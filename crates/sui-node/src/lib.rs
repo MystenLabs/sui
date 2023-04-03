@@ -19,6 +19,7 @@ use anyhow::Result;
 use arc_swap::ArcSwap;
 use futures::TryFutureExt;
 use prometheus::Registry;
+use sui_core::authority::authority_store_tables::LiveObject;
 use sui_core::consensus_adapter::LazyNarwhalClient;
 use sui_types::sui_system_state::SuiSystemState;
 use tap::tap::TapFallible;
@@ -59,7 +60,7 @@ use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
 use sui_core::module_cache_metrics::ResolverMetrics;
 use sui_core::narwhal_manager::{NarwhalConfiguration, NarwhalManager, NarwhalManagerMetrics};
-use sui_core::signature_verifier::VerifiedDigestCacheMetrics;
+use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::state_accumulator::StateAccumulator;
 use sui_core::storage::RocksDbStore;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
@@ -202,7 +203,7 @@ impl SuiNode {
             .get_epoch_start_configuration()?
             .expect("EpochStartConfiguration of the current epoch must exist");
         let cache_metrics = Arc::new(ResolverMetrics::new(&prometheus_registry));
-        let batch_verifier_metrics = VerifiedDigestCacheMetrics::new(&prometheus_registry);
+        let signature_verifier_metrics = SignatureVerifierMetrics::new(&prometheus_registry);
 
         let epoch_store = AuthorityPerEpochStore::new(
             config.protocol_public_key(),
@@ -213,7 +214,7 @@ impl SuiNode {
             epoch_start_configuration,
             store.clone(),
             cache_metrics,
-            batch_verifier_metrics,
+            signature_verifier_metrics,
         );
 
         let effective_buffer_stake = epoch_store.get_effective_buffer_stake_bps();
@@ -363,6 +364,7 @@ impl SuiNode {
                 p2p_network.downgrade(),
                 network_connection_metrics,
                 HashMap::new(),
+                None,
             );
 
         let connection_monitor_status = ConnectionMonitorStatus {
@@ -1014,6 +1016,8 @@ impl SuiNode {
                     None
                 }
             } else {
+                self.check_system_consistency();
+
                 let new_epoch_store = self
                     .reconfigure_state(
                         &cur_epoch_store,
@@ -1106,6 +1110,43 @@ impl SuiNode {
         info!(next_epoch, "Validator State has been reconfigured");
         assert_eq!(next_epoch, new_epoch_store.epoch());
         new_epoch_store
+    }
+
+    fn check_system_consistency(&self) {
+        if !self.config.enable_expensive_safety_checks && cfg!(not(debug_assertions)) {
+            // We only do these checks if either the expensive safety checks are enabled or we are
+            // running in debug mode.
+            return;
+        }
+        let total_storage_rebate: u64 = self
+            .state
+            .db()
+            .iter_live_object_set()
+            .map(|o| match o {
+                LiveObject::Normal(object) => object.storage_rebate,
+                LiveObject::Wrapped(_) => 0,
+            })
+            .sum();
+        let system_state = self
+            .state
+            .get_sui_system_state_object_during_reconfig()
+            .expect("Reading sui system state object cannot fail")
+            .into_sui_system_state_summary();
+
+        let storage_fund_balance = system_state.storage_fund_total_object_storage_rebates;
+        if total_storage_rebate != storage_fund_balance {
+            let err = format!(
+                "Inconsistent state detected at epoch {}: total storage rebate: {}, storage fund balance: {}",
+                system_state.epoch, total_storage_rebate, storage_fund_balance
+            );
+            if cfg!(debug_assertions) {
+                panic!("{}", err);
+            } else {
+                // We cannot panic in production yet because it is known that there are some
+                // inconsistencies in testnet. We will enable this once we make it balanced again in testnet.
+                warn!(err);
+            }
+        }
     }
 }
 

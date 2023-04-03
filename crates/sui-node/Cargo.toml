@@ -10,7 +10,7 @@ edition = "2021"
 anemo.workspace = true
 anemo-tower.workspace = true
 arc-swap = "1.5.1"
-axum = "0.6.2"
+axum.workspace = true
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 clap = { version = "3.2.17", features = ["derive"] }
 prometheus = "0.13.3"

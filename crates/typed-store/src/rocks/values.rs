@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use std::marker::PhantomData;
 
+use crate::TypedStoreError;
 use serde::de::DeserializeOwned;
 
 use super::RocksDBRawIter;
@@ -22,7 +23,7 @@ impl<'a, V: DeserializeOwned> Values<'a, V> {
 }
 
 impl<'a, V: DeserializeOwned> Iterator for Values<'a, V> {
-    type Item = V;
+    type Item = Result<V, TypedStoreError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.db_iter.valid() {
@@ -32,9 +33,12 @@ impl<'a, V: DeserializeOwned> Iterator for Values<'a, V> {
                 .and_then(|_| self.db_iter.value().and_then(|v| bcs::from_bytes(v).ok()));
 
             self.db_iter.next();
-            value
+            value.map(Ok)
         } else {
-            None
+            match self.db_iter.status() {
+                Ok(_) => None,
+                Err(err) => Some(Err(TypedStoreError::RocksDBError(format!("{err}")))),
+            }
         }
     }
 }

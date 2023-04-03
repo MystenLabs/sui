@@ -70,7 +70,13 @@ pub fn end_transaction(
     let object_runtime_state = object_runtime_ref.take_state();
     // Determine writes and deletes
     // We pass an empty map as we do not expose dynamic field objects in the system
-    let results = object_runtime_state.finish(BTreeSet::new(), BTreeSet::new(), BTreeMap::new());
+    let results = object_runtime_state.finish(
+        BTreeSet::new(),
+        BTreeSet::new(),
+        BTreeMap::new(),
+        BTreeMap::new(),
+        false,
+    );
     let RuntimeResults {
         writes,
         deletions,
@@ -118,7 +124,7 @@ pub fn end_transaction(
     // handle transfers, inserting transferred/written objects into their respective inventory
     let mut created = vec![];
     let mut written = vec![];
-    for (id, (kind, owner, ty, _tag, value)) in writes {
+    for (id, (kind, owner, ty, value)) in writes {
         new_object_values.insert(id, (ty.clone(), value.copy_value().unwrap()));
         transferred.push((id, owner));
         incorrect_shared_or_imm_handling = incorrect_shared_or_imm_handling

@@ -96,6 +96,9 @@ pub struct NodeConfig {
 
     #[serde(default)]
     pub indirect_objects_threshold: usize,
+
+    #[serde(default)]
+    pub enable_expensive_safety_checks: bool,
 }
 
 fn default_authority_store_pruning_config() -> AuthorityStorePruningConfig {
@@ -286,6 +289,7 @@ pub struct AuthorityStorePruningConfig {
     pub num_latest_epoch_dbs_to_retain: usize,
     pub epoch_db_pruning_period_secs: u64,
     pub num_epochs_to_retain: u64,
+    pub pruning_run_delay_seconds: u64,
     pub max_checkpoints_in_batch: usize,
     pub max_transactions_in_batch: usize,
     pub use_range_deletion: bool,
@@ -296,7 +300,8 @@ impl Default for AuthorityStorePruningConfig {
         Self {
             num_latest_epoch_dbs_to_retain: usize::MAX,
             epoch_db_pruning_period_secs: u64::MAX,
-            num_epochs_to_retain: 1,
+            num_epochs_to_retain: 0,
+            pruning_run_delay_seconds: 60,
             max_checkpoints_in_batch: 200,
             max_transactions_in_batch: 1000,
             use_range_deletion: true,
@@ -309,7 +314,8 @@ impl AuthorityStorePruningConfig {
         Self {
             num_latest_epoch_dbs_to_retain: 3,
             epoch_db_pruning_period_secs: 60 * 60,
-            num_epochs_to_retain: 1,
+            num_epochs_to_retain: 0,
+            pruning_run_delay_seconds: 60,
             max_checkpoints_in_batch: 200,
             max_transactions_in_batch: 1000,
             use_range_deletion: true,
@@ -320,6 +326,7 @@ impl AuthorityStorePruningConfig {
             num_latest_epoch_dbs_to_retain: 3,
             epoch_db_pruning_period_secs: 60 * 60,
             num_epochs_to_retain: 1,
+            pruning_run_delay_seconds: 60,
             max_checkpoints_in_batch: 200,
             max_transactions_in_batch: 1000,
             use_range_deletion: true,

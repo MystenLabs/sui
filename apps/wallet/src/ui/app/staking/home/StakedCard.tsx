@@ -45,7 +45,7 @@ interface DelegationObjectWithValidator extends StakeObject {
 
 const cardStyle = cva(
     [
-        'group flex no-underline flex-col p-3.75 pr-2 pt-3 box-border h-36 w-full rounded-2xl border border-solid',
+        'group flex no-underline flex-col p-3.75 pr-2 py-3 box-border w-full rounded-2xl border border-solid',
     ],
     {
         variants: {
@@ -176,7 +176,7 @@ export function StakeCard({
                 earnColor={isEarning}
                 earningRewardEpoch={Number(epochBeforeRewards)}
             >
-                <div className="flex justify-between items-start mb-1 ">
+                <div className="flex justify-between items-start mb-1">
                     <ValidatorLogo
                         validatorAddress={validatorAddress}
                         size="subtitle"

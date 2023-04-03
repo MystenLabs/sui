@@ -7,7 +7,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
-axum = {version = "0.6.2", features = ["headers"]}
+axum.workspace = true
 axum-server = { version = "0.4.4", default-features = false, features = ["tls-rustls"] }
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 bytes = "1.4"

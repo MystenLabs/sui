@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod checkpoint_utils;
 mod get_checkpoints;
 mod pay_sui;
 mod query_transactions;

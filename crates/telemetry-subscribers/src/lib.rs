@@ -94,9 +94,7 @@ use std::{
 use tracing::metadata::LevelFilter;
 use tracing::Level;
 use tracing_appender::non_blocking::{NonBlocking, WorkerGuard};
-use tracing_subscriber::{
-    filter, fmt, layer::SubscriberExt, reload, util::SubscriberInitExt, EnvFilter, Layer, Registry,
-};
+use tracing_subscriber::{filter, fmt, layer::SubscriberExt, reload, EnvFilter, Layer, Registry};
 
 use crossterm::tty::IsTty;
 
@@ -325,7 +323,9 @@ impl TelemetryConfig {
             layers.push(fmt_layer);
         }
 
-        tracing_subscriber::registry().with(layers).init();
+        let subscriber = tracing_subscriber::registry().with(layers);
+        ::tracing::subscriber::set_global_default(subscriber)
+            .expect("unable to initialize tracing subscriber");
 
         if config.panic_hook {
             set_panic_hook(config.crash_on_panic);

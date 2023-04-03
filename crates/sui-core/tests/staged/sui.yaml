@@ -251,6 +251,11 @@ ExecutionFailureStatus:
         STRUCT:
           - upgrade_error:
               TYPENAME: PackageUpgradeError
+    28:
+      WrittenObjectsTooLarge:
+        STRUCT:
+          - current_size: U64
+          - max_size: U64
 ExecutionStatus:
   ENUM:
     0:

@@ -10,7 +10,7 @@ publish = false
 rand = "0.8.4"
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 async-trait = "0.1.61"
-axum = { version = "0.6.2", features = ["json"] }
+axum.workspace = true
 clap = { version = "3.2.17", features = ["derive"] }
 thiserror = "1.0.34"
 tokio = { workspace = true, features = ["full"] }
@@ -25,7 +25,6 @@ uuid = {version = "1.1.2", features = [ "v4", "fast-rng"]}
 prometheus = "0.13.3"
 scopeguard = "1.1"
 tap = "1.0"
-tracing-subscriber = { version = "0.3.15" }
 dirs = "4.0.0"
 dashmap = "5.4.0"
 itertools = "0.10.4"

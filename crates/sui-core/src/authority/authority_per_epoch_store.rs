@@ -340,7 +340,7 @@ impl AuthorityPerEpochStore {
         epoch_start_configuration: EpochStartConfiguration,
         store: Arc<AuthorityStore>,
         cache_metrics: Arc<ResolverMetrics>,
-        signature_verifier_metrics: Arc<VerifiedDigestCacheMetrics>,
+        signature_verifier_metrics: Arc<SignatureVerifierMetrics>,
     ) -> Arc<Self> {
         let current_time = Instant::now();
         let epoch_id = committee.epoch;
@@ -1041,7 +1041,7 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
-    pub fn get_capabilities(&self) -> Vec<AuthorityCapabilities> {
+    pub fn get_capabilities(&self) -> Result<Vec<AuthorityCapabilities>, TypedStoreError> {
         self.tables.authority_capabilities.values().collect()
     }
 

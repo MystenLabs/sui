@@ -145,12 +145,12 @@
           "params": [
             {
               "name": "tx_bytes",
-              "value": "AAACACB7qR3cfnF89wjJNwYPBASHNuwz+xdG2Zml5YzVxnftgAEAT4LxyFh7mNZMAL+0bDhDvYv2zPp8ZahhOGmM0f3Kw9wCAAAAAAAAACCxDABG4pPAjOwPQHg9msS/SrtNf4IGR/2F0ZGD3ufH/wEBAQEBAAEAAGH7tbTzQqQL2/h/5KlGueONGM+P/HsAALl1F1x7apV2AejYx86GPzE9o9vZKoPvJtEouI/ma/JuDg0Jza9yfR2EAgAAAAAAAAAgzMqpegLMOpgEFnDhYJ23FOmFjJbp5GmFXxzzv9+X6GVh+7W080KkC9v4f+SpRrnjjRjPj/x7AAC5dRdce2qVdgEAAAAAAAAA6AMAAAAAAAAA"
+              "value": "AAACACB7qR3cfnF89wjJNwYPBASHNuwz+xdG2Zml5YzVxnftgAEAT4LxyFh7mNZMAL+0bDhDvYv2zPp8ZahhOGmM0f3Kw9wCAAAAAAAAACCxDABG4pPAjOwPQHg9msS/SrtNf4IGR/2F0ZGD3ufH/wEBAQEBAAEAAGH7tbTzQqQL2/h/5KlGueONGM+P/HsAALl1F1x7apV2AejYx86GPzE9o9vZKoPvJtEouI/ma/JuDg0Jza9yfR2EAgAAAAAAAAAgzMqpegLMOpgEFnDhYJ23FOmFjJbp5GmFXxzzv9+X6GVh+7W080KkC9v4f+SpRrnjjRjPj/x7AAC5dRdce2qVdgEAAAAAAAAAAPIFKgEAAAAA"
             },
             {
               "name": "signatures",
               "value": [
-                "ALGzUorJ5eSfoPZSblxKUjNuNnB9R06PFVBmbopMmzcmHgZZWAfIpxifHMP9ogXFMxb0weTzRgVbUf241OrvvA1Dij1TvBYKLcfLNo8fq6GASb9yfo6uvuwNUBGkTf54wQ=="
+                "ADJhODBe307HWOPCOuSwCgvhn9ZwybNsTLEZGP+X9TFbg0aDFi1RuhhYMN5RdBWEDD2kpehMsjfgnRI2bGrfwAZDij1TvBYKLcfLNo8fq6GASb9yfo6uvuwNUBGkTf54wQ=="
               ]
             },
             {
@@ -172,7 +172,7 @@
           "result": {
             "name": "Result",
             "value": {
-              "digest": "2Hjgdebhao13ea4AUoE2cxQqrWYSz6iK88tqf53WdaWY",
+              "digest": "BNuAXRjtCZBvUSZDyEp3vDkTZY8ez1Tu7hhnH3rUX2pD",
               "transaction": {
                 "data": {
                   "messageVersion": "v1",
@@ -218,14 +218,14 @@
                     ],
                     "owner": "0x61fbb5b4f342a40bdbf87fe4a946b9e38d18cf8ffc7b0000b975175c7b6a9576",
                     "price": 1,
-                    "budget": 1000
+                    "budget": 5000000000
                   }
                 },
                 "txSignatures": [
-                  "ALGzUorJ5eSfoPZSblxKUjNuNnB9R06PFVBmbopMmzcmHgZZWAfIpxifHMP9ogXFMxb0weTzRgVbUf241OrvvA1Dij1TvBYKLcfLNo8fq6GASb9yfo6uvuwNUBGkTf54wQ=="
+                  "ADJhODBe307HWOPCOuSwCgvhn9ZwybNsTLEZGP+X9TFbg0aDFi1RuhhYMN5RdBWEDD2kpehMsjfgnRI2bGrfwAZDij1TvBYKLcfLNo8fq6GASb9yfo6uvuwNUBGkTf54wQ=="
                 ]
               },
-              "rawTransaction": "AQAAAAAAAgAge6kd3H5xfPcIyTcGDwQEhzbsM/sXRtmZpeWM1cZ37YABAE+C8chYe5jWTAC/tGw4Q72L9sz6fGWoYThpjNH9ysPcAgAAAAAAAAAgsQwARuKTwIzsD0B4PZrEv0q7TX+CBkf9hdGRg97nx/8BAQEBAQABAABh+7W080KkC9v4f+SpRrnjjRjPj/x7AAC5dRdce2qVdgHo2MfOhj8xPaPb2SqD7ybRKLiP5mvybg4NCc2vcn0dhAIAAAAAAAAAIMzKqXoCzDqYBBZw4WCdtxTphYyW6eRphV8c87/fl+hlYfu1tPNCpAvb+H/kqUa5440Yz4/8ewAAuXUXXHtqlXYBAAAAAAAAAOgDAAAAAAAAAAFhALGzUorJ5eSfoPZSblxKUjNuNnB9R06PFVBmbopMmzcmHgZZWAfIpxifHMP9ogXFMxb0weTzRgVbUf241OrvvA1Dij1TvBYKLcfLNo8fq6GASb9yfo6uvuwNUBGkTf54wQ==",
+              "rawTransaction": "AQAAAAAAAgAge6kd3H5xfPcIyTcGDwQEhzbsM/sXRtmZpeWM1cZ37YABAE+C8chYe5jWTAC/tGw4Q72L9sz6fGWoYThpjNH9ysPcAgAAAAAAAAAgsQwARuKTwIzsD0B4PZrEv0q7TX+CBkf9hdGRg97nx/8BAQEBAQABAABh+7W080KkC9v4f+SpRrnjjRjPj/x7AAC5dRdce2qVdgHo2MfOhj8xPaPb2SqD7ybRKLiP5mvybg4NCc2vcn0dhAIAAAAAAAAAIMzKqXoCzDqYBBZw4WCdtxTphYyW6eRphV8c87/fl+hlYfu1tPNCpAvb+H/kqUa5440Yz4/8ewAAuXUXXHtqlXYBAAAAAAAAAADyBSoBAAAAAAFhADJhODBe307HWOPCOuSwCgvhn9ZwybNsTLEZGP+X9TFbg0aDFi1RuhhYMN5RdBWEDD2kpehMsjfgnRI2bGrfwAZDij1TvBYKLcfLNo8fq6GASb9yfo6uvuwNUBGkTf54wQ==",
               "effects": {
                 "messageVersion": "v1",
                 "status": {
@@ -343,7 +343,8 @@
               "transactions": [
                 "3bpzHaSLTQ6p4trLDk2euZxzQ6XqLeWDmUNTAdEXXL2c"
               ],
-              "checkpointCommitments": []
+              "checkpointCommitments": [],
+              "validatorSignature": "wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
             }
           }
         }
@@ -425,7 +426,7 @@
           "params": [
             {
               "name": "transaction_digest",
-              "value": "Bo1wDt96tFw2NjYMr5z8YBVyG1vn1RttXfgx1rQWUZ9x"
+              "value": "HVUhb1a5o2LRTiLNpMKZCevfNdjWDBghvYUvPX9ssYz7"
             }
           ],
           "result": {
@@ -802,7 +803,7 @@
           "params": [
             {
               "name": "digest",
-              "value": "GRNP6yJU4XF11j6MXwi1MEJZxcWk2BnyZczNwnS5QgSC"
+              "value": "9mX7NYAqNnWWfN19MGNp8qe4eUaEPcnjgmzVdhhmw5PK"
             },
             {
               "name": "options",
@@ -819,7 +820,7 @@
           "result": {
             "name": "Result",
             "value": {
-              "digest": "GRNP6yJU4XF11j6MXwi1MEJZxcWk2BnyZczNwnS5QgSC",
+              "digest": "9mX7NYAqNnWWfN19MGNp8qe4eUaEPcnjgmzVdhhmw5PK",
               "transaction": {
                 "data": {
                   "messageVersion": "v1",
@@ -865,14 +866,14 @@
                     ],
                     "owner": "0x82179c57d5895babfb655cd62e8e886a53334b5e7be9be658eb759cc35e3fc66",
                     "price": 1,
-                    "budget": 1000
+                    "budget": 5000000000
                   }
                 },
                 "txSignatures": [
-                  "AJY4zVI51I4JcmR04FFv9e5pShBckeC0Tu7Jsejgt84ZqDwX+yZXN4Tlo/wmFUDaZh34SS2BmXW+J4HVC8+xFwptCxWrqsEEHAdxoMDwblU5hyWJ8H3zFvk20E2fO5bzHA=="
+                  "AMashNqSZcISe9E/6Kh3KiEn4CxA+3IjunkqCSNVHHU6FKbEQSMdqYfqXFZN/REulsczfSUqgPX3aqxmlztVRgVtCxWrqsEEHAdxoMDwblU5hyWJ8H3zFvk20E2fO5bzHA=="
                 ]
               },
-              "rawTransaction": "AQAAAAAAAgAggZbQSLem0EyO3IlXnYb9P8kMUvmhTGuBK5T+YTxbzrsBAF7rHUSeJRYWbVfXH96xVNDcns23swBX0KkyaEysNSzcAgAAAAAAAAAg43+UGkUe+CCaD7+/G1SbK7Jrjq7giJUUbfJ7w88mEMEBAQEBAQABAACCF5xX1Ylbq/tlXNYujohqUzNLXnvpvmWOt1nMNeP8ZgEaPomAKdAk7sHUTGr14vrN7YTQO1NzUU8W49ZuAAgQUQIAAAAAAAAAIGS7c6HtWLLBiwy/N3eS4gbmuA1NXupk4ucFY7FYkCbEghecV9WJW6v7ZVzWLo6IalMzS1576b5ljrdZzDXj/GYBAAAAAAAAAOgDAAAAAAAAAAFhAJY4zVI51I4JcmR04FFv9e5pShBckeC0Tu7Jsejgt84ZqDwX+yZXN4Tlo/wmFUDaZh34SS2BmXW+J4HVC8+xFwptCxWrqsEEHAdxoMDwblU5hyWJ8H3zFvk20E2fO5bzHA==",
+              "rawTransaction": "AQAAAAAAAgAggZbQSLem0EyO3IlXnYb9P8kMUvmhTGuBK5T+YTxbzrsBAF7rHUSeJRYWbVfXH96xVNDcns23swBX0KkyaEysNSzcAgAAAAAAAAAg43+UGkUe+CCaD7+/G1SbK7Jrjq7giJUUbfJ7w88mEMEBAQEBAQABAACCF5xX1Ylbq/tlXNYujohqUzNLXnvpvmWOt1nMNeP8ZgEaPomAKdAk7sHUTGr14vrN7YTQO1NzUU8W49ZuAAgQUQIAAAAAAAAAIGS7c6HtWLLBiwy/N3eS4gbmuA1NXupk4ucFY7FYkCbEghecV9WJW6v7ZVzWLo6IalMzS1576b5ljrdZzDXj/GYBAAAAAAAAAADyBSoBAAAAAAFhAMashNqSZcISe9E/6Kh3KiEn4CxA+3IjunkqCSNVHHU6FKbEQSMdqYfqXFZN/REulsczfSUqgPX3aqxmlztVRgVtCxWrqsEEHAdxoMDwblU5hyWJ8H3zFvk20E2fO5bzHA==",
               "effects": {
                 "messageVersion": "v1",
                 "status": {
@@ -1551,7 +1552,7 @@
           "name": "Extended API"
         }
       ],
-      "description": "Return the list of objects owned by an address.",
+      "description": "Return the list of objects owned by an address. Note that if the address owns more than `QUERY_MAX_RESULT_LIMIT_OBJECTS` objects, the pagination is not accurate, because previous page may have been updated when the next page is fetched. Please use suix_queryObjects if this is a concern.",
       "params": [
         {
           "name": "address",
@@ -1572,7 +1573,7 @@
           "name": "cursor",
           "description": "An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.",
           "schema": {
-            "$ref": "#/components/schemas/CheckpointedObjectID"
+            "$ref": "#/components/schemas/ObjectID"
           }
         },
         {
@@ -1589,7 +1590,7 @@
         "name": "ObjectsPage",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/Page_for_SuiObjectResponse_and_CheckpointedObjectID"
+          "$ref": "#/components/schemas/Page_for_SuiObjectResponse_and_ObjectID"
         }
       }
     },
@@ -1779,7 +1780,7 @@
         }
       ],
       "result": {
-        "name": "ObjectsPage",
+        "name": "QueryObjectsPage",
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/Page_for_SuiObjectResponse_and_CheckpointedObjectID"
@@ -2853,7 +2854,8 @@
           "networkTotalTransactions",
           "sequenceNumber",
           "timestampMs",
-          "transactions"
+          "transactions",
+          "validatorSignature"
         ],
         "properties": {
           "checkpointCommitments": {
@@ -2933,6 +2935,14 @@
             "items": {
               "$ref": "#/components/schemas/TransactionDigest"
             }
+          },
+          "validatorSignature": {
+            "description": "Validator Signature",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Base64"
+              }
+            ]
           }
         }
       },
@@ -4984,6 +4994,24 @@
                 ]
               }
             }
+          },
+          {
+            "type": "object",
+            "required": [
+              "code",
+              "error"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "displayError"
+                ]
+              },
+              "error": {
+                "type": "string"
+              }
+            }
           }
         ]
       },
@@ -5266,6 +5294,35 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/CheckpointedObjectID"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "Page_for_SuiObjectResponse_and_ObjectID": {
+        "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor` if `next_cursor` is `Some`, otherwise it will start from the first item.",
+        "type": "object",
+        "required": [
+          "data",
+          "hasNextPage"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuiObjectResponse"
+            }
+          },
+          "hasNextPage": {
+            "type": "boolean"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObjectID"
               },
               {
                 "type": "null"

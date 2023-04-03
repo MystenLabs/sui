@@ -25,7 +25,7 @@ use rand::{
     thread_rng, Rng, RngCore, SeedableRng,
 };
 use std::{
-    collections::{BTreeMap, BTreeSet, VecDeque},
+    collections::{BTreeMap, BTreeSet, HashMap, VecDeque},
     num::NonZeroUsize,
     ops::RangeInclusive,
     sync::Arc,
@@ -37,14 +37,14 @@ use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing::info;
 use types::{
     Batch, BatchDigest, Certificate, CertificateAPI, CertificateDigest, CommittedSubDagShell,
-    ConsensusStore, FetchCertificatesRequest, FetchCertificatesResponse, GetCertificatesRequest,
-    GetCertificatesResponse, Header, HeaderAPI, HeaderV1Builder, PayloadAvailabilityRequest,
-    PayloadAvailabilityResponse, PrimaryToPrimary, PrimaryToPrimaryServer, PrimaryToWorker,
-    PrimaryToWorkerServer, RequestBatchRequest, RequestBatchResponse, RequestBatchesRequest,
-    RequestBatchesResponse, RequestVoteRequest, RequestVoteResponse, Round, SendCertificateRequest,
-    SendCertificateResponse, SequenceNumber, TimestampMs, Transaction, Vote, VoteAPI,
-    WorkerBatchMessage, WorkerDeleteBatchesMessage, WorkerSynchronizeMessage, WorkerToWorker,
-    WorkerToWorkerServer,
+    ConsensusStore, FetchBatchesRequest, FetchBatchesResponse, FetchCertificatesRequest,
+    FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header, HeaderAPI,
+    HeaderV1Builder, PayloadAvailabilityRequest, PayloadAvailabilityResponse, PrimaryToPrimary,
+    PrimaryToPrimaryServer, PrimaryToWorker, PrimaryToWorkerServer, RequestBatchRequest,
+    RequestBatchResponse, RequestBatchesRequest, RequestBatchesResponse, RequestVoteRequest,
+    RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse, SequenceNumber,
+    TimestampMs, Transaction, Vote, VoteAPI, WorkerBatchMessage, WorkerDeleteBatchesMessage,
+    WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerServer,
 };
 
 pub mod cluster;
@@ -310,6 +310,15 @@ impl PrimaryToWorker for PrimaryToWorkerMockServer {
         Ok(anemo::Response::new(()))
     }
 
+    async fn fetch_batches(
+        &self,
+        _request: anemo::Request<FetchBatchesRequest>,
+    ) -> Result<anemo::Response<FetchBatchesResponse>, anemo::rpc::Status> {
+        Ok(anemo::Response::new(FetchBatchesResponse {
+            batches: HashMap::new(),
+        }))
+    }
+
     async fn delete_batches(
         &self,
         _request: anemo::Request<WorkerDeleteBatchesMessage>,
@@ -405,7 +414,7 @@ pub fn batch_with_transactions(num_of_transactions: usize) -> Batch {
 
 const BATCHES_CF: &str = "batches";
 
-pub fn open_batch_store() -> DBMap<BatchDigest, Batch> {
+pub fn create_batch_store() -> DBMap<BatchDigest, Batch> {
     DBMap::<BatchDigest, Batch>::open(
         temp_dir(),
         MetricConf::default(),

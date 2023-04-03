@@ -8,7 +8,7 @@ use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::committee::EpochId;
 use sui_types::digests::{ObjectDigest, TransactionDigest};
 use sui_types::storage::ObjectKey;
-use tracing::debug;
+use tracing::{debug, error};
 use typed_store::Map;
 
 use std::collections::{HashMap, HashSet};
@@ -22,6 +22,7 @@ use sui_types::messages_checkpoint::{CheckpointSequenceNumber, ECMHLiveObjectSet
 use typed_store::rocks::TypedStoreError;
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority::authority_store_tables::LiveObject;
 use crate::authority::AuthorityStore;
 
 pub struct StateAccumulator {
@@ -30,6 +31,7 @@ pub struct StateAccumulator {
 
 /// Serializable representation of the ObjectRef of an
 /// object that has been wrapped
+/// TODO: This can be replaced with ObjectKey.
 #[derive(Serialize)]
 struct WrappedObject {
     id: ObjectID,
@@ -53,7 +55,6 @@ impl StateAccumulator {
     }
 
     /// Accumulates the effects of a single checkpoint and persists the accumulator.
-    /// This function is idempotent.
     pub fn accumulate_checkpoint(
         &self,
         effects: Vec<TransactionEffects>,
@@ -61,11 +62,20 @@ impl StateAccumulator {
         epoch_store: Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<Accumulator> {
         let _scope = monitored_scope("AccumulateCheckpoint");
-        if let Some(acc) = epoch_store.get_state_hash_for_checkpoint(&checkpoint_seq_num)? {
-            return Ok(acc);
-        }
 
         let acc = self.accumulate_effects(effects);
+
+        if let Some(old_acc) = epoch_store.get_state_hash_for_checkpoint(&checkpoint_seq_num)? {
+            if old_acc != acc {
+                // This should not happen on a non-byzantine Node, as it indicates that the checkpoint
+                // contents are inconsistent. Since checkpoint builder is a callsite here, it could
+                // indicate a proposal that differs from what was finalized in consensus.
+                error!(
+                    "Newly set accumulator for checkpoint {} does not match the already existing one. (Overwriting)",
+                    checkpoint_seq_num,
+                );
+            }
+        }
 
         epoch_store.insert_state_hash_for_checkpoint(&checkpoint_seq_num, &acc)?;
         debug!("Accumulated checkpoint {}", checkpoint_seq_num);
@@ -292,14 +302,17 @@ impl StateAccumulator {
     /// Returns the result of accumulatng the live object set, without side effects
     pub fn accumulate_live_object_set(&self) -> Accumulator {
         let mut acc = Accumulator::default();
-        for oref in self.authority_store.iter_live_object_set() {
-            if oref.2 == ObjectDigest::OBJECT_DIGEST_WRAPPED {
-                acc.insert(
-                    bcs::to_bytes(&WrappedObject::new(oref.0, oref.1))
-                        .expect("Failed to serialize WrappedObject"),
-                );
-            } else {
-                acc.insert(oref.2);
+        for live_object in self.authority_store.iter_live_object_set() {
+            match live_object {
+                LiveObject::Normal(object) => {
+                    acc.insert(object.compute_object_reference().2);
+                }
+                LiveObject::Wrapped(key) => {
+                    acc.insert(
+                        bcs::to_bytes(&WrappedObject::new(key.0, key.1))
+                            .expect("Failed to serialize WrappedObject"),
+                    );
+                }
             }
         }
         acc

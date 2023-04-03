@@ -24,7 +24,7 @@ use sui_protocol_config::{
 use sui_types::clock::{CLOCK_MODULE_NAME, CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME};
 use sui_types::epoch_data::EpochData;
 use sui_types::error::{ExecutionError, ExecutionErrorKind};
-use sui_types::gas::GasCostSummary;
+use sui_types::gas::{GasCostSummary, SuiGasStatusAPI};
 use sui_types::messages::{
     Argument, ConsensusCommitPrologue, GenesisTransaction, ObjectArg, ProgrammableTransaction,
     TransactionKind,
@@ -50,6 +50,7 @@ use sui_types::temporary_store::TemporaryStore;
 
 checked_arithmetic! {
 
+#[derive(Debug)]
 pub struct AdvanceEpochParams {
     pub epoch: u64,
     pub next_protocol_version: ProtocolVersion,
@@ -174,7 +175,7 @@ fn execute_transaction<
     };
     // At this point no charge has been applied yet
     debug_assert!(
-        u64::from(gas_status.gas_used()) == 0
+        gas_status.gas_used() == 0
             && gas_status.storage_rebate() == 0
             && gas_status.storage_gas_units() == 0,
         "No gas charges must be applied yet"
@@ -228,41 +229,88 @@ fn execute_transaction<
                 ))
             }
         };
+        if execution_result.is_ok() {
+
+            // This limit is only present in Version 3 and up, so use this to gate it
+            if let (Some(normal_lim), Some(system_lim)) =
+                (protocol_config.max_size_written_objects(), protocol_config
+            .max_size_written_objects_system_tx()) {
+                let written_objects_size = temporary_store.written_objects_size();
+
+                match check_limit_by_meter!(
+                    !gas_status.is_unmetered(),
+                    written_objects_size,
+                    normal_lim,
+                    system_lim
+                ) {
+                    LimitThresholdCrossed::None => (),
+                    LimitThresholdCrossed::Soft(_, limit) => {
+                        /* TODO: add more alerting */
+                        warn!(
+                            written_objects_size = written_objects_size,
+                            soft_limit = limit,
+                            "Written objects size crossed soft limit",
+                        )
+                    }
+                    LimitThresholdCrossed::Hard(_, lim) => {
+                        execution_result = Err(ExecutionError::new_with_source(
+                            ExecutionErrorKind::WrittenObjectsTooLarge {
+                                current_size: written_objects_size as u64,
+                                max_size: lim as u64,
+                            },
+                            "Written objects size crossed hard limit",
+                        ))
+                    }
+                };
+
+            }
+
+        }
+
         execution_result
     });
-    // We always go through the gas charging process, but for system transaction, we don't pass
-    // the gas object ID since it's not a valid object.
-    // TODO: Ideally we should make gas object ref None in the first place.
-    let gas_object_id = if gas_status.is_unmetered() {
-        None
-    } else {
-        Some(gas_object_ref.0)
-    };
-    temporary_store.charge_gas(gas_object_id, &mut gas_status, &mut result, gas);
-    // Put all the storage rebate accumulated in the system transaction
-    // to the 0x5 object so that it's not lost.
-    temporary_store.conserve_unmetered_storage_rebate(gas_status.unmetered_storage_rebate());
-    #[cfg(debug_assertions)]
-    {
-        // Genesis transactions mint sui supply, and hence does not satisfy SUI conservation.
-        if !is_genesis_tx {
-            // For advance epoch transaction, we need to provide epoch rewards and rebates as extra
-            // information provided to check_sui_conserved, because we mint rewards, and burn
-            // the rebates. We also need to pass in the unmetered_storage_rebate because storage
-            // rebate is not reflected in the storage_rebate of gas summary. This is a bit confusing.
-            // We could probably clean up the code a bit.
-            if !Mode::allow_arbitrary_values() {
-                // ensure that this transaction did not create or destroy SUI
-                temporary_store
-                    .check_sui_conserved(advance_epoch_gas_summary)
-                    .unwrap();
+
+    if protocol_config.gas_model_version() > 1 {
+        // We always go through the gas charging process, but for system transaction, we don't pass
+        // the gas object ID since it's not a valid object.
+        // TODO: Ideally we should make gas object ref None in the first place.
+        let gas_object_id = if gas_status.is_unmetered() {
+            None
+        } else {
+            Some(gas_object_ref.0)
+        };
+        let cost_summary =
+            temporary_store.charge_gas(gas_object_id, &mut gas_status, &mut result, gas);
+        // Put all the storage rebate accumulated in the system transaction
+        // to the 0x5 object so that it's not lost.
+        temporary_store.conserve_unmetered_storage_rebate(gas_status.unmetered_storage_rebate());
+        #[cfg(debug_assertions)]
+        {
+            // Genesis transactions mint sui supply, and hence does not satisfy SUI conservation.
+            if !is_genesis_tx {
+                // For advance epoch transaction, we need to provide epoch rewards and rebates as extra
+                // information provided to check_sui_conserved, because we mint rewards, and burn
+                // the rebates. We also need to pass in the unmetered_storage_rebate because storage
+                // rebate is not reflected in the storage_rebate of gas summary. This is a bit confusing.
+                // We could probably clean up the code a bit.
+                if !Mode::allow_arbitrary_values() {
+                    // ensure that this transaction did not create or destroy SUI
+                    temporary_store
+                        .check_sui_conserved(advance_epoch_gas_summary)
+                        .unwrap();
+                }
+                // else, we're in dev-inspect mode, which lets you turn bytes into arbitrary
+                // objects (including coins). this can violate conservation, but it's expected
+                return (cost_summary, result);
             }
-            // else, we're in dev-inspect mode, which lets you turn bytes into arbitrary
-            // objects (including coins). this can violate conservation, but it's expected
         }
+        (cost_summary, result)
+    } else {
+        // legacy code before gas v2, leave it alone
+        temporary_store.charge_gas_legacy(gas_object_ref.0, &mut gas_status, &mut result, gas);
+        let cost_summary = gas_status.summary();
+        (cost_summary, result)
     }
-    let cost_summary = gas_status.summary();
-    (cost_summary, result)
 }
 
 fn execution_loop<
@@ -405,7 +453,7 @@ pub fn construct_advance_epoch_pt(
 
     info!(
         "Call arguments to advance_epoch transaction: {:?}",
-        arguments
+        params
     );
 
     let storage_rebates = builder.programmable_move_call(
@@ -471,7 +519,7 @@ pub fn construct_advance_epoch_safe_mode_pt(
 
     info!(
         "Call arguments to advance_epoch transaction: {:?}",
-        arguments
+        params
     );
 
     builder.programmable_move_call(
@@ -552,7 +600,7 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
             .collect();
 
         let mut new_package =
-            Object::new_system_package(modules, version, dependencies, tx_ctx.digest());
+            Object::new_system_package(&modules, version, dependencies, tx_ctx.digest());
 
         info!(
             "upgraded system package {:?}",

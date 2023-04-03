@@ -38,7 +38,7 @@ const TEST_MNEMONIC: &str = "result crisp session latin must fruit genuine quest
 #[test]
 fn test_addresses_command() -> Result<(), anyhow::Error> {
     // Add 3 Ed25519 KeyPairs as default
-    let mut keystore = Keystore::from(InMemKeystore::new(3));
+    let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(3));
 
     // Add another 3 Secp256k1 KeyPairs
     for _ in 0..3 {
@@ -52,7 +52,7 @@ fn test_addresses_command() -> Result<(), anyhow::Error> {
 
 #[test]
 fn test_flag_in_signature_and_keypair() -> Result<(), anyhow::Error> {
-    let mut keystore = Keystore::from(InMemKeystore::new(0));
+    let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
 
     keystore.add_key(SuiKeyPair::Secp256k1(get_key_pair().1))?;
     keystore.add_key(SuiKeyPair::Ed25519(get_key_pair().1))?;
@@ -200,7 +200,7 @@ fn test_mnemonics_ed25519() -> Result<(), anyhow::Error> {
     ["organ crash swim stick traffic remember army arctic mesh slice swear summer police vast chaos cradle squirrel hood useless evidence pet hub soap lake", "AAEMSIQeqyz09StSwuOW4MElQcZ+4jHW4/QcWlJEf5Yk", "e69e896ca10f5a77732769803cc2b5707f0ab9d4407afb5e4b4464b89769af14"]];
 
     for t in TEST_CASES {
-        let mut keystore = Keystore::from(InMemKeystore::new(0));
+        let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
         KeyToolCommand::Import {
             mnemonic_phrase: t[0].to_string(),
             key_scheme: SignatureScheme::ED25519,
@@ -223,7 +223,7 @@ fn test_mnemonics_secp256k1() -> Result<(), anyhow::Error> {
     ["organ crash swim stick traffic remember army arctic mesh slice swear summer police vast chaos cradle squirrel hood useless evidence pet hub soap lake", "AY2iJpGSDMhvGILPjjpyeM1bV4Jky979nUenB5kvQeSj", "60287d7c38dee783c2ab1077216124011774be6b0764d62bd05f32c88979d5c5"]];
 
     for t in TEST_CASES {
-        let mut keystore = Keystore::from(InMemKeystore::new(0));
+        let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
         KeyToolCommand::Import {
             mnemonic_phrase: t[0].to_string(),
             key_scheme: SignatureScheme::Secp256k1,
@@ -240,7 +240,7 @@ fn test_mnemonics_secp256k1() -> Result<(), anyhow::Error> {
 
 #[test]
 fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
-    let mut keystore = Keystore::from(InMemKeystore::new(0));
+    let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
     assert!(KeyToolCommand::Import {
         mnemonic_phrase: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::ED25519,
@@ -286,7 +286,7 @@ fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
 
 #[test]
 fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
-    let mut keystore = Keystore::from(InMemKeystore::new(0));
+    let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
     assert!(KeyToolCommand::Import {
         mnemonic_phrase: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::ED25519,
@@ -331,7 +331,7 @@ fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
 
 #[test]
 fn test_keytool_bls12381() -> Result<(), anyhow::Error> {
-    let mut keystore = Keystore::from(InMemKeystore::new(0));
+    let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
     KeyToolCommand::Generate {
         key_scheme: SignatureScheme::BLS12381,
         derivation_path: None,
@@ -343,7 +343,7 @@ fn test_keytool_bls12381() -> Result<(), anyhow::Error> {
 #[test]
 fn test_sign_command() -> Result<(), anyhow::Error> {
     // Add a keypair
-    let mut keystore = Keystore::from(InMemKeystore::new(1));
+    let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(1));
     let binding = keystore.addresses();
     let sender = binding.first().unwrap();
 

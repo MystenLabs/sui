@@ -17,10 +17,11 @@ use move_compiler::{
 };
 use move_core_types::{
     account_address::AccountAddress,
-    identifier::{IdentStr, Identifier},
+    identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
     value::MoveStruct,
 };
+use move_symbol_pool::Symbol;
 use move_transactional_test_runner::{
     framework::{CompiledState, MoveTestAdapter},
     tasks::{InitCommand, SyntaxChoice, TaskInput},
@@ -41,8 +42,6 @@ use sui_framework::{
     make_system_modules, make_system_objects, system_package_ids, DEFAULT_FRAMEWORK_PATH,
 };
 use sui_protocol_config::ProtocolConfig;
-use sui_types::gas::{GasCostSummary, SuiCostTable};
-use sui_types::id::UID;
 use sui_types::messages::CallArg;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::utils::to_sender_signed_transaction;
@@ -50,7 +49,6 @@ use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, SUI_ADDRESS_LENGTH},
     crypto::{get_key_pair_from_rng, AccountKeyPair},
     event::Event,
-    gas,
     messages::{
         ExecutionStatus, TransactionData, TransactionDataAPI, TransactionEffectsAPI,
         VerifiedTransaction,
@@ -63,6 +61,11 @@ use sui_types::{
 use sui_types::{clock::Clock, SUI_SYSTEM_ADDRESS};
 use sui_types::{epoch_data::EpochData, messages::Command};
 use sui_types::{gas::SuiGasStatus, temporary_store::TemporaryStore};
+use sui_types::{
+    gas::{GasCostSummary, SuiCostTable},
+    object::GAS_VALUE_FOR_TESTING,
+};
+use sui_types::{id::UID, object::MAX_GAS_BUDGET_FOR_TESTING};
 use sui_types::{in_memory_storage::InMemoryStorage, messages::ProgrammableTransaction};
 
 pub(crate) type FakeID = u64;
@@ -78,8 +81,8 @@ const RNG_SEED: [u8; 32] = [
     179, 179, 65, 9, 31, 249, 221, 123, 225, 112, 199, 247,
 ];
 
-const DEFAULT_GAS_BUDGET: u64 = 10_000;
-const GAS_FOR_TESTING: u64 = 3_000_000;
+const DEFAULT_GAS_BUDGET: u64 = MAX_GAS_BUDGET_FOR_TESTING;
+const GAS_FOR_TESTING: u64 = GAS_VALUE_FOR_TESTING;
 
 pub struct SuiTestAdapter<'a> {
     vm: Arc<MoveVM>,
@@ -92,10 +95,14 @@ pub struct SuiTestAdapter<'a> {
     rng: StdRng,
 }
 
+#[derive(Debug)]
 struct TxnSummary {
     created: Vec<ObjectID>,
-    written: Vec<ObjectID>,
+    mutated: Vec<ObjectID>,
+    unwrapped: Vec<ObjectID>,
     deleted: Vec<ObjectID>,
+    unwrapped_then_deleted: Vec<ObjectID>,
+    wrapped: Vec<ObjectID>,
     events: Vec<Event>,
     gas_summary: GasCostSummary,
 }
@@ -276,19 +283,23 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         (test_adapter, output)
     }
 
-    fn publish_module(
+    fn publish_modules(
         &mut self,
-        module: CompiledModule,
-        named_addr_opt: Option<Identifier>,
+        modules: Vec<(/* package name */ Option<Symbol>, CompiledModule)>,
         gas_budget: Option<u64>,
         extra: Self::ExtraPublishArgs,
-    ) -> anyhow::Result<(Option<String>, CompiledModule)> {
+    ) -> anyhow::Result<(Option<String>, Vec<(Option<Symbol>, CompiledModule)>)> {
         let SuiPublishArgs {
             sender,
             upgradeable,
             view_gas_used,
             dependencies,
         } = extra;
+
+        let [(named_addr_opt, module)] = &modules[..] else {
+            bail!("Multiple package publish not supported in sui adapter");
+        };
+
         let module_name = module.self_id().name().to_string();
         let module_bytes = {
             let mut buf = vec![];
@@ -368,7 +379,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             .unwrap()
             .clone();
         let published_module = CompiledModule::deserialize(&published_module_bytes).unwrap();
-        Ok((output, published_module))
+        Ok((output, vec![(*named_addr_opt, published_module)]))
     }
 
     fn call_function(
@@ -624,10 +635,9 @@ impl<'a> SuiTestAdapter<'a> {
         gas_budget: u64,
     ) -> anyhow::Result<TxnSummary> {
         let gas_status = if transaction.inner().is_system_tx() {
-            SuiGasStatus::new_unmetered()
+            SuiGasStatus::new_unmetered(&PROTOCOL_CONSTANTS)
         } else {
-            gas::start_gas_metering(gas_budget, 1, 1, SuiCostTable::new(&PROTOCOL_CONSTANTS))
-                .unwrap()
+            SuiCostTable::new(&PROTOCOL_CONSTANTS).into_gas_status_for_testing(gas_budget, 1, 1)
         };
         transaction
             .data()
@@ -706,23 +716,23 @@ impl<'a> SuiTestAdapter<'a> {
             .iter()
             .map(|((id, _, _), _)| *id)
             .collect();
-        let unwrapped_ids: Vec<_> = effects
-            .unwrapped()
-            .iter()
-            .map(|((id, _, _), _)| *id)
-            .collect();
-        let mut written_ids: Vec<_> = effects
+        let mut mutated_ids: Vec<_> = effects
             .mutated()
             .iter()
             .map(|((id, _, _), _)| *id)
             .collect();
-        let mut deleted_ids: Vec<_> = effects
-            .deleted()
+        let mut unwrapped_ids: Vec<_> = effects
+            .unwrapped()
             .iter()
-            .chain(effects.wrapped())
+            .map(|((id, _, _), _)| *id)
+            .collect();
+        let mut deleted_ids: Vec<_> = effects.deleted().iter().map(|(id, _, _)| *id).collect();
+        let mut unwrapped_then_deleted_ids: Vec<_> = effects
+            .unwrapped_then_deleted()
+            .iter()
             .map(|(id, _, _)| *id)
             .collect();
-
+        let mut wrapped_ids: Vec<_> = effects.wrapped().iter().map(|(id, _, _)| *id).collect();
         let gas_summary = effects.gas_cost_summary();
         // update storage
         Arc::get_mut(&mut self.storage)
@@ -744,20 +754,25 @@ impl<'a> SuiTestAdapter<'a> {
 
         // Treat unwrapped objects as writes (even though sometimes this is the first time we can
         // refer to them at their id in storage).
-        written_ids.extend(unwrapped_ids.into_iter());
 
         // sort by fake id
         created_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
-        written_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
+        mutated_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
+        unwrapped_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
+        unwrapped_then_deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
+        wrapped_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
 
         match effects.status() {
             ExecutionStatus::Success { .. } => Ok(TxnSummary {
-                created: created_ids,
-                written: written_ids,
-                deleted: deleted_ids,
                 events: inner.events.data,
                 gas_summary: gas_summary.clone(),
+                created: created_ids,
+                mutated: mutated_ids,
+                unwrapped: unwrapped_ids,
+                deleted: deleted_ids,
+                unwrapped_then_deleted: unwrapped_then_deleted_ids,
+                wrapped: wrapped_ids,
             }),
             ExecutionStatus::Failure { error, .. } => {
                 Err(anyhow::anyhow!(self.stabilize_str(format!(
@@ -830,11 +845,14 @@ impl<'a> SuiTestAdapter<'a> {
     fn object_summary_output(
         &self,
         TxnSummary {
-            created,
-            written,
-            deleted,
             events,
             gas_summary,
+            created,
+            mutated,
+            unwrapped,
+            deleted,
+            unwrapped_then_deleted,
+            wrapped,
         }: &TxnSummary,
         view_events: bool,
         view_gas_summary: bool,
@@ -853,17 +871,40 @@ impl<'a> SuiTestAdapter<'a> {
             }
             write!(out, "created: {}", self.list_objs(created)).unwrap();
         }
-        if !written.is_empty() {
+        if !mutated.is_empty() {
             if !out.is_empty() {
                 out.push('\n')
             }
-            write!(out, "written: {}", self.list_objs(written)).unwrap();
+            write!(out, "mutated: {}", self.list_objs(mutated)).unwrap();
+        }
+        if !unwrapped.is_empty() {
+            if !out.is_empty() {
+                out.push('\n')
+            }
+            write!(out, "unwrapped: {}", self.list_objs(unwrapped)).unwrap();
         }
         if !deleted.is_empty() {
             if !out.is_empty() {
                 out.push('\n')
             }
             write!(out, "deleted: {}", self.list_objs(deleted)).unwrap();
+        }
+        if !unwrapped_then_deleted.is_empty() {
+            if !out.is_empty() {
+                out.push('\n')
+            }
+            write!(
+                out,
+                "unwrapped_then_deleted: {}",
+                self.list_objs(unwrapped_then_deleted)
+            )
+            .unwrap();
+        }
+        if !wrapped.is_empty() {
+            if !out.is_empty() {
+                out.push('\n')
+            }
+            write!(out, "wrapped: {}", self.list_objs(wrapped)).unwrap();
         }
         if view_gas_summary {
             out.push('\n');

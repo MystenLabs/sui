@@ -2,6 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
+    batch_fetcher::BatchFetcher,
     batch_maker::BatchMaker,
     handlers::{PrimaryReceiverHandler, WorkerReceiverHandler},
     metrics::WorkerChannelMetrics,
@@ -79,7 +80,8 @@ impl Worker {
         metrics: Metrics,
         tx_shutdown: &mut PreSubscribedBroadcastSender,
     ) -> Vec<JoinHandle<()>> {
-        let worker_peer_id = PeerId(keypair.public().0.to_bytes());
+        let worker_name = keypair.public().clone();
+        let worker_peer_id = PeerId(worker_name.0.to_bytes());
         info!("Boot worker node with id {} peer id {}", id, worker_peer_id,);
 
         // Define a worker instance.
@@ -101,20 +103,6 @@ impl Worker {
         let network_connection_metrics = metrics.network_connection_metrics.unwrap();
 
         let mut shutdown_receivers = tx_shutdown.subscribe_n(NUM_SHUTDOWN_RECEIVERS);
-
-        client.set_primary_to_worker_local_handler(
-            worker_peer_id,
-            Arc::new(PrimaryReceiverHandler {
-                authority_id: worker.authority.id(),
-                id: worker.id,
-                committee: worker.committee.clone(),
-                worker_cache: worker.worker_cache.clone(),
-                store: worker.store.clone(),
-                request_batch_timeout: worker.parameters.sync_retry_delay,
-                request_batch_retry_nodes: worker.parameters.sync_retry_nodes,
-                validator: validator.clone(),
-            }),
-        );
 
         let mut worker_service = WorkerToWorkerServer::new(WorkerReceiverHandler {
             id: worker.id,
@@ -140,6 +128,7 @@ impl Worker {
             ));
         }
 
+        // Legacy RPC interface, only used by delete_batches() for external consensus.
         let primary_service = PrimaryToWorkerServer::new(PrimaryReceiverHandler {
             authority_id: worker.authority.id(),
             id: worker.id,
@@ -148,6 +137,8 @@ impl Worker {
             store: worker.store.clone(),
             request_batch_timeout: worker.parameters.sync_retry_delay,
             request_batch_retry_nodes: worker.parameters.sync_retry_nodes,
+            network: None,
+            batch_fetcher: None,
             validator: validator.clone(),
         });
 
@@ -277,6 +268,28 @@ impl Worker {
 
         info!("Worker {} listening to worker messages on {}", id, address);
 
+        let batch_fetcher = BatchFetcher::new(
+            worker_name,
+            network.clone(),
+            worker.store.clone(),
+            node_metrics.clone(),
+        );
+        client.set_primary_to_worker_local_handler(
+            worker_peer_id,
+            Arc::new(PrimaryReceiverHandler {
+                authority_id: worker.authority.id(),
+                id: worker.id,
+                committee: worker.committee.clone(),
+                worker_cache: worker.worker_cache.clone(),
+                store: worker.store.clone(),
+                request_batch_timeout: worker.parameters.sync_retry_delay,
+                request_batch_retry_nodes: worker.parameters.sync_retry_nodes,
+                network: Some(network.clone()),
+                batch_fetcher: Some(batch_fetcher),
+                validator: validator.clone(),
+            }),
+        );
+
         let mut peer_types = HashMap::new();
 
         let other_workers = worker
@@ -322,6 +335,7 @@ impl Worker {
             network.downgrade(),
             network_connection_metrics,
             peer_types,
+            Some(shutdown_receivers.pop().unwrap()),
         );
 
         let network_admin_server_base_port = parameters

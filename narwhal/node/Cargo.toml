@@ -18,9 +18,9 @@ thiserror = "1.0.35"
 tokio = { workspace = true, features = ["full"] }
 tokio-stream = "0.1.10"
 tracing = "0.1.36"
-tracing-subscriber = { version = "0.3.15", features = ["time", "env-filter"] }
+tracing-subscriber = { version = "0.3.15", default-features = false, features = ["std", "smallvec", "fmt", "ansi", "time", "env-filter"] }
 url = "2.3.1"
-axum = "0.6.2"
+axum.workspace = true
 
 config = { path = "../config", package = "narwhal-config" }
 consensus = { path = "../consensus", package = "narwhal-consensus" }

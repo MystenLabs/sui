@@ -8,6 +8,7 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use diesel::dsl::max;
+use diesel::pg::PgConnection;
 use diesel::query_builder::AsQuery;
 use diesel::sql_types::{BigInt, VarChar};
 use diesel::upsert::excluded;
@@ -62,6 +63,7 @@ use crate::store::diesel_marco::{read_only, transactional};
 use crate::store::indexer_store::TemporaryCheckpointStore;
 use crate::store::module_resolver::IndexerModuleResolver;
 use crate::store::query::DBFilter;
+use crate::store::TransactionObjectChanges;
 use crate::store::{IndexerStore, TemporaryEpochStore};
 use crate::utils::{get_balance_changes_from_effect, get_object_changes};
 use crate::{get_pg_pool_connection, PgConnectionPool};
@@ -129,6 +131,8 @@ impl PgIndexerStore {
                 ))
                 .filter(objects_history::object_id.eq(object_id.to_string()))
                 .filter(objects_history::version.eq(version.value() as i64))
+                // pick data from checkpoint if available
+                .order(objects_history::checkpoint.desc())
                 .first::<Object>(conn)
         })
         .context("Failed reading Object from PostgresDB");
@@ -167,6 +171,8 @@ impl PgIndexerStore {
                 .filter(objects_history::object_id.eq(id.to_string()))
                 .filter(objects_history::version.le(version.value() as i64))
                 .order_by(objects_history::version.desc())
+                // pick data from checkpoint if available
+                .order_by(objects_history::checkpoint.desc())
                 .first::<Object>(conn)
                 .optional()
         })
@@ -329,7 +335,7 @@ impl IndexerStore for PgIndexerStore {
             }
             // TODO: Implement EventFilter to SQL
             _ => {
-                return Err(IndexerError::NotImplementedError(format!(
+                return Err(IndexerError::NotSupportedError(format!(
                     "Filter type [{query:?}] not supported by the Indexer."
                 )))
             }
@@ -371,7 +377,7 @@ impl IndexerStore for PgIndexerStore {
 
         let mut sui_event_vec = events_vec
             .into_iter()
-            .map(|event| event.try_into())
+            .map(|event| event.try_into(&self.module_cache))
             .collect::<Result<Vec<SuiEvent>, _>>()?;
         // reset to original limit for checking and truncating
         page_limit -= 1;
@@ -537,6 +543,7 @@ impl IndexerStore for PgIndexerStore {
         object_id: ObjectID,
         version: Option<SequenceNumber>,
     ) -> Result<ObjectRead, IndexerError> {
+        // MUSTFIX (jian): add display field error support on implementation
         let object = read_only!(&self.cp, |conn| {
             if let Some(version) = version {
                 objects_history::dsl::objects_history
@@ -575,7 +582,7 @@ impl IndexerStore for PgIndexerStore {
         }
     }
 
-    fn query_objects(
+    fn query_objects_history(
         &self,
         filter: SuiObjectDataFilter,
         at_checkpoint: CheckpointSequenceNumber,
@@ -599,11 +606,44 @@ impl IndexerStore for PgIndexerStore {
                 "storage_rebate",
                 "bcs",
             ];
-            diesel::sql_query(filter.to_sql(cursor, limit, columns))
+            diesel::sql_query(filter.to_objects_history_sql(cursor, limit, columns))
                 .bind::<BigInt, _>(at_checkpoint as i64)
                 .get_results::<Object>(conn)
         })?;
 
+        objects
+            .into_iter()
+            .map(|object| object.try_into_object_read(&self.module_cache))
+            .collect()
+    }
+
+    // NOTE(gegaowp): now only supports query by address owner
+    fn query_latest_objects(
+        &self,
+        filter: SuiObjectDataFilter,
+        cursor: Option<ObjectID>,
+        limit: usize,
+    ) -> Result<Vec<ObjectRead>, IndexerError> {
+        let objects = read_only!(&self.cp, |conn| {
+            let columns = vec![
+                "epoch",
+                "checkpoint",
+                "object_id",
+                "version",
+                "object_digest",
+                "owner_type",
+                "owner_address",
+                "initial_shared_version",
+                "previous_transaction",
+                "object_type",
+                "object_status",
+                "has_public_transfer",
+                "storage_rebate",
+                "bcs",
+            ];
+            diesel::sql_query(filter.to_latest_objects_sql(cursor, limit, columns))
+                .get_results::<Object>(conn)
+        })?;
         objects
             .into_iter()
             .map(|object| object.try_into_object_read(&self.module_cache))
@@ -1021,14 +1061,30 @@ impl IndexerStore for PgIndexerStore {
         })
     }
 
-    fn persist_fast_path(&self, tx: Transaction) -> Result<usize, IndexerError> {
+    fn persist_fast_path(
+        &self,
+        tx: Transaction,
+        tx_object_changes: TransactionObjectChanges,
+    ) -> Result<usize, IndexerError> {
         transactional!(&self.cp, |conn| {
             diesel::insert_into(transactions::table)
                 .values(vec![tx])
                 .on_conflict_do_nothing()
                 .execute(conn)
                 .map_err(IndexerError::from)
-                .context("Failed writing transactions to PostgresDB")
+                .context("Failed writing transactions to PostgresDB")?;
+
+            let deleted_objects: Vec<Object> = tx_object_changes
+                .deleted_objects
+                .iter()
+                .map(|deleted_object| deleted_object.clone().into())
+                .collect();
+
+            persist_transaction_object_changes(
+                conn,
+                tx_object_changes.changed_objects,
+                deleted_objects,
+            )
         })
     }
 
@@ -1037,7 +1093,7 @@ impl IndexerStore for PgIndexerStore {
             checkpoint,
             transactions,
             events,
-            objects_changes,
+            objects_changes: tx_object_changes,
             addresses,
             packages,
             input_objects,
@@ -1073,55 +1129,21 @@ impl IndexerStore for PgIndexerStore {
             }
 
             // Commit indexed objects
-            let all_mutated_objects: Vec<Object> = objects_changes
+            let mutated_objects: Vec<Object> = tx_object_changes
                 .iter()
-                .flat_map(|changes| changes.mutated_objects.iter().cloned())
+                .flat_map(|changes| changes.changed_objects.iter().cloned())
                 .collect();
-            // NOTE: to avoid error of `ON CONFLICT DO UPDATE command cannot affect row a second time`,
-            // we have to limit update of one object once in a query.
-            let mut mutated_object_groups = group_and_sort_objects(all_mutated_objects);
-            loop {
-                let mutated_object_group = mutated_object_groups
-                    .iter_mut()
-                    .filter_map(|group| group.pop())
-                    .collect::<Vec<_>>();
-                if mutated_object_group.is_empty() {
-                    break;
-                }
-                // bulk insert/update via UNNEST trick
-                let insert_update_query =
-                    compose_object_bulk_insert_update_query(&mutated_object_group);
-                diesel::sql_query(insert_update_query).execute(conn)?;
-            }
-            // TODO(gegao): monitor the deletion batch size to see
+            // TODO(gegaowp): monitor the deletion batch size to see
             // if bulk update via unnest is necessary.
-            let all_deleted_changes = objects_changes
+            let deleted_changes = tx_object_changes
                 .iter()
                 .flat_map(|changes| changes.deleted_objects.iter().cloned())
                 .collect::<Vec<_>>();
-            let all_deleted_objects: Vec<Object> = all_deleted_changes
+            let deleted_objects: Vec<Object> = deleted_changes
                 .iter()
                 .map(|deleted_object| deleted_object.clone().into())
                 .collect();
-            for deleted_object_change_chunk in all_deleted_objects.chunks(PG_COMMIT_CHUNK_SIZE) {
-                diesel::insert_into(objects::table)
-                    .values(deleted_object_change_chunk)
-                    .on_conflict(objects::object_id)
-                    .do_update()
-                    .set((
-                        objects::epoch.eq(excluded(objects::epoch)),
-                        objects::checkpoint.eq(excluded(objects::checkpoint)),
-                        objects::version.eq(excluded(objects::version)),
-                        objects::previous_transaction.eq(excluded(objects::previous_transaction)),
-                        objects::object_status.eq(excluded(objects::object_status)),
-                    ))
-                    .execute(conn)
-                    .map_err(IndexerError::from)
-                    .context(&format!(
-                        "Failed writing deleted objects to PostgresDB with chunk: {:?}",
-                        deleted_object_change_chunk
-                    ))?;
-            }
+            persist_transaction_object_changes(conn, mutated_objects, deleted_objects)?;
 
             // Commit indexed addresses
             for addresses_chunk in addresses.chunks(PG_COMMIT_CHUNK_SIZE) {
@@ -1366,6 +1388,58 @@ WHERE e1.epoch = e2.epoch
 
         epoch_info.to_epoch_info(validators)
     }
+}
+
+fn persist_transaction_object_changes(
+    conn: &mut PgConnection,
+    mutated_objects: Vec<Object>,
+    deleted_objects: Vec<Object>,
+) -> Result<usize, IndexerError> {
+    // TODO(gegaowp): tx object changes from one tx do not need group_and_sort_objects, will optimize soon after this PR.
+    // NOTE: to avoid error of `ON CONFLICT DO UPDATE command cannot affect row a second time`,
+    // we have to limit update of one object once in a query.
+    let mut mutated_object_groups = group_and_sort_objects(mutated_objects);
+    loop {
+        let mutated_object_group = mutated_object_groups
+            .iter_mut()
+            .filter_map(|group| group.pop())
+            .collect::<Vec<_>>();
+        if mutated_object_group.is_empty() {
+            break;
+        }
+        // bulk insert/update via UNNEST trick
+        let insert_update_query = compose_object_bulk_insert_update_query(&mutated_object_group);
+        diesel::sql_query(insert_update_query)
+            .execute(conn)
+            .map_err(|e| {
+                IndexerError::PostgresWriteError(format!(
+                    "Failed writing mutated objects to PostgresDB with error: {:?}",
+                    e
+                ))
+            })?;
+    }
+
+    for deleted_object_change_chunk in deleted_objects.chunks(PG_COMMIT_CHUNK_SIZE) {
+        diesel::insert_into(objects::table)
+            .values(deleted_object_change_chunk)
+            .on_conflict(objects::object_id)
+            .do_update()
+            .set((
+                objects::epoch.eq(excluded(objects::epoch)),
+                objects::checkpoint.eq(excluded(objects::checkpoint)),
+                objects::version.eq(excluded(objects::version)),
+                objects::previous_transaction.eq(excluded(objects::previous_transaction)),
+                objects::object_status.eq(excluded(objects::object_status)),
+            ))
+            .execute(conn)
+            .map_err(|e| {
+                IndexerError::PostgresWriteError(format!(
+                    "Failed writing deleted objects to PostgresDB with error: {:?}",
+                    e
+                ))
+            })?;
+    }
+    Ok(0)
 }
 
 #[derive(Clone)]

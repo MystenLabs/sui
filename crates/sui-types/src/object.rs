@@ -31,7 +31,8 @@ use crate::{
 };
 use sui_protocol_config::ProtocolConfig;
 
-pub const GAS_VALUE_FOR_TESTING: u64 = 2_000_000_u64;
+pub const MAX_GAS_BUDGET_FOR_TESTING: u64 = 5_000_000_000;
+pub const GAS_VALUE_FOR_TESTING: u64 = 300_000_000_000_000;
 pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
 
 #[serde_as]
@@ -551,7 +552,7 @@ impl Object {
     /// Create a system package which is not subject to size limits. Panics if the object ID is not
     /// a known system package.
     pub fn new_system_package(
-        modules: Vec<CompiledModule>,
+        modules: &[CompiledModule],
         version: SequenceNumber,
         dependencies: Vec<ObjectID>,
         previous_transaction: TransactionDigest,
@@ -576,15 +577,13 @@ impl Object {
 
     // Note: this will panic if `modules` is empty
     pub fn new_package<'p>(
-        modules: Vec<CompiledModule>,
-        version: SequenceNumber,
+        modules: &[CompiledModule],
         previous_transaction: TransactionDigest,
         max_move_package_size: u64,
         dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
         Ok(Self::new_package_from_data(
             Data::Package(MovePackage::new_initial(
-                version,
                 modules,
                 max_move_package_size,
                 dependencies,
@@ -593,13 +592,13 @@ impl Object {
         ))
     }
 
-    pub fn new_upgraded_package<'a>(
+    pub fn new_upgraded_package<'p>(
         previous_package: &MovePackage,
         new_package_id: ObjectID,
-        modules: Vec<CompiledModule>,
+        modules: &[CompiledModule],
         previous_transaction: TransactionDigest,
         max_move_package_size: u64,
-        dependencies: impl IntoIterator<Item = &'a MovePackage>,
+        dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
         Ok(Self::new_package_from_data(
             Data::Package(previous_package.new_upgraded(
@@ -613,13 +612,12 @@ impl Object {
     }
 
     pub fn new_package_for_testing<'p>(
-        modules: Vec<CompiledModule>,
+        modules: &[CompiledModule],
         previous_transaction: TransactionDigest,
         dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
         Self::new_package(
             modules,
-            OBJECT_START_VERSION,
             previous_transaction,
             ProtocolConfig::get_for_max_version().max_move_package_size(),
             dependencies,
@@ -884,6 +882,20 @@ pub fn generate_test_gas_objects_with_owner(count: usize, owner: SuiAddress) -> 
         .collect()
 }
 
+/// Make a few test gas objects (all with the same owner).
+pub fn generate_test_gas_objects_with_owner_and_value(
+    count: usize,
+    owner: SuiAddress,
+    value: u64,
+) -> Vec<Object> {
+    (0..count)
+        .map(|_i| {
+            let gas_object_id = ObjectID::random();
+            Object::with_id_owner_gas_for_testing(gas_object_id, owner, value)
+        })
+        .collect()
+}
+
 /// Make a few test gas objects (all with the same owner) with TOTAL_SUPPLY_MIST / count balance
 pub fn generate_max_test_gas_objects_with_owner(count: u64, owner: SuiAddress) -> Vec<Object> {
     let coin_size = TOTAL_SUPPLY_MIST / count;
@@ -941,6 +953,14 @@ impl ObjectRead {
                 version: None,
             }),
             Self::Exists(_, o, _) => Ok(o),
+        }
+    }
+
+    pub fn object_id(&self) -> ObjectID {
+        match self {
+            Self::Deleted(oref) => oref.0,
+            Self::NotExists(id) => *id,
+            Self::Exists(oref, _, _) => oref.0,
         }
     }
 }

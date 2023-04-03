@@ -54,10 +54,17 @@ pub trait IndexerStore {
         version: Option<SequenceNumber>,
     ) -> Result<ObjectRead, IndexerError>;
 
-    fn query_objects(
+    fn query_objects_history(
         &self,
         filter: SuiObjectDataFilter,
         at_checkpoint: CheckpointSequenceNumber,
+        cursor: Option<ObjectID>,
+        limit: usize,
+    ) -> Result<Vec<ObjectRead>, IndexerError>;
+
+    fn query_latest_objects(
+        &self,
+        filter: SuiObjectDataFilter,
         cursor: Option<ObjectID>,
         limit: usize,
     ) -> Result<Vec<ObjectRead>, IndexerError>;
@@ -171,7 +178,11 @@ pub trait IndexerStore {
     fn get_network_metrics(&self) -> Result<NetworkMetrics, IndexerError>;
     fn get_move_call_metrics(&self) -> Result<MoveCallMetrics, IndexerError>;
 
-    fn persist_fast_path(&self, tx: Transaction) -> Result<usize, IndexerError>;
+    fn persist_fast_path(
+        &self,
+        tx: Transaction,
+        tx_object_changes: TransactionObjectChanges,
+    ) -> Result<usize, IndexerError>;
     fn persist_checkpoint(&self, data: &TemporaryCheckpointStore) -> Result<usize, IndexerError>;
     fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError>;
 
@@ -226,7 +237,7 @@ pub struct TemporaryCheckpointStore {
 
 #[derive(Debug)]
 pub struct TransactionObjectChanges {
-    pub mutated_objects: Vec<Object>,
+    pub changed_objects: Vec<Object>,
     pub deleted_objects: Vec<DeletedObject>,
 }
 

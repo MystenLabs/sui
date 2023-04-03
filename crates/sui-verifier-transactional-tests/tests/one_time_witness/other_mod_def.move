@@ -11,7 +11,7 @@ module test1::m {
     struct M has drop { }
 }
 
-//# publish
+//# publish --dependencies test1
 module test2::n {
 
     fun init(_: test1::m::M, _ctx: &mut sui::tx_context::TxContext) {

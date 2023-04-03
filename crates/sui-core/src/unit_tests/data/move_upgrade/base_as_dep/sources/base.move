@@ -17,4 +17,6 @@ module base_addr::base {
     public(friend) fun friend_fun(x: u64): u64 { x }
 
     fun non_public_fun(y: bool): u64 { if (y) 0 else 1 }
+
+    entry fun entry_fun() { }
 }

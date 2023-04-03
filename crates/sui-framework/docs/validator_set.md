@@ -7,6 +7,7 @@
 
 -  [Struct `ValidatorSet`](#0x3_validator_set_ValidatorSet)
 -  [Struct `ValidatorEpochInfoEvent`](#0x3_validator_set_ValidatorEpochInfoEvent)
+-  [Struct `ValidatorEpochInfoEventV2`](#0x3_validator_set_ValidatorEpochInfoEventV2)
 -  [Struct `ValidatorJoinEvent`](#0x3_validator_set_ValidatorJoinEvent)
 -  [Struct `ValidatorLeaveEvent`](#0x3_validator_set_ValidatorLeaveEvent)
 -  [Constants](#@Constants_0)
@@ -213,6 +214,94 @@ each validator, emitted during epoch advancement.
 </dd>
 <dt>
 <code>stake: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>commission_rate: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>pool_staking_reward: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>storage_fund_staking_reward: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>pool_token_exchange_rate: <a href="staking_pool.md#0x3_staking_pool_PoolTokenExchangeRate">staking_pool::PoolTokenExchangeRate</a></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>tallying_rule_reporters: <a href="">vector</a>&lt;<b>address</b>&gt;</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>tallying_rule_global_score: u64</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x3_validator_set_ValidatorEpochInfoEventV2"></a>
+
+## Struct `ValidatorEpochInfoEventV2`
+
+V2 of ValidatorEpochInfoEvent containing more information about the validator.
+
+
+<pre><code><b>struct</b> <a href="validator_set.md#0x3_validator_set_ValidatorEpochInfoEventV2">ValidatorEpochInfoEventV2</a> <b>has</b> <b>copy</b>, drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>epoch: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>validator_address: <b>address</b></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>reference_gas_survey_quote: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>stake: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code><a href="voting_power.md#0x3_voting_power">voting_power</a>: u64</code>
 </dt>
 <dd>
 
@@ -2606,11 +2695,12 @@ including stakes, rewards, performance, etc.
             <b>if</b> (<a href="_contains">vector::contains</a>(slashed_validators, &validator_address)) 0
             <b>else</b> 1;
         <a href="_emit">event::emit</a>(
-            <a href="validator_set.md#0x3_validator_set_ValidatorEpochInfoEvent">ValidatorEpochInfoEvent</a> {
+            <a href="validator_set.md#0x3_validator_set_ValidatorEpochInfoEventV2">ValidatorEpochInfoEventV2</a> {
                 epoch: new_epoch,
                 validator_address,
                 reference_gas_survey_quote: <a href="validator.md#0x3_validator_gas_price">validator::gas_price</a>(v),
                 stake: <a href="validator.md#0x3_validator_total_stake_amount">validator::total_stake_amount</a>(v),
+                <a href="voting_power.md#0x3_voting_power">voting_power</a>: <a href="validator.md#0x3_validator_voting_power">validator::voting_power</a>(v),
                 commission_rate: <a href="validator.md#0x3_validator_commission_rate">validator::commission_rate</a>(v),
                 pool_staking_reward: *<a href="_borrow">vector::borrow</a>(pool_staking_reward_amounts, i),
                 storage_fund_staking_reward: *<a href="_borrow">vector::borrow</a>(storage_fund_staking_reward_amounts, i),

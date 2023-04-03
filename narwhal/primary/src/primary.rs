@@ -83,7 +83,7 @@ pub mod primary_tests;
 pub const CHANNEL_CAPACITY: usize = 1_000;
 
 /// The number of shutdown receivers to create on startup. We need one per component loop.
-pub const NUM_SHUTDOWN_RECEIVERS: u64 = 26;
+pub const NUM_SHUTDOWN_RECEIVERS: u64 = 27;
 
 /// Maximum duration to fetch certificates from local storage.
 const FETCH_CERTIFICATES_MAX_HANDLER_TIME: Duration = Duration::from_secs(10);
@@ -120,8 +120,6 @@ impl Primary {
         tx_shutdown: &mut PreSubscribedBroadcastSender,
         tx_committed_certificates: Sender<(Round, Vec<Certificate>)>,
         registry: &Registry,
-        // See comments in Subscriber::spawn
-        tx_executor_network: Option<oneshot::Sender<anemo::Network>>,
     ) -> Vec<JoinHandle<()>> {
         // Write the parameters to the logs.
         parameters.tracing();
@@ -438,6 +436,7 @@ impl Primary {
             network.downgrade(),
             network_connection_metrics,
             peer_types,
+            Some(tx_shutdown.subscribe()),
         );
 
         info!(
@@ -455,12 +454,6 @@ impl Primary {
             network.clone(),
             tx_shutdown.subscribe(),
         );
-
-        if let Some(tx_executor_network) = tx_executor_network {
-            if tx_executor_network.send(network.clone()).is_err() {
-                panic!("Executor shut down before primary has a chance to start");
-            }
-        }
 
         let core_handle = Certifier::spawn(
             authority.id(),

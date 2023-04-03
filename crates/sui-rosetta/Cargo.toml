@@ -7,7 +7,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
-axum = "0.6.2"
+axum.workspace = true
 axum-extra = "0.4.2"
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 tracing = "0.1.36"

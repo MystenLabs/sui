@@ -170,7 +170,6 @@ fn extract_generics_names(generics: &Generics) -> Vec<Ident> {
 /// use typed_store::rocks::DBOptions;
 /// use typed_store::rocks::DBMap;
 /// use typed_store::rocks::MetricConf;
-/// use typed_store::Store;
 /// use typed_store_derive::DBMapUtils;
 /// use typed_store::traits::TypedStoreDebug;
 /// use typed_store::traits::TableSummary;
@@ -228,7 +227,6 @@ fn extract_generics_names(generics: &Generics) -> Vec<Ident> {
 ///```
 /// use typed_store::rocks::DBOptions;
 /// use typed_store::rocks::DBMap;
-/// use typed_store::Store;
 /// use typed_store_derive::DBMapUtils;
 /// use typed_store::traits::TypedStoreDebug;
 /// use core::fmt::Error;
@@ -289,13 +287,8 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
     let generics = &input.generics;
     let generics_names = extract_generics_names(generics);
 
-    let allowed_types_with_post_process_fn: BTreeMap<_, _> = [
-        ("SallyColumn", ""),
-        ("DBMap", ""),
-        ("Store", "typed_store::Store::new"),
-    ]
-    .into_iter()
-    .collect();
+    let allowed_types_with_post_process_fn: BTreeMap<_, _> =
+        [("SallyColumn", ""), ("DBMap", "")].into_iter().collect();
     let allowed_strs = allowed_types_with_post_process_fn
         .keys()
         .map(|s| s.to_string())

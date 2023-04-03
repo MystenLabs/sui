@@ -10,6 +10,7 @@ import { type ReactNode } from 'react';
 
 import { flattenSuiArguments } from './utils';
 
+import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
 import { ObjectLink } from '~/ui/InternalLink';
 
 export interface TransactionProps<T> {
@@ -78,17 +79,23 @@ export function Transaction({
     (SuiArgument | SuiArgument[])[] | MoveCallSuiTransaction | SuiMovePackage
 >) {
     if (type === 'MoveCall') {
-        return <MoveCall type={type} data={data as MoveCallSuiTransaction} />;
+        return (
+            <ErrorBoundary>
+                <MoveCall type={type} data={data as MoveCallSuiTransaction} />
+            </ErrorBoundary>
+        );
     }
 
     return (
-        <ArrayArgument
-            type={type}
-            data={
-                type !== 'Publish'
-                    ? (data as (SuiArgument | SuiArgument[])[])
-                    : undefined
-            }
-        />
+        <ErrorBoundary>
+            <ArrayArgument
+                type={type}
+                data={
+                    type !== 'Publish'
+                        ? (data as (SuiArgument | SuiArgument[])[])
+                        : undefined
+                }
+            />
+        </ErrorBoundary>
     );
 }

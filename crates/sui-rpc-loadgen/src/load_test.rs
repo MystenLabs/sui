@@ -57,12 +57,16 @@ impl<R: Processor + Send + Sync + Clone + 'static> LoadTest<R> {
         }
 
         let elapsed_time = start_time.elapsed();
+        // TODO(chris): clean up this logic
+        let total_commands = num_successful_commands
+            * (self.config.max_repeat + 1)
+            * self.config.num_chunks_per_thread;
 
         println!(
             "Total successful commands: {}, total time {:?}, commands per second {:.2}",
-            num_successful_commands,
+            total_commands,
             elapsed_time,
-            get_tps(num_successful_commands, elapsed_time),
+            get_tps(total_commands, elapsed_time),
         );
 
         self.processor.dump_cache_to_file(&self.config);

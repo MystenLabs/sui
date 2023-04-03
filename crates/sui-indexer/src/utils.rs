@@ -7,15 +7,16 @@ use anyhow::anyhow;
 use diesel::migration::MigrationSource;
 use diesel::{PgConnection, RunQueryDsl};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
+use jsonrpsee::http_client::HttpClient;
 use tracing::info;
 
+use sui_json_rpc::api::ReadApiClient;
 use sui_json_rpc::{get_balance_changes, ObjectProvider};
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_json_rpc_types::{
     BalanceChange, SuiExecutionStatus, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
 };
 use sui_json_rpc_types::{ObjectChange, OwnedObjectRef, SuiObjectRef};
-use sui_sdk::apis::ReadApi as SuiReadApi;
 use sui_types::base_types::TransactionDigest;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::gas::GasCostSummary;
@@ -79,18 +80,20 @@ pub fn drop_all_tables(conn: &mut PgConnection) -> Result<(), diesel::result::Er
 }
 
 pub async fn multi_get_full_transactions(
-    read_api: &SuiReadApi,
+    http_client: HttpClient,
     digests: Vec<TransactionDigest>,
 ) -> Result<Vec<CheckpointTransactionBlockResponse>, IndexerError> {
-    let sui_transactions = read_api
-        .multi_get_transactions_with_options(
+    let sui_transactions = http_client
+        .multi_get_transaction_blocks(
             digests.clone(),
             // MUSTFIX(gegaowp): avoid double fetching both input and raw_input
-            SuiTransactionBlockResponseOptions::new()
-                .with_input()
-                .with_effects()
-                .with_events()
-                .with_raw_input(),
+            Some(
+                SuiTransactionBlockResponseOptions::new()
+                    .with_input()
+                    .with_effects()
+                    .with_events()
+                    .with_raw_input(),
+            ),
         )
         .await
         .map_err(|e| {

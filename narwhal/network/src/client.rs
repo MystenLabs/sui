@@ -11,8 +11,8 @@ use parking_lot::RwLock;
 use tokio::{select, time::sleep};
 use tracing::debug;
 use types::{
-    error::LocalClientError, PrimaryToWorker, WorkerOthersBatchMessage, WorkerOurBatchMessage,
-    WorkerSynchronizeMessage, WorkerToPrimary,
+    error::LocalClientError, FetchBatchesRequest, FetchBatchesResponse, PrimaryToWorker,
+    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerSynchronizeMessage, WorkerToPrimary,
 };
 
 use crate::traits::{PrimaryToWorkerClient, WorkerToPrimaryClient};
@@ -129,22 +129,40 @@ impl NetworkClient {
     }
 }
 
-// TODO: extract common logic for shutdown.
+// TODO: extract common logic for cancelling on shutdown.
 
 #[async_trait]
 impl PrimaryToWorkerClient for NetworkClient {
     async fn synchronize(
         &self,
-        worker_peer: NetworkPublicKey,
+        worker_name: NetworkPublicKey,
         request: WorkerSynchronizeMessage,
     ) -> Result<(), LocalClientError> {
         let c = self
-            .get_primary_to_worker_handler(PeerId(worker_peer.0.into()))
+            .get_primary_to_worker_handler(PeerId(worker_name.0.into()))
             .await?;
         select! {
             resp = c.synchronize(Request::new(request)) => {
                 resp.map_err(|e| LocalClientError::Internal(format!("{e:?}")))?;
                 Ok(())
+            },
+            () = self.shutdown_notify.wait() => {
+                Err(LocalClientError::ShuttingDown)
+            },
+        }
+    }
+
+    async fn fetch_batches(
+        &self,
+        worker_name: NetworkPublicKey,
+        request: FetchBatchesRequest,
+    ) -> Result<FetchBatchesResponse, LocalClientError> {
+        let c = self
+            .get_primary_to_worker_handler(PeerId(worker_name.0.into()))
+            .await?;
+        select! {
+            resp = c.fetch_batches(Request::new(request)) => {
+                Ok(resp.map_err(|e| LocalClientError::Internal(format!("{e:?}")))?.into_inner())
             },
             () = self.shutdown_notify.wait() => {
                 Err(LocalClientError::ShuttingDown)

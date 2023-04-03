@@ -164,7 +164,7 @@ impl LocalNewCluster {
 impl Cluster for LocalNewCluster {
     async fn start(options: &ClusterTestOpt) -> Result<Self, anyhow::Error> {
         // Let the faucet account hold 1000 gas objects on genesis
-        let genesis_config = GenesisConfig::custom_genesis(4, 1, 1000);
+        let genesis_config = GenesisConfig::custom_genesis(4, 1, 100);
 
         // TODO: options should contain port instead of address
         let fullnode_port = options.fullnode_address.as_ref().map(|addr| {

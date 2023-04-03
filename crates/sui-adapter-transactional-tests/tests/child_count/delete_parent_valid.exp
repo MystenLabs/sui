@@ -5,15 +5,15 @@ A: object(103), B: object(104)
 
 task 1 'publish'. lines 9-58:
 created: object(106)
-written: object(105)
+mutated: object(105)
 
 task 2 'run'. lines 59-59:
 created: object(108)
-written: object(107)
+mutated: object(107)
 
 task 3 'run'. lines 61-61:
 created: object(110), object(111)
-written: object(108), object(109)
+mutated: object(108), object(109)
 
 task 4 'view-object'. lines 63-63:
 Owner: Account Address ( A )
@@ -21,9 +21,9 @@ Version: 3
 Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(108)}}}
 
 task 5 'run'. lines 65-65:
-written: object(108), object(112)
+mutated: object(108), object(112)
 deleted: object(110), object(111)
 
 task 6 'run'. lines 67-67:
-written: object(113)
+mutated: object(113)
 deleted: object(108)

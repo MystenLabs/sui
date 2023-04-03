@@ -26,6 +26,7 @@ pub struct Metrics {
     pub futures: IntGaugeVec,
     pub scope_iterations: IntGaugeVec,
     pub scope_duration_ns: IntGaugeVec,
+    pub scope_entrance: IntGaugeVec,
 }
 
 impl Metrics {
@@ -42,6 +43,13 @@ impl Metrics {
                 "monitored_futures",
                 "Number of pending futures per callsite.",
                 &["callsite"],
+                registry,
+            )
+            .unwrap(),
+            scope_entrance: register_int_gauge_vec_with_registry!(
+                "scope_entrance",
+                "Number of entrance in the scope.",
+                &["name"],
                 registry,
             )
             .unwrap(),
@@ -171,6 +179,10 @@ impl Drop for MonitoredScopeGuard {
             .scope_duration_ns
             .with_label_values(&[self.name])
             .add(self.timer.elapsed().as_nanos() as i64);
+        self.metrics
+            .scope_entrance
+            .with_label_values(&[self.name])
+            .dec();
     }
 }
 
@@ -186,6 +198,7 @@ pub fn monitored_scope(name: &'static str) -> Option<MonitoredScopeGuard> {
     let metrics = get_metrics();
     if let Some(m) = metrics {
         m.scope_iterations.with_label_values(&[name]).inc();
+        m.scope_entrance.with_label_values(&[name]).inc();
         Some(MonitoredScopeGuard {
             metrics: m,
             name,

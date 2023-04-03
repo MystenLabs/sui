@@ -23,7 +23,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 reqwest = { version = "0.11.4", default-features = false, features = ["rustls-tls"] }
 
 # Axum support
-axum = "0.6.6"
+axum.workspace = true
 axum-server = { version = "0.4.4", default-features = false, features = ["tls-rustls"] }
 tokio-rustls = "0.23"
 tower-layer = "0.3.2"

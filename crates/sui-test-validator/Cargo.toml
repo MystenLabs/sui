@@ -10,7 +10,7 @@ edition = "2021"
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 clap = { version = "3.2.17", features = ["derive"] }
 tokio = { workspace = true, features = ["full"] }
-axum = { version = "0.6.2", features = ["json"] }
+axum.workspace = true
 tower = { version = "0.4.12", features = ["util", "timeout", "load-shed", "limit"] }
 tower-http = { version = "0.3.4", features = ["cors"] }
 http = { version = "0.2.8" }

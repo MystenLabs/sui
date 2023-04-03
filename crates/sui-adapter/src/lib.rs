@@ -6,7 +6,7 @@ macro_rules! invariant_violation {
         if cfg!(debug_assertions) {
             panic!("{}", $msg)
         }
-        return Err(sui_types::error::ExecutionError::invariant_violation($msg));
+        return Err(sui_types::error::ExecutionError::invariant_violation($msg).into());
     }};
 }
 

@@ -3,7 +3,7 @@
 
 use criterion::*;
 
-use sui_core::signature_verifier::{VerifiedDigestCache, VerifiedDigestCacheMetrics};
+use sui_core::signature_verifier::{SignatureVerifierMetrics, VerifiedDigestCache};
 use sui_types::digests::CertificateDigest;
 
 use criterion::Criterion;
@@ -25,7 +25,7 @@ fn verified_cert_cache_bench(c: &mut Criterion) {
     assert_eq!(chunks.len(), cpus);
 
     let registry = prometheus::Registry::new();
-    let metrics = VerifiedDigestCacheMetrics::new(&registry);
+    let metrics = SignatureVerifierMetrics::new(&registry);
     let cache = VerifiedDigestCache::<CertificateDigest>::new(
         metrics.certificate_signatures_cache_hits.clone(),
         metrics.certificate_signatures_cache_evictions.clone(),

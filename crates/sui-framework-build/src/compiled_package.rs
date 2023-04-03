@@ -474,7 +474,7 @@ impl CompiledPackage {
                 });
             }
             // 2. generate struct layouts for all parameters of `entry` funs
-            for (_name, f) in normalized_m.exposed_functions {
+            for (_name, f) in normalized_m.functions {
                 if f.is_entry {
                     for t in f.parameters {
                         let tag_opt = match t.clone() {

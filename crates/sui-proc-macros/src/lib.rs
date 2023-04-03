@@ -35,11 +35,14 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
             // iteration of a multi-iteration test run.
             std::thread::spawn(|| {
                 use sui_simulator::sui_framework::SystemPackage;
+                use sui_protocol_config::ProtocolConfig;
                 ::sui_simulator::telemetry_subscribers::init_for_testing();
                 ::sui_simulator::sui_framework::MoveStdlib::as_modules();
                 ::sui_simulator::sui_framework::SuiFramework::as_modules();
                 ::sui_simulator::sui_framework::SuiSystem::as_modules();
-                ::sui_simulator::sui_types::gas::SuiGasStatus::new_unmetered();
+                ::sui_simulator::sui_types::gas::SuiGasStatus::new_unmetered(
+                    &ProtocolConfig::get_for_min_version(),
+                );
 
                 // For reasons I can't understand, LruCache causes divergent behavior the second
                 // time one is constructed and inserted into, so construct one before the first

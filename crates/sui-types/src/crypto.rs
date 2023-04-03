@@ -382,26 +382,47 @@ impl AuthorityPublicKeyBytes {
         Ok(())
     }
 
-    /// Get a ConciseAuthorityPublicKeyBytes. Usage:
+    /// Get a ConciseAuthorityPublicKeyBytesRef. Usage:
     ///
     ///   debug!(name = ?authority.concise());
     ///   format!("{:?}", authority.concise());
-    pub fn concise(&self) -> ConciseAuthorityPublicKeyBytes<'_> {
+    pub fn concise(&self) -> ConciseAuthorityPublicKeyBytesRef<'_> {
+        ConciseAuthorityPublicKeyBytesRef(self)
+    }
+
+    pub fn into_concise(self) -> ConciseAuthorityPublicKeyBytes {
         ConciseAuthorityPublicKeyBytes(self)
     }
 }
 
 /// A wrapper around AuthorityPublicKeyBytes that provides a concise Debug impl.
-pub struct ConciseAuthorityPublicKeyBytes<'a>(&'a AuthorityPublicKeyBytes);
+pub struct ConciseAuthorityPublicKeyBytesRef<'a>(&'a AuthorityPublicKeyBytes);
 
-impl Debug for ConciseAuthorityPublicKeyBytes<'_> {
+impl Debug for ConciseAuthorityPublicKeyBytesRef<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         let s = Hex::encode(self.0 .0.get(0..4).ok_or(std::fmt::Error)?);
         write!(f, "k#{}..", s)
     }
 }
 
-impl Display for ConciseAuthorityPublicKeyBytes<'_> {
+impl Display for ConciseAuthorityPublicKeyBytesRef<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        Debug::fmt(self, f)
+    }
+}
+
+/// A wrapper around AuthorityPublicKeyBytes but owns it.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct ConciseAuthorityPublicKeyBytes(AuthorityPublicKeyBytes);
+
+impl Debug for ConciseAuthorityPublicKeyBytes {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        let s = Hex::encode(self.0 .0.get(0..4).ok_or(std::fmt::Error)?);
+        write!(f, "k#{}..", s)
+    }
+}
+
+impl Display for ConciseAuthorityPublicKeyBytes {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         Debug::fmt(self, f)
     }

@@ -58,7 +58,7 @@ async fn test_transfer_sui() {
         sender,
         pt,
         vec![],
-        10000,
+        2_000_000,
         false,
     )
     .await;
@@ -85,7 +85,7 @@ async fn test_transfer_sui_whole_coin() {
         sender,
         pt,
         vec![],
-        10000,
+        1000000,
         false,
     )
     .await;
@@ -113,7 +113,7 @@ async fn test_transfer_object() {
         sender,
         pt,
         vec![],
-        10000,
+        2_000_000,
         false,
     )
     .await;
@@ -140,8 +140,17 @@ async fn test_publish_and_move_call() {
         builder.publish_immutable(compiled_modules_bytes, dependencies);
         builder.finish()
     };
-    let response =
-        test_transaction(&client, keystore, vec![], sender, pt, vec![], 10000, false).await;
+    let response = test_transaction(
+        &client,
+        keystore,
+        vec![],
+        sender,
+        pt,
+        vec![],
+        100_000_000,
+        false,
+    )
+    .await;
     let object_changes = response.object_changes.unwrap();
 
     // Test move call (reuse published module from above test)
@@ -178,7 +187,17 @@ async fn test_publish_and_move_call() {
         builder.finish()
     };
 
-    test_transaction(&client, keystore, vec![], sender, pt, vec![], 10000, false).await;
+    test_transaction(
+        &client,
+        keystore,
+        vec![],
+        sender,
+        pt,
+        vec![],
+        5_000_000,
+        false,
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -199,7 +218,17 @@ async fn test_split_coin() {
         TransactionKind::ProgrammableTransaction(pt) => pt,
         _ => unreachable!(),
     };
-    test_transaction(&client, keystore, vec![], sender, pt, vec![], 10000, false).await;
+    test_transaction(
+        &client,
+        keystore,
+        vec![],
+        sender,
+        pt,
+        vec![],
+        5_000_000,
+        false,
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -221,7 +250,17 @@ async fn test_merge_coin() {
         TransactionKind::ProgrammableTransaction(pt) => pt,
         _ => unreachable!(),
     };
-    test_transaction(&client, keystore, vec![], sender, pt, vec![], 10000, false).await;
+    test_transaction(
+        &client,
+        keystore,
+        vec![],
+        sender,
+        pt,
+        vec![],
+        2_000_000,
+        false,
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -248,7 +287,7 @@ async fn test_pay() {
         sender,
         pt,
         vec![],
-        10000,
+        5_000_000,
         false,
     )
     .await;
@@ -284,7 +323,7 @@ async fn test_pay_multiple_coin_multiple_recipient() {
         sender,
         pt,
         vec![],
-        10000,
+        5_000_000,
         false,
     )
     .await;
@@ -318,7 +357,7 @@ async fn test_pay_sui_multiple_coin_same_recipient() {
         sender,
         pt,
         vec![coin1, coin2],
-        10000,
+        5_000_000,
         false,
     )
     .await;
@@ -350,7 +389,7 @@ async fn test_pay_sui() {
         sender,
         pt,
         vec![coin1, coin2],
-        10000,
+        5_000_000,
         false,
     )
     .await;
@@ -382,7 +421,7 @@ async fn test_failed_pay_sui() {
         sender,
         pt,
         vec![coin1, coin2],
-        110,
+        2000,
         true,
     )
     .await;
@@ -413,7 +452,7 @@ async fn test_stake_sui() {
             Some(1000000000),
             validator,
             None,
-            100000,
+            10_000_000,
         )
         .await
         .unwrap();
@@ -421,7 +460,17 @@ async fn test_stake_sui() {
         TransactionKind::ProgrammableTransaction(pt) => pt,
         _ => unreachable!(),
     };
-    test_transaction(&client, keystore, vec![], sender, pt, vec![], 10000, false).await;
+    test_transaction(
+        &client,
+        keystore,
+        vec![],
+        sender,
+        pt,
+        vec![],
+        100_000_000,
+        false,
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -449,7 +498,7 @@ async fn test_stake_sui_with_none_amount() {
             None,
             validator,
             None,
-            100000,
+            5_000_000,
         )
         .await
         .unwrap();
@@ -457,7 +506,17 @@ async fn test_stake_sui_with_none_amount() {
         TransactionKind::ProgrammableTransaction(pt) => pt,
         _ => unreachable!(),
     };
-    test_transaction(&client, keystore, vec![], sender, pt, vec![], 10000, false).await;
+    test_transaction(
+        &client,
+        keystore,
+        vec![],
+        sender,
+        pt,
+        vec![],
+        100_000_000,
+        false,
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -483,7 +542,7 @@ async fn test_pay_all_sui() {
         sender,
         pt,
         vec![coin1, coin2],
-        10000,
+        2_000_000,
         false,
     )
     .await;
@@ -519,7 +578,7 @@ async fn test_delegation_parsing() -> Result<(), anyhow::Error> {
         objects: vec![],
         total_coin_value: 0,
         gas_price: client.read_api().get_reference_gas_price().await?,
-        budget: 10000,
+        budget: 1000000,
     };
     let parsed_data = ops.clone().into_internal()?.try_into_data(metadata)?;
     assert_eq!(ops, Operations::try_from(parsed_data)?);

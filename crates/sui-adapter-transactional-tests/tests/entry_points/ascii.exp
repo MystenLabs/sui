@@ -5,16 +5,16 @@ A: object(103)
 
 task 1 'publish'. lines 6-28:
 created: object(105)
-written: object(104)
+mutated: object(104)
 
 task 2 'run'. lines 30-33:
-written: object(106)
+mutated: object(106)
 
 task 3 'run'. lines 35-38:
-written: object(107)
+mutated: object(107)
 
 task 4 'run'. lines 40-48:
-written: object(108)
+mutated: object(108)
 
 task 5 'run'. lines 50-50:
 Error: Transaction Effects Status: Invalid command argument at 0. The argument cannot be deserialized into a value of the specified type

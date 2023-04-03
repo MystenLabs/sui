@@ -39,8 +39,8 @@ use sui_types::{
 };
 
 /// The maximum gas per transaction.
-pub const MAX_GAS: u64 = 2_000;
-pub const MAX_DELEGATION_GAS: u64 = 15_000;
+pub const MAX_GAS: u64 = 5_000_000_000;
+pub const MAX_DELEGATION_GAS: u64 = MAX_GAS - 50_000;
 
 /// A helper function to get all accounts and their owned GasCoin
 /// with a WalletContext
@@ -175,9 +175,10 @@ pub async fn make_transactions_with_wallet_context(
     res
 }
 
-pub async fn make_transactions_with_wallet_context_and_rgp(
+pub async fn make_transactions_with_wallet_context_and_budget(
     context: &mut WalletContext,
     max_txn_num: usize,
+    gas_budget: u64,
 ) -> Vec<VerifiedTransaction> {
     let recipient = get_key_pair::<AuthorityKeyPair>().0;
     let accounts_and_objs = get_account_and_gas_objects(context).await;
@@ -201,7 +202,7 @@ pub async fn make_transactions_with_wallet_context_and_rgp(
                     .into_object()
                     .expect("Gas coin could not be converted to object ref.")
                     .object_ref(),
-                MAX_GAS * gas_price,
+                gas_budget,
                 gas_price,
             );
             let tx = to_sender_signed_transaction(

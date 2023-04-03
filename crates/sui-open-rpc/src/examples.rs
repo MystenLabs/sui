@@ -33,7 +33,7 @@ use sui_types::base_types::{
     MoveObjectType, ObjectDigest, ObjectID, ObjectType, SequenceNumber, SuiAddress,
     TransactionDigest,
 };
-use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair};
+use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AggregateAuthoritySignature};
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::event::EventID;
 use sui_types::gas_coin::GasCoin;
@@ -43,6 +43,7 @@ use sui_types::messages::{
 };
 use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::object::Owner;
+use sui_types::object::MAX_GAS_BUDGET_FOR_TESTING;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::query::TransactionFilter;
 use sui_types::signature::GenericSignature;
@@ -294,6 +295,7 @@ impl RpcExampleProvider {
             end_of_epoch_data: None,
             transactions: vec![TransactionDigest::new(self.rng.gen())],
             checkpoint_commitments: vec![],
+            validator_signature: AggregateAuthoritySignature::default(),
         };
 
         Examples::new(
@@ -453,7 +455,11 @@ impl RpcExampleProvider {
         );
 
         let data = TransactionData::new_transfer_with_dummy_gas_price(
-            recipient, object_ref, signer, gas_ref, 1000,
+            recipient,
+            object_ref,
+            signer,
+            gas_ref,
+            MAX_GAS_BUDGET_FOR_TESTING,
         );
         let data1 = data.clone();
         let data2 = data.clone();

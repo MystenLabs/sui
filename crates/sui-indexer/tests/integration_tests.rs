@@ -112,7 +112,7 @@ pub mod pg_integration_test {
         gas: Option<ObjectID>,
     ) -> Result<SuiTransactionBlockResponse, anyhow::Error> {
         let transaction_bytes: TransactionBlockBytes = indexer_rpc_client
-            .transfer_object(*sender, object_id, gas, 2000, *recipient)
+            .transfer_object(*sender, object_id, gas, 2_000_000, *recipient)
             .await?;
         let tx_response = sign_and_execute_transaction_block(
             test_cluster,
@@ -139,7 +139,10 @@ pub mod pg_integration_test {
     > {
         let sender = test_cluster.accounts.first().unwrap();
         let recipient = test_cluster.accounts.last().unwrap();
-        let gas_objects: Vec<ObjectID> = indexer_rpc_client
+        // TODO(gegaowp): today indexer's get_owned_objects only supports filter
+        // by owner address, will revert this when the feature is complete.
+        let gas_objects: Vec<ObjectID> = test_cluster
+            .rpc_client()
             .get_owned_objects(
                 *sender,
                 Some(SuiObjectResponseQuery::new_with_filter(
@@ -497,12 +500,26 @@ pub mod pg_integration_test {
 
         let filter_on_event_type = EventFilter::MoveEventType(target_struct_tag.clone());
         let query_response = indexer_rpc_client
-            .query_events(filter_on_event_type, None, None, None)
+            .query_events(filter_on_event_type.clone(), None, None, None)
             .await?;
         assert_eq!(query_response.data.len(), 2);
         assert_eq!(digest_one, query_response.data[0].id.tx_digest);
         assert_eq!(digest_two, query_response.data[1].id.tx_digest);
 
+        // check parsed event data with FN
+        let fn_query_response = test_cluster
+            .rpc_client()
+            .query_events(filter_on_event_type, None, None, None)
+            .await?;
+
+        assert_eq!(fn_query_response.data.len(), 2);
+        assert_eq!(digest_one, fn_query_response.data[0].id.tx_digest);
+        assert_eq!(digest_two, fn_query_response.data[1].id.tx_digest);
+
+        assert_eq!(
+            query_response.data[0].parsed_json,
+            fn_query_response.data[0].parsed_json
+        );
         Ok(())
     }
 
@@ -720,7 +737,7 @@ pub mod pg_integration_test {
                 *primary_coin,                         // coin to merge into
                 post_transfer_full_obj_data.object_id, // coin to merge and delete
                 None,
-                2000,
+                2_000_000,
             )
             .await?;
         let tx_response = sign_and_execute_transaction_block(
@@ -1185,6 +1202,18 @@ pub mod pg_integration_test {
         assert_eq!(first_checkpoint.network_total_transactions, 1);
         assert_eq!(first_checkpoint.previous_digest, None);
         assert_eq!(first_checkpoint.transactions.len(), 1);
+
+        // Check if checkpoint validator sig matches
+        let fullnode_checkpoint = test_cluster
+            .rpc_client()
+            .get_checkpoint(cp.into())
+            .await
+            .unwrap();
+
+        assert_eq!(
+            first_checkpoint.validator_signature,
+            fullnode_checkpoint.validator_signature
+        );
 
         let (tx_response, _, _, _) =
             execute_simple_transfer(&mut test_cluster, &indexer_rpc_client)

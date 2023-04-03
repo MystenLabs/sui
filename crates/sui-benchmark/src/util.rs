@@ -49,7 +49,7 @@ pub fn make_pay_tx(
         addresses,
         split_amounts,
         gas,
-        1000000,
+        100_000_000,
         gas_price.unwrap_or(DUMMY_GAS_PRICE),
     )?;
     Ok(to_sender_signed_transaction(pay, keypair))

@@ -5,7 +5,6 @@ use futures::future::join_all;
 use itertools::Itertools;
 use std::collections::HashSet;
 use std::fmt::Debug;
-use std::time::Instant;
 use sui_json_rpc::api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiObjectResponse, SuiTransactionBlockEffectsAPI,
@@ -13,8 +12,8 @@ use sui_json_rpc_types::{
 };
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectID, TransactionDigest};
+use tracing::error;
 use tracing::log::warn;
-use tracing::{debug, error};
 
 pub(crate) fn cross_validate_entities<U>(entities: &Vec<Vec<U>>, entity_name: &str)
 where
@@ -65,21 +64,14 @@ pub(crate) async fn check_transactions(
     verify_objects: bool,
 ) -> Vec<Vec<SuiTransactionBlockResponse>> {
     let transactions: Vec<Vec<SuiTransactionBlockResponse>> =
-        join_all(clients.iter().enumerate().map(|(i, client)| async move {
-            let start_time = Instant::now();
-            let transactions = client
+        join_all(clients.iter().map(|client| async move {
+            client
                 .read_api()
                 .multi_get_transactions_with_options(
                     digests.to_vec(),
                     SuiTransactionBlockResponseOptions::full_content(), // todo(Will) support options for this
                 )
-                .await;
-            let elapsed_time = start_time.elapsed();
-            debug!(
-                "MultiGetTransactions Request latency {:.4} for rpc at url {i}",
-                elapsed_time.as_secs_f64()
-            );
-            transactions
+                .await
         }))
         .await
         .into_iter()
@@ -165,46 +157,39 @@ pub(crate) async fn multi_get_object(
     clients: &[SuiClient],
     object_ids: &[ObjectID],
 ) -> Vec<Vec<SuiObjectResponse>> {
-    let objects: Vec<Vec<SuiObjectResponse>> =
-        join_all(clients.iter().enumerate().map(|(i, client)| async move {
-            let object_ids = if object_ids.len() > QUERY_MAX_RESULT_LIMIT {
-                warn!(
-                    "The input size for multi_get_object_with_options has exceed the query limit\
+    let objects: Vec<Vec<SuiObjectResponse>> = join_all(clients.iter().map(|client| async move {
+        let object_ids = if object_ids.len() > QUERY_MAX_RESULT_LIMIT {
+            warn!(
+                "The input size for multi_get_object_with_options has exceed the query limit\
          {QUERY_MAX_RESULT_LIMIT}: {}, time to implement chunking",
-                    object_ids.len()
-                );
-                &object_ids[0..QUERY_MAX_RESULT_LIMIT]
-            } else {
-                object_ids
-            };
-            let start_time = Instant::now();
-            let objects = client
-                .read_api()
-                .multi_get_object_with_options(
-                    object_ids.to_vec(),
-                    SuiObjectDataOptions::full_content(), // todo(Will) support options for this
-                )
-                .await;
-            let elapsed_time = start_time.elapsed();
-            debug!(
-                "MultiGetObject Request latency {:.4} for rpc at url {i}",
-                elapsed_time.as_secs_f64()
+                object_ids.len()
             );
-            objects
-        }))
-        .await
-        .into_iter()
-        .enumerate()
-        .filter_map(|(i, result)| match result {
-            Ok(obj_vec) => Some(obj_vec),
-            Err(err) => {
-                error!(
-                    "Failed to fetch objects for vec {i}: {:?}. Logging objectIDs, {:?}",
-                    err, object_ids
-                );
-                None
-            }
-        })
-        .collect();
+            &object_ids[0..QUERY_MAX_RESULT_LIMIT]
+        } else {
+            object_ids
+        };
+
+        client
+            .read_api()
+            .multi_get_object_with_options(
+                object_ids.to_vec(),
+                SuiObjectDataOptions::full_content(), // todo(Will) support options for this
+            )
+            .await
+    }))
+    .await
+    .into_iter()
+    .enumerate()
+    .filter_map(|(i, result)| match result {
+        Ok(obj_vec) => Some(obj_vec),
+        Err(err) => {
+            error!(
+                "Failed to fetch objects for vec {i}: {:?}. Logging objectIDs, {:?}",
+                err, object_ids
+            );
+            None
+        }
+    })
+    .collect();
     objects
 }

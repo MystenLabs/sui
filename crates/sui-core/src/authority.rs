@@ -55,13 +55,14 @@ use sui_storage::indexes::ObjectIndexChanges;
 use sui_storage::IndexStore;
 use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::{
-    default_hash, AuthorityKeyPair, AuthoritySignInfo, NetworkKeyPair, Signer,
+    default_hash, AggregateAuthoritySignature, AuthorityKeyPair, AuthoritySignInfo, NetworkKeyPair,
+    Signer,
 };
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType, Field};
 use sui_types::error::UserInputError;
 use sui_types::event::{Event, EventID};
-use sui_types::gas::{GasCostSummary, GasPrice, SuiCostTable, SuiGasStatus};
+use sui_types::gas::{GasCostSummary, SuiGasStatus};
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
     CheckpointCommitment, CheckpointContents, CheckpointContentsDigest, CheckpointDigest,
@@ -100,7 +101,7 @@ use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::event_handler::EventHandler;
 use crate::execution_driver::execution_process;
 use crate::module_cache_metrics::ResolverMetrics;
-use crate::signature_verifier::VerifiedDigestCacheMetrics;
+use crate::signature_verifier::SignatureVerifierMetrics;
 use crate::stake_aggregator::StakeAggregator;
 use crate::{transaction_input_checker, transaction_manager::TransactionManager};
 
@@ -1130,12 +1131,18 @@ impl AuthorityState {
 
         transaction_kind.check_version_supported(epoch_store.protocol_config())?;
 
-        let gas_price = gas_price.unwrap_or_else(|| epoch_store.reference_gas_price());
-
+        let gas_price = match gas_price {
+            None => epoch_store.reference_gas_price(),
+            Some(gas) => {
+                if gas == 0 {
+                    epoch_store.reference_gas_price()
+                } else {
+                    gas
+                }
+            }
+        };
         let protocol_config = epoch_store.protocol_config();
-
         let max_tx_gas = protocol_config.max_tx_gas();
-        let storage_gas_price = protocol_config.storage_gas_price();
 
         let gas_object_id = ObjectID::random();
         // give the gas object 2x the max gas to have coin balance to play with during execution
@@ -1153,8 +1160,6 @@ impl AuthorityState {
         .await?;
         let shared_object_refs = input_objects.filter_shared_objects();
 
-        // TODO should we error instead for 0?
-        let gas_price = std::cmp::max(gas_price, 1);
         let gas_budget = max_tx_gas;
         let data = TransactionData::new(
             transaction_kind,
@@ -1172,12 +1177,7 @@ impl AuthorityState {
             transaction_digest,
             protocol_config,
         );
-        let gas_status = SuiGasStatus::new_with_budget(
-            max_tx_gas,
-            GasPrice::from(gas_price),
-            storage_gas_price.into(),
-            SuiCostTable::new(protocol_config),
-        );
+        let gas_status = SuiGasStatus::new_with_budget(max_tx_gas, gas_price, protocol_config);
         let move_vm = Arc::new(
             adapter::new_move_vm(
                 epoch_store.native_functions().clone(),
@@ -1643,6 +1643,7 @@ impl AuthorityState {
             store.objects_lock_table.clone(),
             pruning_config,
             epoch_store.epoch_start_state().epoch_duration_ms(),
+            prometheus_registry,
         );
         let state = Arc::new(AuthorityState {
             name,
@@ -1709,7 +1710,7 @@ impl AuthorityState {
         );
         let registry = Registry::new();
         let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
-        let signature_verifier_metrics = VerifiedDigestCacheMetrics::new(&registry);
+        let signature_verifier_metrics = SignatureVerifierMetrics::new(&registry);
         let epoch_store = AuthorityPerEpochStore::new(
             name,
             Arc::new(genesis_committee.clone()),
@@ -2384,6 +2385,38 @@ impl AuthorityState {
         }
     }
 
+    pub fn get_verified_checkpoint_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> Result<VerifiedCheckpoint, anyhow::Error> {
+        let verified_checkpoint = self
+            .get_checkpoint_store()
+            .get_checkpoint_by_sequence_number(sequence_number)?;
+        match verified_checkpoint {
+            Some(verified_checkpoint) => Ok(verified_checkpoint),
+            None => Err(anyhow!(
+                "Verified checkpoint not found for sequence number {}",
+                sequence_number
+            )),
+        }
+    }
+
+    pub fn get_verified_checkpoint_summary_by_digest(
+        &self,
+        digest: CheckpointDigest,
+    ) -> Result<VerifiedCheckpoint, anyhow::Error> {
+        let verified_checkpoint = self
+            .get_checkpoint_store()
+            .get_checkpoint_by_digest(&digest)?;
+        match verified_checkpoint {
+            Some(verified_checkpoint) => Ok(verified_checkpoint),
+            None => Err(anyhow!(
+                "Verified checkpoint not found for digest: {}",
+                Base58::encode(digest)
+            )),
+        }
+    }
+
     pub fn get_checkpoint_contents(
         &self,
         digest: CheckpointContentsDigest,
@@ -2427,17 +2460,25 @@ impl AuthorityState {
             .get_checkpoint_store()
             .multi_get_checkpoint_by_sequence_number(&checkpoint_numbers)?;
 
-        let checkpoint_summaries: Vec<CheckpointSummary> = verified_checkpoints
+        let checkpoint_summaries_and_signatures: Vec<(
+            CheckpointSummary,
+            AggregateAuthoritySignature,
+        )> = verified_checkpoints
             .into_iter()
             .flatten()
-            .map(|check| check.into_summary_and_sequence().1)
+            .map(|check| {
+                (
+                    check.clone().into_summary_and_sequence().1,
+                    check.get_validator_signature(),
+                )
+            })
             .collect();
 
-        let checkpoint_contents_digest: Vec<CheckpointContentsDigest> = checkpoint_summaries
-            .iter()
-            .map(|summary| summary.content_digest)
-            .collect();
-
+        let checkpoint_contents_digest: Vec<CheckpointContentsDigest> =
+            checkpoint_summaries_and_signatures
+                .iter()
+                .map(|summary| summary.0.content_digest)
+                .collect();
         let checkpoint_contents = self
             .get_checkpoint_store()
             .multi_get_checkpoint_content(checkpoint_contents_digest.as_slice())?;
@@ -2445,8 +2486,15 @@ impl AuthorityState {
 
         let mut checkpoints: Vec<Checkpoint> = vec![];
 
-        for (summary, content) in checkpoint_summaries.into_iter().zip(contents.into_iter()) {
-            checkpoints.push(Checkpoint::from((summary, content)));
+        for (summary_and_sig, content) in checkpoint_summaries_and_signatures
+            .into_iter()
+            .zip(contents.into_iter())
+        {
+            checkpoints.push(Checkpoint::from((
+                summary_and_sig.0,
+                content,
+                summary_and_sig.1,
+            )));
         }
 
         Ok(checkpoints)
@@ -2927,7 +2975,7 @@ impl AuthorityState {
 
         let Some(sui_system) = self.compare_system_package(
             SuiSystem::ID,
-            sui_system_injection::get_modules(self.name),
+            &sui_system_injection::get_modules(self.name),
             SuiSystem::transitive_dependencies(),
             max_binary_format_version,
         ).await else {
@@ -2948,10 +2996,10 @@ impl AuthorityState {
     ///   framework (indicates support for a protocol upgrade without a framework upgrade).
     /// - Returns the digest of the new framework (and version) if it is compatible (indicates
     ///   support for a protocol upgrade with a framework upgrade).
-    async fn compare_system_package<'p>(
+    async fn compare_system_package(
         &self,
         id: ObjectID,
-        modules: Vec<CompiledModule>,
+        modules: &[CompiledModule],
         dependencies: Vec<ObjectID>,
         max_binary_format_version: u32,
     ) -> Option<ObjectRef> {
@@ -2988,14 +3036,12 @@ impl AuthorityState {
             return Some(cur_ref);
         }
 
-        let check_struct_and_pub_function_linking = true;
-        let check_struct_layout = true;
-        let check_friend_linking = false;
-        let compatibility = Compatibility::new(
-            check_struct_and_pub_function_linking,
-            check_struct_layout,
-            check_friend_linking,
-        );
+        let compatibility = Compatibility {
+            check_struct_and_pub_function_linking: true,
+            check_struct_layout: true,
+            check_friend_linking: false,
+            check_private_entry_linking: true,
+        };
 
         let new_pkg = new_object
             .data
@@ -3075,14 +3121,16 @@ impl AuthorityState {
                 _ => panic!("Unrecognised framework: {}", system_package.0),
             };
 
+            let modules: Vec<_> = bytes
+                .iter()
+                .map(|m| {
+                    CompiledModule::deserialize_with_max_version(m, move_binary_format_version)
+                        .unwrap()
+                })
+                .collect();
+
             let new_object = Object::new_system_package(
-                bytes
-                    .iter()
-                    .map(|m| {
-                        CompiledModule::deserialize_with_max_version(m, move_binary_format_version)
-                            .unwrap()
-                    })
-                    .collect(),
+                &modules,
                 system_package.1,
                 dependencies.clone(),
                 cur_object.previous_transaction,
@@ -3208,7 +3256,7 @@ impl AuthorityState {
             Self::choose_protocol_version_and_system_packages(
                 epoch_store.protocol_version(),
                 epoch_store.committee(),
-                epoch_store.get_capabilities(),
+                epoch_store.get_capabilities()?,
                 buffer_stake_bps,
             );
 
@@ -3332,8 +3380,9 @@ impl AuthorityState {
         }
         let pending_certificates = epoch_store.pending_consensus_certificates();
         info!(
-            "Reverting {} locally executed transactions that was not included in the epoch",
-            pending_certificates.len()
+            "Reverting {} locally executed transactions that was not included in the epoch: {:?}",
+            pending_certificates.len(),
+            pending_certificates,
         );
         for digest in pending_certificates {
             if self
@@ -3563,10 +3612,10 @@ pub mod sui_system_injection {
 
     pub fn get_modules(name: AuthorityName) -> Vec<CompiledModule> {
         OVERRIDE.with(|cfg| match &*cfg.borrow() {
-            FrameworkOverrideConfig::Default => SuiSystem::as_modules(),
+            FrameworkOverrideConfig::Default => SuiSystem::as_modules().to_owned(),
             FrameworkOverrideConfig::Global(framework) => framework.clone(),
             FrameworkOverrideConfig::PerValidator(func) => {
-                func(name).unwrap_or_else(SuiSystem::as_modules)
+                func(name).unwrap_or_else(|| SuiSystem::as_modules().to_owned())
             }
         })
     }
@@ -3583,6 +3632,6 @@ pub mod sui_system_injection {
     }
 
     pub fn get_modules(_name: AuthorityName) -> Vec<CompiledModule> {
-        SuiSystem::as_modules()
+        SuiSystem::as_modules().to_owned()
     }
 }
