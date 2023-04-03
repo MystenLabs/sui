@@ -8,14 +8,13 @@ A Sui transaction must pay for both the computational cost of execution and the 
 
 This information displays in Sui Explorer for each transaction block:
 
-![Gas Fees displayed on Sui Explorer](../../static/gas-fees-explorer.png "The Gas Fees section displayed on Sui Explorer")
-*The Gas Fees section for a transaction block displayed on Sui Explorer*
+![Gas Fees displayed on Sui Explorer](../../../static/gas-fees-explorer.png "The Gas Fees section displayed on Sui Explorer")
 
 While computation and storage fees are separate, they are conceptually similar in that they each translate computation or storage into SUI terms by multiplying computation or storage units by the relevant price. 
 
 ### Gas Prices
 
-The [Reference Gas Price](https://docs.sui.io/learn/tokenomics/gas-pricing#computation-gas-prices) translates the real-time cost of executing a transaction into SUI units and is updated at each epoch boundary by the validator set. Similarly, the [Storage Price](https://docs.sui.io/learn/tokenomics/gas-pricing#storage-gas-prices)  translates the long-term cost of storing data on-chain into SUI units and is updated infrequently; often remaining constant for various consecutive epochs. During regular network operations, all Sui users should expect to pay the Reference Gas Price and Storage Price for computation and storage, respectively.
+The [Reference Gas Price](gas-pricing.md#computation-gas-prices) translates the real-time cost of executing a transaction into SUI units and is updated at each epoch boundary by the validator set. Similarly, the [Storage Price](gas-pricing.md#storage-gas-prices)  translates the long-term cost of storing data on-chain into SUI units and is updated infrequently; often remaining constant for various consecutive epochs. During regular network operations, all Sui users should expect to pay the Reference Gas Price and Storage Price for computation and storage, respectively.
 
 ### Gas Units
 
@@ -23,7 +22,7 @@ Different Sui transactions require varying amounts of computational time in orde
 
 The minimum Gas Budget is 2000 MIST. This ensures validators can be compensated with at least 2000 MIST even if the Gas Budget is  incorrectly specified and the transaction aborts. Additionally, this protects the Sui Network from being spammed with a large number of transactions with minimal gas budgets. The maximum Gas Budget is 50 billion MIST or 50 SUI. This protects the network against overflow of internal multiplications and gas limits for denial of service attack
 
-Finally, Sui’s [Storage mechanics](https://docs.sui.io/learn/tokenomics/storage-fund#storage-fund-rewards) provide storage fee rebates whenever a transaction deletes previously-stored objects. Hence, the net fees that a user pays equals Gas Fees minus the rebates associated with data deletion:
+Finally, Sui’s [Storage mechanics](storage-fund.md#storage-fund-rewards) provide storage fee rebates whenever a transaction deletes previously-stored objects. Hence, the net fees that a user pays equals Gas Fees minus the rebates associated with data deletion:
 
 `net_gas_fees = computation_gas_fee + storage_gas_fee - storage_rebate`
 
@@ -55,7 +54,7 @@ Coarse bucketing has important benefits relative to more fine grained gas schedu
 
 Similarly, Sui transactions vary depending on the amount of new data written into on-chain storage. The variable Storage Units captures these difference by mapping the amount of bytes held in storage into storage units. Sui’s current schedule is linear and maps each byte into 100 storage units. So, for example, a transaction that stores 25 bytes will cost 2500 Storage Units while a transaction that stores 75 bytes will cost 7500 units.
 
-Importantly, in Sui’s [Storage Fund](https://docs.sui.io/learn/tokenomics/storage-fund) model users pay upfront for the cost of storing data in perpetuity but can also get a partial rebate on previously stored data if that data is deleted. Hence, the amount of storage fees that a user pays, equal to $\text{StorageFees}[\tau]=\ \text{StorageUnits}[\tau]\times \text{StoragePrice}$, can be split into a rebateable and non-rebateable amount. Initially, the rebateable amount equals 99% of the storage fees while the non-rebateble amount equals 1% of the storage fee.
+Importantly, in Sui’s [Storage Fund](storage-fund.md) model users pay upfront for the cost of storing data in perpetuity but can also get a partial rebate on previously stored data if that data is deleted. Hence, the amount of storage fees that a user pays, equal to $\text{StorageFees}[\tau]=\ \text{StorageUnits}[\tau]\times \text{StoragePrice}$, can be split into a rebateable and non-rebateable amount. Initially, the rebateable amount equals 99% of the storage fees while the non-rebateble amount equals 1% of the storage fee.
 
 ### Gas Budgets
 
