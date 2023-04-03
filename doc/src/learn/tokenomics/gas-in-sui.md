@@ -19,8 +19,6 @@ The [Reference Gas Price](https://docs.sui.io/learn/tokenomics/gas-pricing#compu
 
 ### Gas Units
 
-**Computation Units**
-
 Different Sui transactions require varying amounts of computational time in order to be processed and executed. Sui translates these varying operational loads into transaction fees by measuring each transaction in terms of Computation Units. All else equals, more complex transactions will require more Computation Units.
 
 The minimum Gas Budget is 2000 MIST. This ensures validators can be compensated with at least 2000 MIST even if the Gas Budget is  incorrectly specified and the transaction aborts. Additionally, this protects the Sui Network from being spammed with a large number of transactions with minimal gas budgets. The maximum Gas Budget is 50 billion MIST or 50 SUI. This protects the network against overflow of internal multiplications and gas limits for denial of service attack
@@ -29,8 +27,9 @@ Finally, Sui’s [Storage mechanics](https://docs.sui.io/learn/tokenomics/storag
 
 `net_gas_fees = computation_gas_fee + storage_gas_fee - storage_rebate`
 
+**Computation Units**
 
-Importantly, though, Sui’s gas schedule is built coarsely with a bucketing approach. Two relatively similar transactions will translate into the exact same amount of Computation Units if they are in the same bucket, whereas two relatively different transactions will translate into different amounts of Computation Units if they fall in separate buckets. The smallest bucket maps into 1000 Computation Units, meaning that all transactions that fall into the smallest bucket will cost 1000 Computation Units. The largest bucket maps into 5,000,000 Computation Units; if a transaction were to require more Computation Units it would simply abort.
+Importantly, though, Sui’s computation gas schedule is built coarsely with a bucketing approach. Two relatively similar transactions will translate into the exact same amount of Computation Units if they are in the same bucket, whereas two relatively different transactions will translate into different amounts of Computation Units if they fall in separate buckets. The smallest bucket maps into 1000 Computation Units, meaning that all transactions that fall into the smallest bucket will cost 1000 Computation Units. The largest bucket maps into 5,000,000 Computation Units; if a transaction were to require more Computation Units it would simply abort.
 
 Using coarse bucketing accomplishes two important goals:
 * Frees developers from optimizing their smart contracts to deliver marginal gains in gas costs via "gas golfing"--instead, can focus on step-function improvements in their products and services.
