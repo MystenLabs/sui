@@ -1205,6 +1205,7 @@ impl CheckpointServiceNotify for CheckpointService {
             .keys()
             .skip_to_last()
             .next()
+            .transpose()?
         {
             if sequence <= last_certified {
                 debug!(

@@ -3256,7 +3256,7 @@ impl AuthorityState {
             Self::choose_protocol_version_and_system_packages(
                 epoch_store.protocol_version(),
                 epoch_store.committee(),
-                epoch_store.get_capabilities(),
+                epoch_store.get_capabilities()?,
                 buffer_stake_bps,
             );
 

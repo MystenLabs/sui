@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::TypedStoreError;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{borrow::Borrow, collections::BTreeMap, error::Error};
@@ -11,8 +12,9 @@ where
 {
     type Error: Error;
     type Iterator: Iterator<Item = (K, V)>;
-    type Keys: Iterator<Item = K>;
-    type Values: Iterator<Item = V>;
+    type SafeIterator: Iterator<Item = Result<(K, V), TypedStoreError>>;
+    type Keys: Iterator<Item = Result<K, TypedStoreError>>;
+    type Values: Iterator<Item = Result<V, TypedStoreError>>;
 
     /// Returns true if the map contains a value for the specified key.
     fn contains_key(&self, key: &K) -> Result<bool, Self::Error>;
@@ -54,6 +56,9 @@ where
 
     /// Returns an iterator visiting each key-value pair in the map.
     fn iter(&'a self) -> Self::Iterator;
+
+    /// Same as `iter` but performs status check
+    fn safe_iter(&'a self) -> Self::SafeIterator;
 
     /// Returns an iterator over each key in the map.
     fn keys(&'a self) -> Self::Keys;
@@ -103,9 +108,9 @@ where
     V: Serialize + DeserializeOwned + std::marker::Sync + std::marker::Send,
 {
     type Error: Error;
-    type Iterator: Iterator<Item = (K, V)>;
-    type Keys: Iterator<Item = K>;
-    type Values: Iterator<Item = V>;
+    type Iterator: Iterator<Item = Result<(K, V), TypedStoreError>>;
+    type Keys: Iterator<Item = Result<K, TypedStoreError>>;
+    type Values: Iterator<Item = Result<V, TypedStoreError>>;
 
     /// Returns true if the map contains a value for the specified key.
     async fn contains_key(&self, key: &K) -> Result<bool, Self::Error>;

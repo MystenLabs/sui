@@ -53,13 +53,13 @@ use crate::{
         default_db_options, keys::Keys, values::Values, DBBatch, DBMap, DBOptions,
         RocksDBAccessType, TypedStoreError,
     },
-    test_db::{TestDB, TestDBIter, TestDBKeys, TestDBValues, TestDBWriteBatch},
+    test_db::{TestDB, TestDBKeys, TestDBValues, TestDBWriteBatch},
     traits::{AsyncMap, Map},
 };
 
-use crate::rocks::iter::{Iter as RocksDBIter, RevIter};
+use crate::rocks::safe_iter::{SafeIter as RocksDBIter, SafeRevIter};
 use crate::rocks::{DBMapTableConfigMap, MetricConf};
-use crate::test_db::TestDBRevIter;
+use crate::test_db::{TestDBIter, TestDBRevIter};
 use async_trait::async_trait;
 use collectable::TryExtend;
 use rocksdb::Options;
@@ -204,13 +204,13 @@ where
                 SallyConfig {
                     mode: SallyRunMode::FallbackToDB,
                 },
-            )) => SallyIter::RocksDB(db_map.iter()),
+            )) => SallyIter::RocksDB(db_map.safe_iter()),
             SallyColumn::TestDB((
                 test_db,
                 SallyConfig {
                     mode: SallyRunMode::FallbackToDB,
                 },
-            )) => SallyIter::TestDB(test_db.iter()),
+            )) => SallyIter::TestDB(test_db.safe_iter()),
         }
     }
     async fn keys(&'a self) -> Self::Keys {
@@ -409,7 +409,7 @@ pub enum SallyIter<'a, K, V> {
 }
 
 impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iterator for SallyIter<'a, K, V> {
-    type Item = (K, V);
+    type Item = Result<(K, V), TypedStoreError>;
     fn next(&mut self) -> Option<Self::Item> {
         match self {
             SallyIter::RocksDB(iter) => iter.next(),
@@ -462,12 +462,12 @@ impl<'a, K: Serialize, V> SallyIter<'a, K, V> {
 
 pub enum SallyRevIter<'a, K, V> {
     // Iter for a rocksdb backed sally column when `fallback_to_db` is true
-    RocksDB(RevIter<'a, K, V>),
+    RocksDB(SafeRevIter<'a, K, V>),
     TestDB(TestDBRevIter<'a, K, V>),
 }
 
 impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iterator for SallyRevIter<'a, K, V> {
-    type Item = (K, V);
+    type Item = Result<(K, V), TypedStoreError>;
 
     /// Will give the next item backwards
     fn next(&mut self) -> Option<Self::Item> {
@@ -486,7 +486,7 @@ pub enum SallyKeys<'a, K> {
 }
 
 impl<'a, K: DeserializeOwned> Iterator for SallyKeys<'a, K> {
-    type Item = K;
+    type Item = Result<K, TypedStoreError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
@@ -504,7 +504,7 @@ pub enum SallyValues<'a, V> {
 }
 
 impl<'a, V: DeserializeOwned> Iterator for SallyValues<'a, V> {
-    type Item = V;
+    type Item = Result<V, TypedStoreError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
