@@ -388,21 +388,13 @@ fn batch_verify(
     let mut obligation = VerificationObligation::default();
 
     for cert in certs {
-        let idx = obligation.add_message(
-            cert.data(),
-            cert.epoch(),
-            Intent::default().with_scope(cert.scope()),
-        );
+        let idx = obligation.add_message(cert.data(), cert.epoch(), Intent::sui_app(cert.scope()));
         cert.auth_sig()
             .add_to_verification_obligation(committee, &mut obligation, idx)?;
     }
 
     for ckpt in checkpoints {
-        let idx = obligation.add_message(
-            ckpt.data(),
-            ckpt.epoch(),
-            Intent::default().with_scope(ckpt.scope()),
-        );
+        let idx = obligation.add_message(ckpt.data(), ckpt.epoch(), Intent::sui_app(ckpt.scope()));
         ckpt.auth_sig()
             .add_to_verification_obligation(committee, &mut obligation, idx)?;
     }
