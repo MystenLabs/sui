@@ -84,15 +84,3 @@ These examples also showcase the importance of the Gas Budget. The minimum Gas B
 | Simple transaction storing 10 bytes and deleting data | 500 MIST | 1,000 | 75 MIST | 1,000 | 100,000 MIST | 575,000 MIST | 475,000 MIST |
 | Complex transaction storing 120 bytes | 1,000 MIST | 5,000 | 200 MIST | 12,000 | 0 MIST | 7,400,000 MIST | 7,400,000 MIST |
 | Complex transaction storing 120 bytes and deleting data | 500 MIST | 5,000 |  200 MIST | 12,000 | 5,000,000 MIST | 2,400,000 MIST | -100,000 MIST |
-
-
-
-
-
-
-
-
-![Gas Fees displayed on Sui Explorer](../../static/gas-fees-explorer.png "The Gas Fees section displayed on Sui Explorer")
-*The Gas Fees section for a transaction block displayed on Sui Explorer*
-
-
