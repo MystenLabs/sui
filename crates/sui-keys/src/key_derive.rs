@@ -152,7 +152,7 @@ pub fn validate_path(
                     }
                 }
                 None => Ok(format!(
-                    "m/{DERVIATION_PATH_PURPOSE_SECP256K1}'/{DERIVATION_PATH_COIN_TYPE}'/0'/0/0"
+                    "m/{DERVIATION_PATH_PURPOSE_SECP256R1}'/{DERIVATION_PATH_COIN_TYPE}'/0'/0/0"
                 )
                 .parse()
                 .map_err(|_| SuiError::SignatureKeyGenError("Cannot parse path".to_string()))?),
