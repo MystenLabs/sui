@@ -37,7 +37,8 @@ anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "0e0ef7054082a6
 once_cell = "1.16.0"
 
 store = { path = "../../crates/typed-store", package = "typed-store" }
-mysten-util-mem = { path = "../../crates/mysten-util-mem" }
+mysten-network.workspace = true
+mysten-util-mem.workspace = true
 
 [dev-dependencies]
 criterion = "0.4.0"

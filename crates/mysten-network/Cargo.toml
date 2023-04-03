@@ -16,7 +16,8 @@ futures = "0.3.21"
 http = "0.2.8"
 multiaddr = "0.17.0"
 serde = { version = "1.0.140", features = ["derive"] }
-tokio = { version = "1", features = ["sync", "rt", "macros"] }
+snap = "1.1.0"
+tokio = { workspace = true, features = ["sync", "rt", "macros"] }
 tokio-stream = { version = "0.1.11", features = ["net"] }
 tonic = { version = "0.8.2", features = ["transport"] }
 tonic-health = "0.8.0"

@@ -46,7 +46,7 @@ serde_with = "2.1.0"
 signature = "1.6.0"
 
 store = { path = "../../crates/typed-store", package = "typed-store" }
-mysten-network = { path = "../../crates/mysten-network" }
+mysten-network.workspace = true
 telemetry-subscribers = { path = "../../crates/telemetry-subscribers" }
 
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "0e0ef7054082a6f5a8921688e3d568761bc3be21" }
