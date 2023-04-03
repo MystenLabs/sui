@@ -19,7 +19,7 @@ use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructT
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use sui_protocol_config::ProtocolVersion;
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 
 use self::sui_system_state_inner_v1::{SuiSystemStateInnerV1, ValidatorV1};
 use self::sui_system_state_summary::{SuiSystemStateSummary, SuiValidatorSummary};
@@ -77,6 +77,7 @@ impl SuiSystemStateWrapper {
         &self,
         params: &AdvanceEpochParams,
         object_store: &S,
+        protocol_config: &ProtocolConfig,
     ) -> Object
     where
         S: ObjectStore,
@@ -90,16 +91,25 @@ impl SuiSystemStateWrapper {
             .expect("Dynamic field object must be a Move object");
         match self.version {
             1 => {
-                Self::advance_epoch_safe_mode_impl::<SuiSystemStateInnerV1>(move_object, params);
+                Self::advance_epoch_safe_mode_impl::<SuiSystemStateInnerV1>(
+                    move_object,
+                    params,
+                    protocol_config,
+                );
             }
             2 => {
-                Self::advance_epoch_safe_mode_impl::<SuiSystemStateInnerV1>(move_object, params);
+                Self::advance_epoch_safe_mode_impl::<SuiSystemStateInnerV2>(
+                    move_object,
+                    params,
+                    protocol_config,
+                );
             }
             #[cfg(msim)]
             SUI_SYSTEM_STATE_SIM_TEST_V1 => {
                 Self::advance_epoch_safe_mode_impl::<SimTestSuiSystemStateInnerV1>(
                     move_object,
                     params,
+                    protocol_config,
                 );
             }
             #[cfg(msim)]
@@ -107,6 +117,7 @@ impl SuiSystemStateWrapper {
                 Self::advance_epoch_safe_mode_impl::<SimTestSuiSystemStateInnerShallowV2>(
                     move_object,
                     params,
+                    protocol_config,
                 );
             }
             #[cfg(msim)]
@@ -114,6 +125,7 @@ impl SuiSystemStateWrapper {
                 Self::advance_epoch_safe_mode_impl::<SimTestSuiSystemStateInnerDeepV2>(
                     move_object,
                     params,
+                    protocol_config,
                 );
             }
             _ => unreachable!(),
@@ -121,8 +133,11 @@ impl SuiSystemStateWrapper {
         field_object
     }
 
-    fn advance_epoch_safe_mode_impl<T>(move_object: &mut MoveObject, params: &AdvanceEpochParams)
-    where
+    fn advance_epoch_safe_mode_impl<T>(
+        move_object: &mut MoveObject,
+        params: &AdvanceEpochParams,
+        protocol_config: &ProtocolConfig,
+    ) where
         T: Serialize + DeserializeOwned + SuiSystemStateTrait,
     {
         let mut field: Field<u64, T> =
@@ -141,7 +156,9 @@ impl SuiSystemStateWrapper {
             field.value.system_state_version()
         );
         let new_contents = bcs::to_bytes(&field).expect("bcs serialization should never fail");
-        move_object.update_contents_at_safe_mode(new_contents);
+        move_object
+            .update_contents(new_contents, protocol_config)
+            .expect("Update sui system object content cannot fail since it should be small");
     }
 }
 

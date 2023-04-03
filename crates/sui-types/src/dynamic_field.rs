@@ -248,6 +248,10 @@ where
     Ok(ObjectID::try_from(&hash.as_ref()[0..ObjectID::LENGTH]).unwrap())
 }
 
+/// Given a parent object ID (e.g. a table), and a `key`, retrieve the corresponding dynamic field object
+/// from the `object_store`. The key type `K` must implement `MoveTypeTagTrait` which has an associated
+/// function that returns the Move type tag.
+/// Note that this function returns the Field object itself, not the value in the field.
 pub fn get_dynamic_field_object_from_store<S, K>(
     object_store: &S,
     parent_id: ObjectID,
@@ -268,9 +272,8 @@ where
     Ok(object)
 }
 
-/// Given a parent object ID (e.g. a table), and a `key`, retrieve the corresponding dynamic field
-/// from the `object_store`. The key type `K` must implement `MoveTypeTagTrait` which has an associated
-/// function that returns the Move type tag. This is needed to properly derive the field object ID.
+/// Similar to `get_dynamic_field_object_from_store`, but returns the value in the field instead of
+/// the Field object itself.
 pub fn get_dynamic_field_from_store<S, K, V>(
     object_store: &S,
     parent_id: ObjectID,

@@ -1111,10 +1111,14 @@ impl<S: ObjectStore> TemporaryStore<S> {
 //==============================================================================
 
 impl<S: ObjectStore> TemporaryStore<S> {
-    pub fn advance_epoch_safe_mode(&mut self, params: &AdvanceEpochParams) {
+    pub fn advance_epoch_safe_mode(
+        &mut self,
+        params: &AdvanceEpochParams,
+        protocol_config: &ProtocolConfig,
+    ) {
         let wrapper = get_sui_system_state_wrapper(&self.store)
             .expect("System state wrapper object must exist");
-        let new_object = wrapper.advance_epoch_safe_mode(params, &self.store);
+        let new_object = wrapper.advance_epoch_safe_mode(params, &self.store, protocol_config);
         self.write_object(new_object, WriteKind::Mutate);
     }
 }
@@ -1173,11 +1177,11 @@ impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
 
     /// Check that this transaction neither creates nor destroys SUI. This should hold for all txes except
     /// the epoch change tx, which mints staking rewards equal to the gas fees burned in the previous epoch.
-    /// Specificially, this checks two key invariants about storage fees and storage rebate:
+    /// Specifically, this checks two key invariants about storage fees and storage rebate:
     /// 1. all SUI in storage rebate fields of input objects should flow either to the transaction storage rebate, or the transaction non-refundable storage rebate
     /// 2. all SUI charged for storage should flow into the storage rebate field of some output object
     /// If `do_expensive_checks` is true, this will also check a third invariant:
-    /// 3. all SUI in input objects (including coins etc in the Move part of an object) should flow either to an ouput object, or be burned as part of computation fees or non-refundable storage rebate
+    /// 3. all SUI in input objects (including coins etc in the Move part of an object) should flow either to an output object, or be burned as part of computation fees or non-refundable storage rebate
     /// This function is intended to be called *after* we have charged for gas + applied the storage rebate to the gas object,
     /// but *before* we have updated object versions.
     /// if `do_expensive_checks` is false, this function will only check conservation of object storage rea
