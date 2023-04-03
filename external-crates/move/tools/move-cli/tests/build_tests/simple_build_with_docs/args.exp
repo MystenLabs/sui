@@ -1,6 +1,6 @@
 Command `new --path . Foo`:
 Command `build`:
-UPDATING GIT DEPENDENCY https://github.com/move-language/move.git
+FETCHING GIT DEPENDENCY https://github.com/move-language/move.git
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING Foo
 Command `docgen --template template.md --exclude-impl --exclude-private-fun --exclude-specs --include-call-diagrams --include-dep-diagrams --independent-specs --no-collapsed-sections --output-directory doc --references-file template.md --section-level-start 3 --toc-depth 3`:
