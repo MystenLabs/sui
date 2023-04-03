@@ -26,8 +26,9 @@ Finally, Sui’s [Storage mechanics](storage-fund.md#storage-fund-rewards) provi
 
 `net_gas_fees = computation_gas_fee + storage_gas_fee - storage_rebate`
 
+**Computation Units**
 
-Importantly, though, Sui’s gas schedule is built coarsely with a bucketing approach. Two relatively similar transactions will translate into the exact same amount of Computation Units if they are in the same bucket, whereas two relatively different transactions will translate into different amounts of Computation Units if they fall in separate buckets. The smallest bucket maps into 1000 Computation Units, meaning that all transactions that fall into the smallest bucket will cost 1000 Computation Units. The largest bucket maps into 5,000,000 Computation Units; if a transaction were to require more Computation Units it would simply abort.
+Importantly, though, Sui’s computation gas schedule is built coarsely with a bucketing approach. Two relatively similar transactions will translate into the exact same amount of Computation Units if they are in the same bucket, whereas two relatively different transactions will translate into different amounts of Computation Units if they fall in separate buckets. The smallest bucket maps into 1000 Computation Units, meaning that all transactions that fall into the smallest bucket will cost 1000 Computation Units. The largest bucket maps into 5,000,000 Computation Units; if a transaction were to require more Computation Units it would simply abort.
 
 Using coarse bucketing accomplishes two important goals:
 * Frees developers from optimizing their smart contracts to deliver marginal gains in gas costs via "gas golfing"--instead, can focus on step-function improvements in their products and services.
