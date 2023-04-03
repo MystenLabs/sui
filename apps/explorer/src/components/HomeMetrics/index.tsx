@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { formatAmount, roundFloat, useRpcClient } from '@mysten/core';
+import { formatAmountParts, roundFloat, useRpcClient } from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
 
 import { MetricGroup } from './MetricGroup';
@@ -17,6 +17,19 @@ function StatsWrapper(props: StatsProps) {
         <div className="flex-shrink-0">
             <Stats {...props} />
         </div>
+    );
+}
+
+function FormattedStatsAmount({
+    amount,
+    ...props
+}: Omit<StatsProps, 'children'> & { amount?: string | number | bigint }) {
+    const [formattedAmount, postfix] = formatAmountParts(amount);
+
+    return (
+        <StatsWrapper {...props} postfix={postfix}>
+            {formattedAmount}
+        </StatsWrapper>
     );
 }
 
@@ -52,13 +65,25 @@ export function HomeMetrics() {
 
             <div className="mt-8 space-y-7">
                 <MetricGroup label="Current">
-                    <StatsWrapper label="TPS" tooltip="Transactions per second">
+                    <StatsWrapper
+                        label="TPS Now / 30D"
+                        tooltip="Transactions per second"
+                        postfix={`/ ${
+                            networkMetrics?.tps30Days
+                                ? roundFloat(networkMetrics.tps30Days, 2)
+                                : '--'
+                        }`}
+                    >
                         {networkMetrics?.currentTps
                             ? roundFloat(networkMetrics.currentTps, 2)
-                            : null}
+                            : '--'}
                     </StatsWrapper>
-                    <StatsWrapper label="Gas Price" tooltip="Current gas price">
-                        {gasData ? `${gasData} MIST` : null}
+                    <StatsWrapper
+                        label="Gas Price"
+                        tooltip="Current gas price"
+                        postfix="MIST"
+                    >
+                        {String(gasData) ?? null}
                     </StatsWrapper>
                     <StatsWrapper label="Epoch" tooltip="The current epoch">
                         {networkMetrics?.currentEpoch}
@@ -72,30 +97,26 @@ export function HomeMetrics() {
                 </MetricGroup>
 
                 <MetricGroup label="Total">
-                    <StatsWrapper
+                    <FormattedStatsAmount
                         label="Packages"
                         tooltip="Total packages counter"
-                    >
-                        {formatAmount(networkMetrics?.totalPackages)}
-                    </StatsWrapper>
-                    <StatsWrapper
+                        amount={networkMetrics?.totalPackages}
+                    />
+                    <FormattedStatsAmount
                         label="Objects"
                         tooltip="Total objects counter"
-                    >
-                        {formatAmount(networkMetrics?.totalObjects)}
-                    </StatsWrapper>
-                    <StatsWrapper
+                        amount={networkMetrics?.totalObjects}
+                    />
+                    <FormattedStatsAmount
                         label="Transaction Blocks"
                         tooltip="Total transaction blocks counter"
-                    >
-                        {formatAmount(transactionCount)}
-                    </StatsWrapper>
-                    <StatsWrapper
+                        amount={transactionCount}
+                    />
+                    <FormattedStatsAmount
                         label="Addresses"
                         tooltip="Total addresses counter"
-                    >
-                        {formatAmount(networkMetrics?.totalAddresses)}
-                    </StatsWrapper>
+                        amount={networkMetrics?.totalAddresses}
+                    />
                 </MetricGroup>
             </div>
         </Card>
