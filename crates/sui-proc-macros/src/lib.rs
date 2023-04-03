@@ -406,36 +406,72 @@ impl Fold for CheckArithmetic {
                     right = paren.expr.clone();
                 }
 
+                macro_rules! wrap_op {
+                    ($left: expr, $right: expr, $method: ident, $span: expr) => {
+                        quote_spanned!($span => {
+                            let _checked_arith_left = #left;
+                            let _checked_arith_right = #right;
+                            _checked_arith_left.$method(_checked_arith_right)
+                                .unwrap_or_else(||
+                                    panic!(
+                                        "Overflow or underflow in {} {} + {}",
+                                        stringify!($method),
+                                        _checked_arith_left,
+                                        _checked_arith_right
+                                    )
+                                )
+                        })
+                    };
+                }
+
+                macro_rules! wrap_op_assign {
+                    ($left: expr, $right: expr, $method: ident, $span: expr) => {
+                        quote_spanned!($span => {
+                            let ref mut _checked_arith_left = #left;
+                            let _checked_arith_right = #right;
+                            *_checked_arith_left = (*_checked_arith_left).$method(_checked_arith_right)
+                                .unwrap_or_else(||
+                                    panic!(
+                                        "Overflow or underflow in {} {} + {}",
+                                        stringify!($method),
+                                        *_checked_arith_left,
+                                        _checked_arith_right
+                                    )
+                                )
+                        })
+                    };
+                }
+
                 match op {
                     BinOp::Add(_) => {
-                        quote_spanned!(span => (#left).checked_add(#right).expect("Overflow or underflow in addition"))
+                        wrap_op!(left, right, checked_add, span)
                     }
                     BinOp::Sub(_) => {
-                        quote_spanned!(span => (#left).checked_sub(#right).expect("Overflow or underflow in subtraction"))
+                        wrap_op!(left, right, checked_sub, span)
                     }
                     BinOp::Mul(_) => {
-                        quote_spanned!(span => (#left).checked_mul(#right).expect("Overflow or underflow in multiplication"))
+                        wrap_op!(left, right, checked_mul, span)
                     }
                     BinOp::Div(_) => {
-                        quote_spanned!(span => (#left).checked_div(#right).expect("Overflow or underflow in division"))
+                        wrap_op!(left, right, checked_div, span)
                     }
                     BinOp::Rem(_) => {
-                        quote_spanned!(span => (#left).checked_rem(#right).expect("Overflow or underflow in remainder"))
+                        wrap_op!(left, right, checked_rem, span)
                     }
                     BinOp::AddAssign(_) => {
-                        quote_spanned!(span => #left = #left.checked_add(#right).expect("Overflow or underflow in addition assignment"))
+                        wrap_op_assign!(left, right, checked_add, span)
                     }
                     BinOp::SubAssign(_) => {
-                        quote_spanned!(span => #left = #left.checked_sub(#right).expect("Overflow or underflow in subtraction assignment"))
+                        wrap_op_assign!(left, right, checked_sub, span)
                     }
                     BinOp::MulAssign(_) => {
-                        quote_spanned!(span => #left = #left.checked_mul(#right).expect("Overflow or underflow in multiplication assignment"))
+                        wrap_op_assign!(left, right, checked_mul, span)
                     }
                     BinOp::DivAssign(_) => {
-                        quote_spanned!(span => #left = #left.checked_div(#right).expect("Overflow or underflow in division assignment"))
+                        wrap_op_assign!(left, right, checked_div, span)
                     }
                     BinOp::RemAssign(_) => {
-                        quote_spanned!(span => #left = #left.checked_rem(#right).expect("Overflow or underflow in remainder assignment"))
+                        wrap_op_assign!(left, right, checked_rem, span)
                     }
                     _ => {
                         let expr_binary = ExprBinary {
