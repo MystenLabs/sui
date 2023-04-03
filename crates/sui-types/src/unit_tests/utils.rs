@@ -83,7 +83,7 @@ pub fn to_sender_signed_transaction_with_multi_signers(
 ) -> VerifiedTransaction {
     VerifiedTransaction::new_unchecked(Transaction::from_data_and_signer(
         data,
-        Intent::default_sui_app(),
+        Intent::sui_transaction(),
         signers,
     ))
 }

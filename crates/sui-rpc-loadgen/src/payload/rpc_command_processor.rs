@@ -538,14 +538,14 @@ pub(crate) async fn sign_and_execute(
     request_type: ExecuteTransactionRequestType,
 ) -> SuiTransactionBlockResponse {
     let signature = Signature::new_secure(
-        &IntentMessage::new(Intent::default_sui_app(), &txn_data),
+        &IntentMessage::new(Intent::sui_transaction(), &txn_data),
         keypair,
     );
 
     let transaction_response = match client
         .quorum_driver()
         .execute_transaction_block(
-            Transaction::from_data(txn_data, Intent::default_sui_app(), vec![signature])
+            Transaction::from_data(txn_data, Intent::sui_transaction(), vec![signature])
                 .verify()
                 .expect("signature error"),
             SuiTransactionBlockResponseOptions::new().with_effects(),

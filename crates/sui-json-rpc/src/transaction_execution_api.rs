@@ -79,7 +79,7 @@ impl TransactionExecutionApi {
             sigs.push(GenericSignature::from_bytes(&sig.to_vec()?)?);
         }
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
-        let txn = Transaction::from_generic_sig_data(tx_data, Intent::default_sui_app(), sigs);
+        let txn = Transaction::from_generic_sig_data(tx_data, Intent::sui_transaction(), sigs);
         let tx = SuiTransactionBlock::try_from(txn.data().clone(), epoch_store.module_cache())?;
         let raw_transaction = if opts.show_raw_input {
             bcs::to_bytes(txn.data())?

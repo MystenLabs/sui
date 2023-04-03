@@ -152,13 +152,7 @@ where
         secret: &dyn Signer<AuthoritySignature>,
         authority: AuthorityName,
     ) -> AuthoritySignInfo {
-        AuthoritySignInfo::new(
-            epoch,
-            &data,
-            Intent::default_sui_app().with_scope(T::SCOPE),
-            authority,
-            secret,
-        )
+        AuthoritySignInfo::new(epoch, &data, Intent::sui_app(T::SCOPE), authority, secret)
     }
 
     pub fn epoch(&self) -> EpochId {
@@ -167,11 +161,8 @@ where
 
     pub fn verify_signature(&self, committee: &Committee) -> SuiResult {
         self.data.verify(Some(self.auth_sig().epoch))?;
-        self.auth_signature.verify_secure(
-            self.data(),
-            Intent::default_sui_app().with_scope(T::SCOPE),
-            committee,
-        )
+        self.auth_signature
+            .verify_secure(self.data(), Intent::sui_app(T::SCOPE), committee)
     }
 
     pub fn verify(
@@ -213,11 +204,8 @@ where
     // and make sure they all call verify to avoid repeated verifications.
     pub fn verify_signature(&self, committee: &Committee) -> SuiResult {
         self.data.verify(Some(self.auth_sig().epoch))?;
-        self.auth_signature.verify_secure(
-            self.data(),
-            Intent::default_sui_app().with_scope(T::SCOPE),
-            committee,
-        )
+        self.auth_signature
+            .verify_secure(self.data(), Intent::sui_app(T::SCOPE), committee)
     }
 
     pub fn verify(

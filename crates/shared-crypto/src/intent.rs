@@ -101,15 +101,15 @@ impl FromStr for Intent {
 }
 
 impl Intent {
-    pub fn with_scope(mut self, scope: IntentScope) -> Self {
-        self.scope = scope;
-        self
+    pub fn sui_app(scope: IntentScope) -> Self {
+        Self {
+            version: IntentVersion::V0,
+            scope,
+            app_id: AppId::Sui,
+        }
     }
-}
 
-// TODO: Do not allow default values as they must be explicitly specified.
-impl Intent {
-    pub fn default_sui_app() -> Self {
+    pub fn sui_transaction() -> Self {
         Self {
             version: IntentVersion::V0,
             scope: IntentScope::TransactionData,
@@ -117,10 +117,10 @@ impl Intent {
         }
     }
 
-    pub fn default_narwhal_app() -> Self {
+    pub fn narwhal_app(scope: IntentScope) -> Self {
         Self {
             version: IntentVersion::V0,
-            scope: IntentScope::TransactionData,
+            scope,
             app_id: AppId::Narwhal,
         }
     }

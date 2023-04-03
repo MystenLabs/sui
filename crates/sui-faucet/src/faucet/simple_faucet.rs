@@ -10,7 +10,6 @@ use tap::tap::TapFallible;
 use shared_crypto::intent::Intent;
 #[cfg(test)]
 use std::collections::HashSet;
-use std::default::Default;
 use std::path::Path;
 
 use sui::client_commands::WalletContext;
@@ -237,9 +236,9 @@ impl SimpleFaucet {
             .wallet
             .config
             .keystore
-            .sign_secure(&self.active_address, &tx_data, Intent::default_sui_app())
+            .sign_secure(&self.active_address, &tx_data, Intent::sui_transaction())
             .map_err(FaucetError::internal)?;
-        let tx = Transaction::from_data(tx_data, Intent::default_sui_app(), vec![signature])
+        let tx = Transaction::from_data(tx_data, Intent::sui_transaction(), vec![signature])
             .verify()
             .unwrap();
         let tx_digest = *tx.digest();

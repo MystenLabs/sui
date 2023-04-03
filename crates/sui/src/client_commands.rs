@@ -542,11 +542,11 @@ impl SuiClientCommands {
                 let signature = context.config.keystore.sign_secure(
                     &sender,
                     &data,
-                    Intent::default_sui_app(),
+                    Intent::sui_transaction(),
                 )?;
                 let response = context
                     .execute_transaction_block(
-                        Transaction::from_data(data, Intent::default_sui_app(), vec![signature])
+                        Transaction::from_data(data, Intent::sui_transaction(), vec![signature])
                             .verify()?,
                     )
                     .await?;
@@ -594,11 +594,11 @@ impl SuiClientCommands {
                 let signature = context.config.keystore.sign_secure(
                     &sender,
                     &data,
-                    Intent::default_sui_app(),
+                    Intent::sui_transaction(),
                 )?;
                 let response = context
                     .execute_transaction_block(
-                        Transaction::from_data(data, Intent::default_sui_app(), vec![signature])
+                        Transaction::from_data(data, Intent::sui_transaction(), vec![signature])
                             .verify()?,
                     )
                     .await?;
@@ -667,10 +667,10 @@ impl SuiClientCommands {
                     context
                         .config
                         .keystore
-                        .sign_secure(&from, &data, Intent::default_sui_app())?;
+                        .sign_secure(&from, &data, Intent::sui_transaction())?;
                 let response = context
                     .execute_transaction_block(
-                        Transaction::from_data(data, Intent::default_sui_app(), vec![signature])
+                        Transaction::from_data(data, Intent::sui_transaction(), vec![signature])
                             .verify()?,
                     )
                     .await?;
@@ -704,10 +704,10 @@ impl SuiClientCommands {
                     context
                         .config
                         .keystore
-                        .sign_secure(&from, &data, Intent::default_sui_app())?;
+                        .sign_secure(&from, &data, Intent::sui_transaction())?;
                 let response = context
                     .execute_transaction_block(
-                        Transaction::from_data(data, Intent::default_sui_app(), vec![signature])
+                        Transaction::from_data(data, Intent::sui_transaction(), vec![signature])
                             .verify()?,
                     )
                     .await?;
@@ -753,10 +753,10 @@ impl SuiClientCommands {
                     context
                         .config
                         .keystore
-                        .sign_secure(&from, &data, Intent::default_sui_app())?;
+                        .sign_secure(&from, &data, Intent::sui_transaction())?;
                 let response = context
                     .execute_transaction_block(
-                        Transaction::from_data(data, Intent::default_sui_app(), vec![signature])
+                        Transaction::from_data(data, Intent::sui_transaction(), vec![signature])
                             .verify()?,
                     )
                     .await?;
@@ -803,11 +803,11 @@ impl SuiClientCommands {
                 let signature = context.config.keystore.sign_secure(
                     &signer,
                     &data,
-                    Intent::default_sui_app(),
+                    Intent::sui_transaction(),
                 )?;
                 let response = context
                     .execute_transaction_block(
-                        Transaction::from_data(data, Intent::default_sui_app(), vec![signature])
+                        Transaction::from_data(data, Intent::sui_transaction(), vec![signature])
                             .verify()?,
                     )
                     .await?;
@@ -842,11 +842,11 @@ impl SuiClientCommands {
                 let signature = context.config.keystore.sign_secure(
                     &signer,
                     &data,
-                    Intent::default_sui_app(),
+                    Intent::sui_transaction(),
                 )?;
                 let response = context
                     .execute_transaction_block(
-                        Transaction::from_data(data, Intent::default_sui_app(), vec![signature])
+                        Transaction::from_data(data, Intent::sui_transaction(), vec![signature])
                             .verify()?,
                     )
                     .await?;
@@ -948,11 +948,11 @@ impl SuiClientCommands {
                 let signature = context.config.keystore.sign_secure(
                     &signer,
                     &data,
-                    Intent::default_sui_app(),
+                    Intent::sui_transaction(),
                 )?;
                 let response = context
                     .execute_transaction_block(
-                        Transaction::from_data(data, Intent::default_sui_app(), vec![signature])
+                        Transaction::from_data(data, Intent::sui_transaction(), vec![signature])
                             .verify()?,
                     )
                     .await?;
@@ -973,11 +973,11 @@ impl SuiClientCommands {
                 let signature = context.config.keystore.sign_secure(
                     &signer,
                     &data,
-                    Intent::default_sui_app(),
+                    Intent::sui_transaction(),
                 )?;
                 let response = context
                     .execute_transaction_block(
-                        Transaction::from_data(data, Intent::default_sui_app(), vec![signature])
+                        Transaction::from_data(data, Intent::sui_transaction(), vec![signature])
                             .verify()?,
                     )
                     .await?;
@@ -1045,7 +1045,7 @@ impl SuiClientCommands {
                     );
                 }
                 let verified =
-                    Transaction::from_generic_sig_data(data, Intent::default_sui_app(), sigs)
+                    Transaction::from_generic_sig_data(data, Intent::sui_transaction(), sigs)
                         .verify()?;
 
                 let response = context.execute_transaction_block(verified).await?;
@@ -1619,9 +1619,9 @@ pub async fn call_move(
         context
             .config
             .keystore
-            .sign_secure(&sender, &data, Intent::default_sui_app())?;
+            .sign_secure(&sender, &data, Intent::sui_transaction())?;
     let transaction =
-        Transaction::from_data(data, Intent::default_sui_app(), vec![signature]).verify()?;
+        Transaction::from_data(data, Intent::sui_transaction(), vec![signature]).verify()?;
 
     let response = context.execute_transaction_block(transaction).await?;
     let effects = response

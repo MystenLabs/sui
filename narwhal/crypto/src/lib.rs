@@ -116,8 +116,5 @@ impl NarwhalAuthorityAggregateSignature for AggregateSignature {
 
 /// Wrap a message in an intent message. Currently in Narwhal, the scope is always IntentScope::HeaderDigest and the app id is AppId::Narwhal.
 pub fn to_intent_message<T>(value: T) -> IntentMessage<T> {
-    IntentMessage::new(
-        Intent::default_narwhal_app().with_scope(IntentScope::HeaderDigest),
-        value,
-    )
+    IntentMessage::new(Intent::narwhal_app(IntentScope::HeaderDigest), value)
 }

@@ -65,7 +65,7 @@ pub async fn payloads(
         .operations
         .into_internal()?
         .try_into_data(metadata)?;
-    let intent_msg = IntentMessage::new(Intent::default_sui_app(), data);
+    let intent_msg = IntentMessage::new(Intent::sui_transaction(), data);
     let intent_msg_bytes = bcs::to_bytes(&intent_msg)?;
 
     let mut hasher = DefaultHash::default();
@@ -107,7 +107,7 @@ pub async fn combine(
 
     let signed_tx = Transaction::from_generic_sig_data(
         intent_msg.value,
-        Intent::default_sui_app(),
+        Intent::sui_transaction(),
         vec![GenericSignature::from_bytes(
             &[&*flag, &*sig_bytes, &*pub_key].concat(),
         )?],

@@ -547,9 +547,9 @@ async fn call_0x5(
         context
             .config
             .keystore
-            .sign_secure(&sender, &tx_data, Intent::default_sui_app())?;
+            .sign_secure(&sender, &tx_data, Intent::sui_transaction())?;
     let transaction =
-        Transaction::from_data(tx_data, Intent::default_sui_app(), vec![signature]).verify()?;
+        Transaction::from_data(tx_data, Intent::sui_transaction(), vec![signature]).verify()?;
     sui_client
         .quorum_driver()
         .execute_transaction_block(

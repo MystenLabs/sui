@@ -338,7 +338,7 @@ async fn execute_tx(
 ) -> anyhow::Result<()> {
     let tx = Transaction::from_data_and_signer(
         tx_data,
-        Intent::default_sui_app(),
+        Intent::sui_transaction(),
         vec![config.account_key_pair()],
     )
     .verify()?;

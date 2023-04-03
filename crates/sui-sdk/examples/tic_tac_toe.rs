@@ -95,7 +95,7 @@ impl TicTacToe {
         // Sign transaction.
         let signature =
             self.keystore
-                .sign_secure(&player_x, &create_game_call, Intent::default_sui_app())?;
+                .sign_secure(&player_x, &create_game_call, Intent::sui_transaction())?;
 
         // Execute the transaction.
 
@@ -105,7 +105,7 @@ impl TicTacToe {
             .execute_transaction_block(
                 Transaction::from_data(
                     create_game_call,
-                    Intent::default_sui_app(),
+                    Intent::sui_transaction(),
                     vec![signature],
                 )
                 .verify()?,
@@ -200,7 +200,7 @@ impl TicTacToe {
             let signature = self.keystore.sign_secure(
                 &my_identity,
                 &place_mark_call,
-                Intent::default_sui_app(),
+                Intent::sui_transaction(),
             )?;
 
             // Execute the transaction.
@@ -210,7 +210,7 @@ impl TicTacToe {
                 .execute_transaction_block(
                     Transaction::from_data(
                         place_mark_call,
-                        Intent::default_sui_app(),
+                        Intent::sui_transaction(),
                         vec![signature],
                     )
                     .verify()?,
