@@ -128,7 +128,7 @@ export function EpochsTable({
                               accessorKey: 'storageRevenue',
                           },
                           {
-                              header: 'Time',
+                              header: 'Epoch End',
                               accessorKey: 'time',
                           },
                       ],
@@ -158,7 +158,7 @@ export function EpochsTable({
                         'Stake Rewards',
                         'Checkpoint Set',
                         'Storage Revenue',
-                        'Time',
+                        'Epoch End',
                     ]}
                     colWidths={[
                         '100px',
