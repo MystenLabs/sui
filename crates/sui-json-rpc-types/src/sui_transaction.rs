@@ -660,6 +660,7 @@ pub struct DryRunTransactionBlockResponse {
     pub events: SuiTransactionBlockEvents,
     pub object_changes: Vec<ObjectChange>,
     pub balance_changes: Vec<BalanceChange>,
+    pub input: SuiTransactionBlockData,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]

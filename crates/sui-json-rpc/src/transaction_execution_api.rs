@@ -17,7 +17,8 @@ use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_json_rpc_types::{
     BigInt, DevInspectResults, DryRunTransactionBlockResponse, SuiTransactionBlock,
-    SuiTransactionBlockEvents, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    SuiTransactionBlockData, SuiTransactionBlockEvents, SuiTransactionBlockResponse,
+    SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{EpochId, SuiAddress};
@@ -158,6 +159,12 @@ impl TransactionExecutionApi {
         tx_bytes: Base64,
     ) -> Result<DryRunTransactionBlockResponse, Error> {
         let (txn_data, txn_digest) = get_transaction_data_and_digest(tx_bytes)?;
+        let module_cache = self
+            .state
+            .load_epoch_store_one_call_per_task()
+            .module_cache()
+            .clone();
+        let input = SuiTransactionBlockData::try_from(txn_data.clone(), &module_cache)?;
         let (resp, written_objects, transaction_effects) = self
             .state
             .dry_exec_transaction(txn_data.clone(), txn_digest)
@@ -179,6 +186,7 @@ impl TransactionExecutionApi {
             events: resp.events,
             object_changes,
             balance_changes,
+            input,
         })
     }
 }
