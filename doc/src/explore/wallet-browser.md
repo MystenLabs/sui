@@ -234,14 +234,3 @@ You can easily disconnect your wallet from a connected app.
 1. Click the app to disconnect from your wallet, then click **Disconnect**.
 
 Your wallet immediately disconnects from the app and displays the **Apps** tab.
-
-## Use your Ledger Nano hardware wallet
-
- 1. Click the menu (the three bars at the top-right corner of the wallet interface), then click **Accounts**.
- 2. Click **Connect Ledger Wallet**.
- 4. Connect your Ledger device and open the Sui app on your device.
- 5. Click **Continue**.
- 6. Select which account(s) you would like to import into the wallet.
- 7. Click **Unlock**.
-
- The wallet should display the **Accounts** page with the imported account(s) listed.
