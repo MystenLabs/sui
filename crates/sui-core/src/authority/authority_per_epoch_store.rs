@@ -855,11 +855,6 @@ impl AuthorityPerEpochStore {
         .await
     }
 
-    pub fn insert_checkpoint_boundary(&self, index: u64, height: u64) -> SuiResult {
-        self.tables.checkpoint_boundary.insert(&index, &height)?;
-        Ok(())
-    }
-
     /// When submitting a certificate caller **must** provide a ReconfigState lock guard
     /// and verify that it allows new user certificates
     pub fn insert_pending_consensus_transactions(
@@ -1283,7 +1278,7 @@ impl AuthorityPerEpochStore {
 
         Ok(Some((index, roots)))
     }
-    pub fn record_checkpoint_boundary(&self, commit_round: u64) -> SuiResult {
+    pub fn record_checkpoint_boundary(&self, batch: &mut DBBatch, commit_round: u64) -> SuiResult {
         let (index, height) = self.get_last_checkpoint_boundary();
 
         if let Some(height) = height {
@@ -1299,7 +1294,7 @@ impl AuthorityPerEpochStore {
             "Recording checkpoint boundary {} at {}",
             index, commit_round
         );
-        self.insert_checkpoint_boundary(index, commit_round)?;
+        batch.insert_batch(&self.tables.checkpoint_boundary, [(index, commit_round)])?;
         Ok(())
     }
 
@@ -1457,9 +1452,13 @@ impl AuthorityPerEpochStore {
                 parent_sync_store,
             )
             .await?;
+
+        let checkpoint = self.handle_commit_boundary(&mut batch, round, timestamp)?;
+
         batch.write()?;
         drop(lock);
-        if let Some(checkpoint) = self.handle_commit_boundary(round, timestamp)? {
+
+        if let Some(checkpoint) = checkpoint {
             let final_checkpoint = checkpoint.details.last_of_epoch;
             checkpoint_service.notify_checkpoint(self, checkpoint)?;
             if final_checkpoint {
@@ -1796,6 +1795,7 @@ impl AuthorityPerEpochStore {
 
     pub fn handle_commit_boundary(
         &self,
+        batch: &mut DBBatch,
         round: Round,
         timestamp_ms: CheckpointTimestamp,
     ) -> SuiResult<Option<PendingCheckpoint>> {
@@ -1830,7 +1830,7 @@ impl AuthorityPerEpochStore {
                 },
             });
         }
-        self.record_checkpoint_boundary(round)?;
+        self.record_checkpoint_boundary(batch, round)?;
         Ok(checkpoint)
     }
 
