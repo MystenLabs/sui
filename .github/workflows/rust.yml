@@ -66,7 +66,7 @@ jobs:
   test:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       # Tests written with #[sim_test] are often flaky if run as #[tokio::test] - this var
       # causes #[sim_test] to only run under the deterministic `simtest` job, and not the
@@ -87,6 +87,7 @@ jobs:
           pip install pyopenssl --upgrade
           if [ -f narwhal/benchmark/requirements.txt ]; then pip install -r narwhal/benchmark/requirements.txt; fi
           crates/sui-move/scripts/prover_setup.sh
+          yes | crates/sui-move/scripts/dev_setup.sh -ydp
       - name: cargo test
         run: |
           set -o pipefail

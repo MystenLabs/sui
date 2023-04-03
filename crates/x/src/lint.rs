@@ -91,11 +91,11 @@ pub fn run(args: Args) -> crate::Result<()> {
 
     let results = engine.run()?;
 
-    handle_lint_results_exclude_external_crate_license_check(results)
+    handle_lint_results_exclude_external_crate_checks(results)
 }
 
 /// Define custom handler so we can skip certain lints on certain files. This is a temporary till we upstream this logic
-pub fn handle_lint_results_exclude_external_crate_license_check(
+pub fn handle_lint_results_exclude_external_crate_checks(
     results: LintResults,
 ) -> crate::Result<()> {
     // TODO: handle skipped results
