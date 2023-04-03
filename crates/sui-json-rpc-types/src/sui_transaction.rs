@@ -1091,19 +1091,27 @@ impl SuiProgrammableTransactionBlock {
                         return result_types;
                     };
                     for (arg, type_) in c.arguments.iter().zip(types) {
-                        if let &Argument::Input(i) = arg {
-                            result_types[i as usize] = type_;
+                        match arg {
+                            &Argument::Input(i) if (i as usize) < inputs.len() => {
+                                result_types[i as usize] = type_;
+                            }
+                            _ => {}
                         }
                     }
                 }
                 Command::SplitCoins(_, amounts) => {
                     for arg in amounts {
-                        if let &Argument::Input(i) = arg {
-                            result_types[i as usize] = Some(MoveTypeLayout::U64);
+                        match arg {
+                            &Argument::Input(i) if (i as usize) < inputs.len() => {
+                                result_types[i as usize] = Some(MoveTypeLayout::U64);
+                            }
+                            _ => {}
                         }
                     }
                 }
-                Command::TransferObjects(_, Argument::Input(i)) => {
+                Command::TransferObjects(_, Argument::Input(i))
+                    if ((*i) as usize) < inputs.len() =>
+                {
                     result_types[(*i) as usize] = Some(MoveTypeLayout::Address);
                 }
                 _ => {}
