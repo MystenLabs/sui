@@ -329,6 +329,7 @@ impl<'a> SuiGasStatusAPI<'a> for SuiGasStatus<'a> {
     fn reset_storage_cost_and_rebate(&mut self) {
         self.storage_cost = 0;
         self.storage_rebate = 0;
+        self.unmetered_storage_rebate = 0;
     }
 
     fn charge_storage_read(&mut self, size: usize) -> Result<(), ExecutionError> {
