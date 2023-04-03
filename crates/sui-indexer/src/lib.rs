@@ -14,10 +14,14 @@ use clap::Parser;
 use diesel::pg::PgConnection;
 use diesel::prelude::*;
 use diesel::r2d2::ConnectionManager;
-use diesel_async::pooled_connection::bb8::{Pool, PooledConnection};
+use diesel_async::pooled_connection::deadpool::{Object, Pool};
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::AsyncPgConnection;
+use futures::future::BoxFuture;
+use futures::FutureExt;
 use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClientBuilder};
+use openssl::ssl::{SslConnector, SslMethod, SslVerifyMode};
+use postgres_openssl::MakeTlsConnector;
 use prometheus::Registry;
 use tracing::{info, warn};
 use url::Url;
@@ -52,7 +56,6 @@ pub type PgConnectionPool = diesel::r2d2::Pool<ConnectionManager<PgConnection>>;
 pub type PgPoolConnection = diesel::r2d2::PooledConnection<ConnectionManager<PgConnection>>;
 
 pub type AsyncPgConnectionPool = Pool<AsyncPgConnection>;
-pub type AsyncPgPoolConnection<'a> = PooledConnection<'a, AsyncPgConnection>;
 
 /// Returns all endpoints for which we have implemented on the indexer,
 /// some of them are not validated yet.
@@ -182,8 +185,28 @@ pub async fn new_rpc_client(http_url: &str) -> Result<SuiClient, IndexerError> {
         })
 }
 
-pub fn establish_connection(db_url: String) -> PgConnection {
-    PgConnection::establish(&db_url).unwrap_or_else(|_| panic!("Error connecting to {}", db_url))
+fn establish_connection(url: &str) -> BoxFuture<ConnectionResult<AsyncPgConnection>> {
+    async {
+        let builder = SslConnector::builder(SslMethod::tls()).unwrap();
+        let mut connector = MakeTlsConnector::new(builder.build());
+        // TODO: we might want to set a proper SSL cert for DB and indexer
+        connector.set_callback(|config, _| {
+            config.set_verify_hostname(false);
+            config.set_verify(SslVerifyMode::NONE);
+            Ok(())
+        });
+
+        let (client, connection) = tokio_postgres::connect(url, connector)
+            .await
+            .map_err(|e| ConnectionError::BadConnection(e.to_string()))?;
+        tokio::spawn(async move {
+            if let Err(e) = connection.await {
+                eprintln!("connection error: {}", e);
+            }
+        });
+        AsyncPgConnection::try_from(client).await
+    }
+    .boxed()
 }
 
 pub async fn new_pg_connection_pool(
@@ -198,25 +221,26 @@ pub async fn new_pg_connection_pool(
         ))
     })?;
 
-    let manager = AsyncDieselConnectionManager::<AsyncPgConnection>::new(db_url);
+    let manager = AsyncDieselConnectionManager::<AsyncPgConnection>::new_with_setup(
+        db_url,
+        establish_connection,
+    );
     // Our vultr instances allow up to 197 concurrent connections,
     // setting the default pool size to 187 for async connections and 10 for blocking connections.
     let connection_size = env::var("DB_CONNECTION_SIZE")
         .unwrap_or_else(|_| "187".to_string())
-        .parse::<u32>()
+        .parse::<usize>()
         .unwrap_or(187);
     info!("Creating connection pool with size: {connection_size}");
-    let async_pool = Pool::builder()
+    let async_pool = Pool::builder(manager)
         .max_size(connection_size)
-        .build(manager)
-        .await
+        .build()
         .map_err(|e| {
             IndexerError::PgConnectionPoolInitError(format!(
-                "Failed to initialize connection pool with error: {:?}",
+                "Failed to initialize async connection pool with error: {:?}",
                 e
             ))
         })?;
-
     Ok((blocking_cp, async_pool))
 }
 
@@ -227,7 +251,7 @@ pub fn get_pg_pool_connection(pool: &PgConnectionPool) -> Result<PgPoolConnectio
     })
     .map_err(|e| {
         IndexerError::PgPoolConnectionError(format!(
-            "Failed to get pool connection from PG connection pool with error: {:?}",
+            "Failed to get connection from PG connection pool with error: {:?}",
             e
         ))
     })
@@ -235,14 +259,14 @@ pub fn get_pg_pool_connection(pool: &PgConnectionPool) -> Result<PgPoolConnectio
 
 pub async fn get_async_pg_pool_connection(
     pool: &AsyncPgConnectionPool,
-) -> Result<AsyncPgPoolConnection, IndexerError> {
+) -> Result<Object<AsyncPgConnection>, IndexerError> {
     retry(ExponentialBackoff::default(), || async {
         pool.get().await.map_err(backoff::Error::Permanent)
     })
     .await
     .map_err(|e| {
         IndexerError::PgPoolConnectionError(format!(
-            "Failed to get pool connection from PG connection pool with error: {:?}",
+            "Failed to get async connection from PG connection pool with error: {:?}",
             e
         ))
     })

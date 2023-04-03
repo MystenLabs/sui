@@ -68,7 +68,6 @@ base16ct = { version = "0.1", default-features = false, features = ["alloc"] }
 base64-594e8ee84c453af0 = { package = "base64", version = "0.13", features = ["alloc"] }
 base64-647d43efb71741da = { package = "base64", version = "0.21" }
 base64ct = { version = "1", default-features = false, features = ["alloc"] }
-bb8 = { version = "0.8", default-features = false }
 bcs = { version = "0.1", default-features = false }
 beef = { version = "0.5", features = ["impl_serde"] }
 better_any = { version = "0.1", default-features = false }
@@ -154,6 +153,8 @@ dashmap = { version = "5", default-features = false }
 data-encoding = { version = "2" }
 data-encoding-macro = { version = "0.1", default-features = false }
 datatest-stable = { version = "0.1", default-features = false }
+deadpool = { version = "0.9" }
+deadpool-runtime = { version = "0.1", default-features = false }
 debug-ignore = { version = "1", default-features = false }
 der = { version = "0.6", default-features = false, features = ["oid", "std", "zeroize"] }
 der-parser = { version = "8", features = ["bigint"] }
@@ -161,7 +162,7 @@ derive_builder = { version = "0.12" }
 determinator = { version = "0.10", default-features = false }
 deunicode = { version = "0.4", default-features = false }
 diesel = { version = "2", features = ["64-column-tables", "chrono", "i-implement-a-third-party-backend-and-opt-into-breaking-changes", "postgres", "r2d2", "serde_json"] }
-diesel-async = { version = "0.2", features = ["bb8", "postgres"] }
+diesel-async = { version = "0.2", features = ["deadpool", "postgres"] }
 diesel_migrations = { version = "2" }
 diff = { version = "0.1", default-features = false }
 difference = { version = "2" }
@@ -207,6 +208,8 @@ fixedbitset-9fbad63c4bcf4a8f = { package = "fixedbitset", version = "0.4", defau
 flate2 = { version = "1" }
 float-cmp = { version = "0.9" }
 fnv = { version = "1" }
+foreign-types = { version = "0.3", default-features = false }
+foreign-types-shared = { version = "0.1", default-features = false }
 form_urlencoded = { version = "1", default-features = false }
 fragile = { version = "2", default-features = false }
 fs_extra = { version = "1", default-features = false }
@@ -379,6 +382,8 @@ oid-registry = { version = "0.6", features = ["crypto", "x509"] }
 once_cell = { version = "1" }
 oorandom = { version = "11", default-features = false }
 opaque-debug = { version = "0.3", default-features = false }
+openssl = { version = "0.10" }
+openssl-sys = { version = "0.9", default-features = false }
 ordered-float = { version = "2" }
 os_str_bytes = { version = "6", default-features = false, features = ["raw_os_str"] }
 ouroboros-274715c4dabd11b0 = { package = "ouroboros", version = "0.9", default-features = false }
@@ -410,6 +415,7 @@ plotters-backend = { version = "0.3", default-features = false }
 plotters-svg = { version = "0.3", default-features = false }
 polyval = { version = "0.6", default-features = false }
 portable-atomic = { version = "0.3" }
+postgres-openssl = { version = "0.5" }
 postgres-protocol = { version = "0.6", default-features = false }
 postgres-types = { version = "0.2", default-features = false }
 ppv-lite86 = { version = "0.2", default-features = false, features = ["simd", "std"] }
@@ -520,7 +526,8 @@ slip10_ed25519 = { version = "0.1", default-features = false }
 slug = { version = "0.1", default-features = false }
 smallvec = { version = "1", default-features = false }
 snap = { version = "1", default-features = false }
-socket2 = { version = "0.4", default-features = false, features = ["all"] }
+socket2-9fbad63c4bcf4a8f = { package = "socket2", version = "0.4", default-features = false, features = ["all"] }
+socket2-d8f496e17d97b5cb = { package = "socket2", version = "0.5", default-features = false, features = ["all"] }
 soketto = { version = "0.7", features = ["http"] }
 spki = { version = "0.6", default-features = false, features = ["std"] }
 stable_deref_trait = { version = "1" }
@@ -563,6 +570,7 @@ tinyvec = { version = "1", features = ["alloc"] }
 tinyvec_macros = { version = "0.1", default-features = false }
 tokio = { version = "1", features = ["full", "test-util", "tracing"] }
 tokio-io-timeout = { version = "1", default-features = false }
+tokio-openssl = { version = "0.6", default-features = false }
 tokio-postgres = { version = "0.7" }
 tokio-retry = { version = "0.3", default-features = false }
 tokio-rustls = { version = "0.23" }
@@ -698,7 +706,6 @@ base16ct = { version = "0.1", default-features = false, features = ["alloc"] }
 base64-594e8ee84c453af0 = { package = "base64", version = "0.13", features = ["alloc"] }
 base64-647d43efb71741da = { package = "base64", version = "0.21" }
 base64ct = { version = "1", default-features = false, features = ["alloc"] }
-bb8 = { version = "0.8", default-features = false }
 bcs = { version = "0.1", default-features = false }
 beef = { version = "0.5", features = ["impl_serde"] }
 better_any = { version = "0.1", default-features = false }
@@ -800,6 +807,8 @@ data-encoding = { version = "2" }
 data-encoding-macro = { version = "0.1", default-features = false }
 data-encoding-macro-internal = { version = "0.1", default-features = false }
 datatest-stable = { version = "0.1", default-features = false }
+deadpool = { version = "0.9" }
+deadpool-runtime = { version = "0.1", default-features = false }
 debug-ignore = { version = "1", default-features = false }
 der = { version = "0.6", default-features = false, features = ["oid", "std", "zeroize"] }
 der-parser = { version = "8", features = ["bigint"] }
@@ -812,7 +821,7 @@ derive_more = { version = "0.99" }
 determinator = { version = "0.10", default-features = false }
 deunicode = { version = "0.4", default-features = false }
 diesel = { version = "2", features = ["64-column-tables", "chrono", "i-implement-a-third-party-backend-and-opt-into-breaking-changes", "postgres", "r2d2", "serde_json"] }
-diesel-async = { version = "0.2", features = ["bb8", "postgres"] }
+diesel-async = { version = "0.2", features = ["deadpool", "postgres"] }
 diesel-derive-enum = { version = "2", default-features = false, features = ["postgres"] }
 diesel_derives = { version = "2", features = ["64-column-tables", "postgres", "with-deprecated"] }
 diesel_migrations = { version = "2" }
@@ -863,6 +872,8 @@ fixedbitset-9fbad63c4bcf4a8f = { package = "fixedbitset", version = "0.4", defau
 flate2 = { version = "1" }
 float-cmp = { version = "0.9" }
 fnv = { version = "1" }
+foreign-types = { version = "0.3", default-features = false }
+foreign-types-shared = { version = "0.1", default-features = false }
 form_urlencoded = { version = "1", default-features = false }
 fragile = { version = "2", default-features = false }
 fs_extra = { version = "1", default-features = false }
@@ -1054,6 +1065,9 @@ oid-registry = { version = "0.6", features = ["crypto", "x509"] }
 once_cell = { version = "1" }
 oorandom = { version = "11", default-features = false }
 opaque-debug = { version = "0.3", default-features = false }
+openssl = { version = "0.10" }
+openssl-macros = { version = "0.1", default-features = false }
+openssl-sys = { version = "0.9", default-features = false }
 ordered-float = { version = "2" }
 os_str_bytes = { version = "6", default-features = false, features = ["raw_os_str"] }
 ouroboros-274715c4dabd11b0 = { package = "ouroboros", version = "0.9", default-features = false }
@@ -1098,6 +1112,7 @@ plotters-backend = { version = "0.3", default-features = false }
 plotters-svg = { version = "0.3", default-features = false }
 polyval = { version = "0.6", default-features = false }
 portable-atomic = { version = "0.3" }
+postgres-openssl = { version = "0.5" }
 postgres-protocol = { version = "0.6", default-features = false }
 postgres-types = { version = "0.2", default-features = false }
 ppv-lite86 = { version = "0.2", default-features = false, features = ["simd", "std"] }
@@ -1232,7 +1247,8 @@ slip10_ed25519 = { version = "0.1", default-features = false }
 slug = { version = "0.1", default-features = false }
 smallvec = { version = "1", default-features = false }
 snap = { version = "1", default-features = false }
-socket2 = { version = "0.4", default-features = false, features = ["all"] }
+socket2-9fbad63c4bcf4a8f = { package = "socket2", version = "0.4", default-features = false, features = ["all"] }
+socket2-d8f496e17d97b5cb = { package = "socket2", version = "0.5", default-features = false, features = ["all"] }
 soketto = { version = "0.7", features = ["http"] }
 spki = { version = "0.6", default-features = false, features = ["std"] }
 stable_deref_trait = { version = "1" }
@@ -1284,7 +1300,8 @@ tinyvec = { version = "1", features = ["alloc"] }
 tinyvec_macros = { version = "0.1", default-features = false }
 tokio = { version = "1", features = ["full", "test-util", "tracing"] }
 tokio-io-timeout = { version = "1", default-features = false }
-tokio-macros = { version = "1", default-features = false }
+tokio-macros = { version = "2", default-features = false }
+tokio-openssl = { version = "0.6", default-features = false }
 tokio-postgres = { version = "0.7" }
 tokio-retry = { version = "0.3", default-features = false }
 tokio-rustls = { version = "0.23" }
@@ -1542,7 +1559,9 @@ web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 widestring = { version = "0.5" }
 winapi = { version = "0.3", default-features = false, features = ["basetsd", "cfg", "combaseapi", "consoleapi", "errhandlingapi", "evntrace", "fileapi", "handleapi", "heapapi", "ifdef", "impl-debug", "impl-default", "in6addr", "inaddr", "ioapiset", "iphlpapi", "knownfolders", "libloaderapi", "lmaccess", "lmapibuf", "lmcons", "memoryapi", "minwinbase", "minwindef", "namedpipeapi", "netioapi", "ntdef", "ntlsa", "ntsecapi", "ntstatus", "objbase", "objidl", "oleauto", "pdh", "powerbase", "processenv", "processthreadsapi", "profileapi", "psapi", "rpcdce", "securitybaseapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "timezoneapi", "wbemcli", "winbase", "wincon", "windef", "winerror", "winioctl", "winnt", "winreg", "winsock2", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
 winapi-util = { version = "0.1", default-features = false }
-windows-sys = { version = "0.42", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security_Authentication_Identity", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Input_KeyboardAndMouse"] }
+windows-sys-53888c27b7ba5cf4 = { package = "windows-sys", version = "0.45", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming"] }
+windows-sys-b32c9ddb6d93a9d2 = { package = "windows-sys", version = "0.42", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security_Authentication_Identity", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Input_KeyboardAndMouse"] }
+windows-targets = { version = "0.42", default-features = false }
 windows_x86_64_msvc = { version = "0.42", default-features = false }
 winreg = { version = "0.10", default-features = false }
 
@@ -1568,7 +1587,9 @@ web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 widestring = { version = "0.5" }
 winapi = { version = "0.3", default-features = false, features = ["basetsd", "cfg", "combaseapi", "consoleapi", "errhandlingapi", "evntrace", "fileapi", "handleapi", "heapapi", "ifdef", "impl-debug", "impl-default", "in6addr", "inaddr", "ioapiset", "iphlpapi", "knownfolders", "libloaderapi", "lmaccess", "lmapibuf", "lmcons", "memoryapi", "minwinbase", "minwindef", "namedpipeapi", "netioapi", "ntdef", "ntlsa", "ntsecapi", "ntstatus", "objbase", "objidl", "oleauto", "pdh", "powerbase", "processenv", "processthreadsapi", "profileapi", "psapi", "rpcdce", "securitybaseapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "timezoneapi", "wbemcli", "winbase", "wincon", "windef", "winerror", "winioctl", "winnt", "winreg", "winsock2", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
 winapi-util = { version = "0.1", default-features = false }
-windows-sys = { version = "0.42", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security_Authentication_Identity", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Input_KeyboardAndMouse"] }
+windows-sys-53888c27b7ba5cf4 = { package = "windows-sys", version = "0.45", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming"] }
+windows-sys-b32c9ddb6d93a9d2 = { package = "windows-sys", version = "0.42", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security_Authentication_Identity", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Input_KeyboardAndMouse"] }
+windows-targets = { version = "0.42", default-features = false }
 windows_x86_64_msvc = { version = "0.42", default-features = false }
 winreg = { version = "0.10", default-features = false }
 
