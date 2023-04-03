@@ -20,11 +20,9 @@ interface Props {
 export function GasFees({ sender, transaction }: Props) {
     const { data: transactionData } = useTransactionData(sender, transaction);
     const { data: gasBudget } = useTransactionGasBudget(sender, transaction);
-
     const isSponsored =
         transactionData?.gasConfig.owner &&
         transactionData.sender !== transactionData.gasConfig.owner;
-
     return (
         <SummaryCard
             header="Estimated Gas Fees"
@@ -39,13 +37,13 @@ export function GasFees({ sender, transaction }: Props) {
         >
             <DescriptionList>
                 <DescriptionItem title="You Pay">
-                    {isSponsored ? 0 : gasBudget || '-'} {GAS_SYMBOL}
+                    {isSponsored ? 0 : gasBudget || '-'}
+                    {isSponsored || gasBudget ? GAS_SYMBOL : null}
                 </DescriptionItem>
-
                 {isSponsored && (
                     <>
                         <DescriptionItem title="Sponsor Pays">
-                            {gasBudget || '-'} {GAS_SYMBOL}
+                            {gasBudget ? `${gasBudget} ${GAS_SYMBOL}` : '-'}
                         </DescriptionItem>
                         <DescriptionItem title="Sponsor">
                             {formatAddress(transactionData!.gasConfig.owner!)}
