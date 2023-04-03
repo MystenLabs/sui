@@ -55,7 +55,7 @@ export function translate(o: SuiObjectResponse): DataType {
             display:
                 (typeof o.data === 'object' &&
                     'display' in o.data &&
-                    o.data.display) ||
+                    o.data.display?.data) ||
                 undefined,
         };
     } else {

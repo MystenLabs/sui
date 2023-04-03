@@ -155,6 +155,12 @@ impl TryFrom<SuiObjectResponse> for ObjectInfo {
     }
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq)]
+pub struct DisplayFieldsResponse {
+    pub data: Option<BTreeMap<String, String>>,
+    pub error: Option<SuiObjectResponseError>,
+}
+
 #[serde_as]
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq)]
 #[serde(rename_all = "camelCase", rename = "ObjectData")]
@@ -186,7 +192,7 @@ pub struct SuiObjectData {
     /// This can also be None if the struct type does not have Display defined
     /// See more details in <https://forums.sui.io/t/nft-object-display-proposal/4872>
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub display: Option<BTreeMap<String, String>>,
+    pub display: Option<DisplayFieldsResponse>,
     /// Move object content or package content, default to be None unless SuiObjectDataOptions.showContent is set to true
     #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<SuiParsedData>,
@@ -542,7 +548,7 @@ impl
         Object,
         Option<MoveStructLayout>,
         SuiObjectDataOptions,
-        Option<BTreeMap<String, String>>,
+        Option<DisplayFieldsResponse>,
     )> for SuiObjectData
 {
     type Error = anyhow::Error;
@@ -553,7 +559,7 @@ impl
             Object,
             Option<MoveStructLayout>,
             SuiObjectDataOptions,
-            Option<BTreeMap<String, String>>,
+            Option<DisplayFieldsResponse>,
         ),
     ) -> Result<Self, Self::Error> {
         let show_display = options.show_display;

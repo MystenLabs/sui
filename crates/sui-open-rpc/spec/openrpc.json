@@ -3245,6 +3245,30 @@
           }
         ]
       },
+      "DisplayFieldsResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObjectResponseError"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
       "DryRunTransactionBlockResponse": {
         "type": "object",
         "required": [
@@ -4665,13 +4689,14 @@
           },
           "display": {
             "description": "The Display metadata for frontend UI rendering, default to be None unless SuiObjectDataOptions.showContent is set to true This can also be None if the struct type does not have Display defined See more details in <https://forums.sui.io/t/nft-object-display-proposal/4872>",
-            "type": [
-              "object",
-              "null"
-            ],
-            "additionalProperties": {
-              "type": "string"
-            }
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DisplayFieldsResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "objectId": {
             "$ref": "#/components/schemas/ObjectID"

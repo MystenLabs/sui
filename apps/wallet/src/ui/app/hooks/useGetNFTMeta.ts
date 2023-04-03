@@ -17,9 +17,10 @@ export function useGetNFTMeta(objectID: string) {
     const nftMeta = useMemo(() => {
         if (!resp.data) return null;
         const { data } = resp.data || {};
-        if (!is(data, SuiObjectData) || !data.display) return null;
+        if (!is(data, SuiObjectData) || !data.display || !data.display?.data)
+            return null;
         const { name, description, creator, image_url, link, project_url } =
-            data.display;
+            data.display.data;
         return {
             name: name || null,
             description: description || null,

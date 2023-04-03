@@ -91,7 +91,7 @@ function OwnedObject({ id, byAddress }: { id: string; byAddress: boolean }) {
                                     const displayMeta =
                                         typeof resp.data === 'object' &&
                                         'display' in resp.data
-                                            ? resp.data.display
+                                            ? resp.data.display?.data
                                             : undefined;
                                     const url = parseImageURL(displayMeta);
                                     return {

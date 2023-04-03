@@ -22,10 +22,11 @@ use tracing::{debug, error, warn};
 use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
-    BalanceChange, BigInt, Checkpoint, CheckpointId, CheckpointPage, EventFilter, ObjectChange,
-    SuiCheckpointSequenceNumber, SuiEvent, SuiGetPastObjectRequest, SuiMoveStruct, SuiMoveValue,
-    SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse, SuiTransactionBlock,
-    SuiTransactionBlockEvents, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    BalanceChange, BigInt, Checkpoint, CheckpointId, CheckpointPage, DisplayFieldsResponse,
+    EventFilter, ObjectChange, SuiCheckpointSequenceNumber, SuiEvent, SuiGetPastObjectRequest,
+    SuiMoveStruct, SuiMoveValue, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
+    SuiTransactionBlock, SuiTransactionBlockEvents, SuiTransactionBlockResponse,
+    SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest};
@@ -146,7 +147,7 @@ impl ReadApiServer for ReadApi {
                 let mut display_fields = None;
                 if options.show_display {
                     match get_display_fields(self, &o, &layout).await {
-                        Ok(rendered_fields) => display_fields = rendered_fields,
+                        Ok(rendered_fields) => display_fields = Some(rendered_fields),
                         Err(e) => {
                             return Ok(SuiObjectResponse::new(
                                 Some((object_ref, o, layout, options, None).try_into()?),
@@ -227,7 +228,7 @@ impl ReadApiServer for ReadApi {
             PastObjectRead::VersionFound(object_ref, o, layout) => {
                 let display_fields = if options.show_display {
                     // TODO (jian): api breaking change to also modify past objects.
-                    get_display_fields(self, &o, &layout).await?
+                    Some(get_display_fields(self, &o, &layout).await?)
                 } else {
                     None
                 };
@@ -756,14 +757,17 @@ async fn get_display_fields(
     fullnode_api: &ReadApi,
     original_object: &Object,
     original_layout: &Option<MoveStructLayout>,
-) -> RpcResult<Option<BTreeMap<String, String>>> {
-    let Some((object_type, layout)) = get_object_type_and_struct(original_object, original_layout)? else{
-        return Ok(None)
+) -> RpcResult<DisplayFieldsResponse> {
+    let Some((object_type, layout)) = get_object_type_and_struct(original_object, original_layout)? else {
+        return Ok(DisplayFieldsResponse { data: None, error: None })
     };
     if let Some(display_object) = get_display_object_by_type(fullnode_api, &object_type).await? {
-        return Ok(Some(get_rendered_fields(display_object.fields, &layout)?));
+        return get_rendered_fields(display_object.fields, &layout);
     }
-    Ok(None)
+    Ok(DisplayFieldsResponse {
+        data: None,
+        error: None,
+    })
 }
 
 async fn get_display_object_by_type(
@@ -877,18 +881,37 @@ pub fn get_transaction_data_and_digest(
 pub fn get_rendered_fields(
     fields: VecMap<String, String>,
     move_struct: &MoveStruct,
-) -> RpcResult<BTreeMap<String, String>> {
+) -> RpcResult<DisplayFieldsResponse> {
     let sui_move_value: SuiMoveValue = MoveValue::Struct(move_struct.clone()).into();
     if let SuiMoveValue::Struct(move_struct) = sui_move_value {
-        return fields
-            .contents
+        let fields =
+            fields
+                .contents
+                .iter()
+                .map(|entry| match parse_template(&entry.value, &move_struct) {
+                    Ok(value) => Ok((entry.key.clone(), value)),
+                    Err(e) => Err(e),
+                });
+        let (oks, errs): (Vec<_>, Vec<_>) = fields.partition(Result::is_ok);
+        let success = oks.into_iter().filter_map(Result::ok).collect();
+        let errors: Vec<_> = errs.into_iter().filter_map(Result::err).collect();
+        let error_string = errors
             .iter()
-            .map(|entry| match parse_template(&entry.value, &move_struct) {
-                Ok(value) => Ok((entry.key.clone(), value)),
-                // TODO (jian): implement best effort display fields.
-                Err(e) => Err(e),
+            .map(|e| e.to_string())
+            .collect::<Vec<String>>()
+            .join("; ");
+        let error = if !error_string.is_empty() {
+            Some(SuiObjectResponseError::DisplayError {
+                error: anyhow!("{error_string}").to_string(),
             })
-            .collect::<RpcResult<BTreeMap<_, _>>>();
+        } else {
+            None
+        };
+
+        return Ok(DisplayFieldsResponse {
+            data: Some(success),
+            error,
+        });
     }
     Err(anyhow!("Failed to parse move struct"))?
 }

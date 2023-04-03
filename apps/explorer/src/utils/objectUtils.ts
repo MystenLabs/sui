@@ -7,7 +7,7 @@ import { findIPFSvalue } from './stringUtils';
 
 import type { SuiObjectResponse } from '@mysten/sui.js';
 
-export function parseImageURL(display?: Record<string, string>) {
+export function parseImageURL(display?: Record<string, string> | null) {
     const url = display?.image_url;
     if (url) {
         if (findIPFSvalue(url)) return url;
@@ -43,7 +43,7 @@ export function getOwnerStr(owner: ObjectOwner | string): string {
 export const checkIsPropertyType = (value: any) =>
     ['number', 'string'].includes(typeof value);
 
-export const extractName = (display?: Record<string, string>) => {
+export const extractName = (display?: Record<string, string> | null) => {
     if (!display || !('name' in display)) return undefined;
     const name = display.name;
     if (typeof name === 'string') {
