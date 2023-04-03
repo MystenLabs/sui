@@ -1,9 +1,0 @@
-[package]
-name = "type_params"
-version = "0.0.1"
-
-[dependencies]
-Sui = { local = "../../../../../sui-framework/packages/sui-framework" }
-
-[addresses]
-type_params = "0x0"

@@ -1,6 +1,0 @@
-[package]
-name = "compatibility_invalid"
-version = "0.0.2"
-
-[addresses]
-base_addr = "0x0"

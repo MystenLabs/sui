@@ -1,5 +1,0 @@
-processed 1 task
-
-task 0 'publish'. lines 4-11:
-Error: Transaction Effects Status: Move Runtime Abort. Location: _::m::init (function index 0) at offset 1, Abort Code: 0
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: _, name: Identifier("m") }, function: 0, instruction: 1, function_name: Some("init") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("_::m::init at offset 1"), exec_state: Some(ExecutionState { stack_trace: [] }), location: Module(ModuleId { address: _, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 1)] }), command: Some(0) } }

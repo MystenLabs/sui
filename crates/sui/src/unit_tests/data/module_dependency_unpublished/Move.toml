@@ -1,8 +1,0 @@
-[package]
-name = "Unpublished"
-version = "0.0.1"
-# No published-at address for this package.
-# published-at = "0x0"
-
-[addresses]
-invalid = "0x0"

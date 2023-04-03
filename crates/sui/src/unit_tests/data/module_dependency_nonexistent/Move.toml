@@ -1,7 +1,0 @@
-[package]
-name = "Nonexistent"
-version = "0.0.1"
-published-at = "0xabc123"
-
-[addresses]
-nonexistent = "0x0"

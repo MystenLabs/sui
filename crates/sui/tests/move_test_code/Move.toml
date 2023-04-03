@@ -1,9 +1,0 @@
-[package]
-name = "move_test_code"
-version = "0.0.1"
-
-[dependencies]
-Sui = { local = "../../../sui-framework/packages/sui-framework" }
-
-[addresses]
-move_test_code = "0x0"

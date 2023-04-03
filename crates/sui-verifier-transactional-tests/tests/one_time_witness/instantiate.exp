@@ -1,5 +1,0 @@
-processed 2 tasks
-
-task 1 'publish'. lines 8-20:
-Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("one-time witness type _::m::M is instantiated in the _::m::pack function and must never be"), command: Some(0) } }

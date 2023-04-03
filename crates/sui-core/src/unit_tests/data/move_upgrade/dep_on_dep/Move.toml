@@ -1,9 +1,0 @@
-[package]
-name = "dep_on_dep"
-version = "0.0.1"
-
-[dependencies]
-dep_on_upgrading_package = { local = "../dep_on_upgrading_package_upgradeable" }
-
-[addresses]
-a =  "0x0"

@@ -1,5 +1,0 @@
-processed 1 task
-
-task 0 'publish'. lines 4-34:
-Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("PartialVMError with status UNKNOWN_VERIFICATION_ERROR with sub status 1 and message Invalid object creation in _::m::new. Object created without a newly created UID. The UID must come directly from sui::object::new. Or for tests, it can come from sui::test_scenario::new_object"), command: Some(0) } }

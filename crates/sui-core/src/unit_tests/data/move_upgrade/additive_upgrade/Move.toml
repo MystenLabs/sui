@@ -1,6 +1,0 @@
-[package]
-name = "additive_upgrade"
-version = "0.0.1"
-
-[addresses]
-base_addr =  "0x0"

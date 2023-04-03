@@ -1,9 +1,0 @@
-[package]
-name = "UnpublishedNonZeroAddress"
-version = "0.0.1"
-# No published-at address for this package.
-# published-at = "0x0"
-
-[addresses]
-# Address not set to 0x0. Error if --with-unpublished-dependencies is set.
-non_zero = "0xbad"

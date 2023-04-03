@@ -1,6 +1,0 @@
-[package]
-name = "stage1_basic_compatibility_valid"
-version = "0.0.2"
-
-[addresses]
-base_addr = "0x0"

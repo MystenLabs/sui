@@ -1,7 +1,0 @@
-[package]
-name = "C"
-version = "0.0.1"
-published-at = "0xc1"
-
-[addresses]
-c = "0xc1"

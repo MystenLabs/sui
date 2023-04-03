@@ -1,9 +1,0 @@
-[package]
-name = "package_upgrade_base"
-version = "0.0.1"
-
-[addresses]
-base_addr =  "0x0"
-
-[dependencies]
-Sui = { local = "../../../../../../sui-framework/packages/sui-framework" }
