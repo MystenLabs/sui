@@ -16,6 +16,7 @@ chrono = { version = "0.4.23", features = ["clock", "serde"] }
 clap = { version = "3.2.17", features = ["derive"] }
 diesel = { version = "2.0.3", features = ["chrono", "postgres", "r2d2", "serde_json", "64-column-tables"] }
 openssl = "0.10.32"
+openssl-sys = "0.9.84"
 postgres-openssl = "0.5.0"
 tokio-postgres = "0.7.8"
 diesel-async = { version = "0.2.1", features = ["postgres", "deadpool"] }
