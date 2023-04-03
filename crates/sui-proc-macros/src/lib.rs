@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use proc_macro::TokenStream;
-use quote::{quote, ToTokens};
+use quote::{quote, quote_spanned, ToTokens};
 use syn::{
     fold::{fold_expr, fold_item_macro, fold_stmt, Fold},
     parse::Parser,
     parse2, parse_macro_input,
     punctuated::Punctuated,
+    spanned::Spanned,
     Attribute, BinOp, Expr, ExprBinary, ExprMacro, Item, ItemMacro, Stmt, StmtMacro, Token, UnOp,
 };
 
@@ -367,6 +368,7 @@ impl Fold for CheckArithmetic {
     }
 
     fn fold_expr(&mut self, expr: Expr) -> Expr {
+        let span = expr.span();
         let expr = fold_expr(self, expr);
         let expr = match expr {
             Expr::Macro(expr_macro) => {
@@ -406,34 +408,34 @@ impl Fold for CheckArithmetic {
 
                 match op {
                     BinOp::Add(_) => {
-                        quote!((#left).checked_add(#right).expect("Overflow or underflow in addition"))
+                        quote_spanned!(span => (#left).checked_add(#right).expect("Overflow or underflow in addition"))
                     }
                     BinOp::Sub(_) => {
-                        quote!((#left).checked_sub(#right).expect("Overflow or underflow in subtraction"))
+                        quote_spanned!(span => (#left).checked_sub(#right).expect("Overflow or underflow in subtraction"))
                     }
                     BinOp::Mul(_) => {
-                        quote!((#left).checked_mul(#right).expect("Overflow or underflow in multiplication"))
+                        quote_spanned!(span => (#left).checked_mul(#right).expect("Overflow or underflow in multiplication"))
                     }
                     BinOp::Div(_) => {
-                        quote!((#left).checked_div(#right).expect("Overflow or underflow in division"))
+                        quote_spanned!(span => (#left).checked_div(#right).expect("Overflow or underflow in division"))
                     }
                     BinOp::Rem(_) => {
-                        quote!((#left).checked_rem(#right).expect("Overflow or underflow in remainder"))
+                        quote_spanned!(span => (#left).checked_rem(#right).expect("Overflow or underflow in remainder"))
                     }
                     BinOp::AddAssign(_) => {
-                        quote!(#left = #left.checked_add(#right).expect("Overflow or underflow in addition assignment"))
+                        quote_spanned!(span => #left = #left.checked_add(#right).expect("Overflow or underflow in addition assignment"))
                     }
                     BinOp::SubAssign(_) => {
-                        quote!(#left = #left.checked_sub(#right).expect("Overflow or underflow in subtraction assignment"))
+                        quote_spanned!(span => #left = #left.checked_sub(#right).expect("Overflow or underflow in subtraction assignment"))
                     }
                     BinOp::MulAssign(_) => {
-                        quote!(#left = #left.checked_mul(#right).expect("Overflow or underflow in multiplication assignment"))
+                        quote_spanned!(span => #left = #left.checked_mul(#right).expect("Overflow or underflow in multiplication assignment"))
                     }
                     BinOp::DivAssign(_) => {
-                        quote!(#left = #left.checked_div(#right).expect("Overflow or underflow in division assignment"))
+                        quote_spanned!(span => #left = #left.checked_div(#right).expect("Overflow or underflow in division assignment"))
                     }
                     BinOp::RemAssign(_) => {
-                        quote!(#left = #left.checked_rem(#right).expect("Overflow or underflow in remainder assignment"))
+                        quote_spanned!(span => #left = #left.checked_rem(#right).expect("Overflow or underflow in remainder assignment"))
                     }
                     _ => {
                         let expr_binary = ExprBinary {
@@ -442,7 +444,7 @@ impl Fold for CheckArithmetic {
                             op,
                             right,
                         };
-                        quote!(#expr_binary)
+                        quote_spanned!(span => #expr_binary)
                     }
                 }
             }
@@ -451,12 +453,12 @@ impl Fold for CheckArithmetic {
                 let operand = &expr_unary.expr;
                 match op {
                     UnOp::Neg(_) => {
-                        quote!(#operand.checked_neg().expect("Overflow or underflow in negation"))
+                        quote_spanned!(span => #operand.checked_neg().expect("Overflow or underflow in negation"))
                     }
-                    _ => quote!(#expr_unary),
+                    _ => quote_spanned!(span => #expr_unary),
                 }
             }
-            _ => quote!(#expr),
+            _ => quote_spanned!(span => #expr),
         };
 
         parse2(expr).unwrap()
