@@ -62,7 +62,8 @@ export const Checkpoint = object({
   epochRollingGasCostSummary: GasCostSummary,
   timestampMs: number(),
   endOfEpochData: optional(EndOfEpochData),
-  validatorSignature: ValidatorSignature,
+  // TODO(jian): remove optional after 0.30.0 is released
+  validatorSignature: optional(ValidatorSignature),
   transactions: array(TransactionDigest),
   checkpointCommitments: array(CheckpointCommitment),
 });

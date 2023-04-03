@@ -23,7 +23,6 @@ pub struct Checkpoint {
     pub transactions: Vec<Option<String>>,
     pub previous_checkpoint_digest: Option<String>,
     pub end_of_epoch: bool,
-    #[diesel(sql_type = Text)]
     pub validator_signature: String,
     pub total_gas_cost: i64,
     pub total_computation_cost: i64,

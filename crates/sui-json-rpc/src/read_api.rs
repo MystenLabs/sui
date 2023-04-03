@@ -98,11 +98,11 @@ impl ReadApi {
                 let content = self
                     .state
                     .get_checkpoint_contents(verified_summary.content_digest)?;
-                let signature = &verified_summary.auth_sig().signature;
+                let signature = verified_summary.auth_sig().signature.clone();
                 (
-                    verified_summary.clone().into_inner().into_data(),
+                    verified_summary.into_inner().into_data(),
                     content,
-                    signature.clone(),
+                    signature,
                 )
                     .into()
             }
@@ -110,15 +110,14 @@ impl ReadApi {
                 let verified_summary = self
                     .state
                     .get_verified_checkpoint_summary_by_digest(digest)?;
-                // summary.content_digest
                 let content = self
                     .state
                     .get_checkpoint_contents(verified_summary.content_digest)?;
-                let signature = &verified_summary.auth_sig().signature;
+                let signature = verified_summary.auth_sig().signature.clone();
                 (
-                    verified_summary.clone().into_inner().into_data(),
+                    verified_summary.into_inner().into_data(),
                     content,
-                    signature.clone(),
+                    signature,
                 )
                     .into()
             }
