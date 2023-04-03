@@ -57,20 +57,6 @@ members = [
     "crates/typed-store-derive",
     "crates/workspace-hack",
     "crates/x",
-    "narwhal/config",
-    "narwhal/consensus",
-    "narwhal/crypto",
-    "narwhal/dag",
-    "narwhal/examples",
-    "narwhal/executor",
-    "narwhal/network",
-    "narwhal/node",
-    "narwhal/primary",
-    "narwhal/storage",
-    "narwhal/test-utils",
-    "narwhal/types",
-    "narwhal/worker",
-
 
     "external-crates/move/extensions/move-table-extension",
     "external-crates/move/move-binary-format",
@@ -125,6 +111,21 @@ members = [
     "external-crates/move/tools/read-write-set",
     "external-crates/move/tools/read-write-set/dynamic",
     "external-crates/move/tools/read-write-set/types",
+
+    "narwhal/config",
+    "narwhal/consensus",
+    "narwhal/crypto",
+    "narwhal/dag",
+    "narwhal/examples",
+    "narwhal/executor",
+    "narwhal/network",
+    "narwhal/node",
+    "narwhal/primary",
+    "narwhal/storage",
+    "narwhal/test-utils",
+    "narwhal/types",
+    "narwhal/worker",
+
 ]
 
 [workspace.package]
