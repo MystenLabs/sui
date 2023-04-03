@@ -180,9 +180,7 @@ fn execute_transaction<
             && gas_status.storage_gas_units() == 0,
         "No gas charges must be applied yet"
     );
-    #[cfg(debug_assertions)]
     let is_genesis_tx = matches!(transaction_kind, TransactionKind::Genesis(_));
-    #[cfg(debug_assertions)]
     let advance_epoch_gas_summary = transaction_kind.get_advance_epoch_tx_gas_summary();
 
     // We must charge object read here during transaction execution, because if this fails
