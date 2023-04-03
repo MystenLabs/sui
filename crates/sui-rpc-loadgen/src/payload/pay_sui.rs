@@ -37,31 +37,32 @@ impl<'a> ProcessPayload<'a, &'a PaySui> for RpcCommandProcessor {
         );
 
         let sender = SuiAddress::from(&keypair.public());
-        for client in clients.iter() {
-            let gas_price = client
-                .governance_api()
-                .get_reference_gas_price()
-                .await
-                .expect("Unable to fetch gas price");
-            join_all(gas_payments.iter().map(|gas| async {
-                let tx = TransactionData::new_transfer_sui(
-                    recipient,
-                    sender,
-                    Some(amount),
-                    self.get_object_ref(client, gas).await,
-                    gas_budget,
-                    gas_price,
-                );
-                self.sign_and_execute(
-                    client,
-                    &keypair,
-                    tx,
-                    ExecuteTransactionRequestType::WaitForEffectsCert,
-                )
-                .await
-            }))
-            .await;
-        }
+        // TODO: For write operations, we usually just want to submit the transaction to fullnode
+        // Let's figure out what's the best way to support other mode later
+        let client = clients.first().unwrap();
+        let gas_price = client
+            .governance_api()
+            .get_reference_gas_price()
+            .await
+            .expect("Unable to fetch gas price");
+        join_all(gas_payments.iter().map(|gas| async {
+            let tx = TransactionData::new_transfer_sui(
+                recipient,
+                sender,
+                Some(amount),
+                self.get_object_ref(client, gas).await,
+                gas_budget,
+                gas_price,
+            );
+            self.sign_and_execute(
+                client,
+                &keypair,
+                tx,
+                ExecuteTransactionRequestType::WaitForEffectsCert,
+            )
+            .await
+        }))
+        .await;
 
         Ok(())
     }
