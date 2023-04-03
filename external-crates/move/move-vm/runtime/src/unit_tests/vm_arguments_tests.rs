@@ -571,6 +571,7 @@ fn mismatched_cases() -> Vec<(Signature, Vec<MoveValue>, StatusCode)> {
     ]
 }
 
+#[allow(clippy::type_complexity)]
 fn general_cases() -> Vec<(
     Signature,
     Vec<MoveValue>,

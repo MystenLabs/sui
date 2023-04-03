@@ -295,6 +295,7 @@ impl VMRuntime {
             .collect()
     }
 
+    #[allow(clippy::needless_collect)]
     fn execute_function_impl(
         &self,
         func: Arc<Function>,

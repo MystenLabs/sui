@@ -31,6 +31,7 @@ pub fn modify(mut base_config: UnitTestingConfig, modifier_str: &str) -> Option<
     Some(base_config)
 }
 
+#[allow(clippy::type_complexity)]
 fn run_test_with_modifiers(
     unit_test_config: UnitTestingConfig,
     path: &Path,

@@ -1183,7 +1183,7 @@ fn parse_declarations(
 // FunctionBlock: (Vec<(Var_, Type)>, Block) = {
 //     "{" <locals: Declarations> <stmts: Statements> "}" => (locals, Block::new(stmts))
 // }
-
+#[allow(clippy::type_complexity)]
 fn parse_function_block_(
     tokens: &mut Lexer,
 ) -> Result<(Vec<(Var, Type)>, Vec<Block>), ParseError<Loc, anyhow::Error>> {

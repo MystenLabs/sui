@@ -556,6 +556,7 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
         self.spec_funs.push(fun_decl);
     }
 
+    #[allow(clippy::type_complexity)]
     fn decl_ana_signature(
         &mut self,
         signature: &EA::FunctionSignature,

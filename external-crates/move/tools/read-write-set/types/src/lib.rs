@@ -113,6 +113,7 @@ impl Offset {
 }
 
 impl TrieNode {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             data: None,
@@ -174,6 +175,7 @@ impl TrieNode {
 }
 
 impl ReadWriteSet {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self(BTreeMap::new())
     }

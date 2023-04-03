@@ -68,6 +68,7 @@ pub struct SpecTranslator<'env> {
     /// choice function. If an expression is duplicated and then later specialized by a type
     /// instantiation, it will have a different node id, but again the same instantiations
     /// map to the same node id, which is the desired semantics.
+    #[allow(clippy::type_complexity)]
     lifted_choice_infos: Rc<RefCell<HashMap<(ExpData, Vec<Type>), LiftedChoiceInfo>>>,
 }
 

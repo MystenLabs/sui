@@ -40,6 +40,7 @@ enum Token {
     Lt,
     Gt,
     Comma,
+    #[allow(clippy::upper_case_acronyms)]
     EOF,
 }
 

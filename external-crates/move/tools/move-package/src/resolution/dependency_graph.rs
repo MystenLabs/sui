@@ -961,6 +961,7 @@ fn format_deps(msg: &str, dependencies: Vec<(&Dependency, PM::PackageName)>) -> 
 
 /// Checks if dependencies of a given package in two different dependency graph maps are the
 /// same.
+#[allow(clippy::type_complexity)]
 fn pkg_deps_equal<'a>(
     pkg_name: Symbol,
     pkg_graph: &'a DiGraphMap<PM::PackageName, Dependency>,

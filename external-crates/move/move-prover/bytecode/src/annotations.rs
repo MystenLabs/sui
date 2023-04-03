@@ -22,6 +22,7 @@ pub struct Annotations {
 /// dynamically typed value a function for cloning this value. This works
 /// around the restriction that we cannot use a trait to call into an Any type, so we need
 /// to maintain the "vtable" by ourselves.
+#[allow(clippy::needless_collect)]
 struct Data {
     value: Box<dyn Any>,
     clone_fun: Rc<dyn Fn(&Box<dyn Any>) -> Box<dyn Any>>,

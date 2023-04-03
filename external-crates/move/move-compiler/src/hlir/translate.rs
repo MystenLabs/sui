@@ -819,6 +819,7 @@ fn exp_<'env>(
 ) -> H::Exp {
     use std::{cell::RefCell, rc::Rc};
 
+    #[allow(clippy::type_complexity)]
     struct Stack<'a, 'env> {
         frames: Vec<Box<dyn FnOnce(&mut Self)>>,
         operands: Vec<H::Exp>,

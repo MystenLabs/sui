@@ -336,6 +336,7 @@ fn compute_dep_fun_ids(
 /// appearing in the invariant. Return that, and a second value that is the union
 /// of functions over all invariants in the first map.
 /// This is not applied to update invariants?
+#[allow(clippy::type_complexity)]
 fn compute_funs_that_modify_inv(
     global_env: &GlobalEnv,
     target_invariants: &BTreeSet<GlobalId>,

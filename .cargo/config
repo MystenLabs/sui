@@ -7,6 +7,16 @@ xclippy = [
     "clippy", "--all-targets", "--",
     "-Wclippy::all",
     "-Wclippy::disallowed_methods",
+
+    # Add new "allows" for Move crates
+    # TODO: figure out a way to ignore these in Move alone, or
+    "-Aclippy::type-complexity",
+    "-Aclippy::enum-variant-names",
+    "-Aclippy::new_without_default",
+    "-Aclippy::unit_arg",
+    "-Aclippy::upper-case-acronyms",
+    "-Aclippy::needless-collect",
+    "-Aclippy::or-fun-call"
 ]
 xlint = "run --package x --bin x -- lint"
 

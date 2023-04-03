@@ -854,6 +854,7 @@ fn deduct_update_table_name(map_key: &str) -> Option<String> {
 }
 
 /// Transpose the domain map in the model by aggregating values in it by the key into a standalone map
+#[allow(clippy::type_complexity)]
 fn create_domain_map(
     model_map: &BTreeMap<ModelValue, ModelValue>,
     update_map_opt: Option<&BTreeMap<ModelValue, ModelValue>>,
@@ -912,6 +913,7 @@ fn create_domain_map(
 }
 
 /// Extract domain from the model
+#[allow(clippy::type_complexity)]
 fn extract_domain(
     model: &Model,
 ) -> Option<(
@@ -1144,6 +1146,7 @@ impl ModelValue {
     }
 
     /// Extract memory content from the model
+    #[allow(clippy::type_complexity)]
     fn extract_mem_vector(
         &self,
         model: &Model,
@@ -1596,6 +1599,7 @@ impl ModelValue {
     }
 
     /// Pretty prints the global memory
+    #[allow(clippy::type_complexity)]
     pub fn pretty_mem(
         &self,
         wrapper: &BoogieWrapper,

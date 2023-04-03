@@ -32,6 +32,7 @@ enum Assignment {
 
 impl ResolvingTable {
     /// A fresh `ResolvingTable` with no bindings.
+    #[allow(clippy::new_without_default)]
     pub fn new() -> ResolvingTable {
         ResolvingTable {
             assignments: Vec::new(),

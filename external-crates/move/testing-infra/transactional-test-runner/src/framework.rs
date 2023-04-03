@@ -118,6 +118,7 @@ pub trait MoveTestAdapter<'a>: Sized {
         option: Option<&'a FullyCompiledProgram>,
         init_data: Option<TaskInput<(InitCommand, Self::ExtraInitArgs)>>,
     ) -> (Self, Option<String>);
+    #[allow(clippy::type_complexity)]
     fn publish_modules(
         &mut self,
         modules: Vec<(/* package name */ Option<Symbol>, CompiledModule)>,
@@ -156,6 +157,7 @@ pub trait MoveTestAdapter<'a>: Sized {
         subcommand: TaskInput<Self::Subcommand>,
     ) -> Result<Option<String>>;
 
+    #[allow(clippy::type_complexity)]
     fn handle_command(
         &mut self,
         task: TaskInput<
@@ -667,6 +669,7 @@ where
     Ok(())
 }
 
+#[allow(clippy::type_complexity)]
 fn handle_known_task<'a, Adapter: MoveTestAdapter<'a>>(
     output: &mut String,
     adapter: &mut Adapter,

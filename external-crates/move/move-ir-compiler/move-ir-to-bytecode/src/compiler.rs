@@ -587,6 +587,7 @@ fn compile_friends(
 }
 
 fn compile_imports(context: &mut Context, imports: Vec<ImportDefinition>) -> Result<()> {
+    #[allow(clippy::unit_arg)]
     Ok(for import in imports {
         context.declare_import(import.ident, import.alias)?;
     })

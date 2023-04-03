@@ -40,6 +40,7 @@ impl<R: ModuleResolver> ModuleCache<R> {
         self.cache.borrow_mut().insert(id, m);
     }
 
+    #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         self.cache.borrow().len()
     }
@@ -118,6 +119,7 @@ impl<R: ModuleResolver> SyncModuleCache<R> {
         self.cache.write().unwrap().insert(id, Arc::new(m));
     }
 
+    #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         self.cache.read().unwrap().len()
     }

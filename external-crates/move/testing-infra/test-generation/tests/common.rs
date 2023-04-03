@@ -61,9 +61,9 @@ pub fn run_instruction(
             .iter()
             .any(|precondition| !precondition(&initial_state))
     };
-    assert_eq!(
-        unsatisfied_preconditions, false,
-        "preconditions of instruction not satisfied"
+    assert!(
+        !unsatisfied_preconditions,
+        "preconditions of instruction not satisfied",
     );
     match summary.effects {
         Effects::TyParams(instantiation, effect, instantiation_application) => {

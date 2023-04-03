@@ -661,6 +661,7 @@ impl Loader {
     // Entry point for function execution (`MoveVM::execute_function`).
     // Loading verifies the module if it was never loaded.
     // Type parameters are checked as well after every type is loaded.
+    #[allow(clippy::type_complexity)]
     pub(crate) fn load_function(
         &self,
         runtime_id: &ModuleId,

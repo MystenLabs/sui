@@ -6,6 +6,7 @@ use crate::syntax::ParseError;
 use move_command_line_common::files::FileHash;
 use move_ir_types::location::*;
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Tok {
     EOF,

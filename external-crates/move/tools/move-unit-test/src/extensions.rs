@@ -17,6 +17,7 @@ use move_table_extension::NativeTableContext;
 #[cfg(feature = "table-extension")]
 use move_vm_test_utils::BlankStorage;
 
+#[allow(clippy::type_complexity)]
 static EXTENSION_HOOK: Lazy<
     Mutex<Option<Box<dyn Fn(&mut NativeContextExtensions<'_>) + Send + Sync>>>,
 > = Lazy::new(|| Mutex::new(None));

@@ -187,6 +187,7 @@ fn test_instantiation_no_instantiation() {
 // Run a control test (load_pop) and an instantiation test which is then
 // compared against the control.
 // Ensure that tests complete with "out of gas" and withing a given time range.
+#[allow(clippy::type_complexity)]
 fn test_runner(
     gas_val: u64,
     test_name: &str,
@@ -594,6 +595,7 @@ fn make_module(
 // This function creates a VM, invokes the closure, and on return it builds the call
 // for the entry point.
 // Report time spent, if it terminates (no gas it will never end; use for profiling).
+#[allow(clippy::type_complexity)]
 fn run_with_module(
     gas: &mut GasStatus,
     entry_spec: fn(

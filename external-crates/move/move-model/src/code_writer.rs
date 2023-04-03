@@ -18,6 +18,7 @@ use std::cell::RefCell;
 struct CodeWriterData {
     /// A function to be called on each emitted string. If the function does not change
     /// anything, it returns None.
+    #[allow(clippy::type_complexity)]
     emit_hook: Box<dyn Fn(&str) -> Option<String>>,
 
     /// The generated output string.

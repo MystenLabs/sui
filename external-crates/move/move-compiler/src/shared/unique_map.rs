@@ -163,7 +163,7 @@ impl<K: TName, V> UniqueMap<K, V> {
     pub fn iter_mut(&mut self) -> IterMut<K, V> {
         self.into_iter()
     }
-
+    #[allow(clippy::type_complexity)]
     pub fn maybe_from_opt_iter(
         iter: impl Iterator<Item = Option<(K, V)>>,
     ) -> Option<Result<UniqueMap<K, V>, (K::Key, K::Loc, K::Loc)>> {

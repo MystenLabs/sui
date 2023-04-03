@@ -262,6 +262,7 @@ impl<'a, 'b, W: Write> TestOutput<'a, 'b, W> {
 }
 
 impl SharedTestingConfig {
+    #[allow(clippy::type_complexity)]
     fn execute_via_move_vm(
         &self,
         test_plan: &ModuleTestPlan,
@@ -314,7 +315,7 @@ impl SharedTestingConfig {
             Err(err) => (Err(err.clone()), Err(err), return_result, test_run_info),
         }
     }
-
+    #[allow(clippy::type_complexity)]
     fn execute_via_stackless_vm(
         &self,
         env: &GlobalEnv,

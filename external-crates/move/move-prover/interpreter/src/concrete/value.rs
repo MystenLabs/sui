@@ -1279,6 +1279,7 @@ impl GlobalState {
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
 pub struct EvalState {
     // global resources specifically marked as saved
+    #[allow(clippy::type_complexity)]
     saved_memory: BTreeMap<
         MemoryLabel,
         BTreeMap<StructIdent, BTreeMap<StructInstantiation, BTreeMap<AccountAddress, BaseValue>>>,
