@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 4;
+const MAX_PROTOCOL_VERSION: u64 = 3;
 
 // Record history of protocol version allocations here:
 //
@@ -19,9 +19,6 @@ const MAX_PROTOCOL_VERSION: u64 = 4;
 // Version 3: gas model v2, including all sui conservation fixes. Fix for loaded child object
 //            changes, enable package upgrades, add limits on `max_size_written_objects`,
 //            `max_size_written_objects_system_tx`
-//            changes.
-// Version 4: Executing safe mode epoch change in Rust instead of Move in the execution engine.
-//
 
 #[derive(
     Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, JsonSchema,
@@ -133,9 +130,6 @@ struct FeatureFlags {
     // object runtime.
     #[serde(skip_serializing_if = "is_false")]
     loaded_child_objects_fixed: bool,
-    // If true, advance epoch in safe mode in Rust, instead of in Move.
-    #[serde(skip_serializing_if = "is_false")]
-    advance_epoch_safe_mode_in_rust: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -593,10 +587,6 @@ impl ProtocolConfig {
 
     pub fn loaded_child_objects_fixed(&self) -> bool {
         self.feature_flags.loaded_child_objects_fixed
-    }
-
-    pub fn advance_epoch_safe_mode_in_rust(&self) -> bool {
-        self.feature_flags.advance_epoch_safe_mode_in_rust
     }
 }
 
@@ -1549,11 +1539,6 @@ impl ProtocolConfig {
                 // max size of written objects during a system TXn to allow for larger writes
                 cfg.max_size_written_objects_system_tx = Some(50 * 1000 * 1000);
                 cfg.feature_flags.package_upgrades = true;
-                cfg
-            }
-            4 => {
-                let mut cfg = Self::get_for_version_impl(version - 1);
-                cfg.feature_flags.advance_epoch_safe_mode_in_rust = true;
                 cfg
             }
             // Use this template when making changes:
