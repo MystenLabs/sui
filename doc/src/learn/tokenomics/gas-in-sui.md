@@ -25,8 +25,7 @@ The minimum Gas Budget is 2000 MIST. This ensures validators can be compensated 
 
 Finally, Sui’s [Storage mechanics](https://docs.sui.io/learn/tokenomics/storage-fund#storage-fund-rewards) provide storage fee rebates whenever a transaction deletes previously-stored objects. Hence, the net fees that a user pays equals Gas Fees minus the rebates associated with data deletion:
 
-
-`\text{NetGasFees}[\tau]\ =\ \text{GasFees}[\tau]\ -\text{StorageRebate}[\tau]`
+`net_gas_fees = computation_gas_fee + storage_gas_fee - storage_rebate`
 
 
 Importantly, though, Sui’s gas schedule is built coarsely with a bucketing approach. Two relatively similar transactions will translate into the exact same amount of Computation Units if they are in the same bucket, whereas two relatively different transactions will translate into different amounts of Computation Units if they fall in separate buckets. The smallest bucket maps into 1000 Computation Units, meaning that all transactions that fall into the smallest bucket will cost 1000 Computation Units. The largest bucket maps into 5,000,000 Computation Units; if a transaction were to require more Computation Units it would simply abort.
