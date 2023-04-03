@@ -1043,6 +1043,7 @@ pub struct SuiGetPastObjectRequest {
 pub enum SuiObjectDataFilter {
     MatchAll(Vec<SuiObjectDataFilter>),
     MatchAny(Vec<SuiObjectDataFilter>),
+    MatchNone(Vec<SuiObjectDataFilter>),
     /// Query by type a specified Package.
     Package(ObjectID),
     /// Query by type a specified Move module.
@@ -1079,11 +1080,15 @@ impl SuiObjectDataFilter {
     pub fn or(self, other: Self) -> Self {
         Self::MatchAny(vec![self, other])
     }
+    pub fn not(self, other: Self) -> Self {
+        Self::MatchNone(vec![self, other])
+    }
 
     pub fn matches(&self, object: &ObjectInfo) -> bool {
         match self {
             SuiObjectDataFilter::MatchAll(filters) => !filters.iter().any(|f| !f.matches(object)),
             SuiObjectDataFilter::MatchAny(filters) => filters.iter().any(|f| f.matches(object)),
+            SuiObjectDataFilter::MatchNone(filters) => !filters.iter().any(|f| f.matches(object)),
             SuiObjectDataFilter::StructType(s) => {
                 let obj_tag: StructTag = match &object.type_ {
                     ObjectType::Package => return false,
