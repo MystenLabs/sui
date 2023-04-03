@@ -912,10 +912,12 @@ async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Err
     .execute(context)
     .await;
 
-    assert!(&result
-        .unwrap_err()
-        .to_string()
-        .contains("DependentPackageNotFound"));
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("Dependency object does not exist or was deleted"),
+        "{}",
+        err
+    );
     Ok(())
 }
 

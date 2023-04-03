@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::{fs, io, path::Path};
 use std::{path::PathBuf, str};
 use sui::client_commands::WalletContext;
-use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage};
+use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage, SuiPackageHooks};
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
     SUI_SYSTEM_STATE_OBJECT_ID,
@@ -25,62 +25,53 @@ async fn successful_verification() -> anyhow::Result<()> {
 
     let b_ref = {
         let fixtures = tempfile::tempdir()?;
-        let b_src = copy_package(&fixtures, "b", SuiAddress::ZERO).await?;
+        let b_src = copy_published_package(&fixtures, "b", SuiAddress::ZERO).await?;
         publish_package(context, sender, b_src).await
     };
 
     let b_pkg = {
         let fixtures = tempfile::tempdir()?;
-        let b_src = copy_package(&fixtures, "b", b_ref.0.into()).await?;
+        let b_src = copy_published_package(&fixtures, "b", b_ref.0.into()).await?;
         compile_package(b_src)
     };
 
     let (a_pkg, a_ref) = {
         let fixtures = tempfile::tempdir()?;
-        let b_id = b_ref.0.into();
-        copy_package(&fixtures, "b", b_id).await?;
-        let a_src = copy_package(&fixtures, "a", SuiAddress::ZERO).await?;
+        copy_published_package(&fixtures, "b", b_ref.0.into()).await?;
+        let a_src = copy_published_package(&fixtures, "a", SuiAddress::ZERO).await?;
         (
             compile_package(a_src.clone()),
             publish_package(context, sender, a_src).await,
         )
     };
+
     let client = context.get_client().await?;
     let verifier = BytecodeSourceVerifier::new(client.read_api());
-    let a_addr: SuiAddress = a_ref.0.into();
 
     // Skip deps and root
     verifier
-        .verify_package(
-            &a_pkg.package,
-            /* verify_deps */ false,
-            SourceMode::Skip,
-        )
+        .verify_package(&a_pkg, /* verify_deps */ false, SourceMode::Skip)
         .await
         .unwrap();
 
     // Verify root without updating the address
     verifier
-        .verify_package(
-            &b_pkg.package,
-            /* verify_deps */ false,
-            SourceMode::Verify,
-        )
+        .verify_package(&b_pkg, /* verify_deps */ false, SourceMode::Verify)
         .await
         .unwrap();
 
     // Verify deps but skip root
-    verifier.verify_package_deps(&a_pkg.package).await.unwrap();
+    verifier.verify_package_deps(&a_pkg).await.unwrap();
 
     // Skip deps but verify root
     verifier
-        .verify_package_root(&a_pkg.package, a_addr.into())
+        .verify_package_root(&a_pkg, a_ref.0.into())
         .await
         .unwrap();
 
     // Verify both deps and root
     verifier
-        .verify_package_root_and_deps(&a_pkg.package, a_addr.into())
+        .verify_package_root_and_deps(&a_pkg, a_ref.0.into())
         .await
         .unwrap();
 
@@ -95,8 +86,8 @@ async fn successful_verification_unpublished_deps() -> anyhow::Result<()> {
     let fixtures = tempfile::tempdir()?;
 
     let a_src = {
-        copy_package(&fixtures, "b", SuiAddress::ZERO).await?;
-        copy_package(&fixtures, "a", SuiAddress::ZERO).await?
+        copy_published_package(&fixtures, "b", SuiAddress::ZERO).await?;
+        copy_published_package(&fixtures, "a", SuiAddress::ZERO).await?
     };
 
     let a_pkg = compile_package(a_src.clone());
@@ -107,7 +98,7 @@ async fn successful_verification_unpublished_deps() -> anyhow::Result<()> {
 
     // Verify the root package which now includes dependency modules
     verifier
-        .verify_package_root(&a_pkg.package, a_ref.0.into())
+        .verify_package_root(&a_pkg, a_ref.0.into())
         .await
         .unwrap();
 
@@ -130,13 +121,13 @@ async fn successful_verification_module_ordering() -> anyhow::Result<()> {
     // dependency with its self-address already set as its published address.
     let z_ref = {
         let fixtures = tempfile::tempdir()?;
-        let z_src = copy_package(&fixtures, "z", SuiAddress::ZERO).await?;
+        let z_src = copy_published_package(&fixtures, "z", SuiAddress::ZERO).await?;
         publish_package(context, sender, z_src).await
     };
 
     let z_pkg = {
         let fixtures = tempfile::tempdir()?;
-        let z_src = copy_package(&fixtures, "z", z_ref.0.into()).await?;
+        let z_src = copy_published_package(&fixtures, "z", z_ref.0.into()).await?;
         compile_package(z_src)
     };
 
@@ -145,7 +136,7 @@ async fn successful_verification_module_ordering() -> anyhow::Result<()> {
 
     let verify_deps = false;
     verifier
-        .verify_package(&z_pkg.package, verify_deps, SourceMode::Verify)
+        .verify_package(&z_pkg, verify_deps, SourceMode::Verify)
         .await
         .unwrap();
 
@@ -160,15 +151,15 @@ async fn fail_verification_bad_address() -> anyhow::Result<()> {
 
     let b_ref = {
         let fixtures = tempfile::tempdir()?;
-        let b_src = copy_package(&fixtures, "b", SuiAddress::ZERO).await?;
+        let b_src = copy_published_package(&fixtures, "b", SuiAddress::ZERO).await?;
         publish_package(context, sender, b_src).await
     };
 
     let (a_pkg, _) = {
         let fixtures = tempfile::tempdir()?;
         let b_id = b_ref.0.into();
-        copy_package(&fixtures, "b", b_id).await?;
-        let a_src = copy_package(&fixtures, "a", SuiAddress::ZERO).await?;
+        copy_published_package(&fixtures, "b", b_id).await?;
+        let a_src = copy_published_package(&fixtures, "a", SuiAddress::ZERO).await?;
         (
             compile_package(a_src.clone()),
             publish_package(context, sender, a_src).await,
@@ -180,7 +171,7 @@ async fn fail_verification_bad_address() -> anyhow::Result<()> {
     let expected = expect!["On-chain address cannot be zero"];
     expected.assert_eq(
         &verifier
-            .verify_package_root_and_deps(&a_pkg.package, AccountAddress::ZERO)
+            .verify_package_root_and_deps(&a_pkg, AccountAddress::ZERO)
             .await
             .unwrap_err()
             .to_string(),
@@ -196,7 +187,7 @@ async fn fail_to_verify_unpublished_root() -> anyhow::Result<()> {
 
     let b_pkg = {
         let fixtures = tempfile::tempdir()?;
-        let b_src = copy_package(&fixtures, "b", SuiAddress::ZERO).await?;
+        let b_src = copy_published_package(&fixtures, "b", SuiAddress::ZERO).await?;
         compile_package(b_src)
     };
 
@@ -208,11 +199,7 @@ async fn fail_to_verify_unpublished_root() -> anyhow::Result<()> {
     let expected = expect!["Invalid module b with error: Can't verify unpublished source"];
     expected.assert_eq(
         &verifier
-            .verify_package(
-                &b_pkg.package,
-                /* verify_deps */ false,
-                SourceMode::Verify,
-            )
+            .verify_package(&b_pkg, /* verify_deps */ false, SourceMode::Verify)
             .await
             .unwrap_err()
             .to_string(),
@@ -229,15 +216,15 @@ async fn rpc_call_failed_during_verify() -> anyhow::Result<()> {
 
     let b_ref = {
         let fixtures = tempfile::tempdir()?;
-        let b_src = copy_package(&fixtures, "b", SuiAddress::ZERO).await?;
+        let b_src = copy_published_package(&fixtures, "b", SuiAddress::ZERO).await?;
         publish_package(context, sender, b_src).await
     };
 
     let (_a_pkg, a_ref) = {
         let fixtures = tempfile::tempdir()?;
         let b_id = b_ref.0.into();
-        copy_package(&fixtures, "b", b_id).await?;
-        let a_src = copy_package(&fixtures, "a", SuiAddress::ZERO).await?;
+        copy_published_package(&fixtures, "b", b_id).await?;
+        let a_src = copy_published_package(&fixtures, "a", SuiAddress::ZERO).await?;
         (
             compile_package(a_src.clone()),
             publish_package(context, sender, a_src).await,
@@ -255,20 +242,20 @@ async fn rpc_call_failed_during_verify() -> anyhow::Result<()> {
     drop(cluster);
 
     assert!(matches!(
-        verifier.verify_package_deps(&a_pkg.package).await,
+        verifier.verify_package_deps(&a_pkg).await,
         Err(SourceVerificationError::DependencyObjectReadFailure(_)),
     ),);
 
     assert!(matches!(
         verifier
-            .verify_package_root_and_deps(&a_pkg.package, a_addr.into())
+            .verify_package_root_and_deps(&a_pkg, a_addr.into())
             .await,
         Err(SourceVerificationError::DependencyObjectReadFailure(_)),
     ),);
 
     assert!(matches!(
         verifier
-            .verify_package_root(&a_pkg.package, a_addr.into())
+            .verify_package_root(&a_pkg, a_addr.into())
             .await,
         Err(SourceVerificationError::DependencyObjectReadFailure(_)),
     ),);
@@ -288,15 +275,15 @@ async fn package_not_found() -> anyhow::Result<()> {
         let fixtures = tempfile::tempdir()?;
         let b_id = SuiAddress::random_for_testing_only();
         stable_addrs.insert(b_id, "<id>");
-        copy_package(&fixtures, "b", b_id).await?;
-        let a_src = copy_package(&fixtures, "a", SuiAddress::ZERO).await?;
+        copy_published_package(&fixtures, "b", b_id).await?;
+        let a_src = copy_published_package(&fixtures, "a", SuiAddress::ZERO).await?;
         compile_package(a_src)
     };
 
     let client = context.get_client().await?;
     let verifier = BytecodeSourceVerifier::new(client.read_api());
 
-    let Err(err) = verifier.verify_package_deps(&a_pkg.package).await else {
+    let Err(err) = verifier.verify_package_deps(&a_pkg).await else {
         panic!("Expected verification to fail");
     };
 
@@ -307,7 +294,7 @@ async fn package_not_found() -> anyhow::Result<()> {
     let package_root = AccountAddress::random();
     stable_addrs.insert(SuiAddress::from(package_root), "<id>");
     let Err(err) = verifier.verify_package_root_and_deps(
-	&a_pkg.package,
+	&a_pkg,
 	package_root,
     ).await else {
 	panic!("Expected verification to fail");
@@ -322,7 +309,7 @@ async fn package_not_found() -> anyhow::Result<()> {
     let package_root = AccountAddress::random();
     stable_addrs.insert(SuiAddress::from(package_root), "<id>");
     let Err(err) = verifier.verify_package_root(
-	&a_pkg.package,
+	&a_pkg,
 	package_root,
     ).await else {
 	panic!("Expected verification to fail");
@@ -343,8 +330,8 @@ async fn dependency_is_an_object() -> anyhow::Result<()> {
     let a_pkg = {
         let fixtures = tempfile::tempdir()?;
         let b_id = SUI_SYSTEM_STATE_OBJECT_ID.into();
-        copy_package(&fixtures, "b", b_id).await?;
-        let a_src = copy_package(&fixtures, "a", SuiAddress::ZERO).await?;
+        copy_published_package(&fixtures, "b", b_id).await?;
+        let a_src = copy_published_package(&fixtures, "a", SuiAddress::ZERO).await?;
         compile_package(a_src)
     };
     let client = context.get_client().await?;
@@ -353,7 +340,7 @@ async fn dependency_is_an_object() -> anyhow::Result<()> {
     let expected = expect!["Dependency ID contains a Sui object, not a Move package: 0x0000000000000000000000000000000000000000000000000000000000000005"];
     expected.assert_eq(
         &verifier
-            .verify_package_deps(&a_pkg.package)
+            .verify_package_deps(&a_pkg)
             .await
             .unwrap_err()
             .to_string(),
@@ -370,7 +357,7 @@ async fn module_not_found_on_chain() -> anyhow::Result<()> {
 
     let b_ref = {
         let fixtures = tempfile::tempdir()?;
-        let b_src = copy_package(&fixtures, "b", SuiAddress::ZERO).await?;
+        let b_src = copy_published_package(&fixtures, "b", SuiAddress::ZERO).await?;
         tokio::fs::remove_file(b_src.join("sources").join("c.move")).await?;
         publish_package(context, sender, b_src).await
     };
@@ -378,14 +365,14 @@ async fn module_not_found_on_chain() -> anyhow::Result<()> {
     let a_pkg = {
         let fixtures = tempfile::tempdir()?;
         let b_id = b_ref.0.into();
-        copy_package(&fixtures, "b", b_id).await?;
-        let a_src = copy_package(&fixtures, "a", SuiAddress::ZERO).await?;
+        copy_published_package(&fixtures, "b", b_id).await?;
+        let a_src = copy_published_package(&fixtures, "a", SuiAddress::ZERO).await?;
         compile_package(a_src)
     };
     let client = context.get_client().await?;
     let verifier = BytecodeSourceVerifier::new(client.read_api());
 
-    let Err(err) = verifier.verify_package_deps(&a_pkg.package).await else {
+    let Err(err) = verifier.verify_package_deps(&a_pkg).await else {
         panic!("Expected verification to fail");
     };
 
@@ -404,7 +391,7 @@ async fn module_not_found_locally() -> anyhow::Result<()> {
 
     let b_ref = {
         let fixtures = tempfile::tempdir()?;
-        let b_src = copy_package(&fixtures, "b", SuiAddress::ZERO).await?;
+        let b_src = copy_published_package(&fixtures, "b", SuiAddress::ZERO).await?;
         publish_package(context, sender, b_src).await
     };
 
@@ -412,8 +399,8 @@ async fn module_not_found_locally() -> anyhow::Result<()> {
         let fixtures = tempfile::tempdir()?;
         let b_id = b_ref.0.into();
         stable_addrs.insert(b_id, "b_id");
-        let b_src = copy_package(&fixtures, "b", b_id).await?;
-        let a_src = copy_package(&fixtures, "a", SuiAddress::ZERO).await?;
+        let b_src = copy_published_package(&fixtures, "b", b_id).await?;
+        let a_src = copy_published_package(&fixtures, "a", SuiAddress::ZERO).await?;
         tokio::fs::remove_file(b_src.join("sources").join("d.move")).await?;
         compile_package(a_src)
     };
@@ -421,7 +408,7 @@ async fn module_not_found_locally() -> anyhow::Result<()> {
     let client = context.get_client().await?;
     let verifier = BytecodeSourceVerifier::new(client.read_api());
 
-    let Err(err) = verifier.verify_package_deps(&a_pkg.package).await else {
+    let Err(err) = verifier.verify_package_deps(&a_pkg).await else {
         panic!("Expected verification to fail");
     };
 
@@ -440,7 +427,7 @@ async fn module_bytecode_mismatch() -> anyhow::Result<()> {
 
     let b_ref = {
         let fixtures = tempfile::tempdir()?;
-        let b_src = copy_package(&fixtures, "b", SuiAddress::ZERO).await?;
+        let b_src = copy_published_package(&fixtures, "b", SuiAddress::ZERO).await?;
 
         // Modify a module before publishing
         let c_path = b_src.join("sources").join("c.move");
@@ -456,8 +443,8 @@ async fn module_bytecode_mismatch() -> anyhow::Result<()> {
         let fixtures = tempfile::tempdir()?;
         let b_id = b_ref.0.into();
         stable_addrs.insert(b_id, "<b_id>");
-        copy_package(&fixtures, "b", b_id).await?;
-        let a_src = copy_package(&fixtures, "a", SuiAddress::ZERO).await?;
+        copy_published_package(&fixtures, "b", b_id).await?;
+        let a_src = copy_published_package(&fixtures, "a", SuiAddress::ZERO).await?;
 
         let compiled = compile_package(a_src.clone());
         // Modify a module before publishing
@@ -475,14 +462,14 @@ async fn module_bytecode_mismatch() -> anyhow::Result<()> {
     let client = context.get_client().await?;
     let verifier = BytecodeSourceVerifier::new(client.read_api());
 
-    let Err(err) = verifier.verify_package_deps(&a_pkg.package).await else {
+    let Err(err) = verifier.verify_package_deps(&a_pkg).await else {
         panic!("Expected verification to fail");
     };
 
     let expected = expect!["Local dependency did not match its on-chain version at <b_id>::b::c"];
     expected.assert_eq(&sanitize_id(err.to_string(), &stable_addrs));
 
-    let Err(err) = verifier.verify_package_root(&a_pkg.package, a_addr.into()).await else {
+    let Err(err) = verifier.verify_package_root(&a_pkg, a_addr.into()).await else {
         panic!("Expected verification to fail");
     };
 
@@ -502,7 +489,7 @@ async fn multiple_failures() -> anyhow::Result<()> {
     // Publish package `b::b` on-chain without c.move.
     let b_ref = {
         let fixtures = tempfile::tempdir()?;
-        let b_src = copy_package(&fixtures, "b", SuiAddress::ZERO).await?;
+        let b_src = copy_published_package(&fixtures, "b", SuiAddress::ZERO).await?;
         tokio::fs::remove_file(b_src.join("sources").join("c.move")).await?;
         publish_package(context, sender, b_src).await
     };
@@ -510,7 +497,7 @@ async fn multiple_failures() -> anyhow::Result<()> {
     // Publish package `c::c` on-chain, unmodified.
     let c_ref = {
         let fixtures = tempfile::tempdir()?;
-        let c_src = copy_package(&fixtures, "c", SuiAddress::ZERO).await?;
+        let c_src = copy_published_package(&fixtures, "c", SuiAddress::ZERO).await?;
         publish_package(context, sender, c_src).await
     };
 
@@ -523,9 +510,9 @@ async fn multiple_failures() -> anyhow::Result<()> {
         let c_id = c_ref.0.into();
         stable_addrs.insert(b_id, "<b_id>");
         stable_addrs.insert(c_id, "<c_id>");
-        copy_package(&fixtures, "b", b_id).await?;
-        let c_src = copy_package(&fixtures, "c", c_id).await?;
-        let d_src = copy_package(&fixtures, "d", SuiAddress::ZERO).await?;
+        copy_published_package(&fixtures, "b", b_id).await?;
+        let c_src = copy_published_package(&fixtures, "c", c_id).await?;
+        let d_src = copy_published_package(&fixtures, "d", SuiAddress::ZERO).await?;
         tokio::fs::remove_file(c_src.join("sources").join("d.move")).await?; // delete local module in `c`
         compile_package(d_src)
     };
@@ -533,7 +520,7 @@ async fn multiple_failures() -> anyhow::Result<()> {
     let client = context.get_client().await?;
     let verifier = BytecodeSourceVerifier::new(client.read_api());
 
-    let Err(err) = verifier.verify_package_deps(&d_pkg.package).await else {
+    let Err(err) = verifier.verify_package_deps(&d_pkg).await else {
         panic!("Expected verification to fail");
     };
 
@@ -549,6 +536,7 @@ async fn multiple_failures() -> anyhow::Result<()> {
 
 /// Compile the package at absolute path `package`.
 fn compile_package(package: impl AsRef<Path>) -> CompiledPackage {
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     sui_framework::build_move_package(package.as_ref(), BuildConfig::new_for_testing()).unwrap()
 }
 
@@ -567,7 +555,7 @@ async fn publish_package(
 ) -> ObjectRef {
     let package = compile_package(package);
     let package_bytes = package.get_package_bytes(/* with_unpublished_deps */ false);
-    let package_deps = package.get_dependency_original_package_ids();
+    let package_deps = package.dependency_ids.published.into_values().collect();
     publish_package_with_wallet(context, sender, package_bytes, package_deps)
         .await
         .0
@@ -590,10 +578,19 @@ async fn publish_package_and_deps(
 
 /// Copy `package` from fixtures into `directory`, setting its named address in the copied package's
 /// `Move.toml` to `address`. (A fixture's self-address is assumed to match its package name).
-async fn copy_package<'s>(
+async fn copy_published_package<'s>(
     directory: impl AsRef<Path>,
     package: &str,
     address: SuiAddress,
+) -> io::Result<PathBuf> {
+    copy_upgraded_package(directory, package, address, address).await
+}
+
+async fn copy_upgraded_package<'s>(
+    directory: impl AsRef<Path>,
+    package: &str,
+    storage_id: SuiAddress,
+    runtime_id: SuiAddress,
 ) -> io::Result<PathBuf> {
     let cargo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let repo_root = {
@@ -614,10 +611,11 @@ async fn copy_package<'s>(
     // Create destination directory
     tokio::fs::create_dir(&dst).await?;
 
-    // Copy TOML
+    // Copy TOML, performing replacements
     let mut toml = tokio::fs::read_to_string(src.join("Move.toml")).await?;
     toml = toml.replace("$REPO_ROOT", &repo_root.to_string_lossy());
-    toml += &format!("[addresses]\n{package} = \"{address}\"");
+    toml = toml.replace("$STORAGE_ID", &storage_id.to_string());
+    toml = toml.replace("$RUNTIME_ID", &runtime_id.to_string());
     tokio::fs::write(dst.join("Move.toml"), toml).await?;
 
     // Make destination source directory

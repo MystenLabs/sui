@@ -6,12 +6,13 @@ use futures::future;
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::CompiledModule;
 use std::{collections::HashMap, fmt::Debug};
+use sui_framework_build::compiled_package::CompiledPackage;
 use sui_types::error::SuiObjectResponseError;
 use thiserror::Error;
 
 use move_compiler::compiled_unit::{CompiledUnitEnum, NamedCompiledModule};
 use move_core_types::account_address::AccountAddress;
-use move_package::compilation::compiled_package::CompiledPackage;
+use move_package::compilation::compiled_package::CompiledPackage as MoveCompiledPackage;
 use move_symbol_pool::Symbol;
 use sui_sdk::apis::ReadApi;
 use sui_sdk::error::Error;
@@ -173,17 +174,31 @@ impl<'a> BytecodeSourceVerifier<'a> {
         verify_deps: bool,
         source_mode: SourceMode,
     ) -> Result<(), AggregateSourceVerificationError> {
-        // On-chain address for matching root package cannot be zero
-        if let SourceMode::VerifyAt(root_address) = &source_mode {
-            if *root_address == AccountAddress::ZERO {
-                return Err(SourceVerificationError::ZeroOnChainAddresSpecifiedFailure.into());
+        let mut on_chain_pkgs = vec![];
+        match &source_mode {
+            SourceMode::Skip => (),
+            // On-chain address for matching root package cannot be zero
+            SourceMode::VerifyAt(AccountAddress::ZERO) => {
+                return Err(SourceVerificationError::ZeroOnChainAddresSpecifiedFailure.into())
             }
+            SourceMode::VerifyAt(root_address) => on_chain_pkgs.push(*root_address),
+            SourceMode::Verify => {
+                on_chain_pkgs.extend(compiled_package.published_at.as_ref().map(|id| **id))
+            }
+        };
+
+        if verify_deps {
+            on_chain_pkgs.extend(
+                compiled_package
+                    .dependency_ids
+                    .published
+                    .values()
+                    .map(|id| **id),
+            );
         }
 
-        let local_modules = local_modules(compiled_package, verify_deps, source_mode)?;
-        let mut on_chain_modules = self
-            .on_chain_modules(local_modules.keys().map(|(addr, _)| *addr))
-            .await?;
+        let local_modules = local_modules(&compiled_package.package, verify_deps, source_mode)?;
+        let mut on_chain_modules = self.on_chain_modules(on_chain_pkgs.into_iter()).await?;
 
         let mut errors = Vec::new();
         for ((address, module), (package, local_module)) in local_modules {
@@ -309,7 +324,7 @@ fn substitute_root_address(
 }
 
 fn local_modules(
-    compiled_package: &CompiledPackage,
+    compiled_package: &MoveCompiledPackage,
     include_deps: bool,
     source_mode: SourceMode,
 ) -> Result<LocalModules, SourceVerificationError> {
