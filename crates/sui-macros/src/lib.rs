@@ -278,6 +278,59 @@ mod test {
         f();
     }
 
+
+    #[test]
+    fn test_exprs_evaluated_once_right() {
+        let mut called = false;
+        let mut f = || {
+            if called {
+                panic!("called twice");
+            }
+            called = true;
+            1i32
+        };
+
+        assert_eq!(2i32 + f(), 3);
+    }
+
+    #[test]
+    fn test_exprs_evaluated_once_left() {
+        let mut called = false;
+        let mut f = || {
+            if called {
+                panic!("called twice");
+            }
+            called = true;
+            1i32
+        };
+
+        assert_eq!(f() + 2i32, 3);
+    }
+
+    #[test]
+    fn test_assign_op_evals_once() {
+        struct Foo {
+            a: i32,
+            called: bool,
+        }
+
+        impl Foo {
+            fn get_a_mut(&mut self) -> &mut i32 {
+                if self.called {
+                    panic!("called twice");
+                }
+                let ret = &mut self.a;
+                self.called = true;
+                ret
+            }
+        }
+
+        let mut foo = Foo { a: 1, called: false };
+
+        *foo.get_a_mut() += 2;
+        assert_eq!(foo.a, 3);
+    }
+
     #[test]
     fn test_more_macro_syntax() {
         struct Foo {

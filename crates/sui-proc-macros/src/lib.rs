@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use proc_macro::TokenStream;
-use quote::{quote, ToTokens};
+use quote::{quote, quote_spanned, ToTokens};
 use syn::{
     fold::{fold_expr, fold_item_macro, fold_stmt, Fold},
     parse::Parser,
     parse2, parse_macro_input,
     punctuated::Punctuated,
+    spanned::Spanned,
     Attribute, BinOp, Expr, ExprBinary, ExprMacro, Item, ItemMacro, Stmt, StmtMacro, Token, UnOp,
 };
 
@@ -367,6 +368,7 @@ impl Fold for CheckArithmetic {
     }
 
     fn fold_expr(&mut self, expr: Expr) -> Expr {
+        let span = expr.span();
         let expr = fold_expr(self, expr);
         let expr = match expr {
             Expr::Macro(expr_macro) => {
@@ -391,49 +393,97 @@ impl Fold for CheckArithmetic {
             Expr::Binary(expr_binary) => {
                 let ExprBinary {
                     attrs,
-                    left,
+                    mut left,
                     op,
                     mut right,
                 } = expr_binary;
 
-                // Remove parens from rhs since it will be passed as a function argument
-                // otherwise we get lint errors
-                if let Expr::Paren(paren) = right.as_ref() {
-                    // i don't even think rust allows this, but just in case
-                    assert!(paren.attrs.is_empty(), "TODO: attrs on parenthesized");
-                    right = paren.expr.clone();
+                fn remove_parens(expr: &mut Expr) {
+                    if let Expr::Paren(paren) = expr {
+                        // i don't even think rust allows this, but just in case
+                        assert!(paren.attrs.is_empty(), "TODO: attrs on parenthesized");
+                        *expr = *paren.expr.clone();
+                    }
+                }
+
+                macro_rules! wrap_op {
+                    ($left: expr, $right: expr, $method: ident, $span: expr) => {{
+                        // Remove parens from exprs since both sides get assigned to tmp variables.
+                        // otherwise we get lint errors
+                        remove_parens(&mut $left);
+                        remove_parens(&mut $right);
+
+                        quote_spanned!($span => {
+                            // assign in one stmt in case either #left or #right contains
+                            // references to `left` or `right` symbols.
+                            let (left, right) = (#left, #right);
+                            left.$method(right)
+                                .unwrap_or_else(||
+                                    panic!(
+                                        "Overflow or underflow in {} {} + {}",
+                                        stringify!($method),
+                                        left,
+                                        right,
+                                    )
+                                )
+                        })
+                    }};
+                }
+
+                macro_rules! wrap_op_assign {
+                    ($left: expr, $right: expr, $method: ident, $span: expr) => {{
+                        // Remove parens from exprs since both sides get assigned to tmp variables.
+                        // otherwise we get lint errors
+                        remove_parens(&mut $left);
+                        remove_parens(&mut $right);
+
+                        quote_spanned!($span => {
+                            // assign in one stmt in case either #left or #right contains
+                            // references to `left` or `right` symbols.
+                            let (left, right) = (&mut #left, #right);
+                            *left = (*left).$method(right)
+                                .unwrap_or_else(||
+                                    panic!(
+                                        "Overflow or underflow in {} {} + {}",
+                                        stringify!($method),
+                                        *left,
+                                        right
+                                    )
+                                )
+                        })
+                    }};
                 }
 
                 match op {
                     BinOp::Add(_) => {
-                        quote!((#left).checked_add(#right).expect("Overflow or underflow in addition"))
+                        wrap_op!(left, right, checked_add, span)
                     }
                     BinOp::Sub(_) => {
-                        quote!((#left).checked_sub(#right).expect("Overflow or underflow in subtraction"))
+                        wrap_op!(left, right, checked_sub, span)
                     }
                     BinOp::Mul(_) => {
-                        quote!((#left).checked_mul(#right).expect("Overflow or underflow in multiplication"))
+                        wrap_op!(left, right, checked_mul, span)
                     }
                     BinOp::Div(_) => {
-                        quote!((#left).checked_div(#right).expect("Overflow or underflow in division"))
+                        wrap_op!(left, right, checked_div, span)
                     }
                     BinOp::Rem(_) => {
-                        quote!((#left).checked_rem(#right).expect("Overflow or underflow in remainder"))
+                        wrap_op!(left, right, checked_rem, span)
                     }
                     BinOp::AddAssign(_) => {
-                        quote!(#left = #left.checked_add(#right).expect("Overflow or underflow in addition assignment"))
+                        wrap_op_assign!(left, right, checked_add, span)
                     }
                     BinOp::SubAssign(_) => {
-                        quote!(#left = #left.checked_sub(#right).expect("Overflow or underflow in subtraction assignment"))
+                        wrap_op_assign!(left, right, checked_sub, span)
                     }
                     BinOp::MulAssign(_) => {
-                        quote!(#left = #left.checked_mul(#right).expect("Overflow or underflow in multiplication assignment"))
+                        wrap_op_assign!(left, right, checked_mul, span)
                     }
                     BinOp::DivAssign(_) => {
-                        quote!(#left = #left.checked_div(#right).expect("Overflow or underflow in division assignment"))
+                        wrap_op_assign!(left, right, checked_div, span)
                     }
                     BinOp::RemAssign(_) => {
-                        quote!(#left = #left.checked_rem(#right).expect("Overflow or underflow in remainder assignment"))
+                        wrap_op_assign!(left, right, checked_rem, span)
                     }
                     _ => {
                         let expr_binary = ExprBinary {
@@ -442,7 +492,7 @@ impl Fold for CheckArithmetic {
                             op,
                             right,
                         };
-                        quote!(#expr_binary)
+                        quote_spanned!(span => #expr_binary)
                     }
                 }
             }
@@ -451,12 +501,12 @@ impl Fold for CheckArithmetic {
                 let operand = &expr_unary.expr;
                 match op {
                     UnOp::Neg(_) => {
-                        quote!(#operand.checked_neg().expect("Overflow or underflow in negation"))
+                        quote_spanned!(span => #operand.checked_neg().expect("Overflow or underflow in negation"))
                     }
-                    _ => quote!(#expr_unary),
+                    _ => quote_spanned!(span => #expr_unary),
                 }
             }
-            _ => quote!(#expr),
+            _ => quote_spanned!(span => #expr),
         };
 
         parse2(expr).unwrap()
