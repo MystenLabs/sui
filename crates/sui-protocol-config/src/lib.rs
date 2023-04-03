@@ -9,7 +9,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 4;
+const MAX_PROTOCOL_VERSION: u64 = 3;
 
 // Record history of protocol version allocations here:
 //
@@ -1539,12 +1539,15 @@ impl ProtocolConfig {
                 cfg.feature_flags.package_upgrades = true;
                 cfg
             }
+<<<<<<< HEAD
             4 => {
                 let mut cfg = Self::get_for_version_impl(version - 1);
                 // Change reward slashing rate to 100%.
                 cfg.reward_slashing_rate = Some(10000);
                 cfg
             }
+=======
+>>>>>>> 98727d7d2 (Address feedback)
             // Use this template when making changes:
             //
             //     // modify an existing constant.
