@@ -33,7 +33,7 @@ use sui_types::base_types::{
     MoveObjectType, ObjectDigest, ObjectID, ObjectType, SequenceNumber, SuiAddress,
     TransactionDigest,
 };
-use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair};
+use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AggregateAuthoritySignature};
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::event::EventID;
 use sui_types::gas_coin::GasCoin;
@@ -295,6 +295,7 @@ impl RpcExampleProvider {
             end_of_epoch_data: None,
             transactions: vec![TransactionDigest::new(self.rng.gen())],
             checkpoint_commitments: vec![],
+            validator_signature: AggregateAuthoritySignature::default(),
         };
 
         Examples::new(
