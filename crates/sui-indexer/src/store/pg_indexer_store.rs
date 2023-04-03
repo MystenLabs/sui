@@ -543,6 +543,7 @@ impl IndexerStore for PgIndexerStore {
         object_id: ObjectID,
         version: Option<SequenceNumber>,
     ) -> Result<ObjectRead, IndexerError> {
+        // MUSTFIX (jian): add display field error support on implementation
         let object = read_only!(&self.cp, |conn| {
             if let Some(version) = version {
                 objects_history::dsl::objects_history

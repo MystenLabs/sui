@@ -131,6 +131,9 @@ impl ObjectChecker {
                 }
                 Ok(CheckerResultObject::new(None, Some(object)))
             }
+            (None, Some(SuiObjectResponseError::DisplayError { error })) => {
+                panic!("Display Error: {error:?}");
+            }
             (None, None) | (None, Some(SuiObjectResponseError::Unknown)) => {
                 panic!("Unexpected response: object not found and no specific error provided");
             }
