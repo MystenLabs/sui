@@ -3332,9 +3332,8 @@ impl AuthorityState {
         }
         let pending_certificates = epoch_store.pending_consensus_certificates();
         info!(
-            "Reverting {} locally executed transactions that was not included in the epoch: {:?}",
-            pending_certificates.len(),
-            pending_certificates,
+            "Reverting {} locally executed transactions that was not included in the epoch",
+            pending_certificates.len()
         );
         for digest in pending_certificates {
             if self
