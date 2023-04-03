@@ -16,7 +16,9 @@ use sui_types::crypto::{EncodeDecodeBase64, SuiKeyPair};
 use tracing::info;
 
 use crate::load_test::{LoadTest, LoadTestConfig};
-use crate::payload::{load_addresses_from_file, Command, RpcCommandProcessor, SignerInfo};
+use crate::payload::{
+    load_addresses_from_file, load_objects_from_file, Command, RpcCommandProcessor, SignerInfo,
+};
 
 #[derive(Parser)]
 #[clap(
@@ -96,6 +98,11 @@ pub enum ClapCommand {
         #[clap(long, parse(try_from_str), case_insensitive = true)]
         address_type: AddressQueryType,
 
+        #[clap(flatten)]
+        common: CommonOptions,
+    },
+    #[clap(name = "multi-get-objects")]
+    MultiGetObjects {
         #[clap(flatten)]
         common: CommonOptions,
     },
@@ -179,6 +186,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 common,
                 false,
             )
+        }
+        ClapCommand::MultiGetObjects { common } => {
+            let objects = load_objects_from_file(expand_path(&opts.data_directory));
+            (Command::new_multi_get_objects(objects), common, false)
         }
     };
 

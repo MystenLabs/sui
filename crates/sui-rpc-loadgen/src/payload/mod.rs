@@ -3,6 +3,7 @@
 
 mod checkpoint_utils;
 mod get_checkpoints;
+mod multi_get_objects;
 mod pay_sui;
 mod query_transactions;
 mod rpc_command_processor;
@@ -13,11 +14,12 @@ use anyhow::Result;
 use async_trait::async_trait;
 use core::default::Default;
 use std::time::Duration;
-
 use sui_types::{base_types::SuiAddress, messages_checkpoint::CheckpointSequenceNumber};
 
 use crate::load_test::LoadTestConfig;
-pub use rpc_command_processor::{load_addresses_from_file, RpcCommandProcessor};
+pub use rpc_command_processor::{
+    load_addresses_from_file, load_objects_from_file, RpcCommandProcessor,
+};
 use sui_types::base_types::ObjectID;
 
 #[derive(Default, Clone)]
@@ -104,6 +106,14 @@ impl Command {
         }
     }
 
+    pub fn new_multi_get_objects(object_ids: Vec<ObjectID>) -> Self {
+        let multi_get_objects = MultiGetObjects { object_ids };
+        Self {
+            data: CommandData::MultiGetObjects(multi_get_objects),
+            ..Default::default()
+        }
+    }
+
     pub fn with_repeat_n_times(mut self, num: usize) -> Self {
         self.repeat_n_times = num;
         self
@@ -122,6 +132,7 @@ pub enum CommandData {
     GetCheckpoints(GetCheckpoints),
     PaySui(PaySui),
     QueryTransactionBlocks(QueryTransactionBlocks),
+    MultiGetObjects(MultiGetObjects),
 }
 
 impl Default for CommandData {
@@ -165,6 +176,11 @@ impl Default for AddressQueryType {
     fn default() -> Self {
         AddressQueryType::From
     }
+}
+
+#[derive(Clone)]
+pub struct MultiGetObjects {
+    pub object_ids: Vec<ObjectID>,
 }
 
 #[async_trait]
