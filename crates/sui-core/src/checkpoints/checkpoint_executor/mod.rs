@@ -145,6 +145,14 @@ impl CheckpointExecutor {
             .map(|c| c.network_total_transactions)
             .unwrap_or(0);
 
+        if self.is_epoch_change_recovery(epoch_store.clone(), &highest_executed) {
+            // If we crash during epoch change after execution of the final checkpoint,
+            // we must early return for reconfiguration retry. This is effectively checked
+            // in `check_epoch_last_checkpoint` below, but we need to avoid accumulation
+            // of checkpoints after pruning has run.
+            return;
+        }
+
         loop {
             // If we have executed the last checkpoint of the current epoch, stop.
             if self
@@ -423,6 +431,19 @@ impl CheckpointExecutor {
 
                     return true;
                 }
+            }
+        }
+        false
+    }
+
+    fn is_epoch_change_recovery(
+        &self,
+        epoch_store: Arc<AuthorityPerEpochStore>,
+        checkpoint: &Option<VerifiedCheckpoint>,
+    ) -> bool {
+        if let Some(checkpoint) = checkpoint {
+            if checkpoint.end_of_epoch_data.is_some() {
+                return checkpoint.epoch() == epoch_store.epoch();
             }
         }
         false
