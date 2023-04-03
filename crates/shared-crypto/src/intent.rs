@@ -22,7 +22,7 @@ pub enum IntentVersion {
 impl TryFrom<u8> for IntentVersion {
     type Error = eyre::Report;
     fn try_from(value: u8) -> Result<Self, Self::Error> {
-        Ok(bcs::from_bytes(&[value])?)
+        Ok(bcs::from_bytes(&[value]).map_err(|_| eyre!("Invalid IntentVersion"))?)
     }
 }
 
@@ -41,7 +41,7 @@ pub enum AppId {
 impl TryFrom<u8> for AppId {
     type Error = eyre::Report;
     fn try_from(value: u8) -> Result<Self, Self::Error> {
-        Ok(bcs::from_bytes(&[value])?)
+        Ok(bcs::from_bytes(&[value]).map_err(|_| eyre!("Invalid AppId"))?)
     }
 }
 
@@ -69,7 +69,7 @@ pub enum IntentScope {
 impl TryFrom<u8> for IntentScope {
     type Error = eyre::Report;
     fn try_from(value: u8) -> Result<Self, Self::Error> {
-        Ok(bcs::from_bytes(&[value])?)
+        Ok(bcs::from_bytes(&[value]).map_err(|_| eyre!("Invalid IntentScope"))?)
     }
 }
 
