@@ -87,7 +87,7 @@ jobs:
           pip install pyopenssl --upgrade
           if [ -f narwhal/benchmark/requirements.txt ]; then pip install -r narwhal/benchmark/requirements.txt; fi
           crates/sui-move/scripts/prover_setup.sh
-          yes | crates/sui-move/scripts/dev_setup.sh -ydp
+          yes | sh crates/sui-move/scripts/dev_setup.sh -ydp
       - name: cargo test
         run: |
           set -o pipefail
