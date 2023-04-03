@@ -95,7 +95,7 @@ impl TicTacToe {
         // Sign transaction.
         let signature =
             self.keystore
-                .sign_secure(&player_x, &create_game_call, Intent::default())?;
+                .sign_secure(&player_x, &create_game_call, Intent::default_sui_app())?;
 
         // Execute the transaction.
 
@@ -103,8 +103,12 @@ impl TicTacToe {
             .client
             .quorum_driver()
             .execute_transaction_block(
-                Transaction::from_data(create_game_call, Intent::default(), vec![signature])
-                    .verify()?,
+                Transaction::from_data(
+                    create_game_call,
+                    Intent::default_sui_app(),
+                    vec![signature],
+                )
+                .verify()?,
                 SuiTransactionBlockResponseOptions::full_content(),
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
@@ -193,17 +197,23 @@ impl TicTacToe {
                 .await?;
 
             // Sign transaction.
-            let signature =
-                self.keystore
-                    .sign_secure(&my_identity, &place_mark_call, Intent::default())?;
+            let signature = self.keystore.sign_secure(
+                &my_identity,
+                &place_mark_call,
+                Intent::default_sui_app(),
+            )?;
 
             // Execute the transaction.
             let response = self
                 .client
                 .quorum_driver()
                 .execute_transaction_block(
-                    Transaction::from_data(place_mark_call, Intent::default(), vec![signature])
-                        .verify()?,
+                    Transaction::from_data(
+                        place_mark_call,
+                        Intent::default_sui_app(),
+                        vec![signature],
+                    )
+                    .verify()?,
                     SuiTransactionBlockResponseOptions::new().with_effects(),
                     Some(ExecuteTransactionRequestType::WaitForLocalExecution),
                 )

@@ -180,7 +180,7 @@ impl KeyToolCommand {
             } => {
                 println!("Signer address: {}", address);
                 println!("Raw tx_bytes to execute: {}", data);
-                let intent = intent.unwrap_or_default();
+                let intent = intent.unwrap_or_else(Intent::default_sui_app);
                 println!("Intent: {:?}", intent);
                 let msg: TransactionData =
                     bcs::from_bytes(&Base64::decode(&data).map_err(|e| {

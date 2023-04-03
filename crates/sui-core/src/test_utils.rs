@@ -108,7 +108,7 @@ pub fn create_fake_cert_and_effect_digest<'a>(
                 AuthoritySignInfo::new(
                     committee.epoch,
                     transaction.data(),
-                    Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+                    Intent::default_sui_app().with_scope(IntentScope::SenderSignedTransaction),
                     *name,
                     signer,
                 )
@@ -327,7 +327,7 @@ pub fn make_dummy_tx(
             random_object_ref(),
             5_000_000_000,
         ),
-        Intent::default(),
+        Intent::default_sui_app(),
         vec![sender_sec],
     )
     .verify()

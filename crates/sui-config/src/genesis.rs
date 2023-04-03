@@ -692,7 +692,7 @@ impl Builder {
         );
         let checkpoint_signature = {
             let intent_msg = IntentMessage::new(
-                Intent::default().with_scope(IntentScope::CheckpointSummary),
+                Intent::default_sui_app().with_scope(IntentScope::CheckpointSummary),
                 checkpoint.clone(),
             );
             let signature = AuthoritySignature::new_secure(&intent_msg, &checkpoint.epoch, keypair);
@@ -1053,7 +1053,7 @@ impl Builder {
             signature
                 .verify_secure(
                     unsigned_genesis.checkpoint(),
-                    Intent::default().with_scope(IntentScope::CheckpointSummary),
+                    Intent::default_sui_app().with_scope(IntentScope::CheckpointSummary),
                     &committee,
                 )
                 .expect("signature should be valid");

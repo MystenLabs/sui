@@ -152,7 +152,7 @@ impl TestContext {
             .get_fullnode_client()
             .quorum_driver()
             .execute_transaction_block(
-                Transaction::from_data(txn_data, Intent::default(), vec![signature])
+                Transaction::from_data(txn_data, Intent::default_sui_app(), vec![signature])
                     .verify()
                     .unwrap(),
                 SuiTransactionBlockResponseOptions::new()

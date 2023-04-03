@@ -54,7 +54,7 @@ fn test_signed_values() {
             random_object_ref(),
             MAX_GAS_BUDGET_FOR_TESTING,
         ),
-        Intent::default(),
+        Intent::default_sui_app(),
         vec![&sender_sec],
     )
     .verify()
@@ -68,7 +68,7 @@ fn test_signed_values() {
             random_object_ref(),
             MAX_GAS_BUDGET_FOR_TESTING,
         ),
-        Intent::default(),
+        Intent::default_sui_app(),
         vec![&sender_sec2],
     ));
 
@@ -131,7 +131,7 @@ fn test_certificates() {
             random_object_ref(),
             MAX_GAS_BUDGET_FOR_TESTING,
         ),
-        Intent::default(),
+        Intent::default_sui_app(),
         vec![&sender_sec],
     )
     .verify()
@@ -185,7 +185,7 @@ fn test_new_with_signatures() {
         signatures.push(AuthoritySignInfo::new(
             0,
             &message,
-            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            Intent::default_sui_app().with_scope(IntentScope::SenderSignedTransaction),
             name,
             &sec,
         ));
@@ -234,7 +234,7 @@ fn test_handle_reject_malicious_signature() {
             signatures.push(AuthoritySignInfo::new(
                 0,
                 &Foo("some data".to_string()),
-                Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+                Intent::default_sui_app().with_scope(IntentScope::SenderSignedTransaction),
                 name,
                 &sec,
             ))
@@ -247,7 +247,7 @@ fn test_handle_reject_malicious_signature() {
     {
         let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
         let sig = AuthoritySignature::new_secure(
-            &IntentMessage::new(Intent::default(), message.clone()),
+            &IntentMessage::new(Intent::default_sui_app(), message.clone()),
             &committee.epoch,
             &sec,
         );
@@ -267,14 +267,14 @@ fn test_auth_sig_commit_to_wrong_epoch_id_fail() {
     let idx = obligation.add_message(
         &message,
         0, // Obligation added with correct epoch id.
-        Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+        Intent::default_sui_app().with_scope(IntentScope::SenderSignedTransaction),
     );
     let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
 
     // Auth signtaure commits to epoch 0 verifies ok.
     let sig = AuthoritySignature::new_secure(
         &IntentMessage::new(
-            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            Intent::default_sui_app().with_scope(IntentScope::SenderSignedTransaction),
             message.clone(),
         ),
         &0,
@@ -289,11 +289,11 @@ fn test_auth_sig_commit_to_wrong_epoch_id_fail() {
     let idx1 = obligation.add_message(
         &message,
         0, // Obligation added with correct epoch id.
-        Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+        Intent::default_sui_app().with_scope(IntentScope::SenderSignedTransaction),
     );
     let sig1 = AuthoritySignature::new_secure(
         &IntentMessage::new(
-            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            Intent::default_sui_app().with_scope(IntentScope::SenderSignedTransaction),
             message.clone(),
         ),
         &1,
@@ -316,7 +316,7 @@ fn test_bitmap_out_of_range() {
         signatures.push(AuthoritySignInfo::new(
             0,
             &Foo("some data".to_string()),
-            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            Intent::default_sui_app().with_scope(IntentScope::SenderSignedTransaction),
             name,
             &sec,
         ));
@@ -348,7 +348,7 @@ fn test_reject_extra_public_key() {
         signatures.push(AuthoritySignInfo::new(
             0,
             &Foo("some data".to_string()),
-            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            Intent::default_sui_app().with_scope(IntentScope::SenderSignedTransaction),
             name,
             &sec,
         ));
@@ -388,7 +388,7 @@ fn test_reject_reuse_signatures() {
         signatures.push(AuthoritySignInfo::new(
             0,
             &Foo("some data".to_string()),
-            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            Intent::default_sui_app().with_scope(IntentScope::SenderSignedTransaction),
             name,
             &sec,
         ));
@@ -424,7 +424,7 @@ fn test_empty_bitmap() {
         signatures.push(AuthoritySignInfo::new(
             0,
             &Foo("some data".to_string()),
-            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            Intent::default_sui_app().with_scope(IntentScope::SenderSignedTransaction),
             name,
             &sec,
         ));
@@ -464,7 +464,7 @@ fn test_digest_caching() {
             random_object_ref(),
             MAX_GAS_BUDGET_FOR_TESTING,
         ),
-        Intent::default(),
+        Intent::default_sui_app(),
         vec![&ssec2],
     )
     .verify()
@@ -544,12 +544,15 @@ fn test_user_signature_committed_in_transactions() {
     let mut tx_data_2 = tx_data.clone();
     tx_data_2.gas_data_mut().budget += 1;
 
-    let transaction_a =
-        Transaction::from_data_and_signer(tx_data.clone(), Intent::default(), vec![&sender_sec]);
+    let transaction_a = Transaction::from_data_and_signer(
+        tx_data.clone(),
+        Intent::default_sui_app(),
+        vec![&sender_sec],
+    );
     let transaction_b =
-        Transaction::from_data_and_signer(tx_data, Intent::default(), vec![&sender_sec2]);
+        Transaction::from_data_and_signer(tx_data, Intent::default_sui_app(), vec![&sender_sec2]);
     let transaction_c =
-        Transaction::from_data_and_signer(tx_data_2, Intent::default(), vec![&sender_sec2]);
+        Transaction::from_data_and_signer(tx_data_2, Intent::default_sui_app(), vec![&sender_sec2]);
 
     let tx_digest_a = transaction_a.digest();
     let tx_digest_b = transaction_b.digest();
@@ -589,14 +592,17 @@ fn test_user_signature_committed_in_signed_transactions() {
         random_object_ref(),
         MAX_GAS_BUDGET_FOR_TESTING,
     );
-    let transaction_a =
-        Transaction::from_data_and_signer(tx_data.clone(), Intent::default(), vec![&sender_sec])
-            .verify()
-            .unwrap();
+    let transaction_a = Transaction::from_data_and_signer(
+        tx_data.clone(),
+        Intent::default_sui_app(),
+        vec![&sender_sec],
+    )
+    .verify()
+    .unwrap();
     // transaction_b intentionally invalid (sender does not match signer).
     let transaction_b = VerifiedTransaction::new_unchecked(Transaction::from_data_and_signer(
         tx_data,
-        Intent::default(),
+        Intent::default_sui_app(),
         vec![&sender_sec2],
     ));
 
@@ -626,7 +632,7 @@ fn test_user_signature_committed_in_signed_transactions() {
         .auth_sig()
         .verify_secure(
             transaction_a.data(),
-            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            Intent::default_sui_app().with_scope(IntentScope::SenderSignedTransaction),
             &committee
         )
         .is_ok());
@@ -634,7 +640,7 @@ fn test_user_signature_committed_in_signed_transactions() {
         .auth_sig()
         .verify_secure(
             transaction_b.data(),
-            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            Intent::default_sui_app().with_scope(IntentScope::SenderSignedTransaction),
             &committee
         )
         .is_err());
@@ -683,7 +689,7 @@ fn test_sponsored_transaction_message() {
         budget: 10000,
     };
     let tx_data = TransactionData::new_with_gas_data(kind, sender, gas_data.clone());
-    let intent = Intent::default();
+    let intent = Intent::default_sui_app();
     let sender_sig: GenericSignature =
         signature_from_signer(tx_data.clone(), intent.clone(), &sender_kp).into();
     let sponsor_sig: GenericSignature =
@@ -914,7 +920,7 @@ fn verify_sender_signature_correctly_with_flag() {
     tx_data_3.gas_data_mut().owner = tx_data_3.sender();
 
     let transaction =
-        Transaction::from_data_and_signer(tx_data, Intent::default(), vec![&sender_kp])
+        Transaction::from_data_and_signer(tx_data, Intent::default_sui_app(), vec![&sender_kp])
             .verify()
             .unwrap();
 
@@ -938,13 +944,13 @@ fn verify_sender_signature_correctly_with_flag() {
         .auth_sig()
         .verify_secure(
             transaction.data(),
-            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            Intent::default_sui_app().with_scope(IntentScope::SenderSignedTransaction),
             &committee
         )
         .is_ok());
 
     let transaction_1 =
-        Transaction::from_data_and_signer(tx_data_2, Intent::default(), vec![&sender_kp_2])
+        Transaction::from_data_and_signer(tx_data_2, Intent::default_sui_app(), vec![&sender_kp_2])
             .verify()
             .unwrap();
 
@@ -967,7 +973,7 @@ fn verify_sender_signature_correctly_with_flag() {
         .auth_sig()
         .verify_secure(
             transaction_1.data(),
-            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            Intent::default_sui_app().with_scope(IntentScope::SenderSignedTransaction),
             &committee
         )
         .is_ok());
@@ -976,13 +982,14 @@ fn verify_sender_signature_correctly_with_flag() {
         .auth_sig()
         .verify_secure(
             transaction.data(),
-            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            Intent::default_sui_app().with_scope(IntentScope::SenderSignedTransaction),
             &committee
         )
         .is_err());
 
     // create transaction with r1 signer
-    let tx_3 = Transaction::from_data_and_signer(tx_data_3, Intent::default(), vec![&sender_kp_3]);
+    let tx_3 =
+        Transaction::from_data_and_signer(tx_data_3, Intent::default_sui_app(), vec![&sender_kp_3]);
     let tx_31 = tx_3.clone();
     let tx_32 = tx_3.clone();
 
@@ -1000,7 +1007,7 @@ fn verify_sender_signature_correctly_with_flag() {
         .auth_sig()
         .verify_secure(
             tx_32.data(),
-            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            Intent::default_sui_app().with_scope(IntentScope::SenderSignedTransaction),
             &committee
         )
         .is_ok());
@@ -1244,7 +1251,7 @@ fn test_certificate_digest() {
                 random_object_ref(),
                 MAX_GAS_BUDGET_FOR_TESTING,
             ),
-            Intent::default(),
+            Intent::default_sui_app(),
             vec![&sender_sec],
         )
         .verify()

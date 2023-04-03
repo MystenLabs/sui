@@ -22,10 +22,7 @@ pub enum IntentVersion {
 impl TryFrom<u8> for IntentVersion {
     type Error = eyre::Report;
     fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(Self::V0),
-            _ => Err(eyre!("Invalid IntentVersion")),
-        }
+        Ok(bcs::from_bytes(&[value])?)
     }
 }
 
@@ -44,10 +41,7 @@ pub enum AppId {
 impl TryFrom<u8> for AppId {
     type Error = eyre::Report;
     fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(Self::Sui),
-            _ => Err(eyre!("Invalid AppId")),
-        }
+        Ok(bcs::from_bytes(&[value])?)
     }
 }
 
@@ -75,17 +69,10 @@ pub enum IntentScope {
 impl TryFrom<u8> for IntentScope {
     type Error = eyre::Report;
     fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(Self::TransactionData),
-            1 => Ok(Self::TransactionEffects),
-            2 => Ok(Self::CheckpointSummary),
-            3 => Ok(Self::PersonalMessage),
-            4 => Ok(Self::SenderSignedTransaction),
-            5 => Ok(Self::ProofOfPossession),
-            _ => Err(eyre!("Invalid IntentScope")),
-        }
+        Ok(bcs::from_bytes(&[value])?)
     }
 }
+
 /// An intent is a compact struct serves as the domain separator for a message that a signature commits to.
 /// It consists of three parts: [enum IntentScope] (what the type of the message is), [enum IntentVersion], [enum AppId] (what application that the signature refers to).
 /// It is used to construct [struct IntentMessage] that what a signature commits to.
@@ -114,23 +101,27 @@ impl FromStr for Intent {
 }
 
 impl Intent {
-    pub fn with_app_id(mut self, app_id: AppId) -> Self {
-        self.app_id = app_id;
-        self
-    }
-
     pub fn with_scope(mut self, scope: IntentScope) -> Self {
         self.scope = scope;
         self
     }
 }
 
-impl Default for Intent {
-    fn default() -> Self {
+// TODO: Do not allow default values as they must be explicitly specified.
+impl Intent {
+    pub fn default_sui_app() -> Self {
         Self {
             version: IntentVersion::V0,
             scope: IntentScope::TransactionData,
             app_id: AppId::Sui,
+        }
+    }
+
+    pub fn default_narwhal_app() -> Self {
+        Self {
+            version: IntentVersion::V0,
+            scope: IntentScope::TransactionData,
+            app_id: AppId::Narwhal,
         }
     }
 }

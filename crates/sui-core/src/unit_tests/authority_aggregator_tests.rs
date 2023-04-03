@@ -1934,7 +1934,7 @@ async fn run_aggregator(
             AuthoritySignInfo::new(
                 0,
                 tx.clone().data(),
-                Intent::default().with_scope(IntentScope::ProofOfPossession), // bad intent
+                Intent::default_sui_app().with_scope(IntentScope::ProofOfPossession), // bad intent
                 *name,
                 secret,
             )
@@ -1943,7 +1943,7 @@ async fn run_aggregator(
             AuthoritySignInfo::new(
                 0,
                 tx.clone().data(),
-                Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+                Intent::default_sui_app().with_scope(IntentScope::SenderSignedTransaction),
                 *name,
                 secret,
             )
@@ -2007,7 +2007,7 @@ async fn process_with_cert(
             AuthoritySignInfo::new(
                 0,
                 &effects.clone(),
-                Intent::default().with_scope(IntentScope::ProofOfPossession), // bad intent
+                Intent::default_sui_app().with_scope(IntentScope::ProofOfPossession), // bad intent
                 *name,
                 secret,
             )
@@ -2016,7 +2016,7 @@ async fn process_with_cert(
             AuthoritySignInfo::new(
                 0,
                 &effects.clone(),
-                Intent::default().with_scope(IntentScope::TransactionEffects),
+                Intent::default_sui_app().with_scope(IntentScope::TransactionEffects),
                 *name,
                 secret,
             )

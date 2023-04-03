@@ -43,7 +43,7 @@ fn multisig_scenarios() {
     .unwrap();
     let addr = SuiAddress::from(multisig_pk.clone());
     let msg = IntentMessage::new(
-        Intent::default(),
+        Intent::default_sui_app(),
         PersonalMessage {
             message: "Hello".as_bytes().to_vec(),
         },
@@ -116,7 +116,7 @@ fn multisig_scenarios() {
     // A bad sig in the multisig fails, even though sig2 and sig3 verifies and weights meets threshold.
     let bad_sig = Signature::new_secure(
         &IntentMessage::new(
-            Intent::default(),
+            Intent::default_sui_app(),
             PersonalMessage {
                 message: "Bad message".as_bytes().to_vec(),
             },
@@ -150,7 +150,7 @@ fn test_combine_sigs() {
     let multisig_pk = MultiSigPublicKey::new(vec![pk1, pk2], vec![1, 1], 2).unwrap();
 
     let msg = IntentMessage::new(
-        Intent::default(),
+        Intent::default_sui_app(),
         PersonalMessage {
             message: "Hello".as_bytes().to_vec(),
         },
@@ -168,7 +168,7 @@ fn test_combine_sigs() {
 #[test]
 fn test_serde_roundtrip() {
     let msg = IntentMessage::new(
-        Intent::default(),
+        Intent::default_sui_app(),
         PersonalMessage {
             message: "Hello".as_bytes().to_vec(),
         },
@@ -243,7 +243,7 @@ fn single_sig_port_works() {
     let kp: SuiKeyPair = SuiKeyPair::Ed25519(get_key_pair().1);
     let addr = SuiAddress::from(&kp.public());
     let msg = IntentMessage::new(
-        Intent::default(),
+        Intent::default_sui_app(),
         PersonalMessage {
             message: "Hello".as_bytes().to_vec(),
         },
@@ -311,7 +311,7 @@ fn test_multisig_address() {
 #[test]
 fn test_max_sig() {
     let msg = IntentMessage::new(
-        Intent::default(),
+        Intent::default_sui_app(),
         PersonalMessage {
             message: "Hello".as_bytes().to_vec(),
         },

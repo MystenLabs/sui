@@ -391,7 +391,7 @@ fn batch_verify(
         let idx = obligation.add_message(
             cert.data(),
             cert.epoch(),
-            Intent::default().with_scope(cert.scope()),
+            Intent::default_sui_app().with_scope(cert.scope()),
         );
         cert.auth_sig()
             .add_to_verification_obligation(committee, &mut obligation, idx)?;
@@ -401,7 +401,7 @@ fn batch_verify(
         let idx = obligation.add_message(
             ckpt.data(),
             ckpt.epoch(),
-            Intent::default().with_scope(ckpt.scope()),
+            Intent::default_sui_app().with_scope(ckpt.scope()),
         );
         ckpt.auth_sig()
             .add_to_verification_obligation(committee, &mut obligation, idx)?;

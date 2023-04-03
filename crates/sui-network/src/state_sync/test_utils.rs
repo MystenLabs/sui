@@ -78,7 +78,7 @@ impl CommitteeFixture {
             .iter()
             .map(|(name, (key, _))| {
                 let intent_msg = IntentMessage::new(
-                    Intent::default().with_scope(IntentScope::CheckpointSummary),
+                    Intent::default_sui_app().with_scope(IntentScope::CheckpointSummary),
                     checkpoint.clone(),
                 );
                 let signature = AuthoritySignature::new_secure(&intent_msg, &checkpoint.epoch, key);

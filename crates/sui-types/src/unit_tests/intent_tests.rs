@@ -27,7 +27,7 @@ fn test_personal_message_intent() {
     let p_message_2 = p_message.clone();
     let p_message_bcs = bcs::to_bytes(&p_message).unwrap();
 
-    let intent = Intent::default().with_scope(IntentScope::PersonalMessage);
+    let intent = Intent::default_sui_app().with_scope(IntentScope::PersonalMessage);
     let intent1 = intent.clone();
     let intent2 = intent.clone();
     let intent_bcs = bcs::to_bytes(&IntentMessage::new(intent, &p_message)).unwrap();
@@ -69,10 +69,10 @@ fn test_authority_signature_intent() {
         10000,
     );
     let signature = Signature::new_secure(
-        &IntentMessage::new(Intent::default(), data.clone()),
+        &IntentMessage::new(Intent::default_sui_app(), data.clone()),
         &sender_key,
     );
-    let tx = Transaction::from_data(data, Intent::default(), vec![signature]);
+    let tx = Transaction::from_data(data, Intent::default_sui_app(), vec![signature]);
     let tx1 = tx.clone();
     assert!(tx.verify().is_ok());
 

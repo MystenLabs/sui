@@ -155,7 +155,7 @@ where
         AuthoritySignInfo::new(
             epoch,
             &data,
-            Intent::default().with_scope(T::SCOPE),
+            Intent::default_sui_app().with_scope(T::SCOPE),
             authority,
             secret,
         )
@@ -169,7 +169,7 @@ where
         self.data.verify(Some(self.auth_sig().epoch))?;
         self.auth_signature.verify_secure(
             self.data(),
-            Intent::default().with_scope(T::SCOPE),
+            Intent::default_sui_app().with_scope(T::SCOPE),
             committee,
         )
     }
@@ -215,7 +215,7 @@ where
         self.data.verify(Some(self.auth_sig().epoch))?;
         self.auth_signature.verify_secure(
             self.data(),
-            Intent::default().with_scope(T::SCOPE),
+            Intent::default_sui_app().with_scope(T::SCOPE),
             committee,
         )
     }

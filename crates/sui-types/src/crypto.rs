@@ -91,7 +91,7 @@ pub fn generate_proof_of_possession(
     msg.extend_from_slice(address.as_ref());
     AuthoritySignature::new_secure(
         &IntentMessage::new(
-            Intent::default().with_scope(IntentScope::ProofOfPossession),
+            Intent::default_sui_app().with_scope(IntentScope::ProofOfPossession),
             msg,
         ),
         &DEFAULT_EPOCH_ID,
@@ -111,7 +111,7 @@ pub fn verify_proof_of_possession(
     msg.extend_from_slice(sui_address.as_ref());
     pop.verify_secure(
         &IntentMessage::new(
-            Intent::default().with_scope(IntentScope::ProofOfPossession),
+            Intent::default_sui_app().with_scope(IntentScope::ProofOfPossession),
             msg,
         ),
         DEFAULT_EPOCH_ID,
@@ -1587,7 +1587,7 @@ pub mod bcs_signable_test {
         let idx = obligation.add_message(
             value,
             0,
-            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            Intent::default_sui_app().with_scope(IntentScope::SenderSignedTransaction),
         );
         (obligation, idx)
     }

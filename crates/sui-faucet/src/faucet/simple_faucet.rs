@@ -237,9 +237,9 @@ impl SimpleFaucet {
             .wallet
             .config
             .keystore
-            .sign_secure(&self.active_address, &tx_data, Intent::default())
+            .sign_secure(&self.active_address, &tx_data, Intent::default_sui_app())
             .map_err(FaucetError::internal)?;
-        let tx = Transaction::from_data(tx_data, Intent::default(), vec![signature])
+        let tx = Transaction::from_data(tx_data, Intent::default_sui_app(), vec![signature])
             .verify()
             .unwrap();
         let tx_digest = *tx.digest();

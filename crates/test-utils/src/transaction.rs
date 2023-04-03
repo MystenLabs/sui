@@ -135,9 +135,9 @@ pub async fn publish_package_with_wallet(
         let signature = context
             .config
             .keystore
-            .sign_secure(&sender, &data, Intent::default())
+            .sign_secure(&sender, &data, Intent::default_sui_app())
             .unwrap();
-        Transaction::from_data(data, Intent::default(), vec![signature])
+        Transaction::from_data(data, Intent::default_sui_app(), vec![signature])
             .verify()
             .unwrap()
     };
@@ -197,10 +197,10 @@ pub async fn submit_move_transaction(
     let signature = context
         .config
         .keystore
-        .sign_secure(&sender, &data, Intent::default())
+        .sign_secure(&sender, &data, Intent::default_sui_app())
         .unwrap();
 
-    let tx = Transaction::from_data(data, Intent::default(), vec![signature])
+    let tx = Transaction::from_data(data, Intent::default_sui_app(), vec![signature])
         .verify()
         .unwrap();
     let tx_digest = tx.digest();
@@ -475,10 +475,10 @@ pub async fn delete_devnet_nft(
     let signature = context
         .config
         .keystore
-        .sign_secure(sender, &data, Intent::default())
+        .sign_secure(sender, &data, Intent::default_sui_app())
         .unwrap();
 
-    let tx = Transaction::from_data(data, Intent::default(), vec![signature])
+    let tx = Transaction::from_data(data, Intent::default_sui_app(), vec![signature])
         .verify()
         .unwrap();
     let client = context.get_client().await.unwrap();

@@ -116,7 +116,7 @@ impl TestCluster {
         self.wallet
             .config
             .keystore
-            .sign_secure(signer_address, data, Intent::default())
+            .sign_secure(signer_address, data, Intent::default_sui_app())
             .unwrap()
     }
 

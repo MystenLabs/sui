@@ -2803,7 +2803,7 @@ impl AuthorityState {
             Some(AuthoritySignInfo::new(
                 epoch_store.epoch(),
                 effects,
-                Intent::default().with_scope(IntentScope::TransactionEffects),
+                Intent::default_sui_app().with_scope(IntentScope::TransactionEffects),
                 self.name,
                 &*self.secret,
             ))

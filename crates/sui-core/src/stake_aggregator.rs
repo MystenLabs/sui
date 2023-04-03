@@ -126,7 +126,7 @@ impl<const STRENGTH: bool> StakeAggregator<AuthoritySignInfo, STRENGTH> {
                     Ok(aggregated) => {
                         match aggregated.verify_secure(
                             &data,
-                            Intent::default().with_scope(T::SCOPE),
+                            Intent::default_sui_app().with_scope(T::SCOPE),
                             self.committee(),
                         ) {
                             // In the happy path, the aggregated signature verifies ok and no need to verify
@@ -146,7 +146,7 @@ impl<const STRENGTH: bool> StakeAggregator<AuthoritySignInfo, STRENGTH> {
                                 for (name, sig) in &self.data.clone() {
                                     if let Err(err) = sig.verify_secure(
                                         &data,
-                                        Intent::default().with_scope(T::SCOPE),
+                                        Intent::default_sui_app().with_scope(T::SCOPE),
                                         self.committee(),
                                     ) {
                                         // TODO(joyqvq): Currently, the aggregator cannot do much with an authority that

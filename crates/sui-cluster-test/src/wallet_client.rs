@@ -59,7 +59,7 @@ impl WalletClient {
         self.get_wallet()
             .config
             .keystore
-            .sign_secure(&self.address, txn_data, Intent::default())
+            .sign_secure(&self.address, txn_data, Intent::default_sui_app())
             .unwrap_or_else(|e| panic!("Failed to sign transaction for {}. {}", desc, e))
     }
 }
