@@ -55,7 +55,7 @@ move-bytecode-viewer = { path = "../move-bytecode-viewer" }
 
 [dev-dependencies]
 datatest-stable = "0.1.1"
-httpmock = "0.6.6"
+#httpmock = "0.6.7"
 
 [[bin]]
 name = "move"

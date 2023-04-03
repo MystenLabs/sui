@@ -6,6 +6,7 @@ module std::event {
     use std::bcs;
     use std::guid::{Self, GUID};
 
+    /// THIS COMMENT IS NO LONGER VALID WITH 32-BYTE
     /// Wrapper for a GUID for layout compatibility with legacy EventHandle id's
     // This is a hack for layout compatibility. The old EventHandle.guid was a 24 byte vector<u8>
     // created from `append(u64 counter bytes, account address bytes)`. This dummy struct mimics
@@ -35,8 +36,10 @@ module std::event {
 
     /// Use EventHandleGenerator to generate a unique event handle for `sig`
     public fun new_event_handle<T: drop + store>(account: &signer): EventHandle<T> {
+        // Invalid commment
         // must be 24 for compatibility with legacy Event ID's--see comment on GUIDWrapper
-        let len_bytes = 24u8;
+
+        let len_bytes = 32u8 + 8u8;
          EventHandle<T> {
             counter: 0,
             guid: GUIDWrapper { len_bytes, guid: guid::create(account) }

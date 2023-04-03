@@ -1,7 +1,7 @@
 processed 9 tasks
 
 task 1 'publish'. lines 10-22:
-Error: Unable to publish module '00000000000000000000000000000001::M2'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M2'. Got VMError: {
     major_status: WRITEREF_WITHOUT_DROP_ABILITY,
     sub_status: None,
     location: 0x1::M2,
@@ -10,7 +10,7 @@ Error: Unable to publish module '00000000000000000000000000000001::M2'. Got VMEr
 }
 
 task 2 'publish'. lines 24-36:
-Error: Unable to publish module '00000000000000000000000000000001::M3'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M3'. Got VMError: {
     major_status: POP_WITHOUT_DROP_ABILITY,
     sub_status: None,
     location: 0x1::M3,
@@ -19,7 +19,7 @@ Error: Unable to publish module '00000000000000000000000000000001::M3'. Got VMEr
 }
 
 task 3 'publish'. lines 38-49:
-Error: Unable to publish module '00000000000000000000000000000001::M4'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M4'. Got VMError: {
     major_status: UNSAFE_RET_UNUSED_VALUES_WITHOUT_DROP,
     sub_status: None,
     location: 0x1::M4,
@@ -28,7 +28,7 @@ Error: Unable to publish module '00000000000000000000000000000001::M4'. Got VMEr
 }
 
 task 4 'publish'. lines 51-61:
-Error: Unable to publish module '00000000000000000000000000000001::M5'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M5'. Got VMError: {
     major_status: COPYLOC_WITHOUT_COPY_ABILITY,
     sub_status: None,
     location: 0x1::M5,
@@ -37,7 +37,7 @@ Error: Unable to publish module '00000000000000000000000000000001::M5'. Got VMEr
 }
 
 task 5 'publish'. lines 63-76:
-Error: Unable to publish module '00000000000000000000000000000001::M6'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M6'. Got VMError: {
     major_status: MOVETO_WITHOUT_KEY_ABILITY,
     sub_status: None,
     location: 0x1::M6,
@@ -46,7 +46,7 @@ Error: Unable to publish module '00000000000000000000000000000001::M6'. Got VMEr
 }
 
 task 6 'publish'. lines 78-89:
-Error: Unable to publish module '00000000000000000000000000000001::M7'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M7'. Got VMError: {
     major_status: MOVEFROM_WITHOUT_KEY_ABILITY,
     sub_status: None,
     location: 0x1::M7,
@@ -55,7 +55,7 @@ Error: Unable to publish module '00000000000000000000000000000001::M7'. Got VMEr
 }
 
 task 7 'publish'. lines 91-102:
-Error: Unable to publish module '00000000000000000000000000000001::M8'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M8'. Got VMError: {
     major_status: EXISTS_WITHOUT_KEY_ABILITY_OR_BAD_ARGUMENT,
     sub_status: None,
     location: 0x1::M8,
@@ -64,7 +64,7 @@ Error: Unable to publish module '00000000000000000000000000000001::M8'. Got VMEr
 }
 
 task 8 'publish'. lines 104-115:
-Error: Unable to publish module '00000000000000000000000000000001::M9'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M9'. Got VMError: {
     major_status: CONSTRAINT_NOT_SATISFIED,
     sub_status: None,
     location: 0x1::M9,

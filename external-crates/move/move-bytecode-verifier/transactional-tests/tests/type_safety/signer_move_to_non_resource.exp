@@ -1,7 +1,7 @@
 processed 2 tasks
 
 task 0 'publish'. lines 1-12:
-Error: Unable to publish module '00000000000000000000000000000042::M'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
     major_status: MOVETO_WITHOUT_KEY_ABILITY,
     sub_status: None,
     location: 0x42::M,
@@ -10,7 +10,7 @@ Error: Unable to publish module '00000000000000000000000000000042::M'. Got VMErr
 }
 
 task 1 'publish'. lines 14-23:
-Error: Unable to publish module '00000000000000000000000000000042::N'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::N'. Got VMError: {
     major_status: MOVETO_WITHOUT_KEY_ABILITY,
     sub_status: None,
     location: 0x42::N,

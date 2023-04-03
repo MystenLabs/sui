@@ -16,5 +16,5 @@ Output: Ok(ChangeSet { accounts: {} })
 0x42::m::t4
 Output: Ok(ChangeSet { accounts: {} })
 0x42::m::t5
-Output: Ok(ChangeSet { accounts: {00000000000000000000000000000001: AccountChangeSet { modules: {}, resources: {StructTag { address: 00000000000000000000000000000042, module: Identifier("m"), name: Identifier("R"), type_params: [] }: New([0])} }} })
+Output: Ok(ChangeSet { accounts: {0000000000000000000000000000000000000000000000000000000000000001: AccountChangeSet { modules: {}, resources: {StructTag { address: 0000000000000000000000000000000000000000000000000000000000000042, module: Identifier("m"), name: Identifier("R"), type_params: [] }: New([0])} }} })
 Test result: OK. Total tests: 6; passed: 6; failed: 0

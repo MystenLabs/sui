@@ -26,7 +26,7 @@ Failures in 0x1::M:
 │ 4 │     public fun unexpected_abort() {
 │   │                ---------------- In this function in 0x1::M
 │ 5 │         abort 0
-│   │         ^^^^^^^ Test was not expected to error, but it aborted with code 0 originating in the module 00000000000000000000000000000001::M rooted here
+│   │         ^^^^^^^ Test was not expected to error, but it aborted with code 0 originating in the module 0000000000000000000000000000000000000000000000000000000000000001::M rooted here
 │ 
 │ 
 └──────────────────
@@ -39,7 +39,7 @@ Failures in 0x1::M:
 │ 27 │     fun abort_in_other_function() {
 │    │         ----------------------- In this function in 0x1::M
 │ 28 │         abort 1
-│    │         ^^^^^^^ Test was not expected to error, but it aborted with code 1 originating in the module 00000000000000000000000000000001::M rooted here
+│    │         ^^^^^^^ Test was not expected to error, but it aborted with code 1 originating in the module 0000000000000000000000000000000000000000000000000000000000000001::M rooted here
 │ 
 │ 
 │ stack trace
@@ -55,7 +55,7 @@ Failures in 0x1::M:
 │ 10 │     public fun wrong_abort_code() {
 │    │                ---------------- In this function in 0x1::M
 │ 11 │         abort 0
-│    │         ^^^^^^^ Test did not error as expected. Expected test to abort with code 1 originating in the module 00000000000000000000000000000001::M but instead it aborted with code 0 originating in the module 00000000000000000000000000000001::M rooted here
+│    │         ^^^^^^^ Test did not error as expected. Expected test to abort with code 1 originating in the module 0000000000000000000000000000000000000000000000000000000000000001::M but instead it aborted with code 0 originating in the module 0000000000000000000000000000000000000000000000000000000000000001::M rooted here
 │ 
 │ 
 └──────────────────

@@ -7,13 +7,13 @@ Running Move unit tests
 0x1::A::a
 Output: Ok(ChangeSet { accounts: {} })
 0x1::A::b
-Output: Ok(ChangeSet { accounts: {00000000000000000000000000000001: AccountChangeSet { modules: {}, resources: {StructTag { address: 00000000000000000000000000000001, module: Identifier("A"), name: Identifier("A"), type_params: [] }: New([0])} }} })
+Output: Ok(ChangeSet { accounts: {0000000000000000000000000000000000000000000000000000000000000001: AccountChangeSet { modules: {}, resources: {StructTag { address: 0000000000000000000000000000000000000000000000000000000000000001, module: Identifier("A"), name: Identifier("A"), type_params: [] }: New([0])} }} })
 0x1::A::c
-Output: Ok(ChangeSet { accounts: {00000000000000000000000000000001: AccountChangeSet { modules: {}, resources: {StructTag { address: 00000000000000000000000000000001, module: Identifier("A"), name: Identifier("A"), type_params: [] }: New([0])} }} })
+Output: Ok(ChangeSet { accounts: {0000000000000000000000000000000000000000000000000000000000000001: AccountChangeSet { modules: {}, resources: {StructTag { address: 0000000000000000000000000000000000000000000000000000000000000001, module: Identifier("A"), name: Identifier("A"), type_params: [] }: New([0])} }} })
 0x1::A::x
 Output: Ok(ChangeSet { accounts: {} })
 0x1::A::y
-Output: Ok(ChangeSet { accounts: {00000000000000000000000000000001: AccountChangeSet { modules: {}, resources: {StructTag { address: 00000000000000000000000000000001, module: Identifier("A"), name: Identifier("A"), type_params: [] }: New([0])} }} })
+Output: Ok(ChangeSet { accounts: {0000000000000000000000000000000000000000000000000000000000000001: AccountChangeSet { modules: {}, resources: {StructTag { address: 0000000000000000000000000000000000000000000000000000000000000001, module: Identifier("A"), name: Identifier("A"), type_params: [] }: New([0])} }} })
 
 Test failures:
 
@@ -26,7 +26,7 @@ Failures in 0x1::A:
 │ 5 │     fun x() {
 │   │         - In this function in 0x1::A
 │ 6 │         abort 0
-│   │         ^^^^^^^ Test was not expected to error, but it aborted with code 0 originating in the module 00000000000000000000000000000001::A rooted here
+│   │         ^^^^^^^ Test was not expected to error, but it aborted with code 0 originating in the module 0000000000000000000000000000000000000000000000000000000000000001::A rooted here
 │ 
 │ 
 └──────────────────
@@ -40,7 +40,7 @@ Failures in 0x1::A:
 │    │         - In this function in 0x1::A
 │ 11 │         move_to(&a, A {});
 │ 12 │         abort 0
-│    │         ^^^^^^^ Test was not expected to error, but it aborted with code 0 originating in the module 00000000000000000000000000000001::A rooted here
+│    │         ^^^^^^^ Test was not expected to error, but it aborted with code 0 originating in the module 0000000000000000000000000000000000000000000000000000000000000001::A rooted here
 │ 
 │ 
 └──────────────────

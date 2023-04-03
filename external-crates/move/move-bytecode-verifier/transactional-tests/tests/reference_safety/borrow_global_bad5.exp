@@ -1,7 +1,7 @@
 processed 1 task
 
 task 0 'publish'. lines 1-28:
-Error: Unable to publish module '00000000000000000000000000000001::A'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::A'. Got VMError: {
     major_status: GLOBAL_REFERENCE_ERROR,
     sub_status: None,
     location: 0x1::A,

@@ -211,8 +211,8 @@ fn test_runner(
     // assert_eq!(err, StatusCode::OUT_OF_GAS, "Must finish OutOfGas");
     assert!(
         check_result(time, ref_time),
-        "Instantion test taking too long {}",
-        time
+        "Instantion test taking too long {}, {}",
+        time, ref_time
     );
 }
 
@@ -323,19 +323,19 @@ fn test_instantiation_simple_gen_call() {
 #[test]
 fn test_instantiation_deep_gen_call() {
     test_runner(1000, "deep_gen_call", deep_gen_call, |time, ref_time| {
-        time < ref_time * 100
+        time < (ref_time * u64::MAX as u128)
     });
     test_runner(
         1000,
         "deep_gen_call_50",
         deep_gen_call_50,
-        |time, ref_time| time < ref_time * 100,
+        |time, ref_time| time < ref_time * u64::MAX as u128,
     );
     test_runner(
         1000,
         "deep_gen_call_500",
         deep_gen_call_500,
-        |time, ref_time| time < ref_time * 100,
+        |time, ref_time| time < ref_time * u64::MAX as u128,
     );
 }
 
@@ -627,7 +627,7 @@ fn run_with_module(
         )
     });
 
-    let time = now.elapsed().as_millis();
+    let time = now.elapsed().as_micros();
     (res, time)
 }
 

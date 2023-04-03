@@ -1,7 +1,7 @@
 processed 1 task
 
 task 0 'publish'. lines 1-265:
-Error: Unable to publish module '00000000000000000000000000000001::M'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M'. Got VMError: {
     major_status: TOO_MANY_LOCALS,
     sub_status: None,
     location: undefined,

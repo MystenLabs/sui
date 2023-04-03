@@ -1,7 +1,7 @@
 processed 1 task
 
 task 0 'publish'. lines 1-8:
-Error: Unable to publish module '00000000000000000000000000000042::M'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
     major_status: READREF_WITHOUT_COPY_ABILITY,
     sub_status: None,
     location: 0x42::M,

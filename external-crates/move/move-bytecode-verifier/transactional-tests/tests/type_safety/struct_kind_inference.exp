@@ -1,7 +1,7 @@
 processed 5 tasks
 
 task 0 'publish'. lines 1-12:
-Error: Unable to publish module '00000000000000000000000000000001::M1'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M1'. Got VMError: {
     major_status: UNSAFE_RET_UNUSED_VALUES_WITHOUT_DROP,
     sub_status: None,
     location: 0x1::M1,
@@ -10,7 +10,7 @@ Error: Unable to publish module '00000000000000000000000000000001::M1'. Got VMEr
 }
 
 task 1 'publish'. lines 14-25:
-Error: Unable to publish module '00000000000000000000000000000001::M2'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M2'. Got VMError: {
     major_status: STLOC_UNSAFE_TO_DESTROY_ERROR,
     sub_status: None,
     location: 0x1::M2,
@@ -19,7 +19,7 @@ Error: Unable to publish module '00000000000000000000000000000001::M2'. Got VMEr
 }
 
 task 2 'publish'. lines 27-37:
-Error: Unable to publish module '00000000000000000000000000000001::M3'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M3'. Got VMError: {
     major_status: READREF_WITHOUT_COPY_ABILITY,
     sub_status: None,
     location: 0x1::M3,
@@ -28,7 +28,7 @@ Error: Unable to publish module '00000000000000000000000000000001::M3'. Got VMEr
 }
 
 task 3 'publish'. lines 39-50:
-Error: Unable to publish module '00000000000000000000000000000001::M4'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M4'. Got VMError: {
     major_status: WRITEREF_WITHOUT_DROP_ABILITY,
     sub_status: None,
     location: 0x1::M4,
@@ -37,7 +37,7 @@ Error: Unable to publish module '00000000000000000000000000000001::M4'. Got VMEr
 }
 
 task 4 'publish'. lines 52-62:
-Error: Unable to publish module '00000000000000000000000000000001::M5'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M5'. Got VMError: {
     major_status: COPYLOC_WITHOUT_COPY_ABILITY,
     sub_status: None,
     location: 0x1::M5,

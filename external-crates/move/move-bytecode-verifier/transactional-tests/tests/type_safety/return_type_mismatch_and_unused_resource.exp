@@ -1,7 +1,7 @@
 processed 4 tasks
 
 task 0 'publish'. lines 1-13:
-Error: Unable to publish module '00000000000000000000000000000001::M'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M'. Got VMError: {
     major_status: RET_TYPE_MISMATCH_ERROR,
     sub_status: None,
     location: 0x1::M,
@@ -10,7 +10,7 @@ Error: Unable to publish module '00000000000000000000000000000001::M'. Got VMErr
 }
 
 task 1 'publish'. lines 15-27:
-Error: Unable to publish module '00000000000000000000000000000001::M2'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M2'. Got VMError: {
     major_status: RET_TYPE_MISMATCH_ERROR,
     sub_status: None,
     location: 0x1::M2,
@@ -19,7 +19,7 @@ Error: Unable to publish module '00000000000000000000000000000001::M2'. Got VMEr
 }
 
 task 2 'publish'. lines 29-40:
-Error: Unable to publish module '00000000000000000000000000000001::M'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M'. Got VMError: {
     major_status: UNSAFE_RET_UNUSED_VALUES_WITHOUT_DROP,
     sub_status: None,
     location: 0x1::M,
@@ -28,7 +28,7 @@ Error: Unable to publish module '00000000000000000000000000000001::M'. Got VMErr
 }
 
 task 3 'publish'. lines 42-53:
-Error: Unable to publish module '00000000000000000000000000000001::M2'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M2'. Got VMError: {
     major_status: UNSAFE_RET_LOCAL_OR_RESOURCE_STILL_BORROWED,
     sub_status: None,
     location: 0x1::M2,

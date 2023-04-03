@@ -1,7 +1,7 @@
 processed 4 tasks
 
 task 0 'publish'. lines 1-4:
-Error: Unable to publish module '00000000000000000000000000000042::M1'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M1'. Got VMError: {
     major_status: INVALID_SIGNATURE_TOKEN,
     sub_status: None,
     location: 0x42::M1,
@@ -10,7 +10,7 @@ Error: Unable to publish module '00000000000000000000000000000042::M1'. Got VMEr
 }
 
 task 1 'publish'. lines 6-9:
-Error: Unable to publish module '00000000000000000000000000000042::M2'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M2'. Got VMError: {
     major_status: INVALID_SIGNATURE_TOKEN,
     sub_status: None,
     location: 0x42::M2,
@@ -19,7 +19,7 @@ Error: Unable to publish module '00000000000000000000000000000042::M2'. Got VMEr
 }
 
 task 2 'publish'. lines 11-14:
-Error: Unable to publish module '00000000000000000000000000000042::M3'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M3'. Got VMError: {
     major_status: INVALID_SIGNATURE_TOKEN,
     sub_status: None,
     location: 0x42::M3,
@@ -28,7 +28,7 @@ Error: Unable to publish module '00000000000000000000000000000042::M3'. Got VMEr
 }
 
 task 3 'publish'. lines 16-19:
-Error: Unable to publish module '00000000000000000000000000000042::M4'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M4'. Got VMError: {
     major_status: INVALID_SIGNATURE_TOKEN,
     sub_status: None,
     location: 0x42::M4,

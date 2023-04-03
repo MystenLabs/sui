@@ -1,7 +1,7 @@
 processed 5 tasks
 
 task 0 'publish'. lines 1-20:
-Error: Unable to publish module '00000000000000000000000000000001::M'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M'. Got VMError: {
     major_status: MOVELOC_UNAVAILABLE_ERROR,
     sub_status: None,
     location: 0x1::M,
@@ -10,7 +10,7 @@ Error: Unable to publish module '00000000000000000000000000000001::M'. Got VMErr
 }
 
 task 1 'publish'. lines 22-40:
-Error: Unable to publish module '00000000000000000000000000000001::M'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M'. Got VMError: {
     major_status: UNSAFE_RET_UNUSED_VALUES_WITHOUT_DROP,
     sub_status: None,
     location: 0x1::M,
@@ -19,7 +19,7 @@ Error: Unable to publish module '00000000000000000000000000000001::M'. Got VMErr
 }
 
 task 2 'publish'. lines 42-61:
-Error: Unable to publish module '00000000000000000000000000000001::M'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M'. Got VMError: {
     major_status: STLOC_UNSAFE_TO_DESTROY_ERROR,
     sub_status: None,
     location: 0x1::M,
@@ -28,7 +28,7 @@ Error: Unable to publish module '00000000000000000000000000000001::M'. Got VMErr
 }
 
 task 3 'publish'. lines 63-82:
-Error: Unable to publish module '00000000000000000000000000000001::M'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M'. Got VMError: {
     major_status: COPYLOC_UNAVAILABLE_ERROR,
     sub_status: None,
     location: 0x1::M,
@@ -37,7 +37,7 @@ Error: Unable to publish module '00000000000000000000000000000001::M'. Got VMErr
 }
 
 task 4 'publish'. lines 84-104:
-Error: Unable to publish module '00000000000000000000000000000001::M'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M'. Got VMError: {
     major_status: BORROWLOC_UNAVAILABLE_ERROR,
     sub_status: None,
     location: 0x1::M,
