@@ -143,11 +143,20 @@ impl ReadApiServer for ReadApi {
                 SuiObjectResponseError::NotExists { object_id: id },
             )),
             ObjectRead::Exists(object_ref, o, layout) => {
-                let display_fields = if options.show_display {
-                    get_display_fields(self, &o, &layout).await?
-                } else {
-                    None
-                };
+                let mut display_fields = None;
+                if options.show_display {
+                    match get_display_fields(self, &o, &layout).await {
+                        Ok(rendered_fields) => display_fields = rendered_fields,
+                        Err(e) => {
+                            return Ok(SuiObjectResponse::new(
+                                Some((object_ref, o, layout, options, None).try_into()?),
+                                Some(SuiObjectResponseError::DisplayError {
+                                    error: e.to_string(),
+                                }),
+                            ))
+                        }
+                    }
+                }
                 Ok(SuiObjectResponse::new_with_data(
                     (object_ref, o, layout, options, display_fields).try_into()?,
                 ))
@@ -173,20 +182,22 @@ impl ReadApiServer for ReadApi {
                 futures.push(self.get_object(object_id, options.clone()))
             }
             let results = join_all(futures).await;
-            let (oks, errs): (Vec<_>, Vec<_>) = results.into_iter().partition(Result::is_ok);
+            let objects_result: Result<Vec<SuiObjectResponse>, String> = results
+                .into_iter()
+                .map(|result| match result {
+                    Ok(response) => Ok(response),
+                    Err(error) => {
+                        error!("Failed to fetch object with error: {error:?}");
+                        Err(format!("Error: {}", error))
+                    }
+                })
+                .collect();
 
-            let success = oks.into_iter().filter_map(Result::ok).collect();
-            let errors: Vec<_> = errs.into_iter().filter_map(Result::err).collect();
-            if !errors.is_empty() {
-                let error_string = errors
-                    .iter()
-                    .map(|e| e.to_string())
-                    .collect::<Vec<String>>()
-                    .join("; ");
-                Err(anyhow!("{error_string}").into())
-            } else {
-                Ok(success)
-            }
+            let objects = objects_result.map_err(|err| {
+                Error::UnexpectedError(format!("Failed to fetch objects with error: {}", err))
+            })?;
+
+            Ok(objects)
         } else {
             Err(anyhow!(UserInputError::SizeLimitExceeded {
                 limit: "input limit".to_string(),
@@ -215,6 +226,7 @@ impl ReadApiServer for ReadApi {
             PastObjectRead::ObjectNotExists(id) => Ok(SuiPastObjectResponse::ObjectNotExists(id)),
             PastObjectRead::VersionFound(object_ref, o, layout) => {
                 let display_fields = if options.show_display {
+                    // TODO (jian): api breaking change to also modify past objects.
                     get_display_fields(self, &o, &layout).await?
                 } else {
                     None
@@ -873,6 +885,7 @@ pub fn get_rendered_fields(
             .iter()
             .map(|entry| match parse_template(&entry.value, &move_struct) {
                 Ok(value) => Ok((entry.key.clone(), value)),
+                // TODO (jian): implement best effort display fields.
                 Err(e) => Err(e),
             })
             .collect::<RpcResult<BTreeMap<_, _>>>();

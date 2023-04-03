@@ -171,7 +171,7 @@ fn make_key_files(
                 key
             }
             None => {
-                let (_, kp, _, _) = generate_new_key(SignatureScheme::ED25519, None)?;
+                let (_, kp, _, _) = generate_new_key(SignatureScheme::ED25519, None, None)?;
                 println!("Generated new key file: {:?}.", file_name);
                 kp
             }
@@ -543,12 +543,13 @@ async fn call_0x5(
         rgp,
     )
     .unwrap();
-    let signature = context
-        .config
-        .keystore
-        .sign_secure(&sender, &tx_data, Intent::default())?;
+    let signature =
+        context
+            .config
+            .keystore
+            .sign_secure(&sender, &tx_data, Intent::sui_transaction())?;
     let transaction =
-        Transaction::from_data(tx_data, Intent::default(), vec![signature]).verify()?;
+        Transaction::from_data(tx_data, Intent::sui_transaction(), vec![signature]).verify()?;
     sui_client
         .quorum_driver()
         .execute_transaction_block(
