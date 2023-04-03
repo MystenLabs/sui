@@ -45,11 +45,6 @@ Using coarse bucketing accomplishes two important goals:
 | 1,000,001 | 5,000,000 | 5,000,000 |
 | 5,000,001 | Infinity | transaction will abort |
 
-Coarse bucketing has important benefits relative to more fine grained gas schedules in that it accomplishes two important goals:
-
-- Frees developers from optimizing their smart contracts to deliver marginal gains in gas costs via "gas golfing" – instead, can focus on step-function improvements in their products and services.
-- Gives Sui protocol developers the freedom to adjust per-instruction gas costs and experiment with new gas metering schemes without creating significant disruption for builders. We expect this will happen frequently, so it's important that builders do not rely on per-instruction gas costs remaining stable over time.
-
 **Storage Units**
 
 Similarly, Sui transactions vary depending on the amount of new data written into on-chain storage. The variable Storage Units captures these difference by mapping the amount of bytes held in storage into storage units. Sui’s current schedule is linear and maps each byte into 100 storage units. So, for example, a transaction that stores 25 bytes will cost 2500 Storage Units while a transaction that stores 75 bytes will cost 7500 units.
