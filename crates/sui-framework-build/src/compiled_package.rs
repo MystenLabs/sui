@@ -608,7 +608,7 @@ impl GetModule for CompiledPackage {
 
 pub const PUBLISHED_AT_MANIFEST_FIELD: &str = "published-at";
 
-pub struct SuiPackageHooks {}
+pub struct SuiPackageHooks;
 
 impl PackageHooks for SuiPackageHooks {
     fn custom_package_info_fields(&self) -> Vec<String> {
