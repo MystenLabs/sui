@@ -111,6 +111,11 @@ pub enum ClapCommand {
         #[clap(flatten)]
         common: CommonOptions,
     },
+    #[clap(name = "get-reference-gas-price")]
+    GetReferenceGasPrice {
+        #[clap(flatten)]
+        common: CommonOptions,
+    },
 }
 
 fn get_keypair() -> Result<SignerInfo> {
@@ -205,6 +210,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
         ClapCommand::MultiGetObjects { common } => {
             let objects = load_objects_from_file(expand_path(&opts.data_directory));
             (Command::new_multi_get_objects(objects), common, false)
+        }
+        ClapCommand::GetReferenceGasPrice { common } => {
+            let num_repeats = common.num_chunks_per_thread;
+            (
+                Command::new_get_reference_gas_price(num_repeats),
+                common,
+                false,
+            )
         }
     };
 

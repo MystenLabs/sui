@@ -4,6 +4,7 @@
 mod checkpoint_utils;
 mod get_all_balances;
 mod get_checkpoints;
+mod get_reference_gas_price;
 mod multi_get_objects;
 mod pay_sui;
 mod query_transactions;
@@ -123,6 +124,14 @@ impl Command {
         }
     }
 
+    pub fn new_get_reference_gas_price(num_repeats: usize) -> Self {
+        let get_reference_gas_price = GetReferenceGasPrice { num_repeats };
+        Self {
+            data: CommandData::GetReferenceGasPrice(get_reference_gas_price),
+            ..Default::default()
+        }
+    }
+
     pub fn with_repeat_n_times(mut self, num: usize) -> Self {
         self.repeat_n_times = num;
         self
@@ -143,6 +152,7 @@ pub enum CommandData {
     QueryTransactionBlocks(QueryTransactionBlocks),
     MultiGetObjects(MultiGetObjects),
     GetAllBalances(GetAllBalances),
+    GetReferenceGasPrice(GetReferenceGasPrice),
 }
 
 impl Default for CommandData {
@@ -196,6 +206,11 @@ pub struct MultiGetObjects {
 #[derive(Clone)]
 pub struct GetAllBalances {
     pub addresses: Vec<SuiAddress>,
+}
+
+#[derive(Clone)]
+pub struct GetReferenceGasPrice {
+    num_repeats: usize,
 }
 
 #[async_trait]
