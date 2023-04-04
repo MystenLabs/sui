@@ -1381,6 +1381,15 @@ impl AuthorityStore {
         if !self.enable_epoch_sui_conservation_check {
             return Ok(());
         }
+        let protocol_version = ProtocolVersion::new(
+            self.get_sui_system_state_object()
+                .expect("Read sui system state object cannot fail")
+                .protocol_version(),
+        );
+        // Prior to gas model v2, SUI conservation is not guaranteed.
+        if ProtocolConfig::get_for_version(protocol_version).gas_model_version() <= 1 {
+            return Ok(());
+        }
 
         let mut total_storage_rebate = 0;
         let mut total_sui = 0;

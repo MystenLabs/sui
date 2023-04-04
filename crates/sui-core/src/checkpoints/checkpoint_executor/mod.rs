@@ -235,7 +235,10 @@ impl CheckpointExecutor {
         } else {
             assert_eq!(seq, 0);
         }
-        debug!("Bumping highest_executed_checkpoint watermark to {:?}", seq,);
+        debug!("Bumping highest_executed_checkpoint watermark to {:?}", seq);
+        if seq % 10000 == 0 {
+            info!("Finished syncing and executing checkpoint {}", seq);
+        }
 
         self.checkpoint_store
             .update_highest_executed_checkpoint(checkpoint)
