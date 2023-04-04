@@ -89,6 +89,7 @@ jobs:
       - name: Install Move test dependencies
         run: |
           crates/sui-move/scripts/prover_setup.sh
+          echo "Installing solidity compiler"
           curl -o ~/bin/solc "https://binaries.soliditylang.org/linux-amd64/solc-linux-amd64-v0.8.11+commit.d7f03943"
           chmod +x ~/bin/solc
           set -o pipefail
@@ -98,7 +99,9 @@ jobs:
           export PATH="${DOTNET_ROOT}/tools:$PATH"
           export Z3_EXE="${BIN_DIR}/z3"
           export CVC5_EXE="${BIN_DIR}/cvc5"
-          export BOOGIE_EXE="${DOTNET_ROOT}/tools/boogie"        
+          export BOOGIE_EXE="${DOTNET_ROOT}/tools/boogie"
+          export SOLC_EXE="${BIN_DIR}/solc"
+          echo "Setup done"
       - name: cargo test
         run: |
           cargo nextest run --profile ci
@@ -162,6 +165,7 @@ jobs:
       - name: Install Move test dependencies
         run: |
           crates/sui-move/scripts/prover_setup.sh
+          echo "Installing solidity compiler"
           curl -o ~/bin/solc "https://binaries.soliditylang.org/linux-amd64/solc-linux-amd64-v0.8.11+commit.d7f03943"
           chmod +x ~/bin/solc
           set -o pipefail
@@ -171,7 +175,9 @@ jobs:
           export PATH="${DOTNET_ROOT}/tools:$PATH"
           export Z3_EXE="${BIN_DIR}/z3"
           export CVC5_EXE="${BIN_DIR}/cvc5"
-          export BOOGIE_EXE="${DOTNET_ROOT}/tools/boogie"  
+          export BOOGIE_EXE="${DOTNET_ROOT}/tools/boogie"
+          export SOLC_EXE="${BIN_DIR}/solc"
+          echo "Setup done"
       - name: cargo simtest
         run: |
           scripts/simtest/cargo-simtest simtest
