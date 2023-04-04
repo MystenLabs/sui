@@ -141,7 +141,7 @@ pub fn print_table_metadata(
         table.add_row(row);
     }
 
-    eprintln!("{:?}", table);
+    eprintln!("{}", table);
     Ok(())
 }
 
