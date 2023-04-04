@@ -26,8 +26,13 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
     const [activeFieldName, setActiveFieldName] = useState('');
     const fieldsData = getObjectFields(data!);
     const fieldsNames = Object.entries(fieldsData || {});
+
     if (isLoading) {
-        return <LoadingSpinner text="Loading data" />;
+        return (
+            <div className="flex w-full justify-center">
+                <LoadingSpinner text="Loading data" />
+            </div>
+        );
     }
     if (isError) {
         return null;
