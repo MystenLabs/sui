@@ -220,7 +220,7 @@ export function TokenView({ data }: { data: SuiObjectResponse }) {
                     </TabPanel>
                 </TabPanels>
             </TabGroup>
- 
+
             <DynamicFieldsCard id={objectId} />
 
             <div>
