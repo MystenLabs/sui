@@ -288,6 +288,11 @@ pub struct ExpensiveSafetyCheckConfig {
     /// Disable state consistency check even when we are running in debug mode.
     #[serde(default)]
     force_disable_state_consistency_check: bool,
+
+    /// If enabled, we run the Move VM in paranoid mode, which provides protection
+    /// against some (but not all) potential bugs in the bytecode verifier
+    #[serde(default)]
+    enable_move_vm_paranoid_checks: bool,
     // TODO: Add more expensive checks here
 }
 
@@ -298,7 +303,12 @@ impl ExpensiveSafetyCheckConfig {
             force_disable_epoch_sui_conservation_check: false,
             enable_state_consistency_check: true,
             force_disable_state_consistency_check: false,
+            enable_move_vm_paranoid_checks: true,
         }
+    }
+
+    pub fn enable_paranoid_checks(&mut self) {
+        self.enable_move_vm_paranoid_checks = true
     }
 
     pub fn force_disable_epoch_sui_conservation_check(&mut self) {
@@ -317,6 +327,10 @@ impl ExpensiveSafetyCheckConfig {
     pub fn enable_state_consistency_check(&self) -> bool {
         (self.enable_state_consistency_check || cfg!(debug_assertions))
             && !self.force_disable_state_consistency_check
+    }
+
+    pub fn enable_move_vm_paranoid_checks(&self) -> bool {
+        self.enable_move_vm_paranoid_checks
     }
 }
 

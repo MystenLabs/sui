@@ -14,6 +14,7 @@ use std::future::Future;
 use std::iter;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use sui_config::node::ExpensiveSafetyCheckConfig;
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::{AuthorityName, EpochId, ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::committee::Committee;
@@ -342,6 +343,7 @@ impl AuthorityPerEpochStore {
         store: Arc<AuthorityStore>,
         cache_metrics: Arc<ResolverMetrics>,
         signature_verifier_metrics: Arc<SignatureVerifierMetrics>,
+        expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
     ) -> Arc<Self> {
         let current_time = Instant::now();
         let epoch_id = committee.epoch;
@@ -377,7 +379,12 @@ impl AuthorityPerEpochStore {
             .protocol_version();
         let protocol_config = ProtocolConfig::get_for_version(protocol_version);
 
-        let execution_component = ExecutionComponents::new(&protocol_config, store, cache_metrics);
+        let execution_component = ExecutionComponents::new(
+            &protocol_config,
+            store,
+            cache_metrics,
+            expensive_safety_check_config,
+        );
         let signature_verifier =
             SignatureVerifier::new(committee.clone(), signature_verifier_metrics);
         let s = Arc::new(Self {
@@ -425,6 +432,7 @@ impl AuthorityPerEpochStore {
         new_committee: Committee,
         epoch_start_configuration: EpochStartConfiguration,
         store: Arc<AuthorityStore>,
+        expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
     ) -> Arc<Self> {
         assert_eq!(self.epoch() + 1, new_committee.epoch);
         self.record_reconfig_halt_duration_metric();
@@ -439,6 +447,7 @@ impl AuthorityPerEpochStore {
             store,
             self.execution_component.metrics(),
             self.signature_verifier.metrics.clone(),
+            expensive_safety_check_config,
         )
     }
 
@@ -1963,11 +1972,16 @@ impl ExecutionComponents {
         protocol_config: &ProtocolConfig,
         store: Arc<AuthorityStore>,
         metrics: Arc<ResolverMetrics>,
+        expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
     ) -> Self {
         let native_functions = sui_framework::natives::all_natives();
         let move_vm = Arc::new(
-            adapter::new_move_vm(native_functions.clone(), protocol_config)
-                .expect("We defined natives to not fail here"),
+            adapter::new_move_vm(
+                native_functions.clone(),
+                protocol_config,
+                expensive_safety_check_config.enable_move_vm_paranoid_checks(),
+            )
+            .expect("We defined natives to not fail here"),
         );
         let module_cache = Arc::new(SyncModuleCache::new(ResolverWrapper::new(
             store,

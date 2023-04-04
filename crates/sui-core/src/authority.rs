@@ -495,7 +495,7 @@ pub struct AuthorityState {
     db_checkpoint_config: DBCheckpointConfig,
 
     /// Config controlling what kind of expensive safety checks to perform.
-    _expensive_safety_check_config: ExpensiveSafetyCheckConfig,
+    expensive_safety_check_config: ExpensiveSafetyCheckConfig,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -1069,10 +1069,13 @@ impl AuthorityState {
             epoch_store.protocol_config(),
         );
         let (kind, signer, _) = transaction.execution_parts();
+        // don't bother with paranoid checks in dry run
+        let enable_move_vm_paranoid_checks = false;
         let move_vm = Arc::new(
             adapter::new_move_vm(
                 epoch_store.native_functions().clone(),
                 epoch_store.protocol_config(),
+                enable_move_vm_paranoid_checks,
             )
             .expect("We defined natives to not fail here"),
         );
@@ -1190,6 +1193,8 @@ impl AuthorityState {
             adapter::new_move_vm(
                 epoch_store.native_functions().clone(),
                 epoch_store.protocol_config(),
+                self.expensive_safety_check_config
+                    .enable_move_vm_paranoid_checks(),
             )
             .expect("We defined natives to not fail here"),
         );
@@ -1669,7 +1674,7 @@ impl AuthorityState {
             _objects_pruner,
             _authority_per_epoch_pruner,
             db_checkpoint_config: db_checkpoint_config.clone(),
-            _expensive_safety_check_config: expensive_safety_check_config,
+            expensive_safety_check_config,
         });
 
         // Start a task to execute ready certificates.
@@ -1731,6 +1736,7 @@ impl AuthorityState {
             store.clone(),
             cache_metrics,
             signature_verifier_metrics,
+            &ExpensiveSafetyCheckConfig::default(),
         );
 
         let epochs = Arc::new(CommitteeStore::new(
@@ -1835,7 +1841,7 @@ impl AuthorityState {
         epoch_start_configuration: EpochStartConfiguration,
         checkpoint_executor: &CheckpointExecutor,
         accumulator: Arc<StateAccumulator>,
-        enable_state_consistency_check: bool,
+        expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
     ) -> SuiResult<Arc<AuthorityPerEpochStore>> {
         Self::check_protocol_version(
             supported_protocol_versions,
@@ -1853,7 +1859,7 @@ impl AuthorityState {
             cur_epoch_store,
             checkpoint_executor,
             accumulator,
-            enable_state_consistency_check,
+            expensive_safety_check_config.enable_state_consistency_check(),
         );
         if let Some(checkpoint_path) = &self.db_checkpoint_config.checkpoint_path {
             if self
@@ -1868,7 +1874,12 @@ impl AuthorityState {
         }
         let new_epoch = new_committee.epoch;
         let new_epoch_store = self
-            .reopen_epoch_db(cur_epoch_store, new_committee, epoch_start_configuration)
+            .reopen_epoch_db(
+                cur_epoch_store,
+                new_committee,
+                epoch_start_configuration,
+                expensive_safety_check_config,
+            )
             .await?;
         assert_eq!(new_epoch_store.epoch(), new_epoch);
         self.transaction_manager.reconfigure(new_epoch);
@@ -3452,6 +3463,7 @@ impl AuthorityState {
         cur_epoch_store: &AuthorityPerEpochStore,
         new_committee: Committee,
         epoch_start_configuration: EpochStartConfiguration,
+        expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
     ) -> SuiResult<Arc<AuthorityPerEpochStore>> {
         let new_epoch = new_committee.epoch;
         info!(new_epoch = ?new_epoch, "re-opening AuthorityEpochTables for new epoch");
@@ -3468,6 +3480,7 @@ impl AuthorityState {
             new_committee,
             epoch_start_configuration,
             self.db(),
+            expensive_safety_check_config,
         );
         self.epoch_store.store(new_epoch_store.clone());
         cur_epoch_store.epoch_terminated().await;

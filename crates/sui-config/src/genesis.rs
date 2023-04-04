@@ -1381,9 +1381,14 @@ fn create_genesis_transaction(
         );
 
         let native_functions = sui_framework::natives::all_natives();
+        let enable_move_vm_paranoid_checks = false;
         let move_vm = std::sync::Arc::new(
-            adapter::new_move_vm(native_functions, protocol_config)
-                .expect("We defined natives to not fail here"),
+            adapter::new_move_vm(
+                native_functions,
+                protocol_config,
+                enable_move_vm_paranoid_checks,
+            )
+            .expect("We defined natives to not fail here"),
         );
 
         let transaction_data = &genesis_transaction.data().intent_message().value;
@@ -1436,8 +1441,14 @@ fn create_genesis_objects(
         ProtocolConfig::get_for_version(ProtocolVersion::new(parameters.protocol_version));
 
     let native_functions = sui_framework::natives::all_natives();
-    let move_vm = adapter::new_move_vm(native_functions.clone(), &protocol_config)
-        .expect("We defined natives to not fail here");
+    // paranoid checks are a last line of defense for malicious code, no need to run them in genesis
+    let enable_move_vm_paranoid_checks = false;
+    let move_vm = adapter::new_move_vm(
+        native_functions.clone(),
+        &protocol_config,
+        enable_move_vm_paranoid_checks,
+    )
+    .expect("We defined natives to not fail here");
 
     for (modules, dependencies) in modules {
         process_package(
@@ -1927,10 +1938,15 @@ mod test {
             &protocol_config,
         );
 
+        let enable_move_vm_paranoid_checks = false;
         let native_functions = sui_framework::natives::all_natives();
         let move_vm = std::sync::Arc::new(
-            adapter::new_move_vm(native_functions, &protocol_config)
-                .expect("We defined natives to not fail here"),
+            adapter::new_move_vm(
+                native_functions,
+                &protocol_config,
+                enable_move_vm_paranoid_checks,
+            )
+            .expect("We defined natives to not fail here"),
         );
 
         let transaction_data = &genesis_transaction.data().intent_message().value;

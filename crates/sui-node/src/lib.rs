@@ -217,6 +217,7 @@ impl SuiNode {
             store.clone(),
             cache_metrics,
             signature_verifier_metrics,
+            &config.expensive_safety_check_config,
         );
 
         let effective_buffer_stake = epoch_store.get_effective_buffer_stake_bps();
@@ -1075,9 +1076,7 @@ impl SuiNode {
                 epoch_start_configuration,
                 checkpoint_executor,
                 self.accumulator.clone(),
-                self.config
-                    .expensive_safety_check_config
-                    .enable_state_consistency_check(),
+                &self.config.expensive_safety_check_config,
             )
             .await
             .expect("Reconfigure authority state cannot fail");

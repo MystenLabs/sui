@@ -241,8 +241,16 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             account_objects.insert(account.clone(), obj);
         }
 
+        let enable_move_vm_paranoid_checks = false;
         let mut test_adapter = Self {
-            vm: Arc::new(new_move_vm(native_functions, &PROTOCOL_CONSTANTS).unwrap()),
+            vm: Arc::new(
+                new_move_vm(
+                    native_functions,
+                    &PROTOCOL_CONSTANTS,
+                    enable_move_vm_paranoid_checks,
+                )
+                .unwrap(),
+            ),
             storage: Arc::new(InMemoryStorage::new(objects)),
             compiled_state: CompiledState::new(
                 named_address_mapping,
