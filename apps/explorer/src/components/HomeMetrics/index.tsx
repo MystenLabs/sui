@@ -114,7 +114,7 @@ export function HomeMetrics() {
                     />
                     <FormattedStatsAmount
                         label="Addresses"
-                        tooltip="Total addresses counter"
+                        tooltip="Addresses that have participated in at least one transaction since network genesis"
                         amount={networkMetrics?.totalAddresses}
                     />
                 </MetricGroup>
