@@ -15,6 +15,7 @@ export const Positive: StoryObj<BannerProps> = {
     args: {
         variant: 'positive',
         children: 'Positive',
+        border: true,
     },
 };
 
@@ -36,6 +37,21 @@ export const Message: StoryObj<BannerProps> = {
     args: {
         variant: 'message',
         children: 'Message',
+    },
+};
+
+export const NeutralGrey: StoryObj<BannerProps> = {
+    args: {
+        variant: 'neutralGrey',
+        children: 'Neutral Grey',
+        border: false,
+    },
+};
+
+export const NeutralWhite: StoryObj<BannerProps> = {
+    args: {
+        variant: 'neutralWhite',
+        children: 'Neutral White',
     },
 };
 
@@ -98,4 +114,25 @@ export const DismissibleCenteredFullWidth: StoryObj<BannerProps> = {
         children: 'Message',
         onDismiss: () => null,
     },
+};
+
+const variants = [
+    'positive',
+    'warning',
+    'error',
+    'message',
+    'neutralGrey',
+    'neutralWhite',
+];
+
+export const BannersWithBorder = {
+    render: () => (
+        <div className="flex flex-col gap-2">
+            {variants.map((variant) => (
+                <Banner key={variant} border shadow variant={variant as any}>
+                    <div className="capitalize">{variant}</div>
+                </Banner>
+            ))}
+        </div>
+    ),
 };
