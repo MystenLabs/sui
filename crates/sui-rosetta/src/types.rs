@@ -23,9 +23,7 @@ use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::transaction::{Argument, CallArg, Command, ObjectArg, TransactionData};
-use sui_types::{
-    SUI_SYSTEM_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-};
+use sui_types::SUI_SYSTEM_OBJECT_ID;
 
 use crate::errors::{Error, ErrorType};
 use crate::operations::Operations;
@@ -879,22 +877,17 @@ impl InternalOperation {
                 validator, amount, ..
             } => {
                 let mut builder = ProgrammableTransactionBuilder::new();
-                let system_state = CallArg::Object(ObjectArg::SharedObject {
-                    id: SUI_SYSTEM_STATE_OBJECT_ID,
-                    initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-                    mutable: true,
-                });
 
                 // [WORKAROUND] - this is a hack to work out if the staking ops is for a selected amount or None amount (whole wallet).
                 // if amount is none, validator input will be created after the system object input
                 let (validator, system_state, amount) = if let Some(amount) = amount {
                     let amount = builder.pure(amount)?;
                     let validator = builder.input(CallArg::Pure(bcs::to_bytes(&validator)?))?;
-                    let state = builder.input(system_state)?;
+                    let state = builder.input(CallArg::SUI_SYSTEM_MUT)?;
                     (validator, state, amount)
                 } else {
                     let amount = builder.pure(metadata.total_coin_value - metadata.budget)?;
-                    let state = builder.input(system_state)?;
+                    let state = builder.input(CallArg::SUI_SYSTEM_MUT)?;
                     let validator = builder.input(CallArg::Pure(bcs::to_bytes(&validator)?))?;
                     (validator, state, amount)
                 };
@@ -913,22 +906,17 @@ impl InternalOperation {
             }
             InternalOperation::WithdrawStake { stake_ids, .. } => {
                 let mut builder = ProgrammableTransactionBuilder::new();
-                let system_state = CallArg::Object(ObjectArg::SharedObject {
-                    id: SUI_SYSTEM_STATE_OBJECT_ID,
-                    initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-                    mutable: true,
-                });
 
                 for stake_id in metadata.objects {
                     // [WORKAROUND] - this is a hack to work out if the withdraw stake ops is for selected stake_ids or None (all stakes) using the index of the call args.
                     // if stake_ids is not empty, id input will be created after the system object input
                     let (system_state, id) = if !stake_ids.is_empty() {
-                        let system_state = builder.input(system_state.clone())?;
+                        let system_state = builder.input(CallArg::SUI_SYSTEM_MUT)?;
                         let id = builder.obj(ObjectArg::ImmOrOwnedObject(stake_id))?;
                         (system_state, id)
                     } else {
                         let id = builder.obj(ObjectArg::ImmOrOwnedObject(stake_id))?;
-                        let system_state = builder.input(system_state.clone())?;
+                        let system_state = builder.input(CallArg::SUI_SYSTEM_MUT)?;
                         (system_state, id)
                     };
 

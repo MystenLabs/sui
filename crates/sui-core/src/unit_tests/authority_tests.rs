@@ -50,10 +50,9 @@ use sui_types::{
     crypto::{get_key_pair, Signature},
     crypto::{AccountKeyPair, AuthorityKeyPair, KeypairTraits},
     object::{Owner, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
-    transaction::VerifiedTransaction,
-    MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
+    MOVE_STDLIB_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID,
+    SUI_SYSTEM_STATE_OBJECT_ID,
 };
-use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION};
 
 use crate::authority::move_integration_tests::build_and_publish_test_package_with_upgrade_cap;
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
@@ -2926,11 +2925,7 @@ async fn test_invalid_mutable_clock_parameter() {
         ident_str!("use_clock").to_owned(),
         /* type_args */ vec![],
         gas_ref,
-        vec![CallArg::Object(ObjectArg::SharedObject {
-            id: SUI_CLOCK_OBJECT_ID,
-            initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-            mutable: true,
-        })],
+        vec![CallArg::CLOCK_MUT],
         TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
         rgp,
     )
@@ -2969,11 +2964,7 @@ async fn test_valid_immutable_clock_parameter() {
         ident_str!("use_clock").to_owned(),
         /* type_args */ vec![],
         gas_ref,
-        vec![CallArg::Object(ObjectArg::SharedObject {
-            id: SUI_CLOCK_OBJECT_ID,
-            initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-            mutable: false,
-        })],
+        vec![CallArg::CLOCK_IMM],
         TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
         rgp,
     )

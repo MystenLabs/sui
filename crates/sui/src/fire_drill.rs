@@ -28,10 +28,9 @@ use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::crypto::{generate_proof_of_possession, get_key_pair, SuiKeyPair};
 use sui_types::multiaddr::{Multiaddr, Protocol};
 use sui_types::transaction::{
-    CallArg, ObjectArg, Transaction, TransactionData, TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    CallArg, Transaction, TransactionData, TEST_ONLY_GAS_UNIT_FOR_GENERIC,
 };
 use sui_types::{committee::EpochId, crypto::get_authority_key_pair, SUI_SYSTEM_OBJECT_ID};
-use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION};
 use tracing::info;
 
 #[derive(Parser)]
@@ -313,11 +312,7 @@ async fn update_metadata_on_chain(
         .governance_api()
         .get_reference_gas_price()
         .await?;
-    let mut args = vec![CallArg::Object(ObjectArg::SharedObject {
-        id: SUI_SYSTEM_STATE_OBJECT_ID,
-        initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-        mutable: true,
-    })];
+    let mut args = vec![CallArg::SUI_SYSTEM_MUT];
     args.extend(call_args);
     let tx_data = TransactionData::new_move_call(
         sui_address,
