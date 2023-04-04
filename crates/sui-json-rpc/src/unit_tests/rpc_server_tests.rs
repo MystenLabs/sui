@@ -79,7 +79,13 @@ async fn test_get_package_with_display_should_not_fail() -> Result<(), anyhow::E
         .await;
     assert!(response.is_ok());
     let response: SuiObjectResponse = response?;
-    assert!(response.into_object().unwrap().display.is_none());
+    assert!(response
+        .into_object()
+        .unwrap()
+        .display
+        .unwrap()
+        .data
+        .is_none());
     Ok(())
 }
 

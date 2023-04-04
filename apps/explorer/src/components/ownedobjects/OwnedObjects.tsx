@@ -9,6 +9,7 @@ import {
     getObjectOwner,
     PaginatedObjectsResponse,
     is,
+    getObjectDisplay,
 } from '@mysten/sui.js';
 import { useEffect, useState } from 'react';
 
@@ -88,12 +89,8 @@ function OwnedObject({ id, byAddress }: { id: string; byAddress: boolean }) {
                             })
                             .map(
                                 (resp) => {
-                                    const displayMeta =
-                                        typeof resp.data === 'object' &&
-                                        'display' in resp.data
-                                            ? resp.data.display
-                                            : undefined;
-                                    const url = parseImageURL(displayMeta);
+                                    const displayMeta = getObjectDisplay(resp);
+                                    const url = parseImageURL(displayMeta.data);
                                     return {
                                         id: getObjectId(resp),
                                         Type: parseObjectType(resp),
@@ -102,7 +99,8 @@ function OwnedObject({ id, byAddress }: { id: string; byAddress: boolean }) {
                                             ? transformURL(url)
                                             : undefined,
                                         balance: Coin.getBalance(resp),
-                                        name: extractName(displayMeta) || '',
+                                        name:
+                                            extractName(displayMeta.data) || '',
                                     };
                                 }
                                 // TODO - add back version
