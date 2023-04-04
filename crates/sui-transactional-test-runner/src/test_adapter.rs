@@ -88,11 +88,18 @@ pub struct SuiTestAdapter<'a> {
     vm: Arc<MoveVM>,
     pub(crate) storage: Arc<InMemoryStorage>,
     pub(crate) compiled_state: CompiledState<'a>,
-    accounts: BTreeMap<String, (SuiAddress, AccountKeyPair)>,
+    accounts: BTreeMap<String, TestAccount>,
+    default_account: TestAccount,
     default_syntax: SyntaxChoice,
     object_enumeration: BiBTreeMap<ObjectID, FakeID>,
     next_fake: FakeID,
     rng: StdRng,
+}
+
+struct TestAccount {
+    address: SuiAddress,
+    key_pair: AccountKeyPair,
+    gas: ObjectID,
 }
 
 #[derive(Debug)]
@@ -208,37 +215,48 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             }
             None => (BTreeMap::new(), BTreeSet::new()),
         };
-        let accounts = account_names
-            .into_iter()
-            .map(|n| (n, get_key_pair_from_rng(&mut rng)))
-            .collect::<BTreeMap<_, _>>();
 
         let mut named_address_mapping = NAMED_ADDRESSES.clone();
-        let additional_mapping = additional_mapping.into_iter().chain(accounts.iter().map(
-            |(n, (addr, _)): (_, &(_, AccountKeyPair))| {
-                let addr = NumericalAddress::new(addr.to_inner(), NumberFormat::Hex);
-                (n.clone(), addr)
-            },
-        ));
-        for (name, addr) in additional_mapping {
-            if named_address_mapping.contains_key(&name) || name == "sui" {
-                panic!("Invalid init. The named address '{}' is reserved", name)
-            }
-            named_address_mapping.insert(name, addr);
-        }
 
         let native_functions = sui_framework::natives::all_natives();
         let mut objects = clone_genesis_packages();
         objects.extend(clone_genesis_objects());
         let mut account_objects = BTreeMap::new();
-        for (account, (addr, _)) in &accounts {
+        let mut accounts = BTreeMap::new();
+        let mut mk_account = || {
+            let (address, key_pair) = get_key_pair_from_rng(&mut rng);
             let obj = Object::with_id_owner_gas_for_testing(
                 ObjectID::new(rng.gen()),
-                *addr,
+                address,
                 GAS_FOR_TESTING,
             );
-            objects.push(obj.clone());
-            account_objects.insert(account.clone(), obj);
+            let test_account = TestAccount {
+                address,
+                key_pair,
+                gas: obj.id(),
+            };
+            objects.push(obj);
+            test_account
+        };
+        for n in account_names {
+            let test_account = mk_account();
+            account_objects.insert(n.clone(), test_account.gas);
+            accounts.insert(n, test_account);
+        }
+        let default_account = mk_account();
+        let additional_mapping =
+            additional_mapping
+                .into_iter()
+                .chain(accounts.iter().map(|(n, test_account)| {
+                    let addr =
+                        NumericalAddress::new(test_account.address.to_inner(), NumberFormat::Hex);
+                    (n.clone(), addr)
+                }));
+        for (name, addr) in additional_mapping {
+            if named_address_mapping.contains_key(&name) || name == "sui" {
+                panic!("Invalid init. The named address '{}' is reserved", name)
+            }
+            named_address_mapping.insert(name, addr);
         }
 
         let enable_move_vm_paranoid_checks = false;
@@ -261,6 +279,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 )),
             ),
             accounts,
+            default_account,
             default_syntax,
             object_enumeration: BiBTreeMap::new(),
             next_fake: INIT_NEXT_FAKE,
@@ -273,8 +292,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             .copied()
             .collect::<Vec<_>>();
         let mut output = String::new();
-        for (account, obj) in account_objects {
-            let fake = test_adapter.enumerate_fake(obj.id());
+        for (account, obj_id) in account_objects {
+            let fake = test_adapter.enumerate_fake(obj_id);
             if !output.is_empty() {
                 output.push_str(", ")
             }
@@ -537,7 +556,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 let mut builder = ProgrammableTransactionBuilder::new();
                 let obj_arg = SuiValue::Object(fake_id).into_argument(&mut builder, self)?;
                 let recipient = match self.accounts.get(&recipient) {
-                    Some((recipient, _)) => *recipient,
+                    Some(test_account) => test_account.address,
                     None => panic!("Unbound account {}", recipient),
                 };
                 let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
@@ -613,28 +632,20 @@ impl<'a> SuiTestAdapter<'a> {
         sender: Option<String>,
         txn_data: impl FnOnce(/* sender */ SuiAddress, /* gas */ ObjectRef) -> TransactionData,
     ) -> VerifiedTransaction {
-        let gas_object_id = ObjectID::new(self.rng.gen());
-        assert!(!self.object_enumeration.contains_left(&gas_object_id));
-        self.enumerate_fake(gas_object_id);
-        let new_key_pair;
-        let (sender, sender_key) = match sender {
+        let test_account = match sender {
             Some(n) => match self.accounts.get(&n) {
-                Some((sender, sender_key)) => (*sender, sender_key),
+                Some(test_account) => test_account,
                 None => panic!("Unbound account {}", n),
             },
-            None => {
-                let (sender, sender_key) = get_key_pair_from_rng(&mut self.rng);
-                new_key_pair = sender_key;
-                (sender, &new_key_pair)
-            }
+            None => &self.default_account,
         };
-        let gas_object =
-            Object::with_id_owner_gas_for_testing(gas_object_id, sender, GAS_FOR_TESTING);
-        let gas_payment = gas_object.compute_object_reference();
-        let storage_mut = Arc::get_mut(&mut self.storage).unwrap();
-        storage_mut.insert_object(gas_object);
-        let data = txn_data(sender, gas_payment);
-        to_sender_signed_transaction(data, sender_key)
+        let gas_payment = self
+            .storage
+            .get_object(&test_account.gas)
+            .unwrap()
+            .compute_object_reference();
+        let data = txn_data(test_account.address, gas_payment);
+        to_sender_signed_transaction(data, &test_account.key_pair)
     }
 
     fn execute_txn(
