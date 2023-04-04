@@ -178,7 +178,7 @@ export function TransactionCard({
                         </>
                     )}
 
-                    {timestamp && <DateCard timestamp={timestamp} size="sm" />}
+                    {timestamp && <DateCard timestamp={+timestamp} size="sm" />}
                 </div>
             </div>
         </Link>
