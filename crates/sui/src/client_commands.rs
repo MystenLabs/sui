@@ -359,10 +359,13 @@ pub enum SuiClientCommands {
     Addresses,
 
     /// Generate new address and keypair with keypair scheme flag {ed25519 | secp256k1 | secp256r1}
-    /// with optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1 or m/74'/784'/0'/0/0 for secp256r1.
+    /// with optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or
+    /// m/54'/784'/0'/0/0 for secp256k1 or m/74'/784'/0'/0/0 for secp256r1. Word length can be
+    /// { word12 | word15 | word18 | word21 | word24} default to word12 if not specified.
     #[clap(name = "new-address")]
     NewAddress {
         key_scheme: SignatureScheme,
+        word_length: Option<String>,
         derivation_path: Option<DerivationPath>,
     },
 
@@ -539,14 +542,14 @@ impl SuiClientCommands {
                         gas_budget,
                     )
                     .await?;
-                let signature =
-                    context
-                        .config
-                        .keystore
-                        .sign_secure(&sender, &data, Intent::default())?;
+                let signature = context.config.keystore.sign_secure(
+                    &sender,
+                    &data,
+                    Intent::sui_transaction(),
+                )?;
                 let response = context
                     .execute_transaction_block(
-                        Transaction::from_data(data, Intent::default(), vec![signature])
+                        Transaction::from_data(data, Intent::sui_transaction(), vec![signature])
                             .verify()?,
                     )
                     .await?;
@@ -591,14 +594,14 @@ impl SuiClientCommands {
                     )));
                 }
 
-                let signature =
-                    context
-                        .config
-                        .keystore
-                        .sign_secure(&sender, &data, Intent::default())?;
+                let signature = context.config.keystore.sign_secure(
+                    &sender,
+                    &data,
+                    Intent::sui_transaction(),
+                )?;
                 let response = context
                     .execute_transaction_block(
-                        Transaction::from_data(data, Intent::default(), vec![signature])
+                        Transaction::from_data(data, Intent::sui_transaction(), vec![signature])
                             .verify()?,
                     )
                     .await?;
@@ -667,10 +670,10 @@ impl SuiClientCommands {
                     context
                         .config
                         .keystore
-                        .sign_secure(&from, &data, Intent::default())?;
+                        .sign_secure(&from, &data, Intent::sui_transaction())?;
                 let response = context
                     .execute_transaction_block(
-                        Transaction::from_data(data, Intent::default(), vec![signature])
+                        Transaction::from_data(data, Intent::sui_transaction(), vec![signature])
                             .verify()?,
                     )
                     .await?;
@@ -704,10 +707,10 @@ impl SuiClientCommands {
                     context
                         .config
                         .keystore
-                        .sign_secure(&from, &data, Intent::default())?;
+                        .sign_secure(&from, &data, Intent::sui_transaction())?;
                 let response = context
                     .execute_transaction_block(
-                        Transaction::from_data(data, Intent::default(), vec![signature])
+                        Transaction::from_data(data, Intent::sui_transaction(), vec![signature])
                             .verify()?,
                     )
                     .await?;
@@ -753,10 +756,10 @@ impl SuiClientCommands {
                     context
                         .config
                         .keystore
-                        .sign_secure(&from, &data, Intent::default())?;
+                        .sign_secure(&from, &data, Intent::sui_transaction())?;
                 let response = context
                     .execute_transaction_block(
-                        Transaction::from_data(data, Intent::default(), vec![signature])
+                        Transaction::from_data(data, Intent::sui_transaction(), vec![signature])
                             .verify()?,
                     )
                     .await?;
@@ -800,14 +803,14 @@ impl SuiClientCommands {
                     .transaction_builder()
                     .pay_sui(signer, input_coins, recipients, amounts, gas_budget)
                     .await?;
-                let signature =
-                    context
-                        .config
-                        .keystore
-                        .sign_secure(&signer, &data, Intent::default())?;
+                let signature = context.config.keystore.sign_secure(
+                    &signer,
+                    &data,
+                    Intent::sui_transaction(),
+                )?;
                 let response = context
                     .execute_transaction_block(
-                        Transaction::from_data(data, Intent::default(), vec![signature])
+                        Transaction::from_data(data, Intent::sui_transaction(), vec![signature])
                             .verify()?,
                     )
                     .await?;
@@ -839,14 +842,14 @@ impl SuiClientCommands {
                     .pay_all_sui(signer, input_coins, recipient, gas_budget)
                     .await?;
 
-                let signature =
-                    context
-                        .config
-                        .keystore
-                        .sign_secure(&signer, &data, Intent::default())?;
+                let signature = context.config.keystore.sign_secure(
+                    &signer,
+                    &data,
+                    Intent::sui_transaction(),
+                )?;
                 let response = context
                     .execute_transaction_block(
-                        Transaction::from_data(data, Intent::default(), vec![signature])
+                        Transaction::from_data(data, Intent::sui_transaction(), vec![signature])
                             .verify()?,
                     )
                     .await?;
@@ -898,11 +901,13 @@ impl SuiClientCommands {
             SuiClientCommands::NewAddress {
                 key_scheme,
                 derivation_path,
+                word_length,
             } => {
-                let (address, phrase, scheme) = context
-                    .config
-                    .keystore
-                    .generate_and_add_new_key(key_scheme, derivation_path)?;
+                let (address, phrase, scheme) = context.config.keystore.generate_and_add_new_key(
+                    key_scheme,
+                    derivation_path,
+                    word_length,
+                )?;
                 SuiClientCommandResult::NewAddress((address, phrase, scheme))
             }
             SuiClientCommands::Gas { address } => {
@@ -945,14 +950,14 @@ impl SuiClientCommands {
                         return Err(anyhow!("Exactly one of `count` and `amounts` must be present for split-coin command."));
                     }
                 };
-                let signature =
-                    context
-                        .config
-                        .keystore
-                        .sign_secure(&signer, &data, Intent::default())?;
+                let signature = context.config.keystore.sign_secure(
+                    &signer,
+                    &data,
+                    Intent::sui_transaction(),
+                )?;
                 let response = context
                     .execute_transaction_block(
-                        Transaction::from_data(data, Intent::default(), vec![signature])
+                        Transaction::from_data(data, Intent::sui_transaction(), vec![signature])
                             .verify()?,
                     )
                     .await?;
@@ -970,14 +975,14 @@ impl SuiClientCommands {
                     .transaction_builder()
                     .merge_coins(signer, primary_coin, coin_to_merge, gas, gas_budget)
                     .await?;
-                let signature =
-                    context
-                        .config
-                        .keystore
-                        .sign_secure(&signer, &data, Intent::default())?;
+                let signature = context.config.keystore.sign_secure(
+                    &signer,
+                    &data,
+                    Intent::sui_transaction(),
+                )?;
                 let response = context
                     .execute_transaction_block(
-                        Transaction::from_data(data, Intent::default(), vec![signature])
+                        Transaction::from_data(data, Intent::sui_transaction(), vec![signature])
                             .verify()?,
                     )
                     .await?;
@@ -1045,7 +1050,8 @@ impl SuiClientCommands {
                     );
                 }
                 let verified =
-                    Transaction::from_generic_sig_data(data, Intent::default(), sigs).verify()?;
+                    Transaction::from_generic_sig_data(data, Intent::sui_transaction(), sigs)
+                        .verify()?;
 
                 let response = context.execute_transaction_block(verified).await?;
                 SuiClientCommandResult::ExecuteSignedTx(response)
@@ -1614,11 +1620,13 @@ pub async fn call_move(
             gas_budget,
         )
         .await?;
-    let signature = context
-        .config
-        .keystore
-        .sign_secure(&sender, &data, Intent::default())?;
-    let transaction = Transaction::from_data(data, Intent::default(), vec![signature]).verify()?;
+    let signature =
+        context
+            .config
+            .keystore
+            .sign_secure(&sender, &data, Intent::sui_transaction())?;
+    let transaction =
+        Transaction::from_data(data, Intent::sui_transaction(), vec![signature]).verify()?;
 
     let response = context.execute_transaction_block(transaction).await?;
     let effects = response

@@ -76,7 +76,8 @@ where
         let transaction_store: TemporaryTransactionBlockResponseStore = fast_path_resp.into();
         let transaction: Transaction = transaction_store.try_into()?;
         self.state
-            .persist_fast_path(transaction, tx_object_changes)?;
+            .persist_fast_path(transaction, tx_object_changes)
+            .await?;
 
         Ok(SuiTransactionBlockResponseWithOptions {
             response: sui_transaction_response,

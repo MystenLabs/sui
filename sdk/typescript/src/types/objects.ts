@@ -425,7 +425,8 @@ export type CheckpointedObjectId = Infer<typeof CheckpointedObjectId>;
 
 export const PaginatedObjectsResponse = object({
   data: array(SuiObjectResponse),
-  nextCursor: nullable(ObjectId),
+  // TODO: remove union after 0.30.0 is released
+  nextCursor: union([nullable(ObjectId), nullable(CheckpointedObjectId)]),
   hasNextPage: boolean(),
 });
 export type PaginatedObjectsResponse = Infer<typeof PaginatedObjectsResponse>;

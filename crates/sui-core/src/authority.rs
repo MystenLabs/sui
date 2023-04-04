@@ -43,11 +43,13 @@ use shared_crypto::intent::{Intent, IntentScope};
 use sui_adapter::execution_engine;
 use sui_adapter::{adapter, execution_mode};
 use sui_config::genesis::Genesis;
-use sui_config::node::{AuthorityStorePruningConfig, DBCheckpointConfig};
+use sui_config::node::{
+    AuthorityStorePruningConfig, DBCheckpointConfig, ExpensiveSafetyCheckConfig,
+};
 use sui_framework::{MoveStdlib, SuiFramework, SuiSystem, SystemPackage};
 use sui_json_rpc_types::{
     Checkpoint, DevInspectResults, DryRunTransactionBlockResponse, EventFilter, SuiEvent,
-    SuiMoveValue, SuiObjectDataFilter, SuiTransactionBlockEvents,
+    SuiMoveValue, SuiObjectDataFilter, SuiTransactionBlockData, SuiTransactionBlockEvents,
 };
 use sui_macros::{fail_point, fail_point_async, nondeterministic};
 use sui_protocol_config::SupportedProtocolVersions;
@@ -489,6 +491,9 @@ pub struct AuthorityState {
 
     /// Take db checkpoints af different dbs
     db_checkpoint_config: DBCheckpointConfig,
+
+    /// Config controlling what kind of expensive safety checks to perform.
+    _expensive_safety_check_config: ExpensiveSafetyCheckConfig,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -1102,6 +1107,7 @@ impl AuthorityState {
 
         Ok((
             DryRunTransactionBlockResponse {
+                input: SuiTransactionBlockData::try_from(transaction.clone(), &module_cache)?,
                 effects: effects.clone().try_into()?,
                 events: SuiTransactionBlockEvents::try_from(
                     inner_temp_store.events.clone(),
@@ -1622,6 +1628,7 @@ impl AuthorityState {
         pruning_config: AuthorityStorePruningConfig,
         genesis_objects: &[Object],
         db_checkpoint_config: &DBCheckpointConfig,
+        expensive_safety_check_config: ExpensiveSafetyCheckConfig,
     ) -> Arc<Self> {
         Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
 
@@ -1660,6 +1667,7 @@ impl AuthorityState {
             _objects_pruner,
             _authority_per_epoch_pruner,
             db_checkpoint_config: db_checkpoint_config.clone(),
+            _expensive_safety_check_config: expensive_safety_check_config,
         });
 
         // Start a task to execute ready certificates.
@@ -1745,6 +1753,7 @@ impl AuthorityState {
             AuthorityStorePruningConfig::default(),
             genesis.objects(),
             &DBCheckpointConfig::default(),
+            ExpensiveSafetyCheckConfig::new_enable_all(),
         )
         .await;
 
@@ -1835,6 +1844,7 @@ impl AuthorityState {
         let mut execution_lock = db.execution_lock_for_reconfiguration().await;
         self.revert_uncommitted_epoch_transactions(cur_epoch_store)
             .await?;
+        self.check_system_consistency();
         if let Some(checkpoint_path) = &self.db_checkpoint_config.checkpoint_path {
             if self
                 .db_checkpoint_config
@@ -1857,6 +1867,18 @@ impl AuthorityState {
         // see also assert in AuthorityState::process_certificate
         // on the epoch store and execution lock epoch match
         Ok(new_epoch_store)
+    }
+
+    fn check_system_consistency(&self) {
+        if let Err(err) = self.database.expensive_check_sui_conservation() {
+            if cfg!(debug_assertions) {
+                panic!("{}", err);
+            } else {
+                // We cannot panic in production yet because it is known that there are some
+                // inconsistencies in testnet. We will enable this once we make it balanced again in testnet.
+                warn!("System consistency check failed: {}", err);
+            }
+        }
     }
 
     pub fn db(&self) -> Arc<AuthorityStore> {
@@ -2803,7 +2825,7 @@ impl AuthorityState {
             Some(AuthoritySignInfo::new(
                 epoch_store.epoch(),
                 effects,
-                Intent::default().with_scope(IntentScope::TransactionEffects),
+                Intent::sui_app(IntentScope::TransactionEffects),
                 self.name,
                 &*self.secret,
             ))

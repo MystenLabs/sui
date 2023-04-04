@@ -29,7 +29,7 @@ impl<S: IndexerStore> ExtendedApi<S> {
         Self { state }
     }
 
-    fn query_objects_internal(
+    async fn query_objects_internal(
         &self,
         query: SuiObjectResponseQuery,
         cursor: Option<CheckpointedObjectID>,
@@ -44,7 +44,7 @@ impl<S: IndexerStore> ExtendedApi<S> {
         {
             cp
         } else {
-            self.state.get_latest_checkpoint_sequence_number()? as u64
+            self.state.get_latest_checkpoint_sequence_number().await? as u64
         };
 
         let object_cursor = cursor.as_ref().map(|c| c.object_id);
@@ -52,9 +52,10 @@ impl<S: IndexerStore> ExtendedApi<S> {
         let SuiObjectResponseQuery { filter, options } = query;
         let filter = filter.unwrap_or_else(|| SuiObjectDataFilter::MatchAll(vec![]));
 
-        let objects_from_db =
-            self.state
-                .query_objects_history(filter, at_checkpoint, object_cursor, limit + 1)?;
+        let objects_from_db = self
+            .state
+            .query_objects_history(filter, at_checkpoint, object_cursor, limit + 1)
+            .await?;
 
         let mut data = objects_from_db
             .into_iter()
@@ -92,7 +93,10 @@ impl<S: IndexerStore + Sync + Send + 'static> ExtendedApiServer for ExtendedApi<
         descending_order: Option<bool>,
     ) -> RpcResult<EpochPage> {
         let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS)?;
-        let mut epochs = self.state.get_epochs(cursor, limit + 1, descending_order)?;
+        let mut epochs = self
+            .state
+            .get_epochs(cursor, limit + 1, descending_order)
+            .await?;
 
         let has_next_page = epochs.len() > limit;
         epochs.truncate(limit);
@@ -105,7 +109,7 @@ impl<S: IndexerStore + Sync + Send + 'static> ExtendedApiServer for ExtendedApi<
     }
 
     async fn get_current_epoch(&self) -> RpcResult<EpochInfo> {
-        Ok(self.state.get_current_epoch()?)
+        Ok(self.state.get_current_epoch().await?)
     }
 
     async fn query_objects(
@@ -114,15 +118,15 @@ impl<S: IndexerStore + Sync + Send + 'static> ExtendedApiServer for ExtendedApi<
         cursor: Option<CheckpointedObjectID>,
         limit: Option<usize>,
     ) -> RpcResult<QueryObjectsPage> {
-        Ok(self.query_objects_internal(query, cursor, limit)?)
+        Ok(self.query_objects_internal(query, cursor, limit).await?)
     }
 
     async fn get_network_metrics(&self) -> RpcResult<NetworkMetrics> {
-        Ok(self.state.get_network_metrics()?)
+        Ok(self.state.get_network_metrics().await?)
     }
 
     async fn get_move_call_metrics(&self) -> RpcResult<MoveCallMetrics> {
-        Ok(self.state.get_move_call_metrics()?)
+        Ok(self.state.get_move_call_metrics().await?)
     }
 }
 

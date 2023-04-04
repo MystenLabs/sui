@@ -10,7 +10,6 @@ use tap::tap::TapFallible;
 use shared_crypto::intent::Intent;
 #[cfg(test)]
 use std::collections::HashSet;
-use std::default::Default;
 use std::path::Path;
 
 use sui::client_commands::WalletContext;
@@ -54,7 +53,7 @@ enum GasCoinResponse {
 }
 
 // TODO: replace this with dryrun at the SDK level
-const DEFAULT_GAS_COMPUTATION_BUCKET: u64 = 100_000_000;
+const DEFAULT_GAS_COMPUTATION_BUCKET: u64 = 10_000_000;
 const LOCK_TIMEOUT: Duration = Duration::from_secs(10);
 const RECV_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -237,9 +236,9 @@ impl SimpleFaucet {
             .wallet
             .config
             .keystore
-            .sign_secure(&self.active_address, &tx_data, Intent::default())
+            .sign_secure(&self.active_address, &tx_data, Intent::sui_transaction())
             .map_err(FaucetError::internal)?;
-        let tx = Transaction::from_data(tx_data, Intent::default(), vec![signature])
+        let tx = Transaction::from_data(tx_data, Intent::sui_transaction(), vec![signature])
             .verify()
             .unwrap();
         let tx_digest = *tx.digest();

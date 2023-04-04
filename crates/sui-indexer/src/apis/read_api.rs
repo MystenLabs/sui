@@ -37,9 +37,10 @@ impl<S: IndexerStore> ReadApi<S> {
         }
     }
 
-    fn get_total_transaction_blocks_internal(&self) -> Result<u64, IndexerError> {
+    async fn get_total_transaction_blocks_internal(&self) -> Result<u64, IndexerError> {
         self.state
             .get_total_transaction_number_from_checkpoints()
+            .await
             .map(|n| n as u64)
     }
 
@@ -50,7 +51,8 @@ impl<S: IndexerStore> ReadApi<S> {
     ) -> Result<SuiTransactionBlockResponse, IndexerError> {
         let tx = self
             .state
-            .get_transaction_by_digest(&digest.base58_encode())?;
+            .get_transaction_by_digest(&digest.base58_encode())
+            .await?;
         let sui_tx_resp = self
             .state
             .compose_sui_transaction_block_response(tx, options.as_ref())
@@ -72,7 +74,10 @@ impl<S: IndexerStore> ReadApi<S> {
             .iter()
             .map(|digest| digest.base58_encode())
             .collect::<Vec<_>>();
-        let tx_vec = self.state.multi_get_transactions_by_digests(&digest_strs)?;
+        let tx_vec = self
+            .state
+            .multi_get_transactions_by_digests(&digest_strs)
+            .await?;
         let ordered_tx_vec = digest_strs
             .iter()
             .filter_map(|digest| {
@@ -98,18 +103,19 @@ impl<S: IndexerStore> ReadApi<S> {
         Ok(sui_tx_resp_vec)
     }
 
-    fn get_object_internal(
+    async fn get_object_internal(
         &self,
         object_id: ObjectID,
         options: Option<SuiObjectDataOptions>,
     ) -> Result<SuiObjectResponse, IndexerError> {
-        let read = self.state.get_object(object_id, None)?;
+        let read = self.state.get_object(object_id, None).await?;
         Ok((read, options.unwrap_or_default()).try_into()?)
     }
 
-    fn get_latest_checkpoint_sequence_number_internal(&self) -> Result<u64, IndexerError> {
+    async fn get_latest_checkpoint_sequence_number_internal(&self) -> Result<u64, IndexerError> {
         self.state
             .get_latest_checkpoint_sequence_number()
+            .await
             .map(|n| n as u64)
     }
 }
@@ -128,7 +134,7 @@ where
             return self.fullnode.get_object(object_id, options).await;
         }
 
-        Ok(self.get_object_internal(object_id, options)?)
+        Ok(self.get_object_internal(object_id, options).await?)
     }
 
     async fn multi_get_objects(
@@ -146,7 +152,7 @@ where
         {
             return self.fullnode.get_total_transaction_blocks().await;
         }
-        Ok(self.get_total_transaction_blocks_internal()?.into())
+        Ok(self.get_total_transaction_blocks_internal().await?.into())
     }
 
     async fn get_transaction_block(
@@ -215,7 +221,8 @@ where
             return self.fullnode.get_latest_checkpoint_sequence_number().await;
         }
         Ok(self
-            .get_latest_checkpoint_sequence_number_internal()?
+            .get_latest_checkpoint_sequence_number_internal()
+            .await?
             .into())
     }
 
@@ -226,7 +233,7 @@ where
         {
             return self.fullnode.get_checkpoint(id).await;
         }
-        Ok(self.state.get_checkpoint(id)?)
+        Ok(self.state.get_checkpoint(id).await?)
     }
 
     async fn get_checkpoints(

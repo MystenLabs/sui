@@ -15,6 +15,7 @@ export type StatsProps = {
     children?: ReactNode;
     tooltip?: string;
     unavailable?: boolean;
+    postfix?: ReactNode;
 };
 
 export function Stats({
@@ -22,6 +23,7 @@ export function Stats({
     children,
     tooltip,
     unavailable,
+    postfix,
     size = 'md',
 }: StatsProps) {
     return (
@@ -38,14 +40,27 @@ export function Stats({
                     </Tooltip>
                 )}
             </div>
-            <Heading
-                variant={
-                    size === 'md' ? 'heading2/semibold' : 'heading3/semibold'
-                }
-                color={unavailable ? 'steel-dark' : 'steel-darker'}
-            >
-                {unavailable || children == null ? '--' : children}
-            </Heading>
+            <div className="flex items-baseline gap-0.5">
+                <Heading
+                    variant={
+                        size === 'md'
+                            ? 'heading2/semibold'
+                            : 'heading3/semibold'
+                    }
+                    color={unavailable ? 'steel-dark' : 'steel-darker'}
+                >
+                    {unavailable || children == null ? '--' : children}
+                </Heading>
+
+                {postfix && (
+                    <Heading
+                        variant="heading4/medium"
+                        color={unavailable ? 'steel-dark' : 'steel-darker'}
+                    >
+                        {postfix}
+                    </Heading>
+                )}
+            </div>
         </div>
     );
 }

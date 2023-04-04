@@ -98,7 +98,7 @@ pub struct NodeConfig {
     pub indirect_objects_threshold: usize,
 
     #[serde(default)]
-    pub enable_expensive_safety_checks: bool,
+    pub expensive_safety_check_config: ExpensiveSafetyCheckConfig,
 }
 
 fn default_authority_store_pruning_config() -> AuthorityStorePruningConfig {
@@ -266,6 +266,40 @@ pub struct CheckpointExecutorConfig {
     pub local_execution_timeout_sec: u64,
 }
 
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct ExpensiveSafetyCheckConfig {
+    /// If enabled, at epoch boundary, we will check that the storage
+    /// fund balance is always identical to the sum of the storage
+    /// rebate of all live objects, and that the total SUI in the network remains
+    /// the same.
+    #[serde(default)]
+    enable_epoch_sui_conservation_check: bool,
+
+    /// Disable epoch SUI conservation check even when we are running in debug mode.
+    #[serde(default)]
+    force_disable_epoch_sui_conservation_check: bool,
+    // TODO: Add more expensive checks here
+}
+
+impl ExpensiveSafetyCheckConfig {
+    pub fn new_enable_all() -> Self {
+        Self {
+            enable_epoch_sui_conservation_check: true,
+            force_disable_epoch_sui_conservation_check: false,
+        }
+    }
+
+    pub fn force_disable_epoch_sui_conservation_check(&mut self) {
+        self.force_disable_epoch_sui_conservation_check = true;
+    }
+
+    pub fn enable_epoch_sui_conservation_check(&self) -> bool {
+        (self.enable_epoch_sui_conservation_check || cfg!(debug_assertions))
+            && !self.force_disable_epoch_sui_conservation_check
+    }
+}
+
 fn default_checkpoint_execution_max_concurrency() -> usize {
     200
 }
@@ -300,7 +334,7 @@ impl Default for AuthorityStorePruningConfig {
         Self {
             num_latest_epoch_dbs_to_retain: usize::MAX,
             epoch_db_pruning_period_secs: u64::MAX,
-            num_epochs_to_retain: 0,
+            num_epochs_to_retain: 2,
             pruning_run_delay_seconds: 60,
             max_checkpoints_in_batch: 200,
             max_transactions_in_batch: 1000,
@@ -314,7 +348,7 @@ impl AuthorityStorePruningConfig {
         Self {
             num_latest_epoch_dbs_to_retain: 3,
             epoch_db_pruning_period_secs: 60 * 60,
-            num_epochs_to_retain: 0,
+            num_epochs_to_retain: 2,
             pruning_run_delay_seconds: 60,
             max_checkpoints_in_batch: 200,
             max_transactions_in_batch: 1000,
@@ -325,7 +359,7 @@ impl AuthorityStorePruningConfig {
         Self {
             num_latest_epoch_dbs_to_retain: 3,
             epoch_db_pruning_period_secs: 60 * 60,
-            num_epochs_to_retain: 1,
+            num_epochs_to_retain: 2,
             pruning_run_delay_seconds: 60,
             max_checkpoints_in_batch: 200,
             max_transactions_in_batch: 1000,

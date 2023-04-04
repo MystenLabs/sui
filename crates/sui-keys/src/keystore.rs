@@ -51,8 +51,10 @@ pub trait AccountKeystore: Send + Sync {
         &mut self,
         key_scheme: SignatureScheme,
         derivation_path: Option<DerivationPath>,
+        word_length: Option<String>,
     ) -> Result<(SuiAddress, String, SignatureScheme), anyhow::Error> {
-        let (address, kp, scheme, phrase) = generate_new_key(key_scheme, derivation_path)?;
+        let (address, kp, scheme, phrase) =
+            generate_new_key(key_scheme, derivation_path, word_length)?;
         self.add_key(kp)?;
         Ok((address, phrase, scheme))
     }

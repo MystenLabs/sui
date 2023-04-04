@@ -77,6 +77,14 @@ pub struct PendingCheckpoint {
     pub details: PendingCheckpointInfo,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BuilderCheckpointSummary {
+    pub summary: CheckpointSummary,
+    // Commit form which this checkpoint summary was built. None for genesis checkpoint
+    pub commit_height: Option<CheckpointCommitHeight>,
+    pub position_in_commit: usize,
+}
+
 #[derive(DBMapUtils)]
 pub struct CheckpointStore {
     /// Maps checkpoint contents digest to checkpoint contents
@@ -485,9 +493,13 @@ impl CheckpointBuilder {
                 }
                 Ok(false) => (),
             };
-            let mut last_processed_height: Option<u64> = None;
-            for (height, pending) in self.epoch_store.get_pending_checkpoints() {
-                last_processed_height = Some(height);
+            let mut last = self
+                .epoch_store
+                .last_built_checkpoint_summary()
+                .expect("Unexpected storage failure")
+                .and_then(|(_, b)| b.commit_height);
+            for (height, pending) in self.epoch_store.get_pending_checkpoints(last) {
+                last = Some(height);
                 debug!("Making checkpoint at commit height {height}");
                 if let Err(e) = self.make_checkpoint(height, pending).await {
                     error!("Error while making checkpoint, will retry in 1s: {:?}", e);
@@ -496,7 +508,7 @@ impl CheckpointBuilder {
                     continue 'main;
                 }
             }
-            debug!("Waiting for more checkpoints from consensus after processing {last_processed_height:?}");
+            debug!("Waiting for more checkpoints from consensus after processing {last:?}");
             match select(self.exit.changed().boxed(), self.notify.notified().boxed()).await {
                 Either::Left(_) => {
                     // break loop on exit signal
@@ -564,7 +576,7 @@ impl CheckpointBuilder {
         batch.write()?;
         self.notify_aggregator.notify_one();
         self.epoch_store
-            .process_pending_checkpoint(height, &new_checkpoint)?;
+            .process_pending_checkpoint(height, new_checkpoint)?;
         Ok(())
     }
 
@@ -627,7 +639,10 @@ impl CheckpointBuilder {
     ) -> anyhow::Result<Vec<(CheckpointSummary, CheckpointContents)>> {
         let _scope = monitored_scope("CheckpointBuilder::create_checkpoints");
         let total = all_effects.len();
-        let mut last_checkpoint = self.epoch_store.last_built_checkpoint_summary()?;
+        let mut last_checkpoint = self
+            .epoch_store
+            .last_built_checkpoint_summary()?
+            .map(|(s, b)| (s, b.summary));
         if last_checkpoint.is_none() {
             let epoch = self.epoch_store.epoch();
             if epoch > 0 {
@@ -992,6 +1007,7 @@ impl CheckpointAggregator {
                 current
             } else {
                 let Some(summary) = self.epoch_store.get_built_checkpoint_summary(next_to_certify)? else { return Ok(()); };
+                let summary = summary.summary;
                 self.current = Some(CheckpointSignatureAggregator {
                     next_index: 0,
                     digest: summary.digest(),

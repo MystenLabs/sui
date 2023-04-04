@@ -3251,6 +3251,7 @@
           "balanceChanges",
           "effects",
           "events",
+          "input",
           "objectChanges"
         ],
         "properties": {
@@ -3268,6 +3269,9 @@
             "items": {
               "$ref": "#/components/schemas/Event"
             }
+          },
+          "input": {
+            "$ref": "#/components/schemas/TransactionBlockData"
           },
           "objectChanges": {
             "type": "array",

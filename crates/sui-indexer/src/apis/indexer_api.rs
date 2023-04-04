@@ -55,7 +55,7 @@ impl<S: IndexerStore> IndexerApi<S> {
         }
     }
 
-    pub fn query_events_internal(
+    async fn query_events_internal(
         &self,
         query: EventFilter,
         cursor: Option<EventID>,
@@ -64,6 +64,7 @@ impl<S: IndexerStore> IndexerApi<S> {
     ) -> Result<EventPage, IndexerError> {
         self.state
             .get_events(query, cursor, limit, descending_order.unwrap_or_default())
+            .await
     }
 
     async fn query_transaction_blocks_internal(
@@ -80,20 +81,25 @@ impl<S: IndexerStore> IndexerApi<S> {
             None => {
                 let indexer_seq_number = self
                     .state
-                    .get_transaction_sequence_by_digest(cursor_str, is_descending)?;
+                    .get_transaction_sequence_by_digest(cursor_str, is_descending)
+                    .await?;
                 self.state
                     .get_all_transaction_page(indexer_seq_number, limit + 1, is_descending)
+                    .await
             }
             Some(TransactionFilter::Checkpoint(checkpoint_id)) => {
                 let indexer_seq_number = self
                     .state
-                    .get_transaction_sequence_by_digest(cursor_str, is_descending)?;
-                self.state.get_transaction_page_by_checkpoint(
-                    checkpoint_id as i64,
-                    indexer_seq_number,
-                    limit + 1,
-                    is_descending,
-                )
+                    .get_transaction_sequence_by_digest(cursor_str, is_descending)
+                    .await?;
+                self.state
+                    .get_transaction_page_by_checkpoint(
+                        checkpoint_id as i64,
+                        indexer_seq_number,
+                        limit + 1,
+                        is_descending,
+                    )
+                    .await
             }
             Some(TransactionFilter::MoveFunction {
                 package,
@@ -102,85 +108,106 @@ impl<S: IndexerStore> IndexerApi<S> {
             }) => {
                 let move_call_seq_number = self
                     .state
-                    .get_move_call_sequence_by_digest(cursor_str, is_descending)?;
-                self.state.get_transaction_page_by_move_call(
-                    package.to_string(),
-                    module,
-                    function,
-                    move_call_seq_number,
-                    limit + 1,
-                    is_descending,
-                )
+                    .get_move_call_sequence_by_digest(cursor_str, is_descending)
+                    .await?;
+                self.state
+                    .get_transaction_page_by_move_call(
+                        package.to_string(),
+                        module,
+                        function,
+                        move_call_seq_number,
+                        limit + 1,
+                        is_descending,
+                    )
+                    .await
             }
             Some(TransactionFilter::InputObject(input_obj_id)) => {
                 let input_obj_seq = self
                     .state
-                    .get_input_object_sequence_by_digest(cursor_str, is_descending)?;
-                self.state.get_transaction_page_by_input_object(
-                    input_obj_id.to_string(),
-                    /* version */ None,
-                    input_obj_seq,
-                    limit + 1,
-                    is_descending,
-                )
+                    .get_input_object_sequence_by_digest(cursor_str, is_descending)
+                    .await?;
+                self.state
+                    .get_transaction_page_by_input_object(
+                        input_obj_id.to_string(),
+                        /* version */ None,
+                        input_obj_seq,
+                        limit + 1,
+                        is_descending,
+                    )
+                    .await
             }
             Some(TransactionFilter::ChangedObject(mutated_obj_id)) => {
                 let indexer_seq_number = self
                     .state
-                    .get_transaction_sequence_by_digest(cursor_str, is_descending)?;
-                self.state.get_transaction_page_by_mutated_object(
-                    mutated_obj_id.to_string(),
-                    indexer_seq_number,
-                    limit + 1,
-                    is_descending,
-                )
+                    .get_transaction_sequence_by_digest(cursor_str, is_descending)
+                    .await?;
+                self.state
+                    .get_transaction_page_by_mutated_object(
+                        mutated_obj_id.to_string(),
+                        indexer_seq_number,
+                        limit + 1,
+                        is_descending,
+                    )
+                    .await
             }
             // NOTE: more efficient to run this query over transactions table
             Some(TransactionFilter::FromAddress(sender_address)) => {
                 let indexer_seq_number = self
                     .state
-                    .get_transaction_sequence_by_digest(cursor_str, is_descending)?;
-                self.state.get_transaction_page_by_sender_address(
-                    sender_address.to_string(),
-                    indexer_seq_number,
-                    limit + 1,
-                    is_descending,
-                )
+                    .get_transaction_sequence_by_digest(cursor_str, is_descending)
+                    .await?;
+                self.state
+                    .get_transaction_page_by_sender_address(
+                        sender_address.to_string(),
+                        indexer_seq_number,
+                        limit + 1,
+                        is_descending,
+                    )
+                    .await
             }
             Some(TransactionFilter::ToAddress(recipient_address)) => {
                 let recipient_seq_number = self
                     .state
-                    .get_recipient_sequence_by_digest(cursor_str, is_descending)?;
-                self.state.get_transaction_page_by_sender_recipient_address(
-                    /* from */ None,
-                    recipient_address.to_string(),
-                    recipient_seq_number,
-                    limit + 1,
-                    is_descending,
-                )
+                    .get_recipient_sequence_by_digest(cursor_str, is_descending)
+                    .await?;
+                self.state
+                    .get_transaction_page_by_sender_recipient_address(
+                        /* from */ None,
+                        recipient_address.to_string(),
+                        recipient_seq_number,
+                        limit + 1,
+                        is_descending,
+                    )
+                    .await
             }
             Some(TransactionFilter::FromAndToAddress { from, to }) => {
                 let recipient_seq_number = self
                     .state
-                    .get_recipient_sequence_by_digest(cursor_str, is_descending)?;
-                self.state.get_transaction_page_by_sender_recipient_address(
-                    Some(from.to_string()),
-                    to.to_string(),
-                    recipient_seq_number,
-                    limit + 1,
-                    is_descending,
-                )
+                    .get_recipient_sequence_by_digest(cursor_str, is_descending)
+                    .await?;
+                self.state
+                    .get_transaction_page_by_sender_recipient_address(
+                        Some(from.to_string()),
+                        to.to_string(),
+                        recipient_seq_number,
+                        limit + 1,
+                        is_descending,
+                    )
+                    .await
             }
             Some(TransactionFilter::TransactionKind(tx_kind_name)) => {
                 let indexer_seq_number = self
                     .state
-                    .get_transaction_sequence_by_digest(cursor_str, is_descending)?;
-                self.state.get_transaction_page_by_transaction_kind(
-                    tx_kind_name,
-                    indexer_seq_number,
-                    limit + 1,
-                    is_descending,
-                )
+                    .get_transaction_sequence_by_digest(cursor_str, is_descending)
+                    .await?;
+                self.state
+                    .get_transaction_page_by_transaction_kind(
+                        tx_kind_name,
+                        indexer_seq_number,
+                        limit + 1,
+                        is_descending,
+                    )
+                    .await
             }
         }?;
 
@@ -244,7 +271,11 @@ impl<S: IndexerStore> IndexerApi<S> {
         let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_OBJECTS)?;
 
         // NOTE: fetch one more object to check if there is next page
-        let mut objects = self.state.query_latest_objects(filter, cursor, limit + 1)?;
+        let mut objects = self
+            .state
+            .query_latest_objects(filter, cursor, limit + 1)
+            .await?;
+
         let has_next_page = objects.len() > limit;
         objects.truncate(limit);
         let next_cursor = objects
@@ -325,7 +356,9 @@ where
                 .query_events(query, cursor, limit, descending_order)
                 .await;
         }
-        Ok(self.query_events_internal(query, cursor, limit, descending_order)?)
+        Ok(self
+            .query_events_internal(query, cursor, limit, descending_order)
+            .await?)
     }
 
     async fn get_dynamic_fields(
