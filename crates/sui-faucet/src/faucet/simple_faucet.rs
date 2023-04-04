@@ -53,7 +53,7 @@ enum GasCoinResponse {
 }
 
 // TODO: replace this with dryrun at the SDK level
-const DEFAULT_GAS_COMPUTATION_BUCKET: u64 = 100_000_000;
+const DEFAULT_GAS_COMPUTATION_BUCKET: u64 = 10_000_000;
 const LOCK_TIMEOUT: Duration = Duration::from_secs(10);
 const RECV_TIMEOUT: Duration = Duration::from_secs(5);
 
