@@ -651,10 +651,6 @@ pub enum PublishedAtError {
     NotPresent,
 }
 
-/// Gather transitive package dependencies, partitioned into two sets:
-/// - published dependencies (which contain `published-at` address in manifest); and
-/// - unpublished dependencies (no `published-at` address in manifest).
-
 /// Partition packages in `resolution_graph` into one of four groups:
 /// - The ID that the package itself is published at (if it is published)
 /// - The IDs of dependencies that have been published
