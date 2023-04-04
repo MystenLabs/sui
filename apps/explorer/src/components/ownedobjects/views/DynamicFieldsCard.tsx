@@ -152,7 +152,7 @@ export function DynamicFieldsCard({ id }: { id: string }) {
                                     {data.map((result) => (
                                         <DisclosureBox
                                             title={
-                                                <div className="max-w-[60%] truncate break-words text-body leading-relaxed font-medium text-steel-dark">
+                                                <div className="max-w-[60%] truncate break-words text-body font-medium leading-relaxed text-steel-dark">
                                                     {result.name?.value.toString()}
                                                     :
                                                 </div>
