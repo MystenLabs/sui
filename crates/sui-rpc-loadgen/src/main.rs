@@ -74,15 +74,15 @@ pub enum ClapCommand {
         #[clap(short, long)]
         end: Option<u64>,
 
-        #[clap(long, default_value_t = true)]
-        verify_transactions: bool,
+        #[clap(long)]
+        skip_verify_transactions: bool,
 
-        #[clap(long, default_value_t = true)]
-        verify_objects: bool,
+        #[clap(long)]
+        skip_verify_objects: bool,
 
         // Whether to record data from checkpoint
-        #[clap(long, default_value_t = true)]
-        record: bool,
+        #[clap(long)]
+        skip_record: bool,
 
         #[clap(flatten)]
         common: CommonOptions,
@@ -173,11 +173,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
             common,
             start,
             end,
-            verify_transactions,
-            verify_objects,
-            record,
+            skip_verify_transactions,
+            skip_verify_objects,
+            skip_record,
         } => (
-            Command::new_get_checkpoints(start, end, verify_transactions, verify_objects, record),
+            Command::new_get_checkpoints(
+                start,
+                end,
+                !skip_verify_transactions,
+                !skip_verify_objects,
+                !skip_record,
+            ),
             common,
             false,
         ),

@@ -5,7 +5,6 @@ use futures::future::join_all;
 use itertools::Itertools;
 use std::collections::HashSet;
 use std::fmt::Debug;
-use sui_json_rpc::api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiObjectResponse, SuiTransactionBlockEffectsAPI,
     SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
@@ -15,12 +14,13 @@ use sui_types::base_types::{ObjectID, TransactionDigest};
 use tracing::error;
 use tracing::log::warn;
 
+const LOADGEN_QUERY_MAX_RESULT_LIMIT: usize = 25;
+
 pub(crate) fn cross_validate_entities<U>(entities: &Vec<Vec<U>>, entity_name: &str)
 where
     U: PartialEq + Debug,
 {
     if entities.len() < 2 {
-        error!("Unable to cross validate as {} less than 2", entity_name);
         return;
     }
 
@@ -128,7 +128,7 @@ pub(crate) fn chunk_entities<U>(entities: &[U], chunk_size: Option<usize>) -> Ve
 where
     U: Clone + PartialEq + Debug,
 {
-    let chunk_size = chunk_size.unwrap_or(QUERY_MAX_RESULT_LIMIT);
+    let chunk_size = chunk_size.unwrap_or(LOADGEN_QUERY_MAX_RESULT_LIMIT);
     entities
         .iter()
         .cloned()
@@ -158,13 +158,13 @@ pub(crate) async fn multi_get_object(
     object_ids: &[ObjectID],
 ) -> Vec<Vec<SuiObjectResponse>> {
     let objects: Vec<Vec<SuiObjectResponse>> = join_all(clients.iter().map(|client| async move {
-        let object_ids = if object_ids.len() > QUERY_MAX_RESULT_LIMIT {
+        let object_ids = if object_ids.len() > LOADGEN_QUERY_MAX_RESULT_LIMIT {
             warn!(
                 "The input size for multi_get_object_with_options has exceed the query limit\
-         {QUERY_MAX_RESULT_LIMIT}: {}, time to implement chunking",
+         {LOADGEN_QUERY_MAX_RESULT_LIMIT}: {}, time to implement chunking",
                 object_ids.len()
             );
-            &object_ids[0..QUERY_MAX_RESULT_LIMIT]
+            &object_ids[0..LOADGEN_QUERY_MAX_RESULT_LIMIT]
         } else {
             object_ids
         };

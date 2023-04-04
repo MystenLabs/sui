@@ -35,9 +35,9 @@ use crate::payload::{
     Processor, QueryTransactionBlocks, SignerInfo,
 };
 
-pub(crate) const DEFAULT_GAS_BUDGET: u64 = 10_000;
-pub(crate) const DEFAULT_LARGE_GAS_BUDGET: u64 = 100_000_000;
-pub(crate) const MAX_NUM_NEW_OBJECTS_IN_SINGLE_TRANSACTION: usize = 2000;
+pub(crate) const DEFAULT_GAS_BUDGET: u64 = 500_000_000;
+pub(crate) const DEFAULT_LARGE_GAS_BUDGET: u64 = 50_000_000_000;
+pub(crate) const MAX_NUM_NEW_OBJECTS_IN_SINGLE_TRANSACTION: usize = 120;
 
 #[derive(Clone)]
 pub struct RpcCommandProcessor {
@@ -178,6 +178,7 @@ impl RpcCommandProcessor {
         // TODO: be more granular
         let digests: Vec<TransactionDigest> = self.transaction_digests.iter().map(|x| *x).collect();
         if !digests.is_empty() {
+            debug!("dumping transaction digests to file {:?}", digests.len());
             write_data_to_file(
                 &digests,
                 &format!("{}/{}", &self.data_dir, CacheType::TransactionDigest),
@@ -187,6 +188,7 @@ impl RpcCommandProcessor {
 
         let addresses: Vec<SuiAddress> = self.addresses.iter().map(|x| *x).collect();
         if !addresses.is_empty() {
+            debug!("dumping addresses to file {:?}", addresses.len());
             write_data_to_file(
                 &addresses,
                 &format!("{}/{}", &self.data_dir, CacheType::SuiAddress),
@@ -203,6 +205,7 @@ impl RpcCommandProcessor {
         }
 
         if !object_ids.is_empty() {
+            debug!("dumping object_ids to file {:?}", object_ids.len());
             write_data_to_file(
                 &object_ids,
                 &format!("{}/{}", &self.data_dir, CacheType::ObjectID),
@@ -240,12 +243,24 @@ impl Processor for RpcCommandProcessor {
 
     async fn prepare(&self, config: &LoadTestConfig) -> Result<Vec<Payload>> {
         let clients = self.get_clients().await?;
+        let Command {
+            repeat_n_times,
+            repeat_interval,
+            ..
+        } = &config.command;
         let command_payloads = match &config.command.data {
             CommandData::GetCheckpoints(data) => {
                 if !config.divide_tasks {
                     vec![config.command.clone(); config.num_threads]
                 } else {
-                    divide_checkpoint_tasks(&clients, data, config.num_threads).await
+                    divide_checkpoint_tasks(
+                        &clients,
+                        data,
+                        config.num_threads,
+                        *repeat_n_times,
+                        *repeat_interval,
+                    )
+                    .await
                 }
             }
             CommandData::QueryTransactionBlocks(data) => {
@@ -379,6 +394,8 @@ async fn divide_checkpoint_tasks(
     clients: &[SuiClient],
     data: &GetCheckpoints,
     num_chunks: usize,
+    repeat_n_times: usize,
+    repeat_interval: Duration,
 ) -> Vec<Command> {
     let start = data.start;
     let end = match data.end {
@@ -411,6 +428,8 @@ async fn divide_checkpoint_tasks(
                 data.verify_objects,
                 data.record,
             )
+            .with_repeat_interval(repeat_interval)
+            .with_repeat_n_times(repeat_n_times)
         })
         .collect()
 }
