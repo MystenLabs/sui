@@ -86,10 +86,10 @@ jobs:
         run: |
           pip install pyopenssl --upgrade
           if [ -f narwhal/benchmark/requirements.txt ]; then pip install -r narwhal/benchmark/requirements.txt; fi
-      - name: Install Move test dependencies
+      - name: cargo test
         run: |
+          echo "====> Setting up Move test dependencies"
           crates/sui-move/scripts/prover_setup.sh
-          echo "Installing solidity compiler"
           curl -o ~/bin/solc "https://binaries.soliditylang.org/linux-amd64/solc-linux-amd64-v0.8.11+commit.d7f03943"
           chmod +x ~/bin/solc
           set -o pipefail
@@ -101,9 +101,7 @@ jobs:
           export CVC5_EXE="${BIN_DIR}/cvc5"
           export BOOGIE_EXE="${DOTNET_ROOT}/tools/boogie"
           export SOLC_EXE="${BIN_DIR}/solc"
-          echo "Setup done"
-      - name: cargo test
-        run: |
+          echo "====> Move test dependencies setup done"
           cargo nextest run --profile ci
       - name: benchmark (smoke)
         run: |
@@ -162,10 +160,10 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
       - uses: taiki-e/install-action@nextest
-      - name: Install Move test dependencies
+      - name: cargo simtest
         run: |
+          echo "====> Setting up Move test dependencies"
           crates/sui-move/scripts/prover_setup.sh
-          echo "Installing solidity compiler"
           curl -o ~/bin/solc "https://binaries.soliditylang.org/linux-amd64/solc-linux-amd64-v0.8.11+commit.d7f03943"
           chmod +x ~/bin/solc
           set -o pipefail
@@ -177,9 +175,7 @@ jobs:
           export CVC5_EXE="${BIN_DIR}/cvc5"
           export BOOGIE_EXE="${DOTNET_ROOT}/tools/boogie"
           export SOLC_EXE="${BIN_DIR}/solc"
-          echo "Setup done"
-      - name: cargo simtest
-        run: |
+          echo "====> Move test dependencies setup done"
           scripts/simtest/cargo-simtest simtest
       - name: check new tests for flakiness
         run: |

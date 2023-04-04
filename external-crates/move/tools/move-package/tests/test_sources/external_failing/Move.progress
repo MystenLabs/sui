@@ -1,3 +1,3 @@
-[1;32mRESOLVING DEPENDENCIES IN[0m A [1;32mFROM[0m Root [1;32mWITH[0m ../resolvers/failing.sh
-[31m../resolvers/failing.sh stderr:[0m
+RESOLVING DEPENDENCIES IN A FROM Root WITH ../resolvers/failing.sh
+../resolvers/failing.sh stderr:
 Failed to resolve dependencies for A
