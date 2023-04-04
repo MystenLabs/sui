@@ -74,6 +74,19 @@ where
         keys.into_iter().map(|key| self.get(key.borrow())).collect()
     }
 
+    /// Returns a vector of raw values corresponding to the keys provided, non-atomically.
+    fn multi_get_raw_bytes<J>(
+        &self,
+        keys: impl IntoIterator<Item = J>,
+    ) -> Result<Vec<Option<Vec<u8>>>, Self::Error>
+    where
+        J: Borrow<K>,
+    {
+        keys.into_iter()
+            .map(|key| self.get_raw_bytes(key.borrow()))
+            .collect()
+    }
+
     /// Inserts key-value pairs, non-atomically.
     fn multi_insert<J, U>(
         &self,

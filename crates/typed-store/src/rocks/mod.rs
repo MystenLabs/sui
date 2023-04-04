@@ -1628,12 +1628,12 @@ where
         Values::new(db_iter)
     }
 
-    /// Returns a vector of values corresponding to the keys provided.
+    /// Returns a vector of raw values corresponding to the keys provided.
     #[instrument(level = "trace", skip_all, err)]
-    fn multi_get<J>(
+    fn multi_get_raw_bytes<J>(
         &self,
         keys: impl IntoIterator<Item = J>,
-    ) -> Result<Vec<Option<V>>, TypedStoreError>
+    ) -> Result<Vec<Option<Vec<u8>>>, TypedStoreError>
     where
         J: Borrow<K>,
     {
@@ -1673,9 +1673,22 @@ where
                 .read_perf_ctx_metrics
                 .report_metrics(&self.cf);
         }
+        Ok(results.into_iter().collect::<Result<_, _>>()?)
+    }
+
+    /// Returns a vector of values corresponding to the keys provided.
+    #[instrument(level = "trace", skip_all, err)]
+    fn multi_get<J>(
+        &self,
+        keys: impl IntoIterator<Item = J>,
+    ) -> Result<Vec<Option<V>>, TypedStoreError>
+    where
+        J: Borrow<K>,
+    {
+        let results = self.multi_get_raw_bytes(keys)?;
         let values_parsed: Result<Vec<_>, TypedStoreError> = results
             .into_iter()
-            .map(|value_byte| match value_byte? {
+            .map(|value_byte| match value_byte {
                 Some(data) => Ok(Some(bcs::from_bytes(&data)?)),
                 None => Ok(None),
             })

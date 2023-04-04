@@ -43,6 +43,7 @@ use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use super::authority_store_tables::LiveObject;
 use super::{authority_store_tables::AuthorityPerpetualTables, *};
 use mysten_common::sync::notify_read::NotifyRead;
+use typed_store::rocks::util::is_ref_count_value;
 
 const NUM_SHARDS: usize = 4096;
 
@@ -839,13 +840,13 @@ impl AuthorityStore {
         let existing_digests = self
             .perpetual_tables
             .indirect_move_objects
-            .multi_get(indirect_objects.iter().map(|(digest, _)| digest))?;
+            .multi_get_raw_bytes(indirect_objects.iter().map(|(digest, _)| digest))?;
         // split updates to existing and new indirect objects
         // for new objects full merge needs to be triggered. For existing ref count increment is sufficient
         let (existing_indirect_objects, new_indirect_objects): (Vec<_>, Vec<_>) = indirect_objects
             .into_iter()
             .enumerate()
-            .partition(|(idx, _)| existing_digests[*idx].is_some());
+            .partition(|(idx, _)| matches!(&existing_digests[*idx], Some(value) if !is_ref_count_value(value)));
 
         write_batch.insert_batch(&self.perpetual_tables.objects, new_objects.into_iter())?;
         if !new_indirect_objects.is_empty() {
