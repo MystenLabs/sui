@@ -321,7 +321,7 @@ fn execute_transaction<
     } else {
         // legacy code before gas v2, leave it alone
         temporary_store.charge_gas_legacy(gas_object_ref.0, &mut gas_status, &mut result, gas);
-        let cost_summary = gas_status.summary();
+        let cost_summary = gas_status.summary(false);
         (cost_summary, result)
     }
 }

@@ -379,7 +379,7 @@ impl<'a> SuiGasStatusAPI<'a> for SuiGasStatus<'a> {
     /// Returns the final (computation cost, storage cost, storage rebate) of the gas meter.
     /// We use initial budget, combined with remaining gas and storage cost to derive
     /// computation cost.
-    fn summary(&self) -> GasCostSummary {
+    fn summary(&self, _out_of_gas: bool) -> GasCostSummary {
         let remaining_gas = self.gas_status.remaining_gas();
         let storage_cost = self.storage_gas_units;
         let computation_cost = self
@@ -453,6 +453,14 @@ impl<'a> SuiGasStatusAPI<'a> for SuiGasStatus<'a> {
 
     fn track_storage_mutation(&mut self, _new_size: usize, _storage_rebate: u64) -> u64 {
         unreachable!("track_storage_mutation should not be called in v1 gas model");
+    }
+
+    fn track_deleted(&mut self, _storage_rebate: u64) {
+        unreachable!("track_deleted should not be called in v1 gas model");
+    }
+
+    fn track_for_out_of_gas(&mut self, _storage_rebate: u64) {
+        unreachable!("track_for_out_of_gas should not be called in v1 gas model");
     }
 
     fn adjust_computation_on_out_of_gas(&mut self) {

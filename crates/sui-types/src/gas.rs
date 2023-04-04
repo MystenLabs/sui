@@ -24,7 +24,7 @@ pub trait SuiGasStatusAPI<'a> {
     fn is_unmetered(&self) -> bool;
     fn move_gas_status(&mut self) -> &mut GasStatus<'a>;
     fn bucketize_computation(&mut self) -> Result<(), ExecutionError>;
-    fn summary(&self) -> GasCostSummary;
+    fn summary(&self, out_of_gas: bool) -> GasCostSummary;
     fn gas_budget(&self) -> u64;
     fn storage_gas_units(&self) -> u64;
     fn storage_rebate(&self) -> u64;
@@ -39,6 +39,8 @@ pub trait SuiGasStatusAPI<'a> {
     ) -> Result<u64, ExecutionError>;
     fn charge_publish_package(&mut self, size: usize) -> Result<(), ExecutionError>;
     fn track_storage_mutation(&mut self, new_size: usize, storage_rebate: u64) -> u64;
+    fn track_deleted(&mut self, storage_rebate: u64);
+    fn track_for_out_of_gas(&mut self, storage_rebate: u64);
     fn charge_storage_and_rebate(&mut self) -> Result<(), ExecutionError>;
     fn adjust_computation_on_out_of_gas(&mut self);
 }

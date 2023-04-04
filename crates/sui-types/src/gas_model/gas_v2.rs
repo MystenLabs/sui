@@ -174,6 +174,7 @@ pub struct SuiGasStatus<'a> {
     /// It is the sum of all `storage_rebate` of all objects mutated or deleted during
     /// execution. The value is in Sui.
     storage_rebate: u64,
+    deleted_rebate: u64,
     // storage rebate rate as defined in the ProtocolConfig
     rebate_rate: u64,
     /// Amount of storage rebate accumulated when we are running in unmetered mode (i.e. system transaction).
@@ -200,6 +201,7 @@ impl<'a> SuiGasStatus<'a> {
             storage_gas_price,
             storage_cost: 0,
             storage_rebate: 0,
+            deleted_rebate: 0,
             rebate_rate,
             unmetered_storage_rebate: 0,
             cost_table,
@@ -293,15 +295,21 @@ impl<'a> SuiGasStatusAPI<'a> for SuiGasStatus<'a> {
     /// Returns the final (computation cost, storage cost, storage rebate) of the gas meter.
     /// We use initial budget, combined with remaining gas and storage cost to derive
     /// computation cost.
-    fn summary(&self) -> GasCostSummary {
+    fn summary(&self, out_of_gas: bool) -> GasCostSummary {
         // compute storage rebate, both rebate and non refundable fee
-        let sender_rebate = sender_rebate(self.storage_rebate, self.rebate_rate);
-        assert!(sender_rebate <= self.storage_rebate);
-        let non_refundable_storage_fee = self.storage_rebate - sender_rebate;
+        let rebatable = if out_of_gas {
+            self.deleted_rebate
+        } else {
+            self.storage_rebate
+        };
+        let sender_rebate = sender_rebate(rebatable, self.rebate_rate);
+        assert!(sender_rebate <= rebatable);
+        let non_refundable_storage_fee = rebatable - sender_rebate;
+        let storage_rebate = self.storage_rebate - non_refundable_storage_fee;
         GasCostSummary {
             computation_cost: self.computation_cost,
             storage_cost: self.storage_cost,
-            storage_rebate: sender_rebate,
+            storage_rebate,
             non_refundable_storage_fee,
         }
     }
@@ -329,6 +337,7 @@ impl<'a> SuiGasStatusAPI<'a> for SuiGasStatus<'a> {
     fn reset_storage_cost_and_rebate(&mut self) {
         self.storage_cost = 0;
         self.storage_rebate = 0;
+        self.deleted_rebate = 0;
         self.unmetered_storage_rebate = 0;
     }
 
@@ -378,6 +387,20 @@ impl<'a> SuiGasStatusAPI<'a> for SuiGasStatus<'a> {
         self.storage_cost += storage_cost;
         // return the new object rebate (object storage cost)
         storage_cost
+    }
+
+    fn track_deleted(&mut self, storage_rebate: u64) {
+        if self.is_unmetered() {
+            self.unmetered_storage_rebate += storage_rebate;
+        } else {
+            self.storage_rebate += storage_rebate;
+            self.deleted_rebate += storage_rebate;
+        }
+    }
+
+    fn track_for_out_of_gas(&mut self, storage_rebate: u64) {
+        self.storage_rebate += storage_rebate;
+        self.storage_cost += storage_rebate;
     }
 
     fn charge_storage_and_rebate(&mut self) -> Result<(), ExecutionError> {
