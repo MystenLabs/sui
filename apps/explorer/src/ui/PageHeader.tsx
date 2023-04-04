@@ -18,7 +18,7 @@ export type PageHeaderType =
 
 export interface PageHeaderProps {
     title: string;
-    subtitle?: string;
+    subtitle?: string | null;
     type: PageHeaderType;
     status?: 'success' | 'failure';
 }

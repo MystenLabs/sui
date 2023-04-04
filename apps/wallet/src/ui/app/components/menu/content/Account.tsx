@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Disclosure, Transition } from '@headlessui/react';
+import { useAddressToSuiNS } from '@mysten/core';
 import { ChevronDown16, Copy16 } from '@mysten/icons';
 import { formatAddress } from '@mysten/sui.js';
 import { cx } from 'class-variance-authority';
@@ -10,7 +11,7 @@ import { AccountBadge } from '../../AccountBadge';
 import { AccountActions } from './AccountActions';
 import { type SerializedAccount } from '_src/background/keyring/Account';
 import { useCopyToClipboard } from '_src/ui/app/hooks/useCopyToClipboard';
-import { Heading } from '_src/ui/app/shared/heading';
+import { Text } from '_src/ui/app/shared/text';
 
 export type AccountProps = {
     account: SerializedAccount;
@@ -21,13 +22,14 @@ export function Account({ account }: AccountProps) {
     const copyCallback = useCopyToClipboard(address, {
         copySuccessMessage: 'Address copied',
     });
+    const { data: suins } = useAddressToSuiNS(address);
 
     return (
         <Disclosure>
             {({ open }) => (
                 <div
                     className={cx(
-                        'transition flex flex-col flex-nowrap border border-solid rounded-lg',
+                        'transition flex flex-col flex-nowrap border border-solid rounded-2xl',
                         open
                             ? 'bg-gray-40 border-transparent'
                             : 'hover:border-steel border-gray-60'
@@ -35,17 +37,27 @@ export function Account({ account }: AccountProps) {
                 >
                     <Disclosure.Button
                         as="div"
-                        className="flex flex-nowrap items-center p-5 self-stretch cursor-pointer gap-3 group"
+                        className="flex flex-nowrap items-center px-5 py-3 self-stretch cursor-pointer gap-3 group"
                     >
-                        <div className="transition flex flex-1 gap-3 justify-start items-center text-steel-dark group-hover:text-steel-darker ui-open:text-steel-darker">
-                            <Heading
-                                mono
-                                weight="semibold"
-                                variant="heading6"
-                                leading="none"
-                            >
-                                {formatAddress(address)}
-                            </Heading>
+                        <div className="transition flex flex-1 gap-3 justify-start items-center text-steel-dark group-hover:text-steel-darker ui-open:text-steel-darker min-w-0">
+                            <div className="overflow-hidden flex flex-col gap-1">
+                                {suins && (
+                                    <Text
+                                        variant="body"
+                                        weight="semibold"
+                                        truncate
+                                    >
+                                        {suins}
+                                    </Text>
+                                )}
+                                <Text
+                                    mono
+                                    variant={suins ? 'bodySmall' : 'body'}
+                                    weight="semibold"
+                                >
+                                    {formatAddress(address)}
+                                </Text>
+                            </div>
                             <AccountBadge accountType={type} />
                         </div>
                         <Copy16

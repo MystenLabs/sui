@@ -8,27 +8,22 @@ type AccountBadgeProps = {
     accountType: AccountType;
 };
 
-export function AccountBadge({ accountType }: AccountBadgeProps) {
-    let badgeText: string | null = null;
-    switch (accountType) {
-        case AccountType.LEDGER:
-            badgeText = 'Ledger';
-            break;
-        case AccountType.IMPORTED:
-            badgeText = 'Imported';
-            break;
-        case AccountType.DERIVED:
-            badgeText = null;
-            break;
-        default:
-            throw new Error(`Encountered unknown account type ${accountType}`);
-    }
+const TYPE_TO_TEXT: Record<AccountType, string | null> = {
+    [AccountType.LEDGER]: 'Ledger',
+    [AccountType.IMPORTED]: 'Imported',
+    [AccountType.DERIVED]: 'Derived',
+};
 
-    return badgeText ? (
+export function AccountBadge({ accountType }: AccountBadgeProps) {
+    const badgeText = TYPE_TO_TEXT[accountType];
+
+    if (!badgeText) return null;
+
+    return (
         <div className="bg-gray-40 rounded-2xl border border-solid border-gray-45 py-1 px-1.5">
             <Text variant="captionSmallExtra" color="steel-dark">
                 {badgeText}
             </Text>
         </div>
-    ) : null;
+    );
 }

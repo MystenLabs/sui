@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useAddressToSuiNS } from '@mysten/core';
 import { Check12, Copy12 } from '@mysten/icons';
 import { formatAddress } from '@mysten/sui.js';
 
@@ -24,19 +25,25 @@ export function AccountListItem({
     const copy = useCopyToClipboard(address, {
         copySuccessMessage: 'Address Copied',
     });
+    const { data: suins } = useAddressToSuiNS(address);
 
     return (
         <li>
             <button
-                className="appearance-none bg-transparent border-0 w-full flex p-2.5 items-center gap-2.5 rounded-md hover:bg-sui/10 cursor-pointer focus-visible:ring-1 group transition-colors"
+                className="appearance-none bg-transparent border-0 w-full flex p-2.5 items-center gap-2.5 rounded-md hover:bg-sui/10 cursor-pointer focus-visible:ring-1 group transition-colors text-left"
                 onClick={() => {
                     onAccountSelected(account);
                 }}
             >
-                <div className="flex items-center gap-2 flex-1">
-                    <div className="shrink-0">
-                        <Text color="steel-darker" variant="bodySmall" mono>
-                            {formatAddress(address)}
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <div className="min-w-0">
+                        <Text
+                            color="steel-darker"
+                            variant="bodySmall"
+                            truncate
+                            mono
+                        >
+                            {suins ?? formatAddress(address)}
                         </Text>
                     </div>
                     <AccountBadge accountType={type} />

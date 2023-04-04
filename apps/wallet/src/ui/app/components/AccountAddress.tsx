@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useAddressToSuiNS } from '@mysten/core';
 import { Copy12 } from '@mysten/icons';
 import { formatAddress, type SuiAddress } from '@mysten/sui.js';
 
@@ -20,10 +21,12 @@ export function AccountAddress({ copyable, address }: AccountAddressProps) {
         copySuccessMessage: 'Address copied',
     });
 
+    const { data: suins } = useAddressToSuiNS(addressToShow);
+
     return addressToShow ? (
         <div className="flex flex-nowrap flex-row items-center gap-1">
             <Text variant="bodySmall" weight="medium" color="sui-dark" mono>
-                {formatAddress(addressToShow)}
+                {suins ?? formatAddress(addressToShow)}
             </Text>
             {copyable ? (
                 <Copy12
