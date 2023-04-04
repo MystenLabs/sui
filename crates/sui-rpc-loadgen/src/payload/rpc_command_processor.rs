@@ -82,6 +82,7 @@ impl RpcCommandProcessor {
             CommandData::QueryTransactionBlocks(ref v) => self.process(v, signer_info).await,
             CommandData::MultiGetObjects(ref v) => self.process(v, signer_info).await,
             CommandData::GetAllBalances(ref v) => self.process(v, signer_info).await,
+            CommandData::GetReferenceGasPrice(ref v) => self.process(v, signer_info).await,
         }
     }
 
