@@ -23,12 +23,11 @@ use sui_core::{
     },
 };
 use sui_json_rpc_types::{
-    SuiObjectDataOptions, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
-    SuiTransactionBlockResponseOptions,
+    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockEffects,
+    SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
 };
 use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::base_types::SequenceNumber;
 use sui_types::messages::Argument;
 use sui_types::messages::CallArg;
 use sui_types::messages::ObjectArg;
@@ -50,6 +49,7 @@ use sui_types::{
     object::Object,
 };
 use sui_types::{base_types::ObjectRef, crypto::AuthorityStrongQuorumSignInfo, object::Owner};
+use sui_types::{base_types::SequenceNumber, gas_coin::GasCoin};
 use sui_types::{
     base_types::{AuthorityName, SuiAddress},
     sui_system_state::SuiSystemStateTrait,
@@ -182,6 +182,11 @@ impl ExecutionEffects {
 pub trait ValidatorProxy {
     async fn get_object(&self, object_id: ObjectID) -> Result<Object, anyhow::Error>;
 
+    async fn get_owned_objects(
+        &self,
+        account_address: SuiAddress,
+    ) -> Result<Vec<(u64, Object)>, anyhow::Error>;
+
     async fn get_latest_system_state_object(&self) -> Result<SuiSystemStateSummary, anyhow::Error>;
 
     async fn execute_transaction_block(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects>;
@@ -298,6 +303,13 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         Ok(auth_agg
             .get_latest_object_version_for_testing(object_id)
             .await?)
+    }
+
+    async fn get_owned_objects(
+        &self,
+        _account_address: SuiAddress,
+    ) -> Result<Vec<(u64, Object)>, anyhow::Error> {
+        unimplemented!("Not available for local proxy");
     }
 
     async fn get_latest_system_state_object(&self) -> Result<SuiSystemStateSummary, anyhow::Error> {
@@ -587,6 +599,49 @@ impl ValidatorProxy for FullNodeProxy {
         } else {
             bail!("Object {:?} not found and no error provided", object_id)
         }
+    }
+
+    async fn get_owned_objects(
+        &self,
+        account_address: SuiAddress,
+    ) -> Result<Vec<(u64, Object)>, anyhow::Error> {
+        let mut objects: Vec<SuiObjectResponse> = Vec::new();
+        let mut cursor = None;
+        loop {
+            let response = self
+                .sui_client
+                .read_api()
+                .get_owned_objects(
+                    account_address,
+                    Some(SuiObjectResponseQuery::new_with_options(
+                        SuiObjectDataOptions::bcs_lossless(),
+                    )),
+                    cursor,
+                    None,
+                )
+                .await?;
+
+            objects.extend(response.data);
+
+            if response.has_next_page {
+                cursor = response.next_cursor;
+            } else {
+                break;
+            }
+        }
+
+        let mut values_objects = Vec::new();
+
+        for object in objects {
+            let o = object.data;
+            if let Some(o) = o {
+                let temp: Object = o.clone().try_into()?;
+                let gas_coin = GasCoin::try_from(&temp)?;
+                values_objects.push((gas_coin.value(), o.clone().try_into()?));
+            }
+        }
+
+        Ok(values_objects)
     }
 
     async fn get_latest_system_state_object(&self) -> Result<SuiSystemStateSummary, anyhow::Error> {

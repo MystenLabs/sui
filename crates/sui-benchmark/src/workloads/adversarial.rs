@@ -354,7 +354,7 @@ impl WorkloadBuilder<dyn Payload> for AdversarialWorkloadBuilder {
         // Gas coin for publishing adversarial package
         let (address, keypair) = get_key_pair();
         vec![GasCoinConfig {
-            amount: MAX_GAS_FOR_TESTING,
+            amount: MAX_GAS_FOR_TESTING * 1000,
             address,
             keypair: Arc::new(keypair),
         }]

@@ -164,7 +164,7 @@ impl WorkloadBuilder<dyn Payload> for BatchPaymentWorkloadBuilder {
             .map(|_| {
                 let (address, keypair) = get_key_pair();
                 GasCoinConfig {
-                    amount: MAX_GAS_FOR_TESTING,
+                    amount: MAX_GAS_FOR_TESTING * 100,
                     address,
                     keypair: Arc::new(keypair),
                 }
