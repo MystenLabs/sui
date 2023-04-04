@@ -116,7 +116,7 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
             </div>
             {timestamp && (
                 <div className="my-3 flex justify-center">
-                    <DateCard timestamp={timestamp} size="md" />
+                    <DateCard timestamp={+timestamp} size="md" />
                 </div>
             )}
 

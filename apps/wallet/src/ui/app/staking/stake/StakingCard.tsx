@@ -289,7 +289,7 @@ function StakingCard() {
                                         coinBalance={totalTokenBalance}
                                         coinType={coinType}
                                         stakingReward={suiEarned}
-                                        epoch={system?.epoch || 0}
+                                        epoch={+(system?.epoch || 0)}
                                     />
                                 ) : (
                                     <StakeForm

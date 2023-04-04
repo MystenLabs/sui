@@ -140,10 +140,16 @@ const provider = new JsonRpcProvider();
 const signer = new RawSigner(keypair, provider);
 const tx = new TransactionBlock();
 tx.transferObjects(
-  [tx.object('0xe19739da1a701eadc21683c5b127e62b553e833e8a15a4f292f4f48b4afea3f2')],
+  [
+    tx.object(
+      '0xe19739da1a701eadc21683c5b127e62b553e833e8a15a4f292f4f48b4afea3f2',
+    ),
+  ],
   tx.pure('0x1d20dcdb2bca4f508ea9613994683eb4e76e9c4ed371169677c1be02aaf0b12a'),
 );
-const result = await signer.signAndExecuteTransactionBlock({ transactionBlock: tx });
+const result = await signer.signAndExecuteTransactionBlock({
+  transactionBlock: tx,
+});
 console.log({ result });
 ```
 
@@ -165,7 +171,9 @@ const signer = new RawSigner(keypair, provider);
 const tx = new TransactionBlock();
 const [coin] = tx.splitCoins(tx.gas, tx.pure(1000));
 tx.transferObjects([coin], tx.pure(keypair.getPublicKey().toSuiAddress()));
-const result = await signer.signAndExecuteTransactionBlock({ transactionBlock: tx });
+const result = await signer.signAndExecuteTransactionBlock({
+  transactionBlock: tx,
+});
 console.log({ result });
 ```
 
@@ -183,10 +191,19 @@ const keypair = new Ed25519Keypair();
 const provider = new JsonRpcProvider();
 const signer = new RawSigner(keypair, provider);
 const tx = new TransactionBlock();
-tx.mergeCoin(tx.object('0xe19739da1a701eadc21683c5b127e62b553e833e8a15a4f292f4f48b4afea3f2'), [
-  tx.object('0x127a8975134a4824d9288722c4ee4fc824cd22502ab4ad9f6617f3ba19229c1b'),
-]);
-const result = await signer.signAndExecuteTransactionBlock({ transactionBlock: tx });
+tx.mergeCoin(
+  tx.object(
+    '0xe19739da1a701eadc21683c5b127e62b553e833e8a15a4f292f4f48b4afea3f2',
+  ),
+  [
+    tx.object(
+      '0x127a8975134a4824d9288722c4ee4fc824cd22502ab4ad9f6617f3ba19229c1b',
+    ),
+  ],
+);
+const result = await signer.signAndExecuteTransactionBlock({
+  transactionBlock: tx,
+});
 console.log({ result });
 ```
 
@@ -209,7 +226,9 @@ tx.moveCall({
   target: `${packageObjectId}::nft::mint`,
   arguments: [tx.pure('Example NFT')],
 });
-const result = await signer.signAndExecuteTransactionBlock({ transactionBlock: tx });
+const result = await signer.signAndExecuteTransactionBlock({
+  transactionBlock: tx,
+});
 console.log({ result });
 ```
 
@@ -244,7 +263,9 @@ const [upgradeCap] = tx.publish(
   ),
 );
 tx.transferObjects([upgradeCap], tx.pure(await signer.getAddress()));
-const result = await signer.signAndExecuteTransactionBlock({ transactionBlock: tx });
+const result = await signer.signAndExecuteTransactionBlock({
+  transactionBlock: tx,
+});
 console.log({ result });
 ```
 
@@ -318,7 +339,8 @@ const provider = new JsonRpcProvider();
 // If coin type is not specified, it defaults to 0x2::sui::SUI
 const coins = await provider.getCoins({
   owner: '0xcc2bd176a478baea9a0de7a24cd927661cc6e860d5bacecb9a138ef20dbab231',
-  coinType: '0x65b0553a591d7b13376e03a408e112c706dc0909a79080c810b93b06f922c458::usdc::USDC',
+  coinType:
+    '0x65b0553a591d7b13376e03a408e112c706dc0909a79080c810b93b06f922c458::usdc::USDC',
 });
 ```
 
@@ -340,7 +362,8 @@ const provider = new JsonRpcProvider();
 // If coin type is not specified, it defaults to 0x2::sui::SUI
 const coinBalance = await provider.getBalance({
   owner: '0xcc2bd176a478baea9a0de7a24cd927661cc6e860d5bacecb9a138ef20dbab231',
-  coinType: '0x65b0553a591d7b13376e03a408e112c706dc0909a79080c810b93b06f922c458::usdc::USDC',
+  coinType:
+    '0x65b0553a591d7b13376e03a408e112c706dc0909a79080c810b93b06f922c458::usdc::USDC',
 });
 ```
 
@@ -367,7 +390,10 @@ const provider = new JsonRpcProvider();
 // calls RPC method 'suix_subscribeEvent' with params:
 // [ { Sender: '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3' } ]
 const subscriptionId = await provider.subscribeEvent({
-  filter: { Sender: '0xcc2bd176a478baea9a0de7a24cd927661cc6e860d5bacecb9a138ef20dbab231' },
+  filter: {
+    Sender:
+      '0xcc2bd176a478baea9a0de7a24cd927661cc6e860d5bacecb9a138ef20dbab231',
+  },
   onMessage(event: SuiEvent) {
     // handle subscription notification message here. This function is called once per subscription message.
   },

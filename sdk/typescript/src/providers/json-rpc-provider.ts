@@ -787,7 +787,7 @@ export class JsonRpcProvider {
      */
     cursor?: string;
     /** Maximum item returned per page, default to 100 if not specified. */
-    limit?: number;
+    limit?: string;
     /** query result ordering, default to false (ascending order), oldest record first */
     descendingOrder: boolean;
   }): Promise<CheckpointPage> {
@@ -825,8 +825,8 @@ export class JsonRpcProvider {
    * Return the committee information for the asked epoch
    */
   async getEpochs(input?: {
-    cursor?: number;
-    limit?: number;
+    cursor?: string;
+    limit?: string;
     descendingOrder?: boolean;
   }): Promise<EpochPage> {
     return await this.client.requestWithType(
