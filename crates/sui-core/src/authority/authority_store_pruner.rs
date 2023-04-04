@@ -247,7 +247,7 @@ impl AuthorityStorePruner {
         let tick_duration = if config.num_epochs_to_retain > 0 {
             Duration::from_millis(epoch_duration_ms / 2)
         } else {
-            Duration::from_secs(config.pruning_run_delay_seconds.min(60))
+            Duration::from_secs(config.pruning_run_delay_seconds.unwrap_or(60))
         };
 
         let pruning_initial_delay = min(tick_duration, Duration::from_secs(300));

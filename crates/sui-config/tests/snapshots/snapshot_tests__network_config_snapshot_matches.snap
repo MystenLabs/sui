@@ -64,7 +64,6 @@ validator_configs:
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
       num-epochs-to-retain: 2
-      pruning-run-delay-seconds: 60
       max-checkpoints-in-batch: 200
       max-transactions-in-batch: 1000
       use-range-deletion: true
@@ -139,7 +138,6 @@ validator_configs:
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
       num-epochs-to-retain: 2
-      pruning-run-delay-seconds: 60
       max-checkpoints-in-batch: 200
       max-transactions-in-batch: 1000
       use-range-deletion: true
@@ -214,7 +212,6 @@ validator_configs:
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
       num-epochs-to-retain: 2
-      pruning-run-delay-seconds: 60
       max-checkpoints-in-batch: 200
       max-transactions-in-batch: 1000
       use-range-deletion: true
@@ -289,7 +286,6 @@ validator_configs:
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
       num-epochs-to-retain: 2
-      pruning-run-delay-seconds: 60
       max-checkpoints-in-batch: 200
       max-transactions-in-batch: 1000
       use-range-deletion: true
@@ -364,7 +360,6 @@ validator_configs:
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
       num-epochs-to-retain: 2
-      pruning-run-delay-seconds: 60
       max-checkpoints-in-batch: 200
       max-transactions-in-batch: 1000
       use-range-deletion: true
@@ -439,7 +434,6 @@ validator_configs:
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
       num-epochs-to-retain: 2
-      pruning-run-delay-seconds: 60
       max-checkpoints-in-batch: 200
       max-transactions-in-batch: 1000
       use-range-deletion: true
@@ -514,7 +508,6 @@ validator_configs:
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
       num-epochs-to-retain: 2
-      pruning-run-delay-seconds: 60
       max-checkpoints-in-batch: 200
       max-transactions-in-batch: 1000
       use-range-deletion: true
