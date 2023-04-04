@@ -1408,17 +1408,35 @@ impl AuthorityStore {
             .get_sui_system_state_object()
             .expect("Reading sui system state object cannot fail")
             .into_sui_system_state_summary();
+        info!(
+            "Total SUI amount in the network: {}, total storage rebate: {} at beginning of epoch {}",
+            total_sui, total_storage_rebate, system_state.epoch
+        );
 
         let storage_fund_balance = system_state.storage_fund_total_object_storage_rebates;
-        fp_ensure!(
-            total_storage_rebate == storage_fund_balance,
-            SuiError::from(
-                format!(
-                    "Inconsistent state detected at epoch {}: total storage rebate: {}, storage fund balance: {}",
-                    system_state.epoch, total_storage_rebate, storage_fund_balance
-                ).as_str()
-            )
-        );
+        let imbalance = (storage_fund_balance as i64) - (total_storage_rebate as i64);
+        if let Some(expected_imbalance) = self
+            .perpetual_tables
+            .expected_storage_fund_imbalance
+            .get(&())
+            .expect("DB read cannot fail")
+        {
+            fp_ensure!(
+                imbalance == expected_imbalance,
+                SuiError::from(
+                    format!(
+                        "Inconsistent state detected at epoch {}: total storage rebate: {}, storage fund balance: {}, expected imbalance: {}",
+                        system_state.epoch, total_storage_rebate, storage_fund_balance, expected_imbalance
+                    ).as_str()
+                )
+            );
+        } else {
+            self.perpetual_tables
+                .expected_storage_fund_imbalance
+                .insert(&(), &imbalance)
+                .expect("DB write cannot fail");
+        }
+
         if let Some(expected_sui) = self
             .perpetual_tables
             .expected_network_sui_amount
