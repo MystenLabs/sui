@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useGetRollingAverageApys, useGetValidatorsEvents } from '@mysten/core';
-import { useMemo } from 'react';
+import { type SuiSystemStateSummary } from '@mysten/sui.js';
+import React, { useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 
 import { ValidatorMeta } from '~/components/validator/ValidatorMeta';
@@ -10,7 +11,20 @@ import { ValidatorStats } from '~/components/validator/ValidatorStats';
 import { useGetSystemObject } from '~/hooks/useGetObject';
 import { Banner } from '~/ui/Banner';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
+import { Text } from '~/ui/Text';
 import { getValidatorMoveEvent } from '~/utils/getValidatorMoveEvent';
+import { VALIDATOR_LOW_STAKE_GRACE_PERIOD } from '~/utils/validatorConstants';
+
+const getAtRiskRemainingEpochs = (
+    data: SuiSystemStateSummary | undefined,
+    validatorId: string | undefined
+): number | null => {
+    if (!data || !validatorId) return null;
+    const atRisk = data.atRiskValidators.find(
+        ([address]) => address === validatorId
+    );
+    return atRisk ? VALIDATOR_LOW_STAKE_GRACE_PERIOD - atRisk[1] : null;
+};
 
 function ValidatorDetails() {
     const { id } = useParams();
@@ -20,6 +34,8 @@ function ValidatorDetails() {
         if (!data) return null;
         return data.activeValidators.find((av) => av.suiAddress === id) || null;
     }, [id, data]);
+
+    const atRiskRemainingEpochs = getAtRiskRemainingEpochs(data, id);
 
     const numberOfValidators = data?.activeValidators.length ?? null;
     const { data: rollingAverageApys, isLoading: validatorsApysLoading } =
@@ -77,6 +93,23 @@ function ValidatorDetails() {
                     tallyingScore={tallyingScore}
                 />
             </div>
+            {atRiskRemainingEpochs !== null && (
+                <div className="mt-5">
+                    <Banner fullWidth variant="error">
+                        <div className="flex flex-col gap-1">
+                            <Text uppercase variant="bodySmall/semibold">
+                                at risk of being removed as a validator after{' '}
+                                {atRiskRemainingEpochs} epoch
+                                {atRiskRemainingEpochs > 1 ? 's' : ''}
+                            </Text>
+                            <Text variant="bodySmall/medium">
+                                Staked SUI is below the minimum SUI stake
+                                threshold to remain a validator.
+                            </Text>
+                        </div>
+                    </Banner>
+                </div>
+            )}
         </div>
     );
 }

@@ -24,10 +24,11 @@ import { Stats } from '~/ui/Stats';
 import { TableCard } from '~/ui/TableCard';
 import { TableHeader } from '~/ui/TableHeader';
 import { Text } from '~/ui/Text';
+import { Tooltip } from '~/ui/Tooltip';
 import { getValidatorMoveEvent } from '~/utils/getValidatorMoveEvent';
+import { VALIDATOR_LOW_STAKE_GRACE_PERIOD } from '~/utils/validatorConstants';
 
 const APY_DECIMALS = 3;
-const VALIDATOR_LOW_STAKE_GRACE_PERIOD = 7;
 
 const NodeMap = lazy(() => import('../../components/node-map'));
 
@@ -183,17 +184,23 @@ export function validatorsTableData(
                 cell: (props: any) => {
                     const atRisk = props.getValue();
                     return atRisk !== null ? (
-                        <div className="flex flex-nowrap items-center">
-                            <Text color="issue" variant="bodySmall/medium">
-                                At Risk
-                            </Text>
-                            &nbsp;
-                            <Text variant="bodySmall/medium" color="steel-dark">
-                                {atRisk > 1
-                                    ? `IN ${atRisk} EPOCHS`
-                                    : 'NEXT EPOCH'}
-                            </Text>
-                        </div>
+                        <Tooltip tip="Staked SUI is below the minimum SUI stake threshold to remain a validator.">
+                            <div className="flex cursor-pointer flex-nowrap items-center">
+                                <Text color="issue" variant="bodySmall/medium">
+                                    At Risk
+                                </Text>
+                                &nbsp;
+                                <Text
+                                    uppercase
+                                    variant="bodySmall/medium"
+                                    color="steel-dark"
+                                >
+                                    {atRisk > 1
+                                        ? `in ${atRisk} epochs`
+                                        : 'next epoch'}
+                                </Text>
+                            </div>
+                        </Tooltip>
                     ) : (
                         <Text variant="bodySmall/medium" color="steel-darker">
                             Active
