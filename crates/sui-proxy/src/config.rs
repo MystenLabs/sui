@@ -12,6 +12,7 @@ use tracing::debug;
 #[serde(rename_all = "kebab-case")]
 pub struct ProxyConfig {
     pub network: String,
+    pub inventory_hostname: String,
     pub listen_address: SocketAddr,
     pub remote_write: RemoteWriteConfig,
     pub json_rpc: PeerValidationConfig,
