@@ -55,6 +55,71 @@ async fn test_tx_more_than_maximum_gas_budget() {
     );
 }
 
+// #[tokio::test]
+// async fn test_tx_max_computation() -> SuiResult {
+//     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+//     let gas_object_id = ObjectID::random();
+//     let authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
+//
+//     let response = build_and_try_publish_test_package(
+//         &authority_state,
+//         &sender,
+//         &sender_key,
+//         &gas_object_id,
+//         "move_random",
+//         *MAX_GAS_BUDGET,
+//         /* with_unpublished_deps */ false,
+//     )
+//     .await;
+//     let effects = response.1.into_data();
+//     assert!(effects.status().is_ok());
+//     let package = effects
+//         .created()
+//         .iter()
+//         .find(|(_, owner)| matches!(owner, Owner::Immutable))
+//         .unwrap()
+//         .0
+//         .0;
+//
+//     let gas_object = authority_state.get_object(&gas_object_id).await.unwrap().unwrap();
+//     let initial_value = GasCoin::try_from(&gas_object)?.value();
+//     let gas_object_ref = gas_object.compute_object_reference();
+//     let module = ident_str!("move_random").to_owned();
+//     let function = ident_str!("loopy").to_owned();
+//     let args = vec![];
+//     let budget = 1_500_000_000;
+//     let data = TransactionData::new_move_call(
+//         sender,
+//         package,
+//         module,
+//         function,
+//         vec![],
+//         gas_object_ref,
+//         args,
+//         budget,
+//         300,
+//     )
+//     .unwrap();
+//
+//     let tx = to_sender_signed_transaction(data, &sender_key);
+//     let effects = send_and_confirm_transaction(&authority_state, tx)
+//         .await
+//         .unwrap()
+//         .1
+//         .into_data();
+//     assert_eq!(
+//         effects.status().clone().unwrap_err().0,
+//         ExecutionFailureStatus::InsufficientGas
+//     );
+//     let gas_ref = effects.gas_object().0;
+//     let gas_object = authority_state.get_object(&gas_ref.0).await.unwrap().unwrap();
+//     let final_value = GasCoin::try_from(&gas_object)?.value();
+//     let summary = effects.gas_cost_summary();
+//     assert!(summary.computation_cost == budget);
+//     assert!(initial_value - budget == final_value);
+//     Ok(())
+// }
+
 #[tokio::test]
 async fn test_tx_gas_balance_less_than_budget() {
     // This test creates a transaction that uses a gas object whose balance
