@@ -10,6 +10,7 @@ import { genTableDataFromTxData } from './TxCardUtils';
 import { Banner } from '~/ui/Banner';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { TableCard } from '~/ui/TableCard';
+import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
 interface Props {
     address: string;
@@ -59,7 +60,7 @@ export function TransactionsForAddress({ address, type }: Props) {
 
     if (isLoading) {
         return (
-            <div>
+            <div className="flex w-full justify-center">
                 <LoadingSpinner />
             </div>
         );
@@ -78,7 +79,19 @@ export function TransactionsForAddress({ address, type }: Props) {
 
     return (
         <div data-testid="tx">
-            <TableCard data={tableData.data} columns={tableData.columns} />
+            <TabGroup size="lg">
+                <TabList>
+                    <Tab>Transaction Blocks</Tab>
+                </TabList>
+                <TabPanels>
+                    <TabPanel>
+                        <TableCard
+                            data={tableData.data}
+                            columns={tableData.columns}
+                        />
+                    </TabPanel>
+                </TabPanels>
+            </TabGroup>
         </div>
     );
 }

@@ -14,14 +14,9 @@ import {
 import { useState, useEffect, useCallback } from 'react';
 
 import DisplayBox from '../../../components/displaybox/DisplayBox';
-import {
-    parseImageURL,
-    extractName,
-} from '../../../utils/objectUtils';
+import { parseImageURL, extractName } from '../../../utils/objectUtils';
 import { trimStdLibPrefix, genFileTypeMsg } from '../../../utils/stringUtils';
 import { LinkOrTextDescriptionItem } from '../LinkOrTextDescriptionItem';
-
-import styles from './ObjectView.module.css';
 
 import { DynamicFieldsCard } from '~/components/ownedobjects/views/DynamicFieldsCard';
 import { ObjectFieldsCard } from '~/components/ownedobjects/views/ObjectFieldsCard';
@@ -222,14 +217,9 @@ export function TokenView({ data }: { data: SuiObjectResponse }) {
                     </TabPanel>
                 </TabPanels>
             </TabGroup>
-            
             <ObjectFieldsCard id={objectId} />
             <DynamicFieldsCard id={objectId} />
-
-            <div>
-                <h2 className={styles.header}>Transaction Blocks</h2>
-                <TransactionsForAddress address={objectId} type="object" />
-            </div>
+            <TransactionsForAddress address={objectId} type="object" />
         </div>
     );
 }
