@@ -50,7 +50,7 @@ function MyTokens() {
                         {balance.map(({ coinType, totalBalance }) => (
                             <CoinBalance
                                 type={coinType}
-                                balance={totalBalance}
+                                balance={BigInt(totalBalance)}
                                 key={coinType}
                             />
                         ))}
@@ -114,7 +114,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                     {!coinType && <AccountSelector />}
                     <div className="mt-1.5">
                         <CoinBalance
-                            balance={tokenBalance}
+                            balance={BigInt(tokenBalance)}
                             type={activeCoinType}
                             mode="standalone"
                         />
