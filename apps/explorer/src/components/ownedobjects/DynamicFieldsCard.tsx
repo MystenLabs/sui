@@ -133,9 +133,9 @@ export function DynamicFieldsCard({ id }: { id: string }) {
         );
     }
 
+    // show the dynamic fields tab if there are pages and the first page has data
     const hasPages = !!data?.pages?.[0].data.length;
 
-    // show the dynamic fields tab if there are pages and the first page has data
     return hasPages ? (
         <div className="mt-10">
             <TabGroup size="lg">
