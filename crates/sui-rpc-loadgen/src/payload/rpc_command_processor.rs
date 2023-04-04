@@ -31,8 +31,8 @@ use sui_types::messages::{ExecuteTransactionRequestType, Transaction, Transactio
 use crate::payload::checkpoint_utils::get_latest_checkpoint_stats;
 use crate::payload::validation::chunk_entities;
 use crate::payload::{
-    Command, CommandData, DryRun, GetAllBalances, GetCheckpoints, Payload, ProcessPayload,
-    Processor, QueryTransactionBlocks, SignerInfo,
+    Command, CommandData, DryRun, GetAllBalances, GetCheckpoints, GetObject, MultiGetObjects,
+    Payload, ProcessPayload, Processor, QueryTransactionBlocks, SignerInfo,
 };
 
 pub(crate) const DEFAULT_GAS_BUDGET: u64 = 500_000_000;
@@ -81,6 +81,7 @@ impl RpcCommandProcessor {
             CommandData::PaySui(ref v) => self.process(v, signer_info).await,
             CommandData::QueryTransactionBlocks(ref v) => self.process(v, signer_info).await,
             CommandData::MultiGetObjects(ref v) => self.process(v, signer_info).await,
+            CommandData::GetObject(ref v) => self.process(v, signer_info).await,
             CommandData::GetAllBalances(ref v) => self.process(v, signer_info).await,
             CommandData::GetReferenceGasPrice(ref v) => self.process(v, signer_info).await,
         }
@@ -271,6 +272,20 @@ impl Processor for RpcCommandProcessor {
                     divide_get_all_balances_tasks(data, config.num_threads).await
                 }
             }
+            CommandData::MultiGetObjects(data) => {
+                if !config.divide_tasks {
+                    vec![config.command.clone(); config.num_threads]
+                } else {
+                    divide_multi_get_objects_tasks(data, config.num_threads).await
+                }
+            }
+            CommandData::GetObject(data) => {
+                if !config.divide_tasks {
+                    vec![config.command.clone(); config.num_threads]
+                } else {
+                    divide_get_object_tasks(data, config.num_threads).await
+                }
+            }
             _ => vec![config.command.clone(); config.num_threads],
         };
 
@@ -446,16 +461,45 @@ async fn divide_query_transaction_blocks_tasks(
         .collect()
 }
 
-async fn divide_get_all_balances_tasks(data: &GetAllBalances, num_chunks: usize) -> Vec<Command> {
-    let chunk_size = if data.addresses.len() < num_chunks {
+async fn divide_get_all_balances_tasks(data: &GetAllBalances, num_threads: usize) -> Vec<Command> {
+    let per_thread_size = if data.addresses.len() < num_threads {
         1
     } else {
-        data.addresses.len() as u64 / num_chunks as u64
+        data.addresses.len() / num_threads
     };
-    let chunked = chunk_entities(data.addresses.as_slice(), Some(chunk_size as usize));
+
+    let chunked = chunk_entities(data.addresses.as_slice(), Some(per_thread_size));
     chunked
         .into_iter()
-        .map(Command::new_get_all_balances)
+        .map(|chunk| Command::new_get_all_balances(chunk, data.chunk_size))
+        .collect()
+}
+
+// TODO: probs can do generic divide tasks
+async fn divide_multi_get_objects_tasks(data: &MultiGetObjects, num_chunks: usize) -> Vec<Command> {
+    let chunk_size = if data.object_ids.len() < num_chunks {
+        1
+    } else {
+        data.object_ids.len() as u64 / num_chunks as u64
+    };
+    let chunked = chunk_entities(data.object_ids.as_slice(), Some(chunk_size as usize));
+    chunked
+        .into_iter()
+        .map(Command::new_multi_get_objects)
+        .collect()
+}
+
+async fn divide_get_object_tasks(data: &GetObject, num_threads: usize) -> Vec<Command> {
+    let per_thread_size = if data.object_ids.len() < num_threads {
+        1
+    } else {
+        data.object_ids.len() / num_threads
+    };
+
+    let chunked = chunk_entities(data.object_ids.as_slice(), Some(per_thread_size));
+    chunked
+        .into_iter()
+        .map(|chunk| Command::new_get_object(chunk, data.chunk_size))
         .collect()
 }
 
