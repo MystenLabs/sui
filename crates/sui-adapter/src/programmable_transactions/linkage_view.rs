@@ -183,11 +183,11 @@ impl<'state, S: StorageView> LinkageView<'state, S> {
         self.state_view
     }
 
-    pub fn original_package_id(&self) -> AccountAddress {
+    pub fn original_package_id(&self) -> Option<AccountAddress> {
         if let LinkageInfo::Set(linkage) = &self.linkage_info {
-            linkage.runtime_id
+            Some(linkage.runtime_id)
         } else {
-            AccountAddress::ZERO
+            None
         }
     }
 

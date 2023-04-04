@@ -217,7 +217,7 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
         let resolver = self.session.get_resolver();
         if resolver.has_linkage(package_id) {
             // Setting same context again, can skip.
-            return Ok(resolver.original_package_id());
+            return Ok(resolver.original_package_id().unwrap_or(*package_id));
         }
 
         let package =
