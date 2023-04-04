@@ -58,7 +58,7 @@ cargo run --bin sui-rpc-loadgen -- --urls "http://127.0.0.1:9000" "http://127.0.
 
 ### Get Reference Gas Price
 ```bash
-cargo run --bin sui-rpc-loadgen -- --urls "http://127.0.0.1:9000" "http://127.0.0.1:9000" --num-threads 4 get_reference_gas_price --num-chunks-per-thread 10
+cargo run --bin sui-rpc-loadgen -- --urls "http://127.0.0.1:9000" "http://127.0.0.1:9000" --num-threads 4 get-reference-gas-price --num-chunks-per-thread 10
 ```
 
 # Useful commands
