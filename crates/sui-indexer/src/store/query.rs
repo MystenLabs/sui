@@ -79,7 +79,7 @@ LIMIT {limit};"
         };
 
         format!(
-            "SELECT {columns} 
+            "SELECT {columns}
 FROM objects o WHERE o.object_status NOT IN ('deleted', 'wrapped', 'unwrapped_then_deleted'){cursor}{inner_clauses}
 LIMIT {limit};"
         )
@@ -118,13 +118,29 @@ fn to_clauses(filter: &SuiObjectDataFilter) -> Option<String> {
                 Some(format!("({})", sub_filters.join(" OR ")))
             }
         }
-        SuiObjectDataFilter::Package(p) => Some(format!("o.object_type LIKE '{}'", p.to_hex_literal())),
+        SuiObjectDataFilter::MatchNone(sub_filters) => {
+            let sub_filters = sub_filters.iter().flat_map(to_clauses).collect::<Vec<_>>();
+            if sub_filters.is_empty() {
+                None
+            } else {
+                Some(format!("NOT ({})", sub_filters.join(" OR ")))
+            }
+        }
+        SuiObjectDataFilter::Package(p) => Some(format!("o.object_type LIKE '{}::%'", p.to_hex_literal())),
         SuiObjectDataFilter::MoveModule { package, module } => Some(format!(
-            "o.object_type LIKE '{}::{}'",
+            "o.object_type LIKE '{}::{}::%'",
             package.to_hex_literal(),
             module
         )),
-        SuiObjectDataFilter::StructType(s) => Some(format!("o.object_type = '{s}'")),
+        SuiObjectDataFilter::StructType(s) => {
+            // If people do not provide type_params, we will match all type_params
+            // e.g. `0x2::coin::Coin` can match `0x2::coin::Coin<0x2::sui::SUI>`
+            if s.type_params.is_empty() {
+                Some(format!("o.object_type LIKE '{s}%'"))
+            } else {
+                Some(format!("o.object_type = '{s}'"))
+            }
+        },
         SuiObjectDataFilter::AddressOwner(a) => {
             Some(format!("((o.owner_type = 'address_owner' AND o.owner_address = '{a}') OR (o.old_owner_type = 'address_owner' AND o.old_owner_address = '{a}'))"))
         }
@@ -152,6 +168,17 @@ fn to_clauses(filter: &SuiObjectDataFilter) -> Option<String> {
 
 fn to_outer_clauses(filter: &SuiObjectDataFilter) -> Option<String> {
     match filter {
+        SuiObjectDataFilter::MatchNone(sub_filters) => {
+            let sub_filters = sub_filters
+                .iter()
+                .flat_map(to_outer_clauses)
+                .collect::<Vec<_>>();
+            if sub_filters.is_empty() {
+                None
+            } else {
+                Some(format!("NOT ({})", sub_filters.join(" OR ")))
+            }
+        }
         SuiObjectDataFilter::MatchAll(sub_filters) => {
             let sub_filters = sub_filters
                 .iter()
@@ -231,7 +258,7 @@ LIMIT 100;";
 FROM (SELECT DISTINCT ON (o.object_id) *
       FROM objects_history o
       WHERE o.checkpoint <= $1
-      AND o.object_type LIKE '0x485d947e293f07e659127dc5196146b49cdf2efbe4b233f4d293fc56aff2aa17::test_module'
+      AND o.object_type LIKE '0x485d947e293f07e659127dc5196146b49cdf2efbe4b233f4d293fc56aff2aa17::test_module::%'
       ORDER BY o.object_id, version, o.checkpoint DESC) AS t1
 WHERE t1.object_status NOT IN ('deleted', 'wrapped', 'unwrapped_then_deleted')
 LIMIT 100;";
@@ -290,7 +317,7 @@ LIMIT 100;";
 FROM (SELECT DISTINCT ON (o.object_id) *
       FROM objects_history o
       WHERE o.checkpoint <= $1
-      AND (o.object_id = '0xef9fb75a7b3d4cb5551ef0b08c83528b94d5f5cd8be28b1d08a87dbbf3731738' AND o.object_type = '0x2::test::Test')
+      AND (o.object_id = '0xef9fb75a7b3d4cb5551ef0b08c83528b94d5f5cd8be28b1d08a87dbbf3731738' AND o.object_type LIKE '0x2::test::Test%')
       ORDER BY o.object_id, version, o.checkpoint DESC) AS t1
 WHERE t1.object_status NOT IN ('deleted', 'wrapped', 'unwrapped_then_deleted')
 LIMIT 100;";

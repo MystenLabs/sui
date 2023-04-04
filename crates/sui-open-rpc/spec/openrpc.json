@@ -6229,6 +6229,21 @@
             "additionalProperties": false
           },
           {
+            "type": "object",
+            "required": [
+              "MatchNone"
+            ],
+            "properties": {
+              "MatchNone": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SuiObjectDataFilter"
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
             "description": "Query by type a specified Package.",
             "type": "object",
             "required": [
