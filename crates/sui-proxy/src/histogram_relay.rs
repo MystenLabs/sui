@@ -100,7 +100,6 @@ impl HistogramRelay {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs() as i64;
-        let pressure = data.len();
         let mut queue = self
             .0
             .lock()
@@ -113,10 +112,13 @@ impl HistogramRelay {
             RELAY_PRESSURE.with_label_values(&["overflow"]).inc();
             false
         }); // drain anything 5 mins or older
-        queue.push_back(Wrapper(timestamp_secs, data));
+
+        // filter out our histograms from normal metrics
+        let data: Vec<MetricFamily> = extract_histograms(data).collect();
         RELAY_PRESSURE
             .with_label_values(&["submitted"])
-            .inc_by(pressure as f64);
+            .inc_by(data.len() as f64);
+        queue.push_back(Wrapper(timestamp_secs, data));
         timer.observe_duration();
     }
     pub fn export(&self) -> Result<String> {
@@ -129,18 +131,16 @@ impl HistogramRelay {
             .expect("couldn't get mut lock on HistogramRelay");
 
         let data: Vec<Wrapper> = queue.drain(..).collect();
-        info!(
-            "histogram queue drained {} items; remaining count {}",
-            data.len(),
-            queue.len()
-        );
-
         let mut histograms = vec![];
         for mf in data {
             histograms.extend(mf.1);
         }
+        info!(
+            "histogram queue drained {} items; remaining count {}",
+            histograms.len(),
+            queue.len()
+        );
 
-        let histograms: Vec<MetricFamily> = extract_histograms(histograms).collect();
         let encoder = prometheus::TextEncoder::new();
         let string = match encoder.encode_to_string(&histograms) {
             Ok(s) => s,
