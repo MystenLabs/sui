@@ -103,6 +103,11 @@ pub struct AuthorityPerpetualTables {
     /// expensive checks are enabled. We cannot use 10B today because in tests we often
     /// inject extra gas objects into genesis.
     pub(crate) expected_network_sui_amount: DBMap<(), u64>,
+
+    /// Expected imbalance between storage fund balance and the sum of storage rebate of all live objects.
+    /// This could be non-zero due to bugs in earlier protocol versions.
+    /// This number is the result of storage_fund_balance - sum(storage_rebate).
+    pub(crate) expected_storage_fund_imbalance: DBMap<(), i64>,
 }
 
 impl AuthorityPerpetualTables {
