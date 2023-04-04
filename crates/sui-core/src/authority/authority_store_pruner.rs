@@ -170,6 +170,7 @@ impl AuthorityStorePruner {
 
         #[allow(clippy::explicit_counter_loop)]
         for (_, checkpoint) in iter {
+            checkpoint_number = *checkpoint.sequence_number();
             // Skipping because  checkpoint's epoch or checkpoint number is too new.
             // We have to respect the highest executed checkpoint watermark because there might be
             // parts of the system that still require access to old object versions (i.e. state accumulator)
@@ -178,7 +179,6 @@ impl AuthorityStorePruner {
             {
                 break;
             }
-            checkpoint_number = *checkpoint.sequence_number();
             checkpoints_in_batch += 1;
             if network_total_transactions == checkpoint.network_total_transactions {
                 continue;
