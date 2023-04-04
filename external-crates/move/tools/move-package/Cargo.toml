@@ -45,7 +45,6 @@ hex = { version = "0.4.3", optional = true }
 reqwest = { version = "0.11.1", default-features = false, features = ["rustls-tls", "blocking", "json"] }
 
 whoami = { version = "1.2.1" }
-workspace-hack = { version = "0.1", path = "../../../../crates/workspace-hack" }
 
 [dev-dependencies]
 datatest-stable = "0.1.1"

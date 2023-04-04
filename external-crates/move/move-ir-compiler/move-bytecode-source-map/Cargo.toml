@@ -17,7 +17,6 @@ move-command-line-common = { path = "../../move-command-line-common" }
 bcs.workspace = true
 
 serde = { version = "1.0.124", default-features = false }
-workspace-hack = { version = "0.1", path = "../../../../crates/workspace-hack" }
 
 [features]
 default = []

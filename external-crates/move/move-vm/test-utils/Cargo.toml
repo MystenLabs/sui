@@ -20,7 +20,6 @@ move-binary-format = { path = "../../move-binary-format" }
 move-core-types = {path = "../../move-core/types" }
 move-vm-types = { path = "../types" }
 move-table-extension = { path = "../../extensions/move-table-extension", optional = true }
-workspace-hack = { version = "0.1", path = "../../../../crates/workspace-hack" }
 
 [features]
 default = [ ]

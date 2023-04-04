@@ -24,4 +24,3 @@ name = "concrete_check_testsuite"
 harness = false
 
 [dependencies]
-workspace-hack = { version = "0.1", path = "../../../../crates/workspace-hack" }

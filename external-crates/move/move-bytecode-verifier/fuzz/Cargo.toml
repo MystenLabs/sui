@@ -15,7 +15,6 @@ arbitrary = "1.1.7"
 move-bytecode-verifier = { path = "../" }
 move-core-types = { path = "../../move-core/types", features = ["fuzzing"] }
 move-binary-format = { path = "../../move-binary-format", features = ["fuzzing"] }
-workspace-hack = { version = "0.1", path = "../../../../crates/workspace-hack" }
 
 # Prevent this from interfering with workspaces
 #[workspace]

@@ -24,4 +24,3 @@ fuzzing = ["move-binary-format/fuzzing"]
 address32 = ["move-core-types/address32"]
 
 [dependencies]
-workspace-hack = { version = "0.1", path = "../../../../crates/workspace-hack" }

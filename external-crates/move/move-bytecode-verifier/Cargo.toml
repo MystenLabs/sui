@@ -17,7 +17,6 @@ fail = "0.4.0"
 move-borrow-graph = { path = "../move-borrow-graph" }
 move-binary-format = { path = "../move-binary-format" }
 move-core-types = { path = "../move-core/types" }
-workspace-hack = { version = "0.1", path = "../../../crates/workspace-hack" }
 
 [dev-dependencies]
 hex-literal = "0.3.4"

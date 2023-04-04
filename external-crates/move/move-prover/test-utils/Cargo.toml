@@ -11,4 +11,3 @@ prettydiff = "0.4.0"
 anyhow = "1.0.52"
 regex = "1.5.5"
 move-command-line-common = { path = "../../move-command-line-common" }
-workspace-hack = { version = "0.1", path = "../../../../crates/workspace-hack" }

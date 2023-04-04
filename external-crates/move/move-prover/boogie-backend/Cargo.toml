@@ -29,4 +29,3 @@ tera = "1.16.0"
 tokio = { version = "1.18.2", features = ["full"] }
 codespan = "0.11.1"
 codespan-reporting = "0.11.1"
-workspace-hack = { version = "0.1", path = "../../../../crates/workspace-hack" }

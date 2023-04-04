@@ -43,7 +43,6 @@ toml = "0.5.8"
 clap = { version = "3", features = ["derive", "env"] }
 evm = "0.33.1"
 primitive-types = "0.10.1"
-workspace-hack = { version = "0.1", path = "../../../../crates/workspace-hack" }
 
 [dev-dependencies]
 datatest-stable = "0.1.1"

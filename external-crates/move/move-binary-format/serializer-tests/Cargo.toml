@@ -18,4 +18,3 @@ move-binary-format = { path = "../", features = ["fuzzing"] }
 fuzzing = ["move-binary-format/fuzzing"]
 
 [dependencies]
-workspace-hack = { version = "0.1", path = "../../../../crates/workspace-hack" }

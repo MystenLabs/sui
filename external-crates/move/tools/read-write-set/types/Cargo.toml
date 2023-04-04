@@ -14,4 +14,3 @@ anyhow = "1.0.52"
 move-binary-format = { path = "../../../move-binary-format", version = "0.0.3" }
 move-core-types = { path = "../../../move-core/types", version = "0.0.4" }
 serde = { version = "1.0.124", default-features = false }
-workspace-hack = { version = "0.1", path = "../../../../../crates/workspace-hack" }
