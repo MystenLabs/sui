@@ -1081,7 +1081,7 @@ impl SuiNode {
             )
             .await
             .expect("Reconfigure authority state cannot fail");
-        info!(next_epoch, "Validator State has been reconfigured");
+        info!(next_epoch, "Node State has been reconfigured");
         assert_eq!(next_epoch, new_epoch_store.epoch());
         new_epoch_store
     }
