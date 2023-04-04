@@ -16,7 +16,9 @@ use sui_config::NetworkConfig;
 use sui_network::{
     default_mysten_network_config, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC,
 };
-use sui_types::crypto::{AuthorityPublicKeyBytes, AuthoritySignInfo};
+use sui_types::crypto::{
+    AuthorityPublicKeyBytes, AuthoritySignInfo, ConciseAuthorityPublicKeyBytesRef,
+};
 use sui_types::error::UserInputError;
 use sui_types::fp_ensure;
 use sui_types::message_envelope::Message;
@@ -98,6 +100,7 @@ pub struct AuthAggMetrics {
     pub process_cert_errors: IntCounterVec,
     pub total_client_double_spend_attempts_detected: IntCounter,
     pub total_aggregated_err: IntCounterVec,
+    pub total_rpc_err: IntCounterVec,
 }
 
 impl AuthAggMetrics {
@@ -131,8 +134,15 @@ impl AuthAggMetrics {
             .unwrap(),
             total_aggregated_err: register_int_counter_vec_with_registry!(
                 "total_aggregated_err",
-                "Total number of errors returned from validators per transaction, grouped by error type",
+                "Total number of errors returned from validators, grouped by error type",
                 &["error", "tx_recoverable"],
+                registry,
+            )
+            .unwrap(),
+            total_rpc_err: register_int_counter_vec_with_registry!(
+                "total_rpc_err",
+                "Total number of rpc errors returned from validators, grouped by validator short name and RPC error message",
+                &["name", "error_message"],
                 registry,
             )
             .unwrap(),
@@ -1012,11 +1022,13 @@ where
                                 }
                             },
                             Err(err) => {
-                                debug!(?tx_digest, name=?name.concise(), weight, "Error processing transaction from validator: {:?}", err);
+                                let concise_name = name.concise();
+                                debug!(?tx_digest, name=?concise_name, weight, "Error processing transaction from validator: {:?}", err);
                                 self.metrics
                                     .process_tx_errors
-                                    .with_label_values(&[&name.concise().to_string(), err.as_ref()])
+                                    .with_label_values(&[&concise_name.to_string(), err.as_ref()])
                                     .inc();
+                                self.record_rpc_error_maybe(concise_name, &err);
                                 let (retryable, categorized) = err.is_retryable();
                                 if !categorized {
                                     // TODO: Should minimize possible uncategorized errors here
@@ -1068,6 +1080,15 @@ where
                 let state = self.record_non_quorum_effects_maybe(tx_digest, state);
                 Err(self.handle_process_transaction_error(tx_digest, state))
             }
+        }
+    }
+
+    fn record_rpc_error_maybe(&self, name: ConciseAuthorityPublicKeyBytesRef, error: &SuiError) {
+        if let SuiError::RpcError(message, _code) = error {
+            self.metrics
+                .total_rpc_err
+                .with_label_values(&[&name.to_string(), message.as_str()])
+                .inc();
         }
     }
 
@@ -1417,6 +1438,7 @@ where
                                 .process_cert_errors
                                 .with_label_values(&[&concise_name.to_string(), err.as_ref()])
                                 .inc();
+                            self.record_rpc_error_maybe(concise_name, &err);
                             let (retryable, categorized) = err.is_retryable();
                             if !categorized {
                                 // TODO: Should minimize possible uncategorized errors here
