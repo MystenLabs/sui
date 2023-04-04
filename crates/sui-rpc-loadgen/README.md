@@ -51,6 +51,11 @@ cargo run --bin sui-rpc-loadgen -- --urls "http://127.0.0.1:9000" "http://127.0.
 cargo run --bin sui-rpc-loadgen -- --urls "http://127.0.0.1:9000" "http://127.0.0.1:9000" --num-threads 4 multi-get-objects
 ```
 
+### Get All Balances
+```bash
+cargo run --bin sui-rpc-loadgen -- --urls "http://127.0.0.1:9000" "http://127.0.0.1:9000" --num-threads 4 get-all-balances
+```
+
 # Useful commands
 ```bash
 cat sui-rpc-loadgen.b844f547-d354-4871-b958-1ea3fe23a0a8.log.2023-03-23 | awk '/Finished processing/{print $7}' | sort -n | uniq | awk 'BEGIN{last=0}{for(i=last+1;i<$1;i++) print i; last=$1} END{print last}' | tee missing_numbers.txt && wc -l missing_numbers.txt

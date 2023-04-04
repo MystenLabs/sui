@@ -29,12 +29,11 @@ use sui_types::crypto::{get_key_pair, AccountKeyPair, EncodeDecodeBase64, Signat
 use sui_types::messages::{ExecuteTransactionRequestType, Transaction, TransactionData};
 
 use crate::payload::checkpoint_utils::get_latest_checkpoint_stats;
+use crate::payload::validation::chunk_entities;
 use crate::payload::{
-    Command, CommandData, DryRun, GetCheckpoints, Payload, ProcessPayload, Processor, SignerInfo,
+    Command, CommandData, DryRun, GetAllBalances, GetCheckpoints, Payload, ProcessPayload,
+    Processor, QueryTransactionBlocks, SignerInfo,
 };
-
-use super::validation::chunk_entities;
-use super::QueryTransactionBlocks;
 
 pub(crate) const DEFAULT_GAS_BUDGET: u64 = 10_000;
 pub(crate) const DEFAULT_LARGE_GAS_BUDGET: u64 = 100_000_000;
@@ -82,6 +81,7 @@ impl RpcCommandProcessor {
             CommandData::PaySui(ref v) => self.process(v, signer_info).await,
             CommandData::QueryTransactionBlocks(ref v) => self.process(v, signer_info).await,
             CommandData::MultiGetObjects(ref v) => self.process(v, signer_info).await,
+            CommandData::GetAllBalances(ref v) => self.process(v, signer_info).await,
         }
     }
 
@@ -255,6 +255,13 @@ impl Processor for RpcCommandProcessor {
                     divide_query_transaction_blocks_tasks(data, config.num_threads).await
                 }
             }
+            CommandData::GetAllBalances(data) => {
+                if !config.divide_tasks {
+                    vec![config.command.clone(); config.num_threads]
+                } else {
+                    divide_get_all_balances_tasks(data, config.num_threads).await
+                }
+            }
             _ => vec![config.command.clone(); config.num_threads],
         };
 
@@ -421,6 +428,19 @@ async fn divide_query_transaction_blocks_tasks(
     chunked
         .into_iter()
         .map(|chunk| Command::new_query_transaction_blocks(data.address_type.clone(), chunk))
+        .collect()
+}
+
+async fn divide_get_all_balances_tasks(data: &GetAllBalances, num_chunks: usize) -> Vec<Command> {
+    let chunk_size = if data.addresses.len() < num_chunks {
+        1
+    } else {
+        data.addresses.len() as u64 / num_chunks as u64
+    };
+    let chunked = chunk_entities(data.addresses.as_slice(), Some(chunk_size as usize));
+    chunked
+        .into_iter()
+        .map(Command::new_get_all_balances)
         .collect()
 }
 
