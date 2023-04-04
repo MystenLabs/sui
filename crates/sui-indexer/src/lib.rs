@@ -98,6 +98,11 @@ pub struct IndexerConfig {
     pub migrated_methods: Vec<String>,
     #[clap(long)]
     pub reset_db: bool,
+    // NOTE: experimental only, do not use in production.
+    #[clap(long)]
+    pub download_only: bool,
+    #[clap(long)]
+    pub skip_db_commit: bool,
 }
 
 impl IndexerConfig {
@@ -130,6 +135,8 @@ impl Default for IndexerConfig {
             rpc_server_port: 9000,
             migrated_methods: vec![],
             reset_db: false,
+            download_only: false,
+            skip_db_commit: false,
         }
     }
 }
@@ -156,8 +163,13 @@ impl Indexer {
         backoff::future::retry(ExponentialBackoff::default(), || async {
             let event_handler_clone = event_handler.clone();
             let http_client = get_http_client(config.rpc_client_url.as_str())?;
-            let cp =
-                CheckpointHandler::new(store.clone(), http_client, event_handler_clone, registry);
+            let cp = CheckpointHandler::new(
+                store.clone(),
+                http_client,
+                event_handler_clone,
+                registry,
+                config,
+            );
             cp.spawn()
                 .await
                 .expect("Indexer main should not run into errors.");
