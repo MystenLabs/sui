@@ -97,6 +97,12 @@ pub struct AuthorityPerpetualTables {
 
     /// A singleton table that stores latest pruned checkpoint. Used to keep objects pruner progress
     pub(crate) pruned_checkpoint: DBMap<(), CheckpointSequenceNumber>,
+
+    /// Expected total amount of SUI in the network. This is expected to remain constant
+    /// throughout the lifetime of the network. We check it at the end of each epoch if
+    /// expensive checks are enabled. We cannot use 10B today because in tests we often
+    /// inject extra gas objects into genesis.
+    pub(crate) expected_network_sui_amount: DBMap<(), u64>,
 }
 
 impl AuthorityPerpetualTables {

@@ -893,7 +893,11 @@ async fn test_staking_multiple_coins() -> Result<(), anyhow::Error> {
         .execute_transaction_block(
             tx_bytes,
             signatures,
-            Some(SuiTransactionBlockResponseOptions::new().with_balance_changes()),
+            Some(
+                SuiTransactionBlockResponseOptions::new()
+                    .with_balance_changes()
+                    .with_input(),
+            ),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;
@@ -902,6 +906,12 @@ async fn test_staking_multiple_coins() -> Result<(), anyhow::Error> {
     assert_eq!(
         dryrun_response.balance_changes,
         executed_response.balance_changes.unwrap()
+    );
+
+    // Check that inputs for dry run match the executed transaction
+    assert_eq!(
+        dryrun_response.input,
+        executed_response.transaction.unwrap().data
     );
 
     // Check DelegatedStake object
