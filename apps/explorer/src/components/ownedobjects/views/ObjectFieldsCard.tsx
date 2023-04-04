@@ -24,8 +24,6 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
     const { data, isLoading, isError } = useGetObject(id);
     const [query, setQuery] = useState('');
     const [activeFieldName, setActiveFieldName] = useState('');
-    const fieldsData = getObjectFields(data!);
-    const fieldsNames = Object.entries(fieldsData || {});
 
     if (isLoading) {
         return (
@@ -38,6 +36,8 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
         return null;
     }
 
+    const fieldsData = getObjectFields(data!);
+    const fieldsNames = Object.entries(fieldsData || {});
     const filteredFieldNames =
         query === ''
             ? fieldsNames
