@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { CoinFormat, useAddressToSuiNS } from '@mysten/core';
+import { CoinFormat } from '@mysten/core';
 import { CheckFill16 } from '@mysten/icons';
 
 import { CoinBalance } from './CoinBalance';
@@ -35,13 +35,11 @@ type SenderTransactionAddressProps = {
 export function SenderTransactionAddress({
     sender,
 }: SenderTransactionAddressProps) {
-    const { data: suins } = useAddressToSuiNS(sender);
-
     return (
         <TransactionAddressSection title="Sender">
             <TransactionAddress
                 icon={<CheckFill16 className="text-steel" />}
-                address={suins || sender}
+                address={sender}
             />
         </TransactionAddressSection>
     );

@@ -108,6 +108,18 @@ const getResultsForAddress = async (rpc: JsonRpcProvider, query: string) => {
     };
 };
 
+// This should align with whatever names we want to resolve, and is just to optimize not making requests when
+// we know the input isn't a resolvable name.
+const SUI_NS_DOMAINS = ['.sui'];
+const getResultsForSuiNS = async (rpc: JsonRpcProvider, query: string) => {
+    if (!SUI_NS_DOMAINS.some((domain) => query.endsWith(domain))) return null;
+
+    return {
+        label: 'Domains',
+        results: [{ id: query, label: query, type: 'address' }],
+    };
+};
+
 export function useSearch(query: string) {
     const rpc = useRpcClient();
 
@@ -120,6 +132,7 @@ export function useSearch(query: string) {
                     getResultsForCheckpoint(rpc, query),
                     getResultsForAddress(rpc, query),
                     getResultsForObject(rpc, query),
+                    getResultsForSuiNS(rpc, query),
                 ])
             ).filter(
                 (r) => r.status === 'fulfilled' && r.value

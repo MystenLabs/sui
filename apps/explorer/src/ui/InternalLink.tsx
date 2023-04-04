@@ -38,8 +38,7 @@ export const CheckpointLink = createInternalLink(
 );
 export const CheckpointSequenceLink = createInternalLink(
     'checkpoint',
-    'sequence',
-    (sequence: string) => sequence
+    'sequence'
 );
 export const AddressLink = createInternalLink(
     'address',

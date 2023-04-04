@@ -7,7 +7,7 @@ export * from './hooks/useFormatCoin';
 export * from './hooks/useTimeAgo';
 export * from './hooks/useGetValidatorsEvents';
 export * from './hooks/useGetRollingAverageApys';
-export * from './hooks/useAddressToSuiNS';
+export * from './hooks/nameService';
 export * from './utils/formatAmount';
 export * from './utils/roundFloat';
 export * from './hooks/useGetTransferAmount';

@@ -11,7 +11,7 @@ type AccountBadgeProps = {
 const TYPE_TO_TEXT: Record<AccountType, string | null> = {
     [AccountType.LEDGER]: 'Ledger',
     [AccountType.IMPORTED]: 'Imported',
-    [AccountType.DERIVED]: 'Derived',
+    [AccountType.DERIVED]: null,
 };
 
 export function AccountBadge({ accountType }: AccountBadgeProps) {

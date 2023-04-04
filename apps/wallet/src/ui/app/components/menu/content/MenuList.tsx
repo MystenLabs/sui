@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
-import { useAddressToSuiNS } from '@mysten/core';
+import { useResolveSuiNSName } from '@mysten/core';
 import {
     Account24,
     ArrowUpRight12,
@@ -39,7 +39,7 @@ function MenuList() {
     const networkUrl = useNextMenuUrl(true, '/network');
     const autoLockUrl = useNextMenuUrl(true, '/auto-lock');
     const address = useActiveAddress();
-    const { data: suins } = useAddressToSuiNS(address);
+    const { data: domainName } = useResolveSuiNSName(address);
     const apiEnv = useAppSelector((state) => state.app.apiEnv);
     const networkName = API_ENV_TO_INFO[apiEnv].name;
     const autoLockInterval = useAutoLockInterval();
@@ -63,7 +63,8 @@ function MenuList() {
                         icon={<Account24 />}
                         title={isMultiAccountsEnabled ? 'Accounts' : 'Account'}
                         subtitle={
-                            suins ?? (address ? formatAddress(address) : '')
+                            domainName ??
+                            (address ? formatAddress(address) : '')
                         }
                         onClick={
                             isMultiAccountsEnabled

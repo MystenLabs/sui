@@ -43,6 +43,7 @@ import {
   SuiEvent,
   PaginatedObjectsResponse,
   SuiObjectResponseQuery,
+  ResolvedNameServiceNames,
 } from '../types';
 import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 import {
@@ -793,6 +794,28 @@ export class JsonRpcProvider {
       'suix_getCurrentEpoch',
       [],
       EpochInfo,
+    );
+  }
+
+  async resolveNameServiceAddress(input: {
+    name: string;
+  }): Promise<SuiAddress> {
+    return await this.client.requestWithType(
+      'suix_resolveNameServiceAddress',
+      [input.name],
+      SuiAddress,
+    );
+  }
+
+  async resolveNameServiceNames(
+    input: {
+      address: string;
+    } & PaginationArguments<ResolvedNameServiceNames['nextCursor']>,
+  ): Promise<ResolvedNameServiceNames> {
+    return await this.client.requestWithType(
+      'suix_resolveNameServiceNames',
+      [input.address],
+      ResolvedNameServiceNames,
     );
   }
 }

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useAddressToSuiNS } from '@mysten/core';
+import { useResolveSuiNSName } from '@mysten/core';
 import { Check12, Copy12 } from '@mysten/icons';
 import { formatAddress } from '@mysten/sui.js';
 
@@ -25,7 +25,7 @@ export function AccountListItem({
     const copy = useCopyToClipboard(address, {
         copySuccessMessage: 'Address Copied',
     });
-    const { data: suins } = useAddressToSuiNS(address);
+    const { data: domainName } = useResolveSuiNSName(address);
 
     return (
         <li>
@@ -43,7 +43,7 @@ export function AccountListItem({
                             truncate
                             mono
                         >
-                            {suins ?? formatAddress(address)}
+                            {domainName ?? formatAddress(address)}
                         </Text>
                     </div>
                     <AccountBadge accountType={type} />
