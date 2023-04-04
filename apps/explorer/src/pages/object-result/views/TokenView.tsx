@@ -10,11 +10,14 @@ import {
     getObjectId,
     getObjectVersion,
     getObjectPreviousTransactionDigest,
+    getObjectFields,
+    getMovePackageContent
 } from '@mysten/sui.js';
 import { useState, useEffect, useCallback } from 'react';
 
 import DisplayBox from '../../../components/displaybox/DisplayBox';
-import { parseImageURL, extractName } from '../../../utils/objectUtils';
+import ModulesWrapper from '../../../components/module/ModulesWrapper';
+import { parseImageURL, checkIsPropertyType, extractName } from '../../../utils/objectUtils';
 import { trimStdLibPrefix, genFileTypeMsg } from '../../../utils/stringUtils';
 import { LinkOrTextDescriptionItem } from '../LinkOrTextDescriptionItem';
 
@@ -38,8 +41,23 @@ export function TokenView({ data }: { data: SuiObjectResponse }) {
 
     const objectId = getObjectId(data);
     const objectType = parseObjectType(data);
+    const contents =  getObjectFields(data) ?? getMovePackageContent(data)!;
 
     const [fileType, setFileType] = useState<undefined | string>(undefined);
+
+    const properties = Object.entries(contents).filter(
+        ([key, value]) => key !== 'name' && checkIsPropertyType(value)
+    );
+
+    const structProperties = Object.entries(contents).filter(
+        ([key, value]) => typeof value == 'object' && key !== 'id'
+    );
+    let structPropertiesDisplay: any[] = [];
+    if (structProperties.length > 0) {
+        structPropertiesDisplay = Object.values(structProperties).map(
+            ([x, y]) => [x, JSON.stringify(y, null, 2)]
+        );
+    }
 
     useEffect(() => {
         const controller = new AbortController();
@@ -220,6 +238,45 @@ export function TokenView({ data }: { data: SuiObjectResponse }) {
                     </TabPanel>
                 </TabPanels>
             </TabGroup>
+
+            {properties.length > 0 && (
+                <div>
+                    <h2 className={styles.header}>Properties</h2>
+                    <table className={styles.properties}>
+                        <tbody>
+                            {properties.map(([key, value], index) => (
+                                <tr key={index}>
+                                    <td>{key}</td>
+                                    <td>
+                                        {/* TODO: Use normalized module to determine this display. */}
+                                        {typeof value === 'string' &&
+                                        (value.startsWith('http://') ||
+                                            value.startsWith('https://')) ? (
+                                            <Link
+                                                href={value}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                            >
+                                                {value}
+                                            </Link>
+                                        ) : (
+                                            value
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+            {structProperties.length > 0 && (
+                <ModulesWrapper
+                    data={{
+                        title: '',
+                        content: structPropertiesDisplay,
+                    }}
+                />
+            )}
 
             <DynamicFieldsCard id={objectId} />
 
