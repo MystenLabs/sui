@@ -440,39 +440,31 @@ impl ConsensusAdapter {
         &self,
         positions: Vec<AuthorityName>,
     ) -> (usize, bool) {
-        if self.authority_is_low_scoring(&self.authority) {
+        let low_scoring_authorities = self.low_scoring_authorities.load().load_full();
+        if low_scoring_authorities.get(&self.authority).is_some() {
             return (positions.len(), true);
         }
-
         let initial_position = get_position_in_list(self.authority, positions.clone());
 
         let filtered_positions = positions
             .into_iter()
             .filter(|authority| {
-                // Filter out any nodes that appear disconnected to us
-                self.authority == *authority
-                    || self
+                self.authority == *authority // Don't filter yourself out!
+                    ||
+                (
+                    self // Filter out any nodes that appear disconnected
                         .connection_monitor_status
                         .check_connection(&self.authority, authority)
                         .unwrap_or(ConnectionStatus::Disconnected)
                         == ConnectionStatus::Connected
-            })
-            .filter(|authority| {
-                // Remove any low-scoring authority in front of us
-                !self.authority_is_low_scoring(authority)
+                    && // Filter out low scoring nodes
+                    low_scoring_authorities.get(authority).is_none()
+                )
             })
             .collect();
 
         let position = get_position_in_list(self.authority, filtered_positions);
         (position, position < initial_position)
-    }
-
-    fn authority_is_low_scoring(&self, authority: &AuthorityName) -> bool {
-        self.low_scoring_authorities
-            .load()
-            .load_full()
-            .get(authority)
-            .is_some()
     }
 
     /// This method blocks until transaction is persisted in local database
