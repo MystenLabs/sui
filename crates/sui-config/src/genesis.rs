@@ -8,7 +8,6 @@ use fastcrypto::encoding::{Base64, Encoding};
 use fastcrypto::hash::HashFunction;
 use fastcrypto::traits::KeyPair;
 use move_binary_format::CompiledModule;
-use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::serde_as;
@@ -1485,6 +1484,7 @@ fn process_package(
     #[cfg(debug_assertions)]
     {
         use std::collections::HashSet;
+        use move_core_types::account_address::AccountAddress;
         let to_be_published_addresses: HashSet<_> = modules
             .iter()
             .map(|module| *module.self_id().address())
