@@ -2970,6 +2970,7 @@ async fn test_authority_persist() {
             store.clone(),
             cache_metrics,
             async_batch_verifier_metrics,
+            &ExpensiveSafetyCheckConfig::default(),
         );
 
         let checkpoint_store_path = dir.join(format!("DB_{:?}", ObjectID::random()));

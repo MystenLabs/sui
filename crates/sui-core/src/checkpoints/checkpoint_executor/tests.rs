@@ -3,6 +3,7 @@
 
 use super::*;
 use fastcrypto::traits::KeyPair;
+use sui_config::node::ExpensiveSafetyCheckConfig;
 use sui_types::gas::GasCostSummary;
 use tempfile::tempdir;
 
@@ -233,7 +234,7 @@ pub async fn test_checkpoint_executor_cross_epoch() {
             EpochStartConfiguration::new_v1(system_state, Default::default()),
             &executor,
             accumulator,
-            true,
+            &ExpensiveSafetyCheckConfig::default(),
         )
         .await
         .unwrap();
