@@ -8,7 +8,7 @@ use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::committee::EpochId;
 use sui_types::digests::{ObjectDigest, TransactionDigest};
 use sui_types::storage::ObjectKey;
-use tracing::{debug, error};
+use tracing::debug;
 use typed_store::Map;
 
 use std::collections::{HashMap, HashSet};
@@ -62,20 +62,11 @@ impl StateAccumulator {
         epoch_store: Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<Accumulator> {
         let _scope = monitored_scope("AccumulateCheckpoint");
+        if let Some(acc) = epoch_store.get_state_hash_for_checkpoint(&checkpoint_seq_num)? {
+            return Ok(acc);
+        }
 
         let acc = self.accumulate_effects(effects);
-
-        if let Some(old_acc) = epoch_store.get_state_hash_for_checkpoint(&checkpoint_seq_num)? {
-            if old_acc != acc {
-                // This should not happen on a non-byzantine Node, as it indicates that the checkpoint
-                // contents are inconsistent. Since checkpoint builder is a callsite here, it could
-                // indicate a proposal that differs from what was finalized in consensus.
-                error!(
-                    "Newly set accumulator for checkpoint {} does not match the already existing one. (Overwriting)",
-                    checkpoint_seq_num,
-                );
-            }
-        }
 
         epoch_store.insert_state_hash_for_checkpoint(&checkpoint_seq_num, &acc)?;
         debug!("Accumulated checkpoint {}", checkpoint_seq_num);
