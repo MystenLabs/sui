@@ -17,7 +17,6 @@ import { useState, useEffect, useCallback } from 'react';
 
 import DisplayBox from '../../../components/displaybox/DisplayBox';
 import ModulesWrapper from '../../../components/module/ModulesWrapper';
-import { DynamicFieldsCard } from '../../../components/ownedObjects/DynamicFieldsCard';
 import {
     parseImageURL,
     checkIsPropertyType,
@@ -28,6 +27,7 @@ import { LinkOrTextDescriptionItem } from '../LinkOrTextDescriptionItem';
 
 import styles from './ObjectView.module.css';
 
+import { DynamicFieldsCard } from '~/components/ownedObjects/views/DynamicFieldsCard';
 import { TransactionsForAddress } from '~/components/transactions/TransactionsForAddress';
 import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
 import { Heading } from '~/ui/Heading';

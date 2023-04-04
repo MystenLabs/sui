@@ -6,8 +6,7 @@ import { getObjectDisplay } from '@mysten/sui.js';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useRef, useCallback, useEffect } from 'react';
 
-import { SyntaxHighlightedCode } from './SyntaxHighlightedCode';
-
+import { SyntaxHighlighter } from '~/components/SyntaxHighlighter';
 import DisplayBox from '~/components/displaybox/DisplayBox';
 import { DisclosureBox } from '~/ui/DisclosureBox';
 import { ObjectLink } from '~/ui/InternalLink';
@@ -171,7 +170,7 @@ export function DynamicFieldsCard({ id }: { id: string }) {
                                             key={result.objectId}
                                         >
                                             <div className="flex flex-col divide-y divide-gray-45">
-                                                <SyntaxHighlightedCode
+                                                <SyntaxHighlighter
                                                     code={JSON.stringify(
                                                         result,
                                                         null,
