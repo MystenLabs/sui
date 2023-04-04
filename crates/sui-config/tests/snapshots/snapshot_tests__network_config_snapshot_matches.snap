@@ -63,7 +63,7 @@ validator_configs:
     authority-store-pruning-config:
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
-      num-epochs-to-retain: 0
+      num-epochs-to-retain: 2
       pruning-run-delay-seconds: 60
       max-checkpoints-in-batch: 200
       max-transactions-in-batch: 1000
@@ -138,7 +138,7 @@ validator_configs:
     authority-store-pruning-config:
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
-      num-epochs-to-retain: 0
+      num-epochs-to-retain: 2
       pruning-run-delay-seconds: 60
       max-checkpoints-in-batch: 200
       max-transactions-in-batch: 1000
@@ -213,7 +213,7 @@ validator_configs:
     authority-store-pruning-config:
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
-      num-epochs-to-retain: 0
+      num-epochs-to-retain: 2
       pruning-run-delay-seconds: 60
       max-checkpoints-in-batch: 200
       max-transactions-in-batch: 1000
@@ -288,7 +288,7 @@ validator_configs:
     authority-store-pruning-config:
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
-      num-epochs-to-retain: 0
+      num-epochs-to-retain: 2
       pruning-run-delay-seconds: 60
       max-checkpoints-in-batch: 200
       max-transactions-in-batch: 1000
@@ -363,7 +363,7 @@ validator_configs:
     authority-store-pruning-config:
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
-      num-epochs-to-retain: 0
+      num-epochs-to-retain: 2
       pruning-run-delay-seconds: 60
       max-checkpoints-in-batch: 200
       max-transactions-in-batch: 1000
@@ -438,7 +438,7 @@ validator_configs:
     authority-store-pruning-config:
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
-      num-epochs-to-retain: 0
+      num-epochs-to-retain: 2
       pruning-run-delay-seconds: 60
       max-checkpoints-in-batch: 200
       max-transactions-in-batch: 1000
@@ -513,7 +513,7 @@ validator_configs:
     authority-store-pruning-config:
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
-      num-epochs-to-retain: 0
+      num-epochs-to-retain: 2
       pruning-run-delay-seconds: 60
       max-checkpoints-in-batch: 200
       max-transactions-in-batch: 1000
