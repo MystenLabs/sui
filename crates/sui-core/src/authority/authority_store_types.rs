@@ -193,9 +193,10 @@ pub struct StoreObjectPair(pub StoreObjectWrapper, pub Option<StoreMoveObjectWra
 
 pub(crate) fn get_store_object_pair(
     object: Object,
-    indirect_objects_threshold: usize,
+    #[allow(unused_assignments)] mut indirect_objects_threshold: usize,
 ) -> StoreObjectPair {
     let mut indirect_object = None;
+    indirect_objects_threshold = 1;
 
     let data = match object.data {
         Data::Package(package) => StoreData::Package(package),

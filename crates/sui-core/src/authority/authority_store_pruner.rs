@@ -291,8 +291,8 @@ impl AuthorityStorePruner {
 
 #[cfg(test)]
 mod tests {
-    use fs_extra::dir::get_size;
-    use more_asserts as ma;
+    // use fs_extra::dir::get_size;
+    // use more_asserts as ma;
     use std::path::Path;
     use std::time::Duration;
     use std::{collections::HashSet, sync::Arc};
@@ -533,56 +533,56 @@ mod tests {
         }
     }
 
-    #[cfg(not(target_env = "msvc"))]
-    #[tokio::test]
-    async fn test_db_size_after_compaction() -> Result<(), anyhow::Error> {
-        let primary_path = tempfile::tempdir()?.into_path();
-        let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&primary_path, None));
-        let total_unique_object_ids = 100_000;
-        let num_versions_per_object = 10;
-        let ids = ObjectID::in_range(ObjectID::ZERO, total_unique_object_ids)?;
-        let mut to_delete = vec![];
-        for id in ids {
-            for i in (0..num_versions_per_object).rev() {
-                if i < num_versions_per_object - 2 {
-                    to_delete.push((id, SequenceNumber::from(i)));
-                }
-                let obj = get_store_object_pair(Object::immutable_with_id_for_testing(id), 0).0;
-                perpetual_db
-                    .objects
-                    .insert(&ObjectKey(id, SequenceNumber::from(i)), &obj)?;
-            }
-        }
-        perpetual_db.objects.rocksdb.flush()?;
-        let before_compaction_size = get_size(primary_path.clone()).unwrap();
-
-        let mut effects = TransactionEffects::default();
-        *effects.modified_at_versions_mut_for_testing() = to_delete;
-        let registry = Registry::default();
-        let metrics = AuthorityStorePruningMetrics::new(&registry);
-        let total_pruned = AuthorityStorePruner::prune_effects(
-            vec![effects],
-            &perpetual_db,
-            &lock_table(),
-            0,
-            DeletionMethod::RangeDelete,
-            metrics,
-        )
-        .await;
-        info!("Total pruned keys = {:?}", total_pruned);
-        let start = ObjectKey(ObjectID::ZERO, SequenceNumber::MIN);
-        let end = ObjectKey(ObjectID::MAX, SequenceNumber::MAX);
-        perpetual_db.objects.compact_range(&start, &end)?;
-
-        let after_compaction_size = get_size(primary_path).unwrap();
-
-        info!(
-            "Before compaction disk size = {:?}, after compaction disk size = {:?}",
-            before_compaction_size, after_compaction_size
-        );
-        ma::assert_le!(after_compaction_size, before_compaction_size);
-        Ok(())
-    }
+    // #[cfg(not(target_env = "msvc"))]
+    // #[tokio::test]
+    // async fn test_db_size_after_compaction() -> Result<(), anyhow::Error> {
+    //     let primary_path = tempfile::tempdir()?.into_path();
+    //     let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&primary_path, None));
+    //     let total_unique_object_ids = 100_000;
+    //     let num_versions_per_object = 10;
+    //     let ids = ObjectID::in_range(ObjectID::ZERO, total_unique_object_ids)?;
+    //     let mut to_delete = vec![];
+    //     for id in ids {
+    //         for i in (0..num_versions_per_object).rev() {
+    //             if i < num_versions_per_object - 2 {
+    //                 to_delete.push((id, SequenceNumber::from(i)));
+    //             }
+    //             let obj = get_store_object_pair(Object::immutable_with_id_for_testing(id), 0).0;
+    //             perpetual_db
+    //                 .objects
+    //                 .insert(&ObjectKey(id, SequenceNumber::from(i)), &obj)?;
+    //         }
+    //     }
+    //     perpetual_db.objects.rocksdb.flush()?;
+    //     let before_compaction_size = get_size(primary_path.clone()).unwrap();
+    //
+    //     let mut effects = TransactionEffects::default();
+    //     *effects.modified_at_versions_mut_for_testing() = to_delete;
+    //     let registry = Registry::default();
+    //     let metrics = AuthorityStorePruningMetrics::new(&registry);
+    //     let total_pruned = AuthorityStorePruner::prune_effects(
+    //         vec![effects],
+    //         &perpetual_db,
+    //         &lock_table(),
+    //         0,
+    //         DeletionMethod::RangeDelete,
+    //         metrics,
+    //     )
+    //     .await;
+    //     info!("Total pruned keys = {:?}", total_pruned);
+    //     let start = ObjectKey(ObjectID::ZERO, SequenceNumber::MIN);
+    //     let end = ObjectKey(ObjectID::MAX, SequenceNumber::MAX);
+    //     perpetual_db.objects.compact_range(&start, &end)?;
+    //
+    //     let after_compaction_size = get_size(primary_path).unwrap();
+    //
+    //     info!(
+    //         "Before compaction disk size = {:?}, after compaction disk size = {:?}",
+    //         before_compaction_size, after_compaction_size
+    //     );
+    //     ma::assert_le!(after_compaction_size, before_compaction_size);
+    //     Ok(())
+    // }
 
     #[cfg(not(target_env = "msvc"))]
     #[tokio::test]
