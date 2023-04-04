@@ -43,6 +43,7 @@ use crate::store::{
 };
 use crate::types::{CheckpointTransactionBlockResponse, TemporaryTransactionBlockResponseStore};
 use crate::utils::multi_get_full_transactions;
+use crate::IndexerConfig;
 
 const HANDLER_RETRY_INTERVAL_IN_SECS: u64 = 10;
 const MULTI_GET_CHUNK_SIZE: usize = 500;
@@ -52,6 +53,7 @@ pub struct CheckpointHandler<S> {
     http_client: HttpClient,
     event_handler: Arc<EventHandler>,
     metrics: IndexerCheckpointHandlerMetrics,
+    config: IndexerConfig,
 }
 
 impl<S> CheckpointHandler<S>
@@ -63,12 +65,14 @@ where
         http_client: HttpClient,
         event_handler: Arc<EventHandler>,
         prometheus_registry: &Registry,
+        config: &IndexerConfig,
     ) -> Self {
         Self {
             state,
             http_client,
             event_handler,
             metrics: IndexerCheckpointHandlerMetrics::new(prometheus_registry),
+            config: config.clone(),
         }
     }
 
@@ -111,11 +115,25 @@ where
                     e
                 })?;
             self.metrics.total_checkpoint_received.inc();
+            if self.config.download_only {
+                info!(
+                    "Downloaded checkpoint {} data successfully, skipping all other steps...",
+                    next_cursor_sequence_number
+                );
+                continue;
+            }
 
             // Index checkpoint data
             let index_guard = self.metrics.checkpoint_index_latency.start_timer();
             let (indexed_checkpoint, indexed_epoch) = self.index_checkpoint(&checkpoint)?;
             index_guard.stop_and_record();
+            if self.config.skip_db_commit {
+                info!(
+                    "Downloaded and indexed checkpoint {} successfully, skipping DB commit...",
+                    next_cursor_sequence_number
+                );
+                continue;
+            }
 
             // for the first epoch, we need to store the epoch data first
             if let Some(store) = indexed_epoch.as_ref() {
