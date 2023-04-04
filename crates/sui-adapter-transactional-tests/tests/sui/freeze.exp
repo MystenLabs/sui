@@ -1,18 +1,18 @@
 processed 6 tasks
 
 init:
-A: object(103)
+A: object(0,0)
 
 task 1 'publish'. lines 8-70:
-created: object(105)
-mutated: object(104)
+created: object(1,0)
+mutated: object(0,1)
 
 task 2 'run'. lines 72-72:
-created: object(107)
-mutated: object(106)
+created: object(2,0)
+mutated: object(0,0)
 
 task 3 'run'. lines 74-74:
-mutated: object(107), object(108)
+mutated: object(0,0), object(2,0)
 
 task 4 'run'. lines 76-76:
 Error: Transaction Effects Status: Invalid command argument at 0. Immutable and shared objects cannot be passed by-value.

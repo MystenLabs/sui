@@ -1,11 +1,11 @@
 processed 8 tasks
 
 init:
-A: object(103)
+A: object(0,0)
 
 task 1 'publish'. lines 8-15:
-created: object(105)
-mutated: object(104)
+created: object(1,0)
+mutated: object(0,1)
 
 task 2 'programmable'. lines 17-19:
 Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of result 0, expected a single result but found either no return values or multiple.

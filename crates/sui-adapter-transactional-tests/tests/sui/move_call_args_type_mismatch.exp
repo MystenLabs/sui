@@ -1,8 +1,8 @@
 processed 4 tasks
 
 task 1 'publish'. lines 6-13:
-created: object(104)
-mutated: object(103)
+created: object(1,0)
+mutated: object(0,0)
 
 task 2 'run'. lines 14-16:
 Error: Transaction Effects Status: Arity mismatch for Move function. The number of arguments does not match the number of parameters

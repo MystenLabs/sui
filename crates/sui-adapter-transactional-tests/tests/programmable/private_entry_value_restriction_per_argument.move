@@ -22,11 +22,11 @@ module test::m1 {
 //> 1: test::m1::r();
 //> TransferObjects([Result(0), Result(1)], Input(0))
 
-//# programmable --sender A --inputs object(107) object(108)
+//# programmable --sender A --inputs object(2,0) object(2,1)
 //> test::m1::dirty(Input(1));
 //> test::m1::priv(Input(0), Input(1));
 
-//# programmable --sender A --inputs 0u64 object(108)
+//# programmable --sender A --inputs 0u64 object(2,1)
 //> test::m1::dirty(Input(1));
 // type error instead of dirty error
 //> test::m1::priv(Input(0), Input(1));

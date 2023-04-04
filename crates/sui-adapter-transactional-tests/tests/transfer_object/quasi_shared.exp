@@ -1,29 +1,29 @@
 processed 7 tasks
 
 init:
-A: object(103), B: object(104)
+A: object(0,0), B: object(0,1)
 
 task 1 'publish'. lines 8-27:
-created: object(106)
-mutated: object(105)
+created: object(1,0)
+mutated: object(0,2)
 
 task 2 'run'. lines 29-29:
-created: object(108)
-mutated: object(107)
+created: object(2,0)
+mutated: object(0,2)
 
 task 3 'run'. lines 31-31:
-created: object(110), object(111)
-mutated: object(108), object(109)
+created: object(3,0), object(3,1)
+mutated: object(0,2), object(2,0)
 
 task 4 'view-object'. lines 33-33:
-Owner: Object ID: ( fake(108) )
-Version: 3
-Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(110)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(111)}}
+Owner: Object ID: ( fake(2,0) )
+Version: 4
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(3,1)}}
 
 task 5 'transfer-object'. lines 35-35:
-Error: Object 0xa768945bf1f4faf4d6ee9237d64a652875b6f650940c28ea8ca0774f82a2c948 is owned by object 0x93da53cf8adc59c6dd800f54b6ca7e3cb4c17d3dacf75eae21d61ec9354a55ff. Objects owned by other objects cannot be used as input arguments.
+Error: Object 0xdebe367ed35538a7aaf024c006993944ea7eb2a9f326fa43c6ed69a7ae184ce8 is owned by object 0x42f5c1c42496636b461f1cb4f8d62aac8ebac3ca7766c154b63942671bc86836. Objects owned by other objects cannot be used as input arguments.
 
 task 6 'view-object'. lines 37-37:
-Owner: Object ID: ( fake(108) )
-Version: 3
-Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(110)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(111)}}
+Owner: Object ID: ( fake(2,0) )
+Version: 4
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(3,1)}}

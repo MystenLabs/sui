@@ -22,13 +22,13 @@ module test::fake {
 
 }
 
-//# programmable --sender A --inputs object(107) 18446744073709551614 @A
+//# programmable --sender A --inputs object(1,2) 18446744073709551614 @A
 //> 0: sui::coin::mint<test::fake::FAKE>(Input(0), Input(1));
 //> TransferObjects([Result(0)], Input(2))
 
-//# programmable --sender A --inputs object(107) 1 @A
+//# programmable --sender A --inputs object(1,2) 1 @A
 //> 0: sui::coin::mint<test::fake::FAKE>(Input(0), Input(1));
 //> TransferObjects([Result(0)], Input(2))
 
-//# programmable --sender A --inputs object(109)
+//# programmable --sender A --inputs object(2,0)
 //> MergeCoins(Input(0), [Input(0)]);

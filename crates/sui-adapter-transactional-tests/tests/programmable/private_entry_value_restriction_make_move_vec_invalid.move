@@ -26,7 +26,7 @@ module test::m1 {
 //> 2: test::m1::r();
 //> TransferObjects([Result(0), Result(1), Result(2)], Input(0))
 
-//# programmable --sender A --inputs object(107) object(108) object(109)
+//# programmable --sender A --inputs object(2,0) object(2,1) object(2,2)
 //> 0: test::m1::dirty(Input(2));
 //> 1: MakeMoveVec([Input(0), Input(1), Input(2)]);
 //> test::m1::priv(Result(1))

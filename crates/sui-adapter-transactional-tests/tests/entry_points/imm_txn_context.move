@@ -29,6 +29,6 @@ module Test::M {
 
 //# run Test::M::mint --sender A
 
-//# run Test::M::set_to_epoch --sender A --args object(107)
+//# run Test::M::set_to_epoch --sender A --args object(2,0)
 
-//# run Test::M::check_is_epoch --sender A --args object(107)
+//# run Test::M::check_is_epoch --sender A --args object(2,0)

@@ -65,10 +65,10 @@ module test::m {
 
 //# run test::m::child --sender A
 
-//# run test::m::add_field --sender A --args object(107) object(109)
+//# run test::m::add_field --sender A --args object(2,0) object(3,0)
 
-//# view-object 109
+//# view-object 3,0
 
-//# run test::m::buy --sender A --args object(107)
+//# run test::m::buy --sender A --args object(2,0)
 
-//# view-object 109
+//# view-object 3,0

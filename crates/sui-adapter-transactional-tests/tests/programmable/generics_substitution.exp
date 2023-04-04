@@ -1,14 +1,14 @@
 processed 4 tasks
 
 init:
-A: object(103)
+A: object(0,0)
 
 task 1 'publish'. lines 8-26:
-created: object(105)
-mutated: object(104)
+created: object(1,0)
+mutated: object(0,1)
 
 task 2 'programmable'. lines 27-36:
-mutated: object(106)
+mutated: object(0,1)
 
 task 3 'programmable'. lines 37-44:
 Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type

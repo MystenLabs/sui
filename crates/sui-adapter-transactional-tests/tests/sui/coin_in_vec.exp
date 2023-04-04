@@ -1,16 +1,20 @@
-processed 4 tasks
+processed 5 tasks
 
 init:
-A: object(103)
+A: object(0,0)
 
 task 1 'publish'. lines 6-32:
-created: object(105), object(106)
-mutated: object(104)
+created: object(1,0), object(1,1)
+mutated: object(0,0)
 
-task 2 'run'. lines 34-34:
-mutated: object(105), object(107)
-wrapped: object(104)
+task 2 'programmable'. lines 34-36:
+created: object(2,0)
+mutated: object(0,0)
 
-task 3 'run'. lines 36-36:
-mutated: object(105), object(108)
-unwrapped: object(104)
+task 3 'run'. lines 38-38:
+mutated: object(0,0), object(1,0)
+wrapped: object(2,0)
+
+task 4 'run'. lines 40-40:
+mutated: object(0,0), object(1,0)
+unwrapped: object(2,0)

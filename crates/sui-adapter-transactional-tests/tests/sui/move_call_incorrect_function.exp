@@ -1,8 +1,8 @@
 processed 4 tasks
 
 task 1 'publish'. lines 8-15:
-created: object(104)
-mutated: object(103)
+created: object(1,0)
+mutated: object(0,0)
 
 task 2 'run'. lines 16-18:
 Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.

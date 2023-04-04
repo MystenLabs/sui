@@ -1,15 +1,15 @@
 processed 5 tasks
 
 init:
-A: object(103)
+A: object(0,0)
 
 task 1 'publish'. lines 8-23:
-created: object(105), object(106), object(107)
-mutated: object(104)
+created: object(1,0), object(1,1), object(1,2)
+mutated: object(0,0)
 
 task 2 'programmable'. lines 25-27:
-created: object(109)
-mutated: object(107), object(108)
+created: object(2,0)
+mutated: object(0,0), object(1,2)
 
 task 3 'programmable'. lines 29-30:
 Error: Transaction Effects Status: Insufficient coin balance for operation.
@@ -17,4 +17,4 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 
 task 4 'programmable'. lines 32-33:
 Error: Transaction Effects Status: Insufficient coin balance for operation.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InsufficientCoinBalance, source: Some("balance: 200000000000000 required: 18446744073709551615"), command: Some(0) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InsufficientCoinBalance, source: Some("balance: 199999999832042 required: 18446744073709551615"), command: Some(0) } }

@@ -1,5 +1,5 @@
 processed 1 task
 
 task 0 'publish'. lines 4-20:
-created: object(104)
-mutated: object(103)
+created: object(1,0)
+mutated: object(0,0)

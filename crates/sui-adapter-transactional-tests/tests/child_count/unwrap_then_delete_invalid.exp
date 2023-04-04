@@ -1,21 +1,21 @@
 processed 5 tasks
 
 init:
-A: object(103), B: object(104)
+A: object(0,0), B: object(0,1)
 
 task 1 'publish'. lines 9-45:
-created: object(106)
-mutated: object(105)
+created: object(1,0)
+mutated: object(0,2)
 
 task 2 'run'. lines 47-47:
-created: object(108)
-mutated: object(107)
+created: object(2,0)
+mutated: object(0,0)
 
 task 3 'run'. lines 49-49:
-created: object(110), object(111)
-mutated: object(108), object(109)
+created: object(3,0), object(3,1)
+mutated: object(0,0), object(2,0)
 
 task 4 'run'. lines 51-51:
-created: object(113)
-mutated: object(112)
-wrapped: object(108)
+created: object(4,0)
+mutated: object(0,0)
+wrapped: object(2,0)

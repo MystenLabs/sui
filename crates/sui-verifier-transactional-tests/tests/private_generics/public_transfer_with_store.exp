@@ -1,17 +1,17 @@
 processed 5 tasks
 
 task 1 'publish'. lines 9-12:
-created: object(104)
-mutated: object(103)
+created: object(1,0)
+mutated: object(0,0)
 
 task 2 'publish'. lines 14-19:
-created: object(106)
-mutated: object(105)
+created: object(2,0)
+mutated: object(0,0)
 
 task 3 'publish'. lines 21-26:
-created: object(108)
-mutated: object(107)
+created: object(3,0)
+mutated: object(0,0)
 
 task 4 'publish'. lines 28-33:
-created: object(110)
-mutated: object(109)
+created: object(4,0)
+mutated: object(0,0)

@@ -83,9 +83,11 @@ module t1::o1 {
 
 //# run t3::o3::create --sender A
 
-//# run t2::o2::create_shared --args object(111) --sender A
+//# run t2::o2::create_shared --args object(4,0) --sender A
+
+//# view-object 4,0
+
+//# view-object 5,1
 
 // child arguments cannot be taken directly
-//# run t1::o1::use_o2_o3 --args object(113) object(114) --sender A
-
-//# run t2::o2::use_o2_o3 --args object(113) object(110) --sender A
+//# run t1::o1::use_o2_o3 --args object(5,1) object(4,0) --sender A

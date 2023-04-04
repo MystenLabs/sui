@@ -1,45 +1,45 @@
 processed 10 tasks
 
 init:
-A: object(103)
+A: object(0,0)
 
 task 1 'publish'. lines 8-41:
-created: object(105)
-mutated: object(104)
+created: object(1,0)
+mutated: object(0,1)
 
 task 2 'run'. lines 43-43:
-created: object(107), object(108)
-mutated: object(106)
+created: object(2,0), object(2,1)
+mutated: object(0,0)
 
 task 3 'run'. lines 45-45:
-created: object(111)
-mutated: object(107), object(109)
-unwrapped: object(110)
-deleted: object(108)
+created: object(3,1)
+mutated: object(0,0), object(2,0)
+unwrapped: object(3,0)
+deleted: object(2,1)
 
 task 4 'view-object'. lines 47-47:
-Owner: Object ID: ( fake(111) )
+Owner: Object ID: ( fake(3,1) )
 Version: 3
-Contents: a::m::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(110)}}}
+Contents: a::m::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}}
 
 task 5 'run'. lines 50-50:
-created: object(113), object(114)
-mutated: object(112)
+created: object(5,0), object(5,1)
+mutated: object(0,0)
 
 task 6 'run'. lines 52-52:
-mutated: object(113), object(115)
-deleted: object(114)
+mutated: object(0,0), object(5,0)
+deleted: object(5,1)
 
 task 7 'run'. lines 55-55:
-created: object(117), object(118)
-mutated: object(116)
+created: object(7,0), object(7,1)
+mutated: object(0,0)
 
 task 8 'run'. lines 58-58:
-mutated: object(117), object(119)
-unwrapped: object(120)
-deleted: object(118)
+mutated: object(0,0), object(7,0)
+unwrapped: object(8,0)
+deleted: object(7,1)
 
 task 9 'view-object'. lines 60-60:
 Owner: Account Address ( A )
-Version: 3
-Contents: a::m::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(120)}}}
+Version: 7
+Contents: a::m::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(7,0)}}}

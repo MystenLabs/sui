@@ -116,7 +116,7 @@ module Test::M {
 
 //# run Test::M::mint_any --sender A --type-args Test::M::Any --args 42
 
-//# run Test::M::obj_vec_destroy_any --sender A --type-args Test::M::Any --args vector[object(107)]
+//# run Test::M::obj_vec_destroy_any --sender A --type-args Test::M::Any --args vector[object(2,0)]
 
 
 // create a parent/child object pair, pass child by-value and parent as a single element of a vector
@@ -124,9 +124,9 @@ module Test::M {
 
 //# run Test::M::mint_any --sender A --type-args Test::M::Any --args 42
 
-//# run Test::M::mint_child_any --sender A --type-args Test::M::Any --args 42 object(110)
+//# run Test::M::mint_child_any --sender A --type-args Test::M::Any --args 42 object(4,0)
 
-//# run Test::M::child_access_any --sender A --type-args Test::M::Any --args object(110) vector[object(112)]
+//# run Test::M::child_access_any --sender A --type-args Test::M::Any --args object(4,0) vector[object(5,0)]
 
 
 // create an object of one type and try to pass it as a single element of a vector whose elements
@@ -134,7 +134,7 @@ module Test::M {
 
 //# run Test::M::mint_another_any --type-args Test::M::Any --sender A --args 42
 
-//# run Test::M::obj_vec_destroy_any --sender A --type-args Test::M::Any --args vector[object(116)]
+//# run Test::M::obj_vec_destroy_any --sender A --type-args Test::M::Any --args vector[object(7,0)]
 
 
 // create two objects of different types and try to pass them both as elements of a vector (failure)
@@ -143,25 +143,25 @@ module Test::M {
 
 //# run Test::M::mint_any --sender A --type-args Test::M::Any --args 42
 
-//# run Test::M::two_obj_vec_destroy_any --sender A --type-args Test::M::Any --args vector[object(119),object(121)]
+//# run Test::M::two_obj_vec_destroy_any --sender A --type-args Test::M::Any --args vector[object(9,0),object(10,0)]
 
 
 // create a shared object and try to pass it as a single element of a vector (failure)
 
 //# run Test::M::mint_shared_any --sender A --type-args Test::M::Any --args 42
 
-//# run Test::M::obj_vec_destroy_any --sender A --type-args Test::M::Any --args vector[object(124)]
+//# run Test::M::obj_vec_destroy_any --sender A --type-args Test::M::Any --args vector[object(12,0)]
 
 
 // create an object and pass it both by-value and as element of a vector (failure)
 
 //# run Test::M::mint_any --sender A --type-args Test::M::Any --args 42
 
-//# run Test::M::same_objects_any --sender A --type-args Test::M::Any --args object(127) vector[object(127)]
+//# run Test::M::same_objects_any --sender A --type-args Test::M::Any --args object(14,0) vector[object(14,0)]
 
 
 // create an object and pass it both by-reference and as element of a vector (failure)
 
 //# run Test::M::mint_any --sender A --type-args Test::M::Any --args 42
 
-//# run Test::M::same_objects_ref_any --sender A --type-args Test::M::Any --args object(130) vector[object(130)]
+//# run Test::M::same_objects_ref_any --sender A --type-args Test::M::Any --args object(16,0) vector[object(16,0)]

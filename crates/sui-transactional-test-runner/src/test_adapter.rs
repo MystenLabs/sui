@@ -29,7 +29,7 @@ use move_transactional_test_runner::{
 use move_vm_runtime::{move_vm::MoveVM, session::SerializedReturnValues};
 use once_cell::sync::Lazy;
 use rand::{rngs::StdRng, Rng, SeedableRng};
-use std::fmt::Write;
+use std::fmt::{self, Write};
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::Path,
@@ -42,9 +42,6 @@ use sui_framework::{
     make_system_modules, make_system_objects, system_package_ids, DEFAULT_FRAMEWORK_PATH,
 };
 use sui_protocol_config::ProtocolConfig;
-use sui_types::messages::CallArg;
-use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, SUI_ADDRESS_LENGTH},
     crypto::{get_key_pair_from_rng, AccountKeyPair},
@@ -56,7 +53,7 @@ use sui_types::{
     object::{self, Object, ObjectFormatOptions},
     object::{MoveObject, Owner},
     MOVE_STDLIB_ADDRESS, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
-    SUI_FRAMEWORK_ADDRESS,
+    SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use sui_types::{clock::Clock, SUI_SYSTEM_ADDRESS};
 use sui_types::{epoch_data::EpochData, messages::Command};
@@ -67,14 +64,25 @@ use sui_types::{
 };
 use sui_types::{id::UID, object::MAX_GAS_BUDGET_FOR_TESTING};
 use sui_types::{in_memory_storage::InMemoryStorage, messages::ProgrammableTransaction};
+use sui_types::{messages::CallArg, MOVE_STDLIB_OBJECT_ID};
+use sui_types::{
+    programmable_transaction_builder::ProgrammableTransactionBuilder, SUI_FRAMEWORK_OBJECT_ID,
+};
+use sui_types::{utils::to_sender_signed_transaction, SUI_SYSTEM_PACKAGE_ID};
 
-pub(crate) type FakeID = u64;
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub enum FakeID {
+    Known(ObjectID),
+    Enumerated(u64, u64),
+}
 
-// initial value for fake object ID mapping. If the object ID is less than this value, it will not
-// be remapped.
-// This used to be set to 100, but when the system objects were excluded, this got bumped to avoid
-// breaking tests
-const INIT_NEXT_FAKE: FakeID = 103;
+const WELL_KNOWN_OBJECTS: &[ObjectID] = &[
+    MOVE_STDLIB_OBJECT_ID,
+    SUI_FRAMEWORK_OBJECT_ID,
+    SUI_SYSTEM_PACKAGE_ID,
+    SUI_SYSTEM_STATE_OBJECT_ID,
+    SUI_CLOCK_OBJECT_ID,
+];
 // TODO use the file name as a seed
 const RNG_SEED: [u8; 32] = [
     21, 23, 199, 200, 234, 250, 252, 178, 94, 15, 202, 178, 62, 186, 88, 137, 233, 192, 130, 157,
@@ -92,7 +100,7 @@ pub struct SuiTestAdapter<'a> {
     default_account: TestAccount,
     default_syntax: SyntaxChoice,
     object_enumeration: BiBTreeMap<ObjectID, FakeID>,
-    next_fake: FakeID,
+    next_fake: (u64, u64),
     rng: StdRng,
 }
 
@@ -282,9 +290,14 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             default_account,
             default_syntax,
             object_enumeration: BiBTreeMap::new(),
-            next_fake: INIT_NEXT_FAKE,
+            next_fake: (0, 0),
             rng,
         };
+        for well_known in WELL_KNOWN_OBJECTS.iter().copied() {
+            test_adapter
+                .object_enumeration
+                .insert(well_known, FakeID::Known(well_known));
+        }
         let object_ids = test_adapter
             .storage
             .objects()
@@ -316,6 +329,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         gas_budget: Option<u64>,
         extra: Self::ExtraPublishArgs,
     ) -> anyhow::Result<(Option<String>, Vec<(Option<Symbol>, CompiledModule)>)> {
+        self.next_task();
         let SuiPublishArgs {
             sender,
             upgradeable,
@@ -419,6 +433,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         gas_budget: Option<u64>,
         extra: Self::ExtraRunArgs,
     ) -> anyhow::Result<(Option<String>, SerializedReturnValues)> {
+        self.next_task();
         assert!(signers.is_empty(), "signers are not used");
         let SuiRunArgs {
             sender,
@@ -485,6 +500,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         &mut self,
         task: TaskInput<Self::Subcommand>,
     ) -> anyhow::Result<Option<String>> {
+        self.next_task();
         let TaskInput {
             command,
             name: _,
@@ -828,36 +844,14 @@ impl<'a> SuiTestAdapter<'a> {
     }
 
     fn enumerate_fake(&mut self, id: ObjectID) -> FakeID {
-        // Check if the object ID as a u64 is less than INIT_NEXT_FAKE. If it is, use that value
-        // as the "fake" ID. This essentially excludes the Sui System objects from the fake ID
-        // mapping.
-        let id_addr: SuiAddress = id.into();
-        let id_bytes: [u8; SUI_ADDRESS_LENGTH] = id_addr.to_inner();
-        let high = &id_bytes[0..(SUI_ADDRESS_LENGTH - 8)];
-        let low = [
-            id_bytes[SUI_ADDRESS_LENGTH - 8],
-            id_bytes[SUI_ADDRESS_LENGTH - 7],
-            id_bytes[SUI_ADDRESS_LENGTH - 6],
-            id_bytes[SUI_ADDRESS_LENGTH - 5],
-            id_bytes[SUI_ADDRESS_LENGTH - 4],
-            id_bytes[SUI_ADDRESS_LENGTH - 3],
-            id_bytes[SUI_ADDRESS_LENGTH - 2],
-            id_bytes[SUI_ADDRESS_LENGTH - 1],
-        ];
-        assert!(high.len() + low.len() == SUI_ADDRESS_LENGTH);
-        let id_u64 = u64::from_be_bytes(low);
-        // to check if `id < INIT_NEXT_FAKE`, we check that the "high" value bytes are all 0
-        // and that the "low" value bytes are less than `INIT_NEXT_FAKE` when converted to `u64`
-        if id_u64 < INIT_NEXT_FAKE && high.iter().copied().all(|u| u == 0) {
-            self.object_enumeration.insert(id, id_u64);
-            return id_u64;
-        }
         if let Some(fake) = self.object_enumeration.get_by_left(&id) {
             return *fake;
         }
-        let fake_id = self.next_fake;
+        let (task, i) = self.next_fake;
+        let fake_id = FakeID::Enumerated(task, i);
         self.object_enumeration.insert(id, fake_id);
-        self.next_fake += 1;
+
+        self.next_fake = (task, i + 1);
         fake_id
     }
 
@@ -949,7 +943,10 @@ impl<'a> SuiTestAdapter<'a> {
         objs.iter()
             .map(|id| match self.real_to_fake_object_id(id) {
                 None => "object(_)".to_string(),
-                Some(fake) if fake < INIT_NEXT_FAKE => format!("0x{fake:X}"),
+                Some(FakeID::Known(id)) => {
+                    let id: AccountAddress = id.into();
+                    format!("0x{id:x}")
+                }
                 Some(fake) => format!("object({})", fake),
             })
             .collect::<Vec<_>>()
@@ -1014,9 +1011,16 @@ impl<'a> SuiTestAdapter<'a> {
         }
         match self.real_to_fake_object_id(&parsed.into()) {
             None => "_".to_string(),
-            Some(fake) if fake < INIT_NEXT_FAKE => format!("0x{fake:X}"),
+            Some(FakeID::Known(id)) => {
+                let id: AccountAddress = id.into();
+                format!("0x{id:x}")
+            }
             Some(fake) => format!("fake({})", fake),
         }
+    }
+
+    fn next_task(&mut self) {
+        self.next_fake = (self.next_fake.0 + 1, 0)
     }
 }
 
@@ -1032,6 +1036,18 @@ impl<'a> GetModule for &'a SuiTestAdapter<'_> {
                 .find(|m| &m.self_id() == id)
                 .unwrap_or_else(|| panic!("Internal error: Unbound module {}", id)),
         ))
+    }
+}
+
+impl fmt::Display for FakeID {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FakeID::Known(id) => {
+                let addr: AccountAddress = (*id).into();
+                write!(f, "0x{:x}", addr)
+            }
+            FakeID::Enumerated(task, i) => write!(f, "{},{}", task, i),
+        }
     }
 }
 

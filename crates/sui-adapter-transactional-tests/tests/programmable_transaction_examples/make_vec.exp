@@ -1,24 +1,24 @@
 processed 7 tasks
 
 init:
-A: object(103)
+A: object(0,0)
 
 task 1 'publish'. lines 6-53:
-created: object(105)
-mutated: object(104)
+created: object(1,0)
+mutated: object(0,1)
 
 task 2 'programmable'. lines 55-61:
-mutated: object(106)
+mutated: object(0,1)
 
 task 3 'programmable'. lines 63-69:
-mutated: object(107)
+mutated: object(0,1)
 
 task 4 'programmable'. lines 71-74:
-mutated: object(108)
+mutated: object(0,1)
 
 task 5 'programmable'. lines 76-79:
 Error: Transaction Effects Status: Invalid command argument at 0. The argument cannot be deserialized into a value of the specified type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidBCSBytes }, source: Some("Function expects std::string::String but provided argument's value does not match"), command: Some(0) } }
 
 task 6 'programmable'. lines 81-85:
-mutated: object(110)
+mutated: object(0,0)

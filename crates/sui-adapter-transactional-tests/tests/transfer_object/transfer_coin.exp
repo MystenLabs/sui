@@ -1,17 +1,20 @@
-processed 4 tasks
+processed 5 tasks
 
 init:
-A: object(103), B: object(104)
+A: object(0,0), B: object(0,1), C: object(0,2)
 
-task 1 'view-object'. lines 8-8:
+task 1 'programmable'. lines 8-9:
+mutated: object(0,2)
+
+task 2 'view-object'. lines 11-11:
 Owner: Account Address ( A )
-Version: 1
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(103)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 300000000000000u64}}
-
-task 2 'transfer-object'. lines 10-10:
-mutated: object(103), object(105)
-
-task 3 'view-object'. lines 12-12:
-Owner: Account Address ( B )
 Version: 2
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(103)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 300000000000000u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(0,2)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 299999999986000u64}}
+
+task 3 'transfer-object'. lines 13-13:
+mutated: object(0,0), object(0,2)
+
+task 4 'view-object'. lines 15-15:
+Owner: Account Address ( B )
+Version: 3
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(0,2)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 299999999986000u64}}

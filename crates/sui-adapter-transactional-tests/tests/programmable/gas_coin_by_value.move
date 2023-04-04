@@ -8,4 +8,4 @@
 //# programmable --sender A --inputs @B
 //> TransferObjects([Gas], Input(0))
 
-//# view-object 105
+//# view-object 0,0

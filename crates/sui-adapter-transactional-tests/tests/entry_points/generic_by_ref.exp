@@ -1,8 +1,8 @@
 processed 2 tasks
 
 init:
-A: object(103)
+A: object(0,0)
 
 task 1 'publish'. lines 6-14:
-created: object(105)
-mutated: object(104)
+created: object(1,0)
+mutated: object(0,1)

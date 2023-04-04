@@ -1,8 +1,8 @@
 processed 6 tasks
 
 task 1 'publish'. lines 8-28:
-created: object(104)
-mutated: object(103)
+created: object(1,0)
+mutated: object(0,0)
 
 task 2 'run'. lines 30-30:
 Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function

@@ -1,31 +1,35 @@
-processed 7 tasks
+processed 8 tasks
 
 init:
-A: object(103), B: object(104), C: object(105)
+A: object(0,0), B: object(0,1), C: object(0,2)
 
-task 1 'view-object'. lines 8-8:
-Owner: Account Address ( B )
-Version: 1
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(104)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 300000000000000u64}}
+task 1 'programmable'. lines 8-10:
+created: object(1,0)
+mutated: object(0,1)
 
-task 2 'run'. lines 10-10:
-created: object(107)
-mutated: object(104), object(106)
-
-task 3 'view-object'. lines 12-12:
+task 2 'view-object'. lines 12-12:
 Owner: Account Address ( B )
 Version: 2
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(104)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 299999999999990u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(1,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 10u64}}
 
-task 4 'view-object'. lines 14-14:
+task 3 'run'. lines 14-14:
+created: object(3,0)
+mutated: object(0,1), object(1,0)
+
+task 4 'view-object'. lines 16-16:
+Owner: Account Address ( B )
+Version: 3
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(1,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 0u64}}
+
+task 5 'view-object'. lines 18-18:
 Owner: Account Address ( A )
-Version: 2
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(107)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 10u64}}
+Version: 3
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 10u64}}
 
-task 5 'run'. lines 16-16:
-Error: Transaction was not signed by the correct sender: Object 0xbea8d80a001a7aaf43f65d32de297e626941d085d8ba7d961aabb0a9d5743c4e is owned by account address 0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a, but given owner/signer address is 0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e
+task 6 'run'. lines 20-20:
+Error: Transaction was not signed by the correct sender: Object 0x7fdd5020ef4c65e74770efcaa8c43b30e39c91f1885c497a20e1eafabf9a17d6 is owned by account address 0xd31b7b5068b139941cedc52b036f55c894fd394a170e2ba34245a324f1d16c8b, but given owner/signer address is 0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e
 
-task 6 'view-object'. lines 18-18:
+task 7 'view-object'. lines 22-22:
 Owner: Account Address ( B )
-Version: 2
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(104)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 299999999999990u64}}
+Version: 3
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(1,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 0u64}}

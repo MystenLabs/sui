@@ -1,12 +1,12 @@
 processed 3 tasks
 
 init:
-A: object(103), B: object(104)
+A: object(0,0), B: object(0,1)
 
 task 1 'programmable'. lines 8-9:
-mutated: object(105)
+mutated: object(0,0)
 
 task 2 'view-object'. lines 11-11:
 Owner: Account Address ( B )
 Version: 2
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(105)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 299999999986000u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(0,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 299999999986000u64}}

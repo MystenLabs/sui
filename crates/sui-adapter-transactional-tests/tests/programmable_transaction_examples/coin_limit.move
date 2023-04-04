@@ -31,9 +31,9 @@ module test::m1 {
 //> 0: SplitCoins(Gas, [Input(0)]); // split the coin as a limit
 //> 1: test::m1::purchase(Result(0));
 
-//# view-object 107
+//# view-object 2,0
 
-//# view-object 108
+//# view-object 2,1
 
 // call a non-entry function, but forget the object
 //# programmable --sender A --inputs 100  --gas-budget 100000000000000
@@ -49,10 +49,10 @@ module test::m1 {
 //> 2: test::m1::purchase_(NestedResult(0, 1));
 //> TransferObjects([Result(1), Result(2)], Input(1));
 
-//# view-object 111
+//# view-object 6,0
 
-//# view-object 112
+//# view-object 6,1
 
-//# view-object 113
+//# view-object 6,2
 
-//# view-object 114
+//# view-object 6,3

@@ -29,4 +29,4 @@ module Test::M1 {
 
 //# run Test::M1::create --args 0 @A
 
-//# view-object 106
+//# view-object 2,0

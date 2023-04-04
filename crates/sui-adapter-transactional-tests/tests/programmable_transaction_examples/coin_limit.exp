@@ -1,50 +1,50 @@
 processed 11 tasks
 
 init:
-A: object(103)
+A: object(0,0)
 
 task 1 'publish'. lines 6-28:
-created: object(105)
-mutated: object(104)
+created: object(1,0)
+mutated: object(0,1)
 
 task 2 'programmable'. lines 29-32:
-created: object(107), object(108)
-mutated: object(106)
+created: object(2,0), object(2,1)
+mutated: object(0,0)
 
 task 3 'view-object'. lines 34-34:
 Owner: Account Address ( _ )
 Version: 2
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(107)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 100u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 100u64}}
 
 task 4 'view-object'. lines 36-38:
 Owner: Account Address ( A )
 Version: 2
-Contents: test::m1::CoolMarker {id: sui::object::UID {id: sui::object::ID {bytes: fake(108)}}}
+Contents: test::m1::CoolMarker {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}}
 
 task 5 'programmable'. lines 39-44:
 Error: Transaction Effects Status: Unused result without the drop ability. Command result 1, return value 0
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: UnusedValueWithoutDrop { result_idx: 1, secondary_idx: 0 }, source: None, command: None } }
 
 task 6 'programmable'. lines 45-50:
-created: object(111), object(112), object(113), object(114)
-mutated: object(110)
+created: object(6,0), object(6,1), object(6,2), object(6,3)
+mutated: object(0,0)
 
 task 7 'view-object'. lines 52-52:
 Owner: Account Address ( _ )
-Version: 2
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(111)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 100u64}}
+Version: 4
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(6,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 100u64}}
 
 task 8 'view-object'. lines 54-54:
 Owner: Account Address ( _ )
-Version: 2
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(112)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 100u64}}
+Version: 4
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(6,1)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 100u64}}
 
 task 9 'view-object'. lines 56-56:
 Owner: Account Address ( A )
-Version: 2
-Contents: test::m1::CoolMarker {id: sui::object::UID {id: sui::object::ID {bytes: fake(113)}}}
+Version: 4
+Contents: test::m1::CoolMarker {id: sui::object::UID {id: sui::object::ID {bytes: fake(6,2)}}}
 
 task 10 'view-object'. lines 58-58:
 Owner: Account Address ( A )
-Version: 2
-Contents: test::m1::CoolMarker {id: sui::object::UID {id: sui::object::ID {bytes: fake(114)}}}
+Version: 4
+Contents: test::m1::CoolMarker {id: sui::object::UID {id: sui::object::ID {bytes: fake(6,3)}}}

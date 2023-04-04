@@ -1,10 +1,10 @@
 processed 3 tasks
 
 task 1 'publish'. lines 6-10:
-created: object(104), object(105)
-mutated: object(103)
+created: object(1,0), object(1,1)
+mutated: object(0,0)
 
 task 2 'view-object'. lines 12-12:
 Owner: Account Address ( _ )
 Version: 2
-Contents: sui::package::UpgradeCap {id: sui::object::UID {id: sui::object::ID {bytes: fake(105)}}, package: sui::object::ID {bytes: Test}, version: 1u64, policy: 0u8}
+Contents: sui::package::UpgradeCap {id: sui::object::UID {id: sui::object::ID {bytes: fake(1,1)}}, package: sui::object::ID {bytes: Test}, version: 1u64, policy: 0u8}

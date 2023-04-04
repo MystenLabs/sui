@@ -1,41 +1,41 @@
 processed 10 tasks
 
 init:
-A: object(103), B: object(104)
+A: object(0,0), B: object(0,1)
 
 task 1 'publish'. lines 9-46:
-created: object(106)
-mutated: object(105)
+created: object(1,0)
+mutated: object(0,2)
 
 task 2 'run'. lines 48-48:
-created: object(108), object(109), object(110)
-mutated: object(107)
+created: object(2,0), object(2,1), object(2,2)
+mutated: object(0,0)
 
 task 3 'view-object'. lines 50-54:
-Owner: Object ID: ( fake(108) )
+Owner: Shared
 Version: 2
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(109)}}}
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}}
 
 task 4 'run'. lines 56-56:
-created: object(112), object(113), object(114)
-mutated: object(111)
+created: object(4,0), object(4,1), object(4,2)
+mutated: object(0,0)
 
 task 5 'run'. lines 58-58:
-mutated: object(114), object(115)
+mutated: object(0,0), object(4,2)
 
 task 6 'view-object'. lines 60-64:
 Owner: Account Address ( B )
-Version: 3
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(114)}}}
+Version: 4
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(4,2)}}}
 
 task 7 'run'. lines 66-66:
-created: object(117), object(118), object(119)
-mutated: object(116)
+created: object(7,0), object(7,1), object(7,2)
+mutated: object(0,0)
 
 task 8 'transfer-object'. lines 68-68:
-mutated: object(118), object(120)
+mutated: object(0,0), object(7,2)
 
 task 9 'view-object'. lines 70-70:
 Owner: Account Address ( B )
-Version: 3
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(118)}}}
+Version: 6
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(7,2)}}}

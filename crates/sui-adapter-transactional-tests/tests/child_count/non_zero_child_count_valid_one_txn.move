@@ -37,4 +37,4 @@ module test::m {
 
 //# run test::m::share --sender A
 
-//# view-object 109
+//# view-object 2,1

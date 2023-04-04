@@ -1,35 +1,35 @@
 processed 8 tasks
 
 init:
-A: object(103)
+A: object(0,0)
 
 task 1 'publish'. lines 8-15:
-created: object(105)
-mutated: object(104)
+created: object(1,0)
+mutated: object(0,1)
 
 task 2 'programmable'. lines 17-19:
-created: object(107)
-mutated: object(106)
+created: object(2,0)
+mutated: object(0,0)
 
 task 3 'view-object'. lines 21-21:
 Owner: Account Address ( A )
 Version: 2
-Contents: test::m1::Pub {id: sui::object::UID {id: sui::object::ID {bytes: fake(107)}}}
+Contents: test::m1::Pub {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}}
 
 task 4 'programmable'. lines 23-25:
-created: object(109)
-mutated: object(108)
+created: object(4,0)
+mutated: object(0,1)
 
 task 5 'view-object'. lines 27-27:
 Owner: Shared
-Version: 2
-Contents: test::m1::Pub {id: sui::object::UID {id: sui::object::ID {bytes: fake(109)}}}
+Version: 3
+Contents: test::m1::Pub {id: sui::object::UID {id: sui::object::ID {bytes: fake(4,0)}}}
 
 task 6 'programmable'. lines 29-31:
-created: object(111)
-mutated: object(110)
+created: object(6,0)
+mutated: object(0,1)
 
 task 7 'view-object'. lines 33-33:
 Owner: Immutable
-Version: 2
-Contents: test::m1::Pub {id: sui::object::UID {id: sui::object::ID {bytes: fake(111)}}}
+Version: 4
+Contents: test::m1::Pub {id: sui::object::UID {id: sui::object::ID {bytes: fake(6,0)}}}
