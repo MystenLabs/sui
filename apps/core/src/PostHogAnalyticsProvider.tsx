@@ -5,20 +5,20 @@ import { useFeature } from '@growthbook/growthbook-react';
 import { PostHogProvider } from 'posthog-js/react';
 import { type ReactNode } from 'react';
 
-import { GROWTHBOOK_FEATURES } from '~/utils/growthbook';
-
 type PostHogProviderProps = {
+    projectApiKey: string;
     children: ReactNode;
 };
 
-export function PostHogAnalyticsProvider({ children }: PostHogProviderProps) {
-    const { on: isEnabled } = useFeature(
-        GROWTHBOOK_FEATURES.EXPLORER_POSTHOG_ANALYTICS
-    );
+export function PostHogAnalyticsProvider({
+    projectApiKey,
+    children,
+}: PostHogProviderProps) {
+    const { on: isEnabled } = useFeature('enable-posthog-analytics');
 
     return isEnabled ? (
         <PostHogProvider
-            apiKey="phc_IggVMJtR5vawlA4H3IIYnIyWjcK8rPiqAI1FlmKZPjp"
+            apiKey={projectApiKey}
             options={{
                 // We'll set memory as the default persistence method so that
                 // we aren't required to show a cookie acceptance banner
