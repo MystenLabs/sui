@@ -12,7 +12,7 @@ use std::num::NonZeroUsize;
 use test_utils::{AuthorityFixture, CommitteeFixture};
 
 #[tokio::test]
-async fn test_certificate_signed_correctly() {
+async fn test_certificate_singers_are_ordered() {
     // GIVEN
     let fixture = CommitteeFixture::builder()
         .committee_size(NonZeroUsize::new(4).unwrap())
