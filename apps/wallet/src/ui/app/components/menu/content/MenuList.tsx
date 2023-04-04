@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useResolveSuiNSName } from '@mysten/core';
 import { Account24, ArrowUpRight12, Domain24, Version24 } from '@mysten/icons';
 import { formatAddress } from '@mysten/sui.js';
 import { useState } from 'react';
@@ -29,6 +30,7 @@ function MenuList() {
     const networkUrl = useNextMenuUrl(true, '/network');
     const autoLockUrl = useNextMenuUrl(true, '/auto-lock');
     const address = useActiveAddress();
+    const { data: domainName } = useResolveSuiNSName(address);
     const apiEnv = useAppSelector((state) => state.app.apiEnv);
     const networkName = API_ENV_TO_INFO[apiEnv].name;
     const autoLockInterval = useAutoLockInterval();
@@ -45,7 +47,10 @@ function MenuList() {
                         to={accountUrl}
                         icon={<Account24 />}
                         title={'Accounts'}
-                        subtitle={address ? formatAddress(address) : ''}
+                        subtitle={
+                            domainName ??
+                            (address ? formatAddress(address) : '')
+                        }
                     />
                     <MenuListItem
                         to={networkUrl}

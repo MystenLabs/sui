@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Popover, Transition } from '@headlessui/react';
+import { useResolveSuiNSName } from '@mysten/core';
 import { ChevronDown12, Copy12 } from '@mysten/icons';
 import { formatAddress } from '@mysten/sui.js';
 
@@ -20,14 +21,17 @@ export function AccountSelector() {
         copySuccessMessage: 'Address copied',
     });
     const backgroundClient = useBackgroundClient();
+    const { data: domainName } = useResolveSuiNSName(activeAddress);
     if (!allAccounts.length) {
         return null;
     }
+
     const buttonText = (
-        <Text mono variant="bodySmall">
-            {activeAddress ? formatAddress(activeAddress) : ''}
+        <Text mono variant="bodySmall" truncate>
+            {domainName ?? (activeAddress ? formatAddress(activeAddress) : '')}
         </Text>
     );
+
     if (allAccounts.length === 1) {
         return (
             <ButtonConnectedTo
@@ -39,7 +43,7 @@ export function AccountSelector() {
         );
     }
     return (
-        <Popover className="relative z-10">
+        <Popover className="relative z-10 max-w-full px-5">
             {({ close }) => (
                 <>
                     <Popover.Button
@@ -56,7 +60,7 @@ export function AccountSelector() {
                         leaveFrom="transform scale-100 opacity-100"
                         leaveTo="transform scale-75 opacity-0"
                     >
-                        <Popover.Panel className="absolute left-1/2 -translate-x-1/2 w-60 drop-shadow-accountModal mt-2 z-0 rounded-md bg-white">
+                        <Popover.Panel className="absolute left-1/2 -translate-x-1/2 w-[280px] drop-shadow-accountModal mt-2 z-0 rounded-md bg-white">
                             <div className="absolute w-3 h-3 bg-white -top-1 left-1/2 -translate-x-1/2 rotate-45" />
                             <div className="relative px-1.25 max-h-80 overflow-y-auto max-w-full z-10">
                                 <AccountList

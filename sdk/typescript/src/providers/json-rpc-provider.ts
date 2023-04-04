@@ -48,6 +48,7 @@ import {
   TransactionFilter,
   TransactionEffects,
   Unsubscribe,
+  ResolvedNameServiceNames,
 } from '../types';
 import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 import {
@@ -56,7 +57,7 @@ import {
   WebsocketClientOptions,
 } from '../rpc/websocket-client';
 import { requestSuiFromFaucet } from '../rpc/faucet-client';
-import { any, array, string } from 'superstruct';
+import { any, array, string, nullable } from 'superstruct';
 import { fromB58, toB64, toHEX } from '@mysten/bcs';
 import { SerializedSignature } from '../cryptography/signature';
 import { Connection, devnetConnection } from '../rpc/connection';
@@ -840,6 +841,28 @@ export class JsonRpcProvider {
     const checkpoint = await this.getCheckpoint({ id: '0' });
     const bytes = fromB58(checkpoint.digest);
     return toHEX(bytes.slice(0, 4));
+  }
+
+  async resolveNameServiceAddress(input: {
+    name: string;
+  }): Promise<SuiAddress | null> {
+    return await this.client.requestWithType(
+      'suix_resolveNameServiceAddress',
+      [input.name],
+      nullable(SuiAddress),
+    );
+  }
+
+  async resolveNameServiceNames(
+    input: {
+      address: string;
+    } & PaginationArguments<ResolvedNameServiceNames['nextCursor']>,
+  ): Promise<ResolvedNameServiceNames> {
+    return await this.client.requestWithType(
+      'suix_resolveNameServiceNames',
+      [input.address],
+      ResolvedNameServiceNames,
+    );
   }
 
   /**
