@@ -5,7 +5,7 @@ use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
 
 use sui_types::epoch_data::EpochData;
-use sui_types::messages_checkpoint::CheckpointDigest;
+use sui_types::messages_checkpoint::{CheckpointDigest, CheckpointTimestamp};
 use sui_types::sui_system_state::epoch_start_sui_system_state::{
     EpochStartSystemState, EpochStartSystemStateTrait,
 };
@@ -41,6 +41,10 @@ impl EpochStartConfiguration {
             self.epoch_start_state().epoch_start_timestamp_ms(),
             self.epoch_digest(),
         )
+    }
+
+    pub fn epoch_start_timestamp_ms(&self) -> CheckpointTimestamp {
+        self.epoch_start_state().epoch_start_timestamp_ms()
     }
 }
 

@@ -29,7 +29,6 @@ use sui_types::messages::{
     ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
     VerifiedExecutableTransaction, VerifiedTransaction,
 };
-
 use sui_types::storage::ParentSync;
 
 use tracing::{debug, error, instrument};
@@ -132,6 +131,19 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
         /* (serialized, transaction, output_cert) */
         let mut transactions = vec![];
         let timestamp = consensus_output.sub_dag.commit_timestamp;
+
+        let epoch_start = self
+            .epoch_store
+            .epoch_start_config()
+            .epoch_start_timestamp_ms();
+        let timestamp = if timestamp < epoch_start {
+            error!(
+                "Unexpected commit timestamp {timestamp} less then epoch start time {epoch_start}"
+            );
+            epoch_start
+        } else {
+            timestamp
+        };
 
         let prologue_transaction = self.consensus_commit_prologue_transaction(round, timestamp);
         transactions.push((
