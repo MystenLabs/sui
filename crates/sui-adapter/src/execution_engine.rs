@@ -46,6 +46,9 @@ use sui_types::{
 
 use sui_types::temporary_store::TemporaryStore;
 
+#[cfg(msim)]
+use self::advance_epoch_result_injection::maybe_modify_result;
+
 checked_arithmetic! {
 
 #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
@@ -563,6 +566,9 @@ fn advance_epoch<S: ObjectStore + BackingPackageStore + ParentSync + ChildObject
         advance_epoch_pt,
     );
 
+    #[cfg(msim)]
+    let result = maybe_modify_result(result);
+
     if result.is_err() {
         tracing::error!(
             "Failed to execute advance epoch transaction. Switching to safe mode. Error: {:?}. Input objects: {:?}. Tx data: {:?}",
@@ -670,4 +676,31 @@ fn setup_consensus_commit<S: BackingPackageStore + ParentSync + ChildObjectResol
     )
 }
 
+}
+
+#[cfg(msim)]
+pub mod advance_epoch_result_injection {
+    use std::cell::RefCell;
+    use sui_types::error::{ExecutionError, ExecutionErrorKind};
+
+    thread_local! {
+        static OVERRIDE: RefCell<bool>  = RefCell::new(false);
+    }
+
+    pub fn set_override(value: bool) {
+        OVERRIDE.with(|o| *o.borrow_mut() = value);
+    }
+
+    /// This function is used to modify the result of advance_epoch transaction for testing.
+    /// If the override is set, the result will be an execution error, otherwise the original result will be returned.
+    pub fn maybe_modify_result(result: Result<(), ExecutionError>) -> Result<(), ExecutionError> {
+        if OVERRIDE.with(|o| *o.borrow()) {
+            Err::<(), ExecutionError>(ExecutionError::new(
+                ExecutionErrorKind::FunctionNotFound,
+                None,
+            ))
+        } else {
+            result
+        }
+    }
 }

@@ -28,6 +28,7 @@ rand = "0.8.5"
 tap = "1.0"
 inquire = "0.6.0"
 
+sui-adapter = { path = "../sui-adapter" }
 sui-core = { path = "../sui-core" }
 sui-framework = { path = "../sui-framework" }
 sui-framework-build = { path = "../sui-framework-build" }

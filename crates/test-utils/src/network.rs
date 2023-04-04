@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::future::join_all;
-use move_core_types::ident_str;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::time::Duration;
@@ -16,7 +15,6 @@ use tokio::time::timeout;
 use tokio::{task::JoinHandle, time::sleep};
 use tracing::info;
 
-use crate::messages::get_sui_gas_object_with_wallet_context;
 use mysten_metrics::RegistryService;
 use sui::config::SuiEnv;
 use sui::{client_commands::WalletContext, config::SuiClientConfig};
@@ -25,8 +23,6 @@ use sui_config::genesis_config::GenesisConfig;
 use sui_config::node::DBCheckpointConfig;
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{FullnodeConfigBuilder, NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
-use sui_core::test_utils::MAX_GAS;
-use sui_framework::{SuiSystem, SystemPackage};
 use sui_json_rpc_types::{SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNode;
@@ -37,17 +33,12 @@ use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_swarm::memory::{Swarm, SwarmBuilder};
 use sui_types::base_types::{AuthorityName, SuiAddress};
 use sui_types::committee::EpochId;
+use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
-use sui_types::crypto::{AccountKeyPair, KeypairTraits};
-use sui_types::messages::CallArg;
-use sui_types::messages::ObjectArg;
-use sui_types::messages::TransactionData;
+use sui_types::messages::VerifiedTransaction;
 use sui_types::object::Object;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
-use sui_types::utils::to_sender_signed_transaction;
-use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
-use sui_types::SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION;
 
 const NUM_VALIDAOTR: usize = 4;
 
@@ -174,38 +165,18 @@ impl TestCluster {
         .expect("Timed out waiting for cluster to target epoch")
     }
 
-    pub async fn request_add_stake(
+    pub async fn execute_transaction(
         &self,
-        validator_address: SuiAddress,
-        sender: SuiAddress,
-        sender_keypair: &AccountKeyPair,
+        transaction: VerifiedTransaction,
     ) -> SuiRpcResult<SuiTransactionBlockResponse> {
-        let objects = get_sui_gas_object_with_wallet_context(&self.wallet, &sender).await;
-        let stake_tx_data = TransactionData::new_move_call_with_dummy_gas_price(
-            sender,
-            SuiSystem::ID,
-            ident_str!("sui_system").to_owned(),
-            ident_str!("request_add_stake").to_owned(),
-            vec![],
-            objects[0].1,
-            vec![
-                CallArg::Object(ObjectArg::SharedObject {
-                    id: SUI_SYSTEM_STATE_OBJECT_ID,
-                    initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-                    mutable: true,
-                }),
-                CallArg::Object(ObjectArg::ImmOrOwnedObject(objects[1].1)),
-                CallArg::Pure(bcs::to_bytes(&validator_address).unwrap()),
-            ],
-            MAX_GAS,
-        )
-        .unwrap();
-        let transaction = to_sender_signed_transaction(stake_tx_data, sender_keypair);
-
         self.fullnode_handle
             .sui_client
             .quorum_driver()
-            .execute_transaction_block(transaction, SuiTransactionBlockResponseOptions::new(), None)
+            .execute_transaction_block(
+                transaction,
+                SuiTransactionBlockResponseOptions::new().with_effects(),
+                None,
+            )
             .await
     }
 
