@@ -131,6 +131,7 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
         /* (serialized, transaction, output_cert) */
         let mut transactions = vec![];
         let timestamp = consensus_output.sub_dag.commit_timestamp;
+        let leader_author = consensus_output.sub_dag.leader.header().author();
 
         let epoch_start = self
             .epoch_store
@@ -138,7 +139,8 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             .epoch_start_timestamp_ms();
         let timestamp = if timestamp < epoch_start {
             error!(
-                "Unexpected commit timestamp {timestamp} less then epoch start time {epoch_start}"
+                "Unexpected commit timestamp {timestamp} less then epoch start time {epoch_start}, author {leader_author}, round {round}",
+
             );
             epoch_start
         } else {
@@ -163,12 +165,7 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
 
         self.metrics
             .consensus_committed_subdags
-            .with_label_values(&[&consensus_output
-                .sub_dag
-                .leader
-                .header()
-                .author()
-                .to_string()])
+            .with_label_values(&[&leader_author.to_string()])
             .inc();
         for (cert, batches) in consensus_output.batches {
             let author = cert.header().author();
