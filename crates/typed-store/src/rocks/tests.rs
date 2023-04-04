@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use crate::rocks::util::reference_count_merge_operator;
-use crate::rocks::RocksDB::DBWithThreadMode;
+use crate::rocks::util::{is_ref_count_value, reference_count_merge_operator};
 use crate::{reopen, retry_transaction, retry_transaction_forever};
 use rstest::rstest;
 use serde::Deserialize;
@@ -1011,19 +1010,16 @@ async fn refcount_with_compaction_test() {
     increment_counter(&db, &key, -1);
     increment_counter(&db, &key, -1);
     // ref count went to zero. Reading value returns empty array
-    let value = db.get_raw_bytes(&key).unwrap().unwrap();
+    assert!(db.get(&key).is_err());
+    let value = db.multi_get_raw_bytes([(&key)]).unwrap()[0]
+        .clone()
+        .unwrap();
     assert!(value.is_empty());
 
     // refcount increment makes value visible again
     increment_counter(&db, &key, 1);
     let value = db.get(&key).unwrap().unwrap();
     assert_eq!(value.value, object.value);
-
-    // decrement to zero, run compaction and increment back to 1
-    let _snapshot;
-    if let DBWithThreadMode(db) = &*db.rocksdb {
-        _snapshot = db.underlying.snapshot();
-    };
 
     increment_counter(&db, &key, -1);
     db.compact_range(
@@ -1034,10 +1030,10 @@ async fn refcount_with_compaction_test() {
         },
     )
     .unwrap();
+
     increment_counter(&db, &key, 1);
-    // snapshot creation prevents compaction job from removing the value
-    let value = db.get(&key).unwrap().unwrap();
-    assert_eq!(value.value, object.value);
+    let value = db.get_raw_bytes(&key).unwrap().unwrap();
+    assert!(is_ref_count_value(&value));
 }
 
 fn open_map<P: AsRef<Path>, K, V>(
