@@ -57,8 +57,9 @@ CREATE TABLE objects_history
     has_public_transfer    BOOLEAN       NOT NULL,
     storage_rebate         BIGINT        NOT NULL,
     bcs                    bcs_bytes[]   NOT NULL,
-    CONSTRAINT objects_history_pk PRIMARY KEY (checkpoint, object_id, version)
+    CONSTRAINT objects_history_pk PRIMARY KEY (object_id, version, checkpoint)
 ) PARTITION BY RANGE (checkpoint);
+CREATE INDEX objects_history_checkpoint_index ON objects_history (checkpoint);
 CREATE INDEX objects_history_id_version_index ON objects_history (object_id, version);
 CREATE INDEX objects_history_owner_index ON objects_history (owner_type, owner_address);
 CREATE INDEX objects_history_old_owner_index ON objects_history (old_owner_type, old_owner_address);
