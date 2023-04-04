@@ -8,12 +8,13 @@ use std::{fs, io, path::Path};
 use std::{path::PathBuf, str};
 use sui::client_commands::WalletContext;
 use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage, SuiPackageHooks};
+use sui_types::base_types::ObjectID;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use test_utils::network::TestClusterBuilder;
-use test_utils::transaction::publish_package_with_wallet;
+use test_utils::transaction::{publish_package_with_wallet, upgrade_package_with_wallet};
 
 use crate::{BytecodeSourceVerifier, SourceMode};
 
@@ -26,7 +27,7 @@ async fn successful_verification() -> anyhow::Result<()> {
     let b_ref = {
         let fixtures = tempfile::tempdir()?;
         let b_src = copy_published_package(&fixtures, "b", SuiAddress::ZERO).await?;
-        publish_package(context, sender, b_src).await
+        publish_package(context, sender, b_src).await.0
     };
 
     let b_pkg = {
@@ -41,7 +42,7 @@ async fn successful_verification() -> anyhow::Result<()> {
         let a_src = copy_published_package(&fixtures, "a", SuiAddress::ZERO).await?;
         (
             compile_package(a_src.clone()),
-            publish_package(context, sender, a_src).await,
+            publish_package(context, sender, a_src).await.0,
         )
     };
 
@@ -122,7 +123,7 @@ async fn successful_verification_module_ordering() -> anyhow::Result<()> {
     let z_ref = {
         let fixtures = tempfile::tempdir()?;
         let z_src = copy_published_package(&fixtures, "z", SuiAddress::ZERO).await?;
-        publish_package(context, sender, z_src).await
+        publish_package(context, sender, z_src).await.0
     };
 
     let z_pkg = {
@@ -152,7 +153,7 @@ async fn fail_verification_bad_address() -> anyhow::Result<()> {
     let b_ref = {
         let fixtures = tempfile::tempdir()?;
         let b_src = copy_published_package(&fixtures, "b", SuiAddress::ZERO).await?;
-        publish_package(context, sender, b_src).await
+        publish_package(context, sender, b_src).await.0
     };
 
     let (a_pkg, _) = {
@@ -162,7 +163,7 @@ async fn fail_verification_bad_address() -> anyhow::Result<()> {
         let a_src = copy_published_package(&fixtures, "a", SuiAddress::ZERO).await?;
         (
             compile_package(a_src.clone()),
-            publish_package(context, sender, a_src).await,
+            publish_package(context, sender, a_src).await.0,
         )
     };
     let client = context.get_client().await?;
@@ -217,7 +218,7 @@ async fn rpc_call_failed_during_verify() -> anyhow::Result<()> {
     let b_ref = {
         let fixtures = tempfile::tempdir()?;
         let b_src = copy_published_package(&fixtures, "b", SuiAddress::ZERO).await?;
-        publish_package(context, sender, b_src).await
+        publish_package(context, sender, b_src).await.0
     };
 
     let (_a_pkg, a_ref) = {
@@ -227,7 +228,7 @@ async fn rpc_call_failed_during_verify() -> anyhow::Result<()> {
         let a_src = copy_published_package(&fixtures, "a", SuiAddress::ZERO).await?;
         (
             compile_package(a_src.clone()),
-            publish_package(context, sender, a_src).await,
+            publish_package(context, sender, a_src).await.0,
         )
     };
     let _a_addr: SuiAddress = a_ref.0.into();
@@ -359,7 +360,7 @@ async fn module_not_found_on_chain() -> anyhow::Result<()> {
         let fixtures = tempfile::tempdir()?;
         let b_src = copy_published_package(&fixtures, "b", SuiAddress::ZERO).await?;
         tokio::fs::remove_file(b_src.join("sources").join("c.move")).await?;
-        publish_package(context, sender, b_src).await
+        publish_package(context, sender, b_src).await.0
     };
 
     let a_pkg = {
@@ -392,7 +393,7 @@ async fn module_not_found_locally() -> anyhow::Result<()> {
     let b_ref = {
         let fixtures = tempfile::tempdir()?;
         let b_src = copy_published_package(&fixtures, "b", SuiAddress::ZERO).await?;
-        publish_package(context, sender, b_src).await
+        publish_package(context, sender, b_src).await.0
     };
 
     let a_pkg = {
@@ -436,7 +437,7 @@ async fn module_bytecode_mismatch() -> anyhow::Result<()> {
             .replace("43", "44");
         tokio::fs::write(&c_path, c_file).await?;
 
-        publish_package(context, sender, b_src).await
+        publish_package(context, sender, b_src).await.0
     };
 
     let (a_pkg, a_ref) = {
@@ -454,7 +455,7 @@ async fn module_bytecode_mismatch() -> anyhow::Result<()> {
             .replace("123", "1234");
         tokio::fs::write(&c_path, c_file).await?;
 
-        (compiled, publish_package(context, sender, a_src).await)
+        (compiled, publish_package(context, sender, a_src).await.0)
     };
     let a_addr: SuiAddress = a_ref.0.into();
     stable_addrs.insert(a_addr, "<a_addr>");
@@ -491,14 +492,14 @@ async fn multiple_failures() -> anyhow::Result<()> {
         let fixtures = tempfile::tempdir()?;
         let b_src = copy_published_package(&fixtures, "b", SuiAddress::ZERO).await?;
         tokio::fs::remove_file(b_src.join("sources").join("c.move")).await?;
-        publish_package(context, sender, b_src).await
+        publish_package(context, sender, b_src).await.0
     };
 
     // Publish package `c::c` on-chain, unmodified.
     let c_ref = {
         let fixtures = tempfile::tempdir()?;
         let c_src = copy_published_package(&fixtures, "c", SuiAddress::ZERO).await?;
-        publish_package(context, sender, c_src).await
+        publish_package(context, sender, c_src).await.0
     };
 
     // Compile local package `d` that references:
@@ -552,13 +553,39 @@ async fn publish_package(
     context: &WalletContext,
     sender: SuiAddress,
     package: impl AsRef<Path>,
-) -> ObjectRef {
+) -> (ObjectRef, ObjectRef) {
     let package = compile_package(package);
     let package_bytes = package.get_package_bytes(/* with_unpublished_deps */ false);
     let package_deps = package.dependency_ids.published.into_values().collect();
-    publish_package_with_wallet(context, sender, package_bytes, package_deps)
-        .await
-        .0
+    let (package, cap, _) =
+        publish_package_with_wallet(context, sender, package_bytes, package_deps).await;
+    (package, cap)
+}
+
+async fn upgrade_package(
+    context: &WalletContext,
+    sender: SuiAddress,
+    package_id: ObjectID,
+    upgrade_cap: ObjectID,
+    package: impl AsRef<Path>,
+) -> ObjectRef {
+    let package = compile_package(package);
+    let with_unpublished_deps = false;
+    let package_bytes = package.get_package_bytes(with_unpublished_deps);
+    let package_digest = package.get_package_digest(with_unpublished_deps).to_vec();
+    let package_deps = package.dependency_ids.published.into_values().collect();
+
+    upgrade_package_with_wallet(
+        context,
+        sender,
+        package_id,
+        upgrade_cap,
+        package_bytes,
+        package_deps,
+        package_digest,
+    )
+    .await
+    .0
 }
 
 /// Compile and publish package at absolute path `package` to chain, along with its unpublished
