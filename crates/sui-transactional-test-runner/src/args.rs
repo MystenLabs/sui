@@ -270,7 +270,7 @@ impl ParsableValue for SuiExtraValueArgs {
 }
 
 fn parse_fake_id(s: &str) -> anyhow::Result<FakeID> {
-    Ok(if let Some((s1, s2)) = s.split_once(",") {
+    Ok(if let Some((s1, s2)) = s.split_once(',') {
         let (i, _) = parse_u64(s1)?;
         let (j, _) = parse_u64(s2)?;
         FakeID::Enumerated(i, j)
