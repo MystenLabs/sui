@@ -109,12 +109,12 @@ impl ReadApi {
 
 #[async_trait]
 impl ReadApiServer for ReadApi {
-    async fn get_object(
+    fn get_object(
         &self,
         object_id: ObjectID,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiObjectResponse> {
-        let object_read = self.state.get_object_read(&object_id).await.map_err(|e| {
+        let object_read = self.state.get_object_read(&object_id).map_err(|e| {
             debug!(?object_id, "Failed to get object: {:?}", e);
             anyhow!("{e}")
         })?;
@@ -126,7 +126,7 @@ impl ReadApiServer for ReadApi {
             )),
             ObjectRead::Exists(object_ref, o, layout) => {
                 let display_fields = if options.show_display {
-                    get_display_fields(self, &o, &layout).await?
+                    get_display_fields(self, &o, &layout)?
                 } else {
                     None
                 };
@@ -144,17 +144,16 @@ impl ReadApiServer for ReadApi {
         }
     }
 
-    async fn multi_get_objects(
+    fn multi_get_objects(
         &self,
         object_ids: Vec<ObjectID>,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiObjectResponse>> {
         if object_ids.len() <= QUERY_MAX_RESULT_LIMIT {
-            let mut futures = vec![];
+            let mut results = vec![];
             for object_id in object_ids {
-                futures.push(self.get_object(object_id, options.clone()))
+                results.push(self.get_object(object_id, options.clone()));
             }
-            let results = join_all(futures).await;
             let (oks, errs): (Vec<_>, Vec<_>) = results.into_iter().partition(Result::is_ok);
 
             let success = oks.into_iter().filter_map(Result::ok).collect();
@@ -194,7 +193,7 @@ impl ReadApiServer for ReadApi {
             PastObjectRead::ObjectNotExists(id) => Ok(SuiPastObjectResponse::ObjectNotExists(id)),
             PastObjectRead::VersionFound(object_ref, o, layout) => {
                 let display_fields = if options.show_display {
-                    get_display_fields(self, &o, &layout).await?
+                    get_display_fields(self, &o, &layout)?
                 } else {
                     None
                 };
@@ -699,7 +698,7 @@ fn to_sui_transaction_events(
     .map_err(Error::SuiError)?)
 }
 
-async fn get_display_fields(
+fn get_display_fields(
     fullnode_api: &ReadApi,
     original_object: &Object,
     original_layout: &Option<MoveStructLayout>,
@@ -707,26 +706,23 @@ async fn get_display_fields(
     let Some((object_type, layout)) = get_object_type_and_struct(original_object, original_layout)? else{
         return Ok(None)
     };
-    if let Some(display_object) = get_display_object_by_type(fullnode_api, &object_type).await? {
+    if let Some(display_object) = get_display_object_by_type(fullnode_api, &object_type)? {
         return Ok(Some(get_rendered_fields(display_object.fields, &layout)?));
     }
     Ok(None)
 }
 
-async fn get_display_object_by_type(
+fn get_display_object_by_type(
     fullnode_api: &ReadApi,
     object_type: &StructTag,
     // TODO: add query version support
 ) -> RpcResult<Option<DisplayVersionUpdatedEvent>> {
-    let mut events = fullnode_api
-        .state
-        .query_events(
-            EventFilter::MoveEventType(DisplayVersionUpdatedEvent::type_(object_type)),
-            None,
-            1,
-            true,
-        )
-        .await?;
+    let mut events = fullnode_api.state.query_events(
+        EventFilter::MoveEventType(DisplayVersionUpdatedEvent::type_(object_type)),
+        None,
+        1,
+        true,
+    )?;
 
     // If there's any recent version of Display, give it to the client.
     // TODO: add support for version query.
@@ -781,7 +777,6 @@ pub async fn get_move_modules_by_package(
 ) -> RpcResult<BTreeMap<String, NormalizedModule>> {
     let object_read = state
         .get_object_read(&package)
-        .await
         .map_err(|e| anyhow!("{e}"))?;
 
     Ok(match object_read {

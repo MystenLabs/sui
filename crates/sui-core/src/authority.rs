@@ -2002,53 +2002,47 @@ impl AuthorityState {
         Ok(checkpoint)
     }
 
-    pub async fn get_object_read(&self, object_id: &ObjectID) -> Result<ObjectRead, SuiError> {
-        let database = self.database.clone();
-        let module_cache = self
-            .load_epoch_store_one_call_per_task()
-            .module_cache()
-            .clone();
-        let object_id = *object_id;
-        tokio::task::spawn_blocking(move || {
-            match database.get_object_or_tombstone(object_id)? {
-                None => Ok(ObjectRead::NotExists(object_id)),
-                Some(obj_ref) => {
-                    if obj_ref.2.is_alive() {
-                        match database.get_object_by_key(&object_id, obj_ref.1)? {
-                            None => {
-                                error!("Object with in parent_entry is missing from object store, datastore is inconsistent");
-                                Err(UserInputError::ObjectNotFound {
-                                    object_id,
-                                    version: Some(obj_ref.1),
-                                }
-                                    .into())
+    pub fn get_object_read(&self, object_id: &ObjectID) -> Result<ObjectRead, SuiError> {
+        match self.database.get_object_or_tombstone(*object_id)? {
+            None => Ok(ObjectRead::NotExists(*object_id)),
+            Some(obj_ref) => {
+                if obj_ref.2.is_alive() {
+                    match self.database.get_object_by_key(object_id, obj_ref.1)? {
+                        None => {
+                            error!("Object with in parent_entry is missing from object store, datastore is inconsistent");
+                            Err(UserInputError::ObjectNotFound {
+                                object_id: *object_id,
+                                version: Some(obj_ref.1),
                             }
-                            Some(object) => {
-                                let layout = object.get_layout(
-                                    ObjectFormatOptions::default(),
-                                    // threading the epoch_store through this API does not
-                                    // seem possible, so we just read it from the state (self) and fetch
-                                    // the module cache out of it.
-                                    // Notice that no matter what module cache we get things
-                                    // should work
-                                    &module_cache,
-                                )?;
-                                Ok(ObjectRead::Exists(obj_ref, object, layout))
-                            }
+                            .into())
                         }
-                    } else {
-                        Ok(ObjectRead::Deleted(obj_ref))
+                        Some(object) => {
+                            let layout = object.get_layout(
+                                ObjectFormatOptions::default(),
+                                // threading the epoch_store through this API does not
+                                // seem possible, so we just read it from the state (self) and fetch
+                                // the module cache out of it.
+                                // Notice that no matter what module cache we get things
+                                // should work
+                                self.load_epoch_store_one_call_per_task()
+                                    .module_cache()
+                                    .as_ref(),
+                            )?;
+                            Ok(ObjectRead::Exists(obj_ref, object, layout))
+                        }
                     }
+                } else {
+                    Ok(ObjectRead::Deleted(obj_ref))
                 }
             }
-        }).await.map_err(|e|SuiError::GenericStorageError(e.to_string()))?
+        }
     }
 
     pub async fn get_move_object<T>(&self, object_id: &ObjectID) -> SuiResult<T>
     where
         T: DeserializeOwned,
     {
-        let o = self.get_object_read(object_id).await?.into_object()?;
+        let o = self.get_object_read(object_id)?.into_object()?;
         if let Some(move_object) = o.data.try_as_move() {
             Ok(bcs::from_bytes(move_object.contents()).map_err(|e| {
                 SuiError::ObjectDeserializationError {
@@ -2489,7 +2483,7 @@ impl AuthorityState {
         Ok(self.get_indexes()?.get_timestamp_ms(digest)?)
     }
 
-    pub async fn query_events(
+    pub fn query_events(
         &self,
         query: EventFilter,
         // If `Some`, the query will start from the next item after the specified cursor
@@ -2498,95 +2492,89 @@ impl AuthorityState {
         descending: bool,
     ) -> Result<Vec<SuiEvent>, anyhow::Error> {
         let index_store = self.get_indexes()?;
-        let module_cache = self.epoch_store.load().module_cache().clone();
-        let database = self.database.clone();
 
-        tokio::task::spawn_blocking(move || {
-            //Get the tx_num from tx_digest
-            let (tx_num, event_num) = if let Some(cursor) = cursor.as_ref() {
-                let tx_seq = index_store.get_transaction_seq(&cursor.tx_digest)?.ok_or(
-                    SuiError::TransactionNotFound {
-                        digest: cursor.tx_digest,
-                    },
-                )?;
-                (tx_seq, cursor.event_seq as usize)
-            } else if descending {
-                (u64::MAX, usize::MAX)
-            } else {
-                (0, 0)
-            };
+        //Get the tx_num from tx_digest
+        let (tx_num, event_num) = if let Some(cursor) = cursor.as_ref() {
+            let tx_seq = index_store.get_transaction_seq(&cursor.tx_digest)?.ok_or(
+                SuiError::TransactionNotFound {
+                    digest: cursor.tx_digest,
+                },
+            )?;
+            (tx_seq, cursor.event_seq as usize)
+        } else if descending {
+            (u64::MAX, usize::MAX)
+        } else {
+            (0, 0)
+        };
 
-            let limit = limit + 1;
-            let mut event_keys = match query {
-                EventFilter::All(..) => {
-                    index_store.all_events(tx_num, event_num, limit, descending)?
-                }
-                EventFilter::Transaction(digest) => index_store
-                    .events_by_transaction(&digest, tx_num, event_num, limit, descending)?,
-                EventFilter::MoveModule { package, module } => {
-                    let module_id = ModuleId::new(package.into(), module);
-                    index_store
-                        .events_by_module_id(&module_id, tx_num, event_num, limit, descending)?
-                }
-                EventFilter::MoveEventType(struct_name) => index_store
-                    .events_by_move_event_struct_name(
-                        &struct_name,
-                        tx_num,
-                        event_num,
-                        limit,
-                        descending,
-                    )?,
-                EventFilter::Sender(sender) => {
-                    index_store.events_by_sender(&sender, tx_num, event_num, limit, descending)?
-                }
-                EventFilter::TimeRange {
-                    start_time,
-                    end_time,
-                } => index_store
-                    .event_iterator(start_time, end_time, tx_num, event_num, limit, descending)?,
-                _ => {
-                    return Err(anyhow!(
-                        "This query type is not supported by the full node."
-                    ))
-                }
-            };
-
-            // skip one event if exclusive cursor is provided,
-            // otherwise truncate to the original limit.
-            if cursor.is_some() {
-                if !event_keys.is_empty() {
-                    event_keys.remove(0);
-                }
-            } else {
-                event_keys.truncate(limit - 1);
+        let limit = limit + 1;
+        let mut event_keys = match query {
+            EventFilter::All(..) => index_store.all_events(tx_num, event_num, limit, descending)?,
+            EventFilter::Transaction(digest) => {
+                index_store.events_by_transaction(&digest, tx_num, event_num, limit, descending)?
             }
-            let keys = event_keys.iter().map(|(digest, _, seq, _)| (*digest, *seq));
-
-            let stored_events = database
-                .perpetual_tables
-                .events
-                .multi_get(keys)?
-                .into_iter()
-                .zip(event_keys.into_iter())
-                .map(|(e, (digest, tx_digest, event_seq, timestamp))| {
-                    e.map(|e| (e, tx_digest, event_seq, timestamp))
-                        .ok_or(SuiError::TransactionEventsNotFound { digest })
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-
-            let mut events = vec![];
-            for (e, tx_digest, event_seq, timestamp) in stored_events {
-                events.push(SuiEvent::try_from(
-                    e,
-                    tx_digest,
-                    event_seq as u64,
-                    Some(timestamp),
-                    &module_cache,
-                )?)
+            EventFilter::MoveModule { package, module } => {
+                let module_id = ModuleId::new(package.into(), module);
+                index_store.events_by_module_id(&module_id, tx_num, event_num, limit, descending)?
             }
-            Ok(events)
-        })
-        .await?
+            EventFilter::MoveEventType(struct_name) => index_store
+                .events_by_move_event_struct_name(
+                    &struct_name,
+                    tx_num,
+                    event_num,
+                    limit,
+                    descending,
+                )?,
+            EventFilter::Sender(sender) => {
+                index_store.events_by_sender(&sender, tx_num, event_num, limit, descending)?
+            }
+            EventFilter::TimeRange {
+                start_time,
+                end_time,
+            } => index_store
+                .event_iterator(start_time, end_time, tx_num, event_num, limit, descending)?,
+            _ => {
+                return Err(anyhow!(
+                    "This query type is not supported by the full node."
+                ))
+            }
+        };
+
+        // skip one event if exclusive cursor is provided,
+        // otherwise truncate to the original limit.
+        if cursor.is_some() {
+            if !event_keys.is_empty() {
+                event_keys.remove(0);
+            }
+        } else {
+            event_keys.truncate(limit - 1);
+        }
+        let keys = event_keys.iter().map(|(digest, _, seq, _)| (*digest, *seq));
+
+        let stored_events = self
+            .database
+            .perpetual_tables
+            .events
+            .multi_get(keys)?
+            .into_iter()
+            .zip(event_keys.into_iter())
+            .map(|(e, (digest, tx_digest, event_seq, timestamp))| {
+                e.map(|e| (e, tx_digest, event_seq, timestamp))
+                    .ok_or(SuiError::TransactionEventsNotFound { digest })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let mut events = vec![];
+        for (e, tx_digest, event_seq, timestamp) in stored_events {
+            events.push(SuiEvent::try_from(
+                e,
+                tx_digest,
+                event_seq as u64,
+                Some(timestamp),
+                &**self.epoch_store.load().module_cache(),
+            )?)
+        }
+        Ok(events)
     }
 
     pub async fn insert_genesis_object(&self, object: Object) {

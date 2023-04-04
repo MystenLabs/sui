@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
+use futures::executor::block_on;
 use futures::future::join_all;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::RpcModule;
-
 use sui_json_rpc::api::{ReadApiClient, ReadApiServer};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
@@ -123,7 +123,7 @@ impl<S> ReadApiServer for ReadApi<S>
 where
     S: IndexerStore + Sync + Send + 'static,
 {
-    async fn get_object(
+    fn get_object(
         &self,
         object_id: ObjectID,
         options: Option<SuiObjectDataOptions>,
@@ -132,18 +132,18 @@ where
             .migrated_methods
             .contains(&"get_object_with_options".into())
         {
-            return self.fullnode.get_object(object_id, options).await;
+            return block_on(async { self.fullnode.get_object(object_id, options).await });
         }
 
         Ok(self.get_object_with_options_internal(object_id, options)?)
     }
 
-    async fn multi_get_objects(
+    fn multi_get_objects(
         &self,
         object_ids: Vec<ObjectID>,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiObjectResponse>> {
-        return self.fullnode.multi_get_objects(object_ids, options).await;
+        block_on(async { self.fullnode.multi_get_objects(object_ids, options).await })
     }
 
     async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt> {

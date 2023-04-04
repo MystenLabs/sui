@@ -38,8 +38,8 @@ pub trait ReadApi {
     ) -> RpcResult<Vec<SuiTransactionBlockResponse>>;
 
     /// Return the object information for a specified object
-    #[method(name = "getObject")]
-    async fn get_object(
+    #[method(name = "getObject", blocking)]
+    fn get_object(
         &self,
         /// the ID of the queried object
         object_id: ObjectID,
@@ -48,8 +48,8 @@ pub trait ReadApi {
     ) -> RpcResult<SuiObjectResponse>;
 
     /// Return the object data for a list of objects
-    #[method(name = "multiGetObjects")]
-    async fn multi_get_objects(
+    #[method(name = "multiGetObjects", blocking)]
+    fn multi_get_objects(
         &self,
         /// the IDs of the queried objects
         object_ids: Vec<ObjectID>,

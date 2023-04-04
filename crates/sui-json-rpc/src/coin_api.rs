@@ -37,17 +37,16 @@ impl CoinReadApi {
         Self { state }
     }
 
-    async fn get_object(&self, object_id: &ObjectID) -> Result<Object, Error> {
+    fn get_object(&self, object_id: &ObjectID) -> Result<Object, Error> {
         Ok(self
             .state
-            .get_object_read(object_id)
-            .await?
+            .get_object_read(object_id)?
             .into_object()
             .map_err(SuiError::from)?)
     }
 
     async fn get_coin(&self, coin_id: &ObjectID) -> Result<SuiCoin, Error> {
-        let o = self.get_object(coin_id).await?;
+        let o = self.get_object(coin_id)?;
         if let Some(move_object) = o.data.try_as_move() {
             let (balance, locked_until_epoch) = if move_object.type_().is_coin() {
                 let coin: Coin = bcs::from_bytes(move_object.contents())?;
@@ -129,7 +128,7 @@ impl CoinReadApi {
         package_id: &ObjectID,
         object_struct_tag: StructTag,
     ) -> Result<Object, Error> {
-        let publish_txn_digest = self.get_object(package_id).await?.previous_transaction;
+        let publish_txn_digest = self.get_object(package_id)?.previous_transaction;
         let (_, effect) = self
             .state
             .get_executed_transaction_and_effects(publish_txn_digest)
@@ -153,7 +152,7 @@ impl CoinReadApi {
             ))
         }
         .await?;
-        self.get_object(&object_id).await
+        self.get_object(&object_id)
     }
 }
 

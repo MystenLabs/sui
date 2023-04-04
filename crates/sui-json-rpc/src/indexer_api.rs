@@ -107,9 +107,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         let data = match options.is_not_in_object_info() {
             true => {
                 let object_ids = objects.iter().map(|obj| obj.object_id).collect();
-                self.read_api
-                    .multi_get_objects(object_ids, Some(options.clone()))
-                    .await?
+                self.read_api.multi_get_objects(object_ids, Some(options))?
             }
             false => objects
                 .into_iter()
@@ -183,8 +181,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         // Retrieve 1 extra item for next cursor
         let mut data = self
             .state
-            .query_events(query, cursor.clone(), limit + 1, descending)
-            .await?;
+            .query_events(query, cursor.clone(), limit + 1, descending)?;
         let has_next_page = data.len() > limit;
         data.truncate(limit);
         let next_cursor = data.last().map_or(cursor, |e| Some(e.id.clone()));
@@ -237,7 +234,6 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         // TODO(chris): add options to `get_dynamic_field_object` API as well
         self.read_api
             .get_object(id, Some(SuiObjectDataOptions::full_content()))
-            .await
     }
 }
 
