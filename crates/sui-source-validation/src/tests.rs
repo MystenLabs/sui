@@ -145,6 +145,47 @@ async fn successful_verification_module_ordering() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
+async fn successful_verification_upgrades() -> anyhow::Result<()> {
+    let mut cluster = TestClusterBuilder::new().build().await?;
+    let sender = cluster.get_address_0();
+    let context = &mut cluster.wallet;
+
+    let (b_v1, b_cap) = {
+        let fixtures = tempfile::tempdir()?;
+        let b_src = copy_published_package(&fixtures, "b", SuiAddress::ZERO).await?;
+        publish_package(context, sender, b_src).await
+    };
+
+    let b_v2 = {
+        let fixtures = tempfile::tempdir()?;
+        let b_src = copy_published_package(&fixtures, "b-v2", SuiAddress::ZERO).await?;
+        upgrade_package(context, sender, b_v1.0, b_cap.0, b_src).await
+    };
+
+    let (b_pkg, e_pkg) = {
+        let fixtures = tempfile::tempdir()?;
+        let b_src = copy_upgraded_package(&fixtures, "b-v2", b_v2.0.into(), b_v1.0.into()).await?;
+        let e_src = copy_published_package(&fixtures, "e", SuiAddress::ZERO).await?;
+        (compile_package(b_src), compile_package(e_src))
+    };
+
+    let client = context.get_client().await?;
+    let verifier = BytecodeSourceVerifier::new(client.read_api());
+
+    // Verify the upgraded package b-v2 as the root.
+    let verify_deps = false;
+    verifier
+        .verify_package(&b_pkg, verify_deps, SourceMode::Verify)
+        .await
+        .unwrap();
+
+    // Verify the upgraded package b-v2 as a dep of e.
+    verifier.verify_package_deps(&e_pkg).await.unwrap();
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn fail_verification_bad_address() -> anyhow::Result<()> {
     let mut cluster = TestClusterBuilder::new().build().await?;
     let sender = cluster.get_address_0();
@@ -156,16 +197,14 @@ async fn fail_verification_bad_address() -> anyhow::Result<()> {
         publish_package(context, sender, b_src).await.0
     };
 
-    let (a_pkg, _) = {
+    let a_pkg = {
         let fixtures = tempfile::tempdir()?;
-        let b_id = b_ref.0.into();
-        copy_published_package(&fixtures, "b", b_id).await?;
+        copy_published_package(&fixtures, "b", b_ref.0.into()).await?;
         let a_src = copy_published_package(&fixtures, "a", SuiAddress::ZERO).await?;
-        (
-            compile_package(a_src.clone()),
-            publish_package(context, sender, a_src).await.0,
-        )
+        publish_package(context, sender, a_src.clone()).await;
+        compile_package(a_src)
     };
+
     let client = context.get_client().await?;
     let verifier = BytecodeSourceVerifier::new(client.read_api());
 
@@ -221,15 +260,11 @@ async fn rpc_call_failed_during_verify() -> anyhow::Result<()> {
         publish_package(context, sender, b_src).await.0
     };
 
-    let (_a_pkg, a_ref) = {
+    let a_ref = {
         let fixtures = tempfile::tempdir()?;
-        let b_id = b_ref.0.into();
-        copy_published_package(&fixtures, "b", b_id).await?;
+        copy_published_package(&fixtures, "b", b_ref.0.into()).await?;
         let a_src = copy_published_package(&fixtures, "a", SuiAddress::ZERO).await?;
-        (
-            compile_package(a_src.clone()),
-            publish_package(context, sender, a_src).await.0,
-        )
+        publish_package(context, sender, a_src).await.0
     };
     let _a_addr: SuiAddress = a_ref.0.into();
 
@@ -365,8 +400,7 @@ async fn module_not_found_on_chain() -> anyhow::Result<()> {
 
     let a_pkg = {
         let fixtures = tempfile::tempdir()?;
-        let b_id = b_ref.0.into();
-        copy_published_package(&fixtures, "b", b_id).await?;
+        copy_published_package(&fixtures, "b", b_ref.0.into()).await?;
         let a_src = copy_published_package(&fixtures, "a", SuiAddress::ZERO).await?;
         compile_package(a_src)
     };
