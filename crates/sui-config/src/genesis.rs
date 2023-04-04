@@ -1483,8 +1483,8 @@ fn process_package(
     // that don't exist on-chain because they are yet to be published.
     #[cfg(debug_assertions)]
     {
-        use std::collections::HashSet;
         use move_core_types::account_address::AccountAddress;
+        use std::collections::HashSet;
         let to_be_published_addresses: HashSet<_> = modules
             .iter()
             .map(|module| *module.self_id().address())
