@@ -365,7 +365,7 @@ fn execution_loop<
                 move_vm,
                 gas_status,
                 protocol_config,
-            )?;
+            ).expect("ConsensusCommitPrologue cannot fail");
             Ok(Mode::empty_results())
         }
         TransactionKind::ProgrammableTransaction(pt) => {
