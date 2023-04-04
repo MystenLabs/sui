@@ -423,7 +423,7 @@ fn generate_and_run_execution_plans(
 
         // Now create a new Bullshark engine
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-        let mut state = ConsensusState::new(metrics.clone(), &committee, gc_depth);
+        let mut state = ConsensusState::new(metrics.clone(), gc_depth);
         let mut bullshark = Bullshark::new(
             committee.clone(),
             store.clone(),
