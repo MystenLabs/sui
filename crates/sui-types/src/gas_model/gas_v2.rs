@@ -212,7 +212,7 @@ impl<'a> SuiGasStatus<'a> {
         config: &ProtocolConfig,
     ) -> SuiGasStatus<'a> {
         let storage_gas_price = config.storage_gas_price();
-        let max_computation_budget = MAX_BUCKET_COST;
+        let max_computation_budget = MAX_BUCKET_COST * gas_price;
         let computation_budget = if gas_budget > max_computation_budget {
             max_computation_budget
         } else {
