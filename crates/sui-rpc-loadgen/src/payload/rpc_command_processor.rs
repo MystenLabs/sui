@@ -254,14 +254,7 @@ impl Processor for RpcCommandProcessor {
                 if !config.divide_tasks {
                     vec![config.command.clone(); config.num_threads]
                 } else {
-                    divide_checkpoint_tasks(
-                        &clients,
-                        data,
-                        config.num_threads,
-                        *repeat_n_times,
-                        *repeat_interval,
-                    )
-                    .await
+                    divide_checkpoint_tasks(&clients, data, config.num_threads).await
                 }
             }
             CommandData::QueryTransactionBlocks(data) => {
@@ -280,6 +273,12 @@ impl Processor for RpcCommandProcessor {
             }
             _ => vec![config.command.clone(); config.num_threads],
         };
+
+        let command_payloads = command_payloads.into_iter().map(|command| {
+            command
+                .with_repeat_interval(*repeat_interval)
+                .with_repeat_n_times(*repeat_n_times)
+        });
 
         let coins_and_keys = if config.signer_info.is_some() {
             Some(
@@ -395,8 +394,6 @@ async fn divide_checkpoint_tasks(
     clients: &[SuiClient],
     data: &GetCheckpoints,
     num_chunks: usize,
-    repeat_n_times: usize,
-    repeat_interval: Duration,
 ) -> Vec<Command> {
     let start = data.start;
     let end = match data.end {
@@ -429,8 +426,6 @@ async fn divide_checkpoint_tasks(
                 data.verify_objects,
                 data.record,
             )
-            .with_repeat_interval(repeat_interval)
-            .with_repeat_n_times(repeat_n_times)
         })
         .collect()
 }
