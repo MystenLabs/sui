@@ -735,7 +735,7 @@ object "A3_AccountStateMachine" {
 
             function A3_AccountStateMachine_send_xfer_finish(actor,xfer_id) {
                 let $t2 := 0x6a51b363524e1e502dbe8698bec5f165b6cf490a68c4ee9063f2c2f0653ff0dd
-                let $t3 := 0xb8229d65
+                let $t3 := 0x09d2fda8
                 {
                     let $t4 := mload(0)
                     let $t5 := abi_encode_tuple_$address_uint64_uint64$_$address_u64_u64$($t4, actor,$t3,xfer_id)
@@ -745,7 +745,7 @@ object "A3_AccountStateMachine" {
             }
             function A3_AccountStateMachine_send_xfer_deposit(actor,v,caller_,xfer_id) {
                 let $t4 := 0x5163aa8ed9d57dbb55d2433f534c881e8fec62da43488c756dbd1ac604ce9c1b
-                let $t5 := 0x0b32e0fa
+                let $t5 := 0x8eeea8a2
                 {
                     let $t6 := mload(0)
                     let $t7 := abi_encode_tuple_$address_uint64_uint64_address_uint64$_$address_u64_u64_address_u64$($t6, actor,$t5,v,caller_,xfer_id)

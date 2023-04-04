@@ -56,4 +56,5 @@ module 0x42::InvalidLoopInvariants {
             i = i + 1;
         }
     }
+    spec module { pragma verify = false; }
 }

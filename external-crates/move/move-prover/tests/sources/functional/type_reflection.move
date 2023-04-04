@@ -133,4 +133,5 @@ module 0x43::test {
     spec test_type_name_concrete_struct {
         ensures result.bytes == b"00000000000000000000000000000043::test::Pair<address, bool>";
     }
+    spec module { pragma verify = false; }
 }

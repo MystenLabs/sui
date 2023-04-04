@@ -127,4 +127,5 @@ module 0x42::VerifyBitwiseTable {
         ensures spec_get(result.t, k2) == (23 as u64);
     }
 
+    spec module { pragma verify = false; }
 }

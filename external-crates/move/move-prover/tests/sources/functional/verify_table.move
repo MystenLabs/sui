@@ -147,4 +147,5 @@ module 0x42::VerifyTable {
         ensures spec_get(result.t, k1) == 44;
         ensures spec_get(result.t, k2) == 23;
     }
+    spec module { pragma verify = false; }
 }

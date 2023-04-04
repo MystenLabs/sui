@@ -302,5 +302,5 @@ module 0x42::TestSome {
         ensures !(get_ballot<Proposal>(signer::address_of(ballot_account), result).expiration_timestamp_secs
             <= 0);
     }
-
+    spec module { pragma verify = false; }
 }

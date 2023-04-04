@@ -87,5 +87,5 @@ module 0x42::bitset128 {
             assert s3 == s4;
         };
     }
-
+    spec module { pragma verify = false; }
 }

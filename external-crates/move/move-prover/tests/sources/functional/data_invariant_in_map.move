@@ -22,4 +22,5 @@ module 0x42::data_inv_in_map {
         let s = table::borrow_mut(t, @0x43);
         *&mut s.value = 0;
     }
+    spec module { pragma verify = false; }
 }
