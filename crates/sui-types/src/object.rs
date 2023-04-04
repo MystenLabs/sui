@@ -270,7 +270,12 @@ impl MoveObject {
         format: ObjectFormatOptions,
         resolver: &impl GetModule,
     ) -> Result<MoveStructLayout, SuiError> {
-        Self::get_layout_from_struct_tag(self.type_().clone().into(), format, resolver)
+        if self.type_().is_gas_coin() {
+            // optimization for common Coin<SUI> case
+            Ok(GasCoin::layout())
+        } else {
+            Self::get_layout_from_struct_tag(self.type_().clone().into(), format, resolver)
+        }
     }
 
     pub fn get_layout_from_struct_tag(
