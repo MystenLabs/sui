@@ -89,6 +89,7 @@
         "postcss": "^8.4.19",
         "postcss-loader": "^7.1.0",
         "postcss-preset-env": "^8.2.0",
+        "posthog-js": "^1.51.5",
         "prettier": "^2.8.7",
         "sass": "^1.59.3",
         "sass-loader": "^13.2.0",
