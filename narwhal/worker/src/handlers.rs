@@ -13,7 +13,7 @@ use rand::seq::SliceRandom;
 use std::{collections::HashSet, time::Duration};
 use store::{rocks::DBMap, Map};
 use tokio::time::sleep;
-use tracing::{debug, info, trace, warn};
+use tracing::{debug, trace, warn};
 use types::{
     Batch, BatchDigest, FetchBatchesRequest, FetchBatchesResponse, PrimaryToWorker,
     RequestBatchRequest, RequestBatchResponse, RequestBatchesRequest, RequestBatchesResponse,
@@ -302,7 +302,7 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
                         }
                     }
                     Err(e) => {
-                        info!(
+                        debug!(
                             "RequestBatchRequest to worker {:?} failed: {e:?}",
                             e.peer_id()
                         )
