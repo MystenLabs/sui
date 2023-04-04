@@ -13,10 +13,23 @@ import { useState } from 'react';
 
 import { Text } from '_src/ui/app/shared/text';
 
-function convertCommandArgumentToString(
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function isNumberNestArray(arg: any): arg is number[][] {
+    return (
+        Array.isArray(arg) &&
+        arg.every(
+            (item) =>
+                Array.isArray(item) &&
+                item.every((item) => typeof item === 'number')
+        )
+    );
+}
+
+export function convertCommandArgumentToString(
     arg:
         | string
         | string[]
+        | number[][]
         | TransactionArgument
         | TransactionArgument[]
         | MakeMoveVecTransaction['type']
@@ -25,11 +38,16 @@ function convertCommandArgumentToString(
 
     if (typeof arg === 'string') return arg;
 
-    if ('None' in arg) {
+    // This is a special case for the Publish transaction
+    if (Array.isArray(arg) && isNumberNestArray(arg)) {
+        return `[Bytes]`;
+    }
+
+    if (typeof arg === 'object' && 'None' in arg) {
         return null;
     }
 
-    if ('Some' in arg) {
+    if (typeof arg === 'object' && 'Some' in arg) {
         return arg.Some;
     }
 
