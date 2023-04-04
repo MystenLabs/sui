@@ -3,6 +3,7 @@
 
 use std::fmt::{self, Display, Formatter, Write};
 
+use enum_dispatch::enum_dispatch;
 use fastcrypto::encoding::Base64;
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::binary_views::BinaryIndexedView;
@@ -11,11 +12,10 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::{ModuleId, TypeTag};
 use move_core_types::value::MoveTypeLayout;
-use serde_with::{serde_as, DisplayFromStr};
-
-use enum_dispatch::enum_dispatch;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use serde_with::{serde_as, DisplayFromStr};
+
 use sui_json::{primitive_type, SuiJsonValue};
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::digests::{ObjectDigest, TransactionEventsDigest};
@@ -34,11 +34,11 @@ use sui_types::parse_sui_type_tag;
 use sui_types::query::TransactionFilter;
 use sui_types::signature::GenericSignature;
 use sui_types::storage::{DeleteKind, WriteKind};
+use sui_types::sui_serde::SuiTypeTag as AsSuiTypeTag;
 
 use crate::balance_changes::BalanceChange;
 use crate::object_changes::ObjectChange;
 use crate::{Page, SuiEvent, SuiMovePackage, SuiObjectRef};
-use sui_types::sui_serde::SuiTypeTag as AsSuiTypeTag;
 
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, PartialEq, Eq, Copy)]
@@ -1091,28 +1091,26 @@ impl SuiProgrammableTransactionBlock {
                         return result_types;
                     };
                     for (arg, type_) in c.arguments.iter().zip(types) {
-                        match arg {
-                            &Argument::Input(i) if (i as usize) < inputs.len() => {
-                                result_types[i as usize] = type_;
+                        if let &Argument::Input(i) = arg {
+                            if let Some(x) = result_types.get_mut(i as usize) {
+                                *x = type_;
                             }
-                            _ => {}
                         }
                     }
                 }
                 Command::SplitCoins(_, amounts) => {
                     for arg in amounts {
-                        match arg {
-                            &Argument::Input(i) if (i as usize) < inputs.len() => {
-                                result_types[i as usize] = Some(MoveTypeLayout::U64);
+                        if let &Argument::Input(i) = arg {
+                            if let Some(x) = result_types.get_mut(i as usize) {
+                                *x = Some(MoveTypeLayout::U64);
                             }
-                            _ => {}
                         }
                     }
                 }
-                Command::TransferObjects(_, Argument::Input(i))
-                    if ((*i) as usize) < inputs.len() =>
-                {
-                    result_types[(*i) as usize] = Some(MoveTypeLayout::Address);
+                Command::TransferObjects(_, Argument::Input(i)) => {
+                    if let Some(x) = result_types.get_mut((*i) as usize) {
+                        *x = Some(MoveTypeLayout::Vector(Box::new(MoveTypeLayout::Address)));
+                    }
                 }
                 _ => {}
             }
