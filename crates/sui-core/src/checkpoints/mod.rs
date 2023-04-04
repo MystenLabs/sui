@@ -493,11 +493,7 @@ impl CheckpointBuilder {
                 }
                 Ok(false) => (),
             };
-            let mut last = self
-                .epoch_store
-                .last_built_checkpoint_summary()
-                .expect("Unexpected storage failure")
-                .and_then(|(_, b)| b.commit_height);
+            let mut last = self.epoch_store.last_built_checkpoint_commit_height();
             for (height, pending) in self.epoch_store.get_pending_checkpoints(last) {
                 last = Some(height);
                 debug!("Making checkpoint at commit height {height}");
@@ -639,10 +635,7 @@ impl CheckpointBuilder {
     ) -> anyhow::Result<Vec<(CheckpointSummary, CheckpointContents)>> {
         let _scope = monitored_scope("CheckpointBuilder::create_checkpoints");
         let total = all_effects.len();
-        let mut last_checkpoint = self
-            .epoch_store
-            .last_built_checkpoint_summary()?
-            .map(|(s, b)| (s, b.summary));
+        let mut last_checkpoint = self.epoch_store.last_built_checkpoint_summary()?;
         if last_checkpoint.is_none() {
             let epoch = self.epoch_store.epoch();
             if epoch > 0 {
@@ -1007,7 +1000,6 @@ impl CheckpointAggregator {
                 current
             } else {
                 let Some(summary) = self.epoch_store.get_built_checkpoint_summary(next_to_certify)? else { return Ok(()); };
-                let summary = summary.summary;
                 self.current = Some(CheckpointSignatureAggregator {
                     next_index: 0,
                     digest: summary.digest(),

@@ -274,7 +274,8 @@ pub struct AuthorityEpochTables {
     user_signatures_for_checkpoints: DBMap<TransactionDigest, Vec<GenericSignature>>,
 
     /// Maps sequence number to checkpoint summary, used by CheckpointBuilder to build checkpoint within epoch
-    builder_checkpoint_summary: DBMap<CheckpointSequenceNumber, BuilderCheckpointSummary>,
+    builder_checkpoint_summary: DBMap<CheckpointSequenceNumber, CheckpointSummary>,
+    builder_checkpoint_summary_v2: DBMap<CheckpointSequenceNumber, BuilderCheckpointSummary>,
 
     // Maps checkpoint sequence number to an accumulator with accumulated state
     // only for the checkpoint that the key references. Append-only, i.e.,
@@ -1748,7 +1749,7 @@ impl AuthorityPerEpochStore {
                 position_in_commit,
             };
             batch.insert_batch(
-                &self.tables.builder_checkpoint_summary,
+                &self.tables.builder_checkpoint_summary_v2,
                 [(&sequence_number, summary)],
             )?;
             batch.insert_batch(
@@ -1785,14 +1786,32 @@ impl AuthorityPerEpochStore {
             position_in_commit: 0,
         };
         self.tables
-            .builder_checkpoint_summary
+            .builder_checkpoint_summary_v2
             .insert(summary.sequence_number(), &builder_summary)?;
         Ok(())
     }
 
+    pub fn last_built_checkpoint_commit_height(&self) -> Option<CheckpointCommitHeight> {
+        self.tables
+            .builder_checkpoint_summary_v2
+            .iter()
+            .skip_to_last()
+            .next()
+            .and_then(|(_, b)| b.commit_height)
+    }
+
     pub fn last_built_checkpoint_summary(
         &self,
-    ) -> SuiResult<Option<(CheckpointSequenceNumber, BuilderCheckpointSummary)>> {
+    ) -> SuiResult<Option<(CheckpointSequenceNumber, CheckpointSummary)>> {
+        let last_v2 = self
+            .tables
+            .builder_checkpoint_summary_v2
+            .iter()
+            .skip_to_last()
+            .next();
+        if let Some((seq, last_v2)) = last_v2 {
+            return Ok(Some((seq, last_v2.summary)));
+        }
         Ok(self
             .tables
             .builder_checkpoint_summary
@@ -1804,7 +1823,10 @@ impl AuthorityPerEpochStore {
     pub fn get_built_checkpoint_summary(
         &self,
         sequence: CheckpointSequenceNumber,
-    ) -> SuiResult<Option<BuilderCheckpointSummary>> {
+    ) -> SuiResult<Option<CheckpointSummary>> {
+        if let Some(summary) = self.tables.builder_checkpoint_summary_v2.get(&sequence)? {
+            return Ok(Some(summary.summary));
+        }
         Ok(self.tables.builder_checkpoint_summary.get(&sequence)?)
     }
 
