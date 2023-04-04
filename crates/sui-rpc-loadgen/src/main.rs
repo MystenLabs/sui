@@ -106,6 +106,11 @@ pub enum ClapCommand {
         #[clap(flatten)]
         common: CommonOptions,
     },
+    #[clap(name = "get-all-balances")]
+    GetAllBalances {
+        #[clap(flatten)]
+        common: CommonOptions,
+    },
 }
 
 fn get_keypair() -> Result<SignerInfo> {
@@ -186,6 +191,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 common,
                 false,
             )
+        }
+        ClapCommand::GetAllBalances { common } => {
+            let addresses = load_addresses_from_file(expand_path(&opts.data_directory));
+            (Command::new_get_all_balances(addresses), common, false)
         }
         ClapCommand::MultiGetObjects { common } => {
             let objects = load_objects_from_file(expand_path(&opts.data_directory));

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod checkpoint_utils;
+mod get_all_balances;
 mod get_checkpoints;
 mod multi_get_objects;
 mod pay_sui;
@@ -114,6 +115,14 @@ impl Command {
         }
     }
 
+    pub fn new_get_all_balances(addresses: Vec<SuiAddress>) -> Self {
+        let get_all_balances = GetAllBalances { addresses };
+        Self {
+            data: CommandData::GetAllBalances(get_all_balances),
+            ..Default::default()
+        }
+    }
+
     pub fn with_repeat_n_times(mut self, num: usize) -> Self {
         self.repeat_n_times = num;
         self
@@ -133,6 +142,7 @@ pub enum CommandData {
     PaySui(PaySui),
     QueryTransactionBlocks(QueryTransactionBlocks),
     MultiGetObjects(MultiGetObjects),
+    GetAllBalances(GetAllBalances),
 }
 
 impl Default for CommandData {
@@ -181,6 +191,11 @@ impl Default for AddressQueryType {
 #[derive(Clone)]
 pub struct MultiGetObjects {
     pub object_ids: Vec<ObjectID>,
+}
+
+#[derive(Clone)]
+pub struct GetAllBalances {
+    pub addresses: Vec<SuiAddress>,
 }
 
 #[async_trait]
