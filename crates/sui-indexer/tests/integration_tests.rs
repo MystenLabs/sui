@@ -879,6 +879,7 @@ pub mod pg_integration_test {
         wait_until_next_epoch(&store).await;
         let current_epoch = store.get_current_epoch().await.unwrap();
         let prev_epoch_last_checkpoint_id = current_epoch.first_checkpoint_id - 1;
+        wait_for_checkpoint(&store, current_epoch.first_checkpoint_id as i64).await;
 
         let checkpoint = store
             .get_checkpoint(CheckpointId::SequenceNumber(<BigInt>::from(
@@ -1317,6 +1318,19 @@ pub mod pg_integration_test {
         let since = std::time::Instant::now();
         let mut cp = store.get_latest_checkpoint_sequence_number().await.unwrap();
         let target = cp + 1;
+        while cp < target {
+            let now = std::time::Instant::now();
+            if now.duration_since(since).as_secs() > WAIT_UNTIL_TIME_LIMIT {
+                panic!("wait_until_next_epoch timed out!");
+            }
+            tokio::task::yield_now().await;
+            cp = store.get_latest_checkpoint_sequence_number().await.unwrap();
+        }
+    }
+
+    async fn wait_for_checkpoint(store: &PgIndexerStore, target: i64) {
+        let since = std::time::Instant::now();
+        let mut cp = store.get_latest_checkpoint_sequence_number().await.unwrap();
         while cp < target {
             let now = std::time::Instant::now();
             if now.duration_since(since).as_secs() > WAIT_UNTIL_TIME_LIMIT {

@@ -13,6 +13,8 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
     0.001, 0.005, 0.01, 0.02, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 3.0, 5.0, 10.0, 20.0, 40.0, 60.0,
     80.0, 100.0, 200.0,
 ];
+
+#[derive(Clone)]
 pub struct IndexerCheckpointHandlerMetrics {
     pub total_checkpoint_requested: IntCounter,
     pub total_checkpoint_received: IntCounter,
@@ -21,6 +23,7 @@ pub struct IndexerCheckpointHandlerMetrics {
     pub total_epoch_committed: IntCounter,
     // checkpoint E2E latency is:
     // fullnode_download_latency + checkpoint_index_latency + db_commit_latency
+    pub fullnode_checkpoint_wait_and_download_latency: Histogram,
     pub fullnode_checkpoint_download_latency: Histogram,
     pub fullnode_transaction_download_latency: Histogram,
     pub fullnode_object_download_latency: Histogram,
@@ -62,6 +65,13 @@ impl IndexerCheckpointHandlerMetrics {
             total_epoch_committed: register_int_counter_with_registry!(
                 "total_epoch_committed",
                 "Total number of epoch committed",
+                registry,
+            )
+            .unwrap(),
+            fullnode_checkpoint_wait_and_download_latency: register_histogram_with_registry!(
+                "fullnode_checkpoint_wait_and_download_latency",
+                "Time spent in waiting for a new checkpoint from the Full Node",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),

@@ -82,6 +82,9 @@ pub enum IndexerError {
 
     #[error("`{0}`: `{1}`")]
     ErrorWithContext(String, Box<IndexerError>),
+
+    #[error("Indexer failed to send item to channel with error: `{0}`")]
+    MpscChannelError(String),
 }
 
 pub trait Context<T> {
