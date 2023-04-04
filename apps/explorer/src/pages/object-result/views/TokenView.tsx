@@ -11,13 +11,17 @@ import {
     getObjectVersion,
     getObjectPreviousTransactionDigest,
     getObjectFields,
-    getMovePackageContent
+    getMovePackageContent,
 } from '@mysten/sui.js';
 import { useState, useEffect, useCallback } from 'react';
 
 import DisplayBox from '../../../components/displaybox/DisplayBox';
 import ModulesWrapper from '../../../components/module/ModulesWrapper';
-import { parseImageURL, checkIsPropertyType, extractName } from '../../../utils/objectUtils';
+import {
+    parseImageURL,
+    checkIsPropertyType,
+    extractName,
+} from '../../../utils/objectUtils';
 import { trimStdLibPrefix, genFileTypeMsg } from '../../../utils/stringUtils';
 import { LinkOrTextDescriptionItem } from '../LinkOrTextDescriptionItem';
 
@@ -41,7 +45,7 @@ export function TokenView({ data }: { data: SuiObjectResponse }) {
 
     const objectId = getObjectId(data);
     const objectType = parseObjectType(data);
-    const contents =  getObjectFields(data) ?? getMovePackageContent(data)!;
+    const contents = getObjectFields(data) ?? getMovePackageContent(data)!;
 
     const [fileType, setFileType] = useState<undefined | string>(undefined);
 
