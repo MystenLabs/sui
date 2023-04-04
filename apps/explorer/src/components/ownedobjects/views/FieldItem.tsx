@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SyntaxHighlightedCode } from './SyntaxHighlightedCode';
-
+import { SyntaxHighlighter } from '~/components/SyntaxHighlighter';
 import { AddressLink, ObjectLink, TransactionLink } from '~/ui/InternalLink';
 import { Text } from '~/ui/Text';
 
@@ -14,7 +13,7 @@ interface FieldItemProps<T> {
 export function FieldItem<T>({ value, type }: FieldItemProps<T>) {
     if (typeof value === 'object') {
         return (
-            <SyntaxHighlightedCode
+            <SyntaxHighlighter
                 code={JSON.stringify(value, null, 2)}
                 language="json"
             />

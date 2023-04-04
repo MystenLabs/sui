@@ -6,10 +6,10 @@ import { getObjectFields } from '@mysten/sui.js';
 import clsx from 'clsx';
 import { useState } from 'react';
 
-import { useGetObject } from '../../hooks/useGetObject';
 import { FieldItem } from './FieldItem';
 
 import { ReactComponent as SearchIcon } from '~/assets/SVGIcons/24px/Search.svg';
+import { useGetObject } from '~/hooks/useGetObject';
 import { DisclosureBox } from '~/ui/DisclosureBox';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
