@@ -269,6 +269,22 @@ export class TransactionBlock {
   }
 
   /**
+   * Add a new object input to the transaction using the fully-resolved object reference.
+   * If you only have an object ID, use `builder.object(id)` instead.
+   */
+  objectRef(...args: Parameters<(typeof Inputs)['ObjectRef']>) {
+    return this.object(Inputs.ObjectRef(...args));
+  }
+
+  /**
+   * Add a new shared object input to the transaction using the fully-resolved shared object reference.
+   * If you only have an object ID, use `builder.object(id)` instead.
+   */
+  sharedObjectRef(...args: Parameters<(typeof Inputs)['SharedObjectRef']>) {
+    return this.object(Inputs.SharedObjectRef(...args));
+  }
+
+  /**
    * Add a new non-object input to the transaction.
    */
   pure(
