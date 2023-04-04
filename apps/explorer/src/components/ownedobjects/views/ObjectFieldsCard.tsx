@@ -6,11 +6,11 @@ import { getObjectFields } from '@mysten/sui.js';
 import clsx from 'clsx';
 import { useState } from 'react';
 
-import { FieldItem } from './FieldItem';
-
 import { ReactComponent as SearchIcon } from '~/assets/SVGIcons/24px/Search.svg';
+import { SyntaxHighlighter } from '~/components/SyntaxHighlighter';
 import { useGetObject } from '~/hooks/useGetObject';
 import { DisclosureBox } from '~/ui/DisclosureBox';
+import { AddressLink, ObjectLink, TransactionLink } from '~/ui/InternalLink';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { Text } from '~/ui/Text';
@@ -18,6 +18,43 @@ import { ListItem, VerticalList } from '~/ui/VerticalList';
 
 interface ObjectFieldsProps {
     id: string;
+}
+
+interface FieldItemProps<T> {
+    value: T;
+    type?: string;
+}
+
+function FieldItem<T>({ value, type }: FieldItemProps<T>) {
+    if (typeof value === 'object') {
+        return (
+            <SyntaxHighlighter
+                code={JSON.stringify(value, null, 2)}
+                language="json"
+            />
+        );
+    }
+    if (typeof value === 'string' && type === 'address') {
+        return <AddressLink address={value} />;
+    }
+
+    if (typeof value === 'string' && type === 'objectId') {
+        return (
+            <div className="break-all">
+                <ObjectLink objectId={value} />
+            </div>
+        );
+    }
+
+    if (typeof value === 'string' && type === 'digest') {
+        return <TransactionLink digest={value} />;
+    }
+
+    return (
+        <Text variant="body/medium" color="steel-darker">
+            {value?.toString()}
+        </Text>
+    );
 }
 
 export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
