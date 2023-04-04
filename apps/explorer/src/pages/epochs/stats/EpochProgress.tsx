@@ -11,7 +11,7 @@ import { ProgressBar } from '~/ui/ProgressBar';
 import { Text } from '~/ui/Text';
 
 export interface EpochProgressProps {
-    epoch?: number;
+    epoch?: string;
     start: number;
     end?: number;
     inProgress?: boolean;
