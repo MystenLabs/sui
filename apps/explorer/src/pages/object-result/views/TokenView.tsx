@@ -27,7 +27,7 @@ import { LinkOrTextDescriptionItem } from '../LinkOrTextDescriptionItem';
 
 import styles from './ObjectView.module.css';
 
-import { DynamicFieldsCard } from '~/components/ownedObjects/views/DynamicFieldsCard';
+import { DynamicFieldsCard } from '~/components/ownedobjects/views/DynamicFieldsCard';
 import { TransactionsForAddress } from '~/components/transactions/TransactionsForAddress';
 import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
 import { Heading } from '~/ui/Heading';
