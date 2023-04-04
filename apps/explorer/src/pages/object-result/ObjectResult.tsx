@@ -29,11 +29,7 @@ export function ObjectResult() {
     const { data, isLoading, isError, isFetched } = useGetObject(objID!);
 
     if (isLoading) {
-        return (
-            <div className="mt-1 flex w-full justify-center">
-                <LoadingSpinner text="Loading data" />
-            </div>
-        );
+        return <LoadingSpinner text="Loading data" />;
     }
 
     if (isError) {
