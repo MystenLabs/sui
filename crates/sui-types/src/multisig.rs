@@ -137,7 +137,12 @@ impl AuthenticatorTrait for MultiSig {
                             error: "Invalid public key".to_string(),
                         }
                     })?;
-                    pk.verify(&digest, &s.try_into()?)
+                    pk.verify(
+                        &digest,
+                        &s.try_into().map_err(|_| SuiError::InvalidSignature {
+                            error: "Fail to verify single sig".to_string(),
+                        })?,
+                    )
                 }
                 CompressedSignature::Secp256k1(s) => {
                     let pk = Secp256k1PublicKey::from_bytes(pk_map.0.as_ref()).map_err(|_| {
@@ -145,7 +150,12 @@ impl AuthenticatorTrait for MultiSig {
                             error: "Invalid public key".to_string(),
                         }
                     })?;
-                    pk.verify(&digest, &s.try_into()?)
+                    pk.verify(
+                        &digest,
+                        &s.try_into().map_err(|_| SuiError::InvalidSignature {
+                            error: "Fail to verify single sig".to_string(),
+                        })?,
+                    )
                 }
                 CompressedSignature::Secp256r1(s) => {
                     let pk = Secp256r1PublicKey::from_bytes(pk_map.0.as_ref()).map_err(|_| {
@@ -153,7 +163,12 @@ impl AuthenticatorTrait for MultiSig {
                             error: "Invalid public key".to_string(),
                         }
                     })?;
-                    pk.verify(&digest, &s.try_into()?)
+                    pk.verify(
+                        &digest,
+                        &s.try_into().map_err(|_| SuiError::InvalidSignature {
+                            error: "Fail to verify single sig".to_string(),
+                        })?,
+                    )
                 }
             };
             if res.is_ok() {
