@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 3;
+const MAX_PROTOCOL_VERSION: u64 = 4;
 
 // Record history of protocol version allocations here:
 //
@@ -19,6 +19,7 @@ const MAX_PROTOCOL_VERSION: u64 = 3;
 // Version 3: gas model v2, including all sui conservation fixes. Fix for loaded child object
 //            changes, enable package upgrades, add limits on `max_size_written_objects`,
 //            `max_size_written_objects_system_tx`
+// Version 4: New reward slashing rate.
 
 #[derive(
     Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, JsonSchema,
@@ -1539,6 +1540,12 @@ impl ProtocolConfig {
                 // max size of written objects during a system TXn to allow for larger writes
                 cfg.max_size_written_objects_system_tx = Some(50 * 1000 * 1000);
                 cfg.feature_flags.package_upgrades = true;
+                cfg
+            }
+            4 => {
+                let mut cfg = Self::get_for_version_impl(version - 1);
+                // Change reward slashing rate to 100%.
+                cfg.reward_slashing_rate = Some(10000);
                 cfg
             }
             // Use this template when making changes:
