@@ -2069,14 +2069,16 @@ pub fn open_cf_opts_secondary<P: AsRef<Path>>(
         let rocksdb = {
             options.create_if_missing(true);
             options.create_missing_column_families(true);
-            rocksdb::DBWithThreadMode::<MultiThreaded>::open_cf_descriptors_as_secondary(
+            let db = rocksdb::DBWithThreadMode::<MultiThreaded>::open_cf_descriptors_as_secondary(
                 &options,
                 &primary_path,
                 &secondary_path,
                 opt_cfs
                     .iter()
                     .map(|(name, opts)| ColumnFamilyDescriptor::new(*name, (*opts).clone())),
-            )?
+            )?;
+            db.try_catch_up_with_primary()?;
+            db
         };
         Ok(Arc::new(RocksDB::DBWithThreadMode(
             DBWithThreadModeWrapper {
