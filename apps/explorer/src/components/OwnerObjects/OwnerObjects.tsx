@@ -74,7 +74,7 @@ function OwnerCoins({ id }: { id: string }) {
                                 (currentPage - 1) * OBJECTS_PER_PAGE,
                                 currentPage * OBJECTS_PER_PAGE
                             )
-                            .map((obj) => <OwnedObject obj={obj} />)}
+                            .map((obj) => <OwnedObject obj={obj} key={obj?.data?.objectId} />)}
                     </div>
             }
             totalItems={results.length}

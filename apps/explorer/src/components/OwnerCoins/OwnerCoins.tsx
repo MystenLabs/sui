@@ -32,7 +32,7 @@ function OwnerCoins({ id }: { id: string }) {
             .catch((err) => {
                 setIsFail(true);
             });
-    }, [id]);
+    }, [id, rpc]);
 
     const uniqueCoinTypes = Array.from(
         new Set(results.map(({ coinType }) => coinType))
