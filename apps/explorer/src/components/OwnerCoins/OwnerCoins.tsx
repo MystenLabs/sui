@@ -11,7 +11,6 @@ import type { CoinStruct } from '@mysten/sui.js';
 
 import { Text } from '~/ui/Text';
 
-
 export const COINS_PER_PAGE: number = 6;
 
 function OwnerCoins({ id }: { id: string }) {

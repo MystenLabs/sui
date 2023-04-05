@@ -69,13 +69,15 @@ function OwnerCoins({ id }: { id: string }) {
             itemsPerPage={OBJECTS_PER_PAGE}
             paginatedContent={
                 <div className="flex flex-wrap">
-                        {results
-                            .slice(
-                                (currentPage - 1) * OBJECTS_PER_PAGE,
-                                currentPage * OBJECTS_PER_PAGE
-                            )
-                            .map((obj) => <OwnedObject obj={obj} key={obj?.data?.objectId} />)}
-                    </div>
+                    {results
+                        .slice(
+                            (currentPage - 1) * OBJECTS_PER_PAGE,
+                            currentPage * OBJECTS_PER_PAGE
+                        )
+                        .map((obj) => (
+                            <OwnedObject obj={obj} key={obj?.data?.objectId} />
+                        ))}
+                </div>
             }
             totalItems={results.length}
             currentPage={currentPage}
