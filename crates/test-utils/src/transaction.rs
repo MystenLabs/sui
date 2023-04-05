@@ -214,9 +214,9 @@ pub async fn upgrade_package_with_wallet(
         let signature = context
             .config
             .keystore
-            .sign_secure(&sender, &data, Intent::default())
+            .sign_secure(&sender, &data, Intent::sui_transaction())
             .unwrap();
-        Transaction::from_data(data, Intent::default(), vec![signature])
+        Transaction::from_data(data, Intent::sui_transaction(), vec![signature])
             .verify()
             .unwrap()
     };
