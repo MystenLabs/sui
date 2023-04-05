@@ -1,10 +1,10 @@
 [package]
-name = "a"
+name = "e"
 version = "0.0.1"
 published-at = "$STORAGE_ID"
 
 [dependencies]
-b = { local = "../b" }
+b = { local = "../b-v2" }
 
 [addresses]
-a = "$RUNTIME_ID"
+e = "$RUNTIME_ID"

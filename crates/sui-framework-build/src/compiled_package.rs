@@ -27,7 +27,6 @@ use move_core_types::{
     account_address::AccountAddress,
     language_storage::{ModuleId, StructTag, TypeTag},
 };
-use move_package::source_package::parsed_manifest::CustomDepInfo;
 use move_package::{
     compilation::{
         build_plan::BuildPlan, compiled_package::CompiledPackage as MoveCompiledPackage,
@@ -35,6 +34,9 @@ use move_package::{
     package_hooks::PackageHooks,
     resolution::resolution_graph::ResolvedGraph,
     BuildConfig as MoveBuildConfig,
+};
+use move_package::{
+    resolution::resolution_graph::Package, source_package::parsed_manifest::CustomDepInfo,
 };
 use move_symbol_pool::Symbol;
 use serde_reflection::Registry;
@@ -49,8 +51,11 @@ use sui_verifier::verifier as sui_bytecode_verifier;
 use crate::{MOVE_STDLIB_PACKAGE_NAME, SUI_PACKAGE_NAME, SUI_SYSTEM_PACKAGE_NAME};
 
 /// Wrapper around the core Move `CompiledPackage` with some Sui-specific traits and info
+#[derive(Debug)]
 pub struct CompiledPackage {
     pub package: MoveCompiledPackage,
+    /// Address the package is recorded as being published at.
+    pub published_at: Result<ObjectID, PublishedAtError>,
     /// The dependency IDs of this package
     pub dependency_ids: PackageDependencies,
     /// Path to the Move package (i.e., where the Move.toml file is)
@@ -165,7 +170,8 @@ pub fn build_from_resolution_graph(
     run_bytecode_verifier: bool,
     print_diags_to_stderr: bool,
 ) -> SuiResult<CompiledPackage> {
-    let dependency_ids = gather_dependencies(&resolution_graph);
+    let (published_at, dependency_ids) = gather_published_ids(&resolution_graph);
+
     let result = if print_diags_to_stderr {
         BuildConfig::compile_package(resolution_graph, &mut std::io::stderr())
     } else {
@@ -195,6 +201,7 @@ pub fn build_from_resolution_graph(
     }
     Ok(CompiledPackage {
         package,
+        published_at,
         dependency_ids,
         path,
     })
@@ -608,7 +615,7 @@ impl GetModule for CompiledPackage {
 
 pub const PUBLISHED_AT_MANIFEST_FIELD: &str = "published-at";
 
-pub struct SuiPackageHooks {}
+pub struct SuiPackageHooks;
 
 impl PackageHooks for SuiPackageHooks {
     fn custom_package_info_fields(&self) -> Vec<String> {
@@ -628,6 +635,7 @@ impl PackageHooks for SuiPackageHooks {
     }
 }
 
+#[derive(Debug)]
 pub struct PackageDependencies {
     /// Set of published dependencies (name and address).
     pub published: BTreeMap<Symbol, ObjectID>,
@@ -637,52 +645,69 @@ pub struct PackageDependencies {
     pub invalid: BTreeMap<Symbol, String>,
 }
 
-/// Gather transitive package dependencies, partitioned into two sets:
-/// - published dependencies (which contain `published-at` address in manifest); and
-/// - unpublished dependencies (no `published-at` address in manifest).
-pub fn gather_dependencies(resolution_graph: &ResolvedGraph) -> PackageDependencies {
+#[derive(Debug)]
+pub enum PublishedAtError {
+    Invalid(String),
+    NotPresent,
+}
+
+/// Partition packages in `resolution_graph` into one of four groups:
+/// - The ID that the package itself is published at (if it is published)
+/// - The IDs of dependencies that have been published
+/// - The names of packages that have not been published on chain.
+/// - The names of packages that have a `published-at` field that isn't filled with a valid address.
+pub fn gather_published_ids(
+    resolution_graph: &ResolvedGraph,
+) -> (Result<ObjectID, PublishedAtError>, PackageDependencies) {
+    let root = resolution_graph.root_package();
+
     let mut published = BTreeMap::new();
     let mut unpublished = BTreeSet::new();
     let mut invalid = BTreeMap::new();
+    let mut published_at = Err(PublishedAtError::NotPresent);
 
-    for name in resolution_graph.graph.package_table.keys() {
-        if let Some(package) = &resolution_graph.package_table.get(name) {
-            let value = package
-                .source_package
-                .package
-                .custom_properties
-                .get(&Symbol::from(PUBLISHED_AT_MANIFEST_FIELD));
-
-            if value.is_none() {
-                unpublished.insert(*name);
-                continue;
-            }
-
-            if let Some(id) = value.and_then(|v| ObjectID::from_str(v.as_str()).ok()) {
-                published.insert(*name, id);
-            } else {
-                invalid.insert(*name, value.unwrap().to_string());
-            }
+    for (name, package) in &resolution_graph.package_table {
+        let property = published_at_property(package);
+        if name == &root {
+            // Separate out the root package as a special case
+            published_at = property;
+            continue;
         }
+
+        match property {
+            Ok(id) => {
+                published.insert(*name, id);
+            }
+            Err(PublishedAtError::NotPresent) => {
+                unpublished.insert(*name);
+            }
+            Err(PublishedAtError::Invalid(value)) => {
+                invalid.insert(*name, value);
+            }
+        };
     }
 
-    PackageDependencies {
-        published,
-        unpublished,
-        invalid,
-    }
+    (
+        published_at,
+        PackageDependencies {
+            published,
+            unpublished,
+            invalid,
+        },
+    )
 }
 
-pub fn root_published_at(resolution_graph: &ResolvedGraph) -> Option<ObjectID> {
-    let published_at = resolution_graph
-        .package_table
-        .get(&resolution_graph.graph.root_package)
-        .unwrap()
+pub fn published_at_property(package: &Package) -> Result<ObjectID, PublishedAtError> {
+    let Some(value) = package
         .source_package
         .package
         .custom_properties
-        .get(&Symbol::from(PUBLISHED_AT_MANIFEST_FIELD))?;
-    ObjectID::from_str(published_at.as_str()).ok()
+        .get(&Symbol::from(PUBLISHED_AT_MANIFEST_FIELD))
+    else {
+        return Err(PublishedAtError::NotPresent);
+    };
+
+    ObjectID::from_str(value.as_str()).map_err(|_| PublishedAtError::Invalid(value.to_owned()))
 }
 
 pub fn check_unpublished_dependencies(unpublished: &BTreeSet<Symbol>) -> Result<(), SuiError> {

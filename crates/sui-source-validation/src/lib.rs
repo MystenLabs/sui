@@ -6,12 +6,13 @@ use futures::future;
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::CompiledModule;
 use std::{collections::HashMap, fmt::Debug};
+use sui_framework_build::compiled_package::CompiledPackage;
 use sui_types::error::SuiObjectResponseError;
 use thiserror::Error;
 
 use move_compiler::compiled_unit::{CompiledUnitEnum, NamedCompiledModule};
 use move_core_types::account_address::AccountAddress;
-use move_package::compilation::compiled_package::CompiledPackage;
+use move_package::compilation::compiled_package::CompiledPackage as MoveCompiledPackage;
 use move_symbol_pool::Symbol;
 use sui_sdk::apis::ReadApi;
 use sui_sdk::error::Error;
@@ -35,6 +36,12 @@ pub enum SourceVerificationError {
 
     #[error("On-chain version of dependency {package}::{module} was not found.")]
     OnChainDependencyNotFound { package: Symbol, module: Symbol },
+
+    #[error("Could not deserialize on-chain dependency {address}::{module}.")]
+    OnChainDependencyDeserializationError {
+        address: AccountAddress,
+        module: Symbol,
+    },
 
     #[error("Local version of dependency {address}::{module} was not found.")]
     LocalDependencyNotFound {
@@ -99,22 +106,18 @@ pub enum SourceMode {
 }
 
 pub struct BytecodeSourceVerifier<'a> {
-    pub verbose: bool,
     rpc_client: &'a ReadApi,
 }
 
 /// Map package addresses and module names to package names and bytecode.
-type LocalBytes = HashMap<(AccountAddress, Symbol), (Symbol, Vec<u8>)>;
+type LocalModules = HashMap<(AccountAddress, Symbol), (Symbol, CompiledModule)>;
 /// Map package addresses and modules names to bytecode (package names are gone in the on-chain
 /// representation).
-type OnChainBytes = HashMap<(AccountAddress, Symbol), Vec<u8>>;
+type OnChainModules = HashMap<(AccountAddress, Symbol), CompiledModule>;
 
 impl<'a> BytecodeSourceVerifier<'a> {
-    pub fn new(rpc_client: &'a ReadApi, verbose: bool) -> Self {
-        BytecodeSourceVerifier {
-            verbose,
-            rpc_client,
-        }
+    pub fn new(rpc_client: &'a ReadApi) -> Self {
+        BytecodeSourceVerifier { rpc_client }
     }
 
     /// Helper wrapper to verify that all local Move package dependencies' and root bytecode matches
@@ -171,21 +174,35 @@ impl<'a> BytecodeSourceVerifier<'a> {
         verify_deps: bool,
         source_mode: SourceMode,
     ) -> Result<(), AggregateSourceVerificationError> {
-        // On-chain address for matching root package cannot be zero
-        if let SourceMode::VerifyAt(root_address) = &source_mode {
-            if *root_address == AccountAddress::ZERO {
-                return Err(SourceVerificationError::ZeroOnChainAddresSpecifiedFailure.into());
+        let mut on_chain_pkgs = vec![];
+        match &source_mode {
+            SourceMode::Skip => (),
+            // On-chain address for matching root package cannot be zero
+            SourceMode::VerifyAt(AccountAddress::ZERO) => {
+                return Err(SourceVerificationError::ZeroOnChainAddresSpecifiedFailure.into())
             }
+            SourceMode::VerifyAt(root_address) => on_chain_pkgs.push(*root_address),
+            SourceMode::Verify => {
+                on_chain_pkgs.extend(compiled_package.published_at.as_ref().map(|id| **id))
+            }
+        };
+
+        if verify_deps {
+            on_chain_pkgs.extend(
+                compiled_package
+                    .dependency_ids
+                    .published
+                    .values()
+                    .map(|id| **id),
+            );
         }
 
-        let local_modules = local_bytes(compiled_package, verify_deps, source_mode)?;
-        let mut on_chain_modules = self
-            .on_chain_bytes(local_modules.keys().map(|(addr, _)| *addr))
-            .await?;
+        let local_modules = local_modules(&compiled_package.package, verify_deps, source_mode)?;
+        let mut on_chain_modules = self.on_chain_modules(on_chain_pkgs.into_iter()).await?;
 
         let mut errors = Vec::new();
-        for ((address, module), (package, local_bytes)) in local_modules {
-            let Some(on_chain_bytes) = on_chain_modules.remove(&(address, module)) else {
+        for ((address, module), (package, local_module)) in local_modules {
+            let Some(on_chain_module) = on_chain_modules.remove(&(address, module)) else {
                 errors.push(SourceVerificationError::OnChainDependencyNotFound {
                     package, module,
                 });
@@ -194,21 +211,12 @@ impl<'a> BytecodeSourceVerifier<'a> {
 
             // compare local bytecode to on-chain bytecode to ensure integrity of our
             // dependencies
-            if local_bytes != on_chain_bytes {
+            if local_module != on_chain_module {
                 errors.push(SourceVerificationError::ModuleBytecodeMismatch {
                     address,
                     package,
                     module,
                 });
-            }
-
-            if self.verbose {
-                println!(
-                    "{}::{} - {} bytes, code matches",
-                    package.as_ref(),
-                    module.as_ref(),
-                    on_chain_bytes.len()
-                );
             }
         }
 
@@ -258,20 +266,32 @@ impl<'a> BytecodeSourceVerifier<'a> {
         }
     }
 
-    async fn on_chain_bytes(
+    async fn on_chain_modules(
         &self,
         addresses: impl Iterator<Item = AccountAddress> + Clone,
-    ) -> Result<OnChainBytes, SourceVerificationError> {
+    ) -> Result<OnChainModules, AggregateSourceVerificationError> {
         let resp = future::join_all(addresses.clone().map(|addr| self.pkg_for_address(addr))).await;
-        let mut map = OnChainBytes::new();
+        let mut map = OnChainModules::new();
+        let mut err = vec![];
 
-        for (addr, pkg) in addresses.zip(resp) {
+        for (storage_id, pkg) in addresses.zip(resp) {
             let SuiRawMovePackage { module_map, .. } = pkg?;
-            map.extend(
-                module_map
-                    .into_iter()
-                    .map(move |(module, bytes)| ((addr, Symbol::from(module)), bytes)),
-            )
+            for (name, bytes) in module_map {
+                let Ok(module) = CompiledModule::deserialize(&bytes) else {
+                    err.push(SourceVerificationError::OnChainDependencyDeserializationError {
+                        address: storage_id,
+                        module: name.into(),
+                    });
+                    continue;
+                };
+
+                let runtime_id = *module.self_id().address();
+                map.insert((runtime_id, Symbol::from(name)), module);
+            }
+        }
+
+        if !err.is_empty() {
+            return Err(AggregateSourceVerificationError(err));
         }
 
         Ok(map)
@@ -303,12 +323,12 @@ fn substitute_root_address(
     Ok(module)
 }
 
-fn local_bytes(
-    compiled_package: &CompiledPackage,
+fn local_modules(
+    compiled_package: &MoveCompiledPackage,
     include_deps: bool,
     source_mode: SourceMode,
-) -> Result<LocalBytes, SourceVerificationError> {
-    let mut map = LocalBytes::new();
+) -> Result<LocalModules, SourceVerificationError> {
+    let mut map = LocalModules::new();
 
     if include_deps {
         for (package, local_unit) in &compiled_package.deps_compiled_units {
@@ -322,9 +342,7 @@ fn local_bytes(
                 continue;
             }
 
-            let mut bytes = vec![];
-            m.module.serialize(&mut bytes).unwrap();
-            map.insert((address, module), (*package, bytes));
+            map.insert((address, module), (*package, m.module.clone()));
         }
     }
 
@@ -348,9 +366,7 @@ fn local_bytes(
                     });
                 }
 
-                let mut bytes = vec![];
-                m.module.serialize(&mut bytes).unwrap();
-                map.insert((address, module), (root_package, bytes));
+                map.insert((address, module), (root_package, m.module.clone()));
             }
         }
 
@@ -363,11 +379,10 @@ fn local_bytes(
                 };
 
                 let module = m.name;
-                let mut bytes = vec![];
-                substitute_root_address(m, root_address)?
-                    .serialize(&mut bytes)
-                    .unwrap();
-                map.insert((root_address, module), (root_package, bytes));
+                map.insert(
+                    (root_address, module),
+                    (root_package, substitute_root_address(m, root_address)?),
+                );
             }
 
             for (package, local_unit) in &compiled_package.deps_compiled_units {
@@ -381,11 +396,10 @@ fn local_bytes(
                     continue;
                 }
 
-                let mut bytes = vec![];
-                substitute_root_address(m, root_address)?
-                    .serialize(&mut bytes)
-                    .unwrap();
-                map.insert((root_address, module), (*package, bytes));
+                map.insert(
+                    (root_address, module),
+                    (*package, substitute_root_address(m, root_address)?),
+                );
             }
         }
     }
