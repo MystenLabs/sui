@@ -43,6 +43,7 @@ use crate::store::{
 };
 use crate::types::{CheckpointTransactionBlockResponse, TemporaryTransactionBlockResponseStore};
 use crate::utils::multi_get_full_transactions;
+use crate::IndexerConfig;
 
 const HANDLER_RETRY_INTERVAL_IN_SECS: u64 = 10;
 const MULTI_GET_CHUNK_SIZE: usize = 500;
@@ -52,6 +53,7 @@ pub struct CheckpointHandler<S> {
     http_client: HttpClient,
     event_handler: Arc<EventHandler>,
     metrics: IndexerCheckpointHandlerMetrics,
+    config: IndexerConfig,
 }
 
 impl<S> CheckpointHandler<S>
@@ -63,12 +65,14 @@ where
         http_client: HttpClient,
         event_handler: Arc<EventHandler>,
         prometheus_registry: &Registry,
+        config: &IndexerConfig,
     ) -> Self {
         Self {
             state,
             http_client,
             event_handler,
             metrics: IndexerCheckpointHandlerMetrics::new(prometheus_registry),
+            config: config.clone(),
         }
     }
 
@@ -91,7 +95,8 @@ where
 
     async fn start(&self) -> Result<(), IndexerError> {
         info!("Indexer checkpoint handler started...");
-        let mut next_cursor_sequence_number = self.state.get_latest_checkpoint_sequence_number()?;
+        let mut next_cursor_sequence_number =
+            self.state.get_latest_checkpoint_sequence_number().await?;
         if next_cursor_sequence_number > 0 {
             info!("Resuming from checkpoint {next_cursor_sequence_number}");
         }
@@ -110,18 +115,42 @@ where
                     e
                 })?;
             self.metrics.total_checkpoint_received.inc();
+            if self.config.download_only {
+                info!(
+                    "Downloaded checkpoint {} data successfully, skipping all other steps...",
+                    next_cursor_sequence_number
+                );
+                continue;
+            }
 
             // Index checkpoint data
             let index_guard = self.metrics.checkpoint_index_latency.start_timer();
             let (indexed_checkpoint, indexed_epoch) = self.index_checkpoint(&checkpoint)?;
             index_guard.stop_and_record();
+            if self.config.skip_db_commit {
+                info!(
+                    "Downloaded and indexed checkpoint {} successfully, skipping DB commit...",
+                    next_cursor_sequence_number
+                );
+                continue;
+            }
+
+            // for the first epoch, we need to store the epoch data first
+            if let Some(store) = indexed_epoch.as_ref() {
+                if store.last_epoch.is_none() {
+                    let epoch_db_guard = self.metrics.epoch_db_commit_latency.start_timer();
+                    self.state.persist_epoch(store).await?;
+                    epoch_db_guard.stop_and_record();
+                    self.metrics.total_epoch_committed.inc();
+                }
+            }
 
             // Write checkpoint to DB
             let tx_count = indexed_checkpoint.transactions.len();
             let object_count = indexed_checkpoint.objects_changes.len();
 
             let checkpoint_db_guard = self.metrics.checkpoint_db_commit_latency.start_timer();
-            self.state.persist_checkpoint(&indexed_checkpoint)?;
+            self.state.persist_checkpoint(&indexed_checkpoint).await?;
             checkpoint_db_guard.stop_and_record();
 
             self.metrics.total_checkpoint_committed.inc();
@@ -138,10 +167,12 @@ where
 
             // Write epoch to DB if needed
             if let Some(indexed_epoch) = indexed_epoch {
-                let epoch_db_guard = self.metrics.epoch_db_commit_latency.start_timer();
-                self.state.persist_epoch(&indexed_epoch)?;
-                epoch_db_guard.stop_and_record();
-                self.metrics.total_epoch_committed.inc();
+                if indexed_epoch.last_epoch.is_some() {
+                    let epoch_db_guard = self.metrics.epoch_db_commit_latency.start_timer();
+                    self.state.persist_epoch(&indexed_epoch).await?;
+                    epoch_db_guard.stop_and_record();
+                    self.metrics.total_epoch_committed.inc();
+                }
             }
 
             // Process websocket subscription

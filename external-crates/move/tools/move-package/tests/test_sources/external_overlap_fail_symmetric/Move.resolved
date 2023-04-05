@@ -1,0 +1,6 @@
+Failed to resolve dependencies for package 'Root': Adding dependencies from ../resolvers/successful_dep.sh for dependency 'A' in 'Root': Conflicting dependencies found for 'ADep' during external resolution by '../resolvers/successful_dep.sh':
+
+External dependencies not found:
+	{ name = "ADepDep" }
+New external dependencies:
+	{ name = "ADepOther" }

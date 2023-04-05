@@ -1,0 +1,12 @@
+Command `sandbox publish`:
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ ./sources/M_no_named.move:1:14
+  │
+1 │ module 0x42::M {
+  │              ^ Duplicate definition for module '0x42::M'
+  │
+  ┌─ ./sources/M.move:1:11
+  │
+1 │ module A::M {
+  │           - Module previously defined here, with '(A=0x42)::M'
+

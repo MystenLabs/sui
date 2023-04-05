@@ -111,6 +111,27 @@ export const MIST_PER_SUI = BigInt(1000000000);
 
 export const ObjectDigest = string();
 export type ObjectDigest = Infer<typeof ObjectDigest>;
+export const SuiObjectResponseError = object({
+  code: string(),
+  error: optional(string()),
+  object_id: optional(ObjectId),
+  version: optional(SequenceNumber),
+  digest: optional(ObjectDigest),
+});
+export type SuiObjectResponseError = Infer<typeof SuiObjectResponseError>;
+export const DisplayFieldsResponse = object({
+  data: nullable(record(string(), string())),
+  error: nullable(SuiObjectResponseError),
+});
+export type DisplayFieldsResponse = Infer<typeof DisplayFieldsResponse>;
+// TODO: remove after all envs support the new DisplayFieldsResponse;
+export const DisplayFieldsBackwardCompatibleResponse = union([
+  DisplayFieldsResponse,
+  optional(record(string(), string())),
+]);
+export type DisplayFieldsBackwardCompatibleResponse = Infer<
+  typeof DisplayFieldsBackwardCompatibleResponse
+>;
 
 export const SuiObjectData = object({
   objectId: ObjectId,
@@ -149,7 +170,7 @@ export const SuiObjectData = object({
    * This can also be None if the struct type does not have Display defined
    * See more details in https://forums.sui.io/t/nft-object-display-proposal/4872
    */
-  display: optional(record(string(), string())),
+  display: optional(DisplayFieldsBackwardCompatibleResponse),
 });
 export type SuiObjectData = Infer<typeof SuiObjectData>;
 
@@ -183,14 +204,6 @@ export type ObjectStatus = Infer<typeof ObjectStatus>;
 
 export const GetOwnedObjectsResponse = array(SuiObjectInfo);
 export type GetOwnedObjectsResponse = Infer<typeof GetOwnedObjectsResponse>;
-
-export const SuiObjectResponseError = object({
-  tag: string(),
-  object_id: optional(ObjectId),
-  version: optional(SequenceNumber),
-  digest: optional(ObjectDigest),
-});
-export type SuiObjectResponseError = Infer<typeof SuiObjectResponseError>;
 
 export const SuiObjectResponse = object({
   data: optional(SuiObjectData),
@@ -331,8 +344,18 @@ export function getObjectOwner(
 
 export function getObjectDisplay(
   resp: SuiObjectResponse,
-): Record<string, string> | undefined {
-  return getSuiObjectData(resp)?.display;
+): DisplayFieldsResponse {
+  const display = getSuiObjectData(resp)?.display;
+  if (!display) {
+    return { data: null, error: null };
+  }
+  if (is(display, DisplayFieldsResponse)) {
+    return display;
+  }
+  return {
+    data: display,
+    error: null,
+  };
 }
 
 export function getSharedObjectInitialVersion(

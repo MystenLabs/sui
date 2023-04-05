@@ -1,0 +1,19 @@
+//# publish
+module 0x42.M {
+    struct M has drop { b: bool }
+    public new(): Self.M {
+    label b0:
+        return M{ b: true };
+    }
+}
+
+//# run
+
+import 0x42.M;
+
+main() {
+    let x: M.M;
+label b0:
+    x = M.new();
+    return;
+}

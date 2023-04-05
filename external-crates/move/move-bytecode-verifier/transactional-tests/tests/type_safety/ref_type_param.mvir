@@ -1,0 +1,44 @@
+//# publish
+module 0x42.M1 {
+    struct S<T: copy> { t: T }
+
+    // should get flagged w/ constraint not satisfied--T does not have copy
+    public bad_sig<T>(s: &Self.S<T>) {
+    label b0:
+        return;
+    }
+}
+
+//# publish
+module 0x42.M2 {
+    struct S<T: copy> { t: T }
+
+    // should get flagged w/ constraint not satisfied--T does not have copy
+    public bad_sig<T>(s: &mut Self.S<T>) {
+    label b0:
+        return;
+    }
+}
+
+//# publish
+module 0x42.M3 {
+    struct S<T: copy> { t: T }
+
+    // should get flagged--missing type argument
+    public bad_sig<T>(s: &Self.S) {
+    label b0:
+        return;
+    }
+}
+
+//# publish
+module 0x42.M4 {
+    struct Box<T> { t: T }
+    struct S<T: copy> { t: T }
+
+    // should be rejected
+    public bad_sig<T>(v: Self.Box<Self.S<T>>): Self.Box<Self.S<T>> {
+    label b0:
+        return move(v);
+    }
+}

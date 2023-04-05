@@ -474,15 +474,21 @@ fn execute_move_publish<S: StorageView, Mode: ExecutionMode>(
         };
 
         context.set_linkage(package)?;
-        let res = publish_verify_and_init_modules::<_, Mode>(context, runtime_id, argument_updates, &modules);
+        let res = publish_and_verify_modules(context, runtime_id, &modules).and_then(|_| {
+            init_modules::<_, Mode>(context, argument_updates, &modules)
+        });
         context.reset_linkage();
         res?;
 
         package_obj
     } else {
-        publish_verify_and_init_modules::<_, Mode>(context, runtime_id, argument_updates, &modules)?;
+        // FOR THE LOVE OF ALL THAT IS GOOD DO NOT RE-ORDER THIS.  It looks redundant, but is
+        // required to maintain backwards compatibility.
+        publish_and_verify_modules(context, runtime_id, &modules)?;
         let dependencies = fetch_packages(context, &dep_ids)?;
-        context.new_package(&modules, &dependencies)?
+        let package = context.new_package(&modules, &dependencies)?;
+        init_modules::<_, Mode>(context, argument_updates, &modules)?;
+        package
     };
 
 
@@ -798,14 +804,11 @@ fn publish_and_verify_modules<S: StorageView>(
     Ok(())
 }
 
-fn publish_verify_and_init_modules<S: StorageView, Mode: ExecutionMode>(
+fn init_modules<S: StorageView, Mode: ExecutionMode>(
     context: &mut ExecutionContext<S>,
-    runtime_id: ObjectID,
     argument_updates: &mut Mode::ArgumentUpdates,
     modules: &[CompiledModule],
 ) -> Result<(), ExecutionError> {
-    publish_and_verify_modules(context, runtime_id, modules)?;
-
     let modules_to_init = modules.iter().filter_map(|module| {
         for fdef in &module.function_defs {
             let fhandle = module.function_handle_at(fdef.function);

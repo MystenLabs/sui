@@ -6,6 +6,7 @@ mod payload;
 
 use anyhow::Result;
 use clap::Parser;
+use payload::AddressQueryType;
 
 use std::error::Error;
 use std::path::PathBuf;
@@ -15,7 +16,10 @@ use sui_types::crypto::{EncodeDecodeBase64, SuiKeyPair};
 use tracing::info;
 
 use crate::load_test::{LoadTest, LoadTestConfig};
-use crate::payload::{Command, RpcCommandProcessor, SignerInfo};
+use crate::payload::{
+    load_addresses_from_file, load_digests_from_file, load_objects_from_file, Command,
+    RpcCommandProcessor, SignerInfo,
+};
 
 #[derive(Parser)]
 #[clap(
@@ -71,15 +75,15 @@ pub enum ClapCommand {
         #[clap(short, long)]
         end: Option<u64>,
 
-        #[clap(long, default_value_t = true)]
-        verify_transactions: bool,
+        #[clap(long)]
+        skip_verify_transactions: bool,
 
-        #[clap(long, default_value_t = true)]
-        verify_objects: bool,
+        #[clap(long)]
+        skip_verify_objects: bool,
 
         // Whether to record data from checkpoint
-        #[clap(long, default_value_t = true)]
-        record: bool,
+        #[clap(long)]
+        skip_record: bool,
 
         #[clap(flatten)]
         common: CommonOptions,
@@ -90,14 +94,42 @@ pub enum ClapCommand {
         #[clap(flatten)]
         common: CommonOptions,
     },
-    #[clap(name = "query-transactions")]
-    QueryTransactions {
-        #[clap(short, long)]
-        from_address: Option<String>,
+    #[clap(name = "query-transaction-blocks")]
+    QueryTransactionBlocks {
+        #[clap(long, parse(try_from_str), case_insensitive = true)]
+        address_type: AddressQueryType,
 
-        #[clap(short, long)]
-        to_address: Option<String>,
+        #[clap(flatten)]
+        common: CommonOptions,
+    },
+    #[clap(name = "multi-get-transaction-blocks")]
+    MultiGetTransactionBlocks {
+        #[clap(flatten)]
+        common: CommonOptions,
+    },
+    #[clap(name = "multi-get-objects")]
+    MultiGetObjects {
+        #[clap(flatten)]
+        common: CommonOptions,
+    },
+    #[clap(name = "get-object")]
+    GetObject {
+        #[clap(long)]
+        chunk_size: usize,
 
+        #[clap(flatten)]
+        common: CommonOptions,
+    },
+    #[clap(name = "get-all-balances")]
+    GetAllBalances {
+        #[clap(long)]
+        chunk_size: usize,
+
+        #[clap(flatten)]
+        common: CommonOptions,
+    },
+    #[clap(name = "get-reference-gas-price")]
+    GetReferenceGasPrice {
         #[clap(flatten)]
         common: CommonOptions,
     },
@@ -163,23 +195,63 @@ async fn main() -> Result<(), Box<dyn Error>> {
             common,
             start,
             end,
-            verify_transactions,
-            verify_objects,
-            record,
+            skip_verify_transactions,
+            skip_verify_objects,
+            skip_record,
         } => (
-            Command::new_get_checkpoints(start, end, verify_transactions, verify_objects, record),
+            Command::new_get_checkpoints(
+                start,
+                end,
+                !skip_verify_transactions,
+                !skip_verify_objects,
+                !skip_record,
+            ),
             common,
             false,
         ),
-        ClapCommand::QueryTransactions {
+        ClapCommand::QueryTransactionBlocks {
             common,
-            from_address,
-            to_address,
-        } => (
-            Command::new_query_transaction_blocks(from_address, to_address),
-            common,
-            false,
-        ),
+            address_type,
+        } => {
+            let addresses = load_addresses_from_file(expand_path(&opts.data_directory));
+            (
+                Command::new_query_transaction_blocks(address_type, addresses),
+                common,
+                false,
+            )
+        }
+        ClapCommand::MultiGetTransactionBlocks { common } => {
+            let digests = load_digests_from_file(expand_path(&opts.data_directory));
+            (
+                Command::new_multi_get_transaction_blocks(digests),
+                common,
+                false,
+            )
+        }
+        ClapCommand::GetAllBalances { common, chunk_size } => {
+            let addresses = load_addresses_from_file(expand_path(&opts.data_directory));
+            (
+                Command::new_get_all_balances(addresses, chunk_size),
+                common,
+                false,
+            )
+        }
+        ClapCommand::MultiGetObjects { common } => {
+            let objects = load_objects_from_file(expand_path(&opts.data_directory));
+            (Command::new_multi_get_objects(objects), common, false)
+        }
+        ClapCommand::GetReferenceGasPrice { common } => {
+            let num_repeats = common.num_chunks_per_thread;
+            (
+                Command::new_get_reference_gas_price(num_repeats),
+                common,
+                false,
+            )
+        }
+        ClapCommand::GetObject { common, chunk_size } => {
+            let objects = load_objects_from_file(expand_path(&opts.data_directory));
+            (Command::new_get_object(objects, chunk_size), common, false)
+        }
     };
 
     let signer_info = need_keystore.then_some(get_keypair()?);

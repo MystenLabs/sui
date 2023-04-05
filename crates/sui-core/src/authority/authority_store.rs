@@ -43,6 +43,7 @@ use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use super::authority_store_tables::LiveObject;
 use super::{authority_store_tables::AuthorityPerpetualTables, *};
 use mysten_common::sync::notify_read::NotifyRead;
+use typed_store::rocks::util::is_ref_count_value;
 
 const NUM_SHARDS: usize = 4096;
 
@@ -72,6 +73,9 @@ pub struct AuthorityStore {
     pub(crate) objects_lock_table: Arc<RwLockTable<ObjectContentDigest>>,
 
     indirect_objects_threshold: usize,
+
+    /// Whether to enable expensive SUI conservation check at epoch boundaries.
+    enable_epoch_sui_conservation_check: bool,
 }
 
 pub type ExecutionLockReadGuard<'a> = RwLockReadGuard<'a, EpochId>;
@@ -86,6 +90,7 @@ impl AuthorityStore {
         genesis: &Genesis,
         committee_store: &Arc<CommitteeStore>,
         indirect_objects_threshold: usize,
+        enable_epoch_sui_conservation_check: bool,
     ) -> SuiResult<Self> {
         let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(path, db_options.clone()));
         if perpetual_tables.database_is_empty()? {
@@ -106,6 +111,7 @@ impl AuthorityStore {
             perpetual_tables,
             &committee,
             indirect_objects_threshold,
+            enable_epoch_sui_conservation_check,
         )
         .await
     }
@@ -126,6 +132,7 @@ impl AuthorityStore {
             perpetual_tables,
             committee,
             indirect_objects_threshold,
+            true,
         )
         .await
     }
@@ -135,6 +142,7 @@ impl AuthorityStore {
         perpetual_tables: Arc<AuthorityPerpetualTables>,
         committee: &Committee,
         indirect_objects_threshold: usize,
+        enable_epoch_sui_conservation_check: bool,
     ) -> SuiResult<Self> {
         let epoch = committee.epoch;
 
@@ -147,6 +155,7 @@ impl AuthorityStore {
             execution_lock: RwLock::new(epoch),
             objects_lock_table: Arc::new(RwLockTable::new(NUM_SHARDS)),
             indirect_objects_threshold,
+            enable_epoch_sui_conservation_check,
         };
         // Only initialize an empty database.
         if store
@@ -183,6 +192,13 @@ impl AuthorityStore {
                 .enumerate()
                 .map(|(i, e)| ((event_digests, i), e));
             store.perpetual_tables.events.multi_insert(events).unwrap();
+            // When we are opening the db table, the only time when it's safe to
+            // check SUI conservation is at genesis. Otherwise we may be in the middle of
+            // an epoch and the SUI conservation check will fail. This also initialize
+            // the expected_network_sui_amount table.
+            store
+                .expensive_check_sui_conservation()
+                .expect("SUI conservation check cannot fail at genesis");
         }
 
         Ok(store)
@@ -824,13 +840,13 @@ impl AuthorityStore {
         let existing_digests = self
             .perpetual_tables
             .indirect_move_objects
-            .multi_get(indirect_objects.iter().map(|(digest, _)| digest))?;
+            .multi_get_raw_bytes(indirect_objects.iter().map(|(digest, _)| digest))?;
         // split updates to existing and new indirect objects
         // for new objects full merge needs to be triggered. For existing ref count increment is sufficient
         let (existing_indirect_objects, new_indirect_objects): (Vec<_>, Vec<_>) = indirect_objects
             .into_iter()
             .enumerate()
-            .partition(|(idx, _)| existing_digests[*idx].is_some());
+            .partition(|(idx, _)| matches!(&existing_digests[*idx], Some(value) if !is_ref_count_value(value)));
 
         write_batch.insert_batch(&self.perpetual_tables.objects, new_objects.into_iter())?;
         if !new_indirect_objects.is_empty() {
@@ -1359,6 +1375,125 @@ impl AuthorityStore {
 
     pub fn iter_live_object_set(&self) -> impl Iterator<Item = LiveObject> + '_ {
         self.perpetual_tables.iter_live_object_set()
+    }
+
+    pub fn expensive_check_sui_conservation(&self) -> SuiResult {
+        if !self.enable_epoch_sui_conservation_check {
+            return Ok(());
+        }
+        let protocol_version = ProtocolVersion::new(
+            self.get_sui_system_state_object()
+                .expect("Read sui system state object cannot fail")
+                .protocol_version(),
+        );
+        // Prior to gas model v2, SUI conservation is not guaranteed.
+        if ProtocolConfig::get_for_version(protocol_version).gas_model_version() <= 1 {
+            return Ok(());
+        }
+
+        let mut total_storage_rebate = 0;
+        let mut total_sui = 0;
+        for o in self.iter_live_object_set() {
+            match o {
+                LiveObject::Normal(object) => {
+                    total_storage_rebate += object.storage_rebate;
+                    // get_total_sui includes storage rebate, however all storage rebate is
+                    // also stored in the storage fund, so we need to subtract it here.
+                    total_sui += object.get_total_sui(self)? - object.storage_rebate;
+                }
+                LiveObject::Wrapped(_) => (),
+            }
+        }
+        let system_state = self
+            .get_sui_system_state_object()
+            .expect("Reading sui system state object cannot fail")
+            .into_sui_system_state_summary();
+        info!(
+            "Total SUI amount in the network: {}, total storage rebate: {} at beginning of epoch {}",
+            total_sui, total_storage_rebate, system_state.epoch
+        );
+
+        let storage_fund_balance = system_state.storage_fund_total_object_storage_rebates;
+        let imbalance = (storage_fund_balance as i64) - (total_storage_rebate as i64);
+        if let Some(expected_imbalance) = self
+            .perpetual_tables
+            .expected_storage_fund_imbalance
+            .get(&())
+            .expect("DB read cannot fail")
+        {
+            fp_ensure!(
+                imbalance == expected_imbalance,
+                SuiError::from(
+                    format!(
+                        "Inconsistent state detected at epoch {}: total storage rebate: {}, storage fund balance: {}, expected imbalance: {}",
+                        system_state.epoch, total_storage_rebate, storage_fund_balance, expected_imbalance
+                    ).as_str()
+                )
+            );
+        } else {
+            self.perpetual_tables
+                .expected_storage_fund_imbalance
+                .insert(&(), &imbalance)
+                .expect("DB write cannot fail");
+        }
+
+        if let Some(expected_sui) = self
+            .perpetual_tables
+            .expected_network_sui_amount
+            .get(&())
+            .expect("DB read cannot fail")
+        {
+            fp_ensure!(
+                total_sui == expected_sui,
+                SuiError::from(
+                    format!(
+                        "Inconsistent state detected at epoch {}: total sui: {}, expecting {}",
+                        system_state.epoch, total_sui, expected_sui
+                    )
+                    .as_str()
+                )
+            );
+        } else {
+            self.perpetual_tables
+                .expected_network_sui_amount
+                .insert(&(), &total_sui)
+                .expect("DB write cannot fail");
+        }
+
+        Ok(())
+    }
+
+    pub fn expensive_check_is_consistent_state(
+        &self,
+        checkpoint_executor: &CheckpointExecutor,
+        accumulator: Arc<StateAccumulator>,
+        epoch: EpochId,
+        panic: bool,
+    ) {
+        let live_object_set_hash = accumulator.digest_live_object_set();
+
+        let root_state_hash = self
+            .get_root_state_hash(epoch)
+            .expect("Retrieving root state hash cannot fail");
+
+        let is_inconsistent = root_state_hash != live_object_set_hash;
+        if is_inconsistent {
+            if panic {
+                panic!(
+                    "Inconsistent state detected: root state hash: {:?}, live object set hash: {:?}",
+                    root_state_hash, live_object_set_hash
+                );
+            } else {
+                error!(
+                    "Inconsistent state detected: root state hash: {:?}, live object set hash: {:?}",
+                    root_state_hash, live_object_set_hash
+                );
+            }
+        }
+
+        if !panic {
+            checkpoint_executor.set_inconsistent_state(is_inconsistent);
+        }
     }
 }
 

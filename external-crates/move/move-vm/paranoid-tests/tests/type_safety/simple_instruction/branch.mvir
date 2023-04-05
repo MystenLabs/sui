@@ -1,0 +1,22 @@
+//# run --signers 0x1 --check-runtime-types
+main(account: signer) {
+    let c: bool;
+label b0:
+    c = true;
+    jump_if (move(c)) b1;
+label b1:
+    jump b2;
+label b2:
+    return;
+}
+
+//# run --signers 0x1 --check-runtime-types
+main(account: signer) {
+    let c: bool;
+label b0:
+    c = false;
+    jump_if (move(c)) b1;
+label b1:
+label b2:
+    return;
+}

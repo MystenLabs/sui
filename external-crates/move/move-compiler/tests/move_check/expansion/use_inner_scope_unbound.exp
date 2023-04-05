@@ -1,0 +1,15 @@
+error[E03002]: unbound module
+   ┌─ tests/move_check/expansion/use_inner_scope_unbound.move:13:13
+   │
+13 │         use 0x2::N;
+   │             ^^^^^^ Invalid 'use'. Unbound module: '0x2::N'
+
+error[E03003]: unbound module member
+   ┌─ tests/move_check/expansion/use_inner_scope_unbound.move:14:21
+   │
+ 2 │ module M {
+   │        - Module '0x2::M' declared here
+   ·
+14 │         use 0x2::M::foo;
+   │                     ^^^ Invalid 'use'. Unbound member 'foo' in module '0x2::M'
+

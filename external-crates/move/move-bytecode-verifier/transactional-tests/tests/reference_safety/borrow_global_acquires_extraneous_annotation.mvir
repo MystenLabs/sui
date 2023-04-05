@@ -1,0 +1,11 @@
+//# publish
+module 0x1.A {
+    struct T1 has key {v: u64}
+
+    // unnecessary acquires annotation
+    public test() acquires T1 {
+    label b0:
+        return;
+    }
+
+}

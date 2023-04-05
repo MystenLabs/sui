@@ -1,0 +1,53 @@
+//# publish
+module 0x1.M {
+    struct R { flag: bool }
+
+    // Type checking is done before memory safety checks
+    // wrong return type
+    t1(): bool {
+        let c: Self.R;
+    label b0:
+        c = R { flag: false };
+        return 0;
+    }
+}
+
+//# publish
+module 0x1.M2 {
+    // Type checking is done before memory safety checks
+    // wrong return type
+    t2(): bool {
+        let u: u64;
+        let r: &u64;
+    label b0:
+        u = 0;
+        r = &u;
+        return move(r);
+    }
+}
+
+//# publish
+module 0x1.M {
+    struct R { flag: bool }
+
+    t1(): u64 {
+        let c: Self.R;
+    label b0:
+        c = R { flag: false };
+        // unused resource
+        return 0;
+    }
+}
+
+//# publish
+module 0x1.M2 {
+    t2(): &u64 {
+        let u: u64;
+        let r: &u64;
+    label b0:
+        u = 0;
+        r = &u;
+        // unused resource
+        return move(r);
+    }
+}

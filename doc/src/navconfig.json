@@ -117,8 +117,12 @@
 						"fileName": "learn/cryptography/sui-offline-signing"
 					},
 					{
-						"label": "Sui Multi-Signature",
+						"label": "Sui Multisig",
 						"fileName": "learn/cryptography/sui-multisig"
+					},
+					{
+						"label": "Sui Keys and Addresses",
+						"fileName": "learn/cryptography/sui-wallet-specs"
 					}
 				]
 			},

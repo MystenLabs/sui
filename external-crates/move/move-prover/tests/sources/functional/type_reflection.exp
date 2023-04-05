@@ -1,0 +1,15 @@
+Move prover returns: exiting with verification errors
+error: abort not covered by any of the `aborts_if` clauses
+   ┌─ tests/sources/functional/type_reflection.move:86:5
+   │
+84 │           type_info::type_of<T>()
+   │           ----------------------- abort happened here with execution failure
+85 │       }
+86 │ ╭     spec test_type_info_can_abort {
+87 │ │         // this should not pass
+88 │ │         aborts_if false;
+89 │ │     }
+   │ ╰─────^
+   │
+   =     at tests/sources/functional/type_reflection.move:84: test_type_info_can_abort
+   =         ABORTED

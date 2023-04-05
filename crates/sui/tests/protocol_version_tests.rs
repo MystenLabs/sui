@@ -73,9 +73,9 @@ mod sim_only_tests {
     use sui_types::base_types::ObjectID;
     use sui_types::id::ID;
     use sui_types::sui_system_state::{
-        get_validator_from_table, SuiSystemState, SuiSystemStateTrait,
-        SUI_SYSTEM_STATE_SIM_TEST_DEEP_V2, SUI_SYSTEM_STATE_SIM_TEST_SHALLOW_V2,
-        SUI_SYSTEM_STATE_SIM_TEST_V1,
+        epoch_start_sui_system_state::EpochStartSystemStateTrait, get_validator_from_table,
+        SuiSystemState, SuiSystemStateTrait, SUI_SYSTEM_STATE_SIM_TEST_DEEP_V2,
+        SUI_SYSTEM_STATE_SIM_TEST_SHALLOW_V2, SUI_SYSTEM_STATE_SIM_TEST_V1,
     };
     use sui_types::{
         base_types::SequenceNumber,
@@ -566,6 +566,19 @@ mod sim_only_tests {
             .build()
             .await
             .unwrap();
+        let genesis_epoch_start_time = test_cluster
+            .swarm
+            .validators()
+            .next()
+            .unwrap()
+            .get_node_handle()
+            .unwrap()
+            .with(|node| {
+                node.state()
+                    .epoch_store_for_testing()
+                    .epoch_start_state()
+                    .epoch_start_timestamp_ms()
+            });
 
         // We are going to enter safe mode so set the expectation right.
         test_cluster.set_safe_mode_expected(true);
@@ -577,6 +590,7 @@ mod sim_only_tests {
         assert_eq!(system_state.epoch(), 1);
         assert_eq!(system_state.protocol_version(), FINISH); // protocol version increments
         assert!(system_state.safe_mode()); // enters safe mode
+        assert!(system_state.epoch_start_timestamp_ms() >= genesis_epoch_start_time + 20000);
 
         // We are getting out of safe mode soon.
         test_cluster.set_safe_mode_expected(false);

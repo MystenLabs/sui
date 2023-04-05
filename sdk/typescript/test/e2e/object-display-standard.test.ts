@@ -15,7 +15,7 @@ describe('Test Object Display Standard', () => {
     ({ packageId } = await publishPackage(packagePath, toolbox));
   });
 
-  it('Test getting Display fields', async () => {
+  it('Test getting Display fields with error object', async () => {
     const resp = (
       await toolbox.provider.getOwnedObjects({
         owner: toolbox.address(),
@@ -32,16 +32,23 @@ describe('Test Object Display Standard', () => {
       }),
     );
     expect(display).toEqual({
-      age: '10',
-      buyer: toolbox.address(),
-      creator: 'Chris',
-      description: `Unique Boar from the Boars collection with First Boar and ${boarId}`,
-      img_url: 'https://get-a-boar.com/first.png',
-      name: 'First Boar',
-      price: '',
-      project_url: 'https://get-a-boar.com/',
-      full_url: 'https://get-a-boar.fullurl.com/',
-      escape_syntax: '{name}',
+      data: {
+        age: '10',
+        buyer: toolbox.address(),
+        creator: 'Chris',
+        description: `Unique Boar from the Boars collection with First Boar and ${boarId}`,
+        img_url: 'https://get-a-boar.com/first.png',
+        name: 'First Boar',
+        price: '',
+        project_url: 'https://get-a-boar.com/',
+        full_url: 'https://get-a-boar.fullurl.com/',
+        escape_syntax: '{name}',
+      },
+      error: {
+        code: 'displayError',
+        error:
+          'RPC call failed: Field value idd cannot be found in struct; RPC call failed: Field value namee cannot be found in struct',
+      },
     });
   });
 
@@ -55,6 +62,6 @@ describe('Test Object Display Standard', () => {
         options: { showDisplay: true },
       }),
     );
-    expect(display).toEqual(undefined);
+    expect(display?.data).toEqual(null);
   });
 });

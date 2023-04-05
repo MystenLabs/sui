@@ -1,0 +1,87 @@
+//# publish
+module 0x2.A {
+  struct A has drop { x: bool }
+
+  public make_a(): Self.A {
+  label b0:
+    return A { x: true };
+  }
+
+  public test(a: &mut Self.A) {
+  label b0:
+    *&mut (move(a)).A::x = true;
+    return;
+  }
+
+  public test_invalid(a: &mut Self.A) {
+  label b0:
+    *&mut (move(a)).A::x = 10u64;
+    return;
+  }
+}
+
+//# run --signers 0x1 --check-runtime-types
+import 0x2.A;
+main(account: signer) {
+    let a: A.A;
+label b0:
+    a = A.make_a();
+    A.test(&mut a);
+    return;
+}
+
+//# run --signers 0x1 --check-runtime-types
+import 0x2.A;
+main(account: signer) {
+    let a: A.A;
+label b0:
+    a = A.make_a();
+    A.test_invalid(&mut a);
+    return;
+}
+
+//# run --signers 0x1 --check-runtime-types
+main(account: signer) {
+    let a: vector<bool>;
+    let b: &mut bool;
+label b0:
+    a = vec_pack_0<bool>();
+    vec_push_back<bool>(&mut a, true);
+    b = vec_mut_borrow<bool>(&mut a, 0);
+    *move(b) = false;
+    return;
+}
+
+//# run --signers 0x1 --check-runtime-types
+main(account: signer) {
+    let a: vector<bool>;
+    let b: &mut bool;
+label b0:
+    a = vec_pack_0<bool>();
+    vec_push_back<bool>(&mut a, true);
+    b = vec_mut_borrow<bool>(&mut a, 0);
+    *move(b) = 5u64;
+    return;
+}
+
+//# run --signers 0x1 --check-runtime-types
+main(account: signer) {
+    let a: bool;
+    let b: &mut bool;
+label b0:
+    a = false;
+    b = &mut a;
+    *move(b) = true;
+    return;
+}
+
+//# run --signers 0x1 --check-runtime-types
+main(account: signer) {
+    let a: bool;
+    let b: &mut bool;
+label b0:
+    a = false;
+    b = &mut a;
+    *move(b) = 10u64;
+    return;
+}

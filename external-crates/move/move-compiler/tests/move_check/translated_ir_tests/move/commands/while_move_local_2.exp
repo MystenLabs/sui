@@ -1,0 +1,20 @@
+error[E06002]: use of unassigned variable
+  ┌─ tests/move_check/translated_ir_tests/move/commands/while_move_local_2.move:8:17
+  │
+8 │             y = move x;
+  │                 ^^^^^^
+  │                 │
+  │                 Invalid usage of previously moved variable 'x'.
+  │                 Suggestion: use 'copy x' to avoid the move.
+  │                 In a loop, this typically means it was moved in the first iteration, and is not available by the second iteration.
+
+error[E06002]: use of unassigned variable
+   ┌─ tests/move_check/translated_ir_tests/move/commands/while_move_local_2.move:10:17
+   │
+10 │             x = move y;
+   │                 ^^^^^^
+   │                 │
+   │                 Invalid usage of previously moved variable 'y'.
+   │                 Suggestion: use 'copy y' to avoid the move.
+   │                 In a loop, this typically means it was moved in the first iteration, and is not available by the second iteration.
+

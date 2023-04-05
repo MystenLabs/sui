@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useGetRollingAverageApys } from '@mysten/core';
+import {
+    useGetRollingAverageApys,
+    formatPercentageDisplay,
+} from '@mysten/core';
 import { ArrowRight16 } from '@mysten/icons';
 import cl from 'classnames';
 import { useState, useMemo } from 'react';
@@ -63,7 +66,7 @@ export function SelectValidatorCard() {
         const sortedAsc = validatorsRandomOrder.map((validator) => ({
             name: validator.name,
             address: validator.suiAddress,
-            apy: rollingAverageApys?.[validator.suiAddress] || 0,
+            apy: rollingAverageApys?.[validator.suiAddress] ?? null,
             stakeShare: calculateStakeShare(
                 BigInt(validator.stakingPoolSuiBalance),
                 BigInt(totalStake)
@@ -77,7 +80,8 @@ export function SelectValidatorCard() {
                         numeric: true,
                     });
                 }
-                return a[sortKey] - b[sortKey];
+                // since apy can be null, fallback to 0
+                return (a[sortKey] || 0) - (b[sortKey] || 0);
             });
 
             return sortAscending ? sortedAsc : sortedAsc.reverse();
@@ -185,11 +189,12 @@ export function SelectValidatorCard() {
                                         selectedValidator === validator.address
                                     }
                                     validatorAddress={validator.address}
-                                    value={
+                                    value={formatPercentageDisplay(
                                         !sortKey || sortKey === 'name'
-                                            ? '-'
-                                            : `${validator[sortKey]}%`
-                                    }
+                                            ? null
+                                            : validator[sortKey],
+                                        '-'
+                                    )}
                                 />
                             </div>
                         ))}

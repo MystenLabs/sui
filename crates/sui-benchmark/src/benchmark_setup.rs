@@ -89,6 +89,12 @@ impl Env {
             test_and_configure_authority_configs_with_objects(committee_size, generated_gas);
         let mut metric_port = server_metric_port;
         for node_config in network_config.validator_configs.iter_mut() {
+            // Benchmark setup allocates very large gas objects, which will lead to overflow if we attempt
+            // to calculate the amount of SUI in the network. Hence we disable SUI conservation checks
+            // even when we are running in debug mode.
+            node_config
+                .expensive_safety_check_config
+                .force_disable_epoch_sui_conservation_check();
             let parameters = &mut node_config
                 .consensus_config
                 .as_mut()

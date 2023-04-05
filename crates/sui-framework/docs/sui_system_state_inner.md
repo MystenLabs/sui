@@ -49,7 +49,6 @@
 -  [Function `update_validator_next_epoch_network_pubkey`](#0x3_sui_system_state_inner_update_validator_next_epoch_network_pubkey)
 -  [Function `update_candidate_validator_network_pubkey`](#0x3_sui_system_state_inner_update_candidate_validator_network_pubkey)
 -  [Function `advance_epoch`](#0x3_sui_system_state_inner_advance_epoch)
--  [Function `advance_epoch_safe_mode`](#0x3_sui_system_state_inner_advance_epoch_safe_mode)
 -  [Function `epoch`](#0x3_sui_system_state_inner_epoch)
 -  [Function `protocol_version`](#0x3_sui_system_state_inner_protocol_version)
 -  [Function `system_state_version`](#0x3_sui_system_state_inner_system_state_version)
@@ -2213,57 +2212,6 @@ gas coins.
     // Return the storage rebate split from storage fund that's already refunded <b>to</b> the transaction senders.
     // This will be burnt at the last step of epoch change programmable transaction.
     refunded_storage_rebate
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x3_sui_system_state_inner_advance_epoch_safe_mode"></a>
-
-## Function `advance_epoch_safe_mode`
-
-An extremely simple version of advance_epoch.
-This is called in two situations:
-- When the call to advance_epoch failed due to a bug, and we want to be able to keep the
-system running and continue making epoch changes.
-- When advancing to a new protocol version, we want to be able to change the protocol
-version
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_advance_epoch_safe_mode">advance_epoch_safe_mode</a>(self: &<b>mut</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInnerV2">sui_system_state_inner::SuiSystemStateInnerV2</a>, new_epoch: u64, next_protocol_version: u64, storage_reward: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, computation_reward: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, storage_rebate: u64, non_refundable_storage_fee: u64, epoch_start_timestamp_ms: u64, ctx: &<b>mut</b> <a href="_TxContext">tx_context::TxContext</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_advance_epoch_safe_mode">advance_epoch_safe_mode</a>(
-    self: &<b>mut</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>,
-    new_epoch: u64,
-    next_protocol_version: u64,
-    storage_reward: Balance&lt;SUI&gt;,
-    computation_reward: Balance&lt;SUI&gt;,
-    storage_rebate: u64,
-    non_refundable_storage_fee: u64,
-    epoch_start_timestamp_ms: u64,
-    ctx: &<b>mut</b> TxContext,
-) {
-    // Validator will make a special system call <b>with</b> sender set <b>as</b> 0x0.
-    <b>assert</b>!(<a href="_sender">tx_context::sender</a>(ctx) == @0x0, <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_ENotSystemAddress">ENotSystemAddress</a>);
-
-    self.epoch_start_timestamp_ms = epoch_start_timestamp_ms;
-    self.epoch = new_epoch;
-    self.protocol_version = next_protocol_version;
-
-    self.safe_mode = <b>true</b>;
-    <a href="_join">balance::join</a>(&<b>mut</b> self.safe_mode_storage_rewards, storage_reward);
-    <a href="_join">balance::join</a>(&<b>mut</b> self.safe_mode_computation_rewards, computation_reward);
-    self.safe_mode_storage_rebates = self.safe_mode_storage_rebates + storage_rebate;
-    self.safe_mode_non_refundable_storage_fee = self.safe_mode_non_refundable_storage_fee + non_refundable_storage_fee;
 }
 </code></pre>
 

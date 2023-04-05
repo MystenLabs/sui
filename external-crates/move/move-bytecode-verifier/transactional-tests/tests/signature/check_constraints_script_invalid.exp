@@ -1,0 +1,73 @@
+processed 9 tasks
+
+task 1 'run'. lines 17-22:
+Error: Script execution failed with VMError: {
+    major_status: CONSTRAINT_NOT_SATISFIED,
+    sub_status: None,
+    location: script,
+    indices: [],
+    offsets: [],
+}
+
+task 2 'run'. lines 24-29:
+Error: Script execution failed with VMError: {
+    major_status: CONSTRAINT_NOT_SATISFIED,
+    sub_status: None,
+    location: script,
+    indices: [],
+    offsets: [],
+}
+
+task 3 'run'. lines 31-36:
+Error: Script execution failed with VMError: {
+    major_status: CONSTRAINT_NOT_SATISFIED,
+    sub_status: None,
+    location: script,
+    indices: [],
+    offsets: [],
+}
+
+task 4 'run'. lines 38-43:
+Error: Script execution failed with VMError: {
+    major_status: CONSTRAINT_NOT_SATISFIED,
+    sub_status: None,
+    location: script,
+    indices: [],
+    offsets: [],
+}
+
+task 5 'run'. lines 45-50:
+Error: Script execution failed with VMError: {
+    major_status: CONSTRAINT_NOT_SATISFIED,
+    sub_status: None,
+    location: script,
+    indices: [],
+    offsets: [],
+}
+
+task 6 'run'. lines 52-57:
+Error: Script execution failed with VMError: {
+    major_status: CONSTRAINT_NOT_SATISFIED,
+    sub_status: None,
+    location: script,
+    indices: [],
+    offsets: [],
+}
+
+task 7 'run'. lines 59-64:
+Error: Script execution failed with VMError: {
+    major_status: CONSTRAINT_NOT_SATISFIED,
+    sub_status: None,
+    location: script,
+    indices: [],
+    offsets: [],
+}
+
+task 8 'run'. lines 66-71:
+Error: Script execution failed with VMError: {
+    major_status: CONSTRAINT_NOT_SATISFIED,
+    sub_status: None,
+    location: script,
+    indices: [],
+    offsets: [],
+}

@@ -77,7 +77,6 @@ the SuiSystemStateInner version, or vice versa.
 -  [Function `update_validator_next_epoch_network_pubkey`](#0x3_sui_system_update_validator_next_epoch_network_pubkey)
 -  [Function `update_candidate_validator_network_pubkey`](#0x3_sui_system_update_candidate_validator_network_pubkey)
 -  [Function `advance_epoch`](#0x3_sui_system_advance_epoch)
--  [Function `advance_epoch_safe_mode`](#0x3_sui_system_advance_epoch_safe_mode)
 -  [Function `load_system_state`](#0x3_sui_system_load_system_state)
 -  [Function `load_system_state_mut`](#0x3_sui_system_load_system_state_mut)
 -  [Function `load_inner_maybe_upgrade`](#0x3_sui_system_load_inner_maybe_upgrade)
@@ -1282,59 +1281,6 @@ gas coins.
     );
 
     storage_rebate
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x3_sui_system_advance_epoch_safe_mode"></a>
-
-## Function `advance_epoch_safe_mode`
-
-An extremely simple version of advance_epoch.
-This is called in two situations:
-- When the call to advance_epoch failed due to a bug, and we want to be able to keep the
-system running and continue making epoch changes.
-- When advancing to a new protocol version, we want to be able to change the protocol
-version
-
-
-<pre><code><b>fun</b> <a href="sui_system.md#0x3_sui_system_advance_epoch_safe_mode">advance_epoch_safe_mode</a>(storage_reward: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, computation_reward: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, wrapper: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, new_epoch: u64, next_protocol_version: u64, storage_rebate: u64, non_refundable_storage_fee: u64, epoch_start_timestamp_ms: u64, ctx: &<b>mut</b> <a href="_TxContext">tx_context::TxContext</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="sui_system.md#0x3_sui_system_advance_epoch_safe_mode">advance_epoch_safe_mode</a>(
-    storage_reward: Balance&lt;SUI&gt;,
-    computation_reward: Balance&lt;SUI&gt;,
-    wrapper: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a>,
-    new_epoch: u64,
-    next_protocol_version: u64,
-    storage_rebate: u64,
-    non_refundable_storage_fee: u64,
-    epoch_start_timestamp_ms: u64,
-    ctx: &<b>mut</b> TxContext,
-) {
-    <b>let</b> self = <a href="sui_system.md#0x3_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
-    // Validator will make a special system call <b>with</b> sender set <b>as</b> 0x0.
-    <b>assert</b>!(<a href="_sender">tx_context::sender</a>(ctx) == @0x0, <a href="sui_system.md#0x3_sui_system_ENotSystemAddress">ENotSystemAddress</a>);
-    <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_advance_epoch_safe_mode">sui_system_state_inner::advance_epoch_safe_mode</a>(
-        self,
-        new_epoch,
-        next_protocol_version,
-        storage_reward,
-        computation_reward,
-        storage_rebate,
-        non_refundable_storage_fee,
-        epoch_start_timestamp_ms,
-        ctx
-    )
 }
 </code></pre>
 

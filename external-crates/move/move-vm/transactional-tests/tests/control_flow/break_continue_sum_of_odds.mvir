@@ -1,0 +1,23 @@
+//# run
+main() {
+    let x: u64;
+    let y: u64;
+label b0:
+    x = 0;
+    y = 0;
+label loop:
+    jump_if (copy(x) < 10) loop_b1;
+label loop_b0:
+    jump loop_cont;
+label loop_b1:
+    x = move(x) + 1;
+    jump_if_false (copy(x) % 2 == 0) loop_b3;
+label loop_b2:
+    jump loop;
+label loop_b3:
+    y = move(y) + copy(x);
+    jump loop;
+label loop_cont:
+    assert(move(y) == 25, 42);
+    return;
+}

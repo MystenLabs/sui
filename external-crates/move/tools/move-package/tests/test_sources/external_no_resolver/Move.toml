@@ -1,0 +1,7 @@
+[package]
+name = "Root"
+version = "0.0.0"
+
+[dependencies.A]
+# This resolver doesn't exist, so calling out to it will fail.
+resolver = "../resolvers/doesnt_exist.sh"

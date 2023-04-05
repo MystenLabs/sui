@@ -1,0 +1,6 @@
+error[E04010]: cannot infer type
+  ┌─ tests/move_check/typing/vector_no_type_inferred.move:4:9
+  │
+4 │         vector[];
+  │         ^^^^^^^^ Could not infer this type. Try adding an annotation
+

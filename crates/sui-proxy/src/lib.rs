@@ -34,6 +34,7 @@ macro_rules! var {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::admin::Labels;
     use crate::histogram_relay::HistogramRelay;
     use crate::prom_to_mimir::tests::*;
 
@@ -108,7 +109,10 @@ mod tests {
             tls_info.public_key().unwrap().to_string()
         }
         let app = admin::app(
-            "unittest-network".into(),
+            Labels {
+                network: "unittest-network".into(),
+                inventory_hostname: "ansible_inventory_name".into(),
+            },
             client,
             HistogramRelay::new(),
             Some(allower.clone()),

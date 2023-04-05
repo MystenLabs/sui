@@ -1,0 +1,11 @@
+error[E06002]: use of unassigned variable
+  ┌─ tests/move_check/liveness/copy_after_move.move:5:9
+  │
+4 │         move x;
+  │         ------
+  │         │
+  │         The value of 'x' was previously moved here.
+  │         Suggestion: use 'copy x' to avoid the move.
+5 │         copy x;
+  │         ^^^^^^ Invalid usage of previously moved variable 'x'.
+

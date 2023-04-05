@@ -1,0 +1,16 @@
+error[E10004]: invalid usage of known attribute
+  ┌─ tests/move_check/unit_test/expected_failure_not_test.move:4:9
+  │
+3 │     #[expected_failure]
+  │       ---------------- Attributed as #[expected_failure] here
+4 │     fun foo() { }
+  │         ^^^ Only functions defined as a test with #[test] can also have an #[expected_failure] attribute
+
+error[E10004]: invalid usage of known attribute
+  ┌─ tests/move_check/unit_test/expected_failure_not_test.move:7:9
+  │
+6 │     #[test_only, expected_failure]
+  │                  ---------------- Attributed as #[expected_failure] here
+7 │     fun bar() { }
+  │         ^^^ Only functions defined as a test with #[test] can also have an #[expected_failure] attribute
+

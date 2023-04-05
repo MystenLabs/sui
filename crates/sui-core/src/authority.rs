@@ -43,7 +43,9 @@ use shared_crypto::intent::{Intent, IntentScope};
 use sui_adapter::execution_engine;
 use sui_adapter::{adapter, execution_mode};
 use sui_config::genesis::Genesis;
-use sui_config::node::{AuthorityStorePruningConfig, DBCheckpointConfig};
+use sui_config::node::{
+    AuthorityStorePruningConfig, DBCheckpointConfig, ExpensiveSafetyCheckConfig,
+};
 use sui_framework::{MoveStdlib, SuiFramework, SuiSystem, SystemPackage};
 use sui_json_rpc_types::{
     Checkpoint, DevInspectResults, DryRunTransactionBlockResponse, EventFilter, SuiEvent,
@@ -95,6 +97,7 @@ use crate::authority::authority_store::{ExecutionLockReadGuard, InputKey, Object
 use crate::authority::authority_store_pruner::AuthorityStorePruner;
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
+use crate::checkpoints::checkpoint_executor::CheckpointExecutor;
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::epoch_metrics::EpochMetrics;
@@ -103,6 +106,7 @@ use crate::execution_driver::execution_process;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::signature_verifier::SignatureVerifierMetrics;
 use crate::stake_aggregator::StakeAggregator;
+use crate::state_accumulator::StateAccumulator;
 use crate::{transaction_input_checker, transaction_manager::TransactionManager};
 
 #[cfg(test)]
@@ -489,6 +493,9 @@ pub struct AuthorityState {
 
     /// Take db checkpoints af different dbs
     db_checkpoint_config: DBCheckpointConfig,
+
+    /// Config controlling what kind of expensive safety checks to perform.
+    _expensive_safety_check_config: ExpensiveSafetyCheckConfig,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -1623,6 +1630,7 @@ impl AuthorityState {
         pruning_config: AuthorityStorePruningConfig,
         genesis_objects: &[Object],
         db_checkpoint_config: &DBCheckpointConfig,
+        expensive_safety_check_config: ExpensiveSafetyCheckConfig,
     ) -> Arc<Self> {
         Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
 
@@ -1661,6 +1669,7 @@ impl AuthorityState {
             _objects_pruner,
             _authority_per_epoch_pruner,
             db_checkpoint_config: db_checkpoint_config.clone(),
+            _expensive_safety_check_config: expensive_safety_check_config,
         });
 
         // Start a task to execute ready certificates.
@@ -1746,6 +1755,7 @@ impl AuthorityState {
             AuthorityStorePruningConfig::default(),
             genesis.objects(),
             &DBCheckpointConfig::default(),
+            ExpensiveSafetyCheckConfig::new_enable_all(),
         )
         .await;
 
@@ -1823,6 +1833,9 @@ impl AuthorityState {
         supported_protocol_versions: SupportedProtocolVersions,
         new_committee: Committee,
         epoch_start_configuration: EpochStartConfiguration,
+        checkpoint_executor: &CheckpointExecutor,
+        accumulator: Arc<StateAccumulator>,
+        enable_state_consistency_check: bool,
     ) -> SuiResult<Arc<AuthorityPerEpochStore>> {
         Self::check_protocol_version(
             supported_protocol_versions,
@@ -1836,6 +1849,12 @@ impl AuthorityState {
         let mut execution_lock = db.execution_lock_for_reconfiguration().await;
         self.revert_uncommitted_epoch_transactions(cur_epoch_store)
             .await?;
+        self.check_system_consistency(
+            cur_epoch_store,
+            checkpoint_executor,
+            accumulator,
+            enable_state_consistency_check,
+        );
         if let Some(checkpoint_path) = &self.db_checkpoint_config.checkpoint_path {
             if self
                 .db_checkpoint_config
@@ -1858,6 +1877,34 @@ impl AuthorityState {
         // see also assert in AuthorityState::process_certificate
         // on the epoch store and execution lock epoch match
         Ok(new_epoch_store)
+    }
+
+    fn check_system_consistency(
+        &self,
+        cur_epoch_store: &AuthorityPerEpochStore,
+        checkpoint_executor: &CheckpointExecutor,
+        accumulator: Arc<StateAccumulator>,
+        enable_state_consistency_check: bool,
+    ) {
+        if let Err(err) = self.database.expensive_check_sui_conservation() {
+            if cfg!(debug_assertions) {
+                panic!("{}", err);
+            } else {
+                // We cannot panic in production yet because it is known that there are some
+                // inconsistencies in testnet. We will enable this once we make it balanced again in testnet.
+                warn!("System consistency check failed: {}", err);
+            }
+        }
+
+        // check for root state hash consistency with live object set
+        if enable_state_consistency_check {
+            self.database.expensive_check_is_consistent_state(
+                checkpoint_executor,
+                accumulator,
+                cur_epoch_store.epoch(),
+                cfg!(debug_assertions), // panic in debug mode only
+            );
+        }
     }
 
     pub fn db(&self) -> Arc<AuthorityStore> {

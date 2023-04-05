@@ -1,0 +1,20 @@
+//# publish
+module 0x42.M {
+    consume(s: signer) {
+    label b0:
+        Self.consume(move(s));
+        return;
+    }
+
+    t(cond: bool, s: signer) {
+    label b0:
+        jump_if_false (move(cond)) b2;
+    label b1:
+        Self.consume(move(s));
+    label b2:
+        return;
+    }
+}
+
+// Used to be invalid
+// Now valid because signer has drop

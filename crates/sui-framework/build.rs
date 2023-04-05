@@ -16,7 +16,7 @@ const DOCS_DIR: &str = "docs";
 
 /// Save revision info to environment variable
 fn main() {
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks {}));
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
     let packages_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("packages");
 

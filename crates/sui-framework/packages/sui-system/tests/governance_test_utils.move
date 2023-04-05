@@ -162,24 +162,6 @@ module sui_system::governance_test_utils {
         test_scenario::next_epoch(scenario, @0x0);
     }
 
-    public fun advance_epoch_safe_mode(scenario: &mut Scenario) {
-        advance_epoch_safe_mode_with_reward_amounts(0, 0, 0, 0, scenario)
-    }
-
-    public fun advance_epoch_safe_mode_with_reward_amounts(
-        storage_charge: u64, computation_charge: u64, storage_rebate: u64, non_refundable_storage_rebate: u64, scenario: &mut Scenario,
-    ) {
-        test_scenario::next_tx(scenario, @0x0);
-        let new_epoch = tx_context::epoch(test_scenario::ctx(scenario)) + 1;
-        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
-
-        let ctx = test_scenario::ctx(scenario);
-        sui_system::advance_epoch_safe_mode_for_testing(
-            &mut system_state, new_epoch, 1, storage_charge, computation_charge, storage_rebate, non_refundable_storage_rebate, ctx);
-        test_scenario::return_shared(system_state);
-        test_scenario::next_epoch(scenario, @0x0);
-    }
-
     public fun stake_with(
         staker: address, validator: address, amount: u64, scenario: &mut Scenario
     ) {

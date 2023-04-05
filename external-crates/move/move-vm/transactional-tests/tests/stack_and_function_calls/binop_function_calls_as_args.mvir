@@ -1,0 +1,39 @@
+//# publish
+module 0x1.A {
+    public div_by_two(v: u64): bool {
+    label b0:
+        jump_if (move(v) % 2 == 0) b2;
+    label b1:
+        return false;
+    label b2:
+        return true;
+    }
+
+    public div_by_three(k: u64): bool {
+    label b0:
+        jump_if (move(k) % 3 == 0) b2;
+    label b1:
+        return false;
+    label b2:
+        return true;
+    }
+
+    public div_by_six(b: bool): bool {
+    label b0:
+        return move(b);
+    }
+}
+
+
+//# run
+import 0x1.A;
+
+main() {
+    let x: u64;
+    let y: bool;
+label b0:
+    x = 42;
+    y = A.div_by_six(A.div_by_two(copy(x)) && A.div_by_three(move(x)));
+    assert(move(y) == true, 42);
+    return;
+}

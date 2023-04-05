@@ -1,0 +1,15 @@
+//# run
+main() {
+label b0:
+    jump_if (true) b2;
+label b1:
+    // positive stack, but never reached when checking
+    (5);
+    jump b3;
+label b2:
+    // positive stack
+    (4);
+    jump b3;
+label b3:
+    return;
+}

@@ -40,6 +40,10 @@ pub fn empty_compaction_filter(_level: u32, _key: &[u8], value: &[u8]) -> Compac
     }
 }
 
+pub fn is_ref_count_value(value: &[u8]) -> bool {
+    value.is_empty() || value.len() == 8
+}
+
 fn deserialize_ref_count_value(bytes: &[u8]) -> (Option<&[u8]>, i64) {
     assert!(bytes.len() >= 8);
     let (value, rc_bytes) = bytes.split_at(bytes.len() - 8);

@@ -1541,10 +1541,8 @@ impl ProtocolConfig {
                 cfg.feature_flags.package_upgrades = true;
                 cfg
             }
-
             // Use this template when making changes:
             //
-            // NEW_VERSION => Self {
             //     // modify an existing constant.
             //     move_binary_format_version: Some(7),
             //

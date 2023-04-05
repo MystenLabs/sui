@@ -1,0 +1,1 @@
+Failed to resolve dependencies for package 'Root': Parsing response from '../resolvers/broken.sh' for dependency 'A' of package 'Root': Deserializing lock header: expected an equals, found an identifier at line 1 column 8

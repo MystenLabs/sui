@@ -1,0 +1,18 @@
+error[E03004]: unbound type
+  ┌─ tests/move_check/verification/single_module_invalid.move:8:23
+  │
+8 │     public fun foo(): Foo {
+  │                       ^^^ Unbound type 'Foo' in current scope
+
+error[E03004]: unbound type
+  ┌─ tests/move_check/verification/single_module_invalid.move:9:9
+  │
+9 │         Foo {}
+  │         ^^^ Unbound type 'Foo' in current scope
+
+error[E03005]: unbound unscoped name
+   ┌─ tests/move_check/verification/single_module_invalid.move:17:24
+   │
+17 │     public fun baz() { bar() }
+   │                        ^^^ Unbound function 'bar' in current scope
+

@@ -149,7 +149,7 @@ pub enum SuiCommand {
 
 impl SuiCommand {
     pub async fn execute(self) -> Result<(), anyhow::Error> {
-        move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks {}));
+        move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
         match self {
             SuiCommand::Start {
                 config,

@@ -93,8 +93,9 @@ impl ProtobufDecoder {
 
 // populate labels in place for our given metric family data
 pub fn populate_labels(
-    host: String,
-    network: String,
+    name: String,               // host field for grafana agent (from chain data)
+    network: String,            // network name from ansible (via config)
+    inventory_hostname: String, // inventory_name from ansible (via config)
     data: Vec<proto::MetricFamily>,
 ) -> Vec<proto::MetricFamily> {
     let timer = CONSUMER_OPERATION_DURATION
@@ -108,9 +109,13 @@ pub fn populate_labels(
 
     let mut host_label = proto::LabelPair::default();
     host_label.set_name("host".into());
-    host_label.set_value(host);
+    host_label.set_value(name);
 
-    let labels = vec![network_label, host_label];
+    let mut relay_host_label = proto::LabelPair::default();
+    relay_host_label.set_name("relay_host".into());
+    relay_host_label.set_value(inventory_hostname);
+
+    let labels = vec![network_label, host_label, relay_host_label];
 
     let mut data = data;
     // add our extra labels to our incoming metric data
@@ -275,4 +280,46 @@ pub async fn convert_to_remote_write(
     }
     timer.observe_duration();
     (StatusCode::CREATED, "created")
+}
+
+#[cfg(test)]
+mod tests {
+    use prometheus::proto;
+    use protobuf;
+
+    use crate::{
+        consumer::populate_labels,
+        prom_to_mimir::tests::{
+            create_histogram, create_labels, create_metric_family, create_metric_histogram,
+        },
+    };
+
+    #[test]
+    fn test_populate_labels() {
+        let mf = create_metric_family(
+            "test_histogram",
+            "i'm a help message",
+            Some(proto::MetricType::HISTOGRAM),
+            protobuf::RepeatedField::from(vec![create_metric_histogram(
+                protobuf::RepeatedField::from_vec(create_labels(vec![])),
+                create_histogram(),
+            )]),
+        );
+
+        let labeled_mf = populate_labels(
+            "validator-0".into(),
+            "unittest-network".into(),
+            "inventory-hostname".into(),
+            vec![mf],
+        );
+        let metric = &labeled_mf[0].get_metric()[0];
+        assert_eq!(
+            metric.get_label(),
+            &create_labels(vec![
+                ("network", "unittest-network"),
+                ("host", "validator-0"),
+                ("relay_host", "inventory-hostname"),
+            ])
+        );
+    }
 }

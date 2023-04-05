@@ -1,0 +1,33 @@
+error[E06002]: use of unassigned variable
+  ┌─ tests/move_check/locals/use_after_move_simple.move:7:17
+  │
+6 │         move x;
+  │         ------
+  │         │
+  │         The value of 'x' was previously moved here.
+  │         Suggestion: use 'copy x' to avoid the move.
+7 │         let _ = move x + 1;
+  │                 ^^^^^^ Invalid usage of previously moved variable 'x'.
+
+error[E06002]: use of unassigned variable
+   ┌─ tests/move_check/locals/use_after_move_simple.move:17:17
+   │
+16 │         move x;
+   │         ------
+   │         │
+   │         The value of 'x' was previously moved here.
+   │         Suggestion: use 'copy x' to avoid the move.
+17 │         let _ = x + 1;
+   │                 ^ Invalid usage of previously moved variable 'x'.
+
+error[E06002]: use of unassigned variable
+   ┌─ tests/move_check/locals/use_after_move_simple.move:27:17
+   │
+26 │         move x;
+   │         ------
+   │         │
+   │         The value of 'x' was previously moved here.
+   │         Suggestion: use 'copy x' to avoid the move.
+27 │         let _ = &x;
+   │                 ^^ Invalid usage of previously moved variable 'x'.
+

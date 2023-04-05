@@ -1,0 +1,18 @@
+//# run
+main() {
+label outer_while:
+    jump_if_false (true) outer_while_cont;
+label outer_while_b0:
+label inner_while:
+    jump_if_false (true) inner_while_cont;
+label inner_while_b0:
+    return;
+    assert(false, 2);
+    jump inner_while;
+label inner_while_cont:
+    assert(false, 3);
+    jump outer_while;
+label outer_while_cont:
+    assert(false, 4);
+    return;
+}

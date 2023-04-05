@@ -5,8 +5,10 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use dashmap::{DashMap, DashSet};
 use futures::future::join_all;
+use serde::de::DeserializeOwned;
 use serde::Serialize;
 use shared_crypto::intent::{Intent, IntentMessage};
+use std::fmt;
 use std::fs::{self, File};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -27,13 +29,17 @@ use sui_types::crypto::{get_key_pair, AccountKeyPair, EncodeDecodeBase64, Signat
 use sui_types::messages::{ExecuteTransactionRequestType, Transaction, TransactionData};
 
 use crate::payload::checkpoint_utils::get_latest_checkpoint_stats;
+use crate::payload::validation::chunk_entities;
 use crate::payload::{
-    Command, CommandData, DryRun, GetCheckpoints, Payload, ProcessPayload, Processor, SignerInfo,
+    Command, CommandData, DryRun, GetAllBalances, GetCheckpoints, GetObject, MultiGetObjects,
+    Payload, ProcessPayload, Processor, QueryTransactionBlocks, SignerInfo,
 };
 
-pub(crate) const DEFAULT_GAS_BUDGET: u64 = 10_000;
-pub(crate) const DEFAULT_LARGE_GAS_BUDGET: u64 = 100_000_000;
-pub(crate) const MAX_NUM_NEW_OBJECTS_IN_SINGLE_TRANSACTION: usize = 2000;
+use super::MultiGetTransactionBlocks;
+
+pub(crate) const DEFAULT_GAS_BUDGET: u64 = 500_000_000;
+pub(crate) const DEFAULT_LARGE_GAS_BUDGET: u64 = 50_000_000_000;
+pub(crate) const MAX_NUM_NEW_OBJECTS_IN_SINGLE_TRANSACTION: usize = 120;
 
 #[derive(Clone)]
 pub struct RpcCommandProcessor {
@@ -75,7 +81,12 @@ impl RpcCommandProcessor {
             CommandData::DryRun(ref v) => self.process(v, signer_info).await,
             CommandData::GetCheckpoints(ref v) => self.process(v, signer_info).await,
             CommandData::PaySui(ref v) => self.process(v, signer_info).await,
-            CommandData::QueryTransactions(ref v) => self.process(v, signer_info).await,
+            CommandData::QueryTransactionBlocks(ref v) => self.process(v, signer_info).await,
+            CommandData::MultiGetTransactionBlocks(ref v) => self.process(v, signer_info).await,
+            CommandData::MultiGetObjects(ref v) => self.process(v, signer_info).await,
+            CommandData::GetObject(ref v) => self.process(v, signer_info).await,
+            CommandData::GetAllBalances(ref v) => self.process(v, signer_info).await,
+            CommandData::GetReferenceGasPrice(ref v) => self.process(v, signer_info).await,
         }
     }
 
@@ -145,12 +156,25 @@ impl RpcCommandProcessor {
         }
     }
 
-    pub(crate) fn add_addresses(&self, responses: Vec<SuiTransactionBlockResponse>) {
+    pub(crate) fn add_addresses_from_response(&self, responses: &[SuiTransactionBlockResponse]) {
         for response in responses {
-            let transaction = response.transaction;
+            let transaction = &response.transaction;
             if let Some(transaction) = transaction {
-                let data = transaction.data;
+                let data = &transaction.data;
                 self.addresses.insert(*data.sender());
+            }
+        }
+    }
+
+    pub(crate) fn add_object_ids_from_response(&self, responses: &[SuiTransactionBlockResponse]) {
+        for response in responses {
+            let effects = &response.effects;
+            if let Some(effects) = effects {
+                let all_changed_objects = effects.all_changed_objects();
+                for (object_ref, _) in all_changed_objects {
+                    self.object_ref_cache
+                        .insert(object_ref.object_id(), object_ref.reference.to_object_ref());
+                }
             }
         }
     }
@@ -158,10 +182,41 @@ impl RpcCommandProcessor {
     pub(crate) fn dump_cache_to_file(&self) {
         // TODO: be more granular
         let digests: Vec<TransactionDigest> = self.transaction_digests.iter().map(|x| *x).collect();
-        write_data_to_file(&digests, &format!("{}/digests", &self.data_dir)).unwrap();
+        if !digests.is_empty() {
+            debug!("dumping transaction digests to file {:?}", digests.len());
+            write_data_to_file(
+                &digests,
+                &format!("{}/{}", &self.data_dir, CacheType::TransactionDigest),
+            )
+            .unwrap();
+        }
 
         let addresses: Vec<SuiAddress> = self.addresses.iter().map(|x| *x).collect();
-        write_data_to_file(&addresses, &format!("{}/addresses", &self.data_dir)).unwrap();
+        if !addresses.is_empty() {
+            debug!("dumping addresses to file {:?}", addresses.len());
+            write_data_to_file(
+                &addresses,
+                &format!("{}/{}", &self.data_dir, CacheType::SuiAddress),
+            )
+            .unwrap();
+        }
+
+        let mut object_ids: Vec<ObjectID> = Vec::new();
+        let cloned_object_cache = self.object_ref_cache.clone();
+
+        for item in cloned_object_cache.iter() {
+            let object_id = item.key();
+            object_ids.push(*object_id);
+        }
+
+        if !object_ids.is_empty() {
+            debug!("dumping object_ids to file {:?}", object_ids.len());
+            write_data_to_file(
+                &object_ids,
+                &format!("{}/{}", &self.data_dir, CacheType::ObjectID),
+            )
+            .unwrap();
+        }
     }
 }
 
@@ -193,6 +248,11 @@ impl Processor for RpcCommandProcessor {
 
     async fn prepare(&self, config: &LoadTestConfig) -> Result<Vec<Payload>> {
         let clients = self.get_clients().await?;
+        let Command {
+            repeat_n_times,
+            repeat_interval,
+            ..
+        } = &config.command;
         let command_payloads = match &config.command.data {
             CommandData::GetCheckpoints(data) => {
                 if !config.divide_tasks {
@@ -201,8 +261,49 @@ impl Processor for RpcCommandProcessor {
                     divide_checkpoint_tasks(&clients, data, config.num_threads).await
                 }
             }
+            CommandData::QueryTransactionBlocks(data) => {
+                if !config.divide_tasks {
+                    vec![config.command.clone(); config.num_threads]
+                } else {
+                    divide_query_transaction_blocks_tasks(data, config.num_threads).await
+                }
+            }
+            CommandData::MultiGetTransactionBlocks(data) => {
+                if !config.divide_tasks {
+                    vec![config.command.clone(); config.num_threads]
+                } else {
+                    divide_multi_get_transaction_blocks_tasks(data, config.num_threads).await
+                }
+            }
+            CommandData::GetAllBalances(data) => {
+                if !config.divide_tasks {
+                    vec![config.command.clone(); config.num_threads]
+                } else {
+                    divide_get_all_balances_tasks(data, config.num_threads).await
+                }
+            }
+            CommandData::MultiGetObjects(data) => {
+                if !config.divide_tasks {
+                    vec![config.command.clone(); config.num_threads]
+                } else {
+                    divide_multi_get_objects_tasks(data, config.num_threads).await
+                }
+            }
+            CommandData::GetObject(data) => {
+                if !config.divide_tasks {
+                    vec![config.command.clone(); config.num_threads]
+                } else {
+                    divide_get_object_tasks(data, config.num_threads).await
+                }
+            }
             _ => vec![config.command.clone(); config.num_threads],
         };
+
+        let command_payloads = command_payloads.into_iter().map(|command| {
+            command
+                .with_repeat_interval(*repeat_interval)
+                .with_repeat_n_times(*repeat_n_times)
+        });
 
         let coins_and_keys = if config.signer_info.is_some() {
             Some(
@@ -264,6 +365,63 @@ fn write_data_to_file<T: Serialize>(data: &T, file_path: &str) -> Result<(), any
     Ok(())
 }
 
+pub enum CacheType {
+    SuiAddress,
+    TransactionDigest,
+    ObjectID,
+}
+
+impl fmt::Display for CacheType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CacheType::SuiAddress => write!(f, "SuiAddress"),
+            CacheType::TransactionDigest => write!(f, "TransactionDigest"),
+            CacheType::ObjectID => write!(f, "ObjectID"),
+        }
+    }
+}
+
+// TODO(Will): Consider using enums for input and output? Would mean we need to do checks any time we use generic load_cache_from_file
+pub fn load_addresses_from_file(filepath: String) -> Vec<SuiAddress> {
+    let path = format!("{}/{}", filepath, CacheType::SuiAddress);
+    let addresses: Vec<SuiAddress> = read_data_from_file(&path).expect("Failed to read addresses");
+    addresses
+}
+
+pub fn load_objects_from_file(filepath: String) -> Vec<ObjectID> {
+    let path = format!("{}/{}", filepath, CacheType::ObjectID);
+    let objects: Vec<ObjectID> = read_data_from_file(&path).expect("Failed to read objects");
+    objects
+}
+
+pub fn load_digests_from_file(filepath: String) -> Vec<TransactionDigest> {
+    let path = format!("{}/{}", filepath, CacheType::TransactionDigest);
+    let digests: Vec<TransactionDigest> =
+        read_data_from_file(&path).expect("Failed to read transaction digests");
+    digests
+}
+
+fn read_data_from_file<T: DeserializeOwned>(file_path: &str) -> Result<T, anyhow::Error> {
+    let mut path_buf = PathBuf::from(file_path);
+
+    // Check if the file has a JSON extension
+    if path_buf.extension().map_or(true, |ext| ext != "json") {
+        // If not, add .json to the filename
+        path_buf.set_extension("json");
+    }
+
+    let path = path_buf.as_path();
+    if !path.exists() {
+        return Err(anyhow!("File not found: {}", file_path));
+    }
+
+    let file = File::open(path).map_err(|e| anyhow::anyhow!("Error opening file: {}", e))?;
+    let deserialized_data: T =
+        serde_json::from_reader(file).map_err(|e| anyhow!("Deserialization error: {}", e))?;
+
+    Ok(deserialized_data)
+}
+
 async fn divide_checkpoint_tasks(
     clients: &[SuiClient],
     data: &GetCheckpoints,
@@ -301,6 +459,80 @@ async fn divide_checkpoint_tasks(
                 data.record,
             )
         })
+        .collect()
+}
+
+async fn divide_query_transaction_blocks_tasks(
+    data: &QueryTransactionBlocks,
+    num_chunks: usize,
+) -> Vec<Command> {
+    let chunk_size = if data.addresses.len() < num_chunks {
+        1
+    } else {
+        data.addresses.len() as u64 / num_chunks as u64
+    };
+    let chunked = chunk_entities(data.addresses.as_slice(), Some(chunk_size as usize));
+    chunked
+        .into_iter()
+        .map(|chunk| Command::new_query_transaction_blocks(data.address_type.clone(), chunk))
+        .collect()
+}
+
+async fn divide_multi_get_transaction_blocks_tasks(
+    data: &MultiGetTransactionBlocks,
+    num_chunks: usize,
+) -> Vec<Command> {
+    let chunk_size = if data.digests.len() < num_chunks {
+        1
+    } else {
+        data.digests.len() as u64 / num_chunks as u64
+    };
+    let chunked = chunk_entities(data.digests.as_slice(), Some(chunk_size as usize));
+    chunked
+        .into_iter()
+        .map(Command::new_multi_get_transaction_blocks)
+        .collect()
+}
+
+async fn divide_get_all_balances_tasks(data: &GetAllBalances, num_threads: usize) -> Vec<Command> {
+    let per_thread_size = if data.addresses.len() < num_threads {
+        1
+    } else {
+        data.addresses.len() / num_threads
+    };
+
+    let chunked = chunk_entities(data.addresses.as_slice(), Some(per_thread_size));
+    chunked
+        .into_iter()
+        .map(|chunk| Command::new_get_all_balances(chunk, data.chunk_size))
+        .collect()
+}
+
+// TODO: probs can do generic divide tasks
+async fn divide_multi_get_objects_tasks(data: &MultiGetObjects, num_chunks: usize) -> Vec<Command> {
+    let chunk_size = if data.object_ids.len() < num_chunks {
+        1
+    } else {
+        data.object_ids.len() as u64 / num_chunks as u64
+    };
+    let chunked = chunk_entities(data.object_ids.as_slice(), Some(chunk_size as usize));
+    chunked
+        .into_iter()
+        .map(Command::new_multi_get_objects)
+        .collect()
+}
+
+async fn divide_get_object_tasks(data: &GetObject, num_threads: usize) -> Vec<Command> {
+    let per_thread_size = if data.object_ids.len() < num_threads {
+        1
+    } else {
+        data.object_ids.len() / num_threads
+    };
+
+    let chunked = chunk_entities(data.object_ids.as_slice(), Some(per_thread_size));
+    chunked
+        .into_iter()
+        .map(|chunk| Command::new_get_object(chunk, data.chunk_size))
         .collect()
 }
 

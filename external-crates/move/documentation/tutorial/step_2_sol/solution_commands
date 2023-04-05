@@ -1,0 +1,11 @@
+# Exercise 1
+move test -g
+
+# Exercise 2
+move test --coverage
+
+Followed by:
+
+move coverage summary
+move coverage summary --summarize-functions
+move coverage source --module BasicCoin
