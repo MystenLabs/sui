@@ -4,6 +4,7 @@
 mod checkpoint_utils;
 mod get_all_balances;
 mod get_checkpoints;
+mod get_object;
 mod get_reference_gas_price;
 mod multi_get_objects;
 mod pay_sui;
@@ -116,8 +117,22 @@ impl Command {
         }
     }
 
-    pub fn new_get_all_balances(addresses: Vec<SuiAddress>) -> Self {
-        let get_all_balances = GetAllBalances { addresses };
+    pub fn new_get_object(object_ids: Vec<ObjectID>, chunk_size: usize) -> Self {
+        let get_object = GetObject {
+            object_ids,
+            chunk_size,
+        };
+        Self {
+            data: CommandData::GetObject(get_object),
+            ..Default::default()
+        }
+    }
+
+    pub fn new_get_all_balances(addresses: Vec<SuiAddress>, chunk_size: usize) -> Self {
+        let get_all_balances = GetAllBalances {
+            addresses,
+            chunk_size,
+        };
         Self {
             data: CommandData::GetAllBalances(get_all_balances),
             ..Default::default()
@@ -151,6 +166,7 @@ pub enum CommandData {
     PaySui(PaySui),
     QueryTransactionBlocks(QueryTransactionBlocks),
     MultiGetObjects(MultiGetObjects),
+    GetObject(GetObject),
     GetAllBalances(GetAllBalances),
     GetReferenceGasPrice(GetReferenceGasPrice),
 }
@@ -204,8 +220,15 @@ pub struct MultiGetObjects {
 }
 
 #[derive(Clone)]
+pub struct GetObject {
+    pub object_ids: Vec<ObjectID>,
+    pub chunk_size: usize,
+}
+
+#[derive(Clone)]
 pub struct GetAllBalances {
     pub addresses: Vec<SuiAddress>,
+    pub chunk_size: usize,
 }
 
 #[derive(Clone)]
