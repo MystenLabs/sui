@@ -9608,6 +9608,7 @@ dependencies = [
  "anemo-cli",
  "anyhow",
  "async-trait",
+ "bcs",
  "clap 4.1.4",
  "colored",
  "eyre",

@@ -58,7 +58,7 @@ pub struct AuthorityPerpetualTables {
     /// executable. This means that it may have been executed locally, or it may have been synced through
     /// state-sync but hasn't been executed yet.
     #[default_options_override_fn = "transactions_table_default_config"]
-    pub(crate) transactions: DBMap<TransactionDigest, TrustedTransaction>,
+    pub transactions: DBMap<TransactionDigest, TrustedTransaction>,
 
     /// A map between the transaction digest of a certificate to the effects of its execution.
     /// We store effects into this table in two different cases:
@@ -68,13 +68,13 @@ pub struct AuthorityPerpetualTables {
     /// it's possible to store the same effects twice (once for the synced transaction, and once for the executed).
     /// It's also possible for the effects to be reverted if the transaction didn't make it into the epoch.
     #[default_options_override_fn = "effects_table_default_config"]
-    pub(crate) effects: DBMap<TransactionEffectsDigest, TransactionEffects>,
+    pub effects: DBMap<TransactionEffectsDigest, TransactionEffects>,
 
     /// Transactions that have been executed locally on this node. We need this table since the `effects` table
     /// doesn't say anything about the execution status of the transaction on this node. When we wait for transactions
     /// to be executed, we wait for them to appear in this table. When we revert transactions, we remove them from both
     /// tables.
-    pub(crate) executed_effects: DBMap<TransactionDigest, TransactionEffectsDigest>,
+    pub executed_effects: DBMap<TransactionDigest, TransactionEffectsDigest>,
 
     // Currently this is needed in the validator for returning events during process certificates.
     // We could potentially remove this if we decided not to provide events in the execution path.

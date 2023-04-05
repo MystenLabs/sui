@@ -8,7 +8,7 @@ use futures::future::join_all;
 use futures::stream::{FuturesOrdered, FuturesUnordered};
 use futures::StreamExt;
 use itertools::Itertools;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
@@ -320,13 +320,13 @@ impl ReadTxFromClients {
 }
 
 struct ReadTxFromDb {
-    db: AuthorityPerpetualTablesReadOnly,
+    db: AuthorityPerpetualTables,
 }
 
 impl ReadTxFromDb {
     fn new(db_path: PathBuf) -> Self {
         Self {
-            db: AuthorityPerpetualTables::open_readonly(&db_path),
+            db: AuthorityPerpetualTables::open(&db_path, None),
         }
     }
 }
@@ -401,7 +401,6 @@ impl ReadTx for ReadTxFromClients {
         }
 
         let ret = poll_first_response(tx_digest, fx_digest, &self.clients).await;
-        println!("Fetched transaction: {:?}", tx_digest);
         Ok(ret)
     }
 }
@@ -434,7 +433,6 @@ impl ReadTx for ReadTxFromDb {
         }
 
         let fx = self.db.effects.get(&executed_digest).unwrap().unwrap();
-        println!("fetched tx {}", tx_digest);
 
         Ok((tx, fx))
     }
@@ -445,7 +443,10 @@ pub async fn fetch_causal_history(
     fx_digest: Option<TransactionEffectsDigest>,
     genesis: PathBuf,
     db_path: Option<PathBuf>,
-) -> Result<Vec<(SenderSignedData, TransactionEffects)>> {
+) -> Result<(
+    Vec<TransactionDigest>,
+    BTreeMap<TransactionDigest, (SenderSignedData, TransactionEffects)>,
+)> {
     let fetcher: Box<dyn ReadTx> = if let Some(db_path) = db_path {
         Box::new(ReadTxFromDb::new(db_path))
     } else {
@@ -454,6 +455,8 @@ pub async fn fetch_causal_history(
     };
 
     let mut results = BTreeMap::new();
+    let mut roots = Vec::new();
+    let mut processed = HashSet::new();
 
     let mut queue = Vec::new();
     let (tx, fx) = fetcher.fetch_txn(tx_digest, fx_digest).await?;
@@ -464,6 +467,7 @@ pub async fn fetch_causal_history(
     while let Some(deps) = queue.pop() {
         let futures: FuturesOrdered<_> = deps
             .into_iter()
+            .filter(|dep| processed.insert(*dep))
             .map(|dep| fetcher.fetch_txn(dep, None))
             .collect();
 
@@ -476,21 +480,22 @@ pub async fn fetch_causal_history(
 
             let mutated = fx.mutated();
             if mutated.len() == 1 && mutated[0].0 .0 == SUI_CLOCK_OBJECT_ID {
-                println!("skipping clock txn {:?}", tx_digest);
                 continue;
             }
 
-            if let Some(prev) = results.insert(tx_digest, (tx.clone(), fx.clone())) {
-                assert_eq!(prev.0.digest(), tx.digest());
-                assert_eq!(prev.1.digest(), fx.digest());
-                continue;
+            assert!(results
+                .insert(tx_digest, (tx.clone(), fx.clone()))
+                .is_none());
+
+            if fx.dependencies().is_empty() {
+                roots.push(tx_digest);
+            } else {
+                queue.push(fx.dependencies().to_vec());
             }
-            queue.push(fx.dependencies().to_vec());
         }
     }
 
-    println!("{:#?}", results);
-    panic!("done");
+    Ok((roots, results))
 }
 
 pub async fn get_transaction_block(

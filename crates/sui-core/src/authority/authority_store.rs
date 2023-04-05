@@ -1333,6 +1333,7 @@ impl AuthorityStore {
         &self,
         tx_digest: &TransactionDigest,
     ) -> Result<Option<VerifiedTransaction>, TypedStoreError> {
+        eprintln!("get_transaction_block: {:?}", tx_digest);
         self.perpetual_tables
             .transactions
             .get(tx_digest)

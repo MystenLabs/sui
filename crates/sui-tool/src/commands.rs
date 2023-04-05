@@ -7,6 +7,7 @@ use crate::{
     restore_from_db_checkpoint, ConciseObjectOutput, GroupedObjectOutput, VerboseObjectOutput,
 };
 use anyhow::Result;
+use std::fs::File;
 use std::path::PathBuf;
 use sui_config::genesis::Genesis;
 use sui_core::authority_client::AuthorityAPI;
@@ -86,6 +87,9 @@ pub enum ToolCommand {
 
         #[clap(long, help = "Fetch data from a local db")]
         read_from_db: Option<PathBuf>,
+
+        #[clap(long, help = "Where to serialize output to")]
+        output_file: Option<PathBuf>,
 
         #[clap(long, help = "The transaction ID to fetch")]
         digest: TransactionDigest,
@@ -242,9 +246,17 @@ impl ToolCommand {
                 fx_digest,
                 causal_history,
                 read_from_db,
+                output_file,
             } => {
                 if causal_history {
-                    fetch_causal_history(digest, fx_digest, genesis, read_from_db).await?;
+                    let history =
+                        fetch_causal_history(digest, fx_digest, genesis, read_from_db).await?;
+
+                    if let Some(output_file) = output_file {
+                        // serialize output to disk using bcs
+                        let mut file = File::create(output_file)?;
+                        bcs::serialize_into(&mut file, &history)?;
+                    }
                 } else {
                     print!("{}", get_transaction_block(digest, genesis).await?);
                 }
