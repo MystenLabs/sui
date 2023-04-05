@@ -25,7 +25,7 @@ export function useFaucetRateLimiter() {
     };
 
     useEffect(() => {
-        const changesCallback = (
+        const onChanged = (
             changes: Browser.Storage.StorageAreaOnChangedChangesType
         ) => {
             if (IS_RATE_LIMITED_FROM_FAUCET_STORAGE_KEY in changes) {
@@ -36,9 +36,9 @@ export function useFaucetRateLimiter() {
             }
         };
 
-        Browser.storage.local.onChanged.addListener(changesCallback);
+        Browser.storage.local.onChanged.addListener(onChanged);
         return () => {
-            Browser.storage.local.onChanged.removeListener(changesCallback);
+            Browser.storage.local.onChanged.removeListener(onChanged);
         };
     }, []);
 
