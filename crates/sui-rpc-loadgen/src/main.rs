@@ -106,8 +106,19 @@ pub enum ClapCommand {
         #[clap(flatten)]
         common: CommonOptions,
     },
+    #[clap(name = "get-object")]
+    GetObject {
+        #[clap(long)]
+        chunk_size: usize,
+
+        #[clap(flatten)]
+        common: CommonOptions,
+    },
     #[clap(name = "get-all-balances")]
     GetAllBalances {
+        #[clap(long)]
+        chunk_size: usize,
+
         #[clap(flatten)]
         common: CommonOptions,
     },
@@ -203,9 +214,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 false,
             )
         }
-        ClapCommand::GetAllBalances { common } => {
+        ClapCommand::GetAllBalances { common, chunk_size } => {
             let addresses = load_addresses_from_file(expand_path(&opts.data_directory));
-            (Command::new_get_all_balances(addresses), common, false)
+            (
+                Command::new_get_all_balances(addresses, chunk_size),
+                common,
+                false,
+            )
         }
         ClapCommand::MultiGetObjects { common } => {
             let objects = load_objects_from_file(expand_path(&opts.data_directory));
@@ -218,6 +233,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 common,
                 false,
             )
+        }
+        ClapCommand::GetObject { common, chunk_size } => {
+            let objects = load_objects_from_file(expand_path(&opts.data_directory));
+            (Command::new_get_object(objects, chunk_size), common, false)
         }
     };
 
