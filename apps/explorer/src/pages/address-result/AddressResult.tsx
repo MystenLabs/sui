@@ -26,9 +26,11 @@ function AddressResult() {
                 </div>
                 <ErrorBoundary>
                     {/* <OwnedObjects id={addressID!} byAddress /> */}
-                    <div className={`grid w-full grid-cols-1 md:grid-cols-2 
-                        [&>div:first-child]:border-solid [&>div:first-child]:border-gray-45 
-                        [&>div:first-child]:border-r-[1px] [&>div:last-child]:ml-[40px]`}>
+                    <div
+                        className={`grid w-full grid-cols-1 md:grid-cols-2 
+                        [&>div:first-child]:border-r-[1px] [&>div:first-child]:border-solid 
+                        [&>div:first-child]:border-gray-45 [&>div:last-child]:ml-[40px]`}
+                    >
                         <OwnerCoins id={addressID!} />
                         <OwnerObjects id={addressID!} />
                     </div>

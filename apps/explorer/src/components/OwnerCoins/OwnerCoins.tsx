@@ -15,48 +15,62 @@ const OwnerCoins = ({ id }: { id: string }) => {
     const [results, setResults] = useState<PaginatedCoins[]>([]);
     const [isLoaded, setIsLoaded] = useState(false);
     const [isFail, setIsFail] = useState(false);
-    const [currentSlice, setCurrentSlice] = useState(1)
+    const [currentSlice, setCurrentSlice] = useState(1);
     const rpc = useRpcClient();
 
     useEffect(() => {
         setIsFail(false);
         setIsLoaded(false);
-        rpc.getAllCoins({ owner: id }).then(resp => {
-            setResults(resp.data);
-            setIsLoaded(true);
-        }).catch(err => {
-            setIsFail(true);
-        })
-    }, [id])
+        rpc.getAllCoins({ owner: id })
+            .then((resp) => {
+                setResults(resp.data);
+                setIsLoaded(true);
+            })
+            .catch((err) => {
+                setIsFail(true);
+            });
+    }, [id]);
 
-    const uniqueCoinTypes = Array.from(new Set(results.map(({ coinType }) => coinType)));
+    const uniqueCoinTypes = Array.from(
+        new Set(results.map(({ coinType }) => coinType))
+    );
 
-    return <PaginationContainer
-        heading={"Coins"}
-        isLoaded={isLoaded}
-        isFail={isFail}
-        itemsPerPage={COINS_PER_PAGE}
-        paginatedContent={
-            <div>
-                <div className="grid grid-cols-3 py-2 uppercase tracking-wider text-gray-80">
-                    <Text variant="caption/medium">Type</Text>
-                    <Text variant="caption/medium">Objects</Text>
-                    <Text variant="caption/medium">Balance</Text>
-                </div>
+    return (
+        <PaginationContainer
+            heading={'Coins'}
+            isLoaded={isLoaded}
+            isFail={isFail}
+            itemsPerPage={COINS_PER_PAGE}
+            paginatedContent={
                 <div>
-                    {uniqueCoinTypes.slice((currentSlice - 1) * COINS_PER_PAGE,
-                        currentSlice * COINS_PER_PAGE).map((coinType, index) => (
-                            <CoinView coinType={coinType}
-                                objects={results.filter(object => object.coinType === coinType)}
-                                key={`${coinType}-${index}`}
-                            />))}
+                    <div className="grid grid-cols-3 py-2 uppercase tracking-wider text-gray-80">
+                        <Text variant="caption/medium">Type</Text>
+                        <Text variant="caption/medium">Objects</Text>
+                        <Text variant="caption/medium">Balance</Text>
+                    </div>
+                    <div>
+                        {uniqueCoinTypes
+                            .slice(
+                                (currentSlice - 1) * COINS_PER_PAGE,
+                                currentSlice * COINS_PER_PAGE
+                            )
+                            .map((coinType, index) => (
+                                <CoinView
+                                    coinType={coinType}
+                                    objects={results.filter(
+                                        (object) => object.coinType === coinType
+                                    )}
+                                    key={`${coinType}-${index}`}
+                                />
+                            ))}
+                    </div>
                 </div>
-            </div>
-        }
-        currentPage={currentSlice}
-        setCurrentPage={(page: number) => setCurrentSlice(page)}
-        totalItems={uniqueCoinTypes.length}
-    />
-}
+            }
+            currentPage={currentSlice}
+            setCurrentPage={(page: number) => setCurrentSlice(page)}
+            totalItems={uniqueCoinTypes.length}
+        />
+    );
+};
 
 export default OwnerCoins;

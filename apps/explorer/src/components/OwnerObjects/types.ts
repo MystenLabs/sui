@@ -4,13 +4,7 @@ import {
     getObjectType,
     getObjectOwner,
     Coin,
-    getObjectId
+    getObjectId,
 } from '@mysten/sui.js';
 
-export {
-    SuiObjectResponse,
-    getObjectType,
-    getObjectOwner,
-    Coin,
-    getObjectId
-}
+export { SuiObjectResponse, getObjectType, getObjectOwner, Coin, getObjectId };

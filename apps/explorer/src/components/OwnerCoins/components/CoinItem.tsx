@@ -7,13 +7,14 @@ import { ObjectLink } from '~/ui/InternalLink';
 import { Text } from '~/ui/Text';
 
 type CoinItemProps = {
-    coin: PaginatedCoins
-}
+    coin: PaginatedCoins;
+};
 
-const CoinItem = ({
-    coin
-}: CoinItemProps) => {
-    const [formattedBalance, symbol] = useFormatCoin(coin.balance, coin.coinType);
+const CoinItem = ({ coin }: CoinItemProps) => {
+    const [formattedBalance, symbol] = useFormatCoin(
+        coin.balance,
+        coin.coinType
+    );
     return (
         <div className="bg-grey-40 grid grid-flow-row auto-rows-fr grid-cols-4 items-center">
             <Text color="steel-darker" variant="bodySmall/medium">
@@ -37,6 +38,6 @@ const CoinItem = ({
             </div>
         </div>
     );
-}
+};
 
-export default CoinItem
+export default CoinItem;
