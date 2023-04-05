@@ -152,7 +152,7 @@ fn is_false(b: &bool) -> bool {
 /// - Add a public getter that simply unwraps the field.
 /// - A public getter of the form `field(&self) -> field_type` will be automatically generated for you.
 /// Example for a field: `new_constant: Option<u64>`
-/// ```
+/// ```rust,ignore
 ///      pub fn new_constant(&self) -> u64 {
 ///         self.new_constant.expect(Self::CONSTANT_ERR_MSG)
 ///     }

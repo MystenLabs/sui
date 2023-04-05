@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 extern crate proc_macro;
 
 use proc_macro::TokenStream;
@@ -6,7 +9,7 @@ use syn::{parse_macro_input, Data, DeriveInput, Fields, Type};
 
 /// This proc macro generates getters for protocol config fields of type Option<T>.
 /// Example for a field: `new_constant: Option<u64>`, we derive
-/// ```
+/// ```rust,ignore
 ///      pub fn new_constant(&self) -> u64 {
 ///         self.new_constant.expect(Self::CONSTANT_ERR_MSG)
 ///     }
