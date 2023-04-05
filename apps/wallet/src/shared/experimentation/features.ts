@@ -18,6 +18,7 @@ export enum FEATURES {
     WALLET_DAPPS = 'wallet-dapps',
     WALLET_MULTI_ACCOUNTS = 'wallet-multi-accounts',
     WALLET_LEDGER_INTEGRATION = 'wallet-ledger-integration',
+    WALLET_BALANCE_REFETCH_INTERVAL = 'wallet-balance-refetch-interval',
 }
 
 export function setAttributes(
