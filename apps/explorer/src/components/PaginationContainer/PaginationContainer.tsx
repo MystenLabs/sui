@@ -58,33 +58,37 @@ function PaginatedContainer({
             <div className="flex max-h-80 flex-col overflow-auto">
                 {paginatedContent}
             </div>
-            <div className="mr-[40px] border-t-[1px] border-solid border-gray-45 pt-[8px]" />
+
             {totalItems > itemsPerPage ? (
-                <div className="!mt-0 pt-[8px] [&>button]:mr-[8px]">
-                    <Button
-                        variant="outline"
-                        disabled={currentPage === 1}
-                        onClick={() => setCurrentPage(1)}
-                    >
-                        <PaginationFirst24 />
-                    </Button>
-                    <Button
-                        variant="outline"
-                        disabled={currentPage === 1}
-                        onClick={() => setCurrentPage(currentPage - 1)}
-                    >
-                        <PaginationPrev24 />
-                    </Button>
-                    <Button
-                        variant="outline"
-                        disabled={
-                            currentPage === Math.ceil(totalItems / itemsPerPage)
-                        }
-                        onClick={() => setCurrentPage(currentPage + 1)}
-                    >
-                        <PaginationNext24 />
-                    </Button>
-                </div>
+                <>
+                    <div className="mr-[40px] border-t-[1px] border-solid border-gray-45 pt-[8px]" />
+                    <div className="!mt-0 pt-[8px] [&>button]:mr-[8px]">
+                        <Button
+                            variant="outline"
+                            disabled={currentPage === 1}
+                            onClick={() => setCurrentPage(1)}
+                        >
+                            <PaginationFirst24 />
+                        </Button>
+                        <Button
+                            variant="outline"
+                            disabled={currentPage === 1}
+                            onClick={() => setCurrentPage(currentPage - 1)}
+                        >
+                            <PaginationPrev24 />
+                        </Button>
+                        <Button
+                            variant="outline"
+                            disabled={
+                                currentPage ===
+                                Math.ceil(totalItems / itemsPerPage)
+                            }
+                            onClick={() => setCurrentPage(currentPage + 1)}
+                        >
+                            <PaginationNext24 />
+                        </Button>
+                    </div>
+                </>
             ) : null}
         </div>
     );
