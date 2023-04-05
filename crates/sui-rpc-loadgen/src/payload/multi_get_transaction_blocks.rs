@@ -6,7 +6,6 @@ use anyhow::Result;
 use crate::payload::{MultiGetTransactionBlocks, ProcessPayload, RpcCommandProcessor, SignerInfo};
 use async_trait::async_trait;
 use futures::future::join_all;
-use tracing::log::warn;
 
 use super::validation::{check_transactions, chunk_entities};
 
