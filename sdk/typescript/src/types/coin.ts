@@ -47,7 +47,7 @@ export const CoinBalance = object({
 export type CoinBalance = Infer<typeof CoinBalance>;
 
 export const CoinSupply = object({
-  value: number(),
+  value: string(),
 });
 
 export type CoinSupply = Infer<typeof CoinSupply>;
