@@ -55,6 +55,7 @@ const textStyles = cva(['break-words'], {
             true: 'font-mono',
             false: 'font-sans',
         },
+        hideOverflow: { true: 'overflow-hidden whitespace-nowrap text-ellipsis' }
     },
 });
 

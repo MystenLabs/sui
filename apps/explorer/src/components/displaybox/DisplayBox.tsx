@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useState, useCallback, useEffect } from 'react';
+import { LoadingSpinner } from '~/ui/LoadingSpinner';
 
 import { ReactComponent as BrokenImage } from '../../assets/SVGIcons/24px/NFTTypeImage.svg';
 import {
@@ -222,7 +223,7 @@ function DisplayBoxWString({
                 >
                     {!hasDisplayLoaded && (
                         <div className={styles.imagebox} id="pleaseWaitImage">
-                            Image Loading...
+                            <LoadingSpinner />
                         </div>
                     )}
                     {hasFailedToLoad && (

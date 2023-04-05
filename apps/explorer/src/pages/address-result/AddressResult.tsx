@@ -4,11 +4,12 @@
 import { useParams } from 'react-router-dom';
 
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
-import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
 import { TransactionsForAddress } from '../../components/transactions/TransactionsForAddress';
 
 import { Heading } from '~/ui/Heading';
 import { PageHeader } from '~/ui/PageHeader';
+import OwnerCoins from '~/components/OwnerCoins/OwnerCoins';
+import OwnerObjects from '~/components/OwnerObjects/OwnerObjects';
 
 function AddressResult() {
     const { id: addressID } = useParams();
@@ -20,11 +21,17 @@ function AddressResult() {
             <div>
                 <div className="border-b border-gray-45 pb-5 md:mt-12">
                     <Heading color="gray-90" variant="heading4/semibold">
-                        Owned Objects
+                        Owner Objects
                     </Heading>
                 </div>
                 <ErrorBoundary>
-                    <OwnedObjects id={addressID!} byAddress />
+                    {/* <OwnedObjects id={addressID!} byAddress /> */}
+                    <div className={`grid w-full grid-cols-1 md:grid-cols-2 
+                        [&>div:first-child]:border-solid [&>div:first-child]:border-gray-45 
+                        [&>div:first-child]:border-r-[1px] [&>div:last-child]:ml-[40px]`}>
+                        <OwnerCoins id={addressID!} />
+                        <OwnerObjects id={addressID!} />
+                    </div>
                 </ErrorBoundary>
             </div>
 
