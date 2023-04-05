@@ -17,7 +17,8 @@ use tracing::info;
 
 use crate::load_test::{LoadTest, LoadTestConfig};
 use crate::payload::{
-    load_addresses_from_file, load_objects_from_file, Command, RpcCommandProcessor, SignerInfo,
+    load_addresses_from_file, load_digests_from_file, load_objects_from_file, Command,
+    RpcCommandProcessor, SignerInfo,
 };
 
 #[derive(Parser)]
@@ -98,6 +99,11 @@ pub enum ClapCommand {
         #[clap(long, parse(try_from_str), case_insensitive = true)]
         address_type: AddressQueryType,
 
+        #[clap(flatten)]
+        common: CommonOptions,
+    },
+    #[clap(name = "multi-get-transaction-blocks")]
+    MultiGetTransactionBlocks {
         #[clap(flatten)]
         common: CommonOptions,
     },
@@ -210,6 +216,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let addresses = load_addresses_from_file(expand_path(&opts.data_directory));
             (
                 Command::new_query_transaction_blocks(address_type, addresses),
+                common,
+                false,
+            )
+        }
+        ClapCommand::MultiGetTransactionBlocks { common } => {
+            let digests = load_digests_from_file(expand_path(&opts.data_directory));
+            (
+                Command::new_multi_get_transaction_blocks(digests),
                 common,
                 false,
             )
