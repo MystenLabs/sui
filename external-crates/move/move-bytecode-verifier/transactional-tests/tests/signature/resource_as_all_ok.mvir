@@ -1,0 +1,12 @@
+//# publish
+module 0x1.M {
+    struct S<T> { b: bool }
+    struct R { b: bool }
+
+    foo() {
+        // constraints satisfied
+        let x: Self.S<Self.R>;
+    label b0:
+        return;
+    }
+}

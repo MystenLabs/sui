@@ -1,0 +1,5 @@
+new --path . Foo
+build
+docgen --template template.md --exclude-impl --exclude-private-fun --exclude-specs --include-call-diagrams --include-dep-diagrams --independent-specs --no-collapsed-sections --output-directory doc --references-file template.md --section-level-start 3 --toc-depth 3
+> grep documentation doc/Foo.md
+> cat doc/template.md

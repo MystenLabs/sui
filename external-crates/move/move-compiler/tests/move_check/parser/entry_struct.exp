@@ -1,0 +1,6 @@
+error[E01003]: invalid modifier
+  ┌─ tests/move_check/parser/entry_struct.move:3:5
+  │
+3 │     entry struct S {}
+  │     ^^^^^ Invalid constant declaration. 'entry' is used only on functions
+

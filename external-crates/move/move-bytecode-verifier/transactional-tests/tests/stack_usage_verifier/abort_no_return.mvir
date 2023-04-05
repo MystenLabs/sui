@@ -1,0 +1,6 @@
+//# run
+main() {
+label b0:
+    // no return needed
+    abort 0;
+}

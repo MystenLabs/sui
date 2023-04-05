@@ -1,0 +1,41 @@
+//# publish
+module 0x42.m {
+
+struct S has copy, drop { f: u64 }
+public foo() {
+    let x: Self.S;
+    let y: Self.S;
+    let z: u64;
+    let r: &Self.S;
+    let f: &u64;
+    label l0:
+        x = S { f: 0 };
+        z = 0;
+        r = &x;
+        f = &z;
+    label l1:
+        y = S { f: 1 };
+        _ = *copy(r);
+        r = &y;
+        f = &copy(r).S::f;
+        jump l1;
+}
+}
+
+//# run 0x42::m::foo --gas-budget 100000
+
+//# run --gas-budget 100000
+main() {
+    let x: u64;
+    let y: u64;
+    let z: u64;
+    let r: &u64;
+    label l0:
+        x = 0;
+        r = &x;
+    label l1:
+        y = 0;
+        z = *copy(r);
+        r = &y;
+        jump l1;
+}

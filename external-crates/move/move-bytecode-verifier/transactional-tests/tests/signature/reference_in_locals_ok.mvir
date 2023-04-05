@@ -1,0 +1,8 @@
+//# publish
+module 0x42.M {
+    foo() {
+        let x: &u64;
+    label b0:
+        return;
+    }
+}

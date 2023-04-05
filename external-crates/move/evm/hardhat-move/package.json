@@ -1,0 +1,30 @@
+{
+  "name": "hardhat-move",
+  "version": "0.0.1",
+  "description": "",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "hardhat": "^2.9.3",
+    "mocha": "^7.1.2"
+  },
+  "scripts": {
+    "lint:fix": "prettier --write 'src/**/*.{js,ts}' 'test/**/*.{js,ts}' && tslint --fix --config tslint.json --project tsconfig.json",
+    "lint": "tslint --config tslint.json --project tsconfig.json",
+    "test": "mocha --exit --recursive 'test/**/*.test.ts'",
+    "build": "tsc",
+    "watch": "tsc -w",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@types/mocha": "^9.1.0",
+    "typescript": "^4.6.3",
+    "neverthrow": "^4.3.1"
+  },
+  "peerDependencies": {
+    "hardhat": "^2.0.0"
+  }
+}

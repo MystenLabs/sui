@@ -1,0 +1,1 @@
+Resolving package 'ADep': Unable to find package manifest at "tests/test_sources/external_bad_dep/./deps_only/ADep": No such file or directory (os error 2)

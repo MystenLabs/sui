@@ -1,0 +1,9 @@
+error[E02004]: invalid 'module' declaration
+  ┌─ tests/move_check/dependencies/use_friend_direct.move:8:9
+  │
+5 │     friend B;
+  │     --------- '0x2::B' is a friend of '0x2::A'
+  ·
+8 │         B::b()
+  │         ^^^^ '0x2::B' uses '0x2::A'. This 'use' relationship creates a dependency cycle.
+

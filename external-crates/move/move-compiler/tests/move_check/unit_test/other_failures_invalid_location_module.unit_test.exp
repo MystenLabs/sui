@@ -1,0 +1,6 @@
+error[E03002]: unbound module
+  ┌─ tests/move_check/unit_test/other_failures_invalid_location_module.move:6:51
+  │
+6 │     #[expected_failure(arithmetic_error, location=0x2::m)]
+  │                                                   ^^^^^^ Unbound module '0x2::m'
+

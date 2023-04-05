@@ -1,0 +1,15 @@
+//# run
+// simple breaks for control flow check
+main() {
+    let x: u64;
+label b0:
+    x = 0;
+label while:
+    jump_if (false) while_cont;
+label while_body:
+    x = move(x) + 1;
+    jump while_cont;
+label while_cont:
+    assert(move(x) == 1, 42);
+    return;
+}

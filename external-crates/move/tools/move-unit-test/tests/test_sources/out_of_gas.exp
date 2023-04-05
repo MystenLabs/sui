@@ -1,0 +1,46 @@
+Running Move unit tests
+[ FAIL    ] 0x42::m::t0
+[ FAIL    ] 0x42::m::t1
+[ FAIL    ] 0x42::m::t2
+0x42::m::t0
+Output: Ok(ChangeSet { accounts: {} })
+0x42::m::t1
+Output: Ok(ChangeSet { accounts: {} })
+0x42::m::t2
+Output: Ok(ChangeSet { accounts: {} })
+
+Test failures:
+
+Failures in 0x42::m:
+
+┌── t0 ──────
+│ Test did not error as expected
+└──────────────────
+
+
+┌── t1 ──────
+│ error[E11001]: test failure
+│    ┌─ out_of_gas.move:10:10
+│    │
+│  9 │ fun t1() {
+│    │     -- In this function in 0x42::m
+│ 10 │     loop {}
+│    │          ^^ Test did not error as expected. Expected test to give an arithmetic error originating in the module 00000000000000000000000000000042::m but instead it ran out of gas in the module 00000000000000000000000000000042::m rooted here
+│ 
+│ 
+└──────────────────
+
+
+┌── t2 ──────
+│ error[E11001]: test failure
+│    ┌─ out_of_gas.move:16:7
+│    │
+│ 15 │ fun t2() {
+│    │     -- In this function in 0x42::m
+│ 16 │     0 - 1;
+│    │       ^ Test did not error as expected. Expected test to run out of gas in the module 00000000000000000000000000000042::m but instead it gave an arithmetic error originating in the module 00000000000000000000000000000042::m rooted here
+│ 
+│ 
+└──────────────────
+
+Test result: FAILED. Total tests: 3; passed: 0; failed: 3

@@ -1,0 +1,56 @@
+error: expected `bool` but found `num` in expression
+  ┌─ tests/sources/invariants_err.move:9:15
+  │
+9 │     invariant x + 1;
+  │               ^^^^^
+
+error: `old(..)` expression not allowed in this context
+   ┌─ tests/sources/invariants_err.move:11:15
+   │
+11 │     invariant old(x) > 0;
+   │               ^^^^^^
+
+error: invalid reference to post state
+   ┌─ tests/sources/invariants_err.move:11:5
+   │
+11 │     invariant old(x) > 0;
+   │     ^^^^^^^^^^^^^^^^^^^^^
+   │     │         │
+   │     │         expression referring to post state
+   │     not allowed to refer to post state
+
+error: The type argument to `exists` and `global` must be a struct type but u64 is not a struct type.
+   ┌─ tests/sources/invariants_err.move:36:15
+   │
+36 │     invariant exists<u64>(@0x0);
+   │               ^^^^^^^^^^^^^^^^^
+
+error: The type argument to `exists` and `global` must be a struct type but #0 is not a struct type.
+   ┌─ tests/sources/invariants_err.move:37:18
+   │
+37 │     invariant<T> global<T>(@0x1) == global<T>(@0x2);
+   │                  ^^^^^^^^^^^^^^^
+
+error: The type argument to `exists` and `global` must be a struct type but #0 is not a struct type.
+   ┌─ tests/sources/invariants_err.move:37:37
+   │
+37 │     invariant<T> global<T>(@0x1) == global<T>(@0x2);
+   │                                     ^^^^^^^^^^^^^^^
+
+error: data invariants cannot depend on global state (directly or indirectly uses a global spec var or resource storage).
+   ┌─ tests/sources/invariants_err.move:13:5
+   │
+13 │     invariant exists<S>(@0x0);
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: data invariants cannot depend on global state (directly or indirectly uses a global spec var or resource storage).
+   ┌─ tests/sources/invariants_err.move:14:5
+   │
+14 │     invariant global<S>(@0x0).x == x;
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: data invariants cannot depend on global state (directly or indirectly uses a global spec var or resource storage).
+   ┌─ tests/sources/invariants_err.move:15:5
+   │
+15 │     invariant spec_var > 0;
+   │     ^^^^^^^^^^^^^^^^^^^^^^^

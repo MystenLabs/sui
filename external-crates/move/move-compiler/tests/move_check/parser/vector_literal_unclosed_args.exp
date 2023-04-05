@@ -1,0 +1,9 @@
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/vector_literal_unclosed_args.move:5:5
+  │
+5 │     }
+  │     ^
+  │     │
+  │     Unexpected '}'
+  │     Expected an expression term
+

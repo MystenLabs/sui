@@ -1,0 +1,18 @@
+Move prover returns: exiting with verification errors
+error: post-condition does not hold
+   ┌─ tests/sources/functional/resources.move:39:6
+   │
+39 │      ensures exists<R>(signer::address_of(account));
+   │      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │
+   =     at tests/sources/functional/resources.move:32: create_resource_incorrect
+   =         account = <redacted>
+   =     at tests/sources/functional/resources.move:33: create_resource_incorrect
+   =     at ../move-stdlib/sources/signer.move:12: address_of
+   =         s = <redacted>
+   =     at ../move-stdlib/sources/signer.move:13: address_of
+   =         result = <redacted>
+   =     at ../move-stdlib/sources/signer.move:14: address_of
+   =     at tests/sources/functional/resources.move:36: create_resource_incorrect
+   =     at tests/sources/functional/resources.move:38: create_resource_incorrect (spec)
+   =     at tests/sources/functional/resources.move:39: create_resource_incorrect (spec)

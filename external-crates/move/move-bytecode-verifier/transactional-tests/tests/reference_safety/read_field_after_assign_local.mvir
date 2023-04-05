@@ -1,0 +1,21 @@
+//# publish
+module 0x42.Tester {
+    struct T has drop {v: u64}
+
+    public new(v: u64): Self.T  {
+    label b0:
+        return T{v: move(v)};
+    }
+
+    public replace(t: &mut Self.T) {
+        let t_v: &mut u64;
+        let new_t: Self.T;
+    label b0:
+        t_v = &mut copy(t).T::v;
+        new_t = Self.new(1);
+        *move(t) = move(new_t); // cannot write to t, still borrowed
+
+        assert(*move(t_v) == 1, 42);
+        return;
+    }
+}

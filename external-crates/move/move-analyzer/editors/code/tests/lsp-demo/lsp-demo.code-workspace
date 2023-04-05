@@ -1,0 +1,10 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"move-analyzer.server.path": "../../../../target/debug/move-analyzer"
+	}
+}

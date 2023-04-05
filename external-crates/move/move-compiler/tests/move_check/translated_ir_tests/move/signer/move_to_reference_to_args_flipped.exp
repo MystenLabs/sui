@@ -1,0 +1,42 @@
+error[E04007]: incompatible types
+  ┌─ tests/move_check/translated_ir_tests/move/signer/move_to_reference_to_args_flipped.move:4:9
+  │
+4 │         move_to<R>(R { f: false }, s)
+  │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  │         │          │
+  │         │          Given: '0x8675309::M::R'
+  │         Invalid call of 'move_to'. Invalid argument for parameter '0'
+  │         Expected: '&signer'
+
+error[E04007]: incompatible types
+  ┌─ tests/move_check/translated_ir_tests/move/signer/move_to_reference_to_args_flipped.move:4:9
+  │
+3 │     fun t0(s: &signer) {
+  │               ------- Given: '&signer'
+4 │         move_to<R>(R { f: false }, s)
+  │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  │         │       │
+  │         │       Expected: '0x8675309::M::R'
+  │         Invalid call of 'move_to'. Invalid argument for parameter '1'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/translated_ir_tests/move/signer/move_to_reference_to_args_flipped.move:14:9
+   │
+14 │         move_to<R<bool>>(R { f: false }, s);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │         │                │
+   │         │                Given: '0x8675309::N::R<bool>'
+   │         Invalid call of 'move_to'. Invalid argument for parameter '0'
+   │         Expected: '&signer'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/translated_ir_tests/move/signer/move_to_reference_to_args_flipped.move:14:9
+   │
+13 │     fun t0<T>(s: &signer) {
+   │                  ------- Given: '&signer'
+14 │         move_to<R<bool>>(R { f: false }, s);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │         │       │
+   │         │       Expected: '0x8675309::N::R<bool>'
+   │         Invalid call of 'move_to'. Invalid argument for parameter '1'
+

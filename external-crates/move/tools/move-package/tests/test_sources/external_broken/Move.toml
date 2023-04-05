@@ -1,0 +1,8 @@
+[package]
+name = "Root"
+version = "0.0.0"
+
+[dependencies.A]
+# This resolver exits with success but returns bad output (not a lock
+# file), so resolution fails.
+resolver = "../resolvers/broken.sh"

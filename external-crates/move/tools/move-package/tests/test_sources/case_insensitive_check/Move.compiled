@@ -1,0 +1,10 @@
+Module and/or script names found that would cause failures on case insensitive file systems when compiling package 'case_insensitive_check':
+The following modules and/or scripts would collide as 'a' on the file system:
+	Module 'A' at path 'tests/test_sources/case_insensitive_check/sources/a.move'
+	Script 'a' at path 'tests/test_sources/case_insensitive_check/sources/a_script.move'
+The following modules and/or scripts would collide as 'set' on the file system:
+	Module 'Set' at path 'tests/test_sources/case_insensitive_check/sources/Set.move'
+	Module 'set' at path 'tests/test_sources/case_insensitive_check/sources/foo.move'
+	Module 'seT' at path 'tests/test_sources/case_insensitive_check/sources/otherModule.move'
+	Script 'sEt' at path 'tests/test_sources/case_insensitive_check/sources/script.move'
+Please rename these scripts and/or modules to resolve these conflicts.

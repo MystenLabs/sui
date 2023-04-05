@@ -1,0 +1,111 @@
+\SubSection{Monomorphization}
+\label{sec:Mono}
+
+Monomorphization is the process of removing all generic types from a Move
+program by \emph{specializing the program for all relevant type instantiations}.
+Like with genericity in most modern program languages, this is possible in Move
+because the number of instantiations is statically known for a given program
+fragment. For verification of Move, monomorphization greatly improves the
+performance of the backend solvers (see~\ref{sec:MonoBenchmarks}).
+
+
+\SubSubSection{Basic Monomorphization}
+
+\begin{Figure}
+\caption{Basic Monomorphization}
+\label{fig:Mono}
+\centering
+\begin{MoveBox}
+  struct S<T> { .. }
+  fun f<T>(x: T) { g<S<T>>(S(x)) }
+  fun g<S:key>(s: S) { move_to<S>(.., s) }
+  @\transform@
+  struct T{}
+  struct S_T{ .. }
+  fun f_T(x: T) { g_S_T(S_T(x)) }
+  fun g_S_T(s: S_T) { move_to<S_T>(.., s) }
+\end{MoveBox}
+\end{Figure}
+
+To verify a generic function, monomorphization skolemizes the type parameter
+into a given type. It then, for all functions which are inlined, inserts their
+code specializing it for the given type instantiation, including specialization
+of all used types. Fig.~\ref{fig:Mono} sketches this approach.
+
+The underlying conjecture is that if we verify |f_T|, we have also
+verified it for all possible instantiations. However, this statement is
+only correct for code which does not depend on runtime type information.
+
+\SubSubSection{Type Dependent Code}
+
+The type of genericity Move provides does not allow for full type erasure as
+often found in programming languages. That is because types are used to
+\emph{index} global memory (e.g. |global<S<T>>(addr)| where |T| is a generic
+type). Consider the following Move function:
+
+\begin{Move}
+  fun f<T>(..) { move_to<S<T>>(s, ..); move_to<S<u64>>(s, ..) }
+\end{Move}
+
+\noindent Depending on how |T| is instantiated, this function behaves
+differently.  Specifically, if |T| is instantiated with |u64| the function will
+always abort at the second |move_to|, since the target location is already
+occupied.
+
+The important property enabling monomorphization in the presence of type
+dependent code is that one can identify the situation by looking at the memory
+accessed by code and injected specifications. From this one can derive
+\emph{additional instantiations of the function} which need to be verified. For
+the example above, verifying both |f_T| and an instantiation |f_u64| will cover
+all relevant cases of the function behavior. Notice that this treatment of type
+dependent code is specific to the problem of verification, and cannot directly
+be applied to execution.
+
+The algorithm for computing the instances which require verification works as
+follows. Let |f<T1,..,Tn>| be a verified target function which has all
+specifications injected and inlined function calls expanded.
+\begin{itemize}
+\item Foreach memory |M in modify(f)|, if there is a memory~%
+  |M' in modify(f)+read(f)| such that |M| and |M'| can unify via |T1,..,Tn|,
+  collect an instaniation of the type parameters |Ti| from the resulting
+  substitution. This instantiation may not assign values to all type parameters,
+  and those unassigned parameters stay as is. For instance, |f<T1, T2>| might
+  have a partial instantiation |f<T1, u8>|.
+\item Once the set of all those partial instantiations is computed, it is
+  extended by unifying the instantiations against each other. If |<t>| and
+  |<t'>| are in the set, and they unify under the substitution |s|, then
+  |<s(t)>| will also be part of the set.  For example, consider |f<T1, T2>|
+  which modifies |M<T1>| and |R<T2>|, as well as accesses |M<u64>| and
+  |R<u8>|. From this the instantiations |<u64, T2>| and |<T1, u8>| are computed,
+  and the additional instantiation |<u64, u8>| will be added to the set.
+\item If after computing and extending instantiations any type parameters
+  remain, they are skolemized into a given type as described in the previous
+  section.
+\end{itemize}
+
+To understand the correctness of this procedure, consider the following arguments:
+
+\begin{itemize}
+\item \emph{Direct interaction} Whenever a modified memory |M<t>| can influence
+  the interpretation of |M<t'>|, a unifier must exist for the types |t| and |t'|,
+  and an instantiation will be verified which covers the overlap of |t| and
+  |t'|.
+\item \emph{Indirect interaction} If there is an overlap between two types
+  which influences whether another overlap is semantically relevant, the
+  combination of both overlaps will be verified via the extension step.
+\end{itemize}
+
+
+Notice that even though it is not common in regular Move code to work with both
+memory |S<T>| and, say, |S<u64>| in one function, there is a scenario where such
+code is implicitly created by injection of global invariants. Consider the
+example in Fig.~\ref{fig:Genericity}. The invariant |I1| which works on |S<u64>|
+is injected into the function |g<R>| which works on |S<R>|. When monomorphizing
+|g|, we need to verify an instance |g_u64| in order to ensure that |I1| holds.
+
+
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "main"
+%%% End:

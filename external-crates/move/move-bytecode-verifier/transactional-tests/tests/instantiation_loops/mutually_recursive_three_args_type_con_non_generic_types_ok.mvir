@@ -1,0 +1,23 @@
+//# publish
+module 0x1.M {
+    struct S<T> { b: bool }
+
+    f<T1, T2, T3>() {
+    label b0:
+        Self.g<T2, T3, T1>();
+        return;
+    }
+
+    g<T1, T2, T3>() {
+    label b0:
+        Self.h<T1, T2, Self.S<T3>>();
+        return;
+    }
+
+    h<T1, T2, T3>() {
+    label b0:
+        // The bool breaks the chain.
+        Self.f<T1, bool, T3>();
+        return;
+    }
+}

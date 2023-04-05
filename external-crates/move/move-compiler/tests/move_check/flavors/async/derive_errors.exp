@@ -1,0 +1,83 @@
+error[E13001]: attribute derivation failed
+  ┌─ tests/move_check/flavors/async/derive_errors.move:2:1
+  │  
+2 │ ╭ module 0x3::NoState {
+3 │ │ }
+  │ ╰─^ actor module must have a struct marked as #[state]
+
+error[E13001]: attribute derivation failed
+  ┌─ tests/move_check/flavors/async/derive_errors.move:2:1
+  │  
+2 │ ╭ module 0x3::NoState {
+3 │ │ }
+  │ ╰─^ actor module must have exactly one #[init] function
+
+error[E13001]: attribute derivation failed
+  ┌─ tests/move_check/flavors/async/derive_errors.move:6:1
+  │  
+6 │ ╭ module 0x3::DuplicateState {
+7 │ │     #[state] struct A {}
+8 │ │     #[state] struct B {}
+9 │ │ }
+  │ ╰─^ actor module must have exactly one #[init] function
+
+error[E13001]: attribute derivation failed
+  ┌─ tests/move_check/flavors/async/derive_errors.move:8:14
+  │
+8 │     #[state] struct B {}
+  │              ^^^^^^^^^^^ actor module must have only one struct marked as #[state]
+
+error[E13001]: attribute derivation failed
+   ┌─ tests/move_check/flavors/async/derive_errors.move:12:1
+   │  
+12 │ ╭ module 0x3::WrongHandlerParam {
+13 │ │     #[state] struct A {}
+14 │ │     struct B {}
+15 │ │ 
+   · │
+24 │ │     #[message] fun f8(_x: &mut Self::A) {}
+25 │ │ }
+   │ ╰─^ actor module must have exactly one #[init] function
+
+error[E13001]: attribute derivation failed
+   ┌─ tests/move_check/flavors/async/derive_errors.move:16:7
+   │
+16 │     #[message] fun f1() {}
+   │       ^^^^^^^ expected at least one parameter for message handler
+
+error[E13001]: attribute derivation failed
+   ┌─ tests/move_check/flavors/async/derive_errors.move:17:28
+   │
+17 │     #[message] fun f2(_x: &B) {}
+   │                            ^ expected actor state type `A` but found `B`
+
+error[E13001]: attribute derivation failed
+   ┌─ tests/move_check/flavors/async/derive_errors.move:18:27
+   │
+18 │     #[message] fun f3(_x: A) {}
+   │                           ^ expected a reference type
+
+error[E13001]: attribute derivation failed
+   ┌─ tests/move_check/flavors/async/derive_errors.move:19:28
+   │
+19 │     #[message] fun f4(_x: &u64) {}
+   │                            ^^^ expected actor state type `A` but found `u64`
+
+error[E13001]: attribute derivation failed
+   ┌─ tests/move_check/flavors/async/derive_errors.move:22:7
+   │
+22 │     #[message] fun f7(_x: &A, _a1: u64, _a2: u64, _a3: u64, _a4: u64, _a5: u64, _a6: u64,
+   │       ^^^^^^^ too many arguments for message handler (current max is 8)
+
+error[E03003]: unbound module member
+   ┌─ tests/move_check/flavors/async/derive_errors.move:22:7
+   │
+22 │     #[message] fun f7(_x: &A, _a1: u64, _a2: u64, _a3: u64, _a4: u64, _a5: u64, _a6: u64,
+   │       ^^^^^^^ Invalid module access. Unbound function 'send__9' in module '(Async=0x20)::Runtime'
+
+error[E13001]: attribute derivation failed
+   ┌─ tests/move_check/flavors/async/derive_errors.move:24:32
+   │
+24 │     #[message] fun f8(_x: &mut Self::A) {}
+   │                                ^^^^^^^ qualified type name not supported to reference actor state
+

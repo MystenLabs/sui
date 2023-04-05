@@ -1,0 +1,37 @@
+//# print-bytecode --input=module
+module 0x5d5.M {
+    struct T has key { b: bool }
+
+    f() {
+        let b: bool;
+    label b0:
+        b = exists<T>(4);
+        return;
+    }
+}
+
+//# publish
+module 0x6d5.M {
+    struct T has key { b: bool }
+}
+
+//# print-bytecode --input=module
+// Checking the existence of a struct type defined in a different module is invalid.
+module 0x6d5.N {
+    f() {
+        let b: bool;
+    label b0:
+        b = exists<T>(5);
+        return;
+    }
+}
+
+//# print-bytecode
+// Checking the existence of a struct type within a script (which cannot define its own
+// struct types) is invalid.
+main() {
+    let b: bool;
+label b0:
+    b = exists<T>(6);
+    return;
+}

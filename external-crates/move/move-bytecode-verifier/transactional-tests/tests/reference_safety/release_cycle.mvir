@@ -1,0 +1,25 @@
+//# publish
+module 0x1.M {
+    t0(cond: bool) {
+        let v: u64;
+        let x: &u64;
+        let y: &u64;
+    label b0:
+        v = 0;
+        jump_if (move(cond)) b2;
+    label b1:
+        y = &v;
+        x = copy(y);
+        jump b3;
+    label b2:
+        x = &v;
+        y = copy(x);
+        jump b3;
+    label b3:
+        // the relationship between the references can be viewed as cyclic
+        // reference_safety must be careful when releasing
+        _ = move(x);
+        _ = move(y);
+        return;
+    }
+}

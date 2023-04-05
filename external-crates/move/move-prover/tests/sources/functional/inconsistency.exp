@@ -1,0 +1,11 @@
+Move prover returns: exiting with verification errors
+error: there is an inconsistent assumption in the function, which may allow any post-condition (including false) to be proven
+   ┌─ tests/sources/functional/inconsistency.move:17:5
+   │
+17 │ ╭     fun assume_false(x: u64): u64 {
+18 │ │         spec {
+19 │ │             assume false;
+20 │ │         };
+21 │ │         dec(x)
+22 │ │     }
+   │ ╰─────^

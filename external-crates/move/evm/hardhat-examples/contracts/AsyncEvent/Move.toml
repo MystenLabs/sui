@@ -1,0 +1,13 @@
+[package]
+name = "AsyncEvent"
+version = "0.0.0"
+
+[addresses]
+std = "0x1"
+Evm = "0x2"
+Async = "0x1"
+
+[dependencies]
+EvmStdlib = { local = "../../../stdlib" }
+MoveStdlib = { local = "../../../../move-stdlib" }
+MoveAsyncLib = { local = "../../../../extensions/async/move-async-lib" }

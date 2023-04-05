@@ -1,0 +1,6 @@
+[package]
+name = "Nested"
+version = "0.0.0"
+
+[dependencies]
+More = { local = "./more" }

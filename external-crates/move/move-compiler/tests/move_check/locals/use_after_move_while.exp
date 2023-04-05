@@ -1,0 +1,80 @@
+error[E06002]: use of unassigned variable
+  ┌─ tests/move_check/locals/use_after_move_while.move:4:28
+  │
+4 │         while (cond) { _ = move x };
+  │                            ^^^^^^
+  │                            │
+  │                            Invalid usage of previously moved variable 'x'.
+  │                            Suggestion: use 'copy x' to avoid the move.
+  │                            In a loop, this typically means it was moved in the first iteration, and is not available by the second iteration.
+
+error[E06002]: use of unassigned variable
+  ┌─ tests/move_check/locals/use_after_move_while.move:9:45
+  │
+9 │         while (cond) { if (cond) break; _ = move x };
+  │                                             ^^^^^^
+  │                                             │
+  │                                             Invalid usage of previously moved variable 'x'.
+  │                                             Suggestion: use 'copy x' to avoid the move.
+  │                                             In a loop, this typically means it was moved in the first iteration, and is not available by the second iteration.
+
+error[E06002]: use of unassigned variable
+   ┌─ tests/move_check/locals/use_after_move_while.move:14:32
+   │
+14 │         while (cond) { let y = x; _ = move x; y; };
+   │                                ^      ------
+   │                                │      │
+   │                                │      The value of 'x' might have been previously moved here.
+   │                                │      Suggestion: use 'copy x' to avoid the move.
+   │                                Invalid usage of previously moved variable 'x'.
+
+error[E06002]: use of unassigned variable
+   ┌─ tests/move_check/locals/use_after_move_while.move:14:39
+   │
+14 │         while (cond) { let y = x; _ = move x; y; };
+   │                                       ^^^^^^
+   │                                       │
+   │                                       Invalid usage of previously moved variable 'x'.
+   │                                       Suggestion: use 'copy x' to avoid the move.
+   │                                       In a loop, this typically means it was moved in the first iteration, and is not available by the second iteration.
+
+error[E06002]: use of unassigned variable
+   ┌─ tests/move_check/locals/use_after_move_while.move:19:32
+   │
+19 │         while (cond) { let y = x; if (cond) continue; _ = move x; y; };
+   │                                ^                          ------
+   │                                │                          │
+   │                                │                          The value of 'x' might have been previously moved here.
+   │                                │                          Suggestion: use 'copy x' to avoid the move.
+   │                                Invalid usage of previously moved variable 'x'.
+
+error[E06002]: use of unassigned variable
+   ┌─ tests/move_check/locals/use_after_move_while.move:19:59
+   │
+19 │         while (cond) { let y = x; if (cond) continue; _ = move x; y; };
+   │                                                           ^^^^^^
+   │                                                           │
+   │                                                           Invalid usage of previously moved variable 'x'.
+   │                                                           Suggestion: use 'copy x' to avoid the move.
+   │                                                           In a loop, this typically means it was moved in the first iteration, and is not available by the second iteration.
+
+error[E06002]: use of unassigned variable
+   ┌─ tests/move_check/locals/use_after_move_while.move:24:32
+   │
+24 │         while (cond) { let y = &x; _ = move y; _ = move x };
+   │                                ^^                  ------
+   │                                │                   │
+   │                                │                   The value of 'x' might have been previously moved here.
+   │                                │                   Suggestion: use 'copy x' to avoid the move.
+   │                                Invalid usage of previously moved variable 'x'.
+
+error[E06002]: use of unassigned variable
+   ┌─ tests/move_check/locals/use_after_move_while.move:24:52
+   │
+24 │         while (cond) { let y = &x; _ = move y; _ = move x };
+   │                                                    ^^^^^^
+   │                                                    │
+   │                                                    Invalid usage of previously moved variable 'x'.
+   │                                                    Suggestion: use 'copy x' to avoid the move.
+   │                                                    In a loop, this typically means it was moved in the first iteration, and is not available by the second iteration.
+

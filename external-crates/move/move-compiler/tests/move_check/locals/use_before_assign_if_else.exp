@@ -1,0 +1,27 @@
+error[E06002]: use of unassigned variable
+  ┌─ tests/move_check/locals/use_before_assign_if_else.move:5:17
+  │
+3 │         let x: u64;
+  │             - The variable 'x' might not have a value. The variable must be assigned a value before being used.
+4 │         if (cond) { } else { x = 0 };
+5 │         let _ = move x + 1;
+  │                 ^^^^^^ Invalid usage of unassigned variable 'x'
+
+error[E06002]: use of unassigned variable
+   ┌─ tests/move_check/locals/use_before_assign_if_else.move:11:17
+   │
+ 9 │         let x: u64;
+   │             - The variable 'x' might not have a value. The variable must be assigned a value before being used.
+10 │         if (cond) { } else { x = 0 };
+11 │         let _ = move x + 1;
+   │                 ^^^^^^ Invalid usage of unassigned variable 'x'
+
+error[E06002]: use of unassigned variable
+   ┌─ tests/move_check/locals/use_before_assign_if_else.move:17:17
+   │
+15 │         let x: u64;
+   │             - The variable 'x' might not have a value. The variable must be assigned a value before being used.
+16 │         if (cond) { } else { x = 0 };
+17 │         let _ = move x + 1;
+   │                 ^^^^^^ Invalid usage of unassigned variable 'x'
+
