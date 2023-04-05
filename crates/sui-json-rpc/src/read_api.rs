@@ -760,11 +760,7 @@ fn get_display_fields(
     let Some((object_type, layout)) = get_object_type_and_struct(original_object, original_layout)? else {
         return Ok(DisplayFieldsResponse { data: None, error: None })
     };
-<<<<<<< HEAD
     if let Some(display_object) = get_display_object_by_type(fullnode_api, &object_type)? {
-=======
-    if let Some(display_object) = get_display_object_by_type(fullnode_api, &object_type).await? {
->>>>>>> ffc1988e4 ([Rust / TS SDK] Best effort display on display fields (#10321))
         return get_rendered_fields(display_object.fields, &layout);
     }
     Ok(DisplayFieldsResponse {
