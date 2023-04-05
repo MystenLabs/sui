@@ -360,7 +360,9 @@ export class TransactionBlock {
     provider,
     onlyTransactionKind,
   }: BuildOptions = {}): Promise<Uint8Array> {
+    console.log("in build");
     await this.#prepare({ provider, onlyTransactionKind });
+    console.log("prepared");
     return this.#blockData.build({ onlyTransactionKind });
   }
 
@@ -542,10 +544,10 @@ export class TransactionBlock {
 
             const inputValue = input.value;
 
-            const serType = getPureSerializationType(param, inputValue);
+            const setType = getPureSerializationType(param, inputValue);
 
-            if (serType) {
-              input.value = Inputs.Pure(inputValue, serType);
+            if (setType) {
+              input.value = Inputs.Pure(inputValue, setType);
               return;
             }
 

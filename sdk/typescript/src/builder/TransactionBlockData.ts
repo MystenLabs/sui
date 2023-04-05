@@ -106,13 +106,16 @@ export class TransactionBlockDataBuilder {
   }
 
   static fromBytes(bytes: Uint8Array) {
+    console.log("before rawData");
     const rawData = builder.de('TransactionData', bytes);
+    console.log("got rawData");
     const data = rawData?.V1;
     const programmableTx = data?.kind?.ProgrammableTransaction;
     if (!data || !programmableTx) {
       throw new Error('Unable to deserialize from bytes.');
     }
 
+    console.log("fromBytes, creating time");
     const serialized = create(
       {
         version: 1,
@@ -135,6 +138,7 @@ export class TransactionBlockDataBuilder {
       SerializedTransactionDataBuilder,
     );
 
+    console.log("serialized");
     return TransactionBlockDataBuilder.restore(serialized);
   }
 
@@ -181,6 +185,7 @@ export class TransactionBlockDataBuilder {
     >;
     onlyTransactionKind?: boolean;
   } = {}) {
+    console.log("in transaction block data build");
     // Resolve inputs down to values:
     const inputs = this.inputs.map((input) => {
       assert(input.value, BuilderCallArg);
@@ -196,7 +201,7 @@ export class TransactionBlockDataBuilder {
 
     if (onlyTransactionKind) {
       return builder
-        .ser('TransactionKind', kind, { maxSize: TRANSACTION_DATA_MAX_SIZE })
+        .set('TransactionKind', kind, { maxSize: TRANSACTION_DATA_MAX_SIZE })
         .toBytes();
     }
 
@@ -236,9 +241,10 @@ export class TransactionBlockDataBuilder {
         },
       },
     };
+    console.log("right before set");
 
     return builder
-      .ser(
+      .set(
         'TransactionData',
         { V1: transactionData },
         { maxSize: TRANSACTION_DATA_MAX_SIZE },

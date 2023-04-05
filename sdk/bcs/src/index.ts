@@ -218,7 +218,7 @@ export class BcsReader {
  */
 
 interface BcsWriterOptions {
-  /** The initial size (in bytes) of the buffer tht will be allocated */
+  /** The initial size (in bytes) of the buffer that will be allocated */
   size?: number;
   /** The maximum size (in bytes) that the buffer is allowed to grow to */
   maxSize?: number;
@@ -641,7 +641,7 @@ export class BCS {
    * @param size Serialization buffer size. Default 1024 = 1KB.
    * @return A BCS reader instance. Usually you'd want to call `.toBytes()`
    */
-  public ser(
+  public set(
     type: TypeName | StructTypeDefinition,
     data: any,
     options?: BcsWriterOptions
@@ -655,16 +655,20 @@ export class BCS {
         params as string[]
       );
     }
+    console.log("after initial in set");
 
     // Quick serialization without registering the type in the main struct.
     if (typeof type === "object") {
+      console.log("is object");
       const key = this.tempKey();
       const temp = new BCS(this);
-      return temp.registerStructType(key, type).ser(key, data, options);
+      console.log("try registerStructType");
+      return temp.registerStructType(key, type).set(key, data, options);
     }
 
+    console.log("is object?");
     throw new Error(
-      `Incorrect type passed into the '.ser()' function. \n${JSON.stringify(
+      `Incorrect type passed into the '.set()' function. \n${JSON.stringify(
         type
       )}`
     );
@@ -674,7 +678,7 @@ export class BCS {
    * Deserialize BCS into a JS type.
    *
    * @example
-   * let num = bcs.ser('u64', '4294967295').toString('hex');
+   * let num = bcs.set('u64', '4294967295').toString('hex');
    * let deNum = bcs.de('u64', num, 'hex');
    * console.assert(deNum.toString(10) === '4294967295');
    *
@@ -759,7 +763,7 @@ export class BCS {
    *    (reader) => reader.readVec((r) => r.read8()).join(''), // read each value as u8
    *    (value) => /[0-9]+/.test(value) // test that it has at least one digit
    * );
-   * console.log(Array.from(bcs.ser('number_string', '12345').toBytes()) == [5,1,2,3,4,5]);
+   * console.log(Array.from(bcs.set('number_string', '12345').toBytes()) == [5,1,2,3,4,5]);
    *
    * @param name
    * @param encodeCb Callback to encode a value.
@@ -887,7 +891,7 @@ export class BCS {
    * @example
    * bcs.registerVectorType('vector<T>'); // generic registration
    * let array = bcs.de('vector<u8>', '06010203040506', 'hex'); // [1,2,3,4,5,6];
-   * let again = bcs.ser('vector<u8>', [1,2,3,4,5,6]).toString('hex');
+   * let again = bcs.set('vector<u8>', [1,2,3,4,5,6]).toString('hex');
    *
    * @param name Name of the type to register
    * @param elementType Optional name of the inner type of the vector
@@ -1017,7 +1021,7 @@ export class BCS {
    * ];
    *
    * // Let's encode the value as well
-   * let test_set = bcs.ser('Coin', {
+   * let test_set = bcs.set('Coin', {
    *   owner: 'Big Wallet Guy',
    *   value: '412412400000',
    *   is_locked: false,
@@ -1217,8 +1221,8 @@ export class BCS {
    * )
    *
    * // and serialization
-   * bcs.ser('MyEnum', { single: { value: 10000000 } }).toBytes();
-   * bcs.ser('MyEnum', { multi: [ { value: 1 }, { value: 2 } ] });
+   * bcs.set('MyEnum', { single: { value: 10000000 } }).toBytes();
+   * bcs.set('MyEnum', { multi: [ { value: 1 }, { value: 2 } ] });
    *
    * @param name
    * @param variants

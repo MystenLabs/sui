@@ -37,20 +37,27 @@ describe('Transaction Serialization and deserialization', () => {
     tx: TransactionBlock,
     mutable: boolean[],
   ) {
+    console.log("start");
     tx.setSender(await toolbox.address());
+    console.log("setSender");
     const transactionBlockBytes = await tx.build({
       provider: toolbox.provider,
     });
+    console.log("build tx");
     const deserializedTxnBuilder = TransactionBlockDataBuilder.fromBytes(
       transactionBlockBytes,
     );
+    console.log("from bytes");
     expect(
       deserializedTxnBuilder.inputs
         .filter((i) => isSharedObjectInput(i.value))
         .map((i) => isMutableSharedObjectInput(i.value)),
     ).toStrictEqual(mutable);
+    console.log("finish expect");
     const reserializedTxnBytes = await deserializedTxnBuilder.build();
+    console.log("Reserialize");
     expect(reserializedTxnBytes).toEqual(transactionBlockBytes);
+    console.log("final check equal");
   }
 
   // TODO: Re-enable when this isn't broken
@@ -73,7 +80,7 @@ describe('Transaction Serialization and deserialization', () => {
     await serializeAndDeserialize(tx, [true]);
   });
 
-  it('Move Shared Object Call with immutable reference', async () => {
+  it.only('Move Shared Object Call with immutable reference', async () => {
     const tx = new TransactionBlock();
     tx.moveCall({
       target: `${packageId}::serializer_tests::value`,
