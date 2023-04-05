@@ -83,9 +83,9 @@ fn test_authority_signature_intent() {
     assert_eq!(
         &intent_bcs[..3],
         vec![
+            IntentScope::TransactionData as u8,
             IntentVersion::V0 as u8,
             AppId::Sui as u8,
-            IntentScope::TransactionData as u8,
         ]
     );
 
