@@ -13,7 +13,7 @@ import { Text } from '~/ui/Text';
 
 export const COINS_PER_PAGE: number = 6;
 
-function OwnerCoins({ id }: { id: string }) {
+function OwnedCoins({ id }: { id: string }) {
     const [results, setResults] = useState<CoinStruct[]>([]);
     const [isLoaded, setIsLoaded] = useState(false);
     const [isFail, setIsFail] = useState(false);
@@ -75,4 +75,4 @@ function OwnerCoins({ id }: { id: string }) {
     );
 }
 
-export default OwnerCoins;
+export default OwnedCoins;

@@ -26,7 +26,6 @@ function OwnedObject({ obj }: OwnedObjectTypes) {
     const display = transformURL(parseImageURL(displayMeta));
     return (
         <div
-            id="ownedObject"
             className="w-[50%] lg:flex lg:flex-wrap lg:justify-between"
         >
             <div className="my-2 flex h-fit min-h-[72px] w-[100%] items-center overflow-x-hidden text-ellipsis whitespace-nowrap break-all sm:my-[1vh]">
@@ -41,7 +40,7 @@ function OwnedObject({ obj }: OwnedObjectTypes) {
                         <ObjectLink objectId={getObjectId(obj)} />
                     </div>
                     <div className="overflow-hidden text-gray-80">
-                        <Text variant="p2/medium" hideOverflow>
+                        <Text variant="p2/medium" truncate>
                             {trimStdLibPrefix(parseObjectType(obj))}
                         </Text>
                     </div>
