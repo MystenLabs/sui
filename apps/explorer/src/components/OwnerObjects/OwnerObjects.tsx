@@ -19,7 +19,7 @@ function OwnerCoins({ id }: { id: string }) {
     const [results, setResults] = useState<SuiObjectResponse[]>([]);
     const [isLoaded, setIsLoaded] = useState(false);
     const [isFail, setIsFail] = useState(false);
-    const [currentPage, setCurrentPage] = useState(1);
+    const [currentSlice, setCurrentSlice] = useState(1);
     const rpc = useRpcClient();
 
     useEffect(() => {
@@ -71,8 +71,8 @@ function OwnerCoins({ id }: { id: string }) {
                 <div className="flex flex-wrap">
                     {results
                         .slice(
-                            (currentPage - 1) * OBJECTS_PER_PAGE,
-                            currentPage * OBJECTS_PER_PAGE
+                            (currentSlice - 1) * OBJECTS_PER_PAGE,
+                            currentSlice * OBJECTS_PER_PAGE
                         )
                         .map((obj) => (
                             <OwnedObject obj={obj} key={obj?.data?.objectId} />
@@ -80,8 +80,8 @@ function OwnerCoins({ id }: { id: string }) {
                 </div>
             }
             totalItems={results.length}
-            currentPage={currentPage}
-            setCurrentPage={setCurrentPage}
+            currentPage={currentSlice}
+            setCurrentPage={setCurrentSlice}
         />
     );
 }
