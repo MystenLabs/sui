@@ -233,7 +233,7 @@ impl ConsensusProtocol for Bullshark {
 
         self.metrics
             .committed_certificates
-            .observe(total_committed_certificates as f64);
+            .report(total_committed_certificates as u64);
 
         Ok((Outcome::Commit, committed_sub_dags))
     }
