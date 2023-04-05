@@ -2272,7 +2272,7 @@ impl AuthorityState {
         transaction.ok_or_else(|| anyhow!(SuiError::TransactionNotFound { digest }))
     }
 
-    pub async fn get_executed_effects(
+    pub fn get_executed_effects(
         &self,
         digest: TransactionDigest,
     ) -> Result<TransactionEffects, anyhow::Error> {
@@ -2280,21 +2280,21 @@ impl AuthorityState {
         effects.ok_or_else(|| anyhow!(SuiError::TransactionNotFound { digest }))
     }
 
-    pub async fn multi_get_executed_transactions(
+    pub fn multi_get_executed_transactions(
         &self,
         digests: &[TransactionDigest],
     ) -> Result<Vec<Option<VerifiedTransaction>>, anyhow::Error> {
         Ok(self.database.multi_get_transaction_blocks(digests)?)
     }
 
-    pub async fn multi_get_executed_effects(
+    pub fn multi_get_executed_effects(
         &self,
         digests: &[TransactionDigest],
     ) -> Result<Vec<Option<TransactionEffects>>, anyhow::Error> {
         Ok(self.database.multi_get_executed_effects(digests)?)
     }
 
-    pub async fn multi_get_transaction_checkpoint(
+    pub fn multi_get_transaction_checkpoint(
         &self,
         digests: &[TransactionDigest],
     ) -> Result<Vec<Option<(EpochId, CheckpointSequenceNumber)>>, anyhow::Error> {

@@ -19,8 +19,8 @@ use sui_types::event::EventID;
 #[rpc(server, client, namespace = "suix")]
 pub trait IndexerApi {
     /// Return the list of objects owned by an address.
-    #[method(name = "getOwnedObjects")]
-    async fn get_owned_objects(
+    #[method(name = "getOwnedObjects", blocking)]
+    fn get_owned_objects(
         &self,
         /// the owner's Sui address
         address: SuiAddress,
@@ -33,8 +33,8 @@ pub trait IndexerApi {
     ) -> RpcResult<ObjectsPage>;
 
     /// Return list of transactions for a specified query criteria.
-    #[method(name = "queryTransactionBlocks")]
-    async fn query_transaction_blocks(
+    #[method(name = "queryTransactionBlocks", blocking)]
+     fn query_transaction_blocks(
         &self,
         /// the transaction query criteria.
         query: SuiTransactionBlockResponseQuery,
@@ -47,8 +47,8 @@ pub trait IndexerApi {
     ) -> RpcResult<TransactionBlocksPage>;
 
     /// Return list of events for a specified query criteria.
-    #[method(name = "queryEvents")]
-    async fn query_events(
+    #[method(name = "queryEvents", blocking)]
+     fn query_events(
         &self,
         /// the event query criteria.
         query: EventFilter,
@@ -69,8 +69,8 @@ pub trait IndexerApi {
     );
 
     /// Return the list of dynamic field objects owned by an object.
-    #[method(name = "getDynamicFields")]
-    async fn get_dynamic_fields(
+    #[method(name = "getDynamicFields", blocking)]
+    fn get_dynamic_fields(
         &self,
         /// The ID of the parent object
         parent_object_id: ObjectID,

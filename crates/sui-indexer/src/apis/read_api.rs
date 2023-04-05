@@ -7,6 +7,7 @@ use futures::future::join_all;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::RpcModule;
+
 use sui_json_rpc::api::{ReadApiClient, ReadApiServer};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
@@ -172,7 +173,7 @@ where
             .await?)
     }
 
-    async fn multi_get_transaction_blocks(
+    fn multi_get_transaction_blocks(
         &self,
         digests: Vec<TransactionDigest>,
         options: Option<SuiTransactionBlockResponseOptions>,
@@ -181,14 +182,11 @@ where
             .migrated_methods
             .contains(&"multi_get_transactions_with_options".to_string())
         {
-            return self
-                .fullnode
-                .multi_get_transaction_blocks(digests, options)
-                .await;
+            return block_on(self.fullnode.multi_get_transaction_blocks(digests, options));
         }
-        Ok(self
-            .multi_get_transactions_with_options_internal(&digests, options)
-            .await?)
+        Ok(block_on(
+            self.multi_get_transactions_with_options_internal(&digests, options),
+        )?)
     }
 
     async fn try_get_past_object(
@@ -202,14 +200,15 @@ where
             .await
     }
 
-    async fn try_multi_get_past_objects(
+    fn try_multi_get_past_objects(
         &self,
         past_objects: Vec<SuiGetPastObjectRequest>,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiPastObjectResponse>> {
-        self.fullnode
-            .try_multi_get_past_objects(past_objects, options)
-            .await
+        block_on(
+            self.fullnode
+                .try_multi_get_past_objects(past_objects, options),
+        )
     }
 
     async fn get_latest_checkpoint_sequence_number(
@@ -236,20 +235,20 @@ where
         Ok(self.state.get_checkpoint(id)?)
     }
 
-    async fn get_checkpoints(
+    fn get_checkpoints(
         &self,
         cursor: Option<SuiCheckpointSequenceNumber>,
         limit: Option<usize>,
         descending_order: bool,
     ) -> RpcResult<CheckpointPage> {
-        return self
-            .fullnode
-            .get_checkpoints(cursor, limit, descending_order)
-            .await;
+        return block_on(
+            self.fullnode
+                .get_checkpoints(cursor, limit, descending_order),
+        );
     }
 
-    async fn get_events(&self, transaction_digest: TransactionDigest) -> RpcResult<Vec<SuiEvent>> {
-        self.fullnode.get_events(transaction_digest).await
+    fn get_events(&self, transaction_digest: TransactionDigest) -> RpcResult<Vec<SuiEvent>> {
+        block_on(self.fullnode.get_events(transaction_digest))
     }
 }
 

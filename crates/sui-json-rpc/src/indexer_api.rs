@@ -64,7 +64,7 @@ impl<R: ReadApiServer> IndexerApi<R> {
 
 #[async_trait]
 impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
-    async fn get_owned_objects(
+    fn get_owned_objects(
         &self,
         address: SuiAddress,
         query: Option<SuiObjectResponseQuery>,
@@ -122,7 +122,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         })
     }
 
-    async fn query_transaction_blocks(
+    fn query_transaction_blocks(
         &self,
         query: SuiTransactionBlockResponseQuery,
         // If `Some`, the query will start from the next item after the specified cursor
@@ -151,8 +151,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 .collect()
         } else {
             self.read_api
-                .multi_get_transaction_blocks(digests, Some(opts))
-                .await?
+                .multi_get_transaction_blocks(digests, Some(opts))?
         };
 
         Ok(Page {
@@ -161,7 +160,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
             has_next_page,
         })
     }
-    async fn query_events(
+    fn query_events(
         &self,
         query: EventFilter,
         // exclusive cursor if `Some`, otherwise start from the beginning
@@ -197,7 +196,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         Ok(())
     }
 
-    async fn get_dynamic_fields(
+    fn get_dynamic_fields(
         &self,
         parent_object_id: ObjectID,
         // If `Some`, the query will start from the next item after the specified cursor
