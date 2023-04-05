@@ -1,14 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Heading } from '~/ui/Heading';
-import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import {
     PaginationFirst24,
     PaginationPrev24,
     PaginationNext24,
 } from '@mysten/icons';
+
 import { Button } from '~/ui/Button';
+import { Heading } from '~/ui/Heading';
+import { LoadingSpinner } from '~/ui/LoadingSpinner';
 
 export const ITEMS_PER_PAGE: number = 6;
 
@@ -23,7 +24,7 @@ type PaginatedContainerPropTypes = {
     setCurrentPage: (page: number) => void;
 };
 
-const PaginatedContainer = ({
+function PaginatedContainer({
     heading,
     paginatedContent,
     itemsPerPage,
@@ -32,7 +33,7 @@ const PaginatedContainer = ({
     currentPage,
     isFail = false,
     isLoaded = true,
-}: PaginatedContainerPropTypes) => {
+}: PaginatedContainerPropTypes) {
     if (!isLoaded) {
         return (
             <div className="p-[8px]">
@@ -57,7 +58,7 @@ const PaginatedContainer = ({
             <div className="flex max-h-80 flex-col overflow-auto">
                 {paginatedContent}
             </div>
-            <div className="mr-[40px] border-t-[1px] border-solid border-gray-45 pt-[8px]"></div>
+            <div className="mr-[40px] border-t-[1px] border-solid border-gray-45 pt-[8px]" />
             {totalItems > itemsPerPage ? (
                 <div className="!mt-0 pt-[8px] [&>button]:mr-[8px]">
                     <Button
@@ -87,6 +88,6 @@ const PaginatedContainer = ({
             ) : null}
         </div>
     );
-};
+}
 
 export default PaginatedContainer;

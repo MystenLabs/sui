@@ -1,22 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { type SuiObjectResponse, getObjectId } from '@mysten/sui.js';
+
 import DisplayBox from '~/components/displaybox/DisplayBox';
 import { ObjectLink } from '~/ui/InternalLink';
 import { Text } from '~/ui/Text';
-import { transformURL, trimStdLibPrefix } from '~/utils/stringUtils';
-import { SuiObjectResponse, getObjectId } from '@mysten/sui.js';
 import {
     extractName,
     parseImageURL,
     parseObjectType,
 } from '~/utils/objectUtils';
+import { transformURL, trimStdLibPrefix } from '~/utils/stringUtils';
 
 type OwnedObjectTypes = {
     obj: SuiObjectResponse;
 };
 
-const OwnedObject = ({ obj }: OwnedObjectTypes) => {
+function OwnedObject({ obj }: OwnedObjectTypes) {
     const display = transformURL(parseImageURL(obj.data?.display)) ?? '';
     return (
         <div
@@ -35,7 +36,7 @@ const OwnedObject = ({ obj }: OwnedObjectTypes) => {
                         <ObjectLink objectId={getObjectId(obj)} />
                     </div>
                     <div className="overflow-hidden text-gray-80">
-                        <Text variant="p2/medium" hideOverflow={true}>
+                        <Text variant="p2/medium" hideOverflow>
                             {trimStdLibPrefix(parseObjectType(obj))}
                         </Text>
                     </div>
@@ -43,6 +44,6 @@ const OwnedObject = ({ obj }: OwnedObjectTypes) => {
             </div>
         </div>
     );
-};
+}
 
 export default OwnedObject;

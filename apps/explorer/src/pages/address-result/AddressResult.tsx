@@ -6,10 +6,10 @@ import { useParams } from 'react-router-dom';
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import { TransactionsForAddress } from '../../components/transactions/TransactionsForAddress';
 
-import { Heading } from '~/ui/Heading';
-import { PageHeader } from '~/ui/PageHeader';
 import OwnerCoins from '~/components/OwnerCoins/OwnerCoins';
 import OwnerObjects from '~/components/OwnerObjects/OwnerObjects';
+import { Heading } from '~/ui/Heading';
+import { PageHeader } from '~/ui/PageHeader';
 
 function AddressResult() {
     const { id: addressID } = useParams();

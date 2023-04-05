@@ -2,19 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useRpcClient } from '@mysten/core';
-import { useEffect, useState } from 'react';
-import OwnedObject from './components/OwnedObject';
-import PaginationContainer from '../PaginationContainer/PaginationContainer';
 import {
-    SuiObjectResponse,
+    type SuiObjectResponse,
     getObjectType,
     getObjectOwner,
     Coin,
 } from '@mysten/sui.js';
+import { useEffect, useState } from 'react';
+
+import PaginationContainer from '../PaginationContainer/PaginationContainer';
+import OwnedObject from './components/OwnedObject';
 
 export const OBJECTS_PER_PAGE: number = 6;
 
-const OwnerCoins = ({ id }: { id: string }) => {
+function OwnerCoins({ id }: { id: string }) {
     const [results, setResults] = useState<SuiObjectResponse[]>([]);
     const [isLoaded, setIsLoaded] = useState(false);
     const [isFail, setIsFail] = useState(false);
@@ -62,29 +63,25 @@ const OwnerCoins = ({ id }: { id: string }) => {
 
     return (
         <PaginationContainer
-            heading={'NFTs'}
+            heading="NFTs"
             isLoaded={isLoaded}
             isFail={isFail}
             itemsPerPage={OBJECTS_PER_PAGE}
             paginatedContent={
-                <>
-                    <div className="flex flex-wrap">
+                <div className="flex flex-wrap">
                         {results
                             .slice(
                                 (currentPage - 1) * OBJECTS_PER_PAGE,
                                 currentPage * OBJECTS_PER_PAGE
                             )
-                            .map((obj) => {
-                                return <OwnedObject obj={obj} />;
-                            })}
+                            .map((obj) => <OwnedObject obj={obj} />)}
                     </div>
-                </>
             }
             totalItems={results.length}
             currentPage={currentPage}
             setCurrentPage={setCurrentPage}
         />
     );
-};
+}
 
 export default OwnerCoins;

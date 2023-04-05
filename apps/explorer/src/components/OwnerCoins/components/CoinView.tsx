@@ -1,19 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFormatCoin } from '@mysten/core';
-import { Text } from '~/ui/Text';
 import { Disclosure } from '@headlessui/react';
+import { useFormatCoin } from '@mysten/core';
 import { ArrowShowAndHideRight12 } from '@mysten/icons';
+import { type CoinStruct } from '@mysten/sui.js';
+
 import CoinItem from './CoinItem';
-import { CoinStruct } from '@mysten/sui.js';
+
+import { Text } from '~/ui/Text';
 
 type CoinViewProps = {
     coinType: string;
     objects: CoinStruct[];
 };
 
-const CoinView = ({ coinType, objects }: CoinViewProps) => {
+function CoinView({ coinType, objects }: CoinViewProps) {
     let totalBalance = 0;
     objects.forEach((obj) => {
         totalBalance += obj.balance;
@@ -60,6 +62,6 @@ const CoinView = ({ coinType, objects }: CoinViewProps) => {
             </Disclosure.Panel>
         </Disclosure>
     );
-};
+}
 
 export default CoinView;

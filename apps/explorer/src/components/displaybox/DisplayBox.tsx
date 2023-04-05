@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useState, useCallback, useEffect } from 'react';
-import { LoadingSpinner } from '~/ui/LoadingSpinner';
+
 
 import { ReactComponent as BrokenImage } from '../../assets/SVGIcons/24px/NFTTypeImage.svg';
 import {
@@ -12,6 +12,8 @@ import {
 import { transformURL, genFileTypeMsg } from '../../utils/stringUtils';
 
 import styles from './DisplayBox.module.css';
+
+import { LoadingSpinner } from '~/ui/LoadingSpinner';
 
 function ShowBrokenImage({ onClick }: { onClick?: () => void }) {
     return (

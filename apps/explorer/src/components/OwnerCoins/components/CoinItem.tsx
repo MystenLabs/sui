@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFormatCoin } from '@mysten/core';
-import { CoinStruct } from '@mysten/sui.js';
+import { type CoinStruct } from '@mysten/sui.js';
+
 import { ObjectLink } from '~/ui/InternalLink';
 import { Text } from '~/ui/Text';
 
@@ -10,7 +11,7 @@ type CoinItemProps = {
     coin: CoinStruct;
 };
 
-const CoinItem = ({ coin }: CoinItemProps) => {
+function CoinItem({ coin }: CoinItemProps) {
     const [formattedBalance, symbol] = useFormatCoin(
         coin.balance,
         coin.coinType
@@ -38,6 +39,6 @@ const CoinItem = ({ coin }: CoinItemProps) => {
             </div>
         </div>
     );
-};
+}
 
 export default CoinItem;

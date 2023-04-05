@@ -3,15 +3,18 @@
 
 import { useRpcClient } from '@mysten/core';
 import { useEffect, useState } from 'react';
+
+import PaginationContainer from '../PaginationContainer/PaginationContainer';
+import CoinView from './components/CoinView';
+
+import type { CoinStruct } from '@mysten/sui.js';
+
 import { Text } from '~/ui/Text';
 
-import CoinView from './components/CoinView';
-import PaginationContainer from '../PaginationContainer/PaginationContainer';
-import { CoinStruct } from '@mysten/sui.js';
 
 export const COINS_PER_PAGE: number = 6;
 
-const OwnerCoins = ({ id }: { id: string }) => {
+function OwnerCoins({ id }: { id: string }) {
     const [results, setResults] = useState<CoinStruct[]>([]);
     const [isLoaded, setIsLoaded] = useState(false);
     const [isFail, setIsFail] = useState(false);
@@ -37,7 +40,7 @@ const OwnerCoins = ({ id }: { id: string }) => {
 
     return (
         <PaginationContainer
-            heading={'Coins'}
+            heading="Coins"
             isLoaded={isLoaded}
             isFail={isFail}
             itemsPerPage={COINS_PER_PAGE}
@@ -71,6 +74,6 @@ const OwnerCoins = ({ id }: { id: string }) => {
             totalItems={uniqueCoinTypes.length}
         />
     );
-};
+}
 
 export default OwnerCoins;
