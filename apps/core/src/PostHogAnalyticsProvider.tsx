@@ -25,6 +25,7 @@ export function PostHogAnalyticsProvider({
                 persistence: 'memory',
                 // We need to manually collect page view events since we use client-side routing
                 capture_pageview: false,
+                autocapture: false,
             }}
         >
             {children}
