@@ -8,22 +8,23 @@ use futures::future::join_all;
 use futures::stream::{FuturesOrdered, FuturesUnordered};
 use futures::StreamExt;
 use itertools::Itertools;
-use std::collections::{BTreeMap, HashSet};
+use shared_crypto::intent::Intent;
+use std::collections::{BTreeMap, HashSet, VecDeque};
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
+use sui::client_commands::WalletContext;
 use sui_config::{genesis::Genesis, NodeConfig};
-use sui_core::authority::authority_store_tables::{
-    AuthorityPerpetualTables, AuthorityPerpetualTablesReadOnly,
-};
+use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
+use sui_keys::keystore::AccountKeystore;
 use sui_network::default_mysten_network_config;
+use sui_types::crypto::SignatureScheme;
 use sui_types::multiaddr::Multiaddr;
 use sui_types::object::ObjectFormatOptions;
 use sui_types::SUI_CLOCK_OBJECT_ID;
 use sui_types::{base_types::*, message_envelope::Message, messages::*, object::Owner};
 use tokio::time::Instant;
-use typed_store::rocks::DBMap;
 use typed_store::traits::Map;
 
 use anyhow::anyhow;
@@ -438,15 +439,84 @@ impl ReadTx for ReadTxFromDb {
     }
 }
 
+pub type CausalHistory = (
+    Vec<TransactionDigest>,
+    BTreeMap<TransactionDigest, (SenderSignedData, TransactionEffects)>,
+);
+
+pub async fn replay_transactions(
+    transactions: CausalHistory,
+    mut address_map: BTreeMap<SuiAddress, SuiAddress>,
+    working_dir: PathBuf,
+) {
+    let mut context = WalletContext::new(&working_dir, None).await.unwrap();
+
+    let (roots, txns) = transactions;
+    let mut forward_deps = BTreeMap::new();
+    let mut backward_deps = BTreeMap::new();
+    for (tx_digest, (_, fx)) in txns.iter() {
+        let deps = fx.dependencies();
+        forward_deps.insert(*tx_digest, deps.clone());
+        for dep in deps {
+            backward_deps
+                .entry(dep)
+                .or_insert_with(Vec::new)
+                .push(*tx_digest);
+        }
+    }
+
+    let mut queue = VecDeque::new();
+    queue.push_back(roots);
+
+    while let Some(tx_digests) = queue.pop_front() {
+        let resigned_txns: Vec<_> = tx_digests
+            .into_iter()
+            .map(|tx_digest| {
+                let (tx, _) = txns.get(&tx_digest).unwrap().clone();
+
+                let mut tx_data = tx.transaction_data().clone();
+                let sender = tx_data.sender_mut();
+
+                let new_sender = if let Some(new_sender) = address_map.get(sender) {
+                    *new_sender
+                } else {
+                    let (new_sender, _, _) = context
+                        .config
+                        .keystore
+                        .generate_and_add_new_key(SignatureScheme::ED25519, None)
+                        .unwrap();
+                    address_map.insert(*sender, new_sender);
+                    new_sender
+                };
+
+                *sender = new_sender;
+                let sender = *sender;
+
+                // re-sign the tx
+                let signature = context
+                    .config
+                    .keystore
+                    .sign_secure(&sender, &tx_data, Intent::default())
+                    .unwrap();
+
+                Transaction::from_data(tx_data, Intent::default(), vec![signature])
+                    .verify()
+                    .unwrap()
+            })
+            .collect();
+
+        println!("resigned {} txns", resigned_txns.len());
+    }
+
+    // rea
+}
+
 pub async fn fetch_causal_history(
     tx_digest: TransactionDigest,
     fx_digest: Option<TransactionEffectsDigest>,
     genesis: PathBuf,
     db_path: Option<PathBuf>,
-) -> Result<(
-    Vec<TransactionDigest>,
-    BTreeMap<TransactionDigest, (SenderSignedData, TransactionEffects)>,
-)> {
+) -> Result<CausalHistory> {
     let fetcher: Box<dyn ReadTx> = if let Some(db_path) = db_path {
         Box::new(ReadTxFromDb::new(db_path))
     } else {

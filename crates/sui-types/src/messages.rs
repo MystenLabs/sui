@@ -1512,7 +1512,6 @@ pub trait TransactionDataAPI {
     /// Check if the transaction is sponsored (namely gas owner != sender)
     fn is_sponsored_tx(&self) -> bool;
 
-    #[cfg(test)]
     fn sender_mut(&mut self) -> &mut SuiAddress;
 
     #[cfg(test)]
@@ -1651,7 +1650,6 @@ impl TransactionDataAPI for TransactionDataV1 {
         matches!(self.kind, TransactionKind::Genesis(_))
     }
 
-    #[cfg(test)]
     fn sender_mut(&mut self) -> &mut SuiAddress {
         &mut self.sender
     }

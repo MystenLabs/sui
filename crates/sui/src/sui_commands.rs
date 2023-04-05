@@ -4,7 +4,10 @@
 use std::io::{stderr, stdout, Write};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
-use std::{fs, io};
+use std::{
+    fs::{self, File},
+    io,
+};
 
 use anyhow::{anyhow, bail};
 use clap::*;
@@ -24,6 +27,7 @@ use sui_config::{
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_swarm::memory::Swarm;
+use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{SignatureScheme, SuiKeyPair};
 
 use crate::client_commands::{SuiClientCommands, WalletContext};
@@ -33,6 +37,7 @@ use crate::fire_drill::{run_fire_drill, FireDrill};
 use crate::genesis_ceremony::{run, Ceremony};
 use crate::keytool::KeyToolCommand;
 use crate::validator_commands::SuiValidatorCommand;
+use std::collections::BTreeMap;
 use sui_move::{self, execute_move_command};
 
 #[allow(clippy::large_enum_variant)]
@@ -64,6 +69,13 @@ pub enum SuiCommand {
             help = "Build a genesis config, write it to the specified path, and exit"
         )]
         write_config: Option<PathBuf>,
+
+        #[clap(
+            long,
+            help = "Requires from_config. Replaces all accounts in the config with new accounts, and places the keys for them in a keystore at this path"
+        )]
+        filter_accounts: bool,
+
         #[clap(long)]
         working_dir: Option<PathBuf>,
         #[clap(short, long, help = "Forces overwriting existing configuration")]
@@ -157,7 +169,7 @@ impl SuiCommand {
             } => {
                 // Auto genesis if path is none and sui directory doesn't exists.
                 if config.is_none() && !sui_config_dir()?.join(SUI_NETWORK_CONFIG).exists() {
-                    genesis(None, None, None, false, None, None).await?;
+                    genesis(None, false, None, None, false, None, None).await?;
                 }
 
                 // Load the config of the Sui authority.
@@ -231,12 +243,14 @@ impl SuiCommand {
                 working_dir,
                 force,
                 from_config,
+                filter_accounts,
                 write_config,
                 epoch_duration_ms,
                 benchmark_ips,
             } => {
                 genesis(
                     from_config,
+                    filter_accounts,
                     write_config,
                     working_dir,
                     force,
@@ -308,6 +322,7 @@ impl SuiCommand {
 
 async fn genesis(
     from_config: Option<PathBuf>,
+    filter_accounts: bool,
     write_config: Option<PathBuf>,
     working_dir: Option<PathBuf>,
     force: bool,
@@ -378,7 +393,29 @@ async fn genesis(
     let genesis_path = sui_config_dir.join(SUI_GENESIS_FILENAME);
 
     let mut genesis_conf = match from_config {
-        Some(path) => PersistedConfig::read(&path)?,
+        Some(path) => {
+            let mut cfg: GenesisConfig = PersistedConfig::read(&path)?;
+            if filter_accounts {
+                let address_map_path = sui_config_dir.join("addressmap.bcs");
+                let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+
+                let mut address_map: BTreeMap<SuiAddress, SuiAddress> = BTreeMap::new();
+
+                for account in cfg.accounts.iter_mut() {
+                    if let Some(address) = &mut account.address {
+                        let old = *address;
+                        let (new, _, _) =
+                            keystore.generate_and_add_new_key(SignatureScheme::ED25519, None)?;
+                        address_map.insert(old, new);
+                        *address = new;
+                    }
+                }
+
+                let mut address_map_file = File::create(address_map_path)?;
+                bcs::serialize_into(&mut address_map_file, &address_map)?;
+            }
+            cfg
+        }
         None => {
             if let Some(ips) = benchmark_ips {
                 // Make a keystore containing the key for the genesis gas object.

@@ -3,12 +3,16 @@
 
 use crate::{
     db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand},
-    fetch_causal_history, get_object, get_transaction_block, make_clients,
-    restore_from_db_checkpoint, ConciseObjectOutput, GroupedObjectOutput, VerboseObjectOutput,
+    fetch_causal_history, get_object, get_transaction_block, make_clients, replay_transactions,
+    restore_from_db_checkpoint, CausalHistory, ConciseObjectOutput, GroupedObjectOutput,
+    VerboseObjectOutput,
 };
 use anyhow::Result;
+use serde::de::DeserializeOwned;
+use std::collections::BTreeMap;
 use std::fs::File;
-use std::path::PathBuf;
+use std::io::Read;
+use std::path::{Path, PathBuf};
 use sui_config::genesis::Genesis;
 use sui_core::authority_client::AuthorityAPI;
 
@@ -102,6 +106,14 @@ pub enum ToolCommand {
 
         #[clap(long, help = "Fetch entire causal history of transaction")]
         causal_history: bool,
+    },
+
+    #[clap(name = "replay-transactions")]
+    ReplayTransactions {
+        #[clap(long = "transactions")]
+        transactions: PathBuf,
+
+        working_dir: PathBuf,
     },
 
     /// Tool to read validator & node db.
@@ -260,6 +272,28 @@ impl ToolCommand {
                 } else {
                     print!("{}", get_transaction_block(digest, genesis).await?);
                 }
+            }
+            ToolCommand::ReplayTransactions {
+                transactions: transactions_path,
+                working_dir,
+            } => {
+                let address_map_path = working_dir.join("addressmap.bcs");
+
+                // load and deserialize transactions_path as a CausalHistory instance using bcs
+                fn load_bcs<T: DeserializeOwned>(
+                    path: impl AsRef<Path>,
+                ) -> Result<T, anyhow::Error> {
+                    let file = File::open(path)?;
+                    let bytes: Vec<u8> = file.bytes().collect::<Result<_, _>>()?;
+                    Ok(bcs::from_bytes(&bytes)?)
+                }
+
+                let address_map =
+                    load_bcs::<BTreeMap<SuiAddress, SuiAddress>>(&address_map_path).unwrap();
+
+                let transactions = load_bcs::<CausalHistory>(&transactions_path).unwrap();
+
+                replay_transactions(transactions, address_map, working_dir).await;
             }
             ToolCommand::DbTool { db_path, cmd } => {
                 let path = PathBuf::from(db_path);
