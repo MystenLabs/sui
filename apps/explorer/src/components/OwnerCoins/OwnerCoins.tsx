@@ -7,12 +7,12 @@ import { Text } from '~/ui/Text';
 
 import CoinView from './components/CoinView';
 import PaginationContainer from '../PaginationContainer/PaginationContainer';
-import { PaginatedCoins } from '@mysten/sui.js';
+import { CoinStruct } from '@mysten/sui.js';
 
 export const COINS_PER_PAGE: number = 6;
 
 const OwnerCoins = ({ id }: { id: string }) => {
-    const [results, setResults] = useState<PaginatedCoins[]>([]);
+    const [results, setResults] = useState<CoinStruct[]>([]);
     const [isLoaded, setIsLoaded] = useState(false);
     const [isFail, setIsFail] = useState(false);
     const [currentSlice, setCurrentSlice] = useState(1);

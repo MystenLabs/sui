@@ -6,11 +6,11 @@ import { Text } from '~/ui/Text';
 import { Disclosure } from '@headlessui/react';
 import { ArrowShowAndHideRight12 } from '@mysten/icons';
 import CoinItem from './CoinItem';
-import { PaginatedCoins } from '@mysten/sui.js';
+import { CoinStruct } from '@mysten/sui.js';
 
 type CoinViewProps = {
     coinType: string;
-    objects: PaginatedCoins[];
+    objects: CoinStruct[];
 };
 
 const CoinView = ({ coinType, objects }: CoinViewProps) => {

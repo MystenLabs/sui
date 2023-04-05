@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFormatCoin } from '@mysten/core';
-import { PaginatedCoins } from '@mysten/sui.js';
+import { CoinStruct } from '@mysten/sui.js';
 import { ObjectLink } from '~/ui/InternalLink';
 import { Text } from '~/ui/Text';
 
 type CoinItemProps = {
-    coin: PaginatedCoins;
+    coin: CoinStruct;
 };
 
 const CoinItem = ({ coin }: CoinItemProps) => {
