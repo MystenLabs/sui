@@ -9,7 +9,7 @@ const IS_RATE_LIMITED_FROM_FAUCET_STORAGE_KEY = 'is_rate_limited_from_faucet';
 const FAUCET_RATE_LIMIT_EXPIRY_TIME_STORAGE_KEY =
     'faucet_rate_limit_expiry_time';
 
-const rateLimitExpiryTime = 5000; // 24 * 60 * 60 * 1000;
+const rateLimitExpiryTime = 24 * 60 * 60 * 1000;
 
 export function useFaucetRateLimiter() {
     const [isRateLimited, setRateLimited] = useState(false);
@@ -20,29 +20,6 @@ export function useFaucetRateLimiter() {
             [FAUCET_RATE_LIMIT_EXPIRY_TIME_STORAGE_KEY]:
                 new Date().getTime() + rateLimitExpiryTime,
         });
-    }, []);
-
-    useEffect(() => {
-        Browser.storage.local
-            .get({
-                [FAUCET_RATE_LIMIT_EXPIRY_TIME_STORAGE_KEY]: null,
-            })
-            .then(
-                ({
-                    [FAUCET_RATE_LIMIT_EXPIRY_TIME_STORAGE_KEY]: expiryTime,
-                }) => {
-                    const currTime = new Date().getTime();
-                    if (currTime > expiryTime) {
-                        Browser.storage.local.set({
-                            [IS_RATE_LIMITED_FROM_FAUCET_STORAGE_KEY]: false,
-                            [FAUCET_RATE_LIMIT_EXPIRY_TIME_STORAGE_KEY]: null,
-                        });
-                        setRateLimited(false);
-                    } else {
-                        setRateLimited(true);
-                    }
-                }
-            );
     }, []);
 
     useEffect(() => {
@@ -61,6 +38,29 @@ export function useFaucetRateLimiter() {
         return () => {
             Browser.storage.local.onChanged.removeListener(changesCallback);
         };
+    }, []);
+
+    useEffect(() => {
+        Browser.storage.local
+            .get({
+                [FAUCET_RATE_LIMIT_EXPIRY_TIME_STORAGE_KEY]: null,
+            })
+            .then(
+                ({
+                    [FAUCET_RATE_LIMIT_EXPIRY_TIME_STORAGE_KEY]: expiryTime,
+                }) => {
+                    const currTime = new Date().getTime();
+                    if (expiryTime && currTime > expiryTime) {
+                        Browser.storage.local.set({
+                            [IS_RATE_LIMITED_FROM_FAUCET_STORAGE_KEY]: false,
+                            [FAUCET_RATE_LIMIT_EXPIRY_TIME_STORAGE_KEY]: null,
+                        });
+                        setRateLimited(false);
+                    } else {
+                        setRateLimited(true);
+                    }
+                }
+            );
     }, []);
 
     return [isRateLimited, rateLimit] as const;
