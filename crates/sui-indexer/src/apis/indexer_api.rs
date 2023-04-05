@@ -300,9 +300,7 @@ where
                     .get_owned_objects(address, query, cursor, limit),
             );
         }
-        Ok(block_on(
-            self.get_owned_objects_interal(address, query, cursor, limit),
-        )?)
+        block_on(self.get_owned_objects_interal(address, query, cursor, limit))
     }
 
     fn query_transaction_blocks(
