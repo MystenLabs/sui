@@ -14,7 +14,7 @@
 
 use anyhow::{bail, Result};
 use ed25519_dalek::{
-    ed25519::signature::Signature, PublicKey as Ed25519PublicKey, Signature as Ed25519Signature,
+    PublicKey as Ed25519PublicKey, Signature as Ed25519Signature,
     PUBLIC_KEY_LENGTH as ED25519_PUBLIC_KEY_LENGTH, SIGNATURE_LENGTH as ED25519_SIGNATURE_LENGTH,
 };
 use sha2::{Digest, Sha256};
