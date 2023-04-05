@@ -1,0 +1,52 @@
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/block_with_statements_invalid.move:4:29
+  │
+4 │         ({ let x = 0; x } : bool);
+  │                -            ^^^^
+  │                │            │
+  │                │            Invalid type annotation
+  │                │            Expected: 'bool'
+  │                Given: integer
+
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/block_with_statements_invalid.move:5:30
+  │
+5 │         ({ let x = 0; &x } : u64);
+  │                       --     ^^^
+  │                       │      │
+  │                       │      Invalid type annotation
+  │                       │      Expected: 'u64'
+  │                       Given: '&{integer}'
+
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/block_with_statements_invalid.move:6:40
+  │
+6 │         ({ let y = 0; &mut (y + 1) } : ());
+  │                       ------------     ^^
+  │                       │                │
+  │                       │                Invalid type annotation
+  │                       │                Expected: '()'
+  │                       Given: '&mut {integer}'
+
+error[E05001]: ability constraint not satisfied
+  ┌─ tests/move_check/typing/block_with_statements_invalid.move:7:9
+  │
+2 │     struct R {}
+  │            - To satisfy the constraint, the 'drop' ability would need to be added here
+  ·
+7 │         ({ let r = { let r = R {}; r }; r } : R);
+  │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  │         │                                     │
+  │         │                                     The type '0x8675309::M::R' does not have the ability 'drop'
+  │         Cannot ignore values without the 'drop' ability. The value must be used
+
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/block_with_statements_invalid.move:8:45
+  │
+8 │         ({ let x = 0; (x, false, false) } : (u64, bool));
+  │                       -----------------     ^^^^^^^^^^^
+  │                       │                     │
+  │                       │                     Invalid type annotation
+  │                       │                     Expected expression list of length 2: '(u64, bool)'
+  │                       Given expression list of length 3: '({integer}, bool, bool)'
+

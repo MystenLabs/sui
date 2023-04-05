@@ -1,0 +1,46 @@
+//# print-bytecode
+main() {
+label b0:
+    // return;
+    return;
+}
+
+//# print-bytecode
+main() {
+label b0:
+    // return;
+    // return;
+    return;
+}
+
+//# print-bytecode
+main() {
+label b0:
+    return; // return;
+}
+
+//# print-bytecode
+main() {
+label b0:
+    // return;
+    return; // return;
+}
+
+//# print-bytecode
+// In Move, /* */ are block comment delimiters. Not so in Move IR, so the `/*` below
+// cannot be parsed.
+main() {
+label b0:
+    return;
+    /* return; */
+}
+
+//# print-bytecode
+// Since /* */ are not block comment delimiters, they do not behave in any unique way when
+// they appear within comments.
+main() {
+label b0:
+    // /*
+    return;
+    // */
+}

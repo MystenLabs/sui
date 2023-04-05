@@ -1,0 +1,42 @@
+//# print-bytecode
+// The `borrow_global` builtin is followed by a list of type actuals, and these cannot be qualified
+// (`T` is valid, `M.T` is not).
+main() {
+label b0:
+    borrow_global<M.T>(0x1d4);
+}
+
+//# print-bytecode
+// `borrow_global_mut` types must not be qualified.
+main() {
+label b0:
+    borrow_global_mut<M.T>(0x2d20);
+}
+
+//# print-bytecode
+// `move_to` types must not be qualified.
+main(account: signer) {
+label b0:
+    move_to<M.T>(&account, M.new());
+}
+
+//# print-bytecode
+// `exists` types must not be qualified.
+main(account: signer) {
+label b0:
+    _ = exists<M.T>(0x3d8);
+}
+
+//# print-bytecode
+// Struct field specifiers in immutable borrows must not be qualified.
+main() {
+label b0:
+    _ = &(&mut t).M.T::f;
+}
+
+//# print-bytecode
+// Struct field specifiers in mutable borrows must not be qualified.
+main() {
+label b0:
+    _ = &mut (&mut t).M.T::f;
+}

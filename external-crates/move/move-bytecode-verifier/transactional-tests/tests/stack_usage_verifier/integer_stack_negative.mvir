@@ -1,0 +1,90 @@
+//# publish
+module 0x1.A {
+    three(): u8 * u8{
+    label b0:
+        return 0u8, 255u8;
+    }
+
+    pop() {
+    label b0:
+        // negative stack size, extra pop
+        _, _, _  = Self.three();
+        return;
+    }
+}
+
+
+//# publish
+module 0x1.A {
+    three(): u16 * u16{
+    label b0:
+        return 0u16, 65535u16;
+    }
+
+    pop() {
+    label b0:
+        // negative stack size, extra pop
+        _, _, _  = Self.three();
+        return;
+    }
+}
+
+//# publish
+module 0x1.A {
+    three(): u32 * u32{
+    label b0:
+        return 0u32, 4294967295u32;
+    }
+
+    pop() {
+    label b0:
+        // negative stack size, extra pop
+        _, _, _  = Self.three();
+        return;
+    }
+}
+
+//# publish
+module 0x1.A {
+    three(): u64 * u64{
+    label b0:
+        return 0u64, 18446744073709551615u64;
+    }
+
+    pop() {
+    label b0:
+        // negative stack size, extra pop
+        _, _, _  = Self.three();
+        return;
+    }
+}
+
+//# publish
+module 0x1.A {
+    three(): u128 * u128{
+    label b0:
+        return 0u128, 340282366920938463463374607431768211455u128;
+    }
+
+    pop() {
+    label b0:
+        // negative stack size, extra pop
+        _, _, _  = Self.three();
+        return;
+    }
+}
+
+//# publish
+module 0x1.A {
+    three(): u256 * u256{
+    label b0:
+        return 0u256, 115792089237316195423570985008687907853269984665640564039457584007913129639935u256;
+    }
+
+    pop() {
+    label b0:
+        // negative stack size, extra pop
+        _, _, _  = Self.three();
+        return;
+    }
+}

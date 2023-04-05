@@ -1,0 +1,24 @@
+error[E05001]: ability constraint not satisfied
+  ┌─ tests/move_check/typing/implicit_deref_borrow_field_not_copyable.move:8:15
+  │
+2 │     struct R has drop {}
+  │            - To satisfy the constraint, the 'copy' ability would need to be added here
+3 │     struct S has copy, drop {}
+4 │     struct B has drop { s: S, r: R }
+  │                                  - The type '0x8675309::M::R' does not have the ability 'copy'
+  ·
+8 │         R{} = b.r;
+  │               ^^^ Invalid implicit copy of field 'r' without the 'copy' ability
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/implicit_deref_borrow_field_not_copyable.move:11:15
+   │
+ 2 │     struct R has drop {}
+   │            - To satisfy the constraint, the 'copy' ability would need to be added here
+ 3 │     struct S has copy, drop {}
+ 4 │     struct B has drop { s: S, r: R }
+   │                                  - The type '0x8675309::M::R' does not have the ability 'copy'
+   ·
+11 │         R{} = bref.r;
+   │               ^^^^^^ Invalid implicit copy of field 'r' without the 'copy' ability
+

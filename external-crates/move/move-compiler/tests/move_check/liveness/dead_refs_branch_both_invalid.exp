@@ -1,0 +1,36 @@
+error[E07002]: mutable ownership violated
+   ┌─ tests/move_check/liveness/dead_refs_branch_both_invalid.move:10:13
+   │
+ 4 │         let x_ref = &mut x;
+   │                     ------ It is still being mutably borrowed by this reference
+   ·
+10 │         _ = x;
+   │             ^ Invalid copy of variable 'x'
+
+error[E07003]: invalid operation, could create dangling a reference
+   ┌─ tests/move_check/liveness/dead_refs_branch_both_invalid.move:11:13
+   │
+ 4 │         let x_ref = &mut x;
+   │                     ------ It is still being mutably borrowed by this reference
+   ·
+11 │         _ = move x;
+   │             ^^^^^^ Invalid move of variable 'x'
+
+error[E07002]: mutable ownership violated
+   ┌─ tests/move_check/liveness/dead_refs_branch_both_invalid.move:23:13
+   │
+17 │         let x_ref = &mut x;
+   │                     ------ It is still being mutably borrowed by this reference
+   ·
+23 │         _ = x;
+   │             ^ Invalid copy of variable 'x'
+
+error[E07003]: invalid operation, could create dangling a reference
+   ┌─ tests/move_check/liveness/dead_refs_branch_both_invalid.move:24:13
+   │
+17 │         let x_ref = &mut x;
+   │                     ------ It is still being mutably borrowed by this reference
+   ·
+24 │         _ = move x;
+   │             ^^^^^^ Invalid move of variable 'x'
+

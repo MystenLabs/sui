@@ -1,0 +1,20 @@
+Running Move unit tests
+[ PASS    ] 0x42::m::t0
+[ PASS    ] 0x42::m::t1
+[ PASS    ] 0x42::m::t2
+[ PASS    ] 0x42::m::t3
+[ PASS    ] 0x42::m::t4
+[ PASS    ] 0x42::m::t5
+0x42::m::t0
+Output: Ok(ChangeSet { accounts: {} })
+0x42::m::t1
+Output: Ok(ChangeSet { accounts: {} })
+0x42::m::t2
+Output: Ok(ChangeSet { accounts: {} })
+0x42::m::t3
+Output: Ok(ChangeSet { accounts: {} })
+0x42::m::t4
+Output: Ok(ChangeSet { accounts: {} })
+0x42::m::t5
+Output: Ok(ChangeSet { accounts: {00000000000000000000000000000001: AccountChangeSet { modules: {}, resources: {StructTag { address: 00000000000000000000000000000042, module: Identifier("m"), name: Identifier("R"), type_params: [] }: New([0])} }} })
+Test result: OK. Total tests: 6; passed: 6; failed: 0

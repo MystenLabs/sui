@@ -1,0 +1,10 @@
+processed 1 task
+
+task 0 'publish'. lines 2-416:
+Error: Unable to publish module '00000000000000000000000000000042::pwn'. Got VMError: {
+    major_status: CONSTRAINT_NOT_SATISFIED,
+    sub_status: None,
+    location: 0x42::pwn,
+    indices: [(FunctionDefinition, 2)],
+    offsets: [],
+}

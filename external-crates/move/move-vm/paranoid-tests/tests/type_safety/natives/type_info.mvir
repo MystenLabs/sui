@@ -1,0 +1,19 @@
+//# publish
+module 0x2.A {
+  struct A has drop { x: u64 }
+}
+
+//# run --signers 0x1 --check-runtime-types
+import 0x1.type_name;
+import 0x1.ascii;
+import 0x2.A;
+main(account: signer) {
+    let v: type_name.TypeName;
+    let s: ascii.String;
+
+label b0:
+    v = type_name.get<A.A>();
+    s = type_name.into_string(move(v));
+
+    return;
+}

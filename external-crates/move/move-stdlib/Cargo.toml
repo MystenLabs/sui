@@ -1,0 +1,42 @@
+[package]
+name = "move-stdlib"
+version = "0.1.1"
+edition = "2021"
+authors = ["Diem Association <opensource@diem.com>"]
+description = "Diem stdlib"
+repository = "https://github.com/diem/diem"
+homepage = "https://diem.com"
+license = "Apache-2.0"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[dependencies]
+move-errmapgen = { path = "../move-prover/move-errmapgen" }
+move-docgen = { path = "../move-prover/move-docgen" }
+move-command-line-common = { path = "../move-command-line-common" }
+move-prover = { path = "../move-prover" }
+move-vm-types = { path = "../move-vm/types" }
+move-binary-format = { path = "../move-binary-format" }
+move-core-types = { path = "../move-core/types" }
+move-vm-runtime = { path = "../move-vm/runtime" }
+move-compiler = { path = "../move-compiler" }
+log = "0.4.14"
+walkdir = "2.3.1"
+smallvec = "1.6.1"
+sha2 = "0.9.3"
+sha3 = "0.9.1"
+anyhow = "1.0.52"
+hex = "0.4.3"
+
+[dev-dependencies]
+move-unit-test = { path = "../tools/move-unit-test" }
+tempfile = "3.2.0"
+dir-diff = "0.3.2"
+file_diff = "1.0.0"
+move-cli = { path = "../tools/move-cli" }
+move-package = { path = "../tools/move-package" }
+
+[features]
+testing = []
+address20 = ["move-core-types/address20"]
+address32 = ["move-core-types/address32"]

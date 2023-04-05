@@ -1,0 +1,31 @@
+//# print-bytecode --input=module
+module 0x2d20.M {
+    struct T { u: u64 }
+
+    f(): Self.T {
+    label b0:
+        return T { u: 0 };
+    }
+}
+
+//# print-bytecode --input=module
+module 0x3d20.M {
+    struct T { u: u64, v: u128 }
+
+    // A pack expression must use the correct field names.
+    f(): Self.T {
+    label b0:
+        return T { x: 1, y: 2 };
+    }
+}
+
+//# print-bytecode --input=module
+module 0x4d20.M {
+    struct T { x: u64, y: u64 }
+
+    // A pack expression must refer to the fields in the correct order.
+    f(): Self.T {
+    label b0:
+        return T { y: 1, x: 2 };
+    }
+}

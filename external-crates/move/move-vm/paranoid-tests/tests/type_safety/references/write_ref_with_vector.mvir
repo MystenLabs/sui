@@ -1,0 +1,50 @@
+//# publish
+module 0x2.A {
+  struct C has drop { x: u64 }
+  struct D has drop { x: u64 }
+  struct A has drop { c: Self.C }
+
+  public make_c(): Self.C {
+  label b0:
+    return C { x: 0};
+  }
+
+  public make_d(): Self.D {
+  label b0:
+    return D { x: 0 };
+  }
+}
+
+//# run --signers 0x1 --check-runtime-types
+import 0x2.A;
+main(account: signer) {
+    let c: A.C;
+    let v: vector<A.C>;
+    let c_ref: &mut A.C;
+label b0:
+    c = A.make_c();
+    v = vec_pack_1<A.C>(move(c));
+    c_ref = vec_mut_borrow<A.C>(&mut v, 0);
+
+    c = A.make_c();
+    *move(c_ref) = move(c);
+    return;
+}
+
+
+//# run --signers 0x1 --check-runtime-types
+import 0x2.A;
+main(account: signer) {
+    let c: A.C;
+    let d: A.D;
+    let v: vector<A.C>;
+    let c_ref: &mut A.C;
+label b0:
+    c = A.make_c();
+    v = vec_pack_1<A.C>(move(c));
+    c_ref = vec_mut_borrow<A.C>(&mut v, 0);
+
+    d = A.make_d();
+    *move(c_ref) = move(d);
+    return;
+}

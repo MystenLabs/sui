@@ -1,0 +1,16 @@
+//# print-bytecode
+// `let` generates a local with the given type.
+main() {
+    let x: u64;
+label b0:
+    return;
+}
+
+//# print-bytecode
+// Two `let` cannot use the same name for a local.
+main() {
+    let x: u64;
+    let x: u64;
+label b0:
+    return;
+}

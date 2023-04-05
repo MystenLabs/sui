@@ -1,0 +1,10 @@
+processed 2 tasks
+
+task 1 'run'. lines 13-22:
+Error: Script execution failed with VMError: {
+    major_status: UNKNOWN_INVARIANT_VIOLATION_ERROR,
+    sub_status: None,
+    location: script,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 5)],
+}

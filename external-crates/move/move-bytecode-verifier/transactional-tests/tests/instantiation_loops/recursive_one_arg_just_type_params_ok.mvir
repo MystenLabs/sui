@@ -1,0 +1,11 @@
+//# publish
+
+// This is good as there is only one instance foo<T> for any T.
+
+module 0x1.M {
+    f<T>(x: T) {
+    label b0:
+        Self.f<T>(move(x));
+        return;
+    }
+}

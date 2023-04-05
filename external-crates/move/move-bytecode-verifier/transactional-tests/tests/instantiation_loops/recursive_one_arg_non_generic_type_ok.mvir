@@ -1,0 +1,11 @@
+//# publish
+
+// Good: two instances foo<T> & foo<u64> (if T != u64) for any T.
+
+module 0x1.M {
+    f<T>() {
+    label b0:
+        Self.f<u64>();
+        return;
+    }
+}

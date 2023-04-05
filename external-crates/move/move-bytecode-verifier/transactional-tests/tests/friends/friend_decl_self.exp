@@ -1,0 +1,10 @@
+processed 1 task
+
+task 0 'publish'. lines 1-5:
+Error: Unable to publish module '00000000000000000000000000000042::M'. Got VMError: {
+    major_status: INVALID_FRIEND_DECL_WITH_SELF,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [],
+    offsets: [],
+}

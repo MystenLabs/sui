@@ -1,0 +1,23 @@
+//# publish
+module 0x42.M {
+    struct R has key { f: bool }
+    t0(s: &signer) {
+    label b0:
+        (R { f: false });
+        (copy(s));
+        // args flipped
+        (move_to<R>());
+        return;
+    }
+}
+
+//# publish
+module 0x42.N {
+    struct R<T> has key { f: T }
+    t0(s: &signer) {
+    label b0:
+        // args flipped
+        move_to<R<bool>>(R<bool> { f: false }, copy(s));
+        return;
+    }
+}

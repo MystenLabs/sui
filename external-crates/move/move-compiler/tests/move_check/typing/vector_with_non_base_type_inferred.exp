@@ -1,0 +1,54 @@
+error[E04004]: expected a single non-reference type
+  ┌─ tests/move_check/typing/vector_with_non_base_type_inferred.move:4:9
+  │
+4 │         vector[&0];
+  │         ^^^^^^^^^^
+  │         │      │
+  │         │      Expected a single non-reference type, but found: '&u64'
+  │         Invalid 'vector' type
+
+error[E04004]: expected a single non-reference type
+  ┌─ tests/move_check/typing/vector_with_non_base_type_inferred.move:5:9
+  │
+5 │         vector[&mut 0];
+  │         ^^^^^^^^^^^^^^
+  │         │      │
+  │         │      Expected a single non-reference type, but found: '&mut u64'
+  │         Invalid 'vector' type
+
+error[E04004]: expected a single non-reference type
+  ┌─ tests/move_check/typing/vector_with_non_base_type_inferred.move:6:9
+  │
+6 │         vector[()];
+  │         ^^^^^^^^^^
+  │         │      │
+  │         │      Expected a single non-reference type, but found: '()'
+  │         Invalid 'vector' type
+
+error[E04004]: expected a single non-reference type
+  ┌─ tests/move_check/typing/vector_with_non_base_type_inferred.move:7:9
+  │
+7 │         vector[(0, false)];
+  │         ^^^^^^^^^^^^^^^^^^
+  │         │      │
+  │         │      Expected a single non-reference type, but found: '(u64, bool)'
+  │         Invalid 'vector' type
+
+error[E04004]: expected a single non-reference type
+  ┌─ tests/move_check/typing/vector_with_non_base_type_inferred.move:9:9
+  │
+9 │         vector[&0, &mut 0];
+  │         ^^^^^^^^^^^^^^^^^^
+  │         │      │
+  │         │      Expected a single non-reference type, but found: '&u64'
+  │         Invalid 'vector' type
+
+error[E04004]: expected a single non-reference type
+   ┌─ tests/move_check/typing/vector_with_non_base_type_inferred.move:10:9
+   │
+10 │         vector[&mut 0, &0];
+   │         ^^^^^^^^^^^^^^^^^^
+   │         │              │
+   │         │              Expected a single non-reference type, but found: '&u64'
+   │         Invalid 'vector' type
+

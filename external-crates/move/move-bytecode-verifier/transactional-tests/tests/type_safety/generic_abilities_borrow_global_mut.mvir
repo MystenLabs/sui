@@ -1,0 +1,11 @@
+//# publish
+module 0x1.M {
+    struct Foo<T: copy + drop> { x: T }
+
+    f(): u64 acquires Foo {
+        let foo_ref: &mut Self.Foo<u64>;
+    label b0:
+        foo_ref = borrow_global_mut<Foo<u64>>(0x100); // type does not have key
+        return 1;
+    }
+}

@@ -1,0 +1,8 @@
+//# publish
+module 0x42.M {
+    t(s: &signer): signer {
+    label b0:
+        // cannot copy signer
+        return *copy(s);
+    }
+}

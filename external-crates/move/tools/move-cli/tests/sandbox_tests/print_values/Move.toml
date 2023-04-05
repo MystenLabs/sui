@@ -1,0 +1,9 @@
+[package]
+name = "print_values"
+version = "0.0.0"
+
+[addresses]
+std = "0x1"
+
+[dependencies]
+MoveNursery = { local = "../../../../../move-stdlib/nursery" }

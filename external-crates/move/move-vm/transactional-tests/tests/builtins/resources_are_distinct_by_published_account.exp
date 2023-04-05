@@ -1,0 +1,7 @@
+processed 2 tasks
+
+task 0 'publish'. lines 1-50:
+Error: Dependency not provided for 00000000000000000000000000000001.Account
+
+task 1 'run'. lines 52-59:
+Error: Dependency not provided for 00000000000000000000000000000042.Account

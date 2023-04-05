@@ -1,0 +1,15 @@
+//# publish
+module 0x1.M {
+    id<T>(x: T): T {
+    label b0:
+        return move(x);
+    }
+
+    foo<T: key>(x: T)  {
+        let y: T;
+    label b0:
+        y = Self.id<T>(move(x));
+        y = copy(y); // type does not have copy
+        return;
+    }
+}

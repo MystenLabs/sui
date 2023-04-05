@@ -1,0 +1,1627 @@
+//# run
+
+// tests multiple type mismatches for int operations
+// !!!! generated file, do NOT edit manually !!!!
+
+// operator +
+main() {
+label b0:
+    _ = 0u8 + 0u64;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u8 + 0u128;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u64 + 0u8;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u64 + 0u128;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u128 + 0u8;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u128 + 0u64;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0 + true;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = true + 0;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = true + true;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0 + 0x0;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0x0 + 0;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0x0 + 0x0;
+    return;
+}
+
+
+//# publish
+module 0x42.M {
+    struct R { x: bool }
+    f() {
+    label b0:
+        _ = 0 + (R { x: true });
+        return;
+    }
+}
+
+//# publish
+module 0x42.M {
+    struct R { x: bool }
+    g() {
+    label b0:
+        _ = (R { x: true }) + 0;
+        return;
+    }
+}
+
+//# publish
+module 0x42.M {
+    struct R { x: bool }
+    h() {
+    label b0:
+        _ = (R { x: true }) + (R { x: true });
+        return;
+    }
+}
+
+
+
+// operator -
+//# run
+main() {
+label b0:
+    _ = 0u8 - 0u64;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u8 - 0u128;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u64 - 0u8;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u64 - 0u128;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u128 - 0u8;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u128 - 0u64;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0 - true;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = true - 0;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = true - true;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0 - 0x0;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0x0 - 0;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0x0 - 0x0;
+    return;
+}
+
+
+//# publish
+module 0x42.M {
+    struct R { x: bool }
+    f() {
+    label b0:
+        _ = 0 - (R { x: true });
+        return;
+    }
+}
+
+//# publish
+module 0x42.M {
+    struct R { x: bool }
+    g() {
+    label b0:
+        _ = (R { x: true }) - 0;
+        return;
+    }
+}
+
+//# publish
+module 0x42.M {
+    struct R { x: bool }
+    h() {
+    label b0:
+        _ = (R { x: true }) - (R { x: true });
+        return;
+    }
+}
+
+
+
+// operator *
+//# run
+main() {
+label b0:
+    _ = 0u8 * 0u64;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u8 * 0u128;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u64 * 0u8;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u64 * 0u128;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u128 * 0u8;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u128 * 0u64;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0 * true;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = true * 0;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = true * true;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0 * 0x0;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0x0 * 0;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0x0 * 0x0;
+    return;
+}
+
+
+//# publish
+module 0x42.M {
+    struct R { x: bool }
+    f() {
+    label b0:
+        _ = 0 * (R { x: true });
+        return;
+    }
+}
+
+//# publish
+module 0x42.M {
+    struct R { x: bool }
+    g() {
+    label b0:
+        _ = (R { x: true }) * 0;
+        return;
+    }
+}
+
+//# publish
+module 0x42.M {
+    struct R { x: bool }
+    h() {
+    label b0:
+        _ = (R { x: true }) * (R { x: true });
+        return;
+    }
+}
+
+
+
+// operator /
+//# run
+main() {
+label b0:
+    _ = 0u8 / 0u64;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u8 / 0u128;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u64 / 0u8;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u64 / 0u128;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u128 / 0u8;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u128 / 0u64;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0 / true;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = true / 0;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = true / true;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0 / 0x0;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0x0 / 0;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0x0 / 0x0;
+    return;
+}
+
+
+//# publish
+module 0x42.M {
+    struct R { x: bool }
+    f() {
+    label b0:
+        _ = 0 / (R { x: true });
+        return;
+    }
+}
+
+//# publish
+module 0x42.M {
+    struct R { x: bool }
+    g() {
+    label b0:
+        _ = (R { x: true }) / 0;
+        return;
+    }
+}
+
+//# publish
+module 0x42.M {
+    struct R { x: bool }
+    h() {
+    label b0:
+        _ = (R { x: true }) / (R { x: true });
+        return;
+    }
+}
+
+
+
+// operator &
+//# run
+main() {
+label b0:
+    _ = 0u8 & 0u64;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u8 & 0u128;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u64 & 0u8;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u64 & 0u128;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u128 & 0u8;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u128 & 0u64;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0 & true;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = true & 0;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = true & true;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0 & 0x0;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0x0 & 0;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0x0 & 0x0;
+    return;
+}
+
+
+//# publish
+module 0x42.M {
+    struct R { x: bool }
+    f() {
+    label b0:
+        _ = 0 & (R { x: true });
+        return;
+    }
+}
+
+//# publish
+module 0x42.M {
+    struct R { x: bool }
+    g() {
+    label b0:
+        _ = (R { x: true }) & 0;
+        return;
+    }
+}
+
+//# publish
+module 0x42.M {
+    struct R { x: bool }
+    h() {
+    label b0:
+        _ = (R { x: true }) & (R { x: true });
+        return;
+    }
+}
+
+
+
+// operator |
+//# run
+main() {
+label b0:
+    _ = 0u8 | 0u64;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u8 | 0u128;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u64 | 0u8;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u64 | 0u128;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u128 | 0u8;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u128 | 0u64;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0 | true;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = true | 0;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = true | true;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0 | 0x0;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0x0 | 0;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0x0 | 0x0;
+    return;
+}
+
+
+//# publish
+module 0x42.M {
+    struct R { x: bool }
+    f() {
+    label b0:
+        _ = 0 | (R { x: true });
+        return;
+    }
+}
+
+//# publish
+module 0x42.M {
+    struct R { x: bool }
+    g() {
+    label b0:
+        _ = (R { x: true }) | 0;
+        return;
+    }
+}
+
+//# publish
+module 0x42.M {
+    struct R { x: bool }
+    h() {
+    label b0:
+        _ = (R { x: true }) | (R { x: true });
+        return;
+    }
+}
+
+
+
+// operator ^
+//# run
+main() {
+label b0:
+    _ = 0u8 ^ 0u64;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u8 ^ 0u128;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u64 ^ 0u8;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u64 ^ 0u128;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u128 ^ 0u8;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u128 ^ 0u64;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0 ^ true;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = true ^ 0;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = true ^ true;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0 ^ 0x0;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0x0 ^ 0;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0x0 ^ 0x0;
+    return;
+}
+
+
+//# publish
+module 0x42.M {
+    struct R { x: bool }
+    f() {
+    label b0:
+        _ = 0 ^ (R { x: true });
+        return;
+    }
+}
+
+//# publish
+module 0x42.M {
+    struct R { x: bool }
+    g() {
+    label b0:
+        _ = (R { x: true }) ^ 0;
+        return;
+    }
+}
+
+//# publish
+module 0x42.M {
+    struct R { x: bool }
+    h() {
+    label b0:
+        _ = (R { x: true }) ^ (R { x: true });
+        return;
+    }
+}
+
+
+
+// operator ==
+//# run
+main() {
+label b0:
+    _ = 0u8 == 0u64;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u8 == 0u128;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u64 == 0u8;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u64 == 0u128;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u128 == 0u8;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u128 == 0u64;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0 == true;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = true == 0;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0 == 0x0;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0x0 == 0;
+    return;
+}
+
+
+//# publish
+module 0x42.M {
+    struct R { x: bool }
+    f() {
+    label b0:
+        _ = 0 == (R { x: true });
+        return;
+    }
+}
+
+//# publish
+module 0x42.M {
+    struct R { x: bool }
+    g() {
+    label b0:
+        _ = (R { x: true }) == 0;
+        return;
+    }
+}
+
+
+// operator !=
+//# run
+main() {
+label b0:
+    _ = 0u8 != 0u64;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u8 != 0u128;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u64 != 0u8;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u64 != 0u128;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u128 != 0u8;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u128 != 0u64;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0 != true;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = true != 0;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0 != 0x0;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0x0 != 0;
+    return;
+}
+
+
+//# publish
+module 0x42.M {
+    struct R { x: bool }
+    f() {
+    label b0:
+        _ = 0 != (R { x: true });
+        return;
+    }
+}
+
+//# publish
+module 0x42.M {
+    struct R { x: bool }
+    g() {
+    label b0:
+        _ = (R { x: true }) != 0;
+        return;
+    }
+}
+
+
+
+// operator <
+//# run
+main() {
+label b0:
+    _ = 0u8 < 0u64;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u8 < 0u128;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u64 < 0u8;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u64 < 0u128;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u128 < 0u8;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u128 < 0u64;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0 < true;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = true < 0;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0 < 0x0;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0x0 < 0;
+    return;
+}
+
+
+// operator >
+//# run
+main() {
+label b0:
+    _ = 0u8 > 0u64;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u8 > 0u128;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u64 > 0u8;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u64 > 0u128;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u128 > 0u8;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u128 > 0u64;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0 > true;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = true > 0;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0 > 0x0;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0x0 > 0;
+    return;
+}
+
+
+// operator <=
+//# run
+main() {
+label b0:
+    _ = 0u8 <= 0u64;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u8 <= 0u128;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u64 <= 0u8;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u64 <= 0u128;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u128 <= 0u8;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u128 <= 0u64;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0 <= true;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = true <= 0;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0 <= 0x0;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0x0 <= 0;
+    return;
+}
+
+
+// operator >=
+//# run
+main() {
+label b0:
+    _ = 0u8 >= 0u64;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u8 >= 0u128;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u64 >= 0u8;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u64 >= 0u128;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u128 >= 0u8;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0u128 >= 0u64;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0 >= true;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = true >= 0;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0 >= 0x0;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0x0 >= 0;
+    return;
+}
+
+
+// operator <<
+//# run
+main() {
+label b0:
+    _ = 0 << true;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0 << 0x0;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0 << 0u64;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0 << 0u128;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = true << 0u8;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = true << true;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0x0 << 0u8;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0x0 << 0x0;
+    return;
+}
+
+
+//# publish
+module 0x42.M {
+    struct R { x: bool }
+    f() {
+    label b0:
+        _ = 0 << (R { x: true });
+        return;
+    }
+}
+
+//# publish
+module 0x42.M {
+    struct R { x: bool }
+    g() {
+    label b0:
+        _ = (R { x: true }) << 0;
+        return;
+    }
+}
+
+//# publish
+module 0x42.M {
+    struct R { x: bool }
+    h() {
+    label b0:
+        _ = (R { x: true }) << (R { x: true });
+        return;
+    }
+}
+
+
+
+// operator >>
+//# run
+main() {
+label b0:
+    _ = 0 >> true;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0 >> 0x0;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0 >> 0u64;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0 >> 0u128;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = true >> 0u8;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = true >> true;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0x0 >> 0u8;
+    return;
+}
+
+
+//# run
+main() {
+label b0:
+    _ = 0x0 >> 0x0;
+    return;
+}
+
+
+//# publish
+module 0x42.M {
+    struct R { x: bool }
+    f() {
+    label b0:
+        _ = 0 >> (R { x: true });
+        return;
+    }
+}
+
+//# publish
+module 0x42.M {
+    struct R { x: bool }
+    g() {
+    label b0:
+        _ = (R { x: true }) >> 0;
+        return;
+    }
+}
+
+//# publish
+module 0x42.M {
+    struct R { x: bool }
+    h() {
+    label b0:
+        _ = (R { x: true }) >> (R { x: true });
+        return;
+    }
+}

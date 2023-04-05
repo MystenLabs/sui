@@ -1,0 +1,37 @@
+//# publish
+module 0x1.A {
+    public foo(t: u64): u64 * u64 {
+    label b0:
+       return (copy(t), 2 * move(t));
+    }
+
+    public bar(k: u64): u64 * u64 {
+    label b0:
+        jump_if (copy(k) != 1) b2;
+    label b1:
+        return 3 * Self.foo(move(k));
+    label b2:
+        return Self.foo(copy(k));
+    }
+}
+
+
+//# run
+import 0x1.A;
+
+main() {
+    let x: u64;
+    let y: u64;
+
+    let u: u64;
+    let v: u64;
+label b0:
+    x, y = A.bar(10);
+    u, v = A.bar(1);
+
+    assert(move(x) == 10, 42);
+    assert(move(y) == 20, 42);
+    assert(move(u) == 3, 42);
+    assert(move(v) == 2, 42);
+    return;
+}

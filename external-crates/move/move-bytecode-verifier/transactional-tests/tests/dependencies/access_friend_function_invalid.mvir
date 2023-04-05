@@ -1,0 +1,18 @@
+//# publish
+module 0x42.M {
+    public(friend) foo() {
+    label b0:
+        return;
+    }
+}
+
+//# publish
+module 0x42.N {
+    import 0x42.M;
+    foo() {
+    label b0:
+        // cannot call friend visible function if not a friend
+        M.foo();
+        return;
+    }
+}

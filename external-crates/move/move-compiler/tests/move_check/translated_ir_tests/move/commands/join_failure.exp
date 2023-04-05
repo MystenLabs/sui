@@ -1,0 +1,12 @@
+error[E06002]: use of unassigned variable
+   ┌─ tests/move_check/translated_ir_tests/move/commands/join_failure.move:13:21
+   │
+ 8 │             R{ f } = move r;
+   │                      ------
+   │                      │
+   │                      The value of 'r' might have been previously moved here.
+   │                      Suggestion: use 'copy r' to avoid the move.
+   ·
+13 │         R{ f: _ } = move r;
+   │                     ^^^^^^ Invalid usage of previously moved variable 'r'.
+

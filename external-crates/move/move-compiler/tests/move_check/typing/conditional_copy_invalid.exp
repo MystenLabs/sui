@@ -1,0 +1,110 @@
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/conditional_copy_invalid.move:15:16
+   │
+14 │         let x = Box<R> { f: R{} };
+   │                 -----------------
+   │                 │   │
+   │                 │   The type '0x42::M::Box<0x42::M::R>' can have the ability 'copy' but the type argument '0x42::M::R' does not have the required ability 'copy'
+   │                 The type '0x42::M::Box<0x42::M::R>' does not have the ability 'copy'
+15 │         ignore(copy x);
+   │                ^^^^^^ Invalid 'copy' of owned value without the 'copy' ability
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/conditional_copy_invalid.move:17:16
+   │
+16 │         let x = Box<Box<R>> { f: Box { f: R{} } };
+   │                 ---------------------------------
+   │                 │   │
+   │                 │   The type '0x42::M::Box<0x42::M::Box<0x42::M::R>>' can have the ability 'copy' but the type argument '0x42::M::Box<0x42::M::R>' does not have the required ability 'copy'
+   │                 The type '0x42::M::Box<0x42::M::Box<0x42::M::R>>' does not have the ability 'copy'
+17 │         ignore(copy x);
+   │                ^^^^^^ Invalid 'copy' of owned value without the 'copy' ability
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/conditional_copy_invalid.move:19:16
+   │
+18 │         let x = Box<T> { f: t1 };
+   │                 ----------------
+   │                 │   │
+   │                 │   The type '0x42::M::Box<T>' can have the ability 'copy' but the type argument 'T' does not have the required ability 'copy'
+   │                 The type '0x42::M::Box<T>' does not have the ability 'copy'
+19 │         ignore(copy x);
+   │                ^^^^^^ Invalid 'copy' of owned value without the 'copy' ability
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/conditional_copy_invalid.move:21:16
+   │
+20 │         let x = Box<Box<T>> { f: Box { f: t2 } };
+   │                 --------------------------------
+   │                 │   │
+   │                 │   The type '0x42::M::Box<0x42::M::Box<T>>' can have the ability 'copy' but the type argument '0x42::M::Box<T>' does not have the required ability 'copy'
+   │                 The type '0x42::M::Box<0x42::M::Box<T>>' does not have the ability 'copy'
+21 │         ignore(copy x);
+   │                ^^^^^^ Invalid 'copy' of owned value without the 'copy' ability
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/conditional_copy_invalid.move:23:16
+   │
+22 │         let x = Pair<S, R> { f1: S{}, f2: R{} };
+   │                 -------------------------------
+   │                 │       │
+   │                 │       The type '0x42::M::Pair<0x42::M::S, 0x42::M::R>' can have the ability 'copy' but the type argument '0x42::M::R' does not have the required ability 'copy'
+   │                 The type '0x42::M::Pair<0x42::M::S, 0x42::M::R>' does not have the ability 'copy'
+23 │         ignore(copy x);
+   │                ^^^^^^ Invalid 'copy' of owned value without the 'copy' ability
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/conditional_copy_invalid.move:27:16
+   │
+26 │         let x = &Box<R> { f: R{} };
+   │                  -----------------
+   │                  │   │
+   │                  │   The type '0x42::M::Box<0x42::M::R>' can have the ability 'copy' but the type argument '0x42::M::R' does not have the required ability 'copy'
+   │                  The type '0x42::M::Box<0x42::M::R>' does not have the ability 'copy'
+27 │         ignore(*x);
+   │                ^^ Invalid dereference. Dereference requires the 'copy' ability
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/conditional_copy_invalid.move:29:16
+   │
+28 │         let x = &Box<Box<R>> { f: Box { f: R{} } };
+   │                  ---------------------------------
+   │                  │   │
+   │                  │   The type '0x42::M::Box<0x42::M::Box<0x42::M::R>>' can have the ability 'copy' but the type argument '0x42::M::Box<0x42::M::R>' does not have the required ability 'copy'
+   │                  The type '0x42::M::Box<0x42::M::Box<0x42::M::R>>' does not have the ability 'copy'
+29 │         ignore(*x);
+   │                ^^ Invalid dereference. Dereference requires the 'copy' ability
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/conditional_copy_invalid.move:31:16
+   │
+30 │         let x = &Box<T> { f: t3 };
+   │                  ----------------
+   │                  │   │
+   │                  │   The type '0x42::M::Box<T>' can have the ability 'copy' but the type argument 'T' does not have the required ability 'copy'
+   │                  The type '0x42::M::Box<T>' does not have the ability 'copy'
+31 │         ignore(*x);
+   │                ^^ Invalid dereference. Dereference requires the 'copy' ability
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/conditional_copy_invalid.move:33:16
+   │
+32 │         let x = &Box<Box<T>> { f: Box { f: t4 } };
+   │                  --------------------------------
+   │                  │   │
+   │                  │   The type '0x42::M::Box<0x42::M::Box<T>>' can have the ability 'copy' but the type argument '0x42::M::Box<T>' does not have the required ability 'copy'
+   │                  The type '0x42::M::Box<0x42::M::Box<T>>' does not have the ability 'copy'
+33 │         ignore(*x);
+   │                ^^ Invalid dereference. Dereference requires the 'copy' ability
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/conditional_copy_invalid.move:35:16
+   │
+34 │         let x = &Pair<R, S> { f1: R{}, f2: S{} };
+   │                  -------------------------------
+   │                  │    │
+   │                  │    The type '0x42::M::Pair<0x42::M::R, 0x42::M::S>' can have the ability 'copy' but the type argument '0x42::M::R' does not have the required ability 'copy'
+   │                  The type '0x42::M::Pair<0x42::M::R, 0x42::M::S>' does not have the ability 'copy'
+35 │         ignore(*x);
+   │                ^^ Invalid dereference. Dereference requires the 'copy' ability
+

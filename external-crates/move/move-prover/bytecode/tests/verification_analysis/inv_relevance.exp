@@ -1,0 +1,120 @@
+============ initial translation from Move ================
+
+[variant baseline]
+fun InvRelevance::inner<#0>($t0|s: &signer, $t1|t: #0) {
+     var $t2: &signer
+     var $t3: #0
+     var $t4: InvRelevance::R<#0>
+  0: $t2 := move($t0)
+  1: $t3 := move($t1)
+  2: $t4 := pack InvRelevance::R<#0>($t3)
+  3: move_to<InvRelevance::R<#0>>($t4, $t2)
+  4: return ()
+}
+
+
+[variant baseline]
+public fun InvRelevance::outer_T<#0>($t0|s: &signer, $t1|t: #0) {
+     var $t2: &signer
+     var $t3: #0
+  0: $t2 := move($t0)
+  1: $t3 := move($t1)
+  2: InvRelevance::inner<#0>($t2, $t3)
+  3: return ()
+}
+
+
+[variant baseline]
+public fun InvRelevance::outer_bool($t0|s: &signer, $t1|t: bool) {
+     var $t2: &signer
+     var $t3: bool
+  0: $t2 := move($t0)
+  1: $t3 := move($t1)
+  2: InvRelevance::inner<bool>($t2, $t3)
+  3: return ()
+}
+
+
+[variant baseline]
+public fun InvRelevance::outer_u64($t0|s: &signer, $t1|t: u64) {
+     var $t2: &signer
+     var $t3: u64
+  0: $t2 := move($t0)
+  1: $t3 := move($t1)
+  2: InvRelevance::inner<u64>($t2, $t3)
+  3: return ()
+}
+
+============ after pipeline `verification_analysis` ================
+
+[variant baseline]
+fun InvRelevance::inner<#0>($t0|s: signer, $t1|t: #0) {
+     var $t2: InvRelevance::R<#0>
+  0: $t2 := pack InvRelevance::R<#0>($t1)
+  1: move_to<InvRelevance::R<#0>>($t2, $t0)
+  2: return ()
+}
+
+
+[variant baseline]
+public fun InvRelevance::outer_T<#0>($t0|s: signer, $t1|t: #0) {
+  0: InvRelevance::inner<#0>($t0, $t1)
+  1: return ()
+}
+
+
+[variant baseline]
+public fun InvRelevance::outer_bool($t0|s: signer, $t1|t: bool) {
+  0: InvRelevance::inner<bool>($t0, $t1)
+  1: return ()
+}
+
+
+[variant baseline]
+public fun InvRelevance::outer_u64($t0|s: signer, $t1|t: u64) {
+  0: InvRelevance::inner<u64>($t0, $t1)
+  1: return ()
+}
+
+
+********* Result of verification analysis *********
+
+functions that defer invariant checking at return: [
+]
+
+functions that delegate invariants to its callers: [
+]
+
+invariant applicability: [
+  InvRelevance::inner: {
+    accessed: [@0*]
+    modified: [@0*]
+    directly accessed: [@0*]
+    directly modified: [@0*]
+  }
+  InvRelevance::outer_T: {
+    accessed: [@0*]
+    modified: [@0*]
+    directly accessed: []
+    directly modified: []
+  }
+  InvRelevance::outer_bool: {
+    accessed: [@0*]
+    modified: [@0*]
+    directly accessed: []
+    directly modified: []
+  }
+  InvRelevance::outer_u64: {
+    accessed: []
+    modified: []
+    directly accessed: []
+    directly modified: []
+  }
+]
+
+verification analysis: [
+  InvRelevance::inner: verified + inlined
+  InvRelevance::outer_T: verified
+  InvRelevance::outer_bool: verified
+  InvRelevance::outer_u64: verified
+]

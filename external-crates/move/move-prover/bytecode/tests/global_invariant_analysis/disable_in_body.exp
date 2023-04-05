@@ -1,0 +1,54 @@
+============ initial translation from Move ================
+
+[variant baseline]
+fun DisableInv::foo($t0|s: &signer) {
+     var $t1: &signer
+     var $t2: bool
+     var $t3: DisableInv::R2
+  0: $t1 := move($t0)
+  1: $t2 := false
+  2: $t3 := pack DisableInv::R2($t2)
+  3: move_to<DisableInv::R2>($t3, $t1)
+  4: return ()
+}
+
+============ after pipeline `global_invariant_analysis` ================
+
+[variant verification]
+fun DisableInv::foo($t0|s: signer) {
+     var $t1: bool
+     var $t2: DisableInv::R2
+     var $t3: num
+  0: $t1 := false
+  1: $t2 := pack DisableInv::R2($t1)
+  2: move_to<DisableInv::R2>($t2, $t0) on_abort goto 5 with $t3
+  3: label L1
+  4: return ()
+  5: label L2
+  6: abort($t3)
+}
+
+
+********* Result of global invariant instrumentation *********
+
+DisableInv::foo: [
+  entrypoint {
+    assume @0 = [
+      <> -> [
+        <>
+      ]
+    ]
+  }
+  2: move_to<DisableInv::R2>($t2, $t0) on_abort goto L2 with $t3 {}
+  exitpoint {
+    assert @0 = [
+      <> -> [
+        <>
+      ]
+    ]
+  }
+]
+
+********* Global invariants by ID *********
+
+@0 => invariant [suspendable] forall a: address where exists<R1>(a): exists<R2>(a);
