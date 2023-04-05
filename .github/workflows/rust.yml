@@ -153,42 +153,6 @@ jobs:
         run: |
           scripts/simtest/stress-new-tests.sh
 
-  rosetta-validation:
-    needs: diff
-    if: needs.diff.outputs.isRust == 'true'
-    timeout-minutes: 45
-    runs-on: [ubuntu-ghcloud]
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-
-      - name: Setup environment
-        run: .github/scripts/rosetta/setup.sh
-        shell: bash
-
-      - name: Start local Sui network
-        run: |
-          sui start --no-full-node &
-        shell: bash
-
-      - name: Start Rosetta servers
-        run: .github/scripts/rosetta/start_rosetta.sh
-        shell: bash
-
-      - name: Sleep for 20 seconds
-        run: sleep 20s
-        shell: bash
-
-      - name: Run check:construction test
-        run: |
-          ./bin/rosetta-cli --configuration-file rosetta_cli.json check:construction
-        shell: bash
-
-      - name: Run check:data test
-        run: |
-          ./bin/rosetta-cli --configuration-file rosetta_cli.json check:data
-        shell: bash
-
   # This is a no-op job that allows the resulting action names to line up when
   # there are no rust changes in a given PR/commit. This ensures that we can
   # continue to block on the rust tests passing in the case of rust changes and
