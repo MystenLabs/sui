@@ -35,6 +35,8 @@ use crate::payload::{
     Payload, ProcessPayload, Processor, QueryTransactionBlocks, SignerInfo,
 };
 
+use super::MultiGetTransactionBlocks;
+
 pub(crate) const DEFAULT_GAS_BUDGET: u64 = 500_000_000;
 pub(crate) const DEFAULT_LARGE_GAS_BUDGET: u64 = 50_000_000_000;
 pub(crate) const MAX_NUM_NEW_OBJECTS_IN_SINGLE_TRANSACTION: usize = 120;
@@ -80,6 +82,7 @@ impl RpcCommandProcessor {
             CommandData::GetCheckpoints(ref v) => self.process(v, signer_info).await,
             CommandData::PaySui(ref v) => self.process(v, signer_info).await,
             CommandData::QueryTransactionBlocks(ref v) => self.process(v, signer_info).await,
+            CommandData::MultiGetTransactionBlocks(ref v) => self.process(v, signer_info).await,
             CommandData::MultiGetObjects(ref v) => self.process(v, signer_info).await,
             CommandData::GetObject(ref v) => self.process(v, signer_info).await,
             CommandData::GetAllBalances(ref v) => self.process(v, signer_info).await,
@@ -265,6 +268,13 @@ impl Processor for RpcCommandProcessor {
                     divide_query_transaction_blocks_tasks(data, config.num_threads).await
                 }
             }
+            CommandData::MultiGetTransactionBlocks(data) => {
+                if !config.divide_tasks {
+                    vec![config.command.clone(); config.num_threads]
+                } else {
+                    divide_multi_get_transaction_blocks_tasks(data, config.num_threads).await
+                }
+            }
             CommandData::GetAllBalances(data) => {
                 if !config.divide_tasks {
                     vec![config.command.clone(); config.num_threads]
@@ -384,6 +394,13 @@ pub fn load_objects_from_file(filepath: String) -> Vec<ObjectID> {
     objects
 }
 
+pub fn load_digests_from_file(filepath: String) -> Vec<TransactionDigest> {
+    let path = format!("{}/{}", filepath, CacheType::TransactionDigest);
+    let digests: Vec<TransactionDigest> =
+        read_data_from_file(&path).expect("Failed to read transaction digests");
+    digests
+}
+
 fn read_data_from_file<T: DeserializeOwned>(file_path: &str) -> Result<T, anyhow::Error> {
     let mut path_buf = PathBuf::from(file_path);
 
@@ -458,6 +475,22 @@ async fn divide_query_transaction_blocks_tasks(
     chunked
         .into_iter()
         .map(|chunk| Command::new_query_transaction_blocks(data.address_type.clone(), chunk))
+        .collect()
+}
+
+async fn divide_multi_get_transaction_blocks_tasks(
+    data: &MultiGetTransactionBlocks,
+    num_chunks: usize,
+) -> Vec<Command> {
+    let chunk_size = if data.digests.len() < num_chunks {
+        1
+    } else {
+        data.digests.len() as u64 / num_chunks as u64
+    };
+    let chunked = chunk_entities(data.digests.as_slice(), Some(chunk_size as usize));
+    chunked
+        .into_iter()
+        .map(Command::new_multi_get_transaction_blocks)
         .collect()
 }
 

@@ -7,6 +7,7 @@ mod get_checkpoints;
 mod get_object;
 mod get_reference_gas_price;
 mod multi_get_objects;
+mod multi_get_transaction_blocks;
 mod pay_sui;
 mod query_transactions;
 mod rpc_command_processor;
@@ -17,11 +18,14 @@ use anyhow::Result;
 use async_trait::async_trait;
 use core::default::Default;
 use std::time::Duration;
-use sui_types::{base_types::SuiAddress, messages_checkpoint::CheckpointSequenceNumber};
+use sui_types::{
+    base_types::SuiAddress, digests::TransactionDigest,
+    messages_checkpoint::CheckpointSequenceNumber,
+};
 
 use crate::load_test::LoadTestConfig;
 pub use rpc_command_processor::{
-    load_addresses_from_file, load_objects_from_file, RpcCommandProcessor,
+    load_addresses_from_file, load_digests_from_file, load_objects_from_file, RpcCommandProcessor,
 };
 use sui_types::base_types::ObjectID;
 
@@ -109,6 +113,14 @@ impl Command {
         }
     }
 
+    pub fn new_multi_get_transaction_blocks(digests: Vec<TransactionDigest>) -> Self {
+        let multi_get_transaction_blocks = MultiGetTransactionBlocks { digests };
+        Self {
+            data: CommandData::MultiGetTransactionBlocks(multi_get_transaction_blocks),
+            ..Default::default()
+        }
+    }
+
     pub fn new_multi_get_objects(object_ids: Vec<ObjectID>) -> Self {
         let multi_get_objects = MultiGetObjects { object_ids };
         Self {
@@ -165,6 +177,7 @@ pub enum CommandData {
     GetCheckpoints(GetCheckpoints),
     PaySui(PaySui),
     QueryTransactionBlocks(QueryTransactionBlocks),
+    MultiGetTransactionBlocks(MultiGetTransactionBlocks),
     MultiGetObjects(MultiGetObjects),
     GetObject(GetObject),
     GetAllBalances(GetAllBalances),
@@ -198,6 +211,11 @@ pub struct PaySui {}
 pub struct QueryTransactionBlocks {
     pub address_type: AddressQueryType,
     pub addresses: Vec<SuiAddress>,
+}
+
+#[derive(Clone)]
+pub struct MultiGetTransactionBlocks {
+    pub digests: Vec<TransactionDigest>,
 }
 
 #[derive(Clone, EnumString)]
