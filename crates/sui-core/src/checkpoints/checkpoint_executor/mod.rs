@@ -29,7 +29,6 @@ use itertools::izip;
 use mysten_metrics::{spawn_monitored_task, MonitoredFutureExt};
 use prometheus::Registry;
 use sui_config::node::CheckpointExecutorConfig;
-use sui_types::message_envelope::Message;
 use sui_types::messages::VerifiedExecutableTransaction;
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest, TransactionEffectsDigest},
@@ -37,6 +36,7 @@ use sui_types::{
     messages_checkpoint::{CheckpointSequenceNumber, VerifiedCheckpoint},
 };
 use sui_types::{error::SuiResult, messages::TransactionDataAPI};
+use sui_types::{message_envelope::Message, object::ObjectFormatOptions};
 use tap::{TapFallible, TapOptional};
 use tokio::{
     sync::broadcast::{self, error::RecvError},
@@ -502,6 +502,8 @@ async fn execute_checkpoint(
 
 fn assert_not_forked(
     checkpoint: &VerifiedCheckpoint,
+    authority_store: &AuthorityStore,
+    epoch_store: &AuthorityPerEpochStore,
     tx_digest: &TransactionDigest,
     expected_digest: &TransactionEffectsDigest,
     actual_effects: &TransactionEffects,
@@ -512,9 +514,39 @@ fn assert_not_forked(
             ?checkpoint,
             ?tx_digest,
             ?expected_digest,
-            ?actual_effects,
-            "fork detected!"
+            "fork detected! {actual_effects:#?}"
         );
+
+        for ((id, v, digest), owner) in actual_effects.created() {
+            let object = authority_store.get_object_by_key(id, *v).unwrap().unwrap();
+            if let Some(move_) = object.data.try_as_move() {
+                let struct_ = move_
+                    .to_move_struct_with_resolver(
+                        ObjectFormatOptions::with_types(),
+                        epoch_store.module_cache().as_ref(),
+                    )
+                    .unwrap();
+                info!(?id, ?v, ?digest, ?owner, "Created: {struct_:#}");
+            } else {
+                info!(?id, ?v, ?digest, ?owner, "Created Package");
+            }
+        }
+
+        for ((id, v, digest), owner) in actual_effects.mutated() {
+            let object = authority_store.get_object_by_key(id, *v).unwrap().unwrap();
+            if let Some(move_) = object.data.try_as_move() {
+                let struct_ = move_
+                    .to_move_struct_with_resolver(
+                        ObjectFormatOptions::with_types(),
+                        epoch_store.module_cache().as_ref(),
+                    )
+                    .unwrap();
+                info!(?id, ?v, ?digest, ?owner, "Mutated: {struct_:#}");
+            } else {
+                info!(?id, ?v, ?digest, ?owner, "Mutated Package");
+            }
+        }
+
         panic!(
             "When executing checkpoint {}, transaction {} \
             is expected to have effects digest {}, but got {}!",
@@ -637,7 +669,14 @@ fn get_unexecuted_transactions(
                     "Transaction with digest {:?} has already been executed",
                     tx_digest
                 );
-                assert_not_forked(&checkpoint, tx_digest, effects_digest, actual_effects);
+                assert_not_forked(
+                    &checkpoint,
+                    authority_store.as_ref(),
+                    epoch_store.as_ref(),
+                    tx_digest,
+                    effects_digest,
+                    actual_effects,
+                );
                 None
             }
         })
@@ -772,6 +811,8 @@ async fn execute_transactions(
                     let expected_effects_digest = &expected_digest.effects;
                     assert_not_forked(
                         &checkpoint,
+                        authority_store.as_ref(),
+                        epoch_store.as_ref(),
                         tx_digest,
                         expected_effects_digest,
                         actual_effects,
