@@ -1,0 +1,52 @@
+//# publish
+module 0x2.A {
+  struct C { x: u64 }
+
+  public make(): Self.C {
+  label b0:
+    return C { x: 0};
+  }
+
+  public unpack(c: Self.C) {
+    let x: u64;
+  label b0:
+    C { x } = move(c);
+    return;
+  }
+}
+
+//# publish
+module 0x2.B {
+    import 0x2.A;
+
+    struct C { x: u64 }
+
+    public drop() {
+        let v: A.C;
+        let x: u64;
+
+    label b0:
+        v = A.make();
+        C { x } = move(v);
+
+        return;
+    }
+}
+
+//# run --signers 0x1 --check-runtime-types
+import 0x2.B;
+main(account: signer) {
+label b0:
+    B.drop();
+    return;
+}
+
+//# run --signers 0x1 --check-runtime-types
+import 0x2.A;
+main(account: signer) {
+    let a: A.C;
+label b0:
+    a = A.make();
+    A.unpack(move(a));
+    return;
+}

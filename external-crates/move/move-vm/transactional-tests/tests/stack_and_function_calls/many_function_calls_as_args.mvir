@@ -1,0 +1,55 @@
+//# publish
+module 0x1.A {
+    struct T has drop {value: u64, even: bool}
+
+    public new(): Self.T {
+    label b0:
+        return T {value: 0, even: true};
+    }
+
+    public get_value(this: &mut Self.T): u64 {
+        let v: &u64;
+    label b0:
+        v = &move(this).T::value;
+        return *move(v);
+    }
+
+    public get_parity(this: &mut Self.T): bool {
+        let b: &bool;
+    label b0:
+        b = &move(this).T::even;
+        return *move(b);
+    }
+
+    public change_parity(number: u64, parity: bool): u64 * bool {
+        let n: u64;
+        let p: bool;
+    label b0:
+        n = move(number) + 1;
+        jump_if (move(parity)) b2;
+    label b1:
+        p = true;
+        jump b3;
+    label b2:
+        p = false;
+        jump b3;
+    label b3:
+        return move(n), move(p);
+    }
+}
+
+
+//# run
+import 0x1.A;
+
+main() {
+    let x: A.T;
+    let y: u64;
+    let z: bool;
+label b0:
+    x = A.new();
+    y, z = A.change_parity(A.get_value(&mut x), A.get_parity(&mut x));
+    assert(move(y) == 1, 42);
+    assert(move(z) == false, 42);
+    return;
+}

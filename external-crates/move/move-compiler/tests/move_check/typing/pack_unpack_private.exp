@@ -1,0 +1,14 @@
+error[E04001]: restricted visibility
+  ┌─ tests/move_check/typing/pack_unpack_private.move:8:9
+  │
+8 │         C::T {}
+  │         ^^^^^^^ Invalid instantiation of '0x43::C::T'.
+All structs can only be constructed in the module in which they are declared
+
+error[E04001]: restricted visibility
+   ┌─ tests/move_check/typing/pack_unpack_private.move:11:13
+   │
+11 │         let C::T {} = c;
+   │             ^^^^^^^ Invalid deconstruction binding of '0x43::C::T'.
+ All structs can only be deconstructed in the module in which they are declared
+

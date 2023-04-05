@@ -1,0 +1,37 @@
+//# publish
+module 0x42.B {
+    struct T has copy, drop {g: u64}
+
+    public new(g: u64): Self.T {
+    label b0:
+        return T { g: move(g) };
+    }
+}
+
+
+//# publish
+module 0x42.A {
+    import 0x42.B;
+    struct T{value: B.T}
+    public new(m: B.T): Self.T {
+    label b0:
+        return T{value: move(m)};
+    }
+
+    public t(this: &mut Self.T) {
+        let ref1: &mut B.T;
+        let ref2: &mut B.T;
+        let b2: B.T;
+        let x: B.T;
+    label b0:
+        ref1 = &mut move(this).T::value;
+        ref2 = copy(ref1);
+        b2 = B.new(3);
+        // cannot write to ref1, ref2 still borrows
+        *move(ref1) = move(b2);
+
+        x = *move(ref2);
+
+        return;
+    }
+}

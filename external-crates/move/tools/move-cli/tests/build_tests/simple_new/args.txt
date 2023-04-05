@@ -1,0 +1,5 @@
+new P1
+> cat P1/Move.toml
+
+new P2 -p other_dir
+> cat other_dir/Move.toml

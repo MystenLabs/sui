@@ -1,0 +1,25 @@
+//# run
+main() {
+    let v: vector<u64>;
+    let e_imm: &u64;
+label b0:
+    v = vec_pack_0<u64>();
+    vec_push_back<u64>(&mut v, 0);
+    e_imm = vec_imm_borrow<u64>(&v, 0);
+
+    _ = move(v);
+    return;
+}
+
+//# run
+main() {
+    let v: vector<u64>;
+    let e_mut: &mut u64;
+label b0:
+    v = vec_pack_0<u64>();
+    vec_push_back<u64>(&mut v, 0);
+    e_mut = vec_mut_borrow<u64>(&mut v, 0);
+
+    _ = move(v);
+    return;
+}

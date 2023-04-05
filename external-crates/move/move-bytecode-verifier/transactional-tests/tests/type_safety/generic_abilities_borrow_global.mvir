@@ -1,0 +1,12 @@
+//# publish
+module 0x1.M {
+    struct Foo<T> { x: T }
+
+    bar() acquires Foo {
+        let x: &Self.Foo<u64>;
+        let y: Self.Foo<u64>;
+    label b0:
+        x = borrow_global<Foo<u64>>(0x100); // type does not have key
+        return;
+    }
+}

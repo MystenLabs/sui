@@ -1,0 +1,49 @@
+//# publish
+module 0x42.A {
+    struct Coin { balance: u64 }
+    struct A { c: Self.Coin }
+
+    public zero(): Self.Coin {
+    label b0:
+        return Coin { balance: 0 };
+    }
+
+    public new(c: Self.Coin): Self.A {
+    label b0:
+        return A { c: move(c) };
+    }
+
+    public destroy_a(a: Self.A) {
+        let c: Self.Coin;
+        let balance: u64;
+    label b0:
+        A { c } = move(a);
+        Coin { balance } = move(c);
+        return;
+    }
+
+    public mutate(a_ref: &mut Self.A) {
+        let ref: &mut Self.Coin;
+        let ref_balance: &mut u64;
+    label b0:
+        // safe to modify resources inner values (if they have drop)
+        ref = &mut move(a_ref).A::c;
+        ref_balance = &mut move(ref).Coin::balance;
+        *move(ref_balance) = 100;
+        return;
+    }
+}
+
+//# run
+import 0x42.A;
+
+main() {
+    let zero_resource: A.Coin;
+    let s: A.A;
+label b0:
+    zero_resource = A.zero();
+    s = A.new(move(zero_resource));
+    A.mutate(&mut s);
+    A.destroy_a(move(s));
+    return;
+}

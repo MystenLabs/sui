@@ -1,0 +1,28 @@
+CompiledPackageInfo {
+    package_name: "test",
+    address_alias_instantiation: {
+        "A": 00000000000000000000000000000001,
+        "C": 00000000000000000000000000000003,
+        "DA": 00000000000000000000000000000002,
+    },
+    source_digest: Some(
+        "ELIDED_FOR_TEST",
+    ),
+    build_flags: BuildConfig {
+        dev_mode: true,
+        test_mode: false,
+        generate_docs: false,
+        generate_abis: false,
+        install_dir: Some(
+            "ELIDED_FOR_TEST",
+        ),
+        force_recompilation: false,
+        lock_file: Some(
+            "ELIDED_FOR_TEST",
+        ),
+        additional_named_addresses: {},
+        architecture: None,
+        fetch_deps_only: false,
+        skip_fetch_latest_git_deps: false,
+    },
+}

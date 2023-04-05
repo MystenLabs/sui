@@ -1,0 +1,27 @@
+error[E10003]: invalid attribute value
+  ┌─ tests/move_check/unit_test/expected_failure_constants_invalid.move:9:35
+  │
+2 │     const C: u8 = 0 + 1 + 2;
+  │     ------------------------ Constant '0x2::m::C' has a non-u64 value. Only 'u64' values are permitted
+  ·
+9 │     #[expected_failure(abort_code=0x2::m::C)]
+  │                                   ^^^^^^^^^ Invalid value in attribute assignment
+
+error[E10003]: invalid attribute value
+   ┌─ tests/move_check/unit_test/expected_failure_constants_invalid.move:13:35
+   │
+13 │     #[expected_failure(abort_code=0x2::x::C)]
+   │                                   ^^^^^^^^^
+   │                                   │
+   │                                   Invalid value in attribute assignment
+   │                                   Unbound module '0x2::x'
+
+error[E10003]: invalid attribute value
+   ┌─ tests/move_check/unit_test/expected_failure_constants_invalid.move:17:35
+   │
+17 │     #[expected_failure(abort_code=0x1::A::C0)]
+   │                                   ^^^^^^^^^^
+   │                                   │
+   │                                   Invalid value in attribute assignment
+   │                                   Unbound constant 'C0' in module '0x1::A'
+

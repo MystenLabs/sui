@@ -1,0 +1,24 @@
+error[E10005]: unable to generate test
+  ┌─ tests/move_check/unit_test/attribute_location_invalid.move:1:3
+  │
+1 │ #[test_only]
+  │   ^^^^^^^^^ Testing attributes are not allowed in scripts.
+
+error[E02015]: invalid attribute
+  ┌─ tests/move_check/unit_test/attribute_location_invalid.move:6:3
+  │
+6 │ #[test]
+  │   ^^^^
+  │   │
+  │   Known attribute 'test' is not expected with a module
+  │   Expected to be used with one of the following: function
+
+error[E02015]: invalid attribute
+   ┌─ tests/move_check/unit_test/attribute_location_invalid.move:10:7
+   │
+10 │     #[expected_failure(abort_code = 0)]
+   │       ^^^^^^^^^^^^^^^^
+   │       │
+   │       Known attribute 'expected_failure' is not expected with a struct
+   │       Expected to be used with one of the following: function
+

@@ -1,0 +1,66 @@
+error[E06002]: use of unassigned variable
+  ┌─ tests/move_check/locals/use_after_move_if_else.move:5:17
+  │
+4 │         if (cond) { _ = move x } else { _ = move x };
+  │                         ------
+  │                         │
+  │                         The value of 'x' was previously moved here.
+  │                         Suggestion: use 'copy x' to avoid the move.
+5 │         let _ = move x + 1;
+  │                 ^^^^^^ Invalid usage of previously moved variable 'x'.
+
+error[E06002]: use of unassigned variable
+   ┌─ tests/move_check/locals/use_after_move_if_else.move:11:17
+   │
+10 │         if (cond) { _ = move x } else { _ = x };
+   │                         ------
+   │                         │
+   │                         The value of 'x' might have been previously moved here.
+   │                         Suggestion: use 'copy x' to avoid the move.
+11 │         let _ = move x + 1;
+   │                 ^^^^^^ Invalid usage of previously moved variable 'x'.
+
+error[E06002]: use of unassigned variable
+   ┌─ tests/move_check/locals/use_after_move_if_else.move:17:17
+   │
+16 │         if (cond) { _ = move x } else { _ = move x };
+   │                         ------
+   │                         │
+   │                         The value of 'x' was previously moved here.
+   │                         Suggestion: use 'copy x' to avoid the move.
+17 │         let _ = x + 1;
+   │                 ^ Invalid usage of previously moved variable 'x'.
+
+error[E06002]: use of unassigned variable
+   ┌─ tests/move_check/locals/use_after_move_if_else.move:24:17
+   │
+23 │         if (cond) { _ = move x } else { _ = x };
+   │                         ------
+   │                         │
+   │                         The value of 'x' might have been previously moved here.
+   │                         Suggestion: use 'copy x' to avoid the move.
+24 │         let _ = x + 1;
+   │                 ^ Invalid usage of previously moved variable 'x'.
+
+error[E06002]: use of unassigned variable
+   ┌─ tests/move_check/locals/use_after_move_if_else.move:30:17
+   │
+29 │         if (cond) { _ = move x } else { _ = move x };
+   │                         ------
+   │                         │
+   │                         The value of 'x' was previously moved here.
+   │                         Suggestion: use 'copy x' to avoid the move.
+30 │         let _ = &x;
+   │                 ^^ Invalid usage of previously moved variable 'x'.
+
+error[E06002]: use of unassigned variable
+   ┌─ tests/move_check/locals/use_after_move_if_else.move:36:17
+   │
+35 │         if (cond) { _ = move x } else { _ = x };
+   │                         ------
+   │                         │
+   │                         The value of 'x' might have been previously moved here.
+   │                         Suggestion: use 'copy x' to avoid the move.
+36 │         let _ = &x;
+   │                 ^^ Invalid usage of previously moved variable 'x'.
+

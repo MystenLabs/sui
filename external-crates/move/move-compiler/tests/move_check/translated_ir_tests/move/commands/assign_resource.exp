@@ -1,0 +1,26 @@
+error[E06001]: unused value without 'drop'
+  ┌─ tests/move_check/translated_ir_tests/move/commands/assign_resource.move:6:9
+  │
+2 │     struct T {}
+  │            - To satisfy the constraint, the 'drop' ability would need to be added here
+  ·
+5 │         let t = T{}; &t;
+  │             -   --- The type '0x8675309::M::T' does not have the ability 'drop'
+  │             │    
+  │             The variable contains a value due to this assignment. The value does not have the 'drop' ability and must be used before you assign to this variable again
+6 │         t = T {}; &t;
+  │         ^ Invalid assignment to variable 't'
+
+error[E06001]: unused value without 'drop'
+  ┌─ tests/move_check/translated_ir_tests/move/commands/assign_resource.move:6:21
+  │
+2 │     struct T {}
+  │            - To satisfy the constraint, the 'drop' ability would need to be added here
+  ·
+5 │         let t = T{}; &t;
+  │                 --- The type '0x8675309::M::T' does not have the ability 'drop'
+6 │         t = T {}; &t;
+  │         -           ^ Invalid return
+  │         │            
+  │         The local variable 't' still contains a value. The value does not have the 'drop' ability and must be consumed before the function returns
+

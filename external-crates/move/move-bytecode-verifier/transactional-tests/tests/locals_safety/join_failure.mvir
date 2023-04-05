@@ -1,0 +1,104 @@
+//# publish
+module 0x1.M {
+    struct R { f:bool }
+    t0() {
+        let r: Self.R;
+        let f: bool;
+    label b0:
+        r = R{ f: false };
+        jump_if (true) b2;
+    label b1:
+        R{ f: f } = move(r);
+        r = R{ f: false };
+        jump b3;
+    label b2:
+        R{ f: f } = move(r);
+    label b3:
+        R{ f: f } = move(r); // invalid move loc
+        return;
+    }
+}
+
+//# publish
+module 0x1.M {
+    struct R { f:bool }
+    t0() {
+        let r: Self.R;
+        let f: bool;
+    label b0:
+        r = R{ f: false };
+        jump_if (true) b2;
+    label b1:
+        R{ f: f } = move(r);
+        r = R{ f: false };
+        jump b3;
+    label b2:
+        R{ f: f } = move(r);
+    label b3:
+        return; // resource unused
+    }
+}
+
+//# publish
+module 0x1.M {
+    struct R { f:bool }
+    t0() {
+        let r: Self.R;
+        let f: bool;
+    label b0:
+        r = R{ f: false };
+        jump_if (true) b2;
+    label b1:
+        R{ f: f } = move(r);
+        r = R{ f: false };
+        jump b3;
+    label b2:
+        R{ f: f } = move(r);
+    label b3:
+        r = R{ f: false }; // invalid, still possibly a resource in r
+        return;
+    }
+}
+
+//# publish
+module 0x1.M {
+    struct R has copy, drop { f:bool }
+    t0() {
+        let r: Self.R;
+        let f: bool;
+    label b0:
+        r = R{ f: false };
+        jump_if (true) b2;
+    label b1:
+        R{ f: f } = move(r);
+        r = R{ f: false };
+        jump b3;
+    label b2:
+        R{ f: f } = move(r);
+    label b3:
+        R{ f: f } = copy(r); // invalid copy, r might not have a value
+        return;
+    }
+}
+
+//# publish
+module 0x1.M {
+    struct R { f:bool }
+    t0() {
+        let r: Self.R;
+        let ref: &Self.R;
+        let f: bool;
+    label b0:
+        r = R{ f: false };
+        jump_if (true) b2;
+    label b1:
+        R{ f: f } = move(r);
+        r = R{ f: false };
+        jump b3;
+    label b2:
+        R{ f: f } = move(r);
+    label b3:
+        ref = &r; // cannot borrow, might not have a value
+        return;
+    }
+}

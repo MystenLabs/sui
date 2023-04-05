@@ -1,0 +1,32 @@
+//# publish
+module 0x1.M {
+    struct T has drop {v : u64}
+
+    public new(v: u64): Self.T {
+    label b0:
+        return T{v: move(v)};
+    }
+
+    public value (this: &mut Self.T) : u64 {
+        let b: &u64;
+    label b0:
+        b = &move(this).T::v;
+        return *move(b);
+    }
+}
+
+
+//# run
+import 0x1.M;
+
+main() {
+    let x: M.T;
+    let y: &mut M.T;
+    let z: u64;
+label b0:
+    x = M.new(5);
+    y = &mut x;
+    z = M.value(move(y));
+    assert(move(z) == 5, 42);
+    return;
+}

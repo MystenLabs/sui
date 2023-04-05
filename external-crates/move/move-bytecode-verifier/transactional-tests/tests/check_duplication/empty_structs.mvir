@@ -1,0 +1,6 @@
+//# publish
+module 0x1.EmptyStruct {
+  // no empty structs allowed
+  struct Empty { }
+
+}

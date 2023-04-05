@@ -1,0 +1,10 @@
+processed 2 tasks
+
+task 1 'run'. lines 18-31:
+Error: Script execution failed with VMError: {
+    major_status: UNSAFE_RET_UNUSED_VALUES_WITHOUT_DROP,
+    sub_status: None,
+    location: script,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 5)],
+}

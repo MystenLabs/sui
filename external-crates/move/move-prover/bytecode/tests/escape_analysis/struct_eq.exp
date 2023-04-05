@@ -1,0 +1,50 @@
+============ initial translation from Move ================
+
+[variant baseline]
+public fun StructEq::leak_f($t0|s: &mut StructEq::S): &mut u64 {
+     var $t1: &mut StructEq::S
+     var $t2: &mut u64
+  0: $t1 := move($t0)
+  1: $t2 := borrow_field<StructEq::S>.f($t1)
+  2: return $t2
+}
+
+
+[variant baseline]
+public fun StructEq::new(): StructEq::S {
+     var $t0: u64
+     var $t1: StructEq::S
+  0: $t0 := 10
+  1: $t1 := pack StructEq::S($t0)
+  2: return $t1
+}
+
+============ after pipeline `escape_analysis` ================
+
+[variant baseline]
+public fun StructEq::leak_f($t0|s: &mut StructEq::S): &mut u64 {
+     var $t1: &mut StructEq::S
+     var $t2: &mut u64
+  0: $t1 := move($t0)
+  1: $t2 := borrow_field<StructEq::S>.f($t1)
+  2: return $t2
+}
+
+
+[variant baseline]
+public fun StructEq::new(): StructEq::S {
+     var $t0: u64
+     var $t1: StructEq::S
+  0: $t0 := 10
+  1: $t1 := pack StructEq::S($t0)
+  2: return $t1
+}
+
+============ Diagnostics ================
+error: Leaked mutable module-internal reference via return value 0
+   ┌─ tests/escape_analysis/struct_eq.move:12:5
+   │
+12 │ ╭     public fun leak_f(s: &mut S): &mut u64 {
+13 │ │         &mut s.f
+14 │ │     }
+   │ ╰─────^

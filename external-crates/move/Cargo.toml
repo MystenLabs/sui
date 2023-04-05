@@ -1,0 +1,112 @@
+[workspace]
+resolver = "2"
+
+members = [
+    "benchmarks",
+    "documentation/examples/diem-framework/crates/cli",
+    "documentation/examples/diem-framework/crates/crypto",
+    "documentation/examples/diem-framework/crates/crypto-derive",
+    "documentation/examples/diem-framework/crates/natives",
+    "evm/exec-utils",
+    "evm/extract-ethereum-abi",
+    "evm/move-ethereum-abi",
+    "evm/move-to-yul",
+    "extensions/async/move-async-vm",
+    "extensions/move-table-extension",
+    "move-analyzer",
+    "move-binary-format",
+    "move-binary-format/serializer-tests",
+    "move-borrow-graph",
+    "move-bytecode-verifier",
+    "move-bytecode-verifier/bytecode-verifier-tests",
+    "move-bytecode-verifier/fuzz",
+    "move-bytecode-verifier/invalid-mutations",
+    "move-bytecode-verifier/transactional-tests",
+    "move-command-line-common",
+    "move-compiler",
+    "move-compiler/transactional-tests",
+    "move-core/types",
+    "move-ir/types",
+    "move-ir-compiler",
+    "move-ir-compiler/move-bytecode-source-map",
+    "move-ir-compiler/move-ir-to-bytecode",
+    "move-ir-compiler/move-ir-to-bytecode/syntax",
+    "move-ir-compiler/transactional-tests",
+    "move-model",
+    "move-prover",
+    "move-prover/boogie-backend",
+    "move-prover/bytecode",
+    "move-prover/interpreter",
+    "move-prover/interpreter/crypto",
+    "move-prover/interpreter-testsuite",
+    "move-prover/lab",
+    "move-prover/move-abigen",
+    "move-prover/move-docgen",
+    "move-prover/move-errmapgen",
+    "move-prover/mutation",
+    "move-prover/test-utils",
+    "move-prover/tools/spec-flatten",
+    "move-stdlib",
+    "move-symbol-pool",
+    "move-vm/integration-tests",
+    "move-vm/paranoid-tests",
+    "move-vm/runtime",
+    "move-vm/test-utils",
+    "move-vm/transactional-tests",
+    "move-vm/types",
+    "testing-infra/module-generation",
+    "testing-infra/test-generation",
+    "testing-infra/transactional-test-runner",
+    "tools/move-bytecode-utils",
+    "tools/move-bytecode-viewer",
+    "tools/move-cli",
+    "tools/move-coverage",
+    "tools/move-disassembler",
+    "tools/move-explain",
+    "tools/move-package",
+    "tools/move-resource-viewer",
+    "tools/move-unit-test",
+    "tools/read-write-set",
+    "tools/read-write-set/dynamic",
+    "tools/read-write-set/types",
+]
+
+# NOTE: default-members is the complete list of binaries that form the "production Move codebase". These members should
+# never include crates that require fuzzing features or test features. These are the crates we want built with no extra
+# test-only code included.
+#
+# For more, see the "Conditional compilation for tests" section in documentation/coding_guidelines.md.
+default-members = [
+    "evm/extract-ethereum-abi",
+    "evm/move-to-yul",
+    "move-analyzer",
+    "move-ir-compiler",
+    "move-prover",
+    "move-prover/lab",
+    "move-prover/mutation",
+    "move-prover/tools/spec-flatten",
+    "move-compiler",
+    "move-stdlib",
+    "tools/move-disassembler",
+    "tools/move-bytecode-viewer",
+    "tools/move-cli",
+    "tools/move-coverage",
+    "tools/move-unit-test",
+]
+
+# Dependencies that should be kept in sync through the whole workspace
+[workspace.dependencies]
+bcs = "0.1.4"
+
+[profile.bench]
+debug = true
+
+[profile.dev]
+debug = true
+
+# use release settings to reduce memory pressure in the linking step in CI
+[profile.ci]
+inherits = "test"
+debug = 0 # for saving disk space during linking
+incremental = false
+codegen-units = 16

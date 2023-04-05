@@ -1,0 +1,6 @@
+//# publish
+module 0x42.M {
+    // duplicate functions
+    f() { label b0: }
+    f() { label b0: }
+}

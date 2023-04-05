@@ -1,0 +1,27 @@
+//# publish
+module 0x2.B {
+  struct C has drop { x: u64 }
+  struct D has drop { x: u64 }
+
+  public make_c(): Self.C {
+  label b0:
+    return C { x: 0};
+  }
+
+  public make_d(): Self.D {
+  label b0:
+    return D { x: 0 };
+  }
+}
+
+//# run --signers 0x1 --check-runtime-types
+import 0x2.B;
+main(account: signer) {
+    let c: B.C;
+    let d: B.D;
+label b0:
+    c = B.make_c();
+    d = B.make_d();
+    _ = move(c) == move(d);
+    return;
+}

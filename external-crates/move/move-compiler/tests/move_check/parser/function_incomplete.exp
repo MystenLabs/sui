@@ -1,0 +1,9 @@
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/function_incomplete.move:5:1
+  │
+5 │ 
+  │ ^
+  │ 
+  │ Unexpected end-of-file
+  │ Expected an expression term
+

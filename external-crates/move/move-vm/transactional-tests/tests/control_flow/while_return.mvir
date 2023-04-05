@@ -1,0 +1,11 @@
+//# run
+main() {
+label while:
+    jump_if_false (true) while_cont;
+label while_b0:
+    return;
+    assert(false, 42);
+    jump while;
+label while_cont:
+    return;
+}

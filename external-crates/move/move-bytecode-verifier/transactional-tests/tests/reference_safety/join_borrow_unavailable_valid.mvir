@@ -1,0 +1,23 @@
+//# publish
+module 0x1.M {
+    struct S { f: u64 }
+
+    t1(root: &mut Self.S, cond: bool) {
+        let u: u64;
+        let x: &u64;
+    label b0:
+        u = 0;
+        jump_if (move(cond)) b2;
+    label b1:
+        _ = move(u);
+        x = &move(root).S::f;
+        jump b3;
+    label b2:
+        x = &u;
+        jump b3;
+    label b3:
+        // it is okay for the two branches to disagree on the state of u, even though it is
+        // borrowed in one branch
+        return;
+    }
+}

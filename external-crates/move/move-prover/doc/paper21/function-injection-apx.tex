@@ -1,0 +1,281 @@
+\Section{Injection of Function and Data Specifications}
+
+In this appendix we describe, for the interested reader, the design of function
+and data specification injection (requires, ensures, aborts\_if, modifies,
+emits, and data invariants).  While the impact on speed and reliability of
+verification might have been not that significant, these designs were fine tuned
+over time as well. With this, a comprehensive coverage of the translation of all
+specification constructs in \MVP is provided.
+
+\SubSection{Function Specifications}
+
+The injection of basic function specifications is illustrated in
+Fig.~\ref{fig:RequiresEnsuresAbortsIf}.  An extension of the Move source
+language is used to specify abort behavior. With~%
+|fun f() { .. } onabort { conditions }| a Move function is defined where
+|conditions| are assume or assert statements that are evaluated at every program
+point the function aborts (either implicitly or with an |abort| statement). This
+construct simplifies the presentation and corresponds to a per-function abort
+block on bytecode level which is target of branching.
+
+\begin{Figure}
+  \caption{Requires, Ensures, and AbortsIf Injection}
+  \label{fig:RequiresEnsuresAbortsIf}
+  \centering
+\begin{MoveBoxNumbered}
+  fun f(x: u64, y: u64): u64 { x + y }
+  spec f {
+    requires x < y;
+    aborts_if x + y > MAX_U64;
+    ensures result == x + y;
+  }
+  fun g(x: u64): u64 { f(x, x + 1) }
+  spec g {
+    ensures result > x;
+  }
+  @\transform@
+  fun f(x: u64, y: u64): u64 {
+    spec assume x < y;
+    let result = x + y;
+    spec assert result == x + y;     // ensures of f
+    spec assert                      // negated abort_if of f
+      !(x + y > MAX_U64); @\label{line:aborts_holds_not}@
+    result
+  } onabort {
+    spec assert                      // abort_if of f
+      x + y > MAX_U64; @\label{line:aborts_holds}@
+  }
+  fun g(x: u64): u64 {
+    spec assert x < x + 1;           // requires of f
+@$\textrm{\it if inlined}$\label{line:inline}@
+    let result = inline f(x, x + 1);
+@$\textrm{\it elif opaque}$\label{line:opaque}@
+    if (x + x + 1 > MAX_U64) abort;  // aborts_if of f
+    spec assume result == x + x + 1; // ensures of f
+@$\textrm{\it endif}$@
+    spec assert result > x;          // ensures of g
+    result
+  }
+\end{MoveBoxNumbered}
+\end{Figure}
+
+An aborts condition is translated into two different asserts: one where the
+function aborts and the condition must hold (line~\ref{line:aborts_holds}), and
+one where it returns and the condition must \emph{not} hold
+(line~\ref{line:aborts_holds_not}). If there are multiple |aborts_if|, they are
+or-ed. If there is no abort condition, no asserts are generated. This means
+that once a user specifies aborts conditions, they must completely cover the
+abort behavior of the code. (The prover also provides an option to relax this
+behavior, where aborts conditions can be partial and are only enforced on
+function return.)
+
+For a function call site we distinguish two variants: the call is \emph{inlined}
+(line~\ref{line:inline}) or it is \emph{opaque} (line~\ref{line:opaque}).  For
+inlined calls, the function definition, with all injected assumptions and
+assertions turned into assumptions (as those are considered proven) is
+substituted. For opaque functions the specification conditions are inserted as
+assumptions. Methodologically, opaque functions need precise specifications
+relative to a particular objective, where as in the case of inlined functions
+the code is still the source of truth and specifications can be partial or
+omitted. However, inlining does not scale arbitrarily, and can be only used for
+small function systems.
+
+Notice we have not discussed the way how to deal with relating pre and post
+states yet, which requires taking snapshots of state (e.g.~%
+|ensures x == old(x) + 1|); the example in
+Fig.~\ref{fig:RequiresEnsuresAbortsIf} does not need it. Snapshots of state
+are discussed for global update invariants in Sec.~\ref{sec:GlobalInvariants}.
+
+\Paragraph{Modifies}
+
+\begin{Figure}
+  \caption{Modifies Injection}
+  \label{fig:Modifies}
+  \centering
+\begin{MoveBoxNumbered}
+  fun f(addr: address) { move_to<T>(addr, T{}) }
+  spec f {
+    pragma opaque;
+    ensures exists<T>(addr);
+    modifies global<T>(addr);
+  }
+  fun g() { f(0x1) }
+  spec g {
+    modifies global<T>(0x1); modifies global<T>(0x2);
+  }
+  @\transform@
+  fun f(addr: address) {
+    let can_modify_T = {addr};      // modifies of f
+    spec assert addr in can_modify; // permission check @%
+                                            \label{line:modifies_permission}@
+    move_to<T>(addr, T{});
+  }
+  fun g() {
+    let can_modify_T = {0x1, 0x2};  // modifies of g
+    spec assert {0x1} <= can_modify_T; // permission check @%
+                                            \label{line:modifies_call_permission}@
+    spec havoc global<T>(0x1);      // havoc modified memory @%
+                                            \label{line:modifies_havoc}@
+    spec assume exists<T>(0x1);     // ensures of f
+  }
+\end{MoveBoxNumbered}
+\end{Figure}
+
+
+The |modifies| condition specifies that a function only changes specific memory.
+It comes in the form |modifies global<T>(addr)|, and its injection is
+illustrated in Fig.~\ref{fig:Modifies}.
+
+A type check is used to ensure that if a function has one or more~%
+|modifies| conditions all called functions which are \emph{opaque} have a
+matching modifies declaration. This is important so we can relate the callees
+memory modifications to that what is allowed at caller side.
+
+At verification time, when an operation is performed which modifies memory, an
+assertion is emitted that modification is allowed
+(e.g. line~\ref{line:modifies_permission}). The permitted addresses derived from
+the modifies clause are stored in a set |can_modify_T| generated by the
+transformation. Instructions which modify memory are either primitives (like
+|move_to| in the example) or function calls. If the function call is inlined,
+modifies injection proceeds (conceptually) with the inlined body. For opaque
+function calls, the static analysis has ensured that the target has a modifies
+clause.  This clause is used to derive the modified memory, which must be a
+subset of the modified memory of the caller
+(line~\ref{line:modifies_call_permission}).
+
+For opaque calls, we also need to \emph{havoc} the memory they modify
+(line~\ref{line:modifies_havoc}), by which is meant assigning an unconstrained
+value to it. If present, |ensures| from the called function, injected as
+subsequent assumptions, are further constraining the modified memory.
+
+
+\Paragraph{Emits}
+
+\begin{Figure}
+  \caption{Emits Injection}
+  \label{fig:Emits}
+  \centering
+\begin{MoveBoxNumbered}
+  use Std::Event;
+  struct E has drop, store { m: u64 }
+  fun f(h: &mut Event::EventHandle<E>, x: u64) {
+    Event::emit_event(h, E{m:0}); @\label{line:emit_event}@
+    if (x > 0) {
+      Event::emit_event(h, E{m:x});
+    }
+  }
+  spec f {
+    emits E{m:0} to h; @\label{line:emits}@
+    emits E{m:x} to h if x > 0; @\label{line:emits_if}@
+  }
+  @\transform@
+  fun f(h: &mut Event::EventHandle<E>, x: u64) {
+    es = Mvp::ExtendEventStore(es, h, E{m:0}); // emitting event @\label{line:extend_es}@
+    if (x > 0) {
+      es = Mvp::ExtendEventStore(es, h, E{m:x}); // emitting event
+    }
+    let actual_es = Mvp::subtract(es, old(es)); // events emitted by f @\label{line:actual_es}@
+    let expected_es = Mvp::CondExtendEventStore( // specified events @\label{line:expected_es}@
+      Mvp::ExtendEventStore(Mvp::EmptyEventStore, E{m:x}, h),
+      E{m:x}, h, x>0);
+    spec assert Mvp::includes(expected_es, actual_es); // spec completeness @\label{line:emits_completeness}@
+    spec assert Mvp::includes(actual_es, expected_es); // spec relevance @\label{line:emits_relevance}@
+  }
+\end{MoveBoxNumbered}
+\end{Figure}
+
+The injection for the |emits| clause is illustrated in Fig.~\ref{fig:Emits}. The
+|emits| clause specifies the events that a function is expected to emit. It
+comes in the form |emits message to handle if condition| (e.g.,
+line~\ref{line:emits_if}). The condition part (i.e., |if condition|) can be
+omitted if the event is expected to be emitted unconditionally (e.g.,
+line~\ref{line:emits}).
+
+The function call to |Event::emit_event| (e.g., line~\ref{line:emit_event}) is
+transformed into the statement to extend |es| with the event to emit (e.g.,
+line~\ref{line:extend_es}). |es| is a global variable of type |EventStore| which
+is a map where the key is an event handle and the value is the event stream of
+the handle (modeled as a bag of messages).
+
+In line~\ref{line:actual_es}, |actual_es| represents the portion of the
+EventStore that only comprises the events that the program (i.e., |f|) actually
+emits. In line~\ref{line:expected_es}, |expected_es| is constructed from the
+|emits| specification which contains all of the expected events specified by the
+|emits| clauses. Having these, two assertions using |Mvp::includes| (multiset
+inclusion relation per event handle) are injected.
+
+\begin{itemize}
+\item One asserts that |expected_es| includes |actual_es|, meaning that the
+  function only emits the events that are expected (e.g.,
+  line~\ref{line:emits_completeness}). This would be violated if there is any
+  event emitted by |f| that is not covered by some |emits| clause.
+\item The other asserts that |actual_es| includes |expected_es|, meaning that
+  the function emits all of the events that are expected (e.g.,
+  line~\ref{line:emits_relevance}). This would be violated if |f| does not emit
+  the expected event which a |emits| clause specifies.
+\end{itemize}
+
+We also handle opaque calls properly although it is not illustrated in
+Fig.~\ref{fig:Emits}. Suppose |f| is an opaque function, and another function
+|g| calls |f|. In the transformation of |g|, the event store |es| extends with
+the expected events of |f| (i.e., the events specified by the |emits| clauses of
+|f|) in a similar way to how |expected_es| is constructed in
+line~\ref{line:expected_es}.
+
+\vspace{-2ex}
+\SubSection{Data Invariants}
+
+\begin{Figure}
+  \caption{Data Invariant Injection}
+  \label{fig:DataInvariants}
+  \centering
+\begin{MoveBoxNumbered}
+  struct S { a: u64, b: u64 }
+  spec S { invariant a < b }
+  fun f(s: S): S {
+    let r = &mut s;
+    r.a = r.a + 1;
+    r.b = r.b + 1;
+    s
+  }
+  @\transform@
+  fun f(s: S): S {
+    spec assume s.a < s.b;      // assume invariant for s
+    let r = Mvp::local(s, F_s); // begin mutation of s
+    r = Mvp::set(r, Mvp::get(r)[a = Mvp::get(r).a + 1]);
+    r = Mvp::set(r, Mvp::get(r)[b = Mvp::get(r).b + 1]);
+    spec assert                 // invariant enforced
+      Mvp::get(r).a < Mvp::get(r).b;
+    s = Mvp::get(r);            // write back to s
+    s
+  }
+\end{MoveBoxNumbered}
+\end{Figure}
+
+A data invariant specifies a constraint over a struct value. The value is
+guaranteed to satisfy this constraint at any time. Thus, when a value is
+constructed, the data invariant needs to be verified, and when it is consumed,
+it can be assumed to hold.
+
+In Move's reference semantics, construction of struct values is often done via a
+sequence of mutations via mutable references. It is desirable that \emph{during}
+such mutations, assertion of the data invariant is suspended. This allows to
+state invariants which reference multiple fields, where the fields are updated
+step-by-step.  Move's borrow semantics and concept of mutations provides a
+natural way how to defer invariant evaluation: at the point a mutable reference
+is released, mutation ends, and the data invariant can be enforced.  In other
+specification formalisms, we would need a special language construct for
+invariant suspension. Fig.~\ref{fig:DataInvariants} gives an example, and shows
+how data invariants are reduced to assert/assume statements.
+
+The implementation of data invariants hooks into reference elimination,
+described in Sec.~\ref{sec:RefElim}. As part of this the lifetime of references
+is computed. Whenever a reference is released and the mutated value is written
+back, we also assert the data invariant. In addition, the data invariant is
+asserted when a struct value is directly constructed.
+
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "main"
+%%% End:

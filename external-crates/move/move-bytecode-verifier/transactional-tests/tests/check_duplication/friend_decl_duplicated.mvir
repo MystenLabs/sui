@@ -1,0 +1,10 @@
+//# publish
+module 0x42.A {
+}
+
+//# publish
+module 0x42.B {
+    // duplicate friend decl
+    friend 0x42.A;
+    friend 0x42.A;
+}

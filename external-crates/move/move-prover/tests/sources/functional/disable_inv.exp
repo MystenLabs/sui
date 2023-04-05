@@ -1,0 +1,29 @@
+Move prover returns: exiting with bytecode transformation errors
+error: Public or script functions cannot delegate invariants
+   ┌─ tests/sources/functional/disable_inv.move:13:5
+   │
+13 │ ╭     public fun f1_incorrect(s: &signer) {
+14 │ │         move_to(s, R1 {});
+15 │ │         move_to(s, R2 {});
+16 │ │     }
+   │ ╰─────^
+
+error: Functions must not have `pragma disable_invariants_in_body` when invariant checking is turned-off on this function
+   ┌─ tests/sources/functional/disable_inv.move:34:5
+   │
+34 │ ╭     fun f3_incorrect(s: &signer) {
+35 │ │         move_to(s, R1 {});
+36 │ │     }
+   │ ╰─────^
+   │
+   = disabled by DisableInv::f3_incorrect <- DisableInv::f2
+
+error: Functions must not have `pragma disable_invariants_in_body` when invariant checking is turned-off on this function
+   ┌─ tests/sources/functional/disable_inv.move:50:5
+   │
+50 │ ╭     fun f5_incorrect(s: &signer) {
+51 │ │         move_to(s, R2 {});
+52 │ │     }
+   │ ╰─────^
+   │
+   = disabled by DisableInv::f5_incorrect <- DisableInv::f4 <- DisableInv::f2

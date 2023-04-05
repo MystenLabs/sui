@@ -1,0 +1,30 @@
+//# publish
+module 0x1.M {
+    struct T has drop {f: u64}
+
+    public new(g: u64): Self.T {
+    label b0:
+        return T{f: move(g)};
+    }
+
+    public t(this: &Self.T) {
+        let y: u64;
+    label b0:
+        y = *&move(this).T::f; // valid deref/read
+        assert(copy(y) == 2, 42);
+        return;
+    }
+}
+
+//# run
+import 0x1.M;
+
+main() {
+    let x: M.T;
+    let x_ref: &M.T;
+label b0:
+    x = M.new(2);
+    x_ref = &x;
+    M.t(move(x_ref));
+    return;
+}

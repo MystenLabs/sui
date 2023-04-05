@@ -1,0 +1,15 @@
+//# run
+main() {
+    let x: u64;
+    let y: u64;
+label b0:
+    x = 0;
+    jump_if (false) b2;
+label b1:
+    // okay to use x
+    assert(copy(x) == 0, 42);
+    return;
+label b2:
+    y = move(x);
+    return;
+}
