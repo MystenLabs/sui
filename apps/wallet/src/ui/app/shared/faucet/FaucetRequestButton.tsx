@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { toast } from 'react-hot-toast';
 import { debounce } from 'throttle-debounce';
 
@@ -17,6 +17,8 @@ export type FaucetRequestButtonProps = {
     trackEventSource: 'home' | 'settings';
 };
 
+const debounceWaitInMilliseconds = 2000;
+
 function FaucetRequestButton({
     variant = 'primary',
     trackEventSource,
@@ -25,28 +27,23 @@ function FaucetRequestButton({
     const networkName = API_ENV_TO_INFO[network].name.replace(/sui\s*/gi, '');
     const { isMutating, mutateAsync, enabled } = useFaucetMutation();
 
-    const debouncedOnClick = useMemo(
-        () =>
-            debounce(
-                2000,
-                () => {
-                    toast.promise(mutateAsync(), {
-                        loading: <FaucetMessageInfo loading />,
-                        success: (totalReceived) => (
-                            <FaucetMessageInfo totalReceived={totalReceived} />
-                        ),
-                        error: (error) => (
-                            <FaucetMessageInfo error={error.message} />
-                        ),
-                    });
-
-                    trackEvent('RequestGas', {
-                        props: { source: trackEventSource, networkName },
-                    });
-                },
-                { atBegin: true }
+    const onClick = useCallback(() => {
+        toast.promise(mutateAsync(), {
+            loading: <FaucetMessageInfo loading />,
+            success: (totalReceived) => (
+                <FaucetMessageInfo totalReceived={totalReceived} />
             ),
-        [mutateAsync, networkName, trackEventSource]
+            error: (error) => <FaucetMessageInfo error={error.message} />,
+        });
+
+        trackEvent('RequestGas', {
+            props: { source: trackEventSource, networkName },
+        });
+    }, [mutateAsync, networkName, trackEventSource]);
+
+    const debouncedOnClick = useMemo(
+        () => debounce(debounceWaitInMilliseconds, onClick, { atBegin: true }),
+        [onClick]
     );
 
     return enabled ? (
