@@ -66,8 +66,8 @@ export function HomeMetrics() {
             <div className="mt-8 space-y-7">
                 <MetricGroup label="Current">
                     <StatsWrapper
-                        label="TPS Now / 30D"
-                        tooltip="Transactions per second"
+                        label="TPS Now / Peak 30D"
+                        tooltip="Peak TPS in the past 30 days excluding this epoch"
                         postfix={`/ ${
                             networkMetrics?.tps30Days
                                 ? roundFloat(networkMetrics.tps30Days, 2)
