@@ -420,7 +420,12 @@ impl ReadTx for ReadTxFromDb {
             .unwrap()
             .map(|v| v.into())
             .clone();
-        let tx = tx.unwrap().data().clone();
+        let tx = tx
+            .unwrap_or_else(|| {
+                panic!("transaction not found in db: {:?}", tx_digest);
+            })
+            .data()
+            .clone();
 
         assert_eq!(tx_digest, tx.digest());
         let executed_digest = self.db.executed_effects.get(&tx_digest).unwrap().unwrap();
@@ -429,6 +434,7 @@ impl ReadTx for ReadTxFromDb {
         }
 
         let fx = self.db.effects.get(&executed_digest).unwrap().unwrap();
+        println!("fetched tx {}", tx_digest);
 
         Ok((tx, fx))
     }
