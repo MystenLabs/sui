@@ -223,6 +223,47 @@ module sui_system::rewards_distribution_tests {
     }
 
     #[test]
+    fun test_entire_rewards_slashing() {
+        set_up_sui_system_state();
+        let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
+        let scenario = &mut scenario_val;
+
+        advance_epoch(scenario);
+
+        stake_with(STAKER_ADDR_1, VALIDATOR_ADDR_1, 100, scenario);
+        stake_with(STAKER_ADDR_2, VALIDATOR_ADDR_2, 100, scenario);
+
+        advance_epoch(scenario);
+
+        // validator_2 is reported by 3 other validators, so 75% of total stake.
+        report_validator(VALIDATOR_ADDR_1, VALIDATOR_ADDR_2, scenario);
+        report_validator(VALIDATOR_ADDR_3, VALIDATOR_ADDR_2, scenario);
+        report_validator(VALIDATOR_ADDR_4, VALIDATOR_ADDR_2, scenario);
+
+
+        // 3600 SUI of total rewards, 100% reward slashing.
+        // So validator_2 is the only one whose rewards should get slashed.
+        advance_epoch_with_reward_amounts_and_slashing_rates(
+            0, 3600, 10_000, scenario
+        );
+
+        // Without reward slashing, the validator's stakes should be [100+450, 200+600, 300+900, 400+900]
+        // after the last epoch advancement.
+        // The entire rewards of validator 2's staking pool are slashed, which is 900 SUI.
+        // so the unslashed validators each get their share of additional rewards, which is 300.
+        assert_validator_self_stake_amounts(validator_addrs(), vector[(550 + 150) * MIST_PER_SUI, 200 * MIST_PER_SUI, (1200 + 300) * MIST_PER_SUI, (1300 + 300) * MIST_PER_SUI], scenario);
+
+        // Unstake so we can check the stake rewards as well.
+        unstake(STAKER_ADDR_1, 0, scenario);
+        unstake(STAKER_ADDR_2, 0, scenario);
+
+        // Same analysis as above. Staker 1 has 150 additional SUI, and since all of staker 2's rewards are slashed she only gets back her principal.
+        assert!(total_sui_balance(STAKER_ADDR_1, scenario) == (550 + 150) * MIST_PER_SUI, 0);
+        assert!(total_sui_balance(STAKER_ADDR_2, scenario) == 100 * MIST_PER_SUI, 0);
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
     fun test_rewards_slashing_with_storage_fund() {
         set_up_sui_system_state();
         let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
