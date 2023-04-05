@@ -2,7 +2,7 @@
 title: Use Sui Move Library
 ---
 
-Sui provides a list of Sui Move library functions that enables manipulation of objects in Sui. You can view source code for the implementation of the core Sui Move framework in the [Sui GitHub repo](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/sources).
+Sui provides a list of Sui Move library functions that enables manipulation of objects in Sui. You can view source code for the implementation of the core Sui Move framework in the [Sui GitHub repo](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/).
 
 ## Object ownership
 
