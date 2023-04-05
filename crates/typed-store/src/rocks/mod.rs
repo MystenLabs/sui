@@ -258,7 +258,11 @@ impl RocksDB {
         key: K,
         writeopts: &WriteOptions,
     ) -> Result<(), rocksdb::Error> {
-        delegate_call!(self.delete_cf_opt(cf, key, writeopts))
+        fail_point!("delete-cf-before");
+        let ret = delegate_call!(self.delete_cf_opt(cf, key, writeopts));
+        fail_point!("delete-cf-after");
+        #[allow(clippy::let_and_return)]
+        ret
     }
 
     pub fn path(&self) -> &Path {
@@ -276,8 +280,11 @@ impl RocksDB {
         K: AsRef<[u8]>,
         V: AsRef<[u8]>,
     {
-        fail_point!("put-cf");
-        delegate_call!(self.put_cf_opt(cf, key, value, writeopts))
+        fail_point!("put-cf-before");
+        let ret = delegate_call!(self.put_cf_opt(cf, key, value, writeopts));
+        fail_point!("put-cf-after");
+        #[allow(clippy::let_and_return)]
+        ret
     }
 
     pub fn key_may_exist_cf<K: AsRef<[u8]>>(
@@ -294,8 +301,8 @@ impl RocksDB {
     }
 
     pub fn write(&self, batch: RocksDBBatch) -> Result<(), TypedStoreError> {
-        fail_point!("batch-write");
-        match (self, batch) {
+        fail_point!("batch-write-before");
+        let ret = match (self, batch) {
             (RocksDB::DBWithThreadMode(db), RocksDBBatch::Regular(batch)) => {
                 db.underlying.write(batch)?;
                 Ok(())
@@ -307,7 +314,10 @@ impl RocksDB {
             _ => Err(TypedStoreError::RocksDBError(
                 "using invalid batch type for the database".to_string(),
             )),
-        }
+        };
+        fail_point!("batch-write-after");
+        #[allow(clippy::let_and_return)]
+        ret
     }
 
     pub fn transaction_without_snapshot(
