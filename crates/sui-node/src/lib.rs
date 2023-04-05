@@ -892,7 +892,7 @@ impl SuiNode {
                 };
             }
 
-            if let Ok(sleep_duration) = std::env::var("SUI_NODE_SLEEP") {
+            if let Ok(_) = std::env::var("SUI_NODE_SLEEP") {
                 tokio::time::sleep(Duration::from_secs(100000000)).await;
             }
 
