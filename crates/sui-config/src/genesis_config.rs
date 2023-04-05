@@ -199,7 +199,7 @@ pub struct AccountConfig {
 }
 
 pub const DEFAULT_GAS_AMOUNT: u64 = 30_000_000_000_000_000;
-const DEFAULT_NUMBER_OF_AUTHORITIES: usize = 4;
+pub const DEFAULT_NUMBER_OF_AUTHORITIES: usize = 4;
 const DEFAULT_NUMBER_OF_ACCOUNT: usize = 5;
 pub const DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT: usize = 5;
 
@@ -354,7 +354,7 @@ impl Default for GenesisConfig {
         Self {
             validator_config_info: None,
             parameters: Default::default(),
-            committee_size: DEFAULT_NUMBER_OF_AUTHORITIES,
+            committee_size: 0, // default value indicates the field is not set
             grpc_load_shed: None,
             grpc_concurrency_limit: Some(DEFAULT_GRPC_CONCURRENCY_LIMIT),
             accounts: vec![],
