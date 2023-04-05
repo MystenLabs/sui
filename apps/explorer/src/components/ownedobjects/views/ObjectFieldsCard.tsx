@@ -2,15 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Combobox } from '@headlessui/react';
-import { getObjectFields } from '@mysten/sui.js';
+import {useRpcClient} from '@mysten/core';
+import { getObjectFields, getObjectType, normalizeSuiObjectId, type SuiMoveNormalizedType, type TypeReference} from '@mysten/sui.js';
+import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { useState } from 'react';
 
 import { ReactComponent as SearchIcon } from '~/assets/SVGIcons/24px/Search.svg';
-import { SyntaxHighlighter } from '~/components/SyntaxHighlighter';
+import { FieldItem } from '~/components/ownedobjects/views/FieldItem';
 import { useGetObject } from '~/hooks/useGetObject';
+import { Banner } from '~/ui/Banner';
 import { DisclosureBox } from '~/ui/DisclosureBox';
-import { AddressLink, ObjectLink, TransactionLink } from '~/ui/InternalLink';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { Text } from '~/ui/Text';
@@ -20,49 +22,43 @@ interface ObjectFieldsProps {
     id: string;
 }
 
-interface FieldItemProps<T> {
-    value: T;
-    type?: string;
+function getTypeStruct(type:SuiMoveNormalizedType): null | TypeReference {
+    if (typeof type === 'object') {
+        if ('Struct' in type) {
+            return type.Struct;
+        }
+        if ('Reference' in type) {
+            return getTypeStruct(type.Reference);
+        }
+        if ('MutableReference' in type) {
+            return getTypeStruct(type.MutableReference);
+        }
+        if ('Vector' in type) {
+            return getTypeStruct(type.Vector);
+        }
+    }
+    return null;
 }
 
-function FieldItem<T>({ value, type }: FieldItemProps<T>) {
-    if (typeof value === 'object') {
-        return (
-            <SyntaxHighlighter
-                code={JSON.stringify(value, null, 2)}
-                language="json"
-            />
-        );
-    }
-    if (typeof value === 'string' && type === 'address') {
-        return <AddressLink address={value} />;
-    }
-
-    if (typeof value === 'string' && type === 'objectId') {
-        return (
-            <div className="break-all">
-                <ObjectLink objectId={value} />
-            </div>
-        );
-    }
-
-    if (typeof value === 'string' && type === 'digest') {
-        return <TransactionLink digest={value} />;
-    }
-
-    return (
-        <Text variant="body/medium" color="steel-darker">
-            {value?.toString()}
-        </Text>
-    );
-}
 
 export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
     const { data, isLoading, isError } = useGetObject(id);
     const [query, setQuery] = useState('');
     const [activeFieldName, setActiveFieldName] = useState('');
 
-    if (isLoading) {
+    const objectType = getObjectType(data!);
+    const  [packageId, moduleName, functionName] = objectType?.split('::') || [];
+     const rpcClient = useRpcClient();
+    const {data:normalizedStruct, isLoading:loadingNormalizedStruct} = useQuery(['normalized-struct', id],  () => rpcClient.getNormalizedMoveStruct({
+        package: normalizeSuiObjectId(packageId),
+        module: moduleName,
+        struct: functionName,
+    }),{
+        enabled: !!packageId && !!moduleName && !!functionName,
+    });
+    console.log(normalizedStruct, '-2', 'moveStruct2')
+
+    if (isLoading || loadingNormalizedStruct) {
         return (
             <div className="flex w-full justify-center">
                 <LoadingSpinner text="Loading data" />
@@ -70,7 +66,11 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
         );
     }
     if (isError) {
-        return null;
+        return (
+            <Banner variant="error" spacing="lg" fullWidth>
+                Failed to get field data for :{id}
+            </Banner>
+        );
     }
 
     const fieldsData = getObjectFields(data!);
@@ -89,7 +89,12 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
         setActiveFieldName(newKeyName);
     };
 
-    return fieldsNames?.length && fieldsData ? (
+    // Return null if there are no fields
+    if (!fieldsNames?.length || !fieldsData) {
+        return null;
+    }
+
+    return (
         <TabGroup size="lg">
             <TabList>
                 <Tab>Fields</Tab>
@@ -157,7 +162,7 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
                                 </Combobox>
                                 <div className="max-h-[600px] min-h-full overflow-auto overflow-x-scroll py-3">
                                     <VerticalList>
-                                        {fieldsNames.map(([name, value]) => (
+                                        {normalizedStruct?.fields?.map(({name, type}) => (
                                             <div
                                                 key={name}
                                                 className="mx-0.5 mt-0.5 md:min-w-fit"
@@ -182,7 +187,7 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
                                                                 variant="subtitle/normal"
                                                                 color="steel"
                                                             >
-                                                                {typeof value}
+                                                                {getTypeStruct(type).module}
                                                             </Text>
                                                         </div>
                                                     </div>
@@ -245,5 +250,5 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
                 </TabPanel>
             </TabPanels>
         </TabGroup>
-    ) : null;
+    );
 }
