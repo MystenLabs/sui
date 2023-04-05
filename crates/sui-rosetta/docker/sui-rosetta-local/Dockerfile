@@ -40,6 +40,7 @@ RUN curl -sSfL https://raw.githubusercontent.com/coinbase/rosetta-cli/master/scr
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
 COPY narwhal narwhal
+COPY external-crates external-crates
 RUN cargo build --release --bin sui --bin sui-rosetta
 
 # Production Image

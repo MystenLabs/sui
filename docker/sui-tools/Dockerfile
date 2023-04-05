@@ -37,6 +37,7 @@ FROM chef AS builder
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
 COPY narwhal narwhal
+COPY external-crates external-crates
 RUN cargo build --release \
     --bin sui-node \
     --bin sui \
