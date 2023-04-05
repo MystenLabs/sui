@@ -11,8 +11,9 @@ use sui_json_rpc::api::{
 };
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
-    CheckpointedObjectID, EpochInfo, EpochPage, MoveCallMetrics, NetworkMetrics, Page,
-    QueryObjectsPage, SuiObjectDataFilter, SuiObjectResponse, SuiObjectResponseQuery,
+    CheckpointedObjectID, EpochInfo, EpochPage, MoveCallMetrics, MoveCallMetricsQuery,
+    NetworkMetrics, Page, QueryObjectsPage, SuiObjectDataFilter, SuiObjectResponse,
+    SuiObjectResponseQuery,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::EpochId;
@@ -125,8 +126,11 @@ impl<S: IndexerStore + Sync + Send + 'static> ExtendedApiServer for ExtendedApi<
         Ok(self.state.get_network_metrics().await?)
     }
 
-    async fn get_move_call_metrics(&self) -> RpcResult<MoveCallMetrics> {
-        Ok(self.state.get_move_call_metrics().await?)
+    async fn get_move_call_metrics(
+        &self,
+        query: MoveCallMetricsQuery,
+    ) -> RpcResult<MoveCallMetrics> {
+        Ok(self.state.get_move_call_metrics(query).await?)
     }
 }
 

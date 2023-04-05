@@ -69,13 +69,30 @@ pub struct NetworkMetrics {
     pub current_checkpoint: u64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub enum MoveCallMetricsTimeframe {
+    #[serde(rename = "3d")]
+    Days3,
+    #[serde(rename = "7d")]
+    Days7,
+    #[serde(rename = "30d")]
+    Days30,
+}
+
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct MoveCallMetrics {
-    pub rank_3_days: Vec<(MoveFunctionName, usize)>,
-    pub rank_7_days: Vec<(MoveFunctionName, usize)>,
-    pub rank_30_days: Vec<(MoveFunctionName, usize)>,
+pub struct MoveCallMetricsQuery {
+    pub timeframe: MoveCallMetricsTimeframe,
 }
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MoveCallMetric {
+    pub name: MoveFunctionName,
+    pub count: usize,
+}
+
+pub type MoveCallMetrics = Vec<MoveCallMetric>;
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]

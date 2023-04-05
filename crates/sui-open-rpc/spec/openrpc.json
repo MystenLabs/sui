@@ -1519,12 +1519,23 @@
         }
       ],
       "description": "Return Network metrics",
-      "params": [],
+      "params": [
+        {
+          "name": "query",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/MoveCallMetricsQuery"
+          }
+        }
+      ],
       "result": {
         "name": "MoveCallMetrics",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/MoveCallMetrics"
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/MoveCallMetric"
+          }
         }
       }
     },
@@ -4072,69 +4083,41 @@
           }
         ]
       },
-      "MoveCallMetrics": {
+      "MoveCallMetric": {
         "type": "object",
         "required": [
-          "rank30Days",
-          "rank3Days",
-          "rank7Days"
+          "count",
+          "name"
         ],
         "properties": {
-          "rank30Days": {
-            "type": "array",
-            "items": {
-              "type": "array",
-              "items": [
-                {
-                  "$ref": "#/components/schemas/MoveFunctionName"
-                },
-                {
-                  "type": "integer",
-                  "format": "uint",
-                  "minimum": 0.0
-                }
-              ],
-              "maxItems": 2,
-              "minItems": 2
-            }
+          "count": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0.0
           },
-          "rank3Days": {
-            "type": "array",
-            "items": {
-              "type": "array",
-              "items": [
-                {
-                  "$ref": "#/components/schemas/MoveFunctionName"
-                },
-                {
-                  "type": "integer",
-                  "format": "uint",
-                  "minimum": 0.0
-                }
-              ],
-              "maxItems": 2,
-              "minItems": 2
-            }
-          },
-          "rank7Days": {
-            "type": "array",
-            "items": {
-              "type": "array",
-              "items": [
-                {
-                  "$ref": "#/components/schemas/MoveFunctionName"
-                },
-                {
-                  "type": "integer",
-                  "format": "uint",
-                  "minimum": 0.0
-                }
-              ],
-              "maxItems": 2,
-              "minItems": 2
-            }
+          "name": {
+            "$ref": "#/components/schemas/MoveFunctionName"
           }
         }
+      },
+      "MoveCallMetricsQuery": {
+        "type": "object",
+        "required": [
+          "timeframe"
+        ],
+        "properties": {
+          "timeframe": {
+            "$ref": "#/components/schemas/MoveCallMetricsTimeframe"
+          }
+        }
+      },
+      "MoveCallMetricsTimeframe": {
+        "type": "string",
+        "enum": [
+          "3d",
+          "7d",
+          "30d"
+        ]
       },
       "MoveCallParams": {
         "type": "object",

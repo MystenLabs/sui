@@ -25,8 +25,9 @@ use tracing::info;
 
 use sui_json_rpc::{ObjectProvider, ObjectProviderCache};
 use sui_json_rpc_types::{
-    CheckpointId, EpochInfo, EventFilter, EventPage, MoveCallMetrics, MoveFunctionName,
-    NetworkMetrics, SuiEvent, SuiObjectDataFilter,
+    CheckpointId, EpochInfo, EventFilter, EventPage, MoveCallMetric, MoveCallMetrics,
+    MoveCallMetricsQuery, MoveCallMetricsTimeframe, MoveFunctionName, NetworkMetrics, SuiEvent,
+    SuiObjectDataFilter,
 };
 use sui_json_rpc_types::{
     SuiTransactionBlock, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
@@ -939,10 +940,10 @@ impl IndexerStore for PgIndexerStore {
     ) -> Result<Vec<Transaction>, IndexerError> {
         let sql_query = format!(
             "SELECT transaction_digest as digest_name FROM (
-                SELECT transaction_digest, max(id) AS max_id 
+                SELECT transaction_digest, max(id) AS max_id
                 FROM input_objects
-                WHERE object_id = '{}' {} {} 
-                GROUP BY transaction_digest 
+                WHERE object_id = '{}' {} {}
+                GROUP BY transaction_digest
                 ORDER BY max_id {} LIMIT {}
             ) AS t",
             object_id,
@@ -982,10 +983,10 @@ impl IndexerStore for PgIndexerStore {
     ) -> Result<Vec<Transaction>, IndexerError> {
         let sql_query = format!(
             "SELECT transaction_digest as digest_name FROM (
-                SELECT transaction_digest, max(id) AS max_id 
+                SELECT transaction_digest, max(id) AS max_id
                 FROM move_calls
                 WHERE move_package = '{}' {} {} {}
-                GROUP BY transaction_digest 
+                GROUP BY transaction_digest
                 ORDER BY max_id {} LIMIT {}
             ) AS t",
             package_name,
@@ -1066,39 +1067,56 @@ impl IndexerStore for PgIndexerStore {
         get_network_metrics_cached(&self.cp).await
     }
 
-    async fn get_move_call_metrics(&self) -> Result<MoveCallMetrics, IndexerError> {
+    async fn get_move_call_metrics(
+        &self,
+        query: MoveCallMetricsQuery,
+    ) -> Result<MoveCallMetrics, IndexerError> {
+        // TODO: Rather than query for everything, change to only fetch based on the query.
         let metrics = read_only!(&self.cp, |conn| {
             diesel::sql_query("SELECT * FROM epoch_move_call_metrics;")
                 .get_results::<DBMoveCallMetrics>(conn)
                 .scope_boxed()
         })?;
 
-        let mut d3 = vec![];
-        let mut d7 = vec![];
-        let mut d30 = vec![];
+        let mut results = vec![];
+
         for m in metrics {
+            match query.timeframe {
+                MoveCallMetricsTimeframe::Days3 => {
+                    if m.count != 3 {
+                        continue;
+                    }
+                }
+                MoveCallMetricsTimeframe::Days7 => {
+                    if m.count != 7 {
+                        continue;
+                    }
+                }
+                MoveCallMetricsTimeframe::Days30 => {
+                    if m.count != 30 {
+                        continue;
+                    }
+                }
+            }
+
             let package = ObjectID::from_str(&m.move_package);
             let module = Identifier::from_str(m.move_module.as_str());
             let function = Identifier::from_str(m.move_function.as_str());
             if let (Ok(package), Ok(module), Ok(function)) = (package, module, function) {
-                let fun = MoveFunctionName {
+                let name = MoveFunctionName {
                     package,
                     module,
                     function,
                 };
-                match m.count {
-                    3 => d3.push((fun, m.count as usize)),
-                    7 => d7.push((fun, m.count as usize)),
-                    30 => d30.push((fun, m.count as usize)),
-                    _ => {}
-                }
+
+                results.push(MoveCallMetric {
+                    name,
+                    count: m.count as usize,
+                });
             }
         }
-        Ok(MoveCallMetrics {
-            rank_3_days: d3,
-            rank_7_days: d7,
-            rank_30_days: d30,
-        })
+
+        Ok(results)
     }
 
     async fn persist_fast_path(
