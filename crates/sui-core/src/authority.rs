@@ -2027,7 +2027,7 @@ impl AuthorityState {
         Ok(checkpoint)
     }
 
-    pub async fn get_object_read(&self, object_id: &ObjectID) -> Result<ObjectRead, SuiError> {
+    pub fn get_object_read(&self, object_id: &ObjectID) -> Result<ObjectRead, SuiError> {
         match self.database.get_object_or_tombstone(*object_id)? {
             None => Ok(ObjectRead::NotExists(*object_id)),
             Some(obj_ref) => {
@@ -2067,7 +2067,7 @@ impl AuthorityState {
     where
         T: DeserializeOwned,
     {
-        let o = self.get_object_read(object_id).await?.into_object()?;
+        let o = self.get_object_read(object_id)?.into_object()?;
         if let Some(move_object) = o.data.try_as_move() {
             Ok(bcs::from_bytes(move_object.contents()).map_err(|e| {
                 SuiError::ObjectDeserializationError {
@@ -2297,7 +2297,7 @@ impl AuthorityState {
         transaction.ok_or_else(|| anyhow!(SuiError::TransactionNotFound { digest }))
     }
 
-    pub async fn get_executed_effects(
+    pub fn get_executed_effects(
         &self,
         digest: TransactionDigest,
     ) -> Result<TransactionEffects, anyhow::Error> {
@@ -2305,21 +2305,21 @@ impl AuthorityState {
         effects.ok_or_else(|| anyhow!(SuiError::TransactionNotFound { digest }))
     }
 
-    pub async fn multi_get_executed_transactions(
+    pub fn multi_get_executed_transactions(
         &self,
         digests: &[TransactionDigest],
     ) -> Result<Vec<Option<VerifiedTransaction>>, anyhow::Error> {
         Ok(self.database.multi_get_transaction_blocks(digests)?)
     }
 
-    pub async fn multi_get_executed_effects(
+    pub fn multi_get_executed_effects(
         &self,
         digests: &[TransactionDigest],
     ) -> Result<Vec<Option<TransactionEffects>>, anyhow::Error> {
         Ok(self.database.multi_get_executed_effects(digests)?)
     }
 
-    pub async fn multi_get_transaction_checkpoint(
+    pub fn multi_get_transaction_checkpoint(
         &self,
         digests: &[TransactionDigest],
     ) -> Result<Vec<Option<(EpochId, CheckpointSequenceNumber)>>, anyhow::Error> {
@@ -2555,7 +2555,7 @@ impl AuthorityState {
         Ok(self.get_indexes()?.get_timestamp_ms(digest)?)
     }
 
-    pub async fn query_events(
+    pub fn query_events(
         &self,
         query: EventFilter,
         // If `Some`, the query will start from the next item after the specified cursor

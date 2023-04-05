@@ -52,7 +52,6 @@ async fn test_publishing_with_unpublished_deps() {
 
     let ObjectRead::Exists(read_ref, package_obj, _) = authority
         .get_object_read(&package.0)
-        .await
         .unwrap()
     else {
         panic!("Can't read package")

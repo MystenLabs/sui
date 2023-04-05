@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
+use futures::executor::block_on;
 use futures::future::join_all;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::HttpClient;
@@ -300,7 +301,7 @@ impl<S> IndexerApiServer for IndexerApi<S>
 where
     S: IndexerStore + Sync + Send + 'static,
 {
-    async fn get_owned_objects(
+    fn get_owned_objects(
         &self,
         address: SuiAddress,
         query: Option<SuiObjectResponseQuery>,
@@ -311,17 +312,15 @@ where
             .migrated_methods
             .contains(&"get_owned_objects".to_string())
         {
-            return self
-                .fullnode
-                .get_owned_objects(address, query, cursor, limit)
-                .await;
+            return block_on(
+                self.fullnode
+                    .get_owned_objects(address, query, cursor, limit),
+            );
         }
-        Ok(self
-            .get_owned_objects_internal(address, query, cursor, limit)
-            .await?)
+        block_on(self.get_owned_objects_internal(address, query, cursor, limit))
     }
 
-    async fn query_transaction_blocks(
+    fn query_transaction_blocks(
         &self,
         query: SuiTransactionBlockResponseQuery,
         cursor: Option<TransactionDigest>,
@@ -332,17 +331,22 @@ where
             .migrated_methods
             .contains(&"query_transaction_blocks".to_string())
         {
-            return self
-                .fullnode
-                .query_transaction_blocks(query, cursor, limit, descending_order)
-                .await;
+            return block_on(self.fullnode.query_transaction_blocks(
+                query,
+                cursor,
+                limit,
+                descending_order,
+            ));
         }
-        Ok(self
-            .query_transaction_blocks_internal(query, cursor, limit, descending_order)
-            .await?)
+        Ok(block_on(self.query_transaction_blocks_internal(
+            query,
+            cursor,
+            limit,
+            descending_order,
+        ))?)
     }
 
-    async fn query_events(
+    fn query_events(
         &self,
         query: EventFilter,
         // exclusive cursor if `Some`, otherwise start from the beginning
@@ -351,25 +355,29 @@ where
         descending_order: Option<bool>,
     ) -> RpcResult<EventPage> {
         if self.migrated_methods.contains(&"query_events".to_string()) {
-            return self
-                .fullnode
-                .query_events(query, cursor, limit, descending_order)
-                .await;
+            return block_on(
+                self.fullnode
+                    .query_events(query, cursor, limit, descending_order),
+            );
         }
-        Ok(self
-            .query_events_internal(query, cursor, limit, descending_order)
-            .await?)
+        Ok(block_on(self.query_events_internal(
+            query,
+            cursor,
+            limit,
+            descending_order,
+        ))?)
     }
 
-    async fn get_dynamic_fields(
+    fn get_dynamic_fields(
         &self,
         parent_object_id: ObjectID,
         cursor: Option<ObjectID>,
         limit: Option<usize>,
     ) -> RpcResult<DynamicFieldPage> {
-        self.fullnode
-            .get_dynamic_fields(parent_object_id, cursor, limit)
-            .await
+        block_on(
+            self.fullnode
+                .get_dynamic_fields(parent_object_id, cursor, limit),
+        )
     }
 
     async fn get_dynamic_field_object(

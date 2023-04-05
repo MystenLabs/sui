@@ -7,6 +7,7 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use fastcrypto::encoding::Base64;
+use futures::executor::block_on;
 use futures::future::join_all;
 use itertools::Itertools;
 use jsonrpsee::core::RpcResult;
@@ -124,291 +125,12 @@ impl ReadApi {
             }
         })
     }
-}
 
-#[async_trait]
-impl ReadApiServer for ReadApi {
-    async fn get_object(
-        &self,
-        object_id: ObjectID,
-        options: Option<SuiObjectDataOptions>,
-    ) -> RpcResult<SuiObjectResponse> {
-        let object_read = self.state.get_object_read(&object_id).await.map_err(|e| {
-            warn!(?object_id, "Failed to get object: {:?}", e);
-            anyhow!("{e}")
-        })?;
-        let options = options.unwrap_or_default();
-
-        match object_read {
-            ObjectRead::NotExists(id) => Ok(SuiObjectResponse::new_with_error(
-                SuiObjectResponseError::NotExists { object_id: id },
-            )),
-            ObjectRead::Exists(object_ref, o, layout) => {
-                let mut display_fields = None;
-                if options.show_display {
-                    match get_display_fields(self, &o, &layout).await {
-                        Ok(rendered_fields) => display_fields = Some(rendered_fields),
-                        Err(e) => {
-                            return Ok(SuiObjectResponse::new(
-                                Some((object_ref, o, layout, options, None).try_into()?),
-                                Some(SuiObjectResponseError::DisplayError {
-                                    error: e.to_string(),
-                                }),
-                            ))
-                        }
-                    }
-                }
-                Ok(SuiObjectResponse::new_with_data(
-                    (object_ref, o, layout, options, display_fields).try_into()?,
-                ))
-            }
-            ObjectRead::Deleted((object_id, version, digest)) => Ok(
-                SuiObjectResponse::new_with_error(SuiObjectResponseError::Deleted {
-                    object_id,
-                    version,
-                    digest,
-                }),
-            ),
-        }
-    }
-
-    async fn multi_get_objects(
-        &self,
-        object_ids: Vec<ObjectID>,
-        options: Option<SuiObjectDataOptions>,
-    ) -> RpcResult<Vec<SuiObjectResponse>> {
-        if object_ids.len() <= QUERY_MAX_RESULT_LIMIT {
-            let mut futures = vec![];
-            for object_id in object_ids {
-                futures.push(self.get_object(object_id, options.clone()))
-            }
-            let results = join_all(futures).await;
-            let objects_result: Result<Vec<SuiObjectResponse>, String> = results
-                .into_iter()
-                .map(|result| match result {
-                    Ok(response) => Ok(response),
-                    Err(error) => {
-                        error!("Failed to fetch object with error: {error:?}");
-                        Err(format!("Error: {}", error))
-                    }
-                })
-                .collect();
-
-            let objects = objects_result.map_err(|err| {
-                Error::UnexpectedError(format!("Failed to fetch objects with error: {}", err))
-            })?;
-
-            Ok(objects)
-        } else {
-            Err(anyhow!(UserInputError::SizeLimitExceeded {
-                limit: "input limit".to_string(),
-                value: QUERY_MAX_RESULT_LIMIT.to_string()
-            })
-            .into())
-        }
-    }
-
-    async fn try_get_past_object(
-        &self,
-        object_id: ObjectID,
-        version: SequenceNumber,
-        options: Option<SuiObjectDataOptions>,
-    ) -> RpcResult<SuiPastObjectResponse> {
-        let past_read = self
-            .state
-            .get_past_object_read(&object_id, version)
-            .await
-            .map_err(|e| {
-                error!("Failed to call try_get_past_object for object: {object_id:?} version: {version:?} with error: {e:?}");
-                anyhow!("{e}")
-            })?;
-        let options = options.unwrap_or_default();
-        match past_read {
-            PastObjectRead::ObjectNotExists(id) => Ok(SuiPastObjectResponse::ObjectNotExists(id)),
-            PastObjectRead::VersionFound(object_ref, o, layout) => {
-                let display_fields = if options.show_display {
-                    // TODO (jian): api breaking change to also modify past objects.
-                    Some(get_display_fields(self, &o, &layout).await?)
-                } else {
-                    None
-                };
-                Ok(SuiPastObjectResponse::VersionFound(
-                    (object_ref, o, layout, options, display_fields).try_into()?,
-                ))
-            }
-            PastObjectRead::ObjectDeleted(oref) => {
-                Ok(SuiPastObjectResponse::ObjectDeleted(oref.into()))
-            }
-            PastObjectRead::VersionNotFound(id, seq_num) => {
-                Ok(SuiPastObjectResponse::VersionNotFound(id, seq_num))
-            }
-            PastObjectRead::VersionTooHigh {
-                object_id,
-                asked_version,
-                latest_version,
-            } => Ok(SuiPastObjectResponse::VersionTooHigh {
-                object_id,
-                asked_version,
-                latest_version,
-            }),
-        }
-    }
-
-    async fn try_multi_get_past_objects(
-        &self,
-        past_objects: Vec<SuiGetPastObjectRequest>,
-        options: Option<SuiObjectDataOptions>,
-    ) -> RpcResult<Vec<SuiPastObjectResponse>> {
-        if past_objects.len() <= QUERY_MAX_RESULT_LIMIT {
-            let mut futures = vec![];
-            for past_object in past_objects {
-                futures.push(self.try_get_past_object(
-                    past_object.object_id,
-                    past_object.version,
-                    options.clone(),
-                ));
-            }
-            let results = join_all(futures).await;
-            let (oks, errs): (Vec<_>, Vec<_>) = results.into_iter().partition(Result::is_ok);
-            let success = oks.into_iter().filter_map(Result::ok).collect();
-            let errors: Vec<_> = errs.into_iter().filter_map(Result::err).collect();
-            if !errors.is_empty() {
-                let error_string = errors
-                    .iter()
-                    .map(|e| e.to_string())
-                    .collect::<Vec<String>>()
-                    .join("; ");
-                Err(anyhow!("{error_string}").into())
-            } else {
-                Ok(success)
-            }
-        } else {
-            Err(anyhow!(UserInputError::SizeLimitExceeded {
-                limit: "input limit".to_string(),
-                value: QUERY_MAX_RESULT_LIMIT.to_string()
-            })
-            .into())
-        }
-    }
-
-    async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt> {
-        Ok(self.state.get_total_transaction_blocks()?.into())
-    }
-
-    async fn get_transaction_block(
-        &self,
-        digest: TransactionDigest,
-        opts: Option<SuiTransactionBlockResponseOptions>,
-    ) -> RpcResult<SuiTransactionBlockResponse> {
-        let opts = opts.unwrap_or_default();
-        let mut temp_response = IntermediateTransactionResponse::new(digest);
-
-        // Fetch transaction to determine existence
-        let transaction =
-            Some(self.state.get_executed_transaction(digest).await.tap_err(
-                |err| debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err),
-            )?);
-
-        // the input is needed for object_changes to retrieve the sender address.
-        if opts.require_input() {
-            temp_response.transaction = transaction;
-        }
-
-        // Fetch effects when `show_events` is true because events relies on effects
-        if opts.require_effects() {
-            temp_response.effects =
-                Some(self.state.get_executed_effects(digest).await.tap_err(
-                    |err| debug!(tx_digest=?digest, "Failed to get effects: {:?}", err),
-                )?);
-        }
-
-        if let Some((_, seq)) = self
-            .state
-            .get_transaction_checkpoint_sequence(&digest)
-            .map_err(|e| {
-                error!("Failed to retrieve checkpoint sequence for transaction {digest:?} with error: {e:?}");
-                anyhow!("{e}")
-            })?
-        {
-            temp_response.checkpoint_seq = Some(seq.into());
-        }
-
-        if temp_response.checkpoint_seq.is_some() {
-            let checkpoint_id = temp_response.checkpoint_seq.unwrap().into();
-            let checkpoint = self
-                .state
-                // safe to unwrap because we have checked `is_some` above
-                .get_checkpoint_by_sequence_number(checkpoint_id)
-                .map_err(|e|{
-                    error!("Failed to get checkpoint by sequence number: {checkpoint_id:?} with error: {e:?}");
-                    anyhow!("{e}"
-                )})?;
-            // TODO(chris): we don't need to fetch the whole checkpoint summary
-            temp_response.timestamp = checkpoint.as_ref().map(|c| c.timestamp_ms);
-        }
-
-        if opts.show_events && temp_response.effects.is_some() {
-            // safe to unwrap because we have checked is_some
-            if let Some(event_digest) = temp_response.effects.as_ref().unwrap().events_digest() {
-                let events = self
-                    .state
-                    .get_transaction_events(event_digest)
-                    .map_err(|e|
-                        {
-                            error!("Failed to call get transaction events for events digest: {event_digest:?} with error {e:?}");
-                            Error::from(e)
-                        })?;
-                match to_sui_transaction_events(self, digest, events) {
-                    Ok(e) => temp_response.events = Some(e),
-                    Err(e) => temp_response.errors.push(e.to_string()),
-                };
-            } else {
-                // events field will be Some if and only if `show_events` is true and
-                // there is no error in converting fetching events
-                temp_response.events = Some(SuiTransactionBlockEvents::default());
-            }
-        }
-
-        let object_cache = ObjectProviderCache::new(self.state.clone());
-        if opts.show_balance_changes {
-            if let Some(effects) = &temp_response.effects {
-                let balance_changes = get_balance_changes_from_effect(&object_cache, effects)
-                    .await
-                    .map_err(Error::SuiError)?;
-                temp_response.balance_changes = Some(balance_changes);
-            }
-        }
-
-        if opts.show_object_changes {
-            if let (Some(effects), Some(input)) =
-                (&temp_response.effects, &temp_response.transaction)
-            {
-                let sender = input.data().intent_message().value.sender();
-                let object_changes = get_object_changes(
-                    &object_cache,
-                    sender,
-                    effects.modified_at_versions(),
-                    effects.all_changed_objects(),
-                    effects.all_deleted(),
-                )
-                .await
-                .map_err(Error::SuiError)?;
-                temp_response.object_changes = Some(object_changes);
-            }
-        }
-        let epoch_store = self.state.load_epoch_store_one_call_per_task();
-        Ok(convert_to_response(
-            temp_response,
-            &opts,
-            epoch_store.module_cache(),
-        ))
-    }
-
-    async fn multi_get_transaction_blocks(
+    async fn multi_get_transaction_blocks_internal(
         &self,
         digests: Vec<TransactionDigest>,
         opts: Option<SuiTransactionBlockResponseOptions>,
-    ) -> RpcResult<Vec<SuiTransactionBlockResponse>> {
+    ) -> Result<Vec<SuiTransactionBlockResponse>, Error> {
         let num_digests = digests.len();
         if num_digests > QUERY_MAX_RESULT_LIMIT {
             return Err(anyhow!(UserInputError::SizeLimitExceeded {
@@ -435,7 +157,6 @@ impl ReadApiServer for ReadApi {
             let transactions = self
                 .state
                 .multi_get_executed_transactions(&digests)
-                .await
                 .tap_err(
                     |err| debug!(digests=?digests, "Failed to multi get transaction: {:?}", err),
                 )?;
@@ -449,13 +170,9 @@ impl ReadApiServer for ReadApi {
 
         // Fetch effects when `show_events` is true because events relies on effects
         if opts.require_effects() {
-            let effects_list = self
-                .state
-                .multi_get_executed_effects(&digests)
-                .await
-                .tap_err(
-                    |err| debug!(digests=?digests, "Failed to multi get effects: {:?}", err),
-                )?;
+            let effects_list = self.state.multi_get_executed_effects(&digests).tap_err(
+                |err| debug!(digests=?digests, "Failed to multi get effects: {:?}", err),
+            )?;
             for ((_digest, cache_entry), e) in
                 temp_response.iter_mut().zip(effects_list.into_iter())
             {
@@ -464,11 +181,10 @@ impl ReadApiServer for ReadApi {
         }
 
         let checkpoint_seq_list = self
-                .state
-                .multi_get_transaction_checkpoint(&digests)
-                .await
-                .tap_err(
-                    |err| debug!(digests=?digests, "Failed to multi get checkpoint sequence number: {:?}", err))?;
+            .state
+            .multi_get_transaction_checkpoint(&digests)
+            .tap_err(
+                |err| debug!(digests=?digests, "Failed to multi get checkpoint sequence number: {:?}", err))?;
         for ((_digest, cache_entry), seq) in temp_response
             .iter_mut()
             .zip(checkpoint_seq_list.into_iter())
@@ -640,10 +356,300 @@ impl ReadApiServer for ReadApi {
             .map(|c| convert_to_response(c.1, &opts, epoch_store.module_cache()))
             .collect::<Vec<_>>())
     }
+}
 
-    async fn get_events(&self, transaction_digest: TransactionDigest) -> RpcResult<Vec<SuiEvent>> {
+#[async_trait]
+impl ReadApiServer for ReadApi {
+    fn get_object(
+        &self,
+        object_id: ObjectID,
+        options: Option<SuiObjectDataOptions>,
+    ) -> RpcResult<SuiObjectResponse> {
+        let object_read = self.state.get_object_read(&object_id).map_err(|e| {
+            warn!(?object_id, "Failed to get object: {:?}", e);
+            anyhow!("{e}")
+        })?;
+        let options = options.unwrap_or_default();
+
+        match object_read {
+            ObjectRead::NotExists(id) => Ok(SuiObjectResponse::new_with_error(
+                SuiObjectResponseError::NotExists { object_id: id },
+            )),
+            ObjectRead::Exists(object_ref, o, layout) => {
+                let mut display_fields = None;
+                if options.show_display {
+                    match get_display_fields(self, &o, &layout) {
+                        Ok(rendered_fields) => display_fields = Some(rendered_fields),
+                        Err(e) => {
+                            return Ok(SuiObjectResponse::new(
+                                Some((object_ref, o, layout, options, None).try_into()?),
+                                Some(SuiObjectResponseError::DisplayError {
+                                    error: e.to_string(),
+                                }),
+                            ))
+                        }
+                    }
+                }
+                Ok(SuiObjectResponse::new_with_data(
+                    (object_ref, o, layout, options, display_fields).try_into()?,
+                ))
+            }
+            ObjectRead::Deleted((object_id, version, digest)) => Ok(
+                SuiObjectResponse::new_with_error(SuiObjectResponseError::Deleted {
+                    object_id,
+                    version,
+                    digest,
+                }),
+            ),
+        }
+    }
+
+    fn multi_get_objects(
+        &self,
+        object_ids: Vec<ObjectID>,
+        options: Option<SuiObjectDataOptions>,
+    ) -> RpcResult<Vec<SuiObjectResponse>> {
+        if object_ids.len() <= QUERY_MAX_RESULT_LIMIT {
+            let mut results = vec![];
+            for object_id in object_ids {
+                results.push(self.get_object(object_id, options.clone()));
+            }
+            let objects_result: Result<Vec<SuiObjectResponse>, String> = results
+                .into_iter()
+                .map(|result| match result {
+                    Ok(response) => Ok(response),
+                    Err(error) => {
+                        error!("Failed to fetch object with error: {error:?}");
+                        Err(format!("Error: {}", error))
+                    }
+                })
+                .collect();
+
+            let objects = objects_result.map_err(|err| {
+                Error::UnexpectedError(format!("Failed to fetch objects with error: {}", err))
+            })?;
+
+            Ok(objects)
+        } else {
+            Err(anyhow!(UserInputError::SizeLimitExceeded {
+                limit: "input limit".to_string(),
+                value: QUERY_MAX_RESULT_LIMIT.to_string()
+            })
+            .into())
+        }
+    }
+
+    async fn try_get_past_object(
+        &self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+        options: Option<SuiObjectDataOptions>,
+    ) -> RpcResult<SuiPastObjectResponse> {
+        let past_read = self
+            .state
+            .get_past_object_read(&object_id, version)
+            .await
+            .map_err(|e| {
+                error!("Failed to call try_get_past_object for object: {object_id:?} version: {version:?} with error: {e:?}");
+                anyhow!("{e}")
+            })?;
+        let options = options.unwrap_or_default();
+        match past_read {
+            PastObjectRead::ObjectNotExists(id) => Ok(SuiPastObjectResponse::ObjectNotExists(id)),
+            PastObjectRead::VersionFound(object_ref, o, layout) => {
+                let display_fields = if options.show_display {
+                    // TODO (jian): api breaking change to also modify past objects.
+                    Some(get_display_fields(self, &o, &layout)?)
+                } else {
+                    None
+                };
+                Ok(SuiPastObjectResponse::VersionFound(
+                    (object_ref, o, layout, options, display_fields).try_into()?,
+                ))
+            }
+            PastObjectRead::ObjectDeleted(oref) => {
+                Ok(SuiPastObjectResponse::ObjectDeleted(oref.into()))
+            }
+            PastObjectRead::VersionNotFound(id, seq_num) => {
+                Ok(SuiPastObjectResponse::VersionNotFound(id, seq_num))
+            }
+            PastObjectRead::VersionTooHigh {
+                object_id,
+                asked_version,
+                latest_version,
+            } => Ok(SuiPastObjectResponse::VersionTooHigh {
+                object_id,
+                asked_version,
+                latest_version,
+            }),
+        }
+    }
+
+    fn try_multi_get_past_objects(
+        &self,
+        past_objects: Vec<SuiGetPastObjectRequest>,
+        options: Option<SuiObjectDataOptions>,
+    ) -> RpcResult<Vec<SuiPastObjectResponse>> {
+        if past_objects.len() <= QUERY_MAX_RESULT_LIMIT {
+            let results = block_on(async {
+                let mut futures = vec![];
+                for past_object in past_objects {
+                    futures.push(self.try_get_past_object(
+                        past_object.object_id,
+                        past_object.version,
+                        options.clone(),
+                    ));
+                }
+                join_all(futures).await
+            });
+            let (oks, errs): (Vec<_>, Vec<_>) = results.into_iter().partition(Result::is_ok);
+            let success = oks.into_iter().filter_map(Result::ok).collect();
+            let errors: Vec<_> = errs.into_iter().filter_map(Result::err).collect();
+            if !errors.is_empty() {
+                let error_string = errors
+                    .iter()
+                    .map(|e| e.to_string())
+                    .collect::<Vec<String>>()
+                    .join("; ");
+                Err(anyhow!("{error_string}").into())
+            } else {
+                Ok(success)
+            }
+        } else {
+            Err(anyhow!(UserInputError::SizeLimitExceeded {
+                limit: "input limit".to_string(),
+                value: QUERY_MAX_RESULT_LIMIT.to_string()
+            })
+            .into())
+        }
+    }
+
+    async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt> {
+        Ok(self.state.get_total_transaction_blocks()?.into())
+    }
+
+    async fn get_transaction_block(
+        &self,
+        digest: TransactionDigest,
+        opts: Option<SuiTransactionBlockResponseOptions>,
+    ) -> RpcResult<SuiTransactionBlockResponse> {
+        let opts = opts.unwrap_or_default();
+        let mut temp_response = IntermediateTransactionResponse::new(digest);
+
+        // Fetch transaction to determine existence
+        let transaction =
+            Some(self.state.get_executed_transaction(digest).await.tap_err(
+                |err| debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err),
+            )?);
+
+        // the input is needed for object_changes to retrieve the sender address.
+        if opts.require_input() {
+            temp_response.transaction = transaction;
+        }
+
+        // Fetch effects when `show_events` is true because events relies on effects
+        if opts.require_effects() {
+            temp_response.effects =
+                Some(self.state.get_executed_effects(digest).tap_err(
+                    |err| debug!(tx_digest=?digest, "Failed to get effects: {:?}", err),
+                )?);
+        }
+
+        if let Some((_, seq)) = self
+            .state
+            .get_transaction_checkpoint_sequence(&digest)
+            .map_err(|e| {
+                error!("Failed to retrieve checkpoint sequence for transaction {digest:?} with error: {e:?}");
+                anyhow!("{e}")
+            })?
+        {
+            temp_response.checkpoint_seq = Some(seq.into());
+        }
+
+        if temp_response.checkpoint_seq.is_some() {
+            let checkpoint_id = temp_response.checkpoint_seq.unwrap().into();
+            let checkpoint = self
+                .state
+                // safe to unwrap because we have checked `is_some` above
+                .get_checkpoint_by_sequence_number(checkpoint_id)
+                .map_err(|e|{
+                    error!("Failed to get checkpoint by sequence number: {checkpoint_id:?} with error: {e:?}");
+                    anyhow!("{e}"
+                )})?;
+            // TODO(chris): we don't need to fetch the whole checkpoint summary
+            temp_response.timestamp = checkpoint.as_ref().map(|c| c.timestamp_ms);
+        }
+
+        if opts.show_events && temp_response.effects.is_some() {
+            // safe to unwrap because we have checked is_some
+            if let Some(event_digest) = temp_response.effects.as_ref().unwrap().events_digest() {
+                let events = self
+                    .state
+                    .get_transaction_events(event_digest)
+                    .map_err(|e|
+                        {
+                            error!("Failed to call get transaction events for events digest: {event_digest:?} with error {e:?}");
+                            Error::from(e)
+                        })?;
+                match to_sui_transaction_events(self, digest, events) {
+                    Ok(e) => temp_response.events = Some(e),
+                    Err(e) => temp_response.errors.push(e.to_string()),
+                };
+            } else {
+                // events field will be Some if and only if `show_events` is true and
+                // there is no error in converting fetching events
+                temp_response.events = Some(SuiTransactionBlockEvents::default());
+            }
+        }
+
+        let object_cache = ObjectProviderCache::new(self.state.clone());
+        if opts.show_balance_changes {
+            if let Some(effects) = &temp_response.effects {
+                let balance_changes = get_balance_changes_from_effect(&object_cache, effects)
+                    .await
+                    .map_err(Error::SuiError)?;
+                temp_response.balance_changes = Some(balance_changes);
+            }
+        }
+
+        if opts.show_object_changes {
+            if let (Some(effects), Some(input)) =
+                (&temp_response.effects, &temp_response.transaction)
+            {
+                let sender = input.data().intent_message().value.sender();
+                let object_changes = get_object_changes(
+                    &object_cache,
+                    sender,
+                    effects.modified_at_versions(),
+                    effects.all_changed_objects(),
+                    effects.all_deleted(),
+                )
+                .await
+                .map_err(Error::SuiError)?;
+                temp_response.object_changes = Some(object_changes);
+            }
+        }
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
+        Ok(convert_to_response(
+            temp_response,
+            &opts,
+            epoch_store.module_cache(),
+        ))
+    }
+
+    fn multi_get_transaction_blocks(
+        &self,
+        digests: Vec<TransactionDigest>,
+        opts: Option<SuiTransactionBlockResponseOptions>,
+    ) -> RpcResult<Vec<SuiTransactionBlockResponse>> {
+        Ok(block_on(
+            self.multi_get_transaction_blocks_internal(digests, opts),
+        )?)
+    }
+
+    fn get_events(&self, transaction_digest: TransactionDigest) -> RpcResult<Vec<SuiEvent>> {
         let store = self.state.load_epoch_store_one_call_per_task();
-        let effect = self.state.get_executed_effects(transaction_digest).await?;
+        let effect = self.state.get_executed_effects(transaction_digest)?;
         let events = if let Some(event_digest) = effect.events_digest() {
             self.state
                 .get_transaction_events(event_digest)
@@ -688,7 +694,7 @@ impl ReadApiServer for ReadApi {
         Ok(self.get_checkpoint_internal(id)?)
     }
 
-    async fn get_checkpoints(
+    fn get_checkpoints(
         &self,
         // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<SuiCheckpointSequenceNumber>,
@@ -753,7 +759,7 @@ fn to_sui_transaction_events(
     .map_err(Error::SuiError)?)
 }
 
-async fn get_display_fields(
+fn get_display_fields(
     fullnode_api: &ReadApi,
     original_object: &Object,
     original_layout: &Option<MoveStructLayout>,
@@ -761,7 +767,7 @@ async fn get_display_fields(
     let Some((object_type, layout)) = get_object_type_and_struct(original_object, original_layout)? else {
         return Ok(DisplayFieldsResponse { data: None, error: None })
     };
-    if let Some(display_object) = get_display_object_by_type(fullnode_api, &object_type).await? {
+    if let Some(display_object) = get_display_object_by_type(fullnode_api, &object_type)? {
         return get_rendered_fields(display_object.fields, &layout);
     }
     Ok(DisplayFieldsResponse {
@@ -770,20 +776,17 @@ async fn get_display_fields(
     })
 }
 
-async fn get_display_object_by_type(
+fn get_display_object_by_type(
     fullnode_api: &ReadApi,
     object_type: &StructTag,
     // TODO: add query version support
 ) -> RpcResult<Option<DisplayVersionUpdatedEvent>> {
-    let mut events = fullnode_api
-        .state
-        .query_events(
-            EventFilter::MoveEventType(DisplayVersionUpdatedEvent::type_(object_type)),
-            None,
-            1,
-            true,
-        )
-        .await?;
+    let mut events = fullnode_api.state.query_events(
+        EventFilter::MoveEventType(DisplayVersionUpdatedEvent::type_(object_type)),
+        None,
+        1,
+        true,
+    )?;
 
     // If there's any recent version of Display, give it to the client.
     // TODO: add support for version query.
@@ -836,7 +839,7 @@ pub async fn get_move_modules_by_package(
     state: &AuthorityState,
     package: ObjectID,
 ) -> RpcResult<BTreeMap<String, NormalizedModule>> {
-    let object_read = state.get_object_read(&package).await.map_err(|e| {
+    let object_read = state.get_object_read(&package).map_err(|e| {
         warn!("Failed to call get_move_modules_by_package for package: {package:?}");
         anyhow!("{e}")
     })?;

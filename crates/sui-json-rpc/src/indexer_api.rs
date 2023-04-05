@@ -63,7 +63,7 @@ impl<R: ReadApiServer> IndexerApi<R> {
 
 #[async_trait]
 impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
-    async fn get_owned_objects(
+    fn get_owned_objects(
         &self,
         address: SuiAddress,
         query: Option<SuiObjectResponseQuery>,
@@ -89,9 +89,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         let data = match options.is_not_in_object_info() {
             true => {
                 let object_ids = objects.iter().map(|obj| obj.object_id).collect();
-                self.read_api
-                    .multi_get_objects(object_ids, Some(options.clone()))
-                    .await?
+                self.read_api.multi_get_objects(object_ids, Some(options))?
             }
             false => objects
                 .into_iter()
@@ -106,7 +104,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         })
     }
 
-    async fn query_transaction_blocks(
+    fn query_transaction_blocks(
         &self,
         query: SuiTransactionBlockResponseQuery,
         // If `Some`, the query will start from the next item after the specified cursor
@@ -135,8 +133,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 .collect()
         } else {
             self.read_api
-                .multi_get_transaction_blocks(digests, Some(opts))
-                .await?
+                .multi_get_transaction_blocks(digests, Some(opts))?
         };
 
         Ok(Page {
@@ -145,7 +142,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
             has_next_page,
         })
     }
-    async fn query_events(
+    fn query_events(
         &self,
         query: EventFilter,
         // exclusive cursor if `Some`, otherwise start from the beginning
@@ -165,8 +162,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         // Retrieve 1 extra item for next cursor
         let mut data = self
             .state
-            .query_events(query, cursor.clone(), limit + 1, descending)
-            .await?;
+            .query_events(query, cursor.clone(), limit + 1, descending)?;
         let has_next_page = data.len() > limit;
         data.truncate(limit);
         let next_cursor = data.last().map_or(cursor, |e| Some(e.id.clone()));
@@ -182,7 +178,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         Ok(())
     }
 
-    async fn get_dynamic_fields(
+    fn get_dynamic_fields(
         &self,
         parent_object_id: ObjectID,
         // If `Some`, the query will start from the next item after the specified cursor
@@ -219,7 +215,6 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         // TODO(chris): add options to `get_dynamic_field_object` API as well
         self.read_api
             .get_object(id, Some(SuiObjectDataOptions::full_content()))
-            .await
     }
 }
 
