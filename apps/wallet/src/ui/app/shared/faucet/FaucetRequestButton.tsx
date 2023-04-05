@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useMemo } from 'react';
 import { toast } from 'react-hot-toast';
+import { debounce } from 'throttle-debounce';
 
 import FaucetMessageInfo from './FaucetMessageInfo';
 import { useFaucetMutation } from './useFaucetMutation';
@@ -21,26 +23,37 @@ function FaucetRequestButton({
 }: FaucetRequestButtonProps) {
     const network = useAppSelector(({ app }) => app.apiEnv);
     const networkName = API_ENV_TO_INFO[network].name.replace(/sui\s*/gi, '');
-    const mutation = useFaucetMutation();
+    const { isMutating, mutateAsync, enabled } = useFaucetMutation();
 
-    return mutation.enabled ? (
+    const debouncedOnClick = useMemo(
+        () =>
+            debounce(
+                2000,
+                () => {
+                    toast.promise(mutateAsync(), {
+                        loading: <FaucetMessageInfo loading />,
+                        success: (totalReceived) => (
+                            <FaucetMessageInfo totalReceived={totalReceived} />
+                        ),
+                        error: (error) => (
+                            <FaucetMessageInfo error={error.message} />
+                        ),
+                    });
+
+                    trackEvent('RequestGas', {
+                        props: { source: trackEventSource, networkName },
+                    });
+                },
+                { atBegin: true }
+            ),
+        [mutateAsync, networkName, trackEventSource]
+    );
+
+    return enabled ? (
         <Button
             variant={variant}
-            onClick={() => {
-                toast.promise(mutation.mutateAsync(), {
-                    loading: <FaucetMessageInfo loading />,
-                    success: (totalReceived) => (
-                        <FaucetMessageInfo totalReceived={totalReceived} />
-                    ),
-                    error: (error) => (
-                        <FaucetMessageInfo error={error.message} />
-                    ),
-                });
-                trackEvent('RequestGas', {
-                    props: { source: trackEventSource, networkName },
-                });
-            }}
-            loading={mutation.isMutating}
+            onClick={debouncedOnClick}
+            loading={isMutating}
             text={`Request ${networkName} SUI Tokens`}
         />
     ) : null;
