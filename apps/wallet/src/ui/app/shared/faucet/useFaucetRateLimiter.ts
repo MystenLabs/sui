@@ -45,10 +45,12 @@ export function useFaucetRateLimiter() {
     useEffect(() => {
         Browser.storage.local
             .get({
+                [IS_RATE_LIMITED_FROM_FAUCET_STORAGE_KEY]: false,
                 [FAUCET_RATE_LIMIT_EXPIRY_TIME_STORAGE_KEY]: null,
             })
             .then(
                 ({
+                    [IS_RATE_LIMITED_FROM_FAUCET_STORAGE_KEY]: isRateLimited,
                     [FAUCET_RATE_LIMIT_EXPIRY_TIME_STORAGE_KEY]: expiryTime,
                 }) => {
                     const currTime = new Date().getTime();
@@ -59,7 +61,7 @@ export function useFaucetRateLimiter() {
                         });
                         setRateLimited(false);
                     } else {
-                        setRateLimited(true);
+                        setRateLimited(isRateLimited);
                     }
                 }
             );
