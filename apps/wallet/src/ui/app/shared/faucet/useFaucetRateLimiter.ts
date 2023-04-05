@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Browser from 'webextension-polyfill';
 
 const IS_RATE_LIMITED_FROM_FAUCET_STORAGE_KEY = 'is_rate_limited_from_faucet';
@@ -16,13 +16,13 @@ const rateLimitExpiryTime = 20 * 60 * 1000;
 export function useFaucetRateLimiter() {
     const [isRateLimited, setRateLimited] = useState(false);
 
-    const rateLimit = useCallback(() => {
+    const rateLimit = () => {
         Browser.storage.local.set({
             [IS_RATE_LIMITED_FROM_FAUCET_STORAGE_KEY]: true,
             [FAUCET_RATE_LIMIT_EXPIRY_TIME_STORAGE_KEY]:
                 new Date().getTime() + rateLimitExpiryTime,
         });
-    }, []);
+    };
 
     useEffect(() => {
         const changesCallback = (
