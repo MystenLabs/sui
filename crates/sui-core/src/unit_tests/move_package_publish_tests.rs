@@ -17,7 +17,7 @@ use sui_types::{
 
 use move_package::source_package::manifest_parser;
 use sui_framework_build::compiled_package::{
-    check_unpublished_dependencies, gather_dependencies, BuildConfig,
+    check_unpublished_dependencies, gather_published_ids, BuildConfig,
 };
 use sui_types::{
     crypto::{get_key_pair, AccountKeyPair},
@@ -281,7 +281,7 @@ async fn test_custom_property_check_unpublished_dependencies() {
         .expect("Could not build resolution graph.");
 
     let SuiError::ModulePublishFailure { error } =
-        check_unpublished_dependencies(&gather_dependencies(&resolution_graph).unpublished)
+        check_unpublished_dependencies(&gather_published_ids(&resolution_graph).1.unpublished)
             .err()
             .unwrap()
      else {
