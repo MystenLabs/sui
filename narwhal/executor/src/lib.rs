@@ -119,7 +119,6 @@ pub async fn get_restored_consensus_output<State: ExecutionState>(
             leader,
             sub_dag_index,
             reputation_score: compressed_sub_dag.reputation_score,
-            commit_timestamp: compressed_sub_dag.commit_timestamp,
         });
     }
 
