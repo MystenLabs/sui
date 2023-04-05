@@ -1,0 +1,27 @@
+//# publish
+module 0x2.A {
+    struct HotPotato has store {}
+    struct X has store { h: Self.HotPotato }
+    struct G has key { x: Self.X }
+
+    public make_g(): Self.G {
+    label b0:
+        return G { x: X { h: HotPotato {} }};
+    }
+
+    public store(account: &signer, g: Self.G) {
+    label b0:
+        move_to<G>(move(account), move(g));
+        return;
+    }
+}
+
+//# run --signers 0x1  --check-runtime-types
+import 0x2.A;
+main(account: signer) {
+    let a: A.G;
+label b0:
+    a = A.make_g();
+    A.store(&account, move(a));
+    return;
+}

@@ -1,0 +1,20 @@
+//# run
+main() {
+    let x: u64;
+label b0:
+    x = 0;
+label while:
+    jump_if_false (true) while_cont;
+label while_b0:
+    jump_if_false (copy(x) >= 5) while_b2;
+label while_b1:
+    jump while_cont;
+label while_b2:
+    x = move(x) + 1;
+    jump while;
+    assert(false, 9);
+    jump while;
+label while_cont:
+    assert(move(x) == 5, 11);
+    return;
+}

@@ -1,0 +1,18 @@
+[package]
+name = "DiemExperimental"
+version = "1.5.0"
+
+[addresses]
+std = "0x1"
+DiemFramework = "0x1"
+BARS = "0x06505CCD81E562B524D8F656ABD92A15"
+ExperimentalFramework = "0x1"
+DiemRoot = "0xA550C18"
+TreasuryCompliance = "0xB1E55ED"
+CurrencyInfo = "0xA550C18"
+VMReserved = "0x0"
+
+[dependencies]
+MoveStdlib = { local = "../../../../../move-stdlib" }
+
+DiemCoreFramework = { local = "../core" }

@@ -1,0 +1,23 @@
+error[E03009]: unbound variable
+  ┌─ tests/move_check/parser/vector_conditional_keyword.move:4:17
+  │
+4 │         let a = vector < 100;
+  │                 ^^^^^^ Invalid variable usage. Unbound variable 'vector'
+
+error[E04003]: built-in operation not supported
+  ┌─ tests/move_check/parser/vector_conditional_keyword.move:4:17
+  │
+4 │         let a = vector < 100;
+  │                 ^^^^^^
+  │                 │
+  │                 Invalid argument to '<'
+  │                 Found: '_'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+
+error[E04003]: built-in operation not supported
+  ┌─ tests/move_check/parser/vector_conditional_keyword.move:4:26
+  │
+4 │         let a = vector < 100;
+  │                 ------   ^^^ Invalid argument to '<'
+  │                 │         
+  │                 Found: '_'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+

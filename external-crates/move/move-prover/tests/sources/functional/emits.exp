@@ -1,0 +1,221 @@
+Move prover returns: exiting with verification errors
+error: function does not emit the expected event
+    ┌─ tests/sources/functional/emits.move:120:9
+    │
+120 │         emits DummyEvent{msg: 0} to handle;
+    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    │
+    =     at tests/sources/functional/emits.move:114: conditional_missing_condition_incorrect
+    =         x = <redacted>
+    =         handle = <redacted>
+    =     at tests/sources/functional/emits.move:115: conditional_missing_condition_incorrect
+    =         handle = <redacted>
+    =     at tests/sources/functional/emits.move:118: conditional_missing_condition_incorrect
+    =     at tests/sources/functional/emits.move:120: conditional_missing_condition_incorrect (spec)
+
+error: function does not emit the expected event
+    ┌─ tests/sources/functional/emits.move:159:9
+    │
+159 │         emits DummyEvent{msg: 2} to handle;
+    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    │
+    =     at tests/sources/functional/emits.move:149: conditional_multiple_incorrect
+    =         b = <redacted>
+    =         handle = <redacted>
+    =     at tests/sources/functional/emits.move:150: conditional_multiple_incorrect
+    =     at tests/sources/functional/emits.move:151: conditional_multiple_incorrect
+    =     at tests/sources/functional/emits.move:152: conditional_multiple_incorrect
+    =         handle = <redacted>
+    =     at tests/sources/functional/emits.move:155: conditional_multiple_incorrect
+    =     at tests/sources/functional/emits.move:157: conditional_multiple_incorrect (spec)
+    =     at tests/sources/functional/emits.move:158: conditional_multiple_incorrect (spec)
+    =     at tests/sources/functional/emits.move:159: conditional_multiple_incorrect (spec)
+
+error: function does not emit the expected event
+    ┌─ tests/sources/functional/emits.move:189:9
+    │
+189 │         emits DummyEvent{msg: 0} to handle;
+    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    │
+    =     at tests/sources/functional/emits.move:179: conditional_multiple_same_incorrect
+    =         b = <redacted>
+    =         handle = <redacted>
+    =     at tests/sources/functional/emits.move:180: conditional_multiple_same_incorrect
+    =     at tests/sources/functional/emits.move:181: conditional_multiple_same_incorrect
+    =     at tests/sources/functional/emits.move:182: conditional_multiple_same_incorrect
+    =         handle = <redacted>
+    =     at tests/sources/functional/emits.move:185: conditional_multiple_same_incorrect
+    =     at tests/sources/functional/emits.move:187: conditional_multiple_same_incorrect (spec)
+    =     at tests/sources/functional/emits.move:188: conditional_multiple_same_incorrect (spec)
+    =     at tests/sources/functional/emits.move:189: conditional_multiple_same_incorrect (spec)
+
+error: function does not emit the expected event
+    ┌─ tests/sources/functional/emits.move:111:9
+    │
+111 │         emits DummyEvent{msg: 0} to handle if x > 0;
+    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    │
+    =     at tests/sources/functional/emits.move:105: conditional_wrong_condition_incorrect
+    =         x = <redacted>
+    =         handle = <redacted>
+    =     at tests/sources/functional/emits.move:106: conditional_wrong_condition_incorrect
+    =         handle = <redacted>
+    =     at tests/sources/functional/emits.move:109: conditional_wrong_condition_incorrect
+    =     at tests/sources/functional/emits.move:111: conditional_wrong_condition_incorrect (spec)
+
+error: function does not emit the expected event
+   ┌─ tests/sources/functional/emits.move:54:9
+   │
+54 │         emits DummyEvent{msg: 2} to handle;
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │
+   =     at tests/sources/functional/emits.move:47: multiple_incorrect
+   =         handle = <redacted>
+   =     at tests/sources/functional/emits.move:48: multiple_incorrect
+   =     at tests/sources/functional/emits.move:49: multiple_incorrect
+   =         handle = <redacted>
+   =     at tests/sources/functional/emits.move:50: multiple_incorrect
+   =     at tests/sources/functional/emits.move:52: multiple_incorrect (spec)
+   =     at tests/sources/functional/emits.move:53: multiple_incorrect (spec)
+   =     at tests/sources/functional/emits.move:54: multiple_incorrect (spec)
+
+error: function does not emit the expected event
+   ┌─ tests/sources/functional/emits.move:71:9
+   │
+71 │         emits DummyEvent{msg: 0} to handle;
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │
+   =     at tests/sources/functional/emits.move:66: multiple_same_incorrect
+   =         handle = <redacted>
+   =     at tests/sources/functional/emits.move:67: multiple_same_incorrect
+   =         handle = <redacted>
+   =     at tests/sources/functional/emits.move:68: multiple_same_incorrect
+   =     at tests/sources/functional/emits.move:70: multiple_same_incorrect (spec)
+   =     at tests/sources/functional/emits.move:71: multiple_same_incorrect (spec)
+
+error: emitted event not covered by any of the `emits` clauses
+    ┌─ tests/sources/functional/emits.move:314:5
+    │
+314 │ ╭     spec opaque_completeness_incorrect {
+315 │ │         emits DummyEvent{msg: 0} to handle;
+316 │ │         emits DummyEvent{msg: 7} to handle;
+317 │ │         emits DummyEvent{msg: 1} to handle;
+318 │ │     }
+    │ ╰─────^
+    │
+    =     at tests/sources/functional/emits.move:309: opaque_completeness_incorrect
+    =         handle = <redacted>
+    =     at tests/sources/functional/emits.move:310: opaque_completeness_incorrect
+    =     at tests/sources/functional/emits.move:311: opaque_completeness_incorrect
+    =     at tests/sources/functional/emits.move:312: opaque_completeness_incorrect
+    =         handle = <redacted>
+    =     at tests/sources/functional/emits.move:313: opaque_completeness_incorrect
+    =     at tests/sources/functional/emits.move:315: opaque_completeness_incorrect (spec)
+    =     at tests/sources/functional/emits.move:316: opaque_completeness_incorrect (spec)
+    =     at tests/sources/functional/emits.move:317: opaque_completeness_incorrect (spec)
+    =     at tests/sources/functional/emits.move:314: opaque_completeness_incorrect (spec)
+
+error: function does not emit the expected event
+    ┌─ tests/sources/functional/emits.move:296:9
+    │
+296 │         emits DummyEvent{msg: 2} to handle;
+    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    │
+    =     at tests/sources/functional/emits.move:286: opaque_incorrect
+    =         handle = <redacted>
+    =     at tests/sources/functional/emits.move:287: opaque_incorrect
+    =     at tests/sources/functional/emits.move:288: opaque_incorrect
+    =     at tests/sources/functional/emits.move:289: opaque_incorrect
+    =         handle = <redacted>
+    =     at tests/sources/functional/emits.move:290: opaque_incorrect
+    =     at tests/sources/functional/emits.move:292: opaque_incorrect (spec)
+    =     at tests/sources/functional/emits.move:293: opaque_incorrect (spec)
+    =     at tests/sources/functional/emits.move:294: opaque_incorrect (spec)
+    =     at tests/sources/functional/emits.move:295: opaque_incorrect (spec)
+    =     at tests/sources/functional/emits.move:296: opaque_incorrect (spec)
+
+error: emitted event not covered by any of the `emits` clauses
+    ┌─ tests/sources/functional/emits.move:355:5
+    │
+355 │ ╭     spec opaque_partial_incorrect {
+356 │ │         emits DummyEvent{msg: 0} to handle;
+357 │ │         emits DummyEvent{msg: 7} to handle;
+358 │ │         emits DummyEvent{msg: 77} to handle;
+359 │ │         emits DummyEvent{msg: 1} to handle;
+360 │ │         // The completeness check of the `emits` spec of this function should fail.
+361 │ │     }
+    │ ╰─────^
+    │
+    =     at tests/sources/functional/emits.move:350: opaque_partial_incorrect
+    =         handle = <redacted>
+    =     at tests/sources/functional/emits.move:351: opaque_partial_incorrect
+    =     at tests/sources/functional/emits.move:352: opaque_partial_incorrect
+    =     at tests/sources/functional/emits.move:353: opaque_partial_incorrect
+    =         handle = <redacted>
+    =     at tests/sources/functional/emits.move:354: opaque_partial_incorrect
+    =     at tests/sources/functional/emits.move:356: opaque_partial_incorrect (spec)
+    =     at tests/sources/functional/emits.move:357: opaque_partial_incorrect (spec)
+    =     at tests/sources/functional/emits.move:358: opaque_partial_incorrect (spec)
+    =     at tests/sources/functional/emits.move:359: opaque_partial_incorrect (spec)
+    =     at tests/sources/functional/emits.move:355: opaque_partial_incorrect (spec)
+
+error: emitted event not covered by any of the `emits` clauses
+    ┌─ tests/sources/functional/emits.move:235:5
+    │
+235 │ ╭     spec partial_incorrect {
+236 │ │         emits DummyEvent{msg: 0} to handle;
+237 │ │     }
+    │ ╰─────^
+    │
+    =     at tests/sources/functional/emits.move:231: partial_incorrect
+    =         handle = <redacted>
+    =     at tests/sources/functional/emits.move:232: partial_incorrect
+    =     at tests/sources/functional/emits.move:233: partial_incorrect
+    =         handle = <redacted>
+    =     at tests/sources/functional/emits.move:234: partial_incorrect
+    =     at tests/sources/functional/emits.move:236: partial_incorrect (spec)
+    =     at tests/sources/functional/emits.move:235: partial_incorrect (spec)
+
+error: function does not emit the expected event
+   ┌─ tests/sources/functional/emits.move:30:9
+   │
+30 │         emits DummyEvent{msg: 0} to _handle2;
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │
+   =     at tests/sources/functional/emits.move:26: simple_wrong_handle_incorrect
+   =         handle = <redacted>
+   =         _handle2 = <redacted>
+   =     at tests/sources/functional/emits.move:27: simple_wrong_handle_incorrect
+   =         handle = <redacted>
+   =         _handle2 = <redacted>
+   =     at tests/sources/functional/emits.move:28: simple_wrong_handle_incorrect
+   =     at tests/sources/functional/emits.move:30: simple_wrong_handle_incorrect (spec)
+
+error: function does not emit the expected event
+   ┌─ tests/sources/functional/emits.move:23:9
+   │
+23 │         emits DummyEvent{msg: 1} to handle;
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │
+   =     at tests/sources/functional/emits.move:19: simple_wrong_msg_incorrect
+   =         handle = <redacted>
+   =     at tests/sources/functional/emits.move:20: simple_wrong_msg_incorrect
+   =         handle = <redacted>
+   =     at tests/sources/functional/emits.move:21: simple_wrong_msg_incorrect
+   =     at tests/sources/functional/emits.move:23: simple_wrong_msg_incorrect (spec)
+
+error: emitted event not covered by any of the `emits` clauses
+    ┌─ tests/sources/functional/emits.move:255:5
+    │
+255 │ ╭     spec strict_incorrect {
+256 │ │         pragma emits_is_strict;
+257 │ │     }
+    │ ╰─────^
+    │
+    =     at tests/sources/functional/emits.move:251: strict_incorrect
+    =         handle = <redacted>
+    =     at tests/sources/functional/emits.move:252: strict_incorrect
+    =     at tests/sources/functional/emits.move:253: strict_incorrect
+    =         handle = <redacted>
+    =     at tests/sources/functional/emits.move:254: strict_incorrect
+    =     at tests/sources/functional/emits.move:255: strict_incorrect (spec)

@@ -1,0 +1,50 @@
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/loop_body_invalid.move:3:14
+  │
+3 │         loop 0
+  │              ^
+  │              │
+  │              Invalid loop body
+  │              Expected: '()'
+  │              Given: integer
+
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/loop_body_invalid.move:7:14
+  │
+7 │         loop false
+  │              ^^^^^
+  │              │
+  │              Invalid loop body
+  │              Expected: '()'
+  │              Given: 'bool'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/typing/loop_body_invalid.move:11:14
+   │
+11 │         loop { @0x0 }
+   │              ^^^^^^^^
+   │              │ │
+   │              │ Given: 'address'
+   │              Invalid loop body
+   │              Expected: '()'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/typing/loop_body_invalid.move:15:14
+   │
+15 │         loop { let x = 0; x }
+   │              ^^^^^^^^^^^^^^^^
+   │              │     │
+   │              │     Given: integer
+   │              Invalid loop body
+   │              Expected: '()'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/typing/loop_body_invalid.move:19:14
+   │
+19 │         loop { if (true) 1 else 0 }
+   │              ^^^^^^^^^^^^^^^^^^^^^^
+   │              │                  │
+   │              │                  Given: integer
+   │              Invalid loop body
+   │              Expected: '()'
+

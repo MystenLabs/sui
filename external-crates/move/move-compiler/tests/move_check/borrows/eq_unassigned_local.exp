@@ -1,0 +1,8 @@
+error[E06002]: use of unassigned variable
+  ┌─ tests/move_check/borrows/eq_unassigned_local.move:5:9
+  │
+4 │         let ref;
+  │             --- The variable 'ref' does not have a value. The variable must be assigned a value before being used.
+5 │         ref == &x;
+  │         ^^^ Invalid usage of unassigned variable 'ref'
+

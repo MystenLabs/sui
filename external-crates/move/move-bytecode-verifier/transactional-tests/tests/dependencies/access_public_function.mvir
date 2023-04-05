@@ -1,0 +1,18 @@
+//# publish
+module 0x42.M {
+    public universal_truth(): u64 {
+    label b0:
+        return 42;
+    }
+}
+
+//# run
+import 0x42.M;
+
+main() {
+    let x: u64;
+label b0:
+    // can call public functions
+    x = M.universal_truth();
+    return;
+}

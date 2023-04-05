@@ -1,0 +1,13 @@
+//# publish
+module 0x1.Tester {
+    t() {
+        let x: u64;
+        let r1: &mut u64;
+    label b0:
+        x = 0;
+        r1 = &mut x;
+        // cannot copy, data is "owned" by r1. Violates ref trans
+        _ = copy(x);
+        return;
+    }
+}

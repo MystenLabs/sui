@@ -1,0 +1,20 @@
+Move prover returns: exiting with verification errors
+error: global memory invariant does not hold
+   ┌─ tests/sources/regression/mono_after_global_invariant.move:44:9
+   │
+44 │ ╭         invariant<T> update
+45 │ │             Base::has_b() ==> (has_r<T>() ==> old(has_r<T>()));
+   │ ╰───────────────────────────────────────────────────────────────^
+   │
+   =     at tests/sources/regression/mono_after_global_invariant.move:30: put_r
+   =         s = <redacted>
+   =         v = <redacted>
+   =     at tests/sources/regression/mono_after_global_invariant.move:31: put_r
+   =     at tests/sources/regression/mono_after_global_invariant.move:9: put_b
+   =         s = <redacted>
+   =     at tests/sources/regression/mono_after_global_invariant.move:10: put_b
+   =     at tests/sources/regression/mono_after_global_invariant.move:14: put_b
+   =     at tests/sources/regression/mono_after_global_invariant.move:32: put_r
+   =     at tests/sources/regression/mono_after_global_invariant.move:30: put_r
+   =     at tests/sources/regression/mono_after_global_invariant.move:32: put_r
+   =     at tests/sources/regression/mono_after_global_invariant.move:44

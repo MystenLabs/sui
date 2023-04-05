@@ -1,0 +1,9 @@
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/main_return_type_not_unit.move:4:5
+  │
+4 │ fun main(): u64 {
+  │     ^^^^    --- Given: 'u64'
+  │     │        
+  │     Invalid 'script' function return type. The function entry point to a 'script' must have the return type '()'
+  │     Expected: '()'
+

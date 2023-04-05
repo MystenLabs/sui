@@ -1,0 +1,17 @@
+error[E04007]: incompatible types
+   ┌─ tests/move_check/translated_ir_tests/move/commands/pop_weird.move:13:9
+   │
+13 │         (_, _) = ();
+   │         ^^^^^^   -- Given: '()'
+   │         │         
+   │         Invalid value for assignment
+   │         Expected: '(_, _)'
+
+error[E04005]: expected a single type
+   ┌─ tests/move_check/translated_ir_tests/move/commands/pop_weird.move:14:9
+   │
+14 │         (_) = ();
+   │         ^^^   -- Expected a single type, but found expression list type: '()'
+   │         │      
+   │         Invalid type for local
+

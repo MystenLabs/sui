@@ -1,0 +1,19 @@
+//# publish
+module 0x1.M {
+
+    public foo(): u64 {
+    label b0:
+        return 0;
+    }
+
+}
+
+//# run
+import 0x1.M;
+
+main() {
+label b0:
+    // positive stack size invalid even with abort
+    M.foo();
+    abort 0;
+}

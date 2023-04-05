@@ -1,0 +1,6 @@
+warning[W01004]: invalid documentation comment
+  ┌─ tests/move_check/parser/comments_unbalanced.move:3:5
+  │
+3 │     /** This comment must be closed.
+  │     ^^^ Unclosed block comment
+

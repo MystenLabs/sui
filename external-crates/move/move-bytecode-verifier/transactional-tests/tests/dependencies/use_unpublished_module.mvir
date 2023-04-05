@@ -1,0 +1,8 @@
+//# run
+// missing dep
+import 0x42.M;
+
+main() {
+label b0:
+    return;
+}

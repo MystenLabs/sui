@@ -1,0 +1,7 @@
+//# print-bytecode
+// Un-declared locals cannot be assigned to.
+main() {
+label b0:
+    x = 0;
+    return;
+}

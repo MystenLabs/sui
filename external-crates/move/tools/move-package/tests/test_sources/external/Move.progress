@@ -1,0 +1,6 @@
+RESOLVING DEPENDENCIES IN A FROM Root WITH ../resolvers/successful.sh
+../resolvers/successful.sh stderr:
+Successful External Resolver
+PWD:     $ROOT/language/tools/move-package/tests/test_sources/external
+Type:    dependencies
+Package: A

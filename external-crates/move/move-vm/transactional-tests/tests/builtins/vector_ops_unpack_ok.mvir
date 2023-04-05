@@ -1,0 +1,42 @@
+//# run
+main() {
+    let v: vector<u64>;
+label b0:
+    v = vec_pack_1<u64>(42);
+    _ = vec_unpack_1<u64>(move(v));
+
+    return;
+}
+
+//# run
+main() {
+    let v: vector<u64>;
+label b0:
+    v = vec_pack_2<u64>(42, 43);
+    _, _ = vec_unpack_2<u64>(move(v));
+
+    return;
+}
+
+//# run
+main() {
+    let v: vector<u64>;
+label b0:
+    v = vec_pack_1<u64>(42);
+    vec_push_back<u64>(&mut v, 43);
+    _, _ = vec_unpack_2<u64>(move(v));
+
+    return;
+}
+
+
+//# run
+main() {
+    let v: vector<u64>;
+label b0:
+    v = vec_pack_1<u64>(42);
+    _ = vec_pop_back<u64>(&mut v);
+    vec_unpack_0<u64>(move(v));
+
+    return;
+}

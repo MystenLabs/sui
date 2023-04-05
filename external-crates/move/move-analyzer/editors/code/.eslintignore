@@ -1,0 +1,7 @@
+# There's no need for eslint to lint external module dependencies.
+node_modules
+# eslint lints our pre-compiled source files; it does not need to lint
+# build output.
+out
+# Do not lint TypeScript type declarations.
+*.d.ts

@@ -1,0 +1,28 @@
+//# init
+// Tests for parsing invariants in specifications
+
+// Test parsing invariants and synthetics, parsing only.
+//# publish
+module 0x1.TestInvariants {
+
+  synthetic all_values: u128;
+
+  struct SingleInvariant {
+    i: u64,
+    invariant i > 0
+  }
+
+  struct TwoInvariants {
+    i: u64,
+    j: u64,
+    invariant i > 0,
+    invariant j > i
+  }
+
+  struct InvariantWithModifier {
+    i: u64,
+    invariant {update} old(i) < i && all_values == old(old_values) - old(i) + i,
+    invariant {unpack} all_values == old(old_values) - old(i),
+    invariant {pack}   all_values == old(old_values) + i,
+  }
+}

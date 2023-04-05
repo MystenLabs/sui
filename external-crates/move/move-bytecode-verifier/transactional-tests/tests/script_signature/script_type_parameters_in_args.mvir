@@ -1,0 +1,36 @@
+//# run --type-args u64 --args 0
+// all invalid signatures
+main<T: copy + drop>(x: T) {
+label b0:
+    return;
+}
+
+
+//# run --type-args u8 --args 1u8
+main<T>(x: &T) {
+label b0:
+    return;
+}
+
+
+//# run --type-args u8 --args b"hello"
+main<T: copy + drop>(v: vector<T>) {
+label b0:
+    return;
+}
+
+
+//# publish
+module 0x42.M {
+    struct Box<T> has drop { x: T }
+}
+
+
+//# run --type-args u8 --args 0u8
+// bit of a hack but works because structs have no overhead
+import 0x42.M;
+
+main<T: copy + drop>(x: M.Box<M.Box<T>>) {
+label b0:
+    return;
+}

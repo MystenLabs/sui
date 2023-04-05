@@ -1,0 +1,6 @@
+error[E02005]: invalid 'script' declaration
+  ┌─ tests/move_check/parser/native_main.move:2:1
+  │
+2 │ native fun main();
+  │ ^^^^^^ Invalid 'native' function. 'script' functions must have a defined body
+

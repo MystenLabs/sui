@@ -1,0 +1,157 @@
+Move prover returns: exiting with verification errors
+error: post-condition does not hold
+    ┌─ tests/sources/functional/fixed_point_arithm.move:141:9
+    │
+141 │         ensures result != 10;
+    │         ^^^^^^^^^^^^^^^^^^^^^
+    │
+    =     at tests/sources/functional/fixed_point_arithm.move:136: mul_2_times_incorrect
+    =         a = <redacted>
+    =         b = <redacted>
+    =         c = <redacted>
+    =     at tests/sources/functional/fixed_point_arithm.move:137: mul_2_times_incorrect
+    =         result = <redacted>
+    =     at tests/sources/functional/fixed_point_arithm.move:138: mul_2_times_incorrect
+    =     at tests/sources/functional/fixed_point_arithm.move:141: mul_2_times_incorrect (spec)
+
+error: post-condition does not hold
+    ┌─ tests/sources/functional/fixed_point_arithm.move:149:9
+    │
+149 │         ensures result != 10;
+    │         ^^^^^^^^^^^^^^^^^^^^^
+    │
+    =     at tests/sources/functional/fixed_point_arithm.move:144: mul_3_times_incorrect
+    =         a = <redacted>
+    =         b = <redacted>
+    =         c = <redacted>
+    =         d = <redacted>
+    =     at tests/sources/functional/fixed_point_arithm.move:145: mul_3_times_incorrect
+    =         result = <redacted>
+    =     at tests/sources/functional/fixed_point_arithm.move:146: mul_3_times_incorrect
+    =     at tests/sources/functional/fixed_point_arithm.move:149: mul_3_times_incorrect (spec)
+
+error: post-condition does not hold
+    ┌─ tests/sources/functional/fixed_point_arithm.move:107:9
+    │
+107 │         ensures result >= x; // disproved
+    │         ^^^^^^^^^^^^^^^^^^^^
+    │
+    =     at tests/sources/functional/fixed_point_arithm.move:101: mul_div_incorrect
+    =         x = <redacted>
+    =         y = <redacted>
+    =     at tests/sources/functional/fixed_point_arithm.move:102: mul_div_incorrect
+    =     at ../move-stdlib/sources/FixedPoint32.move:150: get_raw_value
+    =         num = <redacted>
+    =     at ../move-stdlib/sources/FixedPoint32.move:151: get_raw_value
+    =         result = <redacted>
+    =     at ../move-stdlib/sources/FixedPoint32.move:152: get_raw_value
+    =         y_raw_val = <redacted>
+    =     at tests/sources/functional/fixed_point_arithm.move:103: mul_div_incorrect
+    =         z = <redacted>
+    =     at tests/sources/functional/fixed_point_arithm.move:104: mul_div_incorrect
+    =         result = <redacted>
+    =     at tests/sources/functional/fixed_point_arithm.move:105: mul_div_incorrect
+    =     at tests/sources/functional/fixed_point_arithm.move:107: mul_div_incorrect (spec)
+
+error: post-condition does not hold
+    ┌─ tests/sources/functional/fixed_point_arithm.move:109:9
+    │
+109 │         ensures result < x; // disproved
+    │         ^^^^^^^^^^^^^^^^^^^
+    │
+    =     at tests/sources/functional/fixed_point_arithm.move:101: mul_div_incorrect
+    =         x = <redacted>
+    =         y = <redacted>
+    =     at tests/sources/functional/fixed_point_arithm.move:102: mul_div_incorrect
+    =     at ../move-stdlib/sources/FixedPoint32.move:150: get_raw_value
+    =         num = <redacted>
+    =     at ../move-stdlib/sources/FixedPoint32.move:151: get_raw_value
+    =         result = <redacted>
+    =     at ../move-stdlib/sources/FixedPoint32.move:152: get_raw_value
+    =         y_raw_val = <redacted>
+    =     at tests/sources/functional/fixed_point_arithm.move:103: mul_div_incorrect
+    =         z = <redacted>
+    =     at tests/sources/functional/fixed_point_arithm.move:104: mul_div_incorrect
+    =         result = <redacted>
+    =     at tests/sources/functional/fixed_point_arithm.move:105: mul_div_incorrect
+    =     at tests/sources/functional/fixed_point_arithm.move:107: mul_div_incorrect (spec)
+    =     at tests/sources/functional/fixed_point_arithm.move:108: mul_div_incorrect (spec)
+    =     at tests/sources/functional/fixed_point_arithm.move:109: mul_div_incorrect (spec)
+
+error: post-condition does not hold
+   ┌─ tests/sources/functional/fixed_point_arithm.move:28:9
+   │
+28 │         ensures result == 1; // disproved
+   │         ^^^^^^^^^^^^^^^^^^^^
+   │
+   =     at tests/sources/functional/fixed_point_arithm.move:23: multiply_0_x_incorrect
+   =         x = <redacted>
+   =     at tests/sources/functional/fixed_point_arithm.move:24: multiply_0_x_incorrect
+   =         result = <redacted>
+   =     at tests/sources/functional/fixed_point_arithm.move:25: multiply_0_x_incorrect
+   =     at tests/sources/functional/fixed_point_arithm.move:27: multiply_0_x_incorrect (spec)
+   =     at tests/sources/functional/fixed_point_arithm.move:28: multiply_0_x_incorrect (spec)
+
+error: post-condition does not hold
+   ┌─ tests/sources/functional/fixed_point_arithm.move:67:9
+   │
+67 │         ensures result != (x.value >> 32); // disproved
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │
+   =     at tests/sources/functional/fixed_point_arithm.move:61: multiply_1_x_incorrect
+   =         x = <redacted>
+   =     at tests/sources/functional/fixed_point_arithm.move:62: multiply_1_x_incorrect
+   =         result = <redacted>
+   =     at tests/sources/functional/fixed_point_arithm.move:63: multiply_1_x_incorrect
+   =     at tests/sources/functional/fixed_point_arithm.move:65: multiply_1_x_incorrect (spec)
+   =     at tests/sources/functional/fixed_point_arithm.move:67: multiply_1_x_incorrect (spec)
+
+error: post-condition does not hold
+   ┌─ tests/sources/functional/fixed_point_arithm.move:44:9
+   │
+44 │         ensures result == 1; // disproved
+   │         ^^^^^^^^^^^^^^^^^^^^
+   │
+   =     at tests/sources/functional/fixed_point_arithm.move:39: multiply_x_0_incorrect
+   =         x = <redacted>
+   =     at tests/sources/functional/fixed_point_arithm.move:40: multiply_x_0_incorrect
+   =         result = <redacted>
+   =     at tests/sources/functional/fixed_point_arithm.move:41: multiply_x_0_incorrect
+   =     at tests/sources/functional/fixed_point_arithm.move:43: multiply_x_0_incorrect (spec)
+   =     at tests/sources/functional/fixed_point_arithm.move:44: multiply_x_0_incorrect (spec)
+
+error: post-condition does not hold
+   ┌─ tests/sources/functional/fixed_point_arithm.move:75:9
+   │
+75 │         ensures result == x; // proved
+   │         ^^^^^^^^^^^^^^^^^^^^
+   │
+   =     at tests/sources/functional/fixed_point_arithm.move:70: multiply_x_1
+   =         x = <redacted>
+   =     at tests/sources/functional/fixed_point_arithm.move:71: multiply_x_1
+   =     at ../move-stdlib/sources/FixedPoint32.move:126
+   =     at ../move-stdlib/sources/FixedPoint32.move:127
+   =     at ../move-stdlib/sources/FixedPoint32.move:128
+   =     at tests/sources/functional/fixed_point_arithm.move:71: multiply_x_1
+   =         result = <redacted>
+   =     at tests/sources/functional/fixed_point_arithm.move:72: multiply_x_1
+   =     at tests/sources/functional/fixed_point_arithm.move:74: multiply_x_1 (spec)
+   =     at tests/sources/functional/fixed_point_arithm.move:75: multiply_x_1 (spec)
+
+error: post-condition does not hold
+   ┌─ tests/sources/functional/fixed_point_arithm.move:83:9
+   │
+83 │         ensures result != x; // disproved
+   │         ^^^^^^^^^^^^^^^^^^^^
+   │
+   =     at tests/sources/functional/fixed_point_arithm.move:78: multiply_x_1_incorrect
+   =         x = <redacted>
+   =     at tests/sources/functional/fixed_point_arithm.move:79: multiply_x_1_incorrect
+   =     at ../move-stdlib/sources/FixedPoint32.move:126
+   =     at ../move-stdlib/sources/FixedPoint32.move:127
+   =     at ../move-stdlib/sources/FixedPoint32.move:128
+   =     at tests/sources/functional/fixed_point_arithm.move:79: multiply_x_1_incorrect
+   =         result = <redacted>
+   =     at tests/sources/functional/fixed_point_arithm.move:80: multiply_x_1_incorrect
+   =     at tests/sources/functional/fixed_point_arithm.move:82: multiply_x_1_incorrect (spec)
+   =     at tests/sources/functional/fixed_point_arithm.move:83: multiply_x_1_incorrect (spec)

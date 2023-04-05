@@ -1,0 +1,65 @@
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/assign_unpack_references_invalid.move:9:9
+  │
+8 │         R { s1: S { f }, s2 } = &R { s1: S{f: 0}, s2: S{f: 1} };
+  │                     - Expected: '&u64'
+9 │         f = 0;
+  │         ^
+  │         │
+  │         Invalid assignment to local 'f'
+  │         Given: integer
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/typing/assign_unpack_references_invalid.move:10:9
+   │
+ 8 │         R { s1: S { f }, s2 } = &R { s1: S{f: 0}, s2: S{f: 1} };
+   │                          -- Expected: '&0x8675309::M::S'
+ 9 │         f = 0;
+10 │         s2 = S { f: 0 }
+   │         ^^   ---------- Given: '0x8675309::M::S'
+   │         │     
+   │         Invalid assignment to local 's2'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/typing/assign_unpack_references_invalid.move:17:9
+   │
+16 │         R { s1: S { f }, s2 } = &mut R { s1: S{f: 0}, s2: S{f: 1} };
+   │                     - Expected: '&mut u64'
+17 │         f = 0;
+   │         ^
+   │         │
+   │         Invalid assignment to local 'f'
+   │         Given: integer
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/typing/assign_unpack_references_invalid.move:18:9
+   │
+16 │         R { s1: S { f }, s2 } = &mut R { s1: S{f: 0}, s2: S{f: 1} };
+   │                          -- Expected: '&mut 0x8675309::M::S'
+17 │         f = 0;
+18 │         s2 = S { f: 0 }
+   │         ^^   ---------- Given: '0x8675309::M::S'
+   │         │     
+   │         Invalid assignment to local 's2'
+
+error[E04006]: invalid subtype
+   ┌─ tests/move_check/typing/assign_unpack_references_invalid.move:26:9
+   │
+25 │         R { s1: S { f }, s2 } = &mut R { s1: S{f: 0}, s2: S{f: 1} };
+   │                     - Expected: '&mut u64'
+26 │         f = &0;
+   │         ^   -- Given: '&{integer}'
+   │         │    
+   │         Invalid assignment to local 'f'
+
+error[E04006]: invalid subtype
+   ┌─ tests/move_check/typing/assign_unpack_references_invalid.move:27:9
+   │
+25 │         R { s1: S { f }, s2 } = &mut R { s1: S{f: 0}, s2: S{f: 1} };
+   │                          -- Expected: '&mut 0x8675309::M::S'
+26 │         f = &0;
+27 │         s2 = &S { f: 0 }
+   │         ^^   ----------- Given: '&0x8675309::M::S'
+   │         │     
+   │         Invalid assignment to local 's2'
+

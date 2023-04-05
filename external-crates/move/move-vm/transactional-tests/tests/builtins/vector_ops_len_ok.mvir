@@ -1,0 +1,29 @@
+//# run
+main() {
+    let v: vector<u64>;
+label b0:
+    v = vec_pack_0<u64>();
+    assert(vec_len<u64>(&v) == 0, 0);
+
+    return;
+}
+
+//# run
+main() {
+    let v: vector<u64>;
+label b0:
+    v = vec_pack_1<u64>(42);
+    assert(vec_len<u64>(&v) == 1, 1);
+
+    return;
+}
+
+//# run
+main() {
+    let v: vector<u64>;
+label b0:
+    v = vec_pack_2<u64>(42, 43);
+    assert(vec_len<u64>(&v) == 2, 2);
+
+    return;
+}

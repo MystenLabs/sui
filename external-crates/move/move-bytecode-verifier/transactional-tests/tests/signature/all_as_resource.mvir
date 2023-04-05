@@ -1,0 +1,11 @@
+//# publish
+module 0x1.M {
+    struct S<T: key> { b: bool }
+
+    foo<T>() {
+        // T does not have key
+        let x: Self.S<T>;
+    label b0:
+        return;
+    }
+}

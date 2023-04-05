@@ -1,0 +1,9 @@
+error[E02004]: invalid 'module' declaration
+   ┌─ tests/move_check/dependencies/use_cycle_2.move:5:9
+   │
+ 5 │         0x2::B::foo()
+   │         ^^^^^^^^^^^ '0x2::B' uses '0x2::A'. This 'use' relationship creates a dependency cycle.
+   ·
+11 │         0x2::A::foo()
+   │         ----------- '0x2::A' uses '0x2::B'
+

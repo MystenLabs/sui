@@ -1,0 +1,14 @@
+//# publish
+module 0x1.M {
+    f<T1, T2>() {
+    label b0:
+        Self.g<u64, T1>();
+        return;
+    }
+
+    g<T1, T2>() {
+    label b0:
+        Self.f<bool, T1>();
+        return;
+    }
+}
