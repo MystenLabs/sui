@@ -1109,7 +1109,7 @@ impl SuiProgrammableTransactionBlock {
                 }
                 Command::TransferObjects(_, Argument::Input(i)) => {
                     if let Some(x) = result_types.get_mut((*i) as usize) {
-                        x.replace(MoveTypeLayout::Vector(Box::new(MoveTypeLayout::Address)));
+                        x.replace(MoveTypeLayout::Address);
                     }
                 }
                 _ => {}
