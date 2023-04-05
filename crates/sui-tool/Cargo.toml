@@ -11,6 +11,7 @@ anemo.workspace = true
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 tokio = { workspace = true, features = ["full"] }
 clap = { version = "4.1.4", features = ["derive"] }
+async-trait = "0.1.61"
 
 itertools = { version = "0.10.3", features = ["use_alloc"] }
 futures = "0.3.23"

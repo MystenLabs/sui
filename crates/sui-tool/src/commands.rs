@@ -3,15 +3,15 @@
 
 use crate::{
     db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand},
-    get_object, get_transaction_block, make_clients, restore_from_db_checkpoint,
-    ConciseObjectOutput, GroupedObjectOutput, VerboseObjectOutput,
+    fetch_causal_history, get_object, get_transaction_block, make_clients,
+    restore_from_db_checkpoint, ConciseObjectOutput, GroupedObjectOutput, VerboseObjectOutput,
 };
 use anyhow::Result;
 use std::path::PathBuf;
 use sui_config::genesis::Genesis;
 use sui_core::authority_client::AuthorityAPI;
 
-use sui_types::{base_types::*, object::Owner};
+use sui_types::{base_types::*, digests::TransactionEffectsDigest, object::Owner};
 
 use clap::*;
 use sui_config::Config;
@@ -84,8 +84,20 @@ pub enum ToolCommand {
         #[clap(long = "genesis")]
         genesis: PathBuf,
 
+        #[clap(long, help = "Fetch data from a local db")]
+        read_from_db: Option<PathBuf>,
+
         #[clap(long, help = "The transaction ID to fetch")]
         digest: TransactionDigest,
+
+        #[clap(
+            long,
+            help = "Optionally verify that transaction effects match this effects digest"
+        )]
+        fx_digest: Option<TransactionEffectsDigest>,
+
+        #[clap(long, help = "Fetch entire causal history of transaction")]
+        causal_history: bool,
     },
 
     /// Tool to read validator & node db.
@@ -224,8 +236,18 @@ impl ToolCommand {
                     }
                 }
             }
-            ToolCommand::FetchTransaction { genesis, digest } => {
-                print!("{}", get_transaction_block(digest, genesis).await?);
+            ToolCommand::FetchTransaction {
+                genesis,
+                digest,
+                fx_digest,
+                causal_history,
+                read_from_db,
+            } => {
+                if causal_history {
+                    fetch_causal_history(digest, fx_digest, genesis, read_from_db).await?;
+                } else {
+                    print!("{}", get_transaction_block(digest, genesis).await?);
+                }
             }
             ToolCommand::DbTool { db_path, cmd } => {
                 let path = PathBuf::from(db_path);
