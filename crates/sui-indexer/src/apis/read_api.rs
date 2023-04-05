@@ -135,7 +135,7 @@ where
             return block_on(async { self.fullnode.get_object(object_id, options).await });
         }
 
-        Ok(self.get_object_internal(object_id, options).await?)
+        Ok(block_on(self.get_object_internal(object_id, options))?)
     }
 
     fn multi_get_objects(

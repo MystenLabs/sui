@@ -6,6 +6,7 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use futures::executor::block_on;
+use futures::future::join_all;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::types::SubscriptionResult;
@@ -337,9 +338,12 @@ where
                 descending_order,
             ));
         }
-        Ok(self
-            .query_transaction_blocks_internal(query, cursor, limit, descending_order)
-            .await?)
+        Ok(block_on(self.query_transaction_blocks_internal(
+            query,
+            cursor,
+            limit,
+            descending_order,
+        ))?)
     }
 
     fn query_events(
@@ -356,9 +360,12 @@ where
                     .query_events(query, cursor, limit, descending_order),
             );
         }
-        Ok(self
-            .query_events_internal(query, cursor, limit, descending_order)
-            .await?)
+        Ok(block_on(self.query_events_internal(
+            query,
+            cursor,
+            limit,
+            descending_order,
+        ))?)
     }
 
     fn get_dynamic_fields(
