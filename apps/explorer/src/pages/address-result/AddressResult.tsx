@@ -6,9 +6,9 @@ import { useParams } from 'react-router-dom';
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import { TransactionsForAddress } from '../../components/transactions/TransactionsForAddress';
 
+import OwnedObjects from '~/components/ownedobjects/OwnedObjects';
 import { Heading } from '~/ui/Heading';
 import { PageHeader } from '~/ui/PageHeader';
-import OwnedObjects from '~/components/ownedobjects/OwnedObjects';
 
 function AddressResult() {
     const { id: addressID } = useParams();
