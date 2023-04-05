@@ -37,17 +37,16 @@ impl CoinReadApi {
         Self { state }
     }
 
-    async fn get_object(&self, object_id: &ObjectID) -> Result<Object, Error> {
+    fn get_object(&self, object_id: &ObjectID) -> Result<Object, Error> {
         Ok(self
             .state
-            .get_object_read(object_id)
-            .await?
+            .get_object_read(object_id)?
             .into_object()
             .map_err(SuiError::from)?)
     }
 
-    async fn get_coin(&self, coin_id: &ObjectID) -> Result<SuiCoin, Error> {
-        let o = self.get_object(coin_id).await?;
+    fn get_coin(&self, coin_id: &ObjectID) -> Result<SuiCoin, Error> {
+        let o = self.get_object(coin_id)?;
         if let Some(move_object) = o.data.try_as_move() {
             let (balance, locked_until_epoch) = if move_object.type_().is_coin() {
                 let coin: Coin = bcs::from_bytes(move_object.contents())?;
@@ -103,7 +102,7 @@ impl CoinReadApi {
 
         let mut data = vec![];
         for coin in coins {
-            data.push(self.get_coin(&coin).await?)
+            data.push(self.get_coin(&coin)?)
         }
         Ok(CoinPage {
             data,
@@ -129,7 +128,7 @@ impl CoinReadApi {
         package_id: &ObjectID,
         object_struct_tag: StructTag,
     ) -> Result<Object, Error> {
-        let publish_txn_digest = self.get_object(package_id).await?.previous_transaction;
+        let publish_txn_digest = self.get_object(package_id)?.previous_transaction;
         let (_, effect) = self
             .state
             .get_executed_transaction_and_effects(publish_txn_digest)
@@ -153,7 +152,7 @@ impl CoinReadApi {
             ))
         }
         .await?;
-        self.get_object(&object_id).await
+        self.get_object(&object_id)
     }
 }
 
@@ -196,11 +195,7 @@ impl CoinReadApiServer for CoinReadApi {
         Ok(self.get_coins_internal(owner, None, cursor, limit).await?)
     }
 
-    async fn get_balance(
-        &self,
-        owner: SuiAddress,
-        coin_type: Option<String>,
-    ) -> RpcResult<Balance> {
+    fn get_balance(&self, owner: SuiAddress, coin_type: Option<String>) -> RpcResult<Balance> {
         let coin_type = Some(match coin_type {
             Some(c) => parse_sui_struct_tag(&c)?,
             None => GAS::type_(),
@@ -213,7 +208,7 @@ impl CoinReadApiServer for CoinReadApi {
         let mut coin_object_count = 0;
 
         for coin in coins {
-            let coin = self.get_coin(&coin).await?;
+            let coin = self.get_coin(&coin)?;
             if let Some(lock) = coin.locked_until_epoch {
                 *locked_balance.entry(lock).or_default() += coin.balance as u128
             } else {
@@ -230,13 +225,13 @@ impl CoinReadApiServer for CoinReadApi {
         })
     }
 
-    async fn get_all_balances(&self, owner: SuiAddress) -> RpcResult<Vec<Balance>> {
+    fn get_all_balances(&self, owner: SuiAddress) -> RpcResult<Vec<Balance>> {
         // TODO: Add index to improve performance?
         let coins = self.get_owner_coin_iterator(owner, &None)?;
         let mut balances: HashMap<String, Balance> = HashMap::new();
 
         for coin in coins {
-            let coin = self.get_coin(&coin).await?;
+            let coin = self.get_coin(&coin)?;
             let balance = balances.entry(coin.coin_type.clone()).or_insert(Balance {
                 coin_type: coin.coin_type,
                 coin_object_count: 0,
