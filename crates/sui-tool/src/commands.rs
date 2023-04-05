@@ -7,14 +7,21 @@ use crate::{
     ConciseObjectOutput, GroupedObjectOutput, VerboseObjectOutput,
 };
 use anyhow::Result;
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc, time::Duration};
 use sui_config::genesis::Genesis;
-use sui_core::authority_client::AuthorityAPI;
+use sui_core::{
+    authority_aggregator::{AuthAggMetrics, AuthorityAggregator},
+    authority_client::AuthorityAPI,
+    epoch::committee_store::CommitteeStore,
+    safe_client::SafeClientMetricsBase,
+};
+use sui_sdk::SuiClientBuilder;
 
 use sui_types::{base_types::*, object::Owner};
 
 use clap::*;
 use sui_config::Config;
+use sui_core::authority_aggregator::AuthorityAggregatorBuilder;
 use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
@@ -78,6 +85,9 @@ pub enum ToolCommand {
         )]
         concise_no_header: bool,
     },
+
+    #[clap(name = "retry-transaction")]
+    RetryTransaction { digest: TransactionDigest },
 
     #[clap(name = "fetch-transaction")]
     FetchTransaction {
@@ -224,9 +234,39 @@ impl ToolCommand {
                     }
                 }
             }
+
+            ToolCommand::RetryTransaction { digest } => {
+                let url = "http://ewr-tnt-rpc-15.testnet.sui.io:9000";
+                let sui = SuiClientBuilder::default()
+                    .build(url)
+                    .await?;
+                println!("Establish connection with: {}", url);
+                let sui_system_state = sui.governance_api().get_latest_sui_system_state().await?;
+                let committee = sui_system_state.get_sui_committee_for_benchmarking();
+                println!("Committee: {:?}", committee);
+                let committee_store =
+                    Arc::new(CommitteeStore::new_for_testing(&committee.committee));
+                let _ = committee_store
+                    .insert_new_committee(&committee.committee)
+                    .unwrap();
+                let registry = prometheus::Registry::new();
+                let metrics = SafeClientMetricsBase::new(&registry);
+                let metrics2 = AuthAggMetrics::new(&registry);
+                let agg = AuthorityAggregator::new_from_committee(
+                    committee,
+                    &committee_store,
+                    metrics,
+                    metrics2,
+                )?;
+                agg.retry_locked_transaction(digest, Some(Duration::from_secs(60)))
+                    .await?;
+                println!("Completed execution of {:?}", digest);
+            }
+
             ToolCommand::FetchTransaction { genesis, digest } => {
                 print!("{}", get_transaction_block(digest, genesis).await?);
             }
+
             ToolCommand::DbTool { db_path, cmd } => {
                 let path = PathBuf::from(db_path);
                 match cmd {

@@ -1340,6 +1340,37 @@ where
         }
     }
 
+    /// locked it, and it is still possible to form a quorum.
+    pub async fn retry_locked_transaction(
+        &self,
+        digest: TransactionDigest,
+        timeout_total: Option<Duration>,
+    ) -> Result<VerifiedCertifiedTransactionEffects, anyhow::Error> {
+        let tx = self
+            .quorum_once_with_timeout(
+                None,
+                None,
+                |_, client| {
+                    Box::pin(async move {
+                        let tx = client
+                            .handle_transaction_info_request(TransactionInfoRequest {
+                                transaction_digest: digest,
+                            })
+                            .await?;
+                        Ok(tx)
+                    })
+                },
+                self.timeouts.serial_authority_request_timeout,
+                timeout_total,
+                "retry_locked_transaction".to_string(),
+            )
+            .await?;
+        println!("Tx: {:?}", tx);
+        let tx = tx.into_transaction();
+
+        self.execute_transaction_block(&tx).await
+    }
+
     /// Check if we have some signed TransactionEffects but not a quorum
     fn record_non_quorum_effects_maybe(
         &self,

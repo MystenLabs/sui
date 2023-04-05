@@ -21,11 +21,14 @@ strum = "0.24.1"
 eyre = "0.6.8"
 ron = "0.8.0"
 
+prometheus = "0.13.3"
+
 narwhal-types = { path = "../../narwhal/types" }
 sui-storage = { path = "../sui-storage" }
 sui-core = { path = "../sui-core" }
 sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }
+sui-sdk = { path = "../sui-sdk" }
 sui-network = { path = "../sui-network" }
 
 anemo-cli.workspace = true

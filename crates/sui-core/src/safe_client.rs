@@ -234,6 +234,7 @@ impl<C> SafeClient<C> {
                 let signed_effects = self.check_signed_effects_plain(digest, effects, None)?;
                 match cert_opt {
                     Some(cert) => {
+                        println!("@@@@@@@@@@@@@@@@2 cert: {:?}", cert);
                         let committee = self.get_committee(&cert.epoch)?;
                         Ok(PlainTransactionInfoResponse::ExecutedWithCert(
                             CertifiedTransaction::new_from_data_and_sig(
@@ -257,11 +258,14 @@ impl<C> SafeClient<C> {
                             events,
                         ))
                     }
-                    None => Ok(PlainTransactionInfoResponse::ExecutedWithoutCert(
+                    None => {
+                        println!("@@@@@@@@@@@@ no cert");
+                        Ok(PlainTransactionInfoResponse::ExecutedWithoutCert(
                         transaction,
                         signed_effects,
                         events,
-                    )),
+                    ))
+                },
                 }
             }
         }
