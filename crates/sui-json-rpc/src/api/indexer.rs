@@ -34,7 +34,7 @@ pub trait IndexerApi {
 
     /// Return list of transactions for a specified query criteria.
     #[method(name = "queryTransactionBlocks", blocking)]
-     fn query_transaction_blocks(
+    fn query_transaction_blocks(
         &self,
         /// the transaction query criteria.
         query: SuiTransactionBlockResponseQuery,
@@ -48,7 +48,7 @@ pub trait IndexerApi {
 
     /// Return list of events for a specified query criteria.
     #[method(name = "queryEvents", blocking)]
-     fn query_events(
+    fn query_events(
         &self,
         /// the event query criteria.
         query: EventFilter,
