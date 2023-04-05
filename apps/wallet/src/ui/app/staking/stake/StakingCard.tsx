@@ -55,7 +55,7 @@ function StakingCard() {
     const coinType = SUI_TYPE_ARG;
     const accountAddress = useActiveAddress();
     const { data: suiBalance, isLoading: loadingSuiBalances } =
-        useGetCoinBalance(coinType, accountAddress);
+        useGetCoinBalance(SUI_TYPE_ARG, accountAddress);
     const coinBalance = BigInt(suiBalance?.totalBalance || 0);
     const [searchParams] = useSearchParams();
     const validatorAddress = searchParams.get('address');
