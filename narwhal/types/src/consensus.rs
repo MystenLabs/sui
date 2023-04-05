@@ -70,6 +70,16 @@ impl CommittedSubDag {
         }
     }
 
+    pub fn commit_timestamp(&self) -> TimestampMs {
+        // If commit_timestamp is zero, then safely assume that this is an upgraded node that is
+        // replaying this commit and field is never initialised. It's safe to fallback on leader's
+        // timestamp.
+        if self.commit_timestamp == 0 {
+            return *self.leader.header().created_at();
+        }
+        self.commit_timestamp
+    }
+
     pub fn len(&self) -> usize {
         self.certificates.len()
     }
@@ -150,7 +160,9 @@ pub struct CommittedSubDagShell {
     /// The so far calculated reputation score for nodes
     pub reputation_score: ReputationScores,
     /// The timestamp that should identify this commit. This is guaranteed to be monotonically
-    /// incremented
+    /// incremented.
+    /// TODO: remove the default when all validators have been upgraded with the latest release.
+    #[serde(default = "TimestampMs::default")]
     pub commit_timestamp: TimestampMs,
 }
 
@@ -266,6 +278,38 @@ mod tests {
     use indexmap::IndexMap;
     use std::collections::BTreeSet;
     use test_utils::CommitteeFixture;
+
+    #[test]
+    fn test_zero_timestamp_in_sub_dag() {
+        let fixture = CommitteeFixture::builder().build();
+        let committee = fixture.committee();
+
+        let header_builder = HeaderV1Builder::default();
+        let header = header_builder
+            .author(AuthorityIdentifier(1u16))
+            .round(2)
+            .epoch(0)
+            .created_at(50)
+            .payload(IndexMap::new())
+            .parents(BTreeSet::new())
+            .build()
+            .unwrap();
+
+        let certificate =
+            Certificate::new_unsigned(&committee, Header::V1(header), Vec::new()).unwrap();
+
+        // AND we initialise the sub dag via the "restore" way
+        let sub_dag_round = CommittedSubDag {
+            certificates: vec![certificate.clone()],
+            leader: certificate,
+            sub_dag_index: 1,
+            reputation_score: ReputationScores::default(),
+            commit_timestamp: 0,
+        };
+
+        // AND commit timestamp is the leader's timestamp
+        assert_eq!(sub_dag_round.commit_timestamp(), 50);
+    }
 
     #[test]
     fn test_monotonically_incremented_commit_timestamps() {
