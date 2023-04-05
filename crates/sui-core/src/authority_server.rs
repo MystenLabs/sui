@@ -296,12 +296,12 @@ impl ValidatorService {
     }
 
     pub(crate) fn check_system_overload(
-        state: Arc<AuthorityState>,
-        consensus_adapter: Arc<ConsensusAdapter>,
-        msg: &SenderSignedData,
+        _state: Arc<AuthorityState>,
+        _consensus_adapter: Arc<ConsensusAdapter>,
+        _msg: &SenderSignedData,
     ) -> SuiResult<()> {
-        Self::check_execution_overload(state, msg)?;
-        Self::check_consensus_overload(consensus_adapter)?;
+        // Self::check_execution_overload(state, msg)?;
+        // Self::check_consensus_overload(consensus_adapter)?;
         Ok(())
     }
 
