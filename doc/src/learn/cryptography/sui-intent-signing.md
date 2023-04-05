@@ -70,6 +70,14 @@ const signature = await this.signData(intentMessage);
 
 The authority signature is created using the protocol key. The data that it commits to is also an intent message `intent || message`. See all available intent scopes [in the source code](https://github.com/MystenLabs/sui/blob/0dc1a38f800fc2d8fabe11477fdef702058cf00d/crates/sui-types/src/intent.rs#L66)
 
+### How to Generate Proof of Possession for an Authority
+
+When an authority request to join the network, the protocol public key and its proof of possession (PoP) are required to be submitted. PoP is required to prevent [rogue key attack](https://crypto.stanford.edu/~dabo/pubs/papers/BLSmultisig.html).
+
+The proof of possession is a BLS signature created using the authority's protocol private key, committed over the following message: `intent || pubkey || address || epoch`. Here `intent` is serialized to `[5, 0, 0]` representing an intent with scope as "Proof of Possession", version as "V0" and app_id as "Sui". `pubkey` is the serialized public key bytes of the authority's BLS protocol key. `address` is the account address associated with the authority's account key. `epoch` is serialized to `[0, 0, 0, 0, 0, 0, 0, 0]`. 
+
+To generate a proof of possession in Rust, see implementation at `fn generate_proof_of_possession`. For test vectors, see `fn test_proof_of_possession`. 
+
 # Implementation
 
 1. [Struct and enum definitions](https://github.com/MystenLabs/sui/blob/0dc1a38f800fc2d8fabe11477fdef702058cf00d/crates/sui-types/src/intent.rs)

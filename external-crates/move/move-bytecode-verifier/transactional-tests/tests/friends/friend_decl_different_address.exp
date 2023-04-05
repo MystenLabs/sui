@@ -1,0 +1,10 @@
+processed 2 tasks
+
+task 1 'publish'. lines 5-9:
+Error: Unable to publish module '00000000000000000000000000000044::N'. Got VMError: {
+    major_status: INVALID_FRIEND_DECL_WITH_MODULES_OUTSIDE_ACCOUNT_ADDRESS,
+    sub_status: None,
+    location: 0x44::N,
+    indices: [],
+    offsets: [],
+}

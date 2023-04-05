@@ -18,7 +18,9 @@ use crate::coin::Coin;
 use crate::committee::EpochId;
 use crate::messages::TransactionEvents;
 use crate::storage::ObjectStore;
-use crate::sui_system_state::{get_sui_system_state, SuiSystemState};
+use crate::sui_system_state::{
+    get_sui_system_state, get_sui_system_state_wrapper, AdvanceEpochParams, SuiSystemState,
+};
 use crate::{
     base_types::{
         ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
@@ -1108,6 +1110,19 @@ impl<S: ObjectStore> TemporaryStore<S> {
 // Charge gas current - end
 //==============================================================================
 
+impl<S: ObjectStore> TemporaryStore<S> {
+    pub fn advance_epoch_safe_mode(
+        &mut self,
+        params: &AdvanceEpochParams,
+        protocol_config: &ProtocolConfig,
+    ) {
+        let wrapper = get_sui_system_state_wrapper(&self.store)
+            .expect("System state wrapper object must exist");
+        let new_object = wrapper.advance_epoch_safe_mode(params, &self.store, protocol_config);
+        self.write_object(new_object, WriteKind::Mutate);
+    }
+}
+
 impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
     fn get_input_sui(
         &self,
@@ -1126,7 +1141,7 @@ impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
                     )
                 })?
             } else {
-                0
+                obj.storage_rebate
             };
             Ok((input_sui, obj.storage_rebate))
         } else {
@@ -1154,7 +1169,7 @@ impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
                     )
                 })?
             } else {
-                0
+                obj.storage_rebate
             };
             Ok((input_sui, obj.storage_rebate))
         }
@@ -1162,11 +1177,11 @@ impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
 
     /// Check that this transaction neither creates nor destroys SUI. This should hold for all txes except
     /// the epoch change tx, which mints staking rewards equal to the gas fees burned in the previous epoch.
-    /// Specificially, this checks two key invariants about storage fees and storage rebate:
+    /// Specifically, this checks two key invariants about storage fees and storage rebate:
     /// 1. all SUI in storage rebate fields of input objects should flow either to the transaction storage rebate, or the transaction non-refundable storage rebate
     /// 2. all SUI charged for storage should flow into the storage rebate field of some output object
     /// If `do_expensive_checks` is true, this will also check a third invariant:
-    /// 3. all SUI in input objects (including coins etc in the Move part of an object) should flow either to an ouput object, or be burned as part of computation fees or non-refundable storage rebate
+    /// 3. all SUI in input objects (including coins etc in the Move part of an object) should flow either to an output object, or be burned as part of computation fees or non-refundable storage rebate
     /// This function is intended to be called *after* we have charged for gas + applied the storage rebate to the gas object,
     /// but *before* we have updated object versions.
     /// if `do_expensive_checks` is false, this function will only check conservation of object storage rea
@@ -1182,17 +1197,13 @@ impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
         let mut total_input_sui = 0;
         // total amount of SUI in output objects, including both coins and storage rebates
         let mut total_output_sui = 0;
-        // total amount of SUI in storage rebate of input objects
-        let mut total_input_rebate = 0;
-        // total amount of SUI in storage rebate of output objects
-        let mut total_output_rebate = 0;
         for (id, (output_obj, kind)) in &self.written {
             match kind {
                 WriteKind::Mutate => {
                     // note: output_obj.version has not yet been increased by the tx, so output_obj.version
                     // is the object version at tx input
                     let input_version = output_obj.version();
-                    let (input_sui, input_storage_rebate) =
+                    let (input_sui, _input_storage_rebate) =
                         self.get_input_sui(id, input_version, do_expensive_checks)?;
                     total_input_sui += input_sui;
                     if do_expensive_checks {
@@ -1201,9 +1212,9 @@ impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
                                 "Failed looking up output SUI in SUI conservation checking",
                             )
                         })?;
+                    } else {
+                        total_output_sui += output_obj.storage_rebate
                     }
-                    total_input_rebate += input_storage_rebate;
-                    total_output_rebate += output_obj.storage_rebate;
                 }
                 WriteKind::Create => {
                     // created objects did not exist at input, and thus contribute 0 to input SUI
@@ -1214,7 +1225,6 @@ impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
                             )
                         })?;
                     }
-                    total_output_rebate += output_obj.storage_rebate;
                 }
                 WriteKind::Unwrap => {
                     // an unwrapped object was either:
@@ -1227,26 +1237,25 @@ impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
                                 "Failed looking up output SUI in SUI conservation checking",
                             )
                         })?;
+                    } else {
+                        total_output_sui += output_obj.storage_rebate
                     }
-                    total_output_rebate += output_obj.storage_rebate;
                 }
             }
         }
         for (id, (input_version, kind)) in &self.deleted {
             match kind {
                 DeleteKind::Normal => {
-                    let (input_sui, input_storage_rebate) =
+                    let (input_sui, _input_storage_rebate) =
                         self.get_input_sui(id, *input_version, do_expensive_checks)?;
                     total_input_sui += input_sui;
-                    total_input_rebate += input_storage_rebate;
                 }
                 DeleteKind::Wrap => {
                     // wrapped object was a tx input or dynamic field--need to account for it in input SUI
                     // note: if an object is created by the tx, then wrapped, it will not appear here
-                    let (input_sui, input_storage_rebate) =
+                    let (input_sui, _input_storage_rebate) =
                         self.get_input_sui(id, *input_version, do_expensive_checks)?;
                     total_input_sui += input_sui;
-                    total_input_rebate += input_storage_rebate;
                     // else, the wrapped object was either:
                     // 1. freshly created, which means it has 0 contribution to input SUI
                     // 2. unwrapped from another object A, which means its contribution to input SUI will be captured by looking at A
@@ -1265,45 +1274,20 @@ impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
             .map(|(_, summary)| summary.clone())
             .unwrap_or_default();
 
-        if do_expensive_checks {
-            // note: storage_cost flows into the storage_rebate field of the output objects, which is why it is not accounted for here.
-            // similarly, all of the storage_rebate *except* the storage_fund_rebate_inflow gets credited to the gas coin
-            // both computation costs and storage rebate inflow are
-            total_output_sui +=
-                gas_summary.computation_cost + gas_summary.non_refundable_storage_fee;
-            if let Some((epoch_fees, epoch_rebates)) = advance_epoch_gas_summary {
-                total_input_sui += epoch_fees;
-                total_output_sui += epoch_rebates;
-            }
-            if total_input_sui != total_output_sui {
-                return Err(ExecutionError::invariant_violation(
+        // note: storage_cost flows into the storage_rebate field of the output objects, which is why it is not accounted for here.
+        // similarly, all of the storage_rebate *except* the storage_fund_rebate_inflow gets credited to the gas coin
+        // both computation costs and storage rebate inflow are
+        total_output_sui += gas_summary.computation_cost + gas_summary.non_refundable_storage_fee;
+        if let Some((epoch_fees, epoch_rebates)) = advance_epoch_gas_summary {
+            total_input_sui += epoch_fees;
+            total_output_sui += epoch_rebates;
+        }
+        if total_input_sui != total_output_sui {
+            return Err(ExecutionError::invariant_violation(
                 format!("SUI conservation failed: input={}, output={}, this transaction either mints or burns SUI",
                 total_input_sui,
                 total_output_sui))
             );
-            }
-        }
-
-        // all SUI in storage rebate fields of input objects should flow either to the transaction storage rebate, or the non-refundable
-        // storage rebate pool
-        if total_input_rebate != gas_summary.storage_rebate + gas_summary.non_refundable_storage_fee
-        {
-            // TODO: re-enable once we fix the edge case with OOG, gas smashing, and storage rebate
-            /*return Err(ExecutionError::invariant_violation(
-                format!("SUI conservation failed--{} SUI in storage rebate field of input objects, {} SUI in tx storage rebate or tx non-refundable storage rebate",
-                total_input_rebate,
-                gas_summary.non_refundable_storage_fee))
-            );*/
-        }
-
-        // all SUI charged for storage should flow into the storage rebate field of some output object
-        if gas_summary.storage_cost != total_output_rebate {
-            // TODO: re-enable once we fix the edge case with OOG, gas smashing, and storage rebate
-            /*return Err(ExecutionError::invariant_violation(
-                format!("SUI conservation failed--{} SUI charged for storage, {} SUI in storage rebate field of output objects",
-                gas_summary.storage_cost,
-                total_output_rebate))
-            );*/
         }
         Ok(())
     }

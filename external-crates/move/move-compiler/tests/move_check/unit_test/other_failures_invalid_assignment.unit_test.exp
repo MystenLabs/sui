@@ -1,0 +1,54 @@
+error[E10003]: invalid attribute value
+  ┌─ tests/move_check/unit_test/other_failures_invalid_assignment.move:9:24
+  │
+9 │     #[expected_failure(vector_error=0, location=std::vector)]
+  │                        ^^^^^^^^^^^^--
+  │                        │
+  │                        Expected no assigned value, e.g. 'vector_error', for expected failure attribute
+  │                        Unsupported attribute in this location
+
+error[E10003]: invalid attribute value
+   ┌─ tests/move_check/unit_test/other_failures_invalid_assignment.move:13:38
+   │
+13 │     #[expected_failure(vector_error, minor_status=x"", location=std::vector)]
+   │                                      ^^^^^^^^^^^^^^^^
+   │                                      │            │
+   │                                      │            Unsupported value in this assignment
+   │                                      Invalid value in attribute assignment
+
+error[E10003]: invalid attribute value
+   ┌─ tests/move_check/unit_test/other_failures_invalid_assignment.move:17:24
+   │
+17 │     #[expected_failure(arithmetic_error=@0, location=n)]
+   │                        ^^^^^^^^^^^^^^^^---
+   │                        │
+   │                        Expected no assigned value, e.g. 'arithmetic_error', for expected failure attribute
+   │                        Unsupported attribute in this location
+
+error[E10003]: invalid attribute value
+   ┌─ tests/move_check/unit_test/other_failures_invalid_assignment.move:21:24
+   │
+21 │     #[expected_failure(out_of_gas=bool, location=Self)]
+   │                        ^^^^^^^^^^-----
+   │                        │
+   │                        Expected no assigned value, e.g. 'out_of_gas', for expected failure attribute
+   │                        Unsupported attribute in this location
+
+error[E10003]: invalid attribute value
+   ┌─ tests/move_check/unit_test/other_failures_invalid_assignment.move:25:24
+   │
+25 │     #[expected_failure(major_status=4004u128, location=Self)]
+   │                        ^^^^^^^^^^^^^^^^^^^^^
+   │                        │            │
+   │                        │            Annotated non-u64 literals are not permitted
+   │                        Invalid value in attribute assignment
+
+error[E10003]: invalid attribute value
+   ┌─ tests/move_check/unit_test/other_failures_invalid_assignment.move:29:43
+   │
+29 │     #[expected_failure(major_status=4016, minor_status=b"", location=Self)]
+   │                                           ^^^^^^^^^^^^^^^^
+   │                                           │            │
+   │                                           │            Unsupported value in this assignment
+   │                                           Invalid value in attribute assignment
+

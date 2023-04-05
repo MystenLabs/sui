@@ -1,0 +1,17 @@
+//# run
+main() {
+    let ret_if_val: bool;
+label b0:
+    ret_if_val = true;
+    jump_if (move(ret_if_val)) loop;
+label b1:
+    assert(false, 42);
+    return;
+label loop:
+    jump_if (true) loop_b1;
+label loop_b0:
+    jump loop_cont;
+label loop_b1:
+    return;
+label loop_cont:
+}

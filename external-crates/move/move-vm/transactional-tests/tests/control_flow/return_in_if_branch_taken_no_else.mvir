@@ -1,0 +1,22 @@
+//# publish
+module 0x1.Test {
+    public t(): u64 {
+    label b0:
+        jump_if_false (true) b2;
+    label b1:
+        return 100;
+    label b2:
+        return 0;
+    }
+}
+
+//# run
+import 0x1.Test;
+
+main() {
+    let x: u64;
+label b0:
+    x = Test.t();
+    assert(copy(x) == 100, 42);
+    return;
+}

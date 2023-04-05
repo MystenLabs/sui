@@ -1,0 +1,1 @@
+Failed to resolve dependencies for package 'Root': '../resolvers/failing.sh' failed to resolve dependencies for dependency 'A' of package 'Root'. Exited with code: 1

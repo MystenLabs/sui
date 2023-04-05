@@ -1681,7 +1681,10 @@ pub async fn send_and_confirm_transaction_(
     let mut state = state_acc.accumulate_live_object_set();
     let result = authority.try_execute_for_test(&certificate).await?;
     let state_after = state_acc.accumulate_live_object_set();
-    let effects_acc = state_acc.accumulate_effects(vec![result.inner().data().clone()]);
+    let effects_acc = state_acc.accumulate_effects(
+        vec![result.inner().data().clone()],
+        epoch_store.protocol_config(),
+    );
     state.union(&effects_acc);
 
     assert_eq!(state_after.digest(), state.digest());

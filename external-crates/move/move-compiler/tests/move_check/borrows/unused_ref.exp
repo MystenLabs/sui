@@ -1,0 +1,9 @@
+error[E04017]: too many arguments
+   ┌─ tests/move_check/borrows/unused_ref.move:28:5
+   │
+28 │     borrow<u64, u64>(&mut x, 0, 0);
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │     │               │
+   │     │               Found 3 argument(s) here
+   │     Invalid call of '0x42::m::borrow'. The call expected 2 argument(s) but got 3
+

@@ -33,7 +33,7 @@ use sui_types::error::SuiError;
 use shared_crypto::intent::Intent;
 use sui_framework_build::compiled_package::{
     build_from_resolution_graph, check_invalid_dependencies, check_unpublished_dependencies,
-    gather_dependencies, root_published_at, BuildConfig, CompiledPackage, PackageDependencies,
+    gather_published_ids, BuildConfig, CompiledPackage, PackageDependencies, PublishedAtError,
 };
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
@@ -499,6 +499,16 @@ impl SuiClientCommands {
                     )
                     .await?;
 
+                let package_id = package_id.map_err(|e| match e {
+                    PublishedAtError::NotPresent => {
+                        anyhow!("No 'published-at' field in manifest for package to be upgraded.")
+                    }
+                    PublishedAtError::Invalid(v) => anyhow!(
+                        "Invalid 'published-at' field in manifest of package to be upgraded. \
+                         Expected an on-chain address, but found: {v:?}"
+                    ),
+                })?;
+
                 let resp = context
                     .get_client()
                     .await?
@@ -532,7 +542,7 @@ impl SuiClientCommands {
                     .transaction_builder()
                     .upgrade(
                         sender,
-                        package_id.unwrap(),
+                        package_id,
                         compiled_modules,
                         dependencies.published.into_values().collect(),
                         upgrade_capability,
@@ -1104,9 +1114,9 @@ impl SuiClientCommands {
 
                 let client = context.get_client().await?;
 
-                BytecodeSourceVerifier::new(client.read_api(), false)
+                BytecodeSourceVerifier::new(client.read_api())
                     .verify_package(
-                        &compiled_package.package,
+                        &compiled_package,
                         verify_deps,
                         match (skip_source, address_override) {
                             (true, _) => SourceMode::Skip,
@@ -1141,7 +1151,7 @@ async fn compile_package(
         PackageDependencies,
         Vec<Vec<u8>>,
         CompiledPackage,
-        Option<ObjectID>,
+        Result<ObjectID, PublishedAtError>,
     ),
     anemo::Error,
 > {
@@ -1154,8 +1164,7 @@ async fn compile_package(
         print_diags_to_stderr,
     };
     let resolution_graph = config.resolution_graph(&package_path)?;
-    let dependencies = gather_dependencies(&resolution_graph);
-    let package_id = root_published_at(&resolution_graph);
+    let (package_id, dependencies) = gather_published_ids(&resolution_graph);
     check_invalid_dependencies(&dependencies.invalid)?;
     if !with_unpublished_dependencies {
         check_unpublished_dependencies(&dependencies.unpublished)?;
@@ -1183,8 +1192,8 @@ async fn compile_package(
     }
     let compiled_modules = compiled_package.get_package_bytes(with_unpublished_dependencies);
     if !skip_dependency_verification {
-        BytecodeSourceVerifier::new(client.read_api(), false)
-            .verify_package_deps(&compiled_package.package)
+        BytecodeSourceVerifier::new(client.read_api())
+            .verify_package_deps(&compiled_package)
             .await?;
         eprintln!(
             "{}",

@@ -1,0 +1,13 @@
+error[E04001]: restricted visibility
+   ┌─ tests/move_check/typing/pack_private_with_field.move:19:11
+   │  
+19 │     let s = S {
+   │ ╭───────────^
+20 │ │     f1: 0,
+21 │ │     f4: 0,
+22 │ │     f2: 0,
+23 │ │     f3: 0,
+24 │ │   };
+   │ ╰───^ Invalid instantiation of '0x42::m::S'.
+All structs can only be constructed in the module in which they are declared
+

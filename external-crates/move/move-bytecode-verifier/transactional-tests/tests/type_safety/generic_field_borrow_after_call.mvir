@@ -1,0 +1,14 @@
+//# publish
+
+module 0x1.M {
+    struct X has drop { v: u64 }
+    id<T>(x: &T): &T {
+    label b0:
+        return move(x);
+    }
+
+    t(x: Self.X): u64 {
+    label b0:
+        return *(&Self.id<Self.X>(&x).X::v);
+    }
+}

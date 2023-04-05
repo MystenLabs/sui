@@ -1,0 +1,12 @@
+//# publish
+module 0x1.A {
+    struct T1{v: u64}
+
+    // unnecessary acquire annotation
+    public test() acquires T1 {
+    label b0:
+        Self.test();
+        return;
+    }
+
+}

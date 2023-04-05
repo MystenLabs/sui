@@ -1,0 +1,9 @@
+[package]
+name = "doctor_with_stdlib"
+version = "0.0.0"
+
+[addresses]
+std = "0x1"
+
+[dependencies]
+MoveNursery = { local = "../../../../../move-stdlib/nursery" }

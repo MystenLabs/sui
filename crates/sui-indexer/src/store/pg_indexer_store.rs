@@ -290,7 +290,13 @@ impl IndexerStore for PgIndexerStore {
             cp.into_rpc(end_of_epoch_data)
         }
         .scope_boxed())
-        .context("Failed reading previous checkpoint from PostgresDB")
+        .context(
+            format!(
+                "Failed reading previous checkpoint {:?} from PostgresDB",
+                id
+            )
+            .as_str(),
+        )
     }
 
     async fn get_checkpoint_sequence_number(

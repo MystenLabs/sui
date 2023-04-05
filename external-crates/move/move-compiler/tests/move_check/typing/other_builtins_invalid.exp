@@ -1,0 +1,87 @@
+error[E04006]: invalid subtype
+  ┌─ tests/move_check/typing/other_builtins_invalid.move:4:10
+  │
+3 │     fun foo(x: &u64) {
+  │                ---- Given: '&u64'
+4 │         (freeze<u64>(x): &mut u64);
+  │          ^^^^^^^^^^^^^^
+  │          │
+  │          Invalid call of 'freeze'. Invalid argument for parameter '0'
+  │          Expected: '&mut u64'
+
+error[E04006]: invalid subtype
+  ┌─ tests/move_check/typing/other_builtins_invalid.move:4:26
+  │
+4 │         (freeze<u64>(x): &mut u64);
+  │          --------------  ^^^^^^^^
+  │          │               │
+  │          │               Invalid type annotation
+  │          │               Expected: '&mut u64'
+  │          Given: '&u64'
+
+error[E04006]: invalid subtype
+  ┌─ tests/move_check/typing/other_builtins_invalid.move:5:10
+  │
+5 │         (freeze<vector<bool>>(&any()): &mut vector<bool>);
+  │          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  │          │                    │
+  │          │                    Given: '&_'
+  │          Invalid call of 'freeze'. Invalid argument for parameter '0'
+  │          Expected: '&mut vector<bool>'
+
+error[E04010]: cannot infer type
+  ┌─ tests/move_check/typing/other_builtins_invalid.move:5:32
+  │
+5 │         (freeze<vector<bool>>(&any()): &mut vector<bool>);
+  │                                ^^^^^ Could not infer this type. Try adding an annotation
+
+error[E04006]: invalid subtype
+  ┌─ tests/move_check/typing/other_builtins_invalid.move:5:40
+  │
+5 │         (freeze<vector<bool>>(&any()): &mut vector<bool>);
+  │          ----------------------------  ^^^^^^^^^^^^^^^^^
+  │          │                             │
+  │          │                             Invalid type annotation
+  │          │                             Expected: '&mut vector<bool>'
+  │          Given: '&vector<bool>'
+
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/other_builtins_invalid.move:7:10
+  │
+7 │         (assert!(42, true): ());
+  │          ^^^^^^^^^^^^^^^^^
+  │          │       │
+  │          │       Given: integer
+  │          Invalid call of 'assert'. Invalid argument for parameter '0'
+  │          Expected: 'bool'
+
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/other_builtins_invalid.move:7:10
+  │
+7 │         (assert!(42, true): ());
+  │          ^^^^^^^^^^^^^^^^^
+  │          │           │
+  │          │           Given: 'bool'
+  │          Invalid call of 'assert'. Invalid argument for parameter '1'
+  │          Expected: 'u64'
+
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/other_builtins_invalid.move:8:38
+  │
+8 │         (assert!(true && false, *x): bool);
+  │          --------------------------  ^^^^
+  │          │                           │
+  │          │                           Invalid type annotation
+  │          │                           Expected: 'bool'
+  │          Given: '()'
+
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/other_builtins_invalid.move:9:9
+  │
+9 │         assert!(true || false, 0u8);
+  │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  │         │                      │
+  │         │                      Given: 'u8'
+  │         Invalid call of 'assert'. Invalid argument for parameter '1'
+  │         Expected: 'u64'
+

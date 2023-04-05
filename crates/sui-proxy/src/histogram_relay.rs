@@ -21,18 +21,18 @@ use crate::var;
 
 const METRICS_ROUTE: &str = "/metrics";
 
-static HISTOGRAM_RELAY_PRESSURE: Lazy<CounterVec> = Lazy::new(|| {
+static RELAY_PRESSURE: Lazy<CounterVec> = Lazy::new(|| {
     register_counter_vec!(
-        "histogram_relay_pressure",
-        "Number of metric families submitted, exported, overflowed to/from the queue.",
+        "relay_pressure",
+        "HistogramRelay's number of metric families submitted, exported, overflowed to/from the queue.",
         &["histogram_relay"]
     )
     .unwrap()
 });
-static HISTOGRAM_RELAY_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
+static RELAY_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
     register_histogram_vec!(
-        "histogram_submit_duration_seconds",
-        "The submit fn latencies in seconds.",
+        "relay_duration_seconds",
+        "HistogramRelay's submit/export fn latencies in seconds.",
         &["histogram_relay"]
     )
     .unwrap()
@@ -93,18 +93,13 @@ impl HistogramRelay {
     /// in doing so, it will also wrap each entry in a timestamp which will be use
     /// for pruning old entires on each submission call. this may not be ideal long term.
     pub fn submit(&self, data: Vec<MetricFamily>) {
-        HISTOGRAM_RELAY_PRESSURE
-            .with_label_values(&["submit"])
-            .inc();
-        let timer = HISTOGRAM_RELAY_DURATION
-            .with_label_values(&["submit"])
-            .start_timer();
+        RELAY_PRESSURE.with_label_values(&["submit"]).inc();
+        let timer = RELAY_DURATION.with_label_values(&["submit"]).start_timer();
         //  represents a collection timestamp
         let timestamp_secs = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs() as i64;
-        let pressure = data.len();
         let mut queue = self
             .0
             .lock()
@@ -114,24 +109,21 @@ impl HistogramRelay {
             if (timestamp_secs - v.0) < var!("MAX_QUEUE_TIME_SECS", 300) {
                 return true;
             }
-            HISTOGRAM_RELAY_PRESSURE
-                .with_label_values(&["overflow"])
-                .inc();
+            RELAY_PRESSURE.with_label_values(&["overflow"]).inc();
             false
         }); // drain anything 5 mins or older
-        queue.push_back(Wrapper(timestamp_secs, data));
-        HISTOGRAM_RELAY_PRESSURE
+
+        // filter out our histograms from normal metrics
+        let data: Vec<MetricFamily> = extract_histograms(data).collect();
+        RELAY_PRESSURE
             .with_label_values(&["submitted"])
-            .inc_by(pressure as f64);
+            .inc_by(data.len() as f64);
+        queue.push_back(Wrapper(timestamp_secs, data));
         timer.observe_duration();
     }
     pub fn export(&self) -> Result<String> {
-        HISTOGRAM_RELAY_PRESSURE
-            .with_label_values(&["export"])
-            .inc();
-        let timer = HISTOGRAM_RELAY_DURATION
-            .with_label_values(&["export"])
-            .start_timer();
+        RELAY_PRESSURE.with_label_values(&["export"]).inc();
+        let timer = RELAY_DURATION.with_label_values(&["export"]).start_timer();
         // totally drain all metrics whenever we get a scrape request from the metrics handler
         let mut queue = self
             .0
@@ -139,24 +131,22 @@ impl HistogramRelay {
             .expect("couldn't get mut lock on HistogramRelay");
 
         let data: Vec<Wrapper> = queue.drain(..).collect();
-        info!(
-            "histogram queue drained {} items; remaining count {}",
-            data.len(),
-            queue.len()
-        );
-
         let mut histograms = vec![];
         for mf in data {
             histograms.extend(mf.1);
         }
+        info!(
+            "histogram queue drained {} items; remaining count {}",
+            histograms.len(),
+            queue.len()
+        );
 
-        let histograms: Vec<MetricFamily> = extract_histograms(histograms).collect();
         let encoder = prometheus::TextEncoder::new();
         let string = match encoder.encode_to_string(&histograms) {
             Ok(s) => s,
             Err(error) => bail!("{error}"),
         };
-        HISTOGRAM_RELAY_PRESSURE
+        RELAY_PRESSURE
             .with_label_values(&["exported"])
             .inc_by(histograms.len() as f64);
         timer.observe_duration();

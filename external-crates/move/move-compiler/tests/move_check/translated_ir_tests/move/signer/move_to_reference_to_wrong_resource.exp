@@ -1,0 +1,20 @@
+error[E04007]: incompatible types
+  ┌─ tests/move_check/translated_ir_tests/move/signer/move_to_reference_to_wrong_resource.move:5:9
+  │
+5 │         move_to<R>(s, X { f: false })
+  │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  │         │       │     │
+  │         │       │     Given: '0x8675309::M::X'
+  │         │       Expected: '0x8675309::M::R'
+  │         Invalid call of 'move_to'. Invalid argument for parameter '1'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/translated_ir_tests/move/signer/move_to_reference_to_wrong_resource.move:16:14
+   │
+16 │         () = move_to<X<bool>>(s, R { f: false })
+   │              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │              │       │           │
+   │              │       │           Given: '0x8675309::N::R<bool>'
+   │              │       Expected: '0x8675309::N::X<bool>'
+   │              Invalid call of 'move_to'. Invalid argument for parameter '1'
+

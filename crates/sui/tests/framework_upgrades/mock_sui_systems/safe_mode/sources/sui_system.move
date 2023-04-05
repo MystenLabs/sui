@@ -69,33 +69,6 @@ module sui_system::sui_system {
         )
     }
 
-    fun advance_epoch_safe_mode(
-        storage_reward: Balance<SUI>,
-        computation_reward: Balance<SUI>,
-        wrapper: &mut SuiSystemState,
-        new_epoch: u64,
-        next_protocol_version: u64,
-        storage_rebate: u64,
-        non_refundable_storage_fee: u64,
-        epoch_start_timestamp_ms: u64,
-        ctx: &mut TxContext,
-    ) {
-        let self = load_system_state_mut(wrapper);
-        // Validator will make a special system call with sender set as 0x0.
-        assert!(tx_context::sender(ctx) == @0x0, 0);
-        sui_system_state_inner::advance_epoch_safe_mode(
-            self,
-            new_epoch,
-            next_protocol_version,
-            storage_reward,
-            computation_reward,
-            storage_rebate,
-            non_refundable_storage_fee,
-            epoch_start_timestamp_ms,
-            ctx
-        )
-    }
-
     fun load_system_state_mut(self: &mut SuiSystemState): &mut SuiSystemStateInner {
         let version = self.version;
         dynamic_field::borrow_mut(&mut self.id, version)

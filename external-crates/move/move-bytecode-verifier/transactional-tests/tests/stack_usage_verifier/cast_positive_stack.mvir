@@ -1,0 +1,47 @@
+//# run
+main() {
+label b0:
+    (3);
+    to_u8(());
+    return;
+}
+
+//# run
+main() {
+label b0:
+    (3);
+    to_u16(());
+    return;
+}
+
+//# run
+main() {
+label b0:
+    (3);
+    to_u32(());
+    return;
+}
+
+//# run
+main() {
+label b0:
+    (3);
+    to_u64(());
+    return;
+}
+
+//# run
+main() {
+label b0:
+    (3);
+    to_u128(());
+    return;
+}
+
+//# run
+main() {
+label b0:
+    (3);
+    to_u256(());
+    return;
+}

@@ -1,0 +1,125 @@
+//# publish
+module 0x42.tu8 {
+test() {
+let x: u8;
+label l0:
+    x = 0u8;
+    x = 100u8;
+    x = 1u8 + 1u8;
+    x = 1u8 - 1u8;
+    x = 1u8 * 1u8;
+    x = 1u8 / 1u8;
+    x = 1u8 % 1u8;
+    x = 1u8 & 1u8;
+    x = 1u8 | 1u8;
+    x = 1u8 ^ 1u8;
+    x = 1u8 << 1u8;
+    x = 1u8 >> 1u8;
+    return;
+}
+}
+
+//# publish
+module 0x42.tu16 {
+test() {
+let x: u16;
+label l0:
+  x = 0u16;
+  x = 100u16;
+  x = 1u16 + 1u16;
+  x = 1u16 - 1u16;
+  x = 1u16 * 1u16;
+  x = 1u16 / 1u16;
+  x = 1u16 % 1u16;
+  x = 1u16 & 1u16;
+  x = 1u16 | 1u16;
+  x = 1u16 ^ 1u16;
+  x = 1u16 << 1u8;
+  x = 1u16 >> 1u8;
+  return;
+}
+}
+
+//# publish
+module 0x42.tu32 {
+test() {
+let x: u32;
+label l0:
+    x = 0u32;
+    x = 100u32;
+    x = 1u32 + 1u32;
+    x = 1u32 - 1u32;
+    x = 1u32 * 1u32;
+    x = 1u32 / 1u32;
+    x = 1u32 % 1u32;
+    x = 1u32 & 1u32;
+    x = 1u32 | 1u32;
+    x = 1u32 ^ 1u32;
+    x = 1u32 << 1u8;
+    x = 1u32 >> 1u8;
+    return;
+}
+}
+
+//# publish
+module 0x42.tu64 {
+test() {
+let x: u64;
+label l0:
+  x = 0u64;
+  x = 100u64;
+  x = 1u64 + 1u64;
+  x = 1u64 - 1u64;
+  x = 1u64 * 1u64;
+  x = 1u64 / 1u64;
+  x = 1u64 % 1u64;
+  x = 1u64 & 1u64;
+  x = 1u64 | 1u64;
+  x = 1u64 ^ 1u64;
+  x = 1u64 << 1u8;
+  x = 1u64 >> 1u8;
+  return;
+}
+}
+
+//# publish
+module 0x42.tu128 {
+test() {
+let x: u128;
+label l0:
+    x = 0u128;
+    x = 100u128;
+    x = 1u128 + 1u128;
+    x = 1u128 - 1u128;
+    x = 1u128 * 1u128;
+    x = 1u128 / 1u128;
+    x = 1u128 % 1u128;
+    x = 1u128 & 1u128;
+    x = 1u128 | 1u128;
+    x = 1u128 ^ 1u128;
+    x = 1u128 << 1u8;
+    x = 1u128 >> 1u8;
+    return;
+}
+}
+
+//# publish
+module 0x42.tu256 {
+test() {
+let x: u256;
+label l0:
+    x = 0u256;
+    x = 100u256;
+    x = 1u256 + 1u256;
+    x = 1u256 - 1u256;
+    x = 1u256 * 1u256;
+    x = 1u256 / 1u256;
+    x = 1u256 % 1u256;
+    x = 1u256 & 1u256;
+    x = 1u256 | 1u256;
+    x = 1u256 ^ 1u256;
+    x = 1u256 << 1u8;
+    x = 1u256 >> 1u8;
+    return;
+}
+}

@@ -1,0 +1,4 @@
+processed 1 task
+
+task 0 'print-bytecode'. lines 1-7:
+Error: variable x undefined

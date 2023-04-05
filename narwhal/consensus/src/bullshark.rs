@@ -155,7 +155,7 @@ impl ConsensusProtocol for Bullshark {
             .iter()
             .rev()
         {
-            let sub_dag_index = state.next_sub_dag_index();
+            let sub_dag_index = state.latest_sub_dag_index + 1;
             let _span = error_span!("bullshark_process_sub_dag", sub_dag_index);
 
             debug!("Leader {:?} has enough support", leader);
@@ -178,23 +178,23 @@ impl ConsensusProtocol for Bullshark {
 
             total_committed_certificates += sequence.len();
 
-            // We resolve the reputation score that should be stored alongside with this sub dag.
-            let reputation_score = self.resolve_reputation_score(state, &sequence, sub_dag_index);
+            // We update the reputation score stored in state
+            let reputation_score = self.update_reputation_score(state, &sequence, sub_dag_index);
 
-            let sub_dag = CommittedSubDag::new(
-                sequence,
-                leader.clone(),
+            let sub_dag = CommittedSubDag {
+                certificates: sequence,
+                leader: leader.clone(),
                 sub_dag_index,
                 reputation_score,
-                state.last_committed_sub_dag.as_ref(),
-            );
+            };
 
             // Persist the update.
             self.store
                 .write_consensus_state(&state.last_committed, &sub_dag)?;
 
-            // Update the last sub dag
-            state.last_committed_sub_dag = Some(sub_dag.clone());
+            // Increase the global consensus index.
+            state.latest_sub_dag_index = sub_dag_index;
+            state.last_committed_leader = Some(sub_dag.leader.digest());
 
             committed_sub_dags.push(sub_dag);
         }
@@ -302,59 +302,52 @@ impl Bullshark {
         dag.get(&round).and_then(|x| x.get(&leader))
     }
 
-    /// Calculates the reputation score for the current commit by taking into account the reputation
-    /// scores from the previous commit (assuming that exists). It returns the updated reputation score.
-    fn resolve_reputation_score(
-        &self,
+    /// Updates and calculates the reputation score for the current commit managing any internal state.
+    /// It returns the updated reputation score.
+    fn update_reputation_score(
+        &mut self,
         state: &mut ConsensusState,
         committed_sequence: &[Certificate],
         sub_dag_index: u64,
     ) -> ReputationScores {
-        // we reset the scores for every schedule change window, or initialise when it's the first
-        // sub dag we are going to create.
+        // we reset the scores for every schedule change window.
         // TODO: when schedule change is implemented we should probably change a little bit
         // this logic here.
-        let mut reputation_score =
-            if sub_dag_index == 1 || sub_dag_index % self.num_sub_dags_per_schedule == 0 {
-                ReputationScores::new(&self.committee)
-            } else {
-                state
-                    .last_committed_sub_dag
-                    .as_ref()
-                    .expect("Committed sub dag should always exist for sub_dag_index > 1")
-                    .reputation_score
-                    .clone()
-            };
+        if sub_dag_index % self.num_sub_dags_per_schedule == 0 {
+            state.last_consensus_reputation_score = ReputationScores::new(&self.committee)
+        }
 
         // update the score for the previous leader. If no previous leader exists,
         // then this is the first time we commit a leader, so no score update takes place
-        if let Some(last_committed_sub_dag) = state.last_committed_sub_dag.as_ref() {
+        if let Some(previous_leader) = state.last_committed_leader {
             for certificate in committed_sequence {
                 // TODO: we could iterate only the certificates of the round above the previous leader's round
                 if certificate
                     .header()
                     .parents()
                     .iter()
-                    .any(|digest| *digest == last_committed_sub_dag.leader.digest())
+                    .any(|digest| *digest == previous_leader)
                 {
-                    reputation_score.add_score(certificate.origin(), 1);
+                    state
+                        .last_consensus_reputation_score
+                        .add_score(certificate.origin(), 1);
                 }
             }
         }
 
-        // we check if this is the last sub dag of the current schedule. If yes then we mark the
+        // we check if this is the last subdag of the current schedule. If yes then we mark the
         // scores as final_of_schedule = true so any downstream user can now that those are the last
         // ones calculated for the current schedule.
-        reputation_score.final_of_schedule =
+        state.last_consensus_reputation_score.final_of_schedule =
             (sub_dag_index + 1) % self.num_sub_dags_per_schedule == 0;
 
         // Always ensure that all the authorities are present in the reputation scores - even
         // when score is zero.
         assert_eq!(
-            reputation_score.total_authorities() as usize,
+            state.last_consensus_reputation_score.total_authorities() as usize,
             self.committee.size()
         );
 
-        reputation_score
+        state.last_consensus_reputation_score.clone()
     }
 }

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
+use futures::executor::block_on;
 use futures::future::join_all;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::HttpClient;
@@ -125,24 +126,24 @@ impl<S> ReadApiServer for ReadApi<S>
 where
     S: IndexerStore + Sync + Send + 'static,
 {
-    async fn get_object(
+    fn get_object(
         &self,
         object_id: ObjectID,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiObjectResponse> {
         if !self.migrated_methods.contains(&"get_object".into()) {
-            return self.fullnode.get_object(object_id, options).await;
+            return block_on(async { self.fullnode.get_object(object_id, options).await });
         }
 
-        Ok(self.get_object_internal(object_id, options).await?)
+        Ok(block_on(self.get_object_internal(object_id, options))?)
     }
 
-    async fn multi_get_objects(
+    fn multi_get_objects(
         &self,
         object_ids: Vec<ObjectID>,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiObjectResponse>> {
-        return self.fullnode.multi_get_objects(object_ids, options).await;
+        block_on(async { self.fullnode.multi_get_objects(object_ids, options).await })
     }
 
     async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt> {
@@ -171,7 +172,7 @@ where
             .await?)
     }
 
-    async fn multi_get_transaction_blocks(
+    fn multi_get_transaction_blocks(
         &self,
         digests: Vec<TransactionDigest>,
         options: Option<SuiTransactionBlockResponseOptions>,
@@ -180,14 +181,11 @@ where
             .migrated_methods
             .contains(&"multi_get_transaction_blocks".to_string())
         {
-            return self
-                .fullnode
-                .multi_get_transaction_blocks(digests, options)
-                .await;
+            return block_on(self.fullnode.multi_get_transaction_blocks(digests, options));
         }
-        Ok(self
-            .multi_get_transaction_blocks_internal(&digests, options)
-            .await?)
+        Ok(block_on(
+            self.multi_get_transaction_blocks_internal(&digests, options),
+        )?)
     }
 
     async fn try_get_past_object(
@@ -201,14 +199,15 @@ where
             .await
     }
 
-    async fn try_multi_get_past_objects(
+    fn try_multi_get_past_objects(
         &self,
         past_objects: Vec<SuiGetPastObjectRequest>,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiPastObjectResponse>> {
-        self.fullnode
-            .try_multi_get_past_objects(past_objects, options)
-            .await
+        block_on(
+            self.fullnode
+                .try_multi_get_past_objects(past_objects, options),
+        )
     }
 
     async fn get_latest_checkpoint_sequence_number(
@@ -236,20 +235,20 @@ where
         Ok(self.state.get_checkpoint(id).await?)
     }
 
-    async fn get_checkpoints(
+    fn get_checkpoints(
         &self,
         cursor: Option<SuiCheckpointSequenceNumber>,
         limit: Option<usize>,
         descending_order: bool,
     ) -> RpcResult<CheckpointPage> {
-        return self
-            .fullnode
-            .get_checkpoints(cursor, limit, descending_order)
-            .await;
+        return block_on(
+            self.fullnode
+                .get_checkpoints(cursor, limit, descending_order),
+        );
     }
 
-    async fn get_events(&self, transaction_digest: TransactionDigest) -> RpcResult<Vec<SuiEvent>> {
-        self.fullnode.get_events(transaction_digest).await
+    fn get_events(&self, transaction_digest: TransactionDigest) -> RpcResult<Vec<SuiEvent>> {
+        block_on(self.fullnode.get_events(transaction_digest))
     }
 }
 

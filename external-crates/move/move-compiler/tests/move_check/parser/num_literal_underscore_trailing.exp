@@ -1,0 +1,9 @@
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/num_literal_underscore_trailing.move:4:20
+  │
+4 │         let _ = 0u8_;
+  │                    ^
+  │                    │
+  │                    Unexpected '_'
+  │                    Expected ';'
+

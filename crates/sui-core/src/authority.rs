@@ -97,6 +97,7 @@ use crate::authority::authority_store::{ExecutionLockReadGuard, InputKey, Object
 use crate::authority::authority_store_pruner::AuthorityStorePruner;
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
+use crate::checkpoints::checkpoint_executor::CheckpointExecutor;
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::epoch_metrics::EpochMetrics;
@@ -105,6 +106,7 @@ use crate::execution_driver::execution_process;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::signature_verifier::SignatureVerifierMetrics;
 use crate::stake_aggregator::StakeAggregator;
+use crate::state_accumulator::StateAccumulator;
 use crate::{transaction_input_checker, transaction_manager::TransactionManager};
 
 #[cfg(test)]
@@ -1831,6 +1833,9 @@ impl AuthorityState {
         supported_protocol_versions: SupportedProtocolVersions,
         new_committee: Committee,
         epoch_start_configuration: EpochStartConfiguration,
+        checkpoint_executor: &CheckpointExecutor,
+        accumulator: Arc<StateAccumulator>,
+        enable_state_consistency_check: bool,
     ) -> SuiResult<Arc<AuthorityPerEpochStore>> {
         Self::check_protocol_version(
             supported_protocol_versions,
@@ -1844,7 +1849,12 @@ impl AuthorityState {
         let mut execution_lock = db.execution_lock_for_reconfiguration().await;
         self.revert_uncommitted_epoch_transactions(cur_epoch_store)
             .await?;
-        self.check_system_consistency();
+        self.check_system_consistency(
+            cur_epoch_store,
+            checkpoint_executor,
+            accumulator,
+            enable_state_consistency_check,
+        );
         if let Some(checkpoint_path) = &self.db_checkpoint_config.checkpoint_path {
             if self
                 .db_checkpoint_config
@@ -1869,7 +1879,13 @@ impl AuthorityState {
         Ok(new_epoch_store)
     }
 
-    fn check_system_consistency(&self) {
+    fn check_system_consistency(
+        &self,
+        cur_epoch_store: &AuthorityPerEpochStore,
+        checkpoint_executor: &CheckpointExecutor,
+        accumulator: Arc<StateAccumulator>,
+        enable_state_consistency_check: bool,
+    ) {
         if let Err(err) = self.database.expensive_check_sui_conservation() {
             if cfg!(debug_assertions) {
                 panic!("{}", err);
@@ -1878,6 +1894,16 @@ impl AuthorityState {
                 // inconsistencies in testnet. We will enable this once we make it balanced again in testnet.
                 warn!("System consistency check failed: {}", err);
             }
+        }
+
+        // check for root state hash consistency with live object set
+        if enable_state_consistency_check {
+            self.database.expensive_check_is_consistent_state(
+                checkpoint_executor,
+                accumulator,
+                cur_epoch_store.epoch(),
+                cfg!(debug_assertions), // panic in debug mode only
+            );
         }
     }
 
@@ -2001,7 +2027,7 @@ impl AuthorityState {
         Ok(checkpoint)
     }
 
-    pub async fn get_object_read(&self, object_id: &ObjectID) -> Result<ObjectRead, SuiError> {
+    pub fn get_object_read(&self, object_id: &ObjectID) -> Result<ObjectRead, SuiError> {
         match self.database.get_object_or_tombstone(*object_id)? {
             None => Ok(ObjectRead::NotExists(*object_id)),
             Some(obj_ref) => {
@@ -2041,7 +2067,7 @@ impl AuthorityState {
     where
         T: DeserializeOwned,
     {
-        let o = self.get_object_read(object_id).await?.into_object()?;
+        let o = self.get_object_read(object_id)?.into_object()?;
         if let Some(move_object) = o.data.try_as_move() {
             Ok(bcs::from_bytes(move_object.contents()).map_err(|e| {
                 SuiError::ObjectDeserializationError {
@@ -2271,7 +2297,7 @@ impl AuthorityState {
         transaction.ok_or_else(|| anyhow!(SuiError::TransactionNotFound { digest }))
     }
 
-    pub async fn get_executed_effects(
+    pub fn get_executed_effects(
         &self,
         digest: TransactionDigest,
     ) -> Result<TransactionEffects, anyhow::Error> {
@@ -2279,21 +2305,21 @@ impl AuthorityState {
         effects.ok_or_else(|| anyhow!(SuiError::TransactionNotFound { digest }))
     }
 
-    pub async fn multi_get_executed_transactions(
+    pub fn multi_get_executed_transactions(
         &self,
         digests: &[TransactionDigest],
     ) -> Result<Vec<Option<VerifiedTransaction>>, anyhow::Error> {
         Ok(self.database.multi_get_transaction_blocks(digests)?)
     }
 
-    pub async fn multi_get_executed_effects(
+    pub fn multi_get_executed_effects(
         &self,
         digests: &[TransactionDigest],
     ) -> Result<Vec<Option<TransactionEffects>>, anyhow::Error> {
         Ok(self.database.multi_get_executed_effects(digests)?)
     }
 
-    pub async fn multi_get_transaction_checkpoint(
+    pub fn multi_get_transaction_checkpoint(
         &self,
         digests: &[TransactionDigest],
     ) -> Result<Vec<Option<(EpochId, CheckpointSequenceNumber)>>, anyhow::Error> {
@@ -2529,7 +2555,7 @@ impl AuthorityState {
         Ok(self.get_indexes()?.get_timestamp_ms(digest)?)
     }
 
-    pub async fn query_events(
+    pub fn query_events(
         &self,
         query: EventFilter,
         // If `Some`, the query will start from the next item after the specified cursor

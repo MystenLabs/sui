@@ -1,0 +1,44 @@
+//# print-bytecode --input=module
+module 0x1d12.M {
+    struct T { b: bool }
+
+    new(): Self.T {
+    label b0:
+        return T { b: true };
+    }
+
+    f() {
+        let t: Self.T;
+        let b: bool;
+    label b0:
+        t = Self.new();
+        T { b } = move(t);
+        return;
+    }
+}
+
+//# publish
+module 0x2d12.M {
+    struct T { b: bool }
+
+    public new(): Self.T {
+    label b0:
+        return T { b: true };
+    }
+}
+
+
+//# print-bytecode --input=module
+// An unpack expression cannot reference a struct type defined in a separate module.
+module 0x2d12.N {
+    import 0x2d12.M;
+
+    f() {
+        let t: M.T;
+        let b: bool;
+    label b0:
+        t = M.new();
+        T { b } = move(t);
+        return;
+    }
+}

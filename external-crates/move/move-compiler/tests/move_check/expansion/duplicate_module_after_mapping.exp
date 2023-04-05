@@ -1,0 +1,24 @@
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_check/expansion/duplicate_module_after_mapping.move:5:11
+  │
+4 │ module A::M {}
+  │           - Module previously defined here, with '(A=0x42)::M'
+5 │ module B::M {}
+  │           ^ Duplicate definition for module '(B=0x42)::M'
+
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_check/expansion/duplicate_module_after_mapping.move:9:11
+  │
+8 │ module 0x1::M {}
+  │             - Module previously defined here, with '0x1::M'
+9 │ module M::M {}
+  │           ^ Duplicate definition for module '(M=0x1)::M'
+
+error[E02001]: duplicate declaration, item, or annotation
+   ┌─ tests/move_check/expansion/duplicate_module_after_mapping.move:13:14
+   │
+12 │ module K::M {}
+   │           - Module previously defined here, with '(K=0x19)::M'
+13 │ module 0x19::M {}
+   │              ^ Duplicate definition for module '0x19::M'
+

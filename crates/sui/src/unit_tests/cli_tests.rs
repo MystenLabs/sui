@@ -912,10 +912,12 @@ async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Err
     .execute(context)
     .await;
 
-    assert!(&result
-        .unwrap_err()
-        .to_string()
-        .contains("DependentPackageNotFound"));
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("Dependency object does not exist or was deleted"),
+        "{}",
+        err
+    );
     Ok(())
 }
 
@@ -924,7 +926,7 @@ async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Err
 #[sim_test]
 #[ignore]
 async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks {}));
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let mut test_cluster = TestClusterBuilder::new().build().await?;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;

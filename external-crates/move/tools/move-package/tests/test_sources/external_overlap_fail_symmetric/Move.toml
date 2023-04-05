@@ -1,0 +1,16 @@
+[package]
+name = "Root"
+version = "0.0.0"
+
+[dependencies]
+# This should fail because the external resolver will also return
+# `ADep` as a transitive dependency and the set of `ADep`s own
+# dependencies is different in both cases.
+ADep = { local = "./deps_only/ADep"}
+
+[dependencies.A]
+resolver = "../resolvers/successful_dep.sh"
+
+[dependencies.A.packages]
+Contains = "Anything"
+Has = { No = "Schema" }

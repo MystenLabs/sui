@@ -1,0 +1,71 @@
+//# publish
+module 0x2.A {
+    struct G<T> has key, drop { x: T }
+
+    public make_g(): Self.G<u64> {
+    label b0:
+        return G<u64> { x: 1 };
+    }
+
+    public borrow(g: &Self.G<u64>): &u64 {
+    label b0:
+        return &(move(g)).G<u64>::x;
+    }
+
+    public borrow_mut(g: &mut Self.G<u64>): &mut u64 {
+    label b0:
+        return &mut (move(g)).G<u64>::x;
+    }
+}
+
+//# run --signers 0x1  --check-runtime-types
+import 0x2.A;
+main(account: signer) {
+    let g: A.G<u64>;
+    let u_ref: &u64;
+    let x: u64;
+label b0:
+    g = A.make_g();
+    u_ref = A.borrow(&g);
+    x = *move(u_ref);
+    return;
+}
+
+//# run --signers 0x1  --check-runtime-types
+import 0x2.A;
+main(account: signer) {
+    let g: A.G<u64>;
+    let u_ref: &u64;
+    let x: u64;
+label b0:
+    g = A.make_g();
+    u_ref = A.borrow(&g);
+    *move(u_ref) = 10;
+    return;
+}
+
+//# run --signers 0x1  --check-runtime-types
+import 0x2.A;
+main(account: signer) {
+    let g: A.G<u64>;
+    let u_ref: &u64;
+    let x: u64;
+label b0:
+    g = A.make_g();
+    u_ref = A.borrow_mut(&mut g);
+    x = *move(u_ref);
+    return;
+}
+
+//# run --signers 0x1  --check-runtime-types
+import 0x2.A;
+main(account: signer) {
+    let g: A.G<u64>;
+    let u_ref: &mut u64;
+    let x: u64;
+label b0:
+    g = A.make_g();
+    u_ref = A.borrow_mut(&mut g);
+    *move(u_ref) = 10;
+    return;
+}

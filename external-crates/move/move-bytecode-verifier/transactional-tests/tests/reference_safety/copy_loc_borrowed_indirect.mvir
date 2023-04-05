@@ -1,0 +1,23 @@
+//# publish
+module 0x1.Tester {
+    t() {
+        let x: u64;
+        let y: u64;
+        let r1: &u64;
+        let r2: &u64;
+    label b0:
+        x = 0;
+        y = 0;
+        r1 = Self.foo(&x, &y);
+        r2 = Self.foo(&x, &y);
+        // valid to copy locals even though imm borrowed
+        _ = copy(x) + copy(x);
+        _ = copy(y) + copy(y);
+        return;
+    }
+
+    foo(r: &u64, r2: &u64): &u64 {
+    label b0:
+        return move(r2);
+    }
+}

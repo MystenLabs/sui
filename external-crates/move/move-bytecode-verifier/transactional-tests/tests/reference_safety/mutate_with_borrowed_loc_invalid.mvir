@@ -1,0 +1,13 @@
+//# publish
+module 0x1.M {
+    t1() {
+        let x: u64;
+        let y: &u64;
+    label b0:
+        x = 0;
+        y = &x;
+        x = 0; // cannot write to x, still borrowed
+        return;
+    }
+
+}

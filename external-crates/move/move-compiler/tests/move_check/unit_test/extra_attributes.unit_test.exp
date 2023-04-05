@@ -1,0 +1,30 @@
+warning[W09007]: unused attribute
+  ┌─ tests/move_check/unit_test/extra_attributes.move:8:60
+  │
+8 │     #[expected_failure(vector_error, location=std::vector, hello=0)]
+  │                                                            ^^^^^ Unused attribute for expected_failure
+
+warning[W09007]: unused attribute
+   ┌─ tests/move_check/unit_test/extra_attributes.move:12:54
+   │
+12 │     #[expected_failure(arithmetic_error, location=n, wowza)]
+   │                                                      ^^^^^ Unused attribute for expected_failure
+
+warning[W09007]: unused attribute
+   ┌─ tests/move_check/unit_test/extra_attributes.move:16:51
+   │
+16 │     #[expected_failure(out_of_gas, location=Self, so_many_attrs)]
+   │                                                   ^^^^^^^^^^^^^ Unused attribute for expected_failure
+
+warning[W09007]: unused attribute
+   ┌─ tests/move_check/unit_test/extra_attributes.move:20:43
+   │
+20 │     #[expected_failure(major_status=4004, an_attr_here_is_unused, location=Self)]
+   │                                           ^^^^^^^^^^^^^^^^^^^^^^ Unused attribute for expected_failure
+
+warning[W09007]: unused attribute
+   ┌─ tests/move_check/unit_test/extra_attributes.move:24:43
+   │
+24 │     #[expected_failure(major_status=4016, minor_code=0, location=Self)]
+   │                                           ^^^^^^^^^^ Unused attribute for expected_failure
+

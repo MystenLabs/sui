@@ -104,9 +104,16 @@ pub fn make_reqwest_client(settings: RemoteWriteConfig) -> ReqwestClient {
     }
 }
 
+// Labels are adhoc labels we will inject per our config
+#[derive(Clone)]
+pub struct Labels {
+    pub network: String,
+    pub inventory_hostname: String,
+}
+
 /// App will configure our routes. This fn is also used to instrument our tests
 pub fn app(
-    network: String,
+    labels: Labels,
     client: ReqwestClient,
     relay: HistogramRelay,
     allower: Option<SuiNodeProvider>,
@@ -123,7 +130,7 @@ pub fn app(
     }
     router
         .layer(Extension(relay))
-        .layer(Extension(network))
+        .layer(Extension(labels))
         .layer(Extension(client))
         .layer(
             ServiceBuilder::new().layer(

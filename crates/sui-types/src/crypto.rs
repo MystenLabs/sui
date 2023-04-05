@@ -79,7 +79,7 @@ pub const DEFAULT_EPOCH_ID: EpochId = 0;
 /// Creates a proof of that the authority account address is owned by the
 /// holder of authority protocol key, and also ensures that the authority
 /// protocol public key exists. A proof of possession is an authority
-/// signature committed over the intent message `intent || message` (See
+/// signature committed over the intent message `intent || message || epoch` (See
 /// more at [struct IntentMessage] and [struct Intent]) where the message is
 /// constructed as `authority_pubkey_bytes || authority_account_address`.
 pub fn generate_proof_of_possession(

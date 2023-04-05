@@ -1,0 +1,9 @@
+error[E06002]: use of unassigned variable
+  ┌─ tests/move_check/translated_ir_tests/move/borrow_tests/borrow_if.move:8:14
+  │
+4 │     let ref;
+  │         --- The variable 'ref' might not have a value. The variable must be assigned a value before being used.
+  ·
+8 │     assert!(*move ref == 5, 42);
+  │              ^^^^^^^^ Invalid usage of unassigned variable 'ref'
+

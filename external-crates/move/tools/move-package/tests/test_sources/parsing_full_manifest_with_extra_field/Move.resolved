@@ -1,0 +1,1 @@
+Failed to resolve dependencies for package 'name': Parsing manifest for 'A': Unable to find package manifest at "tests/test_sources/parsing_full_manifest_with_extra_field/../a": No such file or directory (os error 2)

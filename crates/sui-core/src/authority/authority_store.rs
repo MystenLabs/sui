@@ -43,6 +43,7 @@ use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use super::authority_store_tables::LiveObject;
 use super::{authority_store_tables::AuthorityPerpetualTables, *};
 use mysten_common::sync::notify_read::NotifyRead;
+use typed_store::rocks::util::is_ref_count_value;
 
 const NUM_SHARDS: usize = 4096;
 
@@ -839,13 +840,13 @@ impl AuthorityStore {
         let existing_digests = self
             .perpetual_tables
             .indirect_move_objects
-            .multi_get(indirect_objects.iter().map(|(digest, _)| digest))?;
+            .multi_get_raw_bytes(indirect_objects.iter().map(|(digest, _)| digest))?;
         // split updates to existing and new indirect objects
         // for new objects full merge needs to be triggered. For existing ref count increment is sufficient
         let (existing_indirect_objects, new_indirect_objects): (Vec<_>, Vec<_>) = indirect_objects
             .into_iter()
             .enumerate()
-            .partition(|(idx, _)| existing_digests[*idx].is_some());
+            .partition(|(idx, _)| matches!(&existing_digests[*idx], Some(value) if !is_ref_count_value(value)));
 
         write_batch.insert_batch(&self.perpetual_tables.objects, new_objects.into_iter())?;
         if !new_indirect_objects.is_empty() {
@@ -1380,6 +1381,15 @@ impl AuthorityStore {
         if !self.enable_epoch_sui_conservation_check {
             return Ok(());
         }
+        let protocol_version = ProtocolVersion::new(
+            self.get_sui_system_state_object()
+                .expect("Read sui system state object cannot fail")
+                .protocol_version(),
+        );
+        // Prior to gas model v2, SUI conservation is not guaranteed.
+        if ProtocolConfig::get_for_version(protocol_version).gas_model_version() <= 1 {
+            return Ok(());
+        }
 
         let mut total_storage_rebate = 0;
         let mut total_sui = 0;
@@ -1398,17 +1408,35 @@ impl AuthorityStore {
             .get_sui_system_state_object()
             .expect("Reading sui system state object cannot fail")
             .into_sui_system_state_summary();
+        info!(
+            "Total SUI amount in the network: {}, total storage rebate: {} at beginning of epoch {}",
+            total_sui, total_storage_rebate, system_state.epoch
+        );
 
         let storage_fund_balance = system_state.storage_fund_total_object_storage_rebates;
-        fp_ensure!(
-            total_storage_rebate == storage_fund_balance,
-            SuiError::from(
-                format!(
-                    "Inconsistent state detected at epoch {}: total storage rebate: {}, storage fund balance: {}",
-                    system_state.epoch, total_storage_rebate, storage_fund_balance
-                ).as_str()
-            )
-        );
+        let imbalance = (storage_fund_balance as i64) - (total_storage_rebate as i64);
+        if let Some(expected_imbalance) = self
+            .perpetual_tables
+            .expected_storage_fund_imbalance
+            .get(&())
+            .expect("DB read cannot fail")
+        {
+            fp_ensure!(
+                imbalance == expected_imbalance,
+                SuiError::from(
+                    format!(
+                        "Inconsistent state detected at epoch {}: total storage rebate: {}, storage fund balance: {}, expected imbalance: {}",
+                        system_state.epoch, total_storage_rebate, storage_fund_balance, expected_imbalance
+                    ).as_str()
+                )
+            );
+        } else {
+            self.perpetual_tables
+                .expected_storage_fund_imbalance
+                .insert(&(), &imbalance)
+                .expect("DB write cannot fail");
+        }
+
         if let Some(expected_sui) = self
             .perpetual_tables
             .expected_network_sui_amount
@@ -1433,6 +1461,39 @@ impl AuthorityStore {
         }
 
         Ok(())
+    }
+
+    pub fn expensive_check_is_consistent_state(
+        &self,
+        checkpoint_executor: &CheckpointExecutor,
+        accumulator: Arc<StateAccumulator>,
+        epoch: EpochId,
+        panic: bool,
+    ) {
+        let live_object_set_hash = accumulator.digest_live_object_set();
+
+        let root_state_hash = self
+            .get_root_state_hash(epoch)
+            .expect("Retrieving root state hash cannot fail");
+
+        let is_inconsistent = root_state_hash != live_object_set_hash;
+        if is_inconsistent {
+            if panic {
+                panic!(
+                    "Inconsistent state detected: root state hash: {:?}, live object set hash: {:?}",
+                    root_state_hash, live_object_set_hash
+                );
+            } else {
+                error!(
+                    "Inconsistent state detected: root state hash: {:?}, live object set hash: {:?}",
+                    root_state_hash, live_object_set_hash
+                );
+            }
+        }
+
+        if !panic {
+            checkpoint_executor.set_inconsistent_state(is_inconsistent);
+        }
     }
 }
 

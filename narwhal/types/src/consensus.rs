@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(clippy::mutable_key_type)]
 
-use crate::{Batch, Certificate, CertificateAPI, CertificateDigest, HeaderAPI, Round, TimestampMs};
+use crate::{Batch, Certificate, CertificateAPI, CertificateDigest, HeaderAPI, Round};
 use config::{AuthorityIdentifier, Committee};
 use fastcrypto::hash::Hash;
 use serde::{Deserialize, Serialize};
@@ -13,7 +13,6 @@ use store::{
     traits::Map,
 };
 use tokio::sync::mpsc;
-use tracing::warn;
 
 /// A global sequence number assigned to every CommittedSubDag.
 pub type SequenceNumber = u64;
@@ -36,40 +35,9 @@ pub struct CommittedSubDag {
     pub sub_dag_index: SequenceNumber,
     /// The so far calculated reputation score for nodes
     pub reputation_score: ReputationScores,
-    /// The timestamp that should identify this commit. This is guaranteed to be monotonically
-    /// incremented. This is not necessarily the leader's timestamp. We compare the leader's timestamp
-    /// with the previously committed sud dag timestamp and we always keep the max.
-    pub commit_timestamp: TimestampMs,
 }
 
 impl CommittedSubDag {
-    pub fn new(
-        certificates: Vec<Certificate>,
-        leader: Certificate,
-        sub_dag_index: SequenceNumber,
-        reputation_score: ReputationScores,
-        previous_sub_dag: Option<&CommittedSubDag>,
-    ) -> Self {
-        // Narwhal enforces some invariants on the header.created_at, so we can use it as a timestamp.
-        let previous_sub_dag_ts = previous_sub_dag
-            .map(|s| s.commit_timestamp)
-            .unwrap_or_default();
-        let commit_timestamp = previous_sub_dag_ts.max(*leader.header().created_at());
-
-        if previous_sub_dag_ts > *leader.header().created_at() {
-            warn!(sub_dag_index = ?sub_dag_index, "Leader timestamp {} is older than previously committed sub dag timestamp {}. Auto-correcting to max {}.",
-            leader.header().created_at(), previous_sub_dag_ts, commit_timestamp);
-        }
-
-        Self {
-            certificates,
-            leader,
-            sub_dag_index,
-            reputation_score,
-            commit_timestamp,
-        }
-    }
-
     pub fn len(&self) -> usize {
         self.certificates.len()
     }
@@ -143,15 +111,12 @@ pub struct CommittedSubDagShell {
     pub certificates: Vec<CertificateDigest>,
     /// The leader certificate's digest responsible of committing this sub-dag.
     pub leader: CertificateDigest,
-    /// The round of the leader
+    // The round of the leader
     pub leader_round: Round,
     /// Sequence number of the CommittedSubDag
     pub sub_dag_index: SequenceNumber,
     /// The so far calculated reputation score for nodes
     pub reputation_score: ReputationScores,
-    /// The timestamp that should identify this commit. This is guaranteed to be monotonically
-    /// incremented
-    pub commit_timestamp: TimestampMs,
 }
 
 impl CommittedSubDagShell {
@@ -162,7 +127,6 @@ impl CommittedSubDagShell {
             leader_round: sub_dag.leader.round(),
             sub_dag_index: sub_dag.sub_dag_index,
             reputation_score: sub_dag.reputation_score.clone(),
-            commit_timestamp: sub_dag.commit_timestamp,
         }
     }
 }
@@ -255,82 +219,5 @@ impl ConsensusStore {
             .skip_to(from)?
             .map(|(_, sub_dag)| sub_dag)
             .collect())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::{Certificate, Header, HeaderV1Builder};
-    use crate::{CommittedSubDag, ReputationScores};
-    use config::AuthorityIdentifier;
-    use indexmap::IndexMap;
-    use std::collections::BTreeSet;
-    use test_utils::CommitteeFixture;
-
-    #[test]
-    fn test_monotonically_incremented_commit_timestamps() {
-        // Create a certificate (leader) of round 2 with a high timestamp
-        let newer_timestamp = 100;
-        let older_timestamp = 50;
-
-        let fixture = CommitteeFixture::builder().build();
-        let committee = fixture.committee();
-
-        let header_builder = HeaderV1Builder::default();
-        let header = header_builder
-            .author(AuthorityIdentifier(1u16))
-            .round(2)
-            .epoch(0)
-            .created_at(newer_timestamp)
-            .payload(IndexMap::new())
-            .parents(BTreeSet::new())
-            .build()
-            .unwrap();
-
-        let certificate =
-            Certificate::new_unsigned(&committee, Header::V1(header), Vec::new()).unwrap();
-
-        // AND
-        let sub_dag_round_2 = CommittedSubDag::new(
-            vec![certificate.clone()],
-            certificate,
-            1,
-            ReputationScores::default(),
-            None,
-        );
-
-        // AND commit timestamp is the leader's timestamp
-        assert_eq!(sub_dag_round_2.commit_timestamp, newer_timestamp);
-
-        // Now create the leader of round 4 with the older timestamp
-        let header_builder = HeaderV1Builder::default();
-        let header = header_builder
-            .author(AuthorityIdentifier(1u16))
-            .round(4)
-            .epoch(0)
-            .created_at(older_timestamp)
-            .payload(IndexMap::new())
-            .parents(BTreeSet::new())
-            .build()
-            .unwrap();
-
-        let certificate =
-            Certificate::new_unsigned(&committee, Header::V1(header), Vec::new()).unwrap();
-
-        // WHEN create the sub dag based on the "previously committed" sub dag.
-        let sub_dag_round_4 = CommittedSubDag::new(
-            vec![certificate.clone()],
-            certificate,
-            2,
-            ReputationScores::default(),
-            Some(&sub_dag_round_2),
-        );
-
-        // THEN the latest sub dag should have the highest committed timestamp - basically the
-        // same as the previous commit round
-        assert_eq!(
-            sub_dag_round_4.commit_timestamp,
-            sub_dag_round_2.commit_timestamp
-        );
     }
 }

@@ -1,4 +1,5 @@
 network: joenet
+inventory-hostname: joenet-local
 listen-address: 192.168.0.2:8080
 remote-write:
   url: http://unittest.abcd.io/api/v1/push

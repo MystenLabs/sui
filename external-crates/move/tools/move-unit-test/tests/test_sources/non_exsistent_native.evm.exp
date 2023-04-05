@@ -1,0 +1,20 @@
+Running Move unit tests
+[ FAIL    ] 0x1::M::non_existent_native
+
+Test failures:
+
+Failures in 0x1::M:
+
+┌── non_existent_native ──────
+│ Failed to compile Move code into EVM bytecode.
+│ 
+│ error: native function M::foo not implemented (w/ signature `[]`)
+│   ┌─ <unknown>:1:1
+│   │
+│ 1 │ <unknown>
+│   │ ^
+│ 
+│ 
+└──────────────────
+
+Test result: FAILED. Total tests: 1; passed: 0; failed: 1

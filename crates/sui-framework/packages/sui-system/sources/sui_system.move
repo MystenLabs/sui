@@ -534,39 +534,6 @@ module sui_system::sui_system {
         storage_rebate
     }
 
-    /// An extremely simple version of advance_epoch.
-    /// This is called in two situations:
-    ///   - When the call to advance_epoch failed due to a bug, and we want to be able to keep the
-    ///     system running and continue making epoch changes.
-    ///   - When advancing to a new protocol version, we want to be able to change the protocol
-    ///     version
-    fun advance_epoch_safe_mode(
-        storage_reward: Balance<SUI>,
-        computation_reward: Balance<SUI>,
-        wrapper: &mut SuiSystemState,
-        new_epoch: u64,
-        next_protocol_version: u64,
-        storage_rebate: u64,
-        non_refundable_storage_fee: u64,
-        epoch_start_timestamp_ms: u64,
-        ctx: &mut TxContext,
-    ) {
-        let self = load_system_state_mut(wrapper);
-        // Validator will make a special system call with sender set as 0x0.
-        assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
-        sui_system_state_inner::advance_epoch_safe_mode(
-            self,
-            new_epoch,
-            next_protocol_version,
-            storage_reward,
-            computation_reward,
-            storage_rebate,
-            non_refundable_storage_fee,
-            epoch_start_timestamp_ms,
-            ctx
-        )
-    }
-
     fun load_system_state(self: &mut SuiSystemState): &SuiSystemStateInnerV2 {
         load_inner_maybe_upgrade(self)
     }
@@ -760,32 +727,5 @@ module sui_system::sui_system {
             ctx,
         );
         storage_rebate
-    }
-
-    // CAUTION: THIS CODE IS ONLY FOR TESTING AND THIS MACRO MUST NEVER EVER BE REMOVED.
-    #[test_only]
-    public(friend) fun advance_epoch_safe_mode_for_testing(
-        wrapper: &mut SuiSystemState,
-        new_epoch: u64,
-        next_protocol_version: u64,
-        storage_charge: u64,
-        computation_charge: u64,
-        storage_rebate: u64,
-        non_refundable_storage_fee: u64,
-        ctx: &mut TxContext,
-    ) {
-        let storage_reward = balance::create_for_testing(storage_charge);
-        let computation_reward = balance::create_for_testing(computation_charge);
-        advance_epoch_safe_mode(
-            storage_reward,
-            computation_reward,
-            wrapper,
-            new_epoch,
-            next_protocol_version,
-            storage_rebate,
-            non_refundable_storage_fee,
-            0,
-            ctx,
-        );
     }
 }

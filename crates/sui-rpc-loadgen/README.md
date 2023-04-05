@@ -53,20 +53,31 @@ cargo run --bin sui-rpc-loadgen -- --urls "http://127.0.0.1:9000" --num-threads 
 cargo run --bin sui-rpc-loadgen -- --urls "http://127.0.0.1:9000" "http://127.0.0.1:9000" --num-threads 4 query-transaction-blocks --address-type from
 ```
 
+### Multi Get Transaction Blocks
+```bash
+cargo run --bin sui-rpc-loadgen -- --urls "http://127.0.0.1:9000" "http://127.0.0.1:9000" --num-threads 4 multi-get-transaction-blocks
+```
+
 ### Multi Get Objects
 
 ```bash
 cargo run --bin sui-rpc-loadgen -- --urls "http://127.0.0.1:9000" "http://127.0.0.1:9000" --num-threads 4 multi-get-objects
 ```
 
+### Get Object
+```bash
+cargo run --bin sui-rpc-loadgen -- --urls "http://127.0.0.1:9000" "http://127.0.0.1:9000" --num-threads 2 get-object --chunk-size 20
+```
+
 ### Get All Balances
 ```bash
-cargo run --bin sui-rpc-loadgen -- --urls "http://127.0.0.1:9000" "http://127.0.0.1:9000" --num-threads 4 get-all-balances
+cargo run --bin sui-rpc-loadgen -- --urls "http://127.0.0.1:9000" "http://127.0.0.1:9000" --num-threads 2 get-all-balances --chunk-size 20
 ```
+
 
 ### Get Reference Gas Price
 ```bash
-cargo run --bin sui-rpc-loadgen -- --urls "http://127.0.0.1:9000" "http://127.0.0.1:9000" --num-threads 4 get-reference-gas-price --num-chunks-per-thread 10
+cargo run --bin sui-rpc-loadgen -- --urls "http://127.0.0.1:9000" "http://127.0.0.1:9000" --num-threads 2 get-reference-gas-price --num-chunks-per-thread 10
 ```
 
 # Useful commands

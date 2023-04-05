@@ -1,0 +1,41 @@
+//# run
+main() {
+label b0:
+    (3u8);
+    return;
+}
+
+//# run
+main() {
+label b0:
+    (3u16);
+    return;
+}
+
+//# run
+main() {
+label b0:
+    (3u32);
+    return;
+}
+
+//# run
+main() {
+label b0:
+    (3u64);
+    return;
+}
+
+//# run
+main() {
+label b0:
+    (3u128);
+    return;
+}
+
+//# run
+main() {
+label b0:
+    (3u256);
+    return;
+}
