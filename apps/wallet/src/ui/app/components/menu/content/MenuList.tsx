@@ -52,9 +52,6 @@ function MenuList() {
         FEATURES.WALLET_MULTI_ACCOUNTS
     ).on;
     const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
-
-    // useFaucetRateLimiter
-
     return (
         <>
             <MenuLayout title="Wallet Settings">
