@@ -892,6 +892,10 @@ impl SuiNode {
                 };
             }
 
+            if let Ok(sleep_duration) = std::env::var("SUI_NODE_SLEEP") {
+                tokio::time::sleep(Duration::from_secs(100000000)).await;
+            }
+
             checkpoint_executor.run_epoch(cur_epoch_store.clone()).await;
             let latest_system_state = self
                 .state
