@@ -14,7 +14,8 @@ use move_core_types::language_storage::{ModuleId, TypeTag};
 use move_core_types::value::MoveTypeLayout;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
+use serde_with::{serde_as, DisplayFromStr};
+
 use sui_json::{primitive_type, SuiJsonValue};
 use sui_types::base_types::{
     EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
@@ -37,8 +38,12 @@ use sui_types::signature::GenericSignature;
 use sui_types::storage::{DeleteKind, WriteKind};
 use sui_types::sui_serde::SuiTypeTag as AsSuiTypeTag;
 use sui_types::sui_serde::BigInt;
+use sui_types::sui_serde::SequenceNumber as AsSequenceNumber;
+use sui_types::sui_serde::SuiTypeTag as AsSuiTypeTag;
+
 use crate::balance_changes::BalanceChange;
 use crate::object_changes::ObjectChange;
+use crate::{Page, SuiEvent, SuiMovePackage, SuiObjectRef};
 
 // similar to EpochId of sui-types but BigInt
 pub type SuiEpochId = BigInt<u64>;
