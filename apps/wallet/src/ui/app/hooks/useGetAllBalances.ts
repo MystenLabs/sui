@@ -10,7 +10,7 @@ export function useGetAllBalances(address?: SuiAddress | null) {
     return useQuery(
         ['get-all-balance', address],
         () => rpc.getAllBalances({ owner: address! }),
-        // refetchInterval is set to 4 seconds
-        { enabled: !!address, refetchInterval: 4000 }
+        // refetchInterval is set to 8 seconds
+        { enabled: !!address, refetchInterval: 8000 }
     );
 }
