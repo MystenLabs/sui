@@ -238,9 +238,21 @@ impl<C> SafeClient<C> {
                         Ok(PlainTransactionInfoResponse::ExecutedWithCert(
                             CertifiedTransaction::new_from_data_and_sig(
                                 transaction.into_message(),
-                                cert,
+                                cert.clone(),
                             )
-                            .verify(&committee)?,
+                            .verify(&committee)
+                            .tap_err(|e| {
+                                error!(
+                                    tx_digest = ?digest,
+                                    name=?self.address.concise(),
+                                    epoch=?committee.epoch,
+                                    voting_rights=?committee.voting_rights,
+                                    "Failed to verify cert from validator response. Error: {:?}. Cert: {:?}",
+                                    e,
+                                    cert
+                                )
+                            })
+                            ?,
                             signed_effects,
                             events,
                         ))
