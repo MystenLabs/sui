@@ -90,7 +90,10 @@ export function useGetRollingAverageApys(numberOfValidators: number | null) {
 
                 const avgApy =
                     apys.reduce((sum, apy) => sum + apy, 0) / apys.length;
-                acc[validatorAddr] = roundFloat(avgApy, DEFAULT_APY_DECIMALS);
+                acc[validatorAddr] = roundFloat(
+                    avgApy * 100,
+                    DEFAULT_APY_DECIMALS
+                );
                 return acc;
             }, {} as ApyByValidator);
             // return object with validator address as key and APY as value
