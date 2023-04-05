@@ -66,7 +66,7 @@ impl StateAccumulator {
             return Ok(acc);
         }
 
-        let acc = self.accumulate_effects(effects);
+        let acc = self.accumulate_effects(effects, epoch_store.clone());
 
         epoch_store.insert_state_hash_for_checkpoint(&checkpoint_seq_num, &acc)?;
         debug!("Accumulated checkpoint {}", checkpoint_seq_num);
@@ -79,7 +79,11 @@ impl StateAccumulator {
     }
 
     /// Accumulates given effects and returns the accumulator without side effects.
-    pub fn accumulate_effects(&self, effects: Vec<TransactionEffects>) -> Accumulator {
+    pub fn accumulate_effects(
+        &self,
+        effects: Vec<TransactionEffects>,
+        epoch_store: Arc<AuthorityPerEpochStore>,
+    ) -> Accumulator {
         let mut acc = Accumulator::default();
 
         // process insertions to the set
@@ -188,10 +192,17 @@ impl StateAccumulator {
                     .get_object_ref_prior_to_key(id, *seq_num)
                     .expect("read cannot fail");
 
-                objref.map(|(id, version, digest)| {
-                    assert!(digest.is_wrapped(), "{:?}", id);
-                    WrappedObject::new(id, version)
-                })
+                if let Some((id, version, digest)) = objref {
+                    if digest.is_wrapped() {
+                        return Some(WrappedObject::new(id, version));
+                    } else if epoch_store.protocol_config().loaded_child_objects_fixed() {
+                        panic!(
+                            "Expected digest {:?} for object id {:?} version {:?} to be wrapped",
+                            digest, id, version
+                        );
+                    }
+                }
+                None
             })
             .collect();
 
