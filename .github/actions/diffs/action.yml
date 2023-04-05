@@ -22,6 +22,7 @@ runs:
       filters: |
         isRust:
           - 'crates/**'
+          - 'external-crates/**'
           - 'narwhal/**'
           - '.github/workflows/bench.yml'
           - '.github/workflows/codecov.yml'
