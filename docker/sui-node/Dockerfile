@@ -25,7 +25,7 @@ RUN apt-get update && apt-get install -y cmake clang
 # and run `cargo build` in order to create a caching Docker layer
 # with all dependencies built.
 FROM chef AS builder 
-# ARG PROFILE=release
+ARG PROFILE=release
 # COPY --from=planner /sui/Cargo.toml Cargo.toml
 # COPY --from=planner /sui/Cargo.lock Cargo.lock
 # COPY --from=planner /sui/crates/workspace-hack crates/workspace-hack
