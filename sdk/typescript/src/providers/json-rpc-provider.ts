@@ -654,7 +654,7 @@ export class JsonRpcProvider {
   }
 
   /**
-   * Runs the transaction block in dev-inpsect mode. Which allows for nearly any
+   * Runs the transaction block in dev-inspect mode. Which allows for nearly any
    * transaction (or Move call) with any arguments. Detailed results are
    * provided, including both the transaction effects and any return values.
    */
@@ -805,7 +805,7 @@ export class JsonRpcProvider {
    */
   async getCommitteeInfo(input?: {
     /** The epoch of interest. If null, default to the latest epoch */
-    epoch?: number;
+    epoch?: string;
   }): Promise<CommitteeInfo> {
     return await this.client.requestWithType(
       'suix_getCommitteeInfo',
