@@ -18,10 +18,10 @@ tracing = "0.1.36"
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 types = { path = "../types", package = "narwhal-types" }
 store = { path = "../../crates/typed-store", package = "typed-store" }
+sui-macros = { path = "../../crates/sui-macros" }
 config = { path = "../config", package = "narwhal-config" }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 prometheus = "0.13.3"
-fail = "0.5.1"
 lru = "0.10"
 parking_lot = "0.12.1"
 tap = "1.0.1"

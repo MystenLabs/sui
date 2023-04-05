@@ -3003,17 +3003,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fail"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe5e43d0f78a42ad591453aedb1d7ae631ce7ee445c7643691055a9ed8d3b01c"
-dependencies = [
- "log",
- "once_cell",
- "rand 0.8.5",
-]
-
-[[package]]
 name = "fallible-iterator"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4828,7 +4817,7 @@ name = "move-bytecode-verifier"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "fail 0.4.0",
+ "fail",
  "move-binary-format",
  "move-borrow-graph",
  "move-core-types",
@@ -5387,7 +5376,7 @@ name = "move-vm-runtime"
 version = "0.1.0"
 dependencies = [
  "better_any",
- "fail 0.4.0",
+ "fail",
  "move-binary-format",
  "move-bytecode-verifier",
  "move-core-types",
@@ -5777,7 +5766,6 @@ dependencies = [
  "bincode",
  "bytes",
  "dashmap",
- "fail 0.5.1",
  "futures",
  "mysten-common",
  "mysten-metrics",
@@ -5788,6 +5776,7 @@ dependencies = [
  "prometheus",
  "quinn-proto",
  "rand 0.8.5",
+ "sui-macros",
  "tokio",
  "tower",
  "tracing",
@@ -5806,7 +5795,6 @@ dependencies = [
  "cfg-if",
  "clap 2.34.0",
  "eyre",
- "fail 0.5.1",
  "fastcrypto",
  "futures",
  "mysten-metrics",
@@ -5855,7 +5843,6 @@ dependencies = [
  "bincode",
  "bytes",
  "dashmap",
- "fail 0.5.1",
  "fastcrypto",
  "futures",
  "governor",
@@ -5881,6 +5868,7 @@ dependencies = [
  "proptest",
  "rand 0.8.5",
  "reqwest",
+ "sui-macros",
  "tap",
  "telemetry-subscribers",
  "tempfile",
@@ -5898,7 +5886,6 @@ name = "narwhal-storage"
 version = "0.1.0"
 dependencies = [
  "dashmap",
- "fail 0.5.1",
  "fastcrypto",
  "futures",
  "lru",
@@ -5909,6 +5896,7 @@ dependencies = [
  "narwhal-types",
  "parking_lot 0.12.1",
  "prometheus",
+ "sui-macros",
  "tap",
  "tempfile",
  "tokio",
@@ -11866,8 +11854,7 @@ dependencies = [
  "event-listener",
  "expect-test",
  "eyre",
- "fail 0.4.0",
- "fail 0.5.1",
+ "fail",
  "fallible-iterator",
  "fastcrypto",
  "fastcrypto-derive",

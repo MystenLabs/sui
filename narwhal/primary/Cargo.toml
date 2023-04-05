@@ -38,6 +38,7 @@ network = { path = "../network", package = "narwhal-network" }
 types = { path = "../types", package = "narwhal-types" }
 storage = { path = "../storage", package = "narwhal-storage" }
 store = { path = "../../crates/typed-store", package = "typed-store" }
+sui-macros = { path = "../../crates/sui-macros" }
 mysten-network.workspace = true
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
@@ -46,7 +47,6 @@ mysten-metrics = { path = "../../crates/mysten-metrics" }
 
 anemo.workspace = true
 anemo-tower.workspace = true
-fail = "0.5.1"
 
 [dev-dependencies]
 dashmap = "5.4.0"

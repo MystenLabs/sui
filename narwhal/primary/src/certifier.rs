@@ -13,6 +13,7 @@ use network::anemo_ext::NetworkExt;
 use std::sync::Arc;
 use std::time::Duration;
 use storage::{CertificateStore, HeaderStore};
+use sui_macros::fail_point_async;
 use tokio::{
     sync::oneshot,
     task::{JoinHandle, JoinSet},
@@ -128,12 +129,6 @@ impl Certifier {
     ) -> DagResult<Vote> {
         let peer_id = anemo::PeerId(target.0.to_bytes());
         let peer = network.waiting_peer(peer_id);
-
-        fail::fail_point!("request-vote", |_| {
-            Err(DagError::NetworkError(format!(
-                "Injected error in request vote for {header}"
-            )))
-        });
 
         let mut client = PrimaryToPrimaryClient::new(peer);
 
@@ -388,6 +383,7 @@ impl Certifier {
                     let signature_service = self.signature_service.clone();
                     let metrics = self.metrics.clone();
                     let network = self.network.clone();
+                    fail_point_async!("narwhal-delay");
                     self.propose_header_tasks.spawn(monitored_future!(Self::propose_header(
                         name,
                         committee,
@@ -407,6 +403,7 @@ impl Certifier {
                 Some(result) = self.propose_header_tasks.join_next() => {
                     match result {
                         Ok(Ok(certificate)) => {
+                            fail_point_async!("narwhal-delay");
                             self.synchronizer.accept_own_certificate(certificate).await
                         },
                         Ok(Err(e)) => Err(e),
