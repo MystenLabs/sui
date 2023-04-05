@@ -1,5 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+use mysten_metrics::histogram::Histogram as MystenHistogram;
 use prometheus::{
     default_registry, register_histogram_with_registry, register_int_counter_vec_with_registry,
     register_int_counter_with_registry, register_int_gauge_vec_with_registry,
@@ -11,7 +13,7 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
     0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 8.0, 10.0, 15.0, 20.0, 30.0, 50.0, 100.0, 200.0,
 ];
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ConsensusMetrics {
     /// The number of rounds for which the Dag holds certificates (for Tusk or Bullshark)
     pub consensus_dag_rounds: IntGaugeVec,
@@ -30,7 +32,7 @@ pub struct ConsensusMetrics {
     /// The latency between two successful commit rounds
     pub commit_rounds_latency: Histogram,
     /// The number of certificates committed per commit round
-    pub committed_certificates: Histogram,
+    pub committed_certificates: MystenHistogram,
     /// The time it takes for a certificate from the moment it gets created
     /// up to the moment it gets committed.
     pub certificate_commit_latency: Histogram,
@@ -89,16 +91,11 @@ impl ConsensusMetrics {
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry
             ).unwrap(),
-            committed_certificates: register_histogram_with_registry!(
+            committed_certificates: MystenHistogram::new_in_registry(
                 "committed_certificates",
                 "The number of certificates committed on a commit round",
-                // buckets in number of certificates
-                vec![
-                    0.0, 5.0, 10.0, 20.0, 30.0, 40.0, 50.0, 100.0, 150.0,
-                    200.0, 300.0, 400.0, 500.0, 1_000.0, 2_000.0, 5_000.0
-                ],
                 registry
-            ).unwrap(),
+            ),
             certificate_commit_latency: register_histogram_with_registry!(
                 "certificate_commit_latency",
                 "The time it takes for a certificate from the moment it gets created up to the moment it gets committed.",
