@@ -4,6 +4,7 @@
 use itertools::Itertools;
 use mysten_metrics::monitored_scope;
 use serde::Serialize;
+use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::committee::EpochId;
 use sui_types::digests::{ObjectDigest, TransactionDigest};
@@ -66,7 +67,7 @@ impl StateAccumulator {
             return Ok(acc);
         }
 
-        let acc = self.accumulate_effects(effects);
+        let acc = self.accumulate_effects(effects, epoch_store.protocol_config());
 
         epoch_store.insert_state_hash_for_checkpoint(&checkpoint_seq_num, &acc)?;
         debug!("Accumulated checkpoint {}", checkpoint_seq_num);
@@ -79,7 +80,11 @@ impl StateAccumulator {
     }
 
     /// Accumulates given effects and returns the accumulator without side effects.
-    pub fn accumulate_effects(&self, effects: Vec<TransactionEffects>) -> Accumulator {
+    pub fn accumulate_effects(
+        &self,
+        effects: Vec<TransactionEffects>,
+        protocol_config: &ProtocolConfig,
+    ) -> Accumulator {
         let mut acc = Accumulator::default();
 
         // process insertions to the set
@@ -189,7 +194,11 @@ impl StateAccumulator {
                     .expect("read cannot fail");
 
                 objref.map(|(id, version, digest)| {
-                    assert!(digest.is_wrapped(), "{:?}", id);
+                    assert!(
+                        !protocol_config.loaded_child_objects_fixed() || digest.is_wrapped(),
+                        "{:?}",
+                        id
+                    );
                     WrappedObject::new(id, version)
                 })
             })
