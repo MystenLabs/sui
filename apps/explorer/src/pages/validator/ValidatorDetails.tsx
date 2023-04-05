@@ -95,18 +95,22 @@ function ValidatorDetails() {
             </div>
             {atRiskRemainingEpochs !== null && (
                 <div className="mt-5">
-                    <Banner fullWidth variant="error">
-                        <div className="flex flex-col gap-1">
+                    <Banner
+                        fullWidth
+                        border
+                        variant="error"
+                        title={
                             <Text uppercase variant="bodySmall/semibold">
                                 at risk of being removed as a validator after{' '}
                                 {atRiskRemainingEpochs} epoch
                                 {atRiskRemainingEpochs > 1 ? 's' : ''}
                             </Text>
-                            <Text variant="bodySmall/medium">
-                                Staked SUI is below the minimum SUI stake
-                                threshold to remain a validator.
-                            </Text>
-                        </div>
+                        }
+                    >
+                        <Text variant="bodySmall/medium">
+                            Staked SUI is below the minimum SUI stake threshold
+                            to remain a validator.
+                        </Text>
                     </Banner>
                 </div>
             )}
