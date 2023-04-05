@@ -1091,9 +1091,9 @@ impl SuiProgrammableTransactionBlock {
                         return result_types;
                     };
                     for (arg, type_) in c.arguments.iter().zip(types) {
-                        if let &Argument::Input(i) = arg {
+                        if let (&Argument::Input(i), Some(type_)) = (arg, type_) {
                             if let Some(x) = result_types.get_mut(i as usize) {
-                                *x = type_;
+                                x.replace(type_);
                             }
                         }
                     }
@@ -1102,14 +1102,14 @@ impl SuiProgrammableTransactionBlock {
                     for arg in amounts {
                         if let &Argument::Input(i) = arg {
                             if let Some(x) = result_types.get_mut(i as usize) {
-                                *x = Some(MoveTypeLayout::U64);
+                                x.replace(MoveTypeLayout::U64);
                             }
                         }
                     }
                 }
                 Command::TransferObjects(_, Argument::Input(i)) => {
                     if let Some(x) = result_types.get_mut((*i) as usize) {
-                        *x = Some(MoveTypeLayout::Vector(Box::new(MoveTypeLayout::Address)));
+                        x.replace(MoveTypeLayout::Vector(Box::new(MoveTypeLayout::Address)));
                     }
                 }
                 _ => {}
