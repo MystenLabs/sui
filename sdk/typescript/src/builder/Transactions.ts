@@ -109,12 +109,23 @@ export const PublishTransaction = object({
 });
 export type PublishTransaction = Infer<typeof PublishTransaction>;
 
+export const UpgradeTransaction = object({
+  kind: literal('Upgrade'),
+  modules: array(array(integer())),
+  dependencies: array(ObjectId),
+  package_id: ObjectId,
+  ticket: TransactionArgument,
+});
+export type UpgradeTransaction = Infer<typeof UpgradeTransaction>;
+
+
 const TransactionTypes = [
   MoveCallTransaction,
   TransferObjectsTransaction,
   SplitCoinsTransaction,
   MergeCoinsTransaction,
   PublishTransaction,
+  UpgradeTransaction,
   MakeMoveVecTransaction,
 ] as const;
 
@@ -174,6 +185,17 @@ export const Transactions = {
     return create(
       { kind: 'Publish', modules, dependencies },
       PublishTransaction,
+    );
+  },
+  Upgrade(
+    modules: number[][],
+    dependencies: ObjectId[],
+    package_id: ObjectId,
+    ticket: TransactionArgument,
+  ): UpgradeTransaction {
+    return create(
+      { kind: 'Upgrade', modules, dependencies, package_id, ticket },
+      UpgradeTransaction,
     );
   },
   MakeMoveVec({

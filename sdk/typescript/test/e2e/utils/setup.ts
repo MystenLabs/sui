@@ -114,7 +114,7 @@ export async function publishPackage(
 
   const tmpobj = tmp.dirSync({ unsafeCleanup: true });
 
-  const compiledModulesAndDeps = JSON.parse(
+  const { modules, dependencies } = JSON.parse(
     execSync(
       `${SUI_BIN} move build --dump-bytecode-as-base64 --path ${packagePath} --install-dir ${tmpobj.name}`,
       { encoding: 'utf-8' },
@@ -122,10 +122,8 @@ export async function publishPackage(
   );
   const tx = new TransactionBlock();
   const cap = tx.publish(
-    compiledModulesAndDeps.modules.map((m: any) => Array.from(fromB64(m))),
-    compiledModulesAndDeps.dependencies.map((addr: string) =>
-      normalizeSuiObjectId(addr),
-    ),
+    modules.map((m: any) => Array.from(fromB64(m))),
+    dependencies.map((addr: string) => normalizeSuiObjectId(addr)),
   );
 
   // Transfer the upgrade capability to the sender so they can upgrade the package later if they want.
@@ -152,6 +150,17 @@ export async function publishPackage(
 
   return { packageId, publishTxn };
 }
+
+export async function upgradePackage(
+  packageId: ObjectId,
+  capId: ObjectId,
+  packagePath: string,
+  toolbox?: TestToolbox,
+) {
+  // TODO: Finish
+}
+
+
 
 export function getRandomAddresses(n: number): SuiAddress[] {
   return Array(n)
