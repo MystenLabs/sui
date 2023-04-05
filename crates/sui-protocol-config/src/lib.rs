@@ -357,9 +357,6 @@ pub struct ProtocolConfig {
     /// Gas model version, what code we are using to charge gas
     gas_model_version: Option<u64>,
 
-    /// Which version of the cost table
-    gas_cost_table_version: Option<u64>,
-
     /// === Storage gas costs ===
 
     /// Per-byte cost of storing an object in the Sui global object store. Some of this cost may be refundable if the object is later freed
@@ -779,7 +776,6 @@ impl ProtocolConfig {
                 obj_data_cost_refundable: Some(100),
                 obj_metadata_cost_non_refundable: Some(50),
                 gas_model_version: Some(1),
-                gas_cost_table_version: Some(1),
                 storage_rebate_rate: Some(9900),
                 storage_fund_reinvest_rate: Some(500),
                 reward_slashing_rate: Some(5000),
@@ -987,8 +983,7 @@ impl ProtocolConfig {
             5 => {
                 let mut cfg = Self::get_for_version_impl(version - 1);
                 cfg.feature_flags.missing_type_is_compatibility_error = true;
-                // TODO(devx): Bump this in next PR
-                cfg.gas_cost_table_version = Some(1);
+                cfg.gas_model_version = Some(4);
                 cfg
             }
             // Use this template when making changes:
