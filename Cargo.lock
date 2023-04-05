@@ -9925,6 +9925,7 @@ dependencies = [
  "anemo",
  "anemo-cli",
  "anyhow",
+ "async-trait",
  "clap 4.1.4",
  "colored",
  "comfy-table",

@@ -3,19 +3,28 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
+use async_trait::async_trait;
 use futures::future::join_all;
+use futures::stream::{FuturesOrdered, FuturesUnordered};
+use futures::StreamExt;
 use itertools::Itertools;
 use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
 use sui_config::{genesis::Genesis, NodeConfig};
+use sui_core::authority::authority_store_tables::{
+    AuthorityPerpetualTables, AuthorityPerpetualTablesReadOnly,
+};
 use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use sui_network::default_mysten_network_config;
 use sui_types::multiaddr::Multiaddr;
 use sui_types::object::ObjectFormatOptions;
-use sui_types::{base_types::*, messages::*, object::Owner};
+use sui_types::SUI_CLOCK_OBJECT_ID;
+use sui_types::{base_types::*, message_envelope::Message, messages::*, object::Owner};
 use tokio::time::Instant;
+use typed_store::rocks::DBMap;
+use typed_store::traits::Map;
 
 use anyhow::anyhow;
 
@@ -298,6 +307,184 @@ pub async fn get_object(
         requested_id: obj_id,
         responses,
     })
+}
+
+struct ReadTxFromClients {
+    clients: BTreeMap<AuthorityName, (Multiaddr, NetworkAuthorityClient)>,
+}
+
+impl ReadTxFromClients {
+    fn new(clients: BTreeMap<AuthorityName, (Multiaddr, NetworkAuthorityClient)>) -> Self {
+        Self { clients }
+    }
+}
+
+struct ReadTxFromDb {
+    db: AuthorityPerpetualTablesReadOnly,
+}
+
+impl ReadTxFromDb {
+    fn new(db_path: PathBuf) -> Self {
+        Self {
+            db: AuthorityPerpetualTables::open_readonly(&db_path),
+        }
+    }
+}
+
+#[async_trait]
+trait ReadTx {
+    async fn fetch_txn(
+        &self,
+        tx_digest: TransactionDigest,
+        fx_digest: Option<TransactionEffectsDigest>,
+    ) -> Result<(SenderSignedData, TransactionEffects)>;
+}
+
+#[async_trait]
+impl ReadTx for ReadTxFromClients {
+    async fn fetch_txn(
+        &self,
+        tx_digest: TransactionDigest,
+        fx_digest: Option<TransactionEffectsDigest>,
+    ) -> Result<(SenderSignedData, TransactionEffects)> {
+        // get first successful response from futures
+        async fn poll_first_response(
+            tx_digest: TransactionDigest,
+            fx_digest: Option<TransactionEffectsDigest>,
+            clients: &BTreeMap<AuthorityName, (Multiaddr, NetworkAuthorityClient)>,
+        ) -> (SenderSignedData, TransactionEffects) {
+            let mut futures: FuturesUnordered<_> = clients
+                .iter()
+                .map(|(name, (address, client))| async {
+                    let result = client
+                        .handle_transaction_info_request(TransactionInfoRequest {
+                            transaction_digest: tx_digest,
+                        })
+                        .await;
+                    (*name, address.clone(), result)
+                })
+                .collect();
+
+            while let Some((name, address, result)) = futures.next().await {
+                match result {
+                    Ok(resp) => {
+                        if resp.transaction.digest() != tx_digest {
+                            eprintln!("transaction digest mismatch");
+                            continue;
+                        }
+                        match resp.status {
+                            TransactionStatus::Executed(_, effects, _) => {
+                                if let Some(fx_digest) = fx_digest {
+                                    if *effects.digest() != fx_digest {
+                                        eprintln!("effects digest mismatch");
+                                        continue;
+                                    }
+                                } else {
+                                    return (resp.transaction, effects.into_data());
+                                }
+                            }
+                            _ => {
+                                eprintln!("transaction not executed");
+                                continue;
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "Error fetching transaction from validator {:?} at {:?}: {}",
+                            name, address, e
+                        );
+                    }
+                }
+            }
+            panic!("No validator responded to transaction request");
+        }
+
+        let ret = poll_first_response(tx_digest, fx_digest, &self.clients).await;
+        println!("Fetched transaction: {:?}", tx_digest);
+        Ok(ret)
+    }
+}
+
+#[async_trait]
+impl ReadTx for ReadTxFromDb {
+    async fn fetch_txn(
+        &self,
+        tx_digest: TransactionDigest,
+        fx_digest: Option<TransactionEffectsDigest>,
+    ) -> Result<(SenderSignedData, TransactionEffects)> {
+        let tx: Option<VerifiedTransaction> = self
+            .db
+            .transactions
+            .get(&tx_digest)
+            .unwrap()
+            .map(|v| v.into())
+            .clone();
+        let tx = tx.unwrap().data().clone();
+
+        assert_eq!(tx_digest, tx.digest());
+        let executed_digest = self.db.executed_effects.get(&tx_digest).unwrap().unwrap();
+        if let Some(fx_digest) = fx_digest {
+            assert_eq!(fx_digest, executed_digest);
+        }
+
+        let fx = self.db.effects.get(&executed_digest).unwrap().unwrap();
+
+        Ok((tx, fx))
+    }
+}
+
+pub async fn fetch_causal_history(
+    tx_digest: TransactionDigest,
+    fx_digest: Option<TransactionEffectsDigest>,
+    genesis: PathBuf,
+    db_path: Option<PathBuf>,
+) -> Result<Vec<(SenderSignedData, TransactionEffects)>> {
+    let fetcher: Box<dyn ReadTx> = if let Some(db_path) = db_path {
+        Box::new(ReadTxFromDb::new(db_path))
+    } else {
+        let clients = make_clients(genesis)?;
+        Box::new(ReadTxFromClients::new(clients))
+    };
+
+    let mut results = BTreeMap::new();
+
+    let mut queue = Vec::new();
+    let (tx, fx) = fetcher.fetch_txn(tx_digest, fx_digest).await?;
+
+    results.insert(tx_digest, (tx.clone(), fx.clone()));
+    queue.push(fx.dependencies().to_vec());
+
+    while let Some(deps) = queue.pop() {
+        let futures: FuturesOrdered<_> = deps
+            .into_iter()
+            .map(|dep| fetcher.fetch_txn(dep, None))
+            .collect();
+
+        // collect all results from `futures` into a vector
+        let dep_results = futures.collect::<Vec<_>>().await;
+
+        for res in dep_results {
+            let (tx, fx) = res?;
+            let tx_digest = tx.digest();
+
+            let mutated = fx.mutated();
+            if mutated.len() == 1 && mutated[0].0 .0 == SUI_CLOCK_OBJECT_ID {
+                println!("skipping clock txn {:?}", tx_digest);
+                continue;
+            }
+
+            if let Some(prev) = results.insert(tx_digest, (tx.clone(), fx.clone())) {
+                assert_eq!(prev.0.digest(), tx.digest());
+                assert_eq!(prev.1.digest(), fx.digest());
+                continue;
+            }
+            queue.push(fx.dependencies().to_vec());
+        }
+    }
+
+    println!("{:#?}", results);
+    panic!("done");
 }
 
 pub async fn get_transaction_block(
