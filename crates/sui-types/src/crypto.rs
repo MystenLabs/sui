@@ -103,7 +103,11 @@ pub fn verify_proof_of_possession(
     protocol_pubkey: &narwhal_crypto::PublicKey,
     sui_address: SuiAddress,
 ) -> Result<(), SuiError> {
-    protocol_pubkey.validate()?;
+    protocol_pubkey
+        .validate()
+        .map_err(|_| SuiError::InvalidSignature {
+            error: "Fail to validate pubkey".to_string(),
+        })?;
     let mut msg = protocol_pubkey.as_bytes().to_vec();
     msg.extend_from_slice(sui_address.as_ref());
     pop.verify_secure(
@@ -529,8 +533,13 @@ impl SuiAuthoritySignature for AuthoritySignature {
         })?;
         public_key
             .verify(&message[..], self)
-            .map_err(|_| SuiError::InvalidSignature {
-                error: "Invalid signature".to_string(),
+            .map_err(|e| SuiError::InvalidSignature {
+                error: format!(
+                    "Fail to verify auth sig {} epoch: {} author: {}",
+                    e,
+                    epoch,
+                    author.concise()
+                ),
             })
     }
 }
@@ -932,9 +941,9 @@ pub trait SuiSignatureInner: Sized + ToFromBytes + PartialEq + Eq + Hash {
         }
 
         // deserialize the signature
-        let signature = Self::Sig::from_bytes(self.signature_bytes()).map_err(|err| {
+        let signature = Self::Sig::from_bytes(self.signature_bytes()).map_err(|_| {
             SuiError::InvalidSignature {
-                error: err.to_string(),
+                error: "Fail to get pubkey and sig".to_string(),
             }
         })?;
 
@@ -997,7 +1006,7 @@ impl<S: SuiSignatureInner + Sized> SuiSignature for S {
         let (sig, pk) = &self.get_verification_inputs(author)?;
         pk.verify(&digest, sig)
             .map_err(|e| SuiError::InvalidSignature {
-                error: format!("{}", e),
+                error: format!("Fail to verify user sig {}", e),
             })
     }
 }
@@ -1100,7 +1109,7 @@ impl AuthoritySignInfoTrait for AuthoritySignInfo {
             .ok_or(SuiError::InvalidAddress)?
             .add_signature(self.signature.clone())
             .map_err(|_| SuiError::InvalidSignature {
-                error: "Invalid Signature".to_string(),
+                error: "Fail to aggregator auth sig".to_string(),
             })?;
         Ok(())
     }
@@ -1549,8 +1558,8 @@ impl<'a> VerificationObligation<'a> {
             pks,
             &self.messages.iter().map(|x| &x[..]).collect::<Vec<_>>()[..],
         )
-        .map_err(|error| SuiError::InvalidSignature {
-            error: format!("{error}"),
+        .map_err(|e| SuiError::InvalidSignature {
+            error: format!("Failed to batch verify aggregated auth sig {}", e),
         })?;
         Ok(())
     }
