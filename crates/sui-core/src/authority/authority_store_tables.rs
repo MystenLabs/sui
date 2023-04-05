@@ -12,8 +12,7 @@ use sui_types::storage::ObjectStore;
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::util::{empty_compaction_filter, reference_count_merge_operator};
 use typed_store::rocks::{
-    optimized_for_high_throughput_options, read_size_from_env, DBBatch, DBMap, DBOptions,
-    MetricConf, ReadWriteOptions,
+    point_lookup_db_options, DBBatch, DBMap, DBOptions, MetricConf, ReadWriteOptions,
 };
 use typed_store::traits::{Map, TableSummary, TypedStoreDebug};
 
@@ -23,13 +22,6 @@ use crate::authority::authority_store_types::{
 };
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use typed_store_derive::DBMapUtils;
-
-const ENV_VAR_OBJECTS_BLOCK_CACHE_SIZE: &str = "OBJECTS_BLOCK_CACHE_MB";
-const ENV_VAR_LOCKS_BLOCK_CACHE_SIZE: &str = "LOCKS_BLOCK_CACHE_MB";
-const ENV_VAR_TRANSACTIONS_BLOCK_CACHE_SIZE: &str = "TRANSACTIONS_BLOCK_CACHE_MB";
-const ENV_VAR_EFFECTS_BLOCK_CACHE_SIZE: &str = "EFFECTS_BLOCK_CACHE_MB";
-const ENV_VAR_INDIRECT_OBJECTS_BLOCK_CACHE_SIZE: &str = "INDIRECT_OBJECTS_BLOCK_CACHE_MB";
-const ENV_VAR_EVENTS_BLOCK_CACHE_SIZE: &str = "EVENTS_BLOCK_CACHE_MB";
 
 /// AuthorityPerpetualTables contains data that must be preserved from one epoch to the next.
 #[derive(DBMapUtils)]
@@ -88,7 +80,6 @@ pub struct AuthorityPerpetualTables {
     // We could potentially remove this if we decided not to provide events in the execution path.
     // TODO: Figure out what to do with this table in the long run.
     // Also we need a pruning policy for this table. We can prune this table along with tx/effects.
-    #[default_options_override_fn = "events_table_default_config"]
     pub(crate) events: DBMap<(TransactionEventsDigest, usize), Event>,
 
     /// When transaction is executed via checkpoint executor, we store association here
@@ -384,19 +375,13 @@ impl Iterator for LiveSetIter<'_> {
 
 // These functions are used to initialize the DB tables
 fn owned_object_transaction_locks_table_default_config() -> DBOptions {
-    optimized_for_high_throughput_options(
-        read_size_from_env(ENV_VAR_LOCKS_BLOCK_CACHE_SIZE).unwrap_or(1024),
-        false,
-    )
+    point_lookup_db_options()
 }
 
 fn objects_table_default_config() -> DBOptions {
+    let db_options = point_lookup_db_options();
     DBOptions {
-        options: optimized_for_high_throughput_options(
-            read_size_from_env(ENV_VAR_OBJECTS_BLOCK_CACHE_SIZE).unwrap_or(5 * 1024),
-            false,
-        )
-        .options,
+        options: db_options.options,
         rw_options: ReadWriteOptions {
             ignore_range_deletions: true,
         },
@@ -404,31 +389,15 @@ fn objects_table_default_config() -> DBOptions {
 }
 
 fn transactions_table_default_config() -> DBOptions {
-    optimized_for_high_throughput_options(
-        read_size_from_env(ENV_VAR_TRANSACTIONS_BLOCK_CACHE_SIZE).unwrap_or(512),
-        true,
-    )
+    point_lookup_db_options()
 }
 
 fn effects_table_default_config() -> DBOptions {
-    optimized_for_high_throughput_options(
-        read_size_from_env(ENV_VAR_EFFECTS_BLOCK_CACHE_SIZE).unwrap_or(1024),
-        true,
-    )
-}
-
-fn events_table_default_config() -> DBOptions {
-    optimized_for_high_throughput_options(
-        read_size_from_env(ENV_VAR_EVENTS_BLOCK_CACHE_SIZE).unwrap_or(1024),
-        false,
-    )
+    point_lookup_db_options()
 }
 
 fn indirect_move_objects_table_default_config() -> DBOptions {
-    let mut options = optimized_for_high_throughput_options(
-        read_size_from_env(ENV_VAR_INDIRECT_OBJECTS_BLOCK_CACHE_SIZE).unwrap_or(512),
-        true,
-    );
+    let mut options = point_lookup_db_options();
     options.options.set_merge_operator(
         "refcount operator",
         reference_count_merge_operator,
