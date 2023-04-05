@@ -18,7 +18,9 @@ type OwnedObjectTypes = {
 };
 
 function OwnedObject({ obj }: OwnedObjectTypes) {
-    const display = transformURL(parseImageURL(obj?.data?.display ?? undefined));
+    const display = transformURL(
+        parseImageURL(obj?.data?.display ?? undefined)
+    );
     return (
         <div
             id="ownedObject"
