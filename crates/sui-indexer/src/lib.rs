@@ -100,8 +100,6 @@ pub struct IndexerConfig {
     pub reset_db: bool,
     // NOTE: experimental only, do not use in production.
     #[clap(long)]
-    pub download_only: bool,
-    #[clap(long)]
     pub skip_db_commit: bool,
 }
 
@@ -135,7 +133,6 @@ impl Default for IndexerConfig {
             rpc_server_port: 9000,
             migrated_methods: vec![],
             reset_db: false,
-            download_only: false,
             skip_db_commit: false,
         }
     }
