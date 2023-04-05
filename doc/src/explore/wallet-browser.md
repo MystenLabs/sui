@@ -4,7 +4,7 @@ title: Sui Wallet
 
 This topic describes how to install and use the [Sui Wallet browser extension](https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil).
 
-The early versions of Sui Wallet let you experiment with the Sui network for testing. The Sui network is still in development, and the tokens have no real value. Accounts reset with each deployment of a new version of the network. View the [devnet-updates](https://discord.com/channels/916379725201563759/1004638487078772736) channel in Discord for updates about the network.
+Sui Wallet lets you experiment with the Sui network for testing. The Sui network is still in development, and the tokens have no real value.
 
 To test more advanced features not available in Sui Wallet, see [Sui CLI client](../build/cli-client.md).
 
@@ -14,15 +14,12 @@ You can use Sui Wallet to:
 
  * Create Sui accounts (addresses)
  * Import private keys from other wallets (must be a 32 or 64 byte address)
- * Mint NFTs
  * Stake and earn SUI
  * Transfer coins and NFTs to another address
  * View your coins, tokens, and NFTs
  * View recent transactions
  * Auto split/merge coins to the exact transfer amount
  * Easily access transaction history in the [Sui Explorer](https://explorer.sui.io/)
-
-In the current release, Sui Wallet includes **Buy** and **Swap** buttons. These are placeholders for functionality included in future versions of Sui Wallet.
 
 ## Install the Sui Wallet browser extension
 
