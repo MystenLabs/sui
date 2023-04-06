@@ -50,8 +50,7 @@ impl<'a> ProcessPayload<'a, &'a GetBalance> for RpcCommandProcessor {
                     tasks.push(task);
                 }
             }
-            let results = join_all(tasks).await;
-            println!("Completed chunk of {} tasks", results.len());
+            join_all(tasks).await;
         }
         Ok(())
     }
