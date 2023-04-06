@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
+import {useGetSystemObject} from '@mysten/core';
 import { useContext } from 'react';
 
 import { NetworkContext } from '../../context';
 import { Network } from '../../utils/api/DefaultRpcClient';
 import { GROWTHBOOK_FEATURES } from '../../utils/growthbook';
 
-import { useGetSystemObject } from '~/hooks/useGetObject';
 import { NetworkSelect, type NetworkOption } from '~/ui/header/NetworkSelect';
 
 export default function WrappedNetworkSelect() {
