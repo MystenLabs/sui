@@ -19,7 +19,7 @@ export type StakeFromProps = {
     stakedSuiId: string;
     coinBalance: bigint;
     coinType: string;
-    stakingReward?: string;
+    stakingReward?: bigint;
     epoch: number;
 };
 

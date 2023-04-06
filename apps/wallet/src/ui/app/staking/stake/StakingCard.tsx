@@ -288,7 +288,7 @@ function StakingCard() {
                                         stakedSuiId={stakeSuiIdParams!}
                                         coinBalance={totalTokenBalance}
                                         coinType={coinType}
-                                        stakingReward={suiEarned}
+                                        stakingReward={BigInt(suiEarned)}
                                         epoch={Number(system?.epoch || 0)}
                                     />
                                 ) : (

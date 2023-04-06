@@ -7,7 +7,7 @@ import { Heading } from '_src/ui/app/shared/heading';
 import { Text } from '_src/ui/app/shared/text';
 
 type TxnAmountProps = {
-    amount: string | number;
+    amount: bigint | number;
     coinType: string;
     label: string;
     approximation?: boolean;
@@ -21,11 +21,9 @@ export function TxnAmount({
     label,
     approximation,
 }: TxnAmountProps) {
-    const [formatAmount, symbol] = useFormatCoin(
-        Math.abs(Number(amount)),
-        coinType
-    );
-    return Number(amount) !== 0 ? (
+    const [formatAmount, symbol] = useFormatCoin(amount, coinType);
+    if (!amount) return null;
+    return (
         <div className="flex justify-between w-full items-center py-3.5 first:pt-0">
             <Text variant="body" weight="medium" color="steel-darker">
                 {label}
@@ -40,5 +38,5 @@ export function TxnAmount({
                 </Text>
             </div>
         </div>
-    ) : null;
+    );
 }

@@ -21,6 +21,7 @@ export function useQueryTransactionsByAddress(address: SuiAddress | null) {
                         ToAddress: address!,
                     },
                     options: {
+                        showBalanceChanges: true,
                         showInput: true,
                         showEffects: true,
                         showEvents: true,

@@ -9,7 +9,7 @@ import { GAS_SYMBOL, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 import { Text } from '_src/ui/app/shared/text';
 
 type SponsoredTxnGasSummaryProps = {
-    totalGas: number;
+    totalGas: bigint | number;
     sponsor: SuiAddress;
 };
 

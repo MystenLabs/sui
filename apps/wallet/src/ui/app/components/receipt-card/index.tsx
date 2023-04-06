@@ -1,17 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useGetTransferAmount, useGetTransferLabel } from '@mysten/core';
 import { ArrowUpRight12 } from '@mysten/icons';
 import {
     getExecutionStatusType,
     getTransactionKindName,
-    getTotalGasUsed,
     getExecutionStatusError,
-    SUI_TYPE_ARG,
     getTransactionKind,
     getTransactionSender,
     getTransactionDigest,
     getGasData,
+    STAKING_REQUEST_EVENT,
+    UNSTAKING_REQUEST_EVENT,
 } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
@@ -27,7 +28,7 @@ import { TxnAddress } from '_components/receipt-card/TxnAddress';
 import { TxnAmount } from '_components/receipt-card/TxnAmount';
 import { UnStakeTxnCard } from '_components/receipt-card/UnstakeTxnCard';
 // import { TxnImage } from '_components/transactions-card/TxnImage';
-import { useGetTxnRecipientAddress, useGetTransferAmount } from '_hooks';
+import { useGetTxnRecipientAddress } from '_hooks';
 import { TxnGasSummary } from '_src/ui/app/components/receipt-card/TxnGasSummary';
 import { Text } from '_src/ui/app/shared/text';
 
@@ -56,55 +57,39 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
     //     return getTxnEffectsEventID(events!, activeAddress)[0];
     // }, [events, activeAddress]);
 
-    const transferAmount = useGetTransferAmount({
-        txn,
-        activeAddress,
-    });
-
-    const totalSuiAmount = useMemo(() => {
-        const amount = transferAmount?.find(
-            ({ coinType }) => coinType === SUI_TYPE_ARG
-        )?.amount;
-        return amount ? Math.abs(amount) : null;
-    }, [transferAmount]);
+    const transferAmount = useGetTransferAmount(txn, activeAddress);
+    const transferLabel = useGetTransferLabel(txn, activeAddress);
 
     const { owner } = getGasData(txn)!;
     const transactionSender = getTransactionSender(txn);
     const isSender = activeAddress === transactionSender;
     const isSponsoredTransaction = transactionSender !== owner;
-    const gasTotal = Number(getTotalGasUsed(txn));
 
-    const showGasSummary = isSuccessful && isSender && gasTotal;
+    const showGasSummary = isSuccessful && isSender && transferAmount.gas;
     const showSponsorInfo = !isSuccessful && isSender && isSponsoredTransaction;
     const stakedTxn = events?.find(
-        ({ type }) => type === '0x3::validator::StakingRequestEvent'
+        ({ type }) => type === STAKING_REQUEST_EVENT
     );
 
     const unstakeTxn = events?.find(
-        ({ type }) => type === '0x3::validator::UnstakingRequestEvent'
+        ({ type }) => type === UNSTAKING_REQUEST_EVENT
     );
 
     let txnGasSummary: JSX.Element | undefined;
     if (showGasSummary && isSponsoredTransaction) {
         txnGasSummary = (
-            <SponsoredTxnGasSummary sponsor={owner} totalGas={gasTotal} />
+            <SponsoredTxnGasSummary
+                sponsor={owner}
+                totalGas={transferAmount.gas}
+            />
         );
     } else if (showGasSummary) {
         txnGasSummary = (
             <TxnGasSummary
-                totalGas={gasTotal}
-                transferAmount={totalSuiAmount}
+                totalGas={transferAmount.gas}
+                transferAmount={transferAmount.amount}
             />
         );
-    }
-
-    let txnStatusText = '';
-    if (isSender && isSuccessful) {
-        txnStatusText = 'Sent';
-    } else if (isSender && !isSuccessful) {
-        txnStatusText = 'Failed to Send';
-    } else {
-        txnStatusText = 'Received';
     }
 
     // const nftObjectLabel = transferAmount?.length ? txnStatusText : 'Call';
@@ -144,17 +129,18 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                             />
                         )} */}
 
-                        {transferAmount && transferAmount.length > 0
-                            ? transferAmount.map(
-                                  ({ amount, coinType, receiverAddress }) => {
+                        {transferAmount &&
+                        transferAmount.balanceChanges?.length > 0
+                            ? transferAmount.balanceChanges.map(
+                                  ({ amount, coinType, address }) => {
                                       return (
                                           <div
-                                              key={coinType + receiverAddress}
+                                              key={coinType + address}
                                               className="divide-y divide-solid divide-steel/20 divide-x-0 flex flex-col pt-3.5 first:pt-0"
                                           >
                                               <TxnAmount
                                                   amount={amount}
-                                                  label={txnStatusText}
+                                                  label={transferLabel}
                                                   coinType={coinType}
                                               />
 
@@ -184,7 +170,7 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                         )}
 
                         {txnKind === 'ChangeEpoch' &&
-                            !transferAmount?.length && (
+                            !transferAmount?.balanceChanges.length && (
                                 <TxnAddress
                                     address={recipientAddress!}
                                     label="From"
@@ -200,7 +186,6 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                             transactionID={getTransactionDigest(txn)}
                             title="View on Sui Explorer"
                             className="text-sui-dark text-p4 font-semibold no-underline uppercase tracking-wider"
-                            showIcon={false}
                         >
                             View on Explorer
                         </ExplorerLink>

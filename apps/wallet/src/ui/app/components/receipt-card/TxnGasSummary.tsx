@@ -10,18 +10,17 @@ import type { GasCostSummary } from '@mysten/sui.js';
 
 type TxnGasSummaryProps = {
     gasSummary?: GasCostSummary;
-    totalGas: number;
-    transferAmount: number | null;
+    totalGas: bigint;
+    transferAmount: bigint;
 };
 
 //TODO add gas breakdown
 export function TxnGasSummary({
-    gasSummary,
     totalGas,
     transferAmount,
 }: TxnGasSummaryProps) {
     const [totalAmount, totalAmountSymbol] = useFormatCoin(
-        totalGas + (transferAmount || 0),
+        totalGas + transferAmount,
         GAS_TYPE_ARG
     );
     const [gas, symbol] = useFormatCoin(totalGas, GAS_TYPE_ARG);

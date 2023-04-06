@@ -38,7 +38,7 @@ export function PreviewTransfer({
     return (
         <div className="divide-y divide-solid divide-steel/20 divide-x-0 flex flex-col px-2.5 w-full">
             <TxnAmount
-                amount={amountWithoutDecimals.toString()}
+                amount={amountWithoutDecimals}
                 label="Sending"
                 coinType={coinType}
                 approximation={approximation}

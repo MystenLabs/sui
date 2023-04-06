@@ -8,10 +8,13 @@ import {
 } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
-export function useGetTransferAmount(txnData: SuiTransactionBlockResponse) {
+export function useGetTransferAmount(
+    txnData: SuiTransactionBlockResponse,
+    currentAddress?: string
+) {
     const { balanceChanges } = txnData;
     const sender = getTransactionSender(txnData);
-    const gas = getTotalGasUsed(txnData);
+    const gas = BigInt(getTotalGasUsed(txnData) ?? 0n);
     const changes = useMemo(
         () =>
             balanceChanges
@@ -26,26 +29,24 @@ export function useGetTransferAmount(txnData: SuiTransactionBlockResponse) {
                               ? owner.ObjectOwner
                               : '',
                       amount:
-                          coinType === SUI_TYPE_ARG && BigInt(amount) < 0n
-                              ? BigInt(amount) + BigInt(gas ?? 0n)
+                          BigInt(amount) < 0n
+                              ? -(BigInt(amount) + gas)
                               : BigInt(amount),
                   }))
                 : [],
         [balanceChanges, gas]
     );
-    // take absolute value of the first balance change entry for display
-    const [change] = changes;
-    const amount = change?.amount
-        ? change.amount < 0n
-            ? -change.amount
-            : change.amount
-        : 0n;
+
+    // todo: this is a bit of hack until we support proper transaction summary
+    const change = currentAddress
+        ? changes?.find(({ address }) => address === currentAddress)
+        : changes?.[0];
 
     return {
-        balanceChanges: changes,
-        coinType: change?.coinType,
+        balanceChanges: currentAddress && change ? [change] : changes,
+        coinType: change?.coinType || SUI_TYPE_ARG,
         gas,
         sender,
-        amount,
+        amount: change?.amount ?? 0n,
     };
 }

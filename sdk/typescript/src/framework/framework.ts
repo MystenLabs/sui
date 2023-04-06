@@ -26,7 +26,8 @@ export const ID_STRUCT_NAME = 'ID';
 export const SUI_TYPE_ARG = `${SUI_FRAMEWORK_ADDRESS}::sui::SUI`;
 export const VALIDATORS_EVENTS_QUERY =
   '0x3::validator_set::ValidatorEpochInfoEvent';
-
+export const STAKING_REQUEST_EVENT = '0x3::validator::StakingRequestEvent';
+export const UNSTAKING_REQUEST_EVENT = '0x3::validator::UnstakingRequestEvent';
 export const SUI_CLOCK_OBJECT_ID = normalizeSuiObjectId('0x6');
 
 // `sui::pay` module is used for Coin management (split, join, join_and_transfer etc);
