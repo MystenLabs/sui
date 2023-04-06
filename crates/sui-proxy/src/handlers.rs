@@ -19,7 +19,7 @@ static HANDLER_HITS: Lazy<CounterVec> = Lazy::new(|| {
     register_counter_vec!(
         "http_handler_hits",
         "Number of HTTP requests made.",
-        &["handler"]
+        &["handler", "remote"]
     )
     .unwrap()
 });
@@ -28,7 +28,7 @@ static HTTP_HANDLER_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
     register_histogram_vec!(
         "http_handler_duration_seconds",
         "The HTTP request latencies in seconds.",
-        &["handler"]
+        &["handler", "remote"]
     )
     .unwrap()
 });
@@ -47,9 +47,11 @@ pub async fn publish_metrics(
     Extension(relay): Extension<HistogramRelay>,
     LenDelimProtobuf(data): LenDelimProtobuf,
 ) -> (StatusCode, &'static str) {
-    HANDLER_HITS.with_label_values(&["publish_metrics"]).inc();
+    HANDLER_HITS
+        .with_label_values(&["publish_metrics", &name])
+        .inc();
     let timer = HTTP_HANDLER_DURATION
-        .with_label_values(&["publish_metrics"])
+        .with_label_values(&["publish_metrics", &name])
         .start_timer();
     let data = populate_labels(name, labels.network, labels.inventory_hostname, data);
     relay.submit(data.clone());
