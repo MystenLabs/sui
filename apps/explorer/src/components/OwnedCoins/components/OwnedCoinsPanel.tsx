@@ -14,6 +14,8 @@ type CoinsPanelProps = {
     id: string;
 };
 
+const MAX_COIN_LIMIT = 10;
+
 function CoinsPanel({ coinType, id }: CoinsPanelProps): JSX.Element {
     const [coinObjects, setCoinObjects] = useState<CoinStruct[]>([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -31,7 +33,7 @@ function CoinsPanel({ coinType, id }: CoinsPanelProps): JSX.Element {
 
     useEffect(() => {
         setIsLoading(true);
-        rpc.getCoins({ owner: id, coinType, limit: 10 }).then((resp) => {
+        rpc.getCoins({ owner: id, coinType, limit: MAX_COIN_LIMIT }).then((resp) => {
             update(resp);
         });
     }, [id, coinType, rpc]);
@@ -77,7 +79,7 @@ function CoinsPanel({ coinType, id }: CoinsPanelProps): JSX.Element {
             rpc.getCoins({
                 owner: id,
                 coinType,
-                limit: 10,
+                limit: MAX_COIN_LIMIT,
                 cursor: nextCursor,
             }).then((resp) => {
                 update(resp);
