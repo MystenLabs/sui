@@ -46,18 +46,17 @@ export function FieldItem<T>({
             </div>
         );
     }
-    
-    const isObjectId = ['0x2::object::UID', '0x2::object::ID'].includes(`${address}::${moduleName}::${name}`);
-    if (
-        typeof value === 'string' && isObjectId
-    ) {
+
+    const isObjectId = ['0x2::object::UID', '0x2::object::ID'].includes(
+        `${address}::${moduleName}::${name}`
+    );
+    if (typeof value === 'string' && isObjectId) {
         return (
             <div className="break-all">
                 <ObjectLink objectId={value} noTruncate={!truncate} />
             </div>
         );
     }
-
 
     if (typeof value === 'string' && moduleName === 'url') {
         return (
