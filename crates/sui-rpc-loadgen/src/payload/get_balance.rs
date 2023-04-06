@@ -42,11 +42,8 @@ impl<'a> ProcessPayload<'a, &'a GetBalance> for RpcCommandProcessor {
             for (owner_address, coin_type) in chunk {
                 for client in clients.iter() {
                     let with_coin_type = coin_type.clone();
-                    let task = async move {
-                        get_balance(client, owner_address, with_coin_type)
-                            .await
-                            .unwrap()
-                    };
+                    let task =
+                        async move { get_balance(client, owner_address, with_coin_type).await };
                     tasks.push(task);
                 }
             }
@@ -60,12 +57,16 @@ async fn get_balance(
     client: &SuiClient,
     owner_address: SuiAddress,
     coin_type: String,
-) -> Result<Balance> {
-    let balance = client
+) -> Result<Option<Balance>> {
+    match client
         .coin_read_api()
         .get_balance(owner_address, Some(coin_type))
         .await
-        .ok()
-        .unwrap();
-    Ok(balance)
+    {
+        Ok(balance) => Ok(Some(balance)),
+        Err(error) => {
+            println!("Error getting balance: {:?}", error);
+            Ok(None)
+        }
+    }
 }
