@@ -407,7 +407,17 @@ impl Certifier {
                             self.synchronizer.accept_own_certificate(certificate).await
                         },
                         Ok(Err(e)) => Err(e),
-                        Err(_) => Err(DagError::ShuttingDown),
+                        Err(e) => {
+                            if e.is_cancelled() {
+                                // Ungraceful shutdown.
+                                Err(DagError::ShuttingDown)
+                            } else if e.is_panic() {
+                                // propagate panics.
+                                std::panic::resume_unwind(e.into_panic());
+                            } else {
+                                panic!("propose header task failed: {e}");
+                            }
+                        },
                     }
                 },
 

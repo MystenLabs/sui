@@ -105,7 +105,19 @@ impl DiscoveryEventLoop {
                     self.handle_trusted_peer_change_event(event);
                 }
                 Some(task_result) = self.tasks.join_next() => {
-                    task_result.unwrap();
+                    match task_result {
+                        Ok(()) => {},
+                        Err(e) => {
+                            if e.is_cancelled() {
+                                // avoid crashing on ungraceful shutdown
+                            } else if e.is_panic() {
+                                // propagate panics.
+                                std::panic::resume_unwind(e.into_panic());
+                            } else {
+                                panic!("task failed: {e}");
+                            }
+                        },
+                    };
                 },
                 // Once the shutdown notification resolves we can terminate the event loop
                 _ = &mut self.shutdown_handle => {
