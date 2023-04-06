@@ -508,13 +508,18 @@ impl<S> TemporaryStore<S> {
     pub fn delete_object(&mut self, id: &ObjectID, version: SequenceNumber, kind: DeleteKind) {
         // there should be no deletion after write
         debug_assert!(self.written.get(id).is_none());
-        // Check it is not read-only
-        #[cfg(test)] // Movevm should ensure this
+
+        // TODO: promote this to an on-in-prod check that raises an invariant_violation
+        // Check that we are not deleting an immutable object
+        #[cfg(debug_assertions)]
         if let Some(object) = self.read_object(id) {
             if object.is_immutable() {
                 // This is an internal invariant violation. Move only allows us to
                 // mutate objects if they are &mut so they cannot be read-only.
-                panic!("Internal invariant violation: Deleting a read-only object.")
+                // In addition, gas objects should never be immutable, so gas smashing
+                // should not allow us to delete immutable objects
+                let digest = self.tx_digest;
+                panic!("Internal invariant violation in tx {digest}: Deleting immutable object {id}, version {version}, delete kind {kind}")
             }
         }
 
