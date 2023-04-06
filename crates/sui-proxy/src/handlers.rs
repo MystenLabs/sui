@@ -28,7 +28,8 @@ static HTTP_HANDLER_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
     register_histogram_vec!(
         "http_handler_duration_seconds",
         "The HTTP request latencies in seconds.",
-        &["handler", "remote"]
+        &["handler", "remote"],
+        vec![0.1024, 0.2048, 0.4096, 0.8192, 1.0, 1.25, 1.5, 1.75, 2.0, 4.0, 8.0, 10.0, 12.5, 15.0],
     )
     .unwrap()
 });
