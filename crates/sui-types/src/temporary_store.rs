@@ -365,6 +365,22 @@ impl<S> TemporaryStore<S> {
             }
         }
 
+        let mut modified_versions = BTreeMap::new();
+        for (id, version) in &modified_at_versions {
+            if let Some(prev) = modified_versions.insert(id, version) {
+                panic!("Two modified_at_versions for {id}: {prev} and {version}");
+            }
+        }
+
+        for (id, version, _digest) in &shared_object_refs {
+            if let Some(modified_at) = modified_versions.get(id) {
+                assert_eq!(
+                    *modified_at, version,
+                    "Shared object modified at different version from input",
+                );
+            }
+        }
+
         let effects = TransactionEffects::new_from_execution(
             protocol_version,
             status,

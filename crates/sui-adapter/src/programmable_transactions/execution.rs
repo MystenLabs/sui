@@ -76,7 +76,7 @@ pub fn execute<S: StorageView, Mode: ExecutionMode>(
         tx_context,
         gas_status,
         gas_coin,
-        inputs,
+        inputs.clone(),
     )?;
     // execute commands
     let mut mode_results = Mode::empty_results();
@@ -89,6 +89,16 @@ pub fn execute<S: StorageView, Mode: ExecutionMode>(
         object_changes,
         user_events,
     } = context.finish::<Mode>()?;
+    for input in inputs {
+        if let sui_types::messages::CallArg::Object(
+            sui_types::messages::ObjectArg::SharedObject {
+                id, mutable: false, ..
+            },
+        ) = input
+        {
+            assert!(!object_changes.contains_key(&id));
+        }
+    }
     state_view.apply_object_changes(object_changes);
     for (module_id, tag, contents) in user_events {
         state_view.log_event(Event::new(

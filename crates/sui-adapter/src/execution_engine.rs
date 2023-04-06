@@ -69,6 +69,7 @@ pub fn execute_transaction_to_effects<
     TransactionEffects,
     Result<Mode::ExecutionResults, ExecutionError>,
 ) {
+    let object_inputs = transaction_kind.input_objects().unwrap();
     let mut tx_ctx = TxContext::new(&transaction_signer, &transaction_digest, epoch_data);
 
     #[cfg(debug_assertions)]
@@ -119,6 +120,20 @@ pub fn execute_transaction_to_effects<
         gas,
         epoch_data.epoch_id(),
     );
+    for object_input in object_inputs {
+        if let sui_types::messages::InputObjectKind::SharedMoveObject {
+            id, mutable: false, ..
+        } = object_input
+        {
+            use sui_types::messages::TransactionEffectsAPI;
+            assert!(effects.created().iter().all(|(o, _)| o.0 != id));
+            assert!(effects.mutated().iter().all(|(o, _)| o.0 != id));
+            assert!(effects.unwrapped().iter().all(|(o, _)| o.0 != id));
+            assert!(effects.deleted().iter().all(|o| o.0 != id));
+            assert!(effects.unwrapped_then_deleted().iter().all(|o| o.0 != id));
+            assert!(effects.wrapped().iter().all(|o| o.0 != id));
+        }
+    }
     (inner, effects, execution_result)
 }
 
