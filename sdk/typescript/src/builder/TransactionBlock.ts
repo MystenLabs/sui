@@ -222,7 +222,7 @@ export class TransactionBlock {
 
   constructor(transaction?: TransactionBlock) {
     this.#blockData = new TransactionBlockDataBuilder(
-      transaction ? transaction.#blockData : undefined,
+      transaction ? transaction.blockData : undefined,
     );
   }
 

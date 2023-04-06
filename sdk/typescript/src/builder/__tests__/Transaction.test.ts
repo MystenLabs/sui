@@ -58,6 +58,22 @@ describe('offline build', () => {
     await tx.build();
   });
 
+  it('breaks reference equality', () => {
+    const tx = setup();
+    const tx2 = new TransactionBlock(tx);
+
+    tx.setGasBudget(999);
+
+    // Ensure that setting budget after a clone does not affect the original:
+    expect(tx2.blockData).not.toEqual(tx.blockData);
+
+    // Ensure `blockData` always breaks reference equality:
+    expect(tx.blockData).not.toBe(tx.blockData);
+    expect(tx.blockData.gasConfig).not.toBe(tx.blockData.gasConfig);
+    expect(tx.blockData.transactions).not.toBe(tx.blockData.transactions);
+    expect(tx.blockData.inputs).not.toBe(tx.blockData.inputs);
+  });
+
   it('can determine the type of inputs for built-in transactions', async () => {
     const tx = setup();
     tx.add(Transactions.SplitCoins(tx.gas, [tx.pure(100)]));
