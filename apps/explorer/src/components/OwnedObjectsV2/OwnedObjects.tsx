@@ -9,27 +9,35 @@ import {
     Coin,
 } from '@mysten/sui.js';
 import { useEffect, useState } from 'react';
+import { Heading } from '~/ui/Heading';
+import { LoadingSpinner } from '~/ui/LoadingSpinner';
+import { Pagination } from '~/ui/Pagination';
 
-import PaginationContainer from '../PaginationContainer/PaginationContainer';
 import OwnedObject from './components/OwnedObject';
 
 export const OBJECTS_PER_PAGE: number = 6;
 
 function OwnerCoins({ id }: { id: string }) {
     const [results, setResults] = useState<SuiObjectResponse[]>([]);
-    const [isLoaded, setIsLoaded] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
     const [isFail, setIsFail] = useState(false);
     const [currentSlice, setCurrentSlice] = useState(1);
     const rpc = useRpcClient();
 
     useEffect(() => {
-        rpc.getOwnedObjects({ owner: id,  options: {
-                    showType: true,
-                    showContent: true,
-                    showDisplay: true,
-                } })
+        setIsLoading(true)
+        rpc.getOwnedObjects({
+            owner: id,
+            options: {
+                showType: true,
+                showContent: true,
+                showDisplay: true,
+            }
+        })
             .then((objects) => {
-                // console.log('objs', {objects})
+                const res = objects.data.filter(() => !Coin.isCoin)
+                setResults(res)
+                setIsLoading(false)
                 // const ids: string[] = objects.data.map(
                 //     (obj) => obj.data?.objectId ?? ''
                 // );
@@ -41,7 +49,7 @@ function OwnerCoins({ id }: { id: string }) {
                 //         showDisplay: true,
                 //     },
                 // })
-                
+
                 // .then((results) => {
                 //     setResults(
                 //         results.filter((resp) => {
@@ -69,12 +77,12 @@ function OwnerCoins({ id }: { id: string }) {
     }, [id, rpc]);
 
     return (
-        <PaginationContainer
-            heading="NFTs"
-            isLoaded={isLoaded}
-            isFail={isFail}
-            itemsPerPage={OBJECTS_PER_PAGE}
-            paginatedContent={
+        <div className="flex flex-col space-y-5 pt-5 text-left xl:pr-10">
+            <Heading color="gray-90" variant="heading4/semibold">
+                NFTs
+            </Heading>
+            {isLoading && <LoadingSpinner />}
+            <div className="flex max-h-80 flex-col overflow-auto">
                 <div className="flex flex-wrap">
                     {results
                         .slice(
@@ -85,11 +93,16 @@ function OwnerCoins({ id }: { id: string }) {
                             <OwnedObject obj={obj} key={obj?.data?.objectId} />
                         ))}
                 </div>
-            }
-            totalItems={results.length}
-            currentPage={currentSlice}
-            setCurrentPage={setCurrentSlice}
-        />
+            </div>
+            {results.length > OBJECTS_PER_PAGE && <Pagination
+                onNext={() => setCurrentSlice(currentSlice + 1)}
+                hasNext={currentSlice !==
+                    Math.ceil(results.length / OBJECTS_PER_PAGE)}
+                hasPrev={currentSlice !== 1}
+                onPrev={() => setCurrentSlice(currentSlice - 1)}
+                onFirst={() => setCurrentSlice(1)}
+            />}
+        </div>
     );
 }
 

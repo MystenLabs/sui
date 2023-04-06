@@ -18,28 +18,23 @@ export const COINS_PER_PAGE: number = 6;
 
 function OwnedCoins({ id }: { id: string }) {
     const [uniqueCoins, setUniqueCoins] = useState<CoinBalance[]>([]);
-    const [isLoaded, setIsLoaded] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
     const [isFail, setIsFail] = useState(false);
     const [currentSlice, setCurrentSlice] = useState(1);
     const rpc = useRpcClient();
 
     useEffect(() => {
         setIsFail(false);
-        setIsLoaded(false);
+        setIsLoading(true);
         rpc.getAllBalances({ owner: id, })
             .then((resp) => {
                 setUniqueCoins(resp)
-                setIsLoaded(true);
+                setIsLoading(false);
             })
             .catch((err) => {
                 setIsFail(true);
             });
     }, [id, rpc]);
-
-
-    if (!isLoaded) {
-        return <LoadingSpinner />
-    }
 
     if (isFail) {
         return (
@@ -54,6 +49,7 @@ function OwnedCoins({ id }: { id: string }) {
             <Heading color="gray-90" variant="heading4/semibold">
                 Coins
             </Heading>
+            {isLoading && <LoadingSpinner />}
             <div className="flex max-h-80 flex-col overflow-auto">
                 <div className="grid grid-cols-3 py-2 uppercase tracking-wider text-gray-80">
                     <Text variant="caption/medium">Type</Text>
@@ -71,14 +67,14 @@ function OwnedCoins({ id }: { id: string }) {
                         ))}
                 </div>
             </div>
-            <Pagination
+            {uniqueCoins.length > COINS_PER_PAGE && <Pagination
                 onNext={() => setCurrentSlice(currentSlice + 1)}
                 hasNext={currentSlice !==
                     Math.ceil(uniqueCoins.length / COINS_PER_PAGE)}
                 hasPrev={currentSlice !== 1}
                 onPrev={() => setCurrentSlice(currentSlice - 1)}
                 onFirst={() => setCurrentSlice(1)}
-            />
+            />}
         </div>
     );
 }
