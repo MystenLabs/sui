@@ -17,10 +17,7 @@ export function useTransactionData(
     return useQuery(
         ['transaction-data', transaction?.serialize()],
         async () => {
-            const clonedTransaction = new TransactionBlock(
-                // make sure cloned transaction doesn't affect the original one
-                TransactionBlock.from(transaction!.serialize())
-            );
+            const clonedTransaction = new TransactionBlock(transaction!);
             if (sender) {
                 clonedTransaction.setSenderIfNotSet(sender);
             }
