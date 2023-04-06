@@ -112,19 +112,9 @@ impl ReadApi {
                     .into()
             }
             CheckpointId::Digest(digest) => {
-                let verified_summary = self
-                    .state
-                    .get_verified_checkpoint_summary_by_digest(digest)?;
-                let content = self
-                    .state
-                    .get_checkpoint_contents(verified_summary.content_digest)?;
-                let signature = verified_summary.auth_sig().signature.clone();
-                (
-                    verified_summary.into_inner().into_data(),
-                    content,
-                    signature,
-                )
-                    .into()
+                let summary = self.state.get_checkpoint_summary_by_digest(digest)?;
+                let content = self.state.get_checkpoint_contents(summary.content_digest)?;
+                (summary, content).into()
             }
         })
     }

@@ -4,9 +4,7 @@
 use crate::accumulator::Accumulator;
 use crate::base_types::{ExecutionData, ExecutionDigests, VerifiedExecutionData};
 use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
-use crate::crypto::{
-    default_hash, AggregateAuthoritySignature, AuthoritySignInfo, AuthorityStrongQuorumSignInfo,
-};
+use crate::crypto::{default_hash, AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use crate::error::SuiResult;
 use crate::gas::GasCostSummary;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
@@ -257,10 +255,6 @@ impl VerifiedCheckpoint {
     pub fn into_summary_and_sequence(self) -> (CheckpointSequenceNumber, CheckpointSummary) {
         let summary = self.into_inner().into_data();
         (summary.sequence_number, summary)
-    }
-
-    pub fn get_validator_signature(self) -> AggregateAuthoritySignature {
-        self.auth_sig().signature.clone()
     }
 }
 

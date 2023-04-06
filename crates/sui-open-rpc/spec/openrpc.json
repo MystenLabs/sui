@@ -341,8 +341,7 @@
               "transactions": [
                 "3bpzHaSLTQ6p4trLDk2euZxzQ6XqLeWDmUNTAdEXXL2c"
               ],
-              "checkpointCommitments": [],
-              "validatorSignature": "wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+              "checkpointCommitments": []
             }
           }
         }
@@ -2809,8 +2808,7 @@
           "networkTotalTransactions",
           "sequenceNumber",
           "timestampMs",
-          "transactions",
-          "validatorSignature"
+          "transactions"
         ],
         "properties": {
           "checkpointCommitments": {
@@ -2896,14 +2894,6 @@
             "items": {
               "$ref": "#/components/schemas/TransactionDigest"
             }
-          },
-          "validatorSignature": {
-            "description": "Validator Signature",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/Base64"
-              }
-            ]
           }
         }
       },
