@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use crate::payload::{GetBalance, ProcessPayload, RpcCommandProcessor, SignerInfo};
 use anyhow::Result;
@@ -51,24 +51,14 @@ impl<'a> ProcessPayload<'a, &'a GetBalance> for RpcCommandProcessor {
                     tasks.push(task);
                 }
             }
-            let mut count = 0;
             let start = Instant::now();
             let results = join_all(tasks).await;
             let elapsed = start.elapsed();
             total_elapsed += elapsed.as_secs_f64();
 
             for _ in results.into_iter().flatten().flatten() {
-                count += 1;
+                total_count += 1;
             }
-            total_count += count;
-
-            let rps = count as f64 / elapsed.as_secs_f64();
-            println!(
-                "count: {} elapsed: {} rps: {}",
-                count,
-                elapsed.as_secs_f64(),
-                rps
-            );
         }
 
         println!(
