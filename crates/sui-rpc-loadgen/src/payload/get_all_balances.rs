@@ -25,22 +25,38 @@ impl<'a> ProcessPayload<'a, &'a GetAllBalances> for RpcCommandProcessor {
         let chunked = chunk_entities(&op.addresses, Some(op.chunk_size));
         for chunk in chunked {
             let mut tasks = Vec::new();
-            for address in chunk {
+            for address in &chunk {
                 for client in clients.iter() {
                     let owner_address = address;
-                    let task = async move {
-                        get_all_balances(client, owner_address).await.unwrap();
-                    };
+                    let task =
+                        async move { get_all_balances(client, *owner_address).await.unwrap() };
                     tasks.push(task);
                 }
             }
-            join_all(tasks).await;
+            let result = join_all(tasks).await;
+            // arbitrarily pick the 0th vec of results for now
+            let mut client_coin_types: Vec<Vec<String>> = Vec::new();
+            for (idx, balances) in result.into_iter().enumerate() {
+                if idx % clients.len() == 0 {
+                    let coin_types: Vec<String> = balances
+                        .iter()
+                        .map(|balance| balance.coin_type.clone())
+                        .collect();
+                    client_coin_types.push(coin_types);
+                }
+            }
+            for (address, coin_types) in chunk.into_iter().zip(client_coin_types.into_iter()) {
+                self.add_addresses_with_coin_types(address, coin_types);
+            }
         }
         Ok(())
     }
 }
 
-async fn get_all_balances(client: &SuiClient, owner_address: SuiAddress) -> Result<Vec<Balance>> {
+pub async fn get_all_balances(
+    client: &SuiClient,
+    owner_address: SuiAddress,
+) -> Result<Vec<Balance>> {
     let balances = client
         .coin_read_api()
         .get_all_balances(owner_address)
