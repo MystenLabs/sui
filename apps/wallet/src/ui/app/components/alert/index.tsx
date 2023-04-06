@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import cl from 'classnames';
-import { memo } from 'react';
 
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
@@ -22,7 +21,11 @@ const modeToIcon: Record<Exclude<ModeType, 'loading'>, SuiIcons> = {
     success: SuiIcons.Check,
 };
 
-function Alert({ children, className, mode = 'warning' }: AlertProps) {
+export default function Alert({
+    children,
+    className,
+    mode = 'warning',
+}: AlertProps) {
     return (
         <div className={cl(st.container, st[mode], className)}>
             {mode === 'loading' ? (
@@ -34,5 +37,3 @@ function Alert({ children, className, mode = 'warning' }: AlertProps) {
         </div>
     );
 }
-
-export default memo(Alert);
