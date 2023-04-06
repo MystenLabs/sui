@@ -39,8 +39,8 @@ function CoinsPanel({ coinType, id }: CoinsPanelProps): JSX.Element {
             root: null,
             rootMargin: '0px',
             threshold: 1,
-            // eslint-disable-next-line react-hooks/exhaustive-deps
         }),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
         undefined
     );
 

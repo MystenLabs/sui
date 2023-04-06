@@ -9,7 +9,6 @@ import { TransactionsForAddress } from '../../components/transactions/Transactio
 
 import OwnedCoins from '~/components/OwnedCoins/OwnedCoins';
 import OwnedObjects from '~/components/OwnedObjectsV2/OwnedObjects';
-import OwnedObjectsOld from '~/components/ownedobjects/OwnedObjects';
 import { Heading } from '~/ui/Heading';
 import { PageHeader } from '~/ui/PageHeader';
 
