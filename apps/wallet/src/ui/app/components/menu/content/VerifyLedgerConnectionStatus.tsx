@@ -25,6 +25,8 @@ enum VerificationStatus {
     NOT_VERIFIED = 'NOT_VERIFIED',
 }
 
+const resetVerificationStatusTimeout = 5000;
+
 export function VerifyLedgerConnectionStatus({
     accountAddress,
     derivationPath,
@@ -56,6 +58,12 @@ export function VerifyLedgerConnectionStatus({
                                     ? VerificationStatus.VERIFIED
                                     : VerificationStatus.NOT_VERIFIED
                             );
+
+                            setTimeout(() => {
+                                setVerificationStatus(
+                                    VerificationStatus.UNKNOWN
+                                );
+                            }, resetVerificationStatusTimeout);
                         } catch (error) {
                             const errorMessage =
                                 getLedgerConnectionErrorMessage(error) ||
