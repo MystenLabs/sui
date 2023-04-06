@@ -36,6 +36,7 @@ impl HeaderStore {
         self.store.get(id)
     }
 
+    #[allow(clippy::let_and_return)]
     pub fn write(&self, header: &Header) -> Result<(), TypedStoreError> {
         fail_point!("narwhal-store-before-write");
 

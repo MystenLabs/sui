@@ -36,6 +36,7 @@ impl ProposerStore {
     }
 
     /// Inserts a proposed header into the store
+    #[allow(clippy::let_and_return)]
     pub fn write_last_proposed(&self, header: &Header) -> StoreResult<()> {
         fail_point!("narwhal-store-before-write");
 

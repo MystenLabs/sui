@@ -114,6 +114,7 @@ impl PayloadStore {
         self.store.multi_get(keys)
     }
 
+    #[allow(clippy::let_and_return)]
     pub fn remove_all(
         &self,
         keys: impl IntoIterator<Item = (BatchDigest, WorkerId)>,

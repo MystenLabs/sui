@@ -36,6 +36,7 @@ impl VoteDigestStore {
 
     /// Insert the vote's basic details into the database for the corresponding
     /// header author key.
+    #[allow(clippy::let_and_return)]
     pub fn write(&self, vote: &Vote) -> Result<(), TypedStoreError> {
         fail_point!("narwhal-store-before-write");
 
