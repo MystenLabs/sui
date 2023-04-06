@@ -2740,7 +2740,6 @@ impl AuthorityState {
     }
 
     /// Commit effects of transaction execution to data store.
-    #[instrument(level = "trace", skip_all)]
     pub(crate) async fn commit_certificate(
         &self,
         inner_temporary_store: InnerTemporaryStore,
