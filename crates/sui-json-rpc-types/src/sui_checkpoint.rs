@@ -1,13 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::encoding::Base64;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::EpochId;
-use sui_types::crypto::AggregateAuthoritySignature;
 use sui_types::digests::CheckpointDigest;
 use sui_types::gas::GasCostSummary;
 use sui_types::message_envelope::Message;
@@ -23,7 +20,6 @@ pub type SuiCheckpointSequenceNumber = BigInt;
 pub type CheckpointPage = Page<Checkpoint, SuiCheckpointSequenceNumber>;
 
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
-#[serde_as]
 #[serde(rename_all = "camelCase")]
 pub struct Checkpoint {
     /// Checkpoint's epoch ID
@@ -53,26 +49,10 @@ pub struct Checkpoint {
 
     /// Commitments to checkpoint state
     pub checkpoint_commitments: Vec<CheckpointCommitment>,
-    /// Validator Signature
-    #[schemars(with = "Base64")]
-    #[serde_as(as = "Readable<Base64, Bytes>")]
-    pub validator_signature: AggregateAuthoritySignature,
 }
 
-impl
-    From<(
-        CheckpointSummary,
-        CheckpointContents,
-        AggregateAuthoritySignature,
-    )> for Checkpoint
-{
-    fn from(
-        (summary, contents, signature): (
-            CheckpointSummary,
-            CheckpointContents,
-            AggregateAuthoritySignature,
-        ),
-    ) -> Self {
+impl From<(CheckpointSummary, CheckpointContents)> for Checkpoint {
+    fn from((summary, contents): (CheckpointSummary, CheckpointContents)) -> Self {
         let digest = summary.digest();
         let CheckpointSummary {
             epoch,
@@ -99,7 +79,6 @@ impl
             // info (if they need it, they need to get signed BCS data anyway in order to trust
             // it).
             checkpoint_commitments: Default::default(),
-            validator_signature: signature,
         }
     }
 }
