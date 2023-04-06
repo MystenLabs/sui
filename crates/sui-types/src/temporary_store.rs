@@ -536,7 +536,7 @@ impl<S> TemporaryStore<S> {
 
     /// Resets any mutations, deletions, and events recorded in the store, as well as any storage costs and
     /// rebates, then Re-runs gas smashing. Effects on store are now as if we were about to begin execution
-    fn reset(&mut self, gas: &[ObjectRef], gas_status: &mut SuiGasStatus<'_>) {
+    pub fn reset(&mut self, gas: &[ObjectRef], gas_status: &mut SuiGasStatus<'_>) {
         self.drop_writes();
         gas_status.reset_storage_cost_and_rebate();
 

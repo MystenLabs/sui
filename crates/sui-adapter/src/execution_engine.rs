@@ -337,6 +337,7 @@ fn execute_transaction<
                   // conservation violated. try to avoid panic by dumping all writes, charging for gas, re-checking
                   // conservation, and surfacing an aborted transaction with an invariant violation if all of that works
                   result = Err(conservation_err);
+                  temporary_store.reset(gas, &mut gas_status);
                   temporary_store.charge_gas(gas_object_id, &mut gas_status, &mut result, gas);
                   // check conservation once more more. if we still fail, it's a problem with gas
                   // charging that happens even in the "aborted" case--no other option but panic.
