@@ -1550,7 +1550,7 @@ impl<'a> VerificationObligation<'a> {
 
     pub fn verify_all(self) -> SuiResult<()> {
         let mut pks = Vec::with_capacity(self.public_keys.len());
-        for pk in self.public_keys {
+        for pk in self.public_keys.clone() {
             pks.push(pk.into_iter());
         }
         AggregateAuthoritySignature::batch_verify(
@@ -1559,7 +1559,10 @@ impl<'a> VerificationObligation<'a> {
             &self.messages.iter().map(|x| &x[..]).collect::<Vec<_>>()[..],
         )
         .map_err(|e| SuiError::InvalidSignature {
-            error: format!("Failed to batch verify aggregated auth sig {}", e),
+            error: format!(
+                "Failed to batch verify aggregated auth sig {} pks: {:?} messages: {:?} sigs: {:?}",
+                e, &self.public_keys, &self.messages, &self.signatures
+            ),
         })?;
         Ok(())
     }
