@@ -41,12 +41,12 @@ static CONSUMER_ENCODE_COMPRESS_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
 });
 static CONSUMER_OPERATION_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
     register_histogram_vec!(
-        "protobuf_decode_duration_seconds",
+        "consumer_operations_duration_seconds",
         "The time it takes to perform various consumer operations in seconds.",
         &["operation"],
         vec![
             0.0008, 0.0016, 0.0032, 0.0064, 0.0128, 0.0256, 0.0512, 0.1024, 0.2048, 0.4096, 0.8192,
-            1.0, 1.25, 1.5, 1.75, 2.0, 4.0, 8.0
+            1.0, 1.25, 1.5, 1.75, 2.0, 4.0, 8.0, 10.0, 12.5, 15.0
         ],
     )
     .unwrap()
