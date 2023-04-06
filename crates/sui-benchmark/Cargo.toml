@@ -48,6 +48,8 @@ test-utils = { path = "../test-utils" }
 sysinfo = "0.27.5"
 
 [target.'cfg(msim)'.dependencies]
+sui-framework = { path = "../sui-framework" }
+sui-framework-snapshot = { path = "../sui-framework-snapshot" }
 sui-macros = { path = "../sui-macros" }
 sui-simulator = { path = "../sui-simulator" }
 typed-store = { path = "../typed-store" }

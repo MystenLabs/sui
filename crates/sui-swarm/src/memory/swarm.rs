@@ -313,6 +313,10 @@ impl Swarm {
         self.validators.get(&name)
     }
 
+    pub fn validator_mut(&mut self, name: AuthorityName) -> Option<&mut Node> {
+        self.validators.get_mut(&name)
+    }
+
     /// Return an iterator over shared references of all Validators.
     pub fn validators(&self) -> impl Iterator<Item = &Node> {
         self.validators.values()
