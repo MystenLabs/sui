@@ -10,7 +10,6 @@ import { genTableDataFromTxData } from './TxCardUtils';
 import { Banner } from '~/ui/Banner';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { TableCard } from '~/ui/TableCard';
-import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
 interface Props {
     address: string;
@@ -79,10 +78,7 @@ export function TransactionsForAddress({ address, type }: Props) {
 
     return (
         <div data-testid="tx">
-             <TableCard
-                            data={tableData.data}
-                            columns={tableData.columns}
-                        />
+            <TableCard data={tableData.data} columns={tableData.columns} />
         </div>
     );
 }

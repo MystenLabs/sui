@@ -1,14 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {type SuiMoveNormalizedType } from '@mysten/sui.js';
+import { type SuiMoveNormalizedType } from '@mysten/sui.js';
 
 import { SyntaxHighlighter } from '~/components/SyntaxHighlighter';
-import { extractSerializationType, getFieldTypeValue, FieldTypeValue } from '~/components/ownedobjects/utils';
+import {
+    extractSerializationType,
+    getFieldTypeValue,
+    FieldTypeValue,
+} from '~/components/ownedobjects/utils';
 import { AddressLink, ObjectLink, TransactionLink } from '~/ui/InternalLink';
 import { Link } from '~/ui/Link';
 import { Text } from '~/ui/Text';
-
 
 interface FieldItemProps<T> {
     value: T;
@@ -16,8 +19,11 @@ interface FieldItemProps<T> {
     truncate?: boolean;
 }
 
-export function FieldItem<T>({ value, type, truncate = false }: FieldItemProps<T>) {
-    
+export function FieldItem<T>({
+    value,
+    type,
+    truncate = false,
+}: FieldItemProps<T>) {
     // for object types, use SyntaxHighlighter
     if (typeof value === 'object') {
         return (
@@ -32,15 +38,18 @@ export function FieldItem<T>({ value, type, truncate = false }: FieldItemProps<T
     if (typeof value === 'string' && normalizedType === 'Address') {
         return (
             <div className="break-all">
-                <AddressLink address={value} noTruncate={!truncate}/>
+                <AddressLink address={value} noTruncate={!truncate} />
             </div>
         );
     }
 
-    if (typeof value === 'string' && getFieldTypeValue(normalizedType, FieldTypeValue.ADDRESS) === 'Address') {
+    if (
+        typeof value === 'string' &&
+        getFieldTypeValue(normalizedType, FieldTypeValue.ADDRESS) === 'Address'
+    ) {
         return (
             <div className="break-all">
-                <ObjectLink objectId={value} noTruncate={!truncate}/>
+                <ObjectLink objectId={value} noTruncate={!truncate} />
             </div>
         );
     }
@@ -54,15 +63,17 @@ export function FieldItem<T>({ value, type, truncate = false }: FieldItemProps<T
         );
     }
 
-    if(typeof value === 'string' &&  getFieldTypeValue(normalizedType, FieldTypeValue.MODULE) === 'url') {  
+    if (
+        typeof value === 'string' &&
+        getFieldTypeValue(normalizedType, FieldTypeValue.MODULE) === 'url'
+    ) {
         return (
-            <div className="break-all truncate">
+            <div className="truncate break-all">
                 <Link href={value} variant="textHeroDark">
                     {value}
                 </Link>
             </div>
-        )
-        
+        );
     }
 
     return (

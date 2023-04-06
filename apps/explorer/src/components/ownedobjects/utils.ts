@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {type SuiMoveNormalizedType} from '@mysten/sui.js';
+import { type SuiMoveNormalizedType } from '@mysten/sui.js';
 
 export enum FieldTypeValue {
     ADDRESS = 'address',
@@ -9,14 +9,19 @@ export enum FieldTypeValue {
     NAME = 'name',
 }
 
-type TypeReference = {
-    address: string;
-    module: string;
-    name: string;
-    typeArguments?: SuiMoveNormalizedType[];
-} | string | number;
+type TypeReference =
+    | {
+          address: string;
+          module: string;
+          name: string;
+          typeArguments?: SuiMoveNormalizedType[];
+      }
+    | string
+    | number;
 
-export function extractSerializationType(type: SuiMoveNormalizedType): TypeReference {
+export function extractSerializationType(
+    type: SuiMoveNormalizedType
+): TypeReference {
     if (typeof type === 'string') {
         return type;
     }
@@ -40,21 +45,26 @@ export function extractSerializationType(type: SuiMoveNormalizedType): TypeRefer
     if ('Struct' in type) {
         const theType = type.Struct;
         const theTypeArgs = theType.typeArguments;
-        
+
         if (theTypeArgs && theTypeArgs.length > 0) {
             return extractSerializationType(theTypeArgs[0]);
         }
 
         return type.Struct;
     }
-    
+
     return type;
 }
 
-
-export function getFieldTypeValue(normalizedType: TypeReference , structFieldName = FieldTypeValue.NAME)  {
-    if(typeof normalizedType === 'string' || typeof normalizedType === 'number') {
+export function getFieldTypeValue(
+    normalizedType: TypeReference,
+    structFieldName = FieldTypeValue.NAME
+) {
+    if (
+        typeof normalizedType === 'string' ||
+        typeof normalizedType === 'number'
+    ) {
         return normalizedType;
     }
-    return normalizedType[structFieldName]
+    return normalizedType[structFieldName];
 }

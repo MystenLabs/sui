@@ -7,14 +7,17 @@ import {
     getObjectFields,
     getObjectType,
     normalizeSuiObjectId,
-    type SuiMoveNormalizedType,
 } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 
 import { ReactComponent as SearchIcon } from '~/assets/SVGIcons/24px/Search.svg';
-import { getFieldTypeValue, FieldTypeValue, extractSerializationType} from '~/components/ownedobjects/utils';
+import {
+    getFieldTypeValue,
+    FieldTypeValue,
+    extractSerializationType,
+} from '~/components/ownedobjects/utils';
 import { FieldItem } from '~/components/ownedobjects/views/FieldItem';
 import { useGetObject } from '~/hooks/useGetObject';
 import { Banner } from '~/ui/Banner';
@@ -24,18 +27,9 @@ import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { Text } from '~/ui/Text';
 import { ListItem, VerticalList } from '~/ui/VerticalList';
 
-
 interface ObjectFieldsProps {
     id: string;
 }
-
-interface DisclosureBoxWrapperProps {
-    ref: HTMLDivElement;
-    keyName: string;
-    children: ReactNode;
-
-}
-
 
 export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
     const { data, isLoading, isError } = useGetObject(id);
@@ -49,19 +43,22 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
     const rpcClient = useRpcClient();
 
     // Get the normalized struct for the object
-    const { data: normalizedStruct, isLoading: loadingNormalizedStruct, isError:errorNormalizedMoveStruct } =
-        useQuery(
-            ['normalized-struct', id],
-            () =>
-                rpcClient.getNormalizedMoveStruct({
-                    package: normalizeSuiObjectId(packageId),
-                    module: moduleName,
-                    struct: functionName,
-                }),
-            {
-                enabled: !!packageId && !!moduleName && !!functionName,
-            }
-        );
+    const {
+        data: normalizedStruct,
+        isLoading: loadingNormalizedStruct,
+        isError: errorNormalizedMoveStruct,
+    } = useQuery(
+        ['normalized-struct', id],
+        () =>
+            rpcClient.getNormalizedMoveStruct({
+                package: normalizeSuiObjectId(packageId),
+                module: moduleName,
+                struct: functionName,
+            }),
+        {
+            enabled: !!packageId && !!moduleName && !!functionName,
+        }
+    );
 
     if (isLoading || loadingNormalizedStruct) {
         return (
@@ -88,7 +85,6 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
                       name.toLowerCase().includes(query.toLowerCase())
                   )
                   .map((name) => name);
-
 
     // Return null if there are no fields
     if (!fieldsNames?.length || !fieldsData || !normalizedStruct?.fields) {
@@ -164,40 +160,50 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
                                 <div className="max-h-[600px] min-h-full overflow-auto overflow-x-scroll py-3">
                                     <VerticalList>
                                         {normalizedStruct?.fields?.map(
-                                            ({ name, type }) =>  {
-                                                const fieldType = extractSerializationType(type);
-                                                return( <div
-                                                    key={name}
-                                                    className="mx-0.5 mt-0.5 md:min-w-fit"
-                                                >
-                                                    <ListItem
-                                                        active={
-                                                            activeFieldName ===
-                                                            name
-                                                        }
-                                                        onClick={() =>
-                                                            setActiveFieldName(name)
-                                                        }
+                                            ({ name, type }) => {
+                                                const fieldType =
+                                                    extractSerializationType(
+                                                        type
+                                                    );
+                                                return (
+                                                    <div
+                                                        key={name}
+                                                        className="mx-0.5 mt-0.5 md:min-w-fit"
                                                     >
-                                                        <div className="flex justify-between">
-                                                            <Text
-                                                                variant="body/medium"
-                                                                color="steel-darker"
-                                                            >
-                                                                {name.toString()}
-                                                            </Text>
-                                                            <div className="capitalize">
+                                                        <ListItem
+                                                            active={
+                                                                activeFieldName ===
+                                                                name
+                                                            }
+                                                            onClick={() =>
+                                                                setActiveFieldName(
+                                                                    name
+                                                                )
+                                                            }
+                                                        >
+                                                            <div className="flex justify-between">
                                                                 <Text
-                                                                    variant="subtitle/normal"
-                                                                    color="steel"
+                                                                    variant="body/medium"
+                                                                    color="steel-darker"
                                                                 >
-                                                                    { getFieldTypeValue(fieldType, FieldTypeValue.NAME) }
+                                                                    {name.toString()}
                                                                 </Text>
+                                                                <div className="capitalize">
+                                                                    <Text
+                                                                        variant="subtitle/normal"
+                                                                        color="steel"
+                                                                    >
+                                                                        {getFieldTypeValue(
+                                                                            fieldType,
+                                                                            FieldTypeValue.NAME
+                                                                        )}
+                                                                    </Text>
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                    </ListItem>
-                                                </div>
-                                            )}
+                                                        </ListItem>
+                                                    </div>
+                                                );
+                                            }
                                         )}
                                     </VerticalList>
                                 </div>
@@ -210,14 +216,15 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
                                             <div key={name}>
                                                 <DisclosureBox
                                                     title={
-                                                        <div className="max-w-[60%] min-w-fit truncate break-words text-body font-medium leading-relaxed text-steel-dark">
+                                                        <div className="min-w-fit max-w-[60%] truncate break-words text-body font-medium leading-relaxed text-steel-dark">
                                                             {name}:
                                                         </div>
                                                     }
                                                     preview={
                                                         <div className="flex items-center gap-1 truncate break-all">
-                                                            {typeof fieldsData[name]  ===
-                                                            'object' ? (
+                                                            {typeof fieldsData[
+                                                                name
+                                                            ] === 'object' ? (
                                                                 <Text
                                                                     variant="body/medium"
                                                                     color="gray-90"
@@ -228,12 +235,12 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
                                                             ) : (
                                                                 <FieldItem
                                                                     value={
-                                                                        fieldsData[name]
+                                                                        fieldsData[
+                                                                            name
+                                                                        ]
                                                                     }
                                                                     truncate
                                                                     type={type}
-                                                                    
-                                                                    
                                                                 />
                                                             )}
                                                         </div>
@@ -243,7 +250,6 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
                                                     <FieldItem
                                                         value={fieldsData[name]}
                                                         type={type}
-                                                        
                                                     />
                                                 </DisclosureBox>
                                             </div>
