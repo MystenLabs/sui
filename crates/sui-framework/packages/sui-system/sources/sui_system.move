@@ -65,6 +65,8 @@ module sui_system::sui_system {
 
     #[test_only]
     friend sui_system::governance_test_utils;
+    #[test_only]
+    friend sui_system::sui_system_tests;
 
     struct SuiSystemState has key {
         id: UID,
@@ -651,6 +653,12 @@ module sui_system::sui_system {
     public fun get_storage_fund_object_rebates(wrapper: &mut SuiSystemState): u64 {
         let self = load_system_state(wrapper);
         sui_system_state_inner::get_storage_fund_object_rebates(self)
+    }
+
+    #[test_only]
+    public fun get_stake_subsidy_distribution_counter(wrapper: &mut SuiSystemState): u64 {
+        let self = load_system_state(wrapper);
+        sui_system_state_inner::get_stake_subsidy_distribution_counter(self)
     }
 
     // CAUTION: THIS CODE IS ONLY FOR TESTING AND THIS MACRO MUST NEVER EVER BE REMOVED.  Creates a
