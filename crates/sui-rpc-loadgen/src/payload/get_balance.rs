@@ -50,7 +50,8 @@ impl<'a> ProcessPayload<'a, &'a GetBalance> for RpcCommandProcessor {
                     tasks.push(task);
                 }
             }
-            join_all(tasks).await;
+            let results = join_all(tasks).await;
+            println!("Completed chunk of {} tasks", results.len());
         }
         Ok(())
     }
@@ -65,6 +66,7 @@ async fn get_balance(
         .coin_read_api()
         .get_balance(owner_address, Some(coin_type))
         .await
+        .ok()
         .unwrap();
     Ok(balance)
 }
