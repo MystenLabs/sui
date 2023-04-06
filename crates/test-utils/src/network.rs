@@ -37,6 +37,7 @@ use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::messages::VerifiedTransaction;
 use sui_types::object::Object;
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 
@@ -118,6 +119,15 @@ impl TestCluster {
         start_fullnode_from_config(config).await
     }
 
+    pub fn all_node_handles(&self) -> impl Iterator<Item = SuiNodeHandle> {
+        self.swarm
+            .validator_node_handles()
+            .into_iter()
+            .chain(std::iter::once(SuiNodeHandle::new(
+                self.fullnode_handle.sui_node.clone(),
+            )))
+    }
+
     pub fn get_validator_addresses(&self) -> Vec<AuthorityName> {
         self.swarm.validators().map(|v| v.name()).collect()
     }
@@ -138,12 +148,13 @@ impl TestCluster {
         RandomNodeRestarter::new(self.clone())
     }
 
-    /// Wait for thet network to transition to the next or a specific epoch.
+    /// Wait for the network to transition to the next or a specific epoch.
     /// To detect whether the network has reached such state, we use the fullnode as the
     /// source of truth, since a fullnode only does epoch transition when the network has
     /// done so.
     /// If target_epoch is specified, wait until the cluster reaches that epoch.
     /// If target_epoch is None, wait until the cluster reaches the next epoch.
+    /// Note that this function does not guarantee that every node is at the target epoch.
     pub async fn wait_for_epoch(&self, target_epoch: Option<EpochId>) -> SuiSystemState {
         let mut epoch_rx = self.fullnode_handle.sui_node.subscribe_to_epoch_change();
         timeout(Duration::from_secs(60), async move {
@@ -165,6 +176,43 @@ impl TestCluster {
         .expect("Timed out waiting for cluster to target epoch")
     }
 
+    /// Upgrade the network protocol version, by restarting every validator with a new
+    /// supported versions.
+    /// Note that we don't restart the fullnode here, and it is assumed that the fulnode supports
+    /// the entire version range.
+    pub async fn upgrade_protocol(&mut self, new_supported_versions: SupportedProtocolVersions) {
+        for authority in self.get_validator_addresses().into_iter() {
+            self.stop_validator(authority);
+            tokio::time::sleep(Duration::from_millis(1000)).await;
+            self.swarm
+                .validator_mut(authority)
+                .unwrap()
+                .config
+                .supported_protocol_versions = Some(new_supported_versions);
+            self.start_validator(authority).await;
+            info!("Restarted validator {}", authority);
+        }
+    }
+
+    /// Wait for all nodes in the network to upgrade to `protocol_version`.
+    pub async fn wait_for_all_nodes_upgrade_to(&self, protocol_version: u64) {
+        for h in self.all_node_handles() {
+            h.with_async(|node| async {
+                while node
+                    .state()
+                    .epoch_store_for_testing()
+                    .epoch_start_state()
+                    .protocol_version()
+                    .as_u64()
+                    != protocol_version
+                {
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+            })
+            .await;
+        }
+    }
+
     pub async fn execute_transaction(
         &self,
         transaction: VerifiedTransaction,
@@ -182,10 +230,9 @@ impl TestCluster {
 
     #[cfg(msim)]
     pub fn set_safe_mode_expected(&self, value: bool) {
-        for n in self.swarm.validator_node_handles() {
+        for n in self.all_node_handles() {
             n.with(|node| node.set_safe_mode_expected(value));
         }
-        self.fullnode_handle.sui_node.set_safe_mode_expected(value);
     }
 }
 
@@ -249,7 +296,9 @@ pub struct TestClusterBuilder {
     fullnode_rpc_port: Option<u16>,
     enable_fullnode_events: bool,
     initial_protocol_version: ProtocolVersion,
-    supported_protocol_versions_config: ProtocolVersionsConfig,
+    validator_supported_protocol_versions_config: ProtocolVersionsConfig,
+    // Default to validator_supported_protocol_versions_config, but can be overridden.
+    fullnode_supported_protocol_versions_config: Option<ProtocolVersionsConfig>,
     db_checkpoint_config_validators: DBCheckpointConfig,
     db_checkpoint_config_fullnodes: DBCheckpointConfig,
 }
@@ -263,7 +312,8 @@ impl TestClusterBuilder {
             num_validators: None,
             enable_fullnode_events: false,
             initial_protocol_version: SupportedProtocolVersions::SYSTEM_DEFAULT.max,
-            supported_protocol_versions_config: ProtocolVersionsConfig::Default,
+            validator_supported_protocol_versions_config: ProtocolVersionsConfig::Default,
+            fullnode_supported_protocol_versions_config: None,
             db_checkpoint_config_validators: DBCheckpointConfig::default(),
             db_checkpoint_config_fullnodes: DBCheckpointConfig::default(),
         }
@@ -322,7 +372,15 @@ impl TestClusterBuilder {
     }
 
     pub fn with_supported_protocol_versions(mut self, c: SupportedProtocolVersions) -> Self {
-        self.supported_protocol_versions_config = ProtocolVersionsConfig::Global(c);
+        self.validator_supported_protocol_versions_config = ProtocolVersionsConfig::Global(c);
+        self
+    }
+
+    pub fn with_fullnode_supported_protocol_versions_config(
+        mut self,
+        c: SupportedProtocolVersions,
+    ) -> Self {
+        self.fullnode_supported_protocol_versions_config = Some(ProtocolVersionsConfig::Global(c));
         self
     }
 
@@ -335,7 +393,8 @@ impl TestClusterBuilder {
         mut self,
         func: SupportedProtocolVersionsCallback,
     ) -> Self {
-        self.supported_protocol_versions_config = ProtocolVersionsConfig::PerValidator(func);
+        self.validator_supported_protocol_versions_config =
+            ProtocolVersionsConfig::PerValidator(func);
         self
     }
 
@@ -357,7 +416,9 @@ impl TestClusterBuilder {
             .config()
             .fullnode_config_builder()
             .with_supported_protocol_versions_config(
-                self.supported_protocol_versions_config.clone(),
+                self.fullnode_supported_protocol_versions_config
+                    .clone()
+                    .unwrap_or_else(|| self.validator_supported_protocol_versions_config.clone()),
             )
             .with_db_checkpoint_config(self.db_checkpoint_config_fullnodes)
             .set_event_store(self.enable_fullnode_events)
@@ -401,7 +462,7 @@ impl TestClusterBuilder {
             .with_protocol_version(self.initial_protocol_version)
             .with_db_checkpoint_config(self.db_checkpoint_config_validators.clone())
             .with_supported_protocol_versions_config(
-                self.supported_protocol_versions_config.clone(),
+                self.validator_supported_protocol_versions_config.clone(),
             );
 
         if let Some(genesis_config) = self.genesis_config.take() {

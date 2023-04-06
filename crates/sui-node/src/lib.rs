@@ -437,6 +437,7 @@ impl SuiNode {
 
     #[cfg(msim)]
     pub fn set_safe_mode_expected(&self, new_value: bool) {
+        info!("Setting safe mode expected to {}", new_value);
         self.sim_safe_mode_expected
             .store(new_value, Ordering::Relaxed);
     }
@@ -876,6 +877,7 @@ impl SuiNode {
 
         loop {
             let cur_epoch_store = self.state.load_epoch_store_one_call_per_task();
+
             // Advertise capabilities to committee, if we are a validator.
             if let Some(components) = &*self.validator_components.lock().await {
                 // TODO: without this sleep, the consensus message is not delivered reliably.
@@ -905,6 +907,15 @@ impl SuiNode {
                 .state
                 .get_sui_system_state_object_during_reconfig()
                 .expect("Read Sui System State object cannot fail");
+
+            #[cfg(msim)]
+            if !self.sim_safe_mode_expected.load(Ordering::Relaxed) {
+                debug_assert!(!latest_system_state.safe_mode());
+            }
+
+            #[cfg(not(msim))]
+            debug_assert!(!latest_system_state.safe_mode());
+
             if let Err(err) = self.end_of_epoch_channel.send(latest_system_state.clone()) {
                 if self.state.is_fullnode(&cur_epoch_store) {
                     warn!(
@@ -919,14 +930,6 @@ impl SuiNode {
             let next_epoch_committee = new_epoch_start_state.get_sui_committee();
             let next_epoch = next_epoch_committee.epoch();
             assert_eq!(cur_epoch_store.epoch() + 1, next_epoch);
-
-            #[cfg(msim)]
-            if !self.sim_safe_mode_expected.load(Ordering::Relaxed) {
-                debug_assert!(!new_epoch_start_state.safe_mode());
-            }
-
-            #[cfg(not(msim))]
-            debug_assert!(!new_epoch_start_state.safe_mode());
 
             info!(
                 next_epoch,

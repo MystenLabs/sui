@@ -279,8 +279,8 @@ impl<'state, S: StorageView> LinkageResolver for LinkageView<'state, S> {
         let runtime_id = ObjectID::from_address(*module_id.address());
         let Some(upgrade) = linkage.link_table.get(&runtime_id) else {
             invariant_violation!(format!(
-                "Missing linkage for {runtime_id} in context {}",
-                linkage.storage_id,
+                "Missing linkage for {runtime_id} in context {}, runtime_id is {}",
+                linkage.storage_id, linkage.runtime_id
             ));
         };
 
