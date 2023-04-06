@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useRpcClient } from '@mysten/core';
-import { type CoinStruct } from '@mysten/sui.js';
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { type PaginatedCoins, type CoinStruct } from '@mysten/sui.js';
+import { useState, useRef, useEffect, useMemo } from 'react';
 
 import CoinItem from './CoinItem';
 
@@ -22,18 +22,19 @@ function CoinsPanel({ coinType, id }: CoinsPanelProps): JSX.Element {
     const [isVisible, setIsVisible] = useState(false);
     const rpc = useRpcClient();
 
-    const rpcCb = useCallback(() => rpc.getCoins({ owner: id, coinType, limit: 10, cursor: nextCursor }).then((resp) => {
-            setCoinObjects((coinObjects) => [...coinObjects, ...resp.data]);
-            setHasNextPage(resp.hasNextPage);
-            setNextCursor(resp.nextCursor);
-            setIsLoading(false);
-        }), 
-        [id, coinType, nextCursor, rpc])
+    const update = (resp: PaginatedCoins) => {
+        setCoinObjects((coinObjects) => [...coinObjects, ...resp.data]);
+        setHasNextPage(resp.hasNextPage);
+        setNextCursor(resp.nextCursor);
+        setIsLoading(false);
+    };
 
     useEffect(() => {
         setIsLoading(true);
-        rpcCb();
-    }, []);
+        rpc.getCoins({ owner: id, coinType, limit: 10 }).then((resp) => {
+            update(resp);
+        });
+    }, [id, coinType, rpc]);
 
     const containerRef = useRef(null);
 
@@ -73,9 +74,16 @@ function CoinsPanel({ coinType, id }: CoinsPanelProps): JSX.Element {
     useEffect(() => {
         if (isVisible && hasNextPage && nextCursor && !isLoading) {
             setIsLoading(true);
-            rpcCb();
+            rpc.getCoins({
+                owner: id,
+                coinType,
+                limit: 10,
+                cursor: nextCursor,
+            }).then((resp) => {
+                update(resp);
+            });
         }
-    }, [isVisible, hasNextPage, nextCursor, isLoading, coinType, id, rpcCb]);
+    }, [isVisible, hasNextPage, nextCursor, isLoading, coinType, id, rpc]);
 
     return (
         <div>
