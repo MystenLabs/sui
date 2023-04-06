@@ -3,7 +3,7 @@
 
 import { Check12, X12 } from '@mysten/icons';
 import { Ed25519PublicKey, type SuiAddress } from '@mysten/sui.js';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 
 import { useSuiLedgerClient } from '../../ledger/SuiLedgerClientProvider';
@@ -35,6 +35,11 @@ export function VerifyLedgerConnectionStatus({
     const [verificationStatus, setVerificationStatus] = useState(
         VerificationStatus.UNKNOWN
     );
+    const timeoutIdRef = useRef<number>();
+
+    useEffect(() => {
+        return () => clearTimeout(timeoutIdRef.current);
+    }, []);
 
     switch (verificationStatus) {
         case VerificationStatus.UNKNOWN:
@@ -59,7 +64,7 @@ export function VerifyLedgerConnectionStatus({
                                     : VerificationStatus.NOT_VERIFIED
                             );
 
-                            setTimeout(() => {
+                            timeoutIdRef.current = window.setTimeout(() => {
                                 setVerificationStatus(
                                     VerificationStatus.UNKNOWN
                                 );
