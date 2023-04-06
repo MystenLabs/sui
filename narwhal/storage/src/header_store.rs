@@ -5,6 +5,7 @@ use crate::NodeStorage;
 use store::rocks::ReadWriteOptions;
 use store::rocks::{open_cf, DBMap, MetricConf};
 use store::{reopen, Map, TypedStoreError};
+use sui_macros::fail_point;
 use types::{Header, HeaderDigest};
 
 #[derive(Clone)]
@@ -35,8 +36,14 @@ impl HeaderStore {
         self.store.get(id)
     }
 
+    #[allow(clippy::let_and_return)]
     pub fn write(&self, header: &Header) -> Result<(), TypedStoreError> {
-        self.store.insert(&header.digest(), header)
+        fail_point!("narwhal-store-before-write");
+
+        let result = self.store.insert(&header.digest(), header);
+
+        fail_point!("narwhal-store-after-write");
+        result
     }
 
     pub fn remove_all(

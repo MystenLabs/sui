@@ -248,15 +248,6 @@ async fn run(
     worker_keypair: NetworkKeyPair,
     registry: Registry,
 ) -> Result<(), eyre::Report> {
-    // Only enabled if failpoints feature flag is set
-    let _failpoints_scenario: fail::FailScenario<'_>;
-    if fail::has_failpoints() {
-        warn!("Failpoints are enabled");
-        _failpoints_scenario = fail::FailScenario::setup();
-    } else {
-        info!("Failpoints are not enabled");
-    }
-
     let workers_file = matches.value_of("workers").unwrap();
     let parameters_file = matches.value_of("parameters");
     let store_path = matches.value_of("store").unwrap();
