@@ -12,7 +12,7 @@ use std::fmt;
 use std::fs::{self, File};
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, Instant};
 use sui_json_rpc_types::{
     SuiExecutionStatus, SuiObjectDataOptions, SuiTransactionBlockDataAPI,
     SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
@@ -412,20 +412,12 @@ impl<'a> ProcessPayload<'a, &'a DryRun> for RpcCommandProcessor {
 fn write_data_to_file<T: Serialize>(
     data: &T,
     file_path: &str,
-    use_timestamp: Option<bool>,
+    _use_timestamp: Option<bool>,
 ) -> Result<(), anyhow::Error> {
     let mut path_buf = PathBuf::from(&file_path);
     path_buf.pop();
     fs::create_dir_all(&path_buf).map_err(|e| anyhow!("Error creating directory: {}", e))?;
-
-    let file_name: String = if Some(true) == use_timestamp {
-        let timestamp = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .map_err(|e| anyhow!("Error getting timestamp: {}", e))?;
-        format!("{}_{}.json", file_path, timestamp.as_millis())
-    } else {
-        format!("{}.json", file_path)
-    };
+    let file_name = format!("{}.json", file_path);
 
     let file = File::create(&file_name).map_err(|e| anyhow!("Error creating file: {}", e))?;
     serde_json::to_writer(file, data).map_err(|e| anyhow!("Error writing to file: {}", e))?;
