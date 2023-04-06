@@ -4,6 +4,7 @@
 use move_binary_format::CompiledModule;
 use move_core_types::gas_algebra::InternalGas;
 use once_cell::sync::Lazy;
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage};
 use sui_types::{
@@ -19,6 +20,7 @@ pub mod natives;
 
 /// Represents a system package in the framework, that's built from the source code inside
 /// sui-framework.
+#[derive(Serialize, Deserialize)]
 pub struct SystemPackage {
     id: ObjectID,
     bytes: Vec<Vec<u8>>,
