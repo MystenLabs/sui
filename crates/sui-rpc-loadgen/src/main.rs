@@ -17,8 +17,8 @@ use tracing::info;
 
 use crate::load_test::{LoadTest, LoadTestConfig};
 use crate::payload::{
-    load_addresses_from_file, load_digests_from_file, load_objects_from_file, Command,
-    RpcCommandProcessor, SignerInfo,
+    load_addresses_from_file, load_addresses_with_coin_types_from_file, load_digests_from_file,
+    load_objects_from_file, Command, RpcCommandProcessor, SignerInfo,
 };
 
 #[derive(Parser)]
@@ -125,6 +125,17 @@ pub enum ClapCommand {
         #[clap(long)]
         chunk_size: usize,
 
+        #[clap(long)]
+        skip_record: bool,
+
+        #[clap(flatten)]
+        common: CommonOptions,
+    },
+    #[clap(name = "get-balance")]
+    GetBalance {
+        #[clap(long)]
+        chunk_size: usize,
+
         #[clap(flatten)]
         common: CommonOptions,
     },
@@ -228,10 +239,23 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 false,
             )
         }
-        ClapCommand::GetAllBalances { common, chunk_size } => {
+        ClapCommand::GetAllBalances {
+            common,
+            chunk_size,
+            skip_record,
+        } => {
             let addresses = load_addresses_from_file(expand_path(&opts.data_directory));
             (
-                Command::new_get_all_balances(addresses, chunk_size),
+                Command::new_get_all_balances(addresses, chunk_size, !skip_record),
+                common,
+                false,
+            )
+        }
+        ClapCommand::GetBalance { common, chunk_size } => {
+            let addresses_with_coin_types =
+                load_addresses_with_coin_types_from_file(expand_path(&opts.data_directory));
+            (
+                Command::new_get_balance(addresses_with_coin_types, chunk_size),
                 common,
                 false,
             )
