@@ -9,6 +9,7 @@ use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 use move_core_types::language_storage::{StructTag, TypeTag};
+use sui_types::storage::ObjectKey;
 use tracing::debug;
 
 use sui_core::authority::AuthorityState;
@@ -18,7 +19,7 @@ use sui_open_rpc::Module;
 use sui_types::balance::Supply;
 use sui_types::base_types::{MoveObjectType, ObjectID, ObjectRef, SuiAddress};
 use sui_types::coin::{Coin, CoinMetadata, TreasuryCap};
-use sui_types::error::SuiError;
+use sui_types::error::{SuiError, UserInputError};
 use sui_types::gas_coin::GAS;
 use sui_types::messages::TransactionEffectsAPI;
 use sui_types::object::{Object, Owner};
@@ -35,43 +36,6 @@ pub struct CoinReadApi {
 impl CoinReadApi {
     pub fn new(state: Arc<AuthorityState>) -> Self {
         Self { state }
-    }
-
-    fn get_object(&self, object_id: &ObjectID) -> Result<Object, Error> {
-        Ok(self
-            .state
-            .get_object_read(object_id)?
-            .into_object()
-            .map_err(SuiError::from)?)
-    }
-
-    fn get_coin(&self, coin_id: &ObjectID) -> Result<SuiCoin, Error> {
-        let o = self.get_object(coin_id)?;
-        if let Some(move_object) = o.data.try_as_move() {
-            let (balance, locked_until_epoch) = if move_object.type_().is_coin() {
-                let coin: Coin = bcs::from_bytes(move_object.contents())?;
-                (coin.balance.value(), None)
-            } else {
-                return Err(Error::SuiError(SuiError::ObjectDeserializationError {
-                    error: format!("{:?} is not a supported coin type", move_object.type_()),
-                }));
-            };
-
-            Ok(SuiCoin {
-                coin_type: move_object
-                    .type_()
-                    .type_params()
-                    .first()
-                    .unwrap()
-                    .to_string(),
-                coin_object_id: o.id(),
-                version: o.version(),
-                digest: o.digest(),
-                balance,
-                locked_until_epoch,
-                previous_transaction: o.previous_transaction,
-            }
-        }
     }
 
     fn multi_get_coin_objects(&self, coins: &[ObjectRef]) -> Result<Vec<Object>, Error> {
@@ -144,8 +108,9 @@ impl CoinReadApi {
                         o.id()
                     )))
                 }
-            }))
-        }
+            })
+            .collect())
+    }
 
     async fn get_coins_internal(
         &self,
@@ -158,8 +123,8 @@ impl CoinReadApi {
         // TODO: Add index to improve performance?
         let limit = cap_page_limit(limit);
         let mut coins = self
-            .get_owner_coin_iterator(owner, &coin_type)?
-            .skip_while(|o| matches!(&cursor, Some(cursor) if cursor != o))
+            .get_owner_coin_iterator(owner, coin_type)?
+            .skip_while(|o| matches!(&cursor, Some(cursor) if cursor != &o.0))
             // skip an extra b/c the cursor is exclusive
             .skip(usize::from(cursor.is_some()))
             .take(limit + 1)
@@ -167,12 +132,12 @@ impl CoinReadApi {
 
         let has_next_page = coins.len() > limit;
         coins.truncate(limit);
-        let next_cursor = coins.last().cloned().map_or(cursor, Some);
+        let next_cursor = coins.last().cloned().map_or(cursor, |(id, _, _)| Some(id));
 
-        let mut data = vec![];
-        for coin in coins {
-            data.push(self.get_coin(&coin)?)
-        }
+        let data = self
+            .multi_get_coin(&coins, coin_type)?
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(CoinPage {
             data,
             next_cursor,
@@ -203,7 +168,11 @@ impl CoinReadApi {
         package_id: &ObjectID,
         object_struct_tag: StructTag,
     ) -> Result<Object, Error> {
-        let publish_txn_digest = self.get_object(package_id)?.previous_transaction;
+        let publish_txn_digest = self
+            .state
+            .get_object_read(package_id)?
+            .into_object()?
+            .previous_transaction;
         let (_, effect) = self
             .state
             .get_executed_transaction_and_effects(publish_txn_digest)
@@ -227,7 +196,7 @@ impl CoinReadApi {
             ))
         }
         .await?;
-        self.get_object(&object_id)
+        Ok(self.state.get_object_read(&object_id)?.into_object()?)
     }
 }
 
