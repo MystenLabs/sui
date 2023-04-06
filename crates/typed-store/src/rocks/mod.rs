@@ -46,6 +46,10 @@ const DEFAULT_DB_WRITE_BUFFER_SIZE: usize = 1024;
 const ENV_VAR_DB_WAL_SIZE: &str = "MYSTEN_DB_WAL_SIZE_MB";
 const DEFAULT_DB_WAL_SIZE: usize = 1024;
 
+const ENV_MAX_BACKGROUND_JOBS: &str = "NUM_COMPACTION_JOBS";
+const ENV_NUM_WRITE_BUFFER_TRIGGER: &str = "NUM_WRITE_BUFFER_TRIGGER";
+
+
 #[cfg(test)]
 mod tests;
 
@@ -1838,7 +1842,11 @@ pub fn optimized_for_high_throughput_options(
     db_options.options.set_max_write_buffer_number(6);
     db_options
         .options
-        .set_level_zero_file_num_compaction_trigger(2);
+        .set_level_zero_file_num_compaction_trigger(
+            read_size_from_env(ENV_NUM_WRITE_BUFFER_TRIGGER)
+            .unwrap_or(4)
+            .try_into()
+            .unwrap());
     db_options
         .options
         .set_target_file_size_base(64 * 1024 * 1024);
@@ -1846,7 +1854,12 @@ pub fn optimized_for_high_throughput_options(
         .options
         .set_max_bytes_for_level_base(512 * 1024 * 1024);
 
-    db_options.options.set_max_background_jobs(4);
+    db_options.options.set_max_background_jobs(
+        read_size_from_env(ENV_MAX_BACKGROUND_JOBS)
+            .unwrap_or(2)
+            .try_into()
+            .unwrap(),
+    );
 
     if optimize_for_point_lookup {
         db_options
