@@ -1059,6 +1059,74 @@ async fn test_reconfig_with_committee_change_stress() {
     assert_eq!(epoch, 3);
 }
 
+#[cfg(msim)]
+#[sim_test]
+async fn safe_mode_reconfig_test() {
+    use sui_adapter::execution_engine::advance_epoch_result_injection;
+    use test_utils::messages::make_staking_transaction_with_wallet_context;
+
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(5000)
+        .build()
+        .await
+        .unwrap();
+
+    let system_state = test_cluster
+        .sui_client()
+        .governance_api()
+        .get_latest_sui_system_state()
+        .await
+        .unwrap();
+
+    // On startup, we should be at V1.
+    assert_eq!(system_state.system_state_version, 1);
+    assert_eq!(system_state.epoch, 0);
+
+    // Wait for regular epoch change to happen once. Migration from V1 to V2 should happen here.
+    let system_state = test_cluster.wait_for_epoch(Some(1)).await;
+    assert!(!system_state.safe_mode());
+    assert_eq!(system_state.epoch(), 1);
+    assert_eq!(system_state.system_state_version(), 2);
+
+    let prev_epoch_start_timestamp = system_state.epoch_start_timestamp_ms();
+
+    // We are going to enter safe mode so set the expectation right.
+    test_cluster.set_safe_mode_expected(true);
+
+    // Now inject an error into epoch change txn execution.
+    advance_epoch_result_injection::set_override(true);
+
+    // Reconfig again and check that we are in safe mode now.
+    let system_state = test_cluster.wait_for_epoch(Some(2)).await;
+    assert!(system_state.safe_mode());
+    assert_eq!(system_state.epoch(), 2);
+    // Check that time is properly set even in safe mode.
+    assert!(system_state.epoch_start_timestamp_ms() >= prev_epoch_start_timestamp + 5000);
+
+    // Try a staking transaction.
+    let validator_address = system_state
+        .into_sui_system_state_summary()
+        .active_validators[0]
+        .sui_address;
+    let txn =
+        make_staking_transaction_with_wallet_context(test_cluster.wallet_mut(), validator_address)
+            .await;
+    let response = test_cluster
+        .execute_transaction(txn)
+        .await
+        .expect("Staking txn failed");
+    assert!(response.status_ok().unwrap());
+
+    // Now remove the override and check that in the next epoch we are no longer in safe mode.
+    test_cluster.set_safe_mode_expected(false);
+    advance_epoch_result_injection::set_override(false);
+
+    let system_state = test_cluster.wait_for_epoch(Some(3)).await;
+    assert!(!system_state.safe_mode());
+    assert_eq!(system_state.epoch(), 3);
+    assert_eq!(system_state.system_state_version(), 2);
+}
+
 async fn execute_add_validator_candidate_tx(
     authorities: &[SuiNodeHandle],
     gas_object: ObjectRef,

@@ -51,7 +51,7 @@ impl Payload for DelegationTestPayload {
                 coin,
                 self.validator,
                 self.sender,
-                &self.keypair,
+                self.keypair.as_ref(),
                 Some(
                     self.system_state_observer
                         .state
