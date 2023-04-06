@@ -2,23 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Combobox } from '@headlessui/react';
-import { useRpcClient } from '@mysten/core';
 import {
     getObjectFields,
     getObjectType,
     normalizeSuiObjectId,
 } from '@mysten/sui.js';
-import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { useState } from 'react';
 
 import { ReactComponent as SearchIcon } from '~/assets/SVGIcons/24px/Search.svg';
-import {
-    getFieldTypeValue,
-    FieldValueType,
-    extractSerializationType,
-} from '~/components/ownedobjects/utils';
+import { getFieldTypeValue } from '~/components/ownedobjects/utils';
 import { FieldItem } from '~/components/ownedobjects/views/FieldItem';
+import { useGetNormalizedMoveStruct } from '~/hooks/useGetNormalizedMoveStruct';
 import { useGetObject } from '~/hooks/useGetObject';
 import { Banner } from '~/ui/Banner';
 import { DisclosureBox } from '~/ui/DisclosureBox';
@@ -40,24 +35,16 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
     // Get the packageId, moduleName, functionName from the objectType
     const [packageId, moduleName, functionName] =
         objectType?.split('<')[0]?.split('::') || [];
-    const rpcClient = useRpcClient();
 
     // Get the normalized struct for the object
     const {
         data: normalizedStruct,
         isLoading: loadingNormalizedStruct,
         isError: errorNormalizedMoveStruct,
-    } = useQuery(
-        ['normalized-struct', id],
-        () =>
-            rpcClient.getNormalizedMoveStruct({
-                package: normalizeSuiObjectId(packageId),
-                module: moduleName,
-                struct: functionName,
-            }),
-        {
-            enabled: !!packageId && !!moduleName && !!functionName,
-        }
+    } = useGetNormalizedMoveStruct(
+        normalizeSuiObjectId(packageId),
+        moduleName,
+        functionName
     );
 
     if (isLoading || loadingNormalizedStruct) {
@@ -74,19 +61,18 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
             </Banner>
         );
     }
+
     const fieldsData = getObjectFields(data!);
-    const fieldsNames = Object.entries(fieldsData || {});
+
     const filteredFieldNames =
         query === ''
-            ? fieldsNames
-            : fieldsNames
-                  .filter(([name]) =>
-                      name.toLowerCase().includes(query.toLowerCase())
-                  )
-                  .map((name) => name);
+            ? normalizedStruct?.fields
+            : normalizedStruct?.fields.filter(({ name }) =>
+                  name.toLowerCase().includes(query.toLowerCase())
+              );
 
     // Return null if there are no fields
-    if (!fieldsNames?.length || !fieldsData || !normalizedStruct?.fields) {
+    if (!fieldsData || !normalizedStruct?.fields) {
         return null;
     }
 
@@ -133,75 +119,73 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
                                                 No results
                                             </div>
                                         )}
-                                        {filteredFieldNames?.map(([name]) => (
-                                            <Combobox.Option
-                                                key={name}
-                                                value={name}
-                                                className="list-none md:min-w-fit"
-                                            >
-                                                {({ active }) => (
-                                                    <button
-                                                        type="button"
-                                                        className={clsx(
-                                                            'mt-0.5 block w-full cursor-pointer rounded-md border px-1.5 py-2 text-left text-body',
-                                                            active
-                                                                ? 'border-transparent bg-gray-40 text-steel-darker'
-                                                                : 'border-transparent bg-white font-medium text-steel-darker'
-                                                        )}
-                                                    >
-                                                        {name}
-                                                    </button>
-                                                )}
-                                            </Combobox.Option>
-                                        ))}
+                                        {normalizedStruct?.fields?.map(
+                                            ({ name }) => (
+                                                <Combobox.Option
+                                                    key={name}
+                                                    value={name}
+                                                    className="list-none md:min-w-fit"
+                                                >
+                                                    {({ active }) => (
+                                                        <button
+                                                            type="button"
+                                                            className={clsx(
+                                                                'mt-0.5 block w-full cursor-pointer rounded-md border px-1.5 py-2 text-left text-body',
+                                                                active
+                                                                    ? 'border-transparent bg-gray-40 text-steel-darker'
+                                                                    : 'border-transparent bg-white font-medium text-steel-darker'
+                                                            )}
+                                                        >
+                                                            {name}
+                                                        </button>
+                                                    )}
+                                                </Combobox.Option>
+                                            )
+                                        )}
                                     </Combobox.Options>
                                 </Combobox>
                                 <div className="max-h-[600px] min-h-full overflow-auto overflow-x-clip overflow-y-scroll py-3">
                                     <VerticalList>
                                         {normalizedStruct?.fields?.map(
-                                            ({ name, type }) => {
-                                                const fieldType =
-                                                    extractSerializationType(
-                                                        type
-                                                    );
-                                                return (
-                                                    <div
-                                                        key={name}
-                                                        className="mt-0.5 md:min-w-fit"
-                                                    >
-                                                        <ListItem
-                                                            active={
-                                                                activeFieldName ===
+                                            ({ name, type }) => (
+                                                <div
+                                                    key={name}
+                                                    className="mt-0.5 md:min-w-fit"
+                                                >
+                                                    <ListItem
+                                                        active={
+                                                            activeFieldName ===
+                                                            name
+                                                        }
+                                                        onClick={() =>
+                                                            setActiveFieldName(
                                                                 name
-                                                            }
-                                                            onClick={() =>
-                                                                setActiveFieldName(
-                                                                    name
-                                                                )
-                                                            }
-                                                        >
-                                                            <div className="flex flex-1 justify-between gap-2 truncate">
-                                                                <Text
-                                                                    variant="body/medium"
-                                                                    color="steel-darker"
-                                                                >
-                                                                    {name.toString()}
-                                                                </Text>
+                                                            )
+                                                        }
+                                                    >
+                                                        <div className="flex flex-1 justify-between gap-2 truncate">
+                                                            <Text
+                                                                variant="body/medium"
+                                                                color="steel-darker"
+                                                            >
+                                                                {name.toString()}
+                                                            </Text>
 
-                                                                <Text
-                                                                    variant="p3/normal"
-                                                                    color="steel"
-                                                                >
-                                                                    {getFieldTypeValue(
-                                                                        fieldType,
-                                                                        FieldValueType.NAME
-                                                                    )}
-                                                                </Text>
-                                                            </div>
-                                                        </ListItem>
-                                                    </div>
-                                                );
-                                            }
+                                                            <Text
+                                                                variant="p3/normal"
+                                                                color="steel"
+                                                            >
+                                                                {
+                                                                    getFieldTypeValue(
+                                                                        type
+                                                                    )
+                                                                        .displayName
+                                                                }
+                                                            </Text>
+                                                        </div>
+                                                    </ListItem>
+                                                </div>
+                                            )
                                         )}
                                     </VerticalList>
                                 </div>
