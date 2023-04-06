@@ -11,7 +11,7 @@ type CoinItemProps = {
     coin: CoinStruct;
 };
 
-function CoinItem({ coin }: CoinItemProps) {
+function CoinItem({ coin }: CoinItemProps): JSX.Element {
     const [formattedBalance, symbol] = useFormatCoin(
         coin.balance,
         coin.coinType

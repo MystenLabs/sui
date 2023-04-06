@@ -13,7 +13,7 @@ import { Pagination } from '~/ui/Pagination';
 
 export const OBJECTS_PER_PAGE: number = 6;
 
-function OwnerCoins({ id }: { id: string }) {
+function OwnerCoins({ id }: { id: string }): JSX.Element {
     const [results, setResults] = useState<SuiObjectResponse[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isFail, setIsFail] = useState(false);

@@ -15,7 +15,7 @@ type OwnedCoinViewProps = {
     id: string;
 };
 
-function OwnedCoinView({ coin, id }: OwnedCoinViewProps) {
+function OwnedCoinView({ coin, id }: OwnedCoinViewProps): JSX.Element {
     const [formattedTotalBalance, symbol] = useFormatCoin(
         coin.totalBalance,
         coin.coinType

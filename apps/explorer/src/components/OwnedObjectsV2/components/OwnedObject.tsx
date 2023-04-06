@@ -21,7 +21,7 @@ type OwnedObjectTypes = {
     obj: SuiObjectResponse;
 };
 
-function OwnedObject({ obj }: OwnedObjectTypes) {
+function OwnedObject({ obj }: OwnedObjectTypes): JSX.Element {
     const displayMeta = getObjectDisplay(obj).data;
     const display = transformURL(parseImageURL(displayMeta));
     return (
