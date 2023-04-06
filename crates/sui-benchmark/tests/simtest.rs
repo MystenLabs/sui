@@ -147,9 +147,18 @@ mod test {
         let dead_validator = dead_validator_orig.clone();
         let client_node = sui_simulator::current_simnode_id();
         register_fail_points(
-            &["batch-write", "transaction-commit", "put-cf"],
+            &[
+                "batch-write-before",
+                "batch-write-after",
+                "put-cf-before",
+                "put-cf-after",
+                "delete-cf-before",
+                "delete-cf-after",
+                "transaction-commit",
+                "highest-executed-checkpoint",
+            ],
             move || {
-                handle_failpoint(dead_validator.clone(), client_node, 0.01);
+                handle_failpoint(dead_validator.clone(), client_node, 0.02);
             },
         );
 
