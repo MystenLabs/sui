@@ -28,6 +28,7 @@ use serde_json::{json, Value};
 use sui_framework::build_move_package;
 use sui_move::build::resolve_lock_file_path;
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
+use sui_types::digests::TransactionDigest;
 use sui_types::error::SuiError;
 
 use shared_crypto::intent::Intent;
@@ -104,6 +105,14 @@ pub enum SuiClientCommands {
         /// Return the bcs serialized version of the object
         #[clap(long)]
         bcs: bool,
+    },
+
+    /// Get the effects of executing the given transaction block
+    #[clap(name = "tx-block")]
+    TransactionBlock {
+        /// Digest of the transaction block
+        #[clap(name = "digest")]
+        digest: TransactionDigest,
     },
 
     /// Publish Move modules
@@ -635,6 +644,18 @@ impl SuiClientCommands {
                         .await?;
                     SuiClientCommandResult::RawObject(raw_object_read)
                 }
+            }
+
+            SuiClientCommands::TransactionBlock { digest } => {
+                let client = context.get_client().await?;
+                let tx_read = client
+                    .read_api()
+                    .get_transaction_with_options(
+                        digest,
+                        SuiTransactionBlockResponseOptions::full_content(),
+                    )
+                    .await?;
+                SuiClientCommandResult::TransactionBlock(tx_read)
             }
 
             SuiClientCommands::DynamicFieldQuery { id, cursor, limit } => {
@@ -1410,6 +1431,9 @@ impl Display for SuiClientCommandResult {
                 let object = unwrap_err_to_string(|| Ok(object_read.object()?));
                 writeln!(writer, "{}", object)?;
             }
+            SuiClientCommandResult::TransactionBlock(response) => {
+                write!(writer, "{}", write_transaction_response(response)?)?;
+            }
             SuiClientCommandResult::RawObject(raw_object_read) => {
                 let raw_object = match raw_object_read.object() {
                     Ok(v) => match &v.bcs {
@@ -1743,6 +1767,7 @@ pub enum SuiClientCommandResult {
     VerifySource,
     Object(SuiObjectResponse),
     RawObject(SuiObjectResponse),
+    TransactionBlock(SuiTransactionBlockResponse),
     Call(SuiTransactionBlockResponse),
     Transfer(
         // Skipping serialisation for elapsed time.
