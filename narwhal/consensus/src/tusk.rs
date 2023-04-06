@@ -90,7 +90,7 @@ impl ConsensusProtocol for Tusk {
             .iter()
             .rev()
         {
-            let sub_dag_index = state.latest_sub_dag_index + 1;
+            let sub_dag_index = state.next_sub_dag_index();
             let _span = error_span!("tusk_process_sub_dag", sub_dag_index);
 
             let mut sequence = Vec::new();
@@ -105,19 +105,21 @@ impl ConsensusProtocol for Tusk {
             }
             debug!("Subdag has {} certificates", sequence.len());
 
-            let sub_dag = CommittedSubDag {
-                certificates: sequence,
-                leader: leader.clone(),
+            // TODO compute the scores for Tusk as well
+            let sub_dag = CommittedSubDag::new(
+                sequence,
+                leader.clone(),
                 sub_dag_index,
-                reputation_score: ReputationScores::default(), // TODO compute the scores for Tusk as well
-            };
+                ReputationScores::default(),
+                None,
+            );
 
             // Persist the update.
             self.store
                 .write_consensus_state(&state.last_committed, &sub_dag)?;
 
             // Increase the global consensus index.
-            state.latest_sub_dag_index = sub_dag_index;
+            state.last_committed_sub_dag = Some(sub_dag.clone());
 
             committed_sub_dags.push(sub_dag);
         }
@@ -204,7 +206,7 @@ mod tests {
 
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
-        let mut state = ConsensusState::new(metrics, &committee, gc_depth);
+        let mut state = ConsensusState::new(metrics, gc_depth);
         let mut tusk = Tusk::new(committee, store, gc_depth);
         for certificate in certificates {
             tusk.process_certificate(&mut state, certificate).unwrap();
@@ -242,14 +244,14 @@ mod tests {
         // TODO: evidence that this test fails when `failure_probability` parameter >= 1/3
         let (certificates, _next_parents) =
             test_utils::make_certificates(&committee, 1..=rounds, &genesis, &keys, 0.333);
-        let arc_committee = Arc::new(ArcSwap::from_pointee(committee.clone()));
+        let arc_committee = Arc::new(ArcSwap::from_pointee(committee));
 
         let store_path = test_utils::temp_dir();
         let store = make_consensus_store(&store_path);
 
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
-        let mut state = ConsensusState::new(metrics, &committee, gc_depth);
+        let mut state = ConsensusState::new(metrics, gc_depth);
         let mut tusk = Tusk::new((**arc_committee.load()).clone(), store, gc_depth);
 
         for certificate in certificates {
