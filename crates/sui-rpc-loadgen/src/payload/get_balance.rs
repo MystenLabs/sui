@@ -4,6 +4,7 @@
 use crate::payload::{GetBalance, ProcessPayload, RpcCommandProcessor, SignerInfo};
 use anyhow::Result;
 use async_trait::async_trait;
+use futures::future::join_all;
 use sui_json_rpc_types::Balance;
 use sui_sdk::SuiClient;
 use sui_types::base_types::SuiAddress;
@@ -49,6 +50,7 @@ impl<'a> ProcessPayload<'a, &'a GetBalance> for RpcCommandProcessor {
                     tasks.push(task);
                 }
             }
+            join_all(tasks).await;
         }
         Ok(())
     }
