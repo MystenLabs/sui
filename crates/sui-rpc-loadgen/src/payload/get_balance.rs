@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crate::payload::{GetBalance, ProcessPayload, RpcCommandProcessor, SignerInfo};
 use anyhow::Result;
@@ -38,7 +38,8 @@ impl<'a> ProcessPayload<'a, &'a GetBalance> for RpcCommandProcessor {
         let clients = self.get_clients().await?;
         let chunked = chunk_entities(&mapped, Some(op.chunk_size));
 
-        let mut count = 0;
+        let mut total_count = 0;
+        let mut total_elapsed: f64 = 0.0;
 
         for chunk in chunked {
             let mut tasks = Vec::new();
@@ -50,13 +51,17 @@ impl<'a> ProcessPayload<'a, &'a GetBalance> for RpcCommandProcessor {
                     tasks.push(task);
                 }
             }
+            let mut count = 0;
             let start = Instant::now();
             let results = join_all(tasks).await;
             let elapsed = start.elapsed();
+            total_elapsed += elapsed.as_secs_f64();
 
             for _ in results.into_iter().flatten().flatten() {
                 count += 1;
             }
+            total_count += count;
+
             let rps = count as f64 / elapsed.as_secs_f64();
             println!(
                 "count: {} elapsed: {} rps: {}",
@@ -66,7 +71,14 @@ impl<'a> ProcessPayload<'a, &'a GetBalance> for RpcCommandProcessor {
             );
         }
 
-        self.inc_counter(count);
+        println!(
+            "total count: {} total elapsed: {} rps: {}",
+            total_count,
+            total_elapsed,
+            total_count as f64 / total_elapsed
+        );
+
+        self.inc_counter(total_count);
         Ok(())
     }
 }
