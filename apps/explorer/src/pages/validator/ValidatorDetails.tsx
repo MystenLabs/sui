@@ -1,14 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useGetRollingAverageApys, useGetValidatorsEvents } from '@mysten/core';
+import {
+    useGetRollingAverageApys,
+    useGetValidatorsEvents,
+    useGetSystemObject,
+} from '@mysten/core';
 import { type SuiSystemStateSummary } from '@mysten/sui.js';
 import React, { useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 
 import { ValidatorMeta } from '~/components/validator/ValidatorMeta';
 import { ValidatorStats } from '~/components/validator/ValidatorStats';
-import { useGetSystemObject } from '~/hooks/useGetObject';
 import { Banner } from '~/ui/Banner';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Text } from '~/ui/Text';

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { useGetSystemObject } from '~/hooks/useGetObject';
+import { useGetSystemObject } from '@mysten/core';
+
 import { RingChart } from '~/ui/RingChart';
 
 export function ValidatorStatus() {
