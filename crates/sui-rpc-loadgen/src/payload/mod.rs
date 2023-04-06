@@ -3,6 +3,7 @@
 
 mod checkpoint_utils;
 mod get_all_balances;
+mod get_balance;
 mod get_checkpoints;
 mod get_object;
 mod get_reference_gas_price;
@@ -25,9 +26,12 @@ use sui_types::{
 
 use crate::load_test::LoadTestConfig;
 pub use rpc_command_processor::{
-    load_addresses_from_file, load_digests_from_file, load_objects_from_file, RpcCommandProcessor,
+    load_addresses_from_file, load_addresses_with_coin_types_from_file, load_digests_from_file,
+    load_objects_from_file, RpcCommandProcessor,
 };
 use sui_types::base_types::ObjectID;
+
+use self::rpc_command_processor::AddressWithCoinTypes;
 
 #[derive(Default, Clone)]
 pub struct SignerInfo {
@@ -140,13 +144,33 @@ impl Command {
         }
     }
 
-    pub fn new_get_all_balances(addresses: Vec<SuiAddress>, chunk_size: usize) -> Self {
+    pub fn new_get_all_balances(
+        addresses: Vec<SuiAddress>,
+        chunk_size: usize,
+        record: bool,
+    ) -> Self {
         let get_all_balances = GetAllBalances {
             addresses,
             chunk_size,
+            record,
         };
         Self {
             data: CommandData::GetAllBalances(get_all_balances),
+            ..Default::default()
+        }
+    }
+
+    pub fn new_get_balance(
+        addresses_with_coin_types: Vec<AddressWithCoinTypes>,
+        chunk_size: usize,
+    ) -> Self {
+        // load data here
+        let get_balance = GetBalance {
+            addresses_with_coin_types,
+            chunk_size,
+        };
+        Self {
+            data: CommandData::GetBalance(get_balance),
             ..Default::default()
         }
     }
@@ -181,6 +205,7 @@ pub enum CommandData {
     MultiGetObjects(MultiGetObjects),
     GetObject(GetObject),
     GetAllBalances(GetAllBalances),
+    GetBalance(GetBalance),
     GetReferenceGasPrice(GetReferenceGasPrice),
 }
 
@@ -246,6 +271,13 @@ pub struct GetObject {
 #[derive(Clone)]
 pub struct GetAllBalances {
     pub addresses: Vec<SuiAddress>,
+    pub chunk_size: usize,
+    pub record: bool,
+}
+
+#[derive(Clone)]
+pub struct GetBalance {
+    pub addresses_with_coin_types: Vec<AddressWithCoinTypes>,
     pub chunk_size: usize,
 }
 

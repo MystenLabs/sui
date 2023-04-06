@@ -6,13 +6,13 @@ use async_trait::async_trait;
 use dashmap::{DashMap, DashSet};
 use futures::future::join_all;
 use serde::de::DeserializeOwned;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::fmt;
 use std::fs::{self, File};
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 use sui_json_rpc_types::{
     SuiExecutionStatus, SuiObjectDataOptions, SuiTransactionBlockDataAPI,
     SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
@@ -35,7 +35,7 @@ use crate::payload::{
     Payload, ProcessPayload, Processor, QueryTransactionBlocks, SignerInfo,
 };
 
-use super::MultiGetTransactionBlocks;
+use super::{GetBalance, MultiGetTransactionBlocks};
 
 pub(crate) const DEFAULT_GAS_BUDGET: u64 = 500_000_000;
 pub(crate) const DEFAULT_LARGE_GAS_BUDGET: u64 = 50_000_000_000;
@@ -48,6 +48,7 @@ pub struct RpcCommandProcessor {
     object_ref_cache: Arc<DashMap<ObjectID, ObjectRef>>,
     transaction_digests: Arc<DashSet<TransactionDigest>>,
     addresses: Arc<DashSet<SuiAddress>>,
+    addresses_with_coin_types: Arc<DashMap<SuiAddress, Vec<String>>>,
     data_dir: String,
 }
 
@@ -68,6 +69,7 @@ impl RpcCommandProcessor {
             object_ref_cache: Arc::new(DashMap::new()),
             transaction_digests: Arc::new(DashSet::new()),
             addresses: Arc::new(DashSet::new()),
+            addresses_with_coin_types: Arc::new(DashMap::new()),
             data_dir,
         }
     }
@@ -86,6 +88,7 @@ impl RpcCommandProcessor {
             CommandData::MultiGetObjects(ref v) => self.process(v, signer_info).await,
             CommandData::GetObject(ref v) => self.process(v, signer_info).await,
             CommandData::GetAllBalances(ref v) => self.process(v, signer_info).await,
+            CommandData::GetBalance(ref v) => self.process(v, signer_info).await,
             CommandData::GetReferenceGasPrice(ref v) => self.process(v, signer_info).await,
         }
     }
@@ -166,6 +169,14 @@ impl RpcCommandProcessor {
         }
     }
 
+    pub(crate) fn add_addresses_with_coin_types(
+        &self,
+        address: SuiAddress,
+        coin_types: Vec<String>,
+    ) {
+        self.addresses_with_coin_types.insert(address, coin_types);
+    }
+
     pub(crate) fn add_object_ids_from_response(&self, responses: &[SuiTransactionBlockResponse]) {
         for response in responses {
             let effects = &response.effects;
@@ -187,6 +198,7 @@ impl RpcCommandProcessor {
             write_data_to_file(
                 &digests,
                 &format!("{}/{}", &self.data_dir, CacheType::TransactionDigest),
+                Some(true),
             )
             .unwrap();
         }
@@ -197,6 +209,7 @@ impl RpcCommandProcessor {
             write_data_to_file(
                 &addresses,
                 &format!("{}/{}", &self.data_dir, CacheType::SuiAddress),
+                Some(true),
             )
             .unwrap();
         }
@@ -214,10 +227,42 @@ impl RpcCommandProcessor {
             write_data_to_file(
                 &object_ids,
                 &format!("{}/{}", &self.data_dir, CacheType::ObjectID),
+                Some(true),
+            )
+            .unwrap();
+        }
+
+        let mut addresses_with_coin_type: Vec<AddressWithCoinTypes> = Vec::new();
+        let cloned_address_cache = self.addresses_with_coin_types.clone();
+
+        for item in cloned_address_cache.iter() {
+            let address = item.key();
+            let coin_types = item.value();
+            addresses_with_coin_type.push(AddressWithCoinTypes {
+                address: *address,
+                coin_types: coin_types.clone(),
+            });
+        }
+
+        if !addresses_with_coin_type.is_empty() {
+            debug!(
+                "dumping addresses_with_coin_type to file {:?}",
+                addresses_with_coin_type.len()
+            );
+            write_data_to_file(
+                &addresses_with_coin_type,
+                &format!("{}/{}", &self.data_dir, CacheType::AddressWithCoinTypes),
+                Some(true),
             )
             .unwrap();
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+pub struct AddressWithCoinTypes {
+    pub address: SuiAddress,
+    pub coin_types: Vec<String>,
 }
 
 #[async_trait]
@@ -282,6 +327,13 @@ impl Processor for RpcCommandProcessor {
                     divide_get_all_balances_tasks(data, config.num_threads).await
                 }
             }
+            CommandData::GetBalance(data) => {
+                if !config.divide_tasks {
+                    vec![config.command.clone(); config.num_threads]
+                } else {
+                    divide_get_balance_tasks(data, config.num_threads).await
+                }
+            }
             CommandData::MultiGetObjects(data) => {
                 if !config.divide_tasks {
                     vec![config.command.clone(); config.num_threads]
@@ -341,6 +393,10 @@ impl Processor for RpcCommandProcessor {
             if data.record {
                 self.dump_cache_to_file();
             }
+        } else if let CommandData::GetAllBalances(data) = &config.command.data {
+            if data.record {
+                self.dump_cache_to_file();
+            }
         }
     }
 }
@@ -353,12 +409,24 @@ impl<'a> ProcessPayload<'a, &'a DryRun> for RpcCommandProcessor {
     }
 }
 
-fn write_data_to_file<T: Serialize>(data: &T, file_path: &str) -> Result<(), anyhow::Error> {
+fn write_data_to_file<T: Serialize>(
+    data: &T,
+    file_path: &str,
+    use_timestamp: Option<bool>,
+) -> Result<(), anyhow::Error> {
     let mut path_buf = PathBuf::from(&file_path);
     path_buf.pop();
     fs::create_dir_all(&path_buf).map_err(|e| anyhow!("Error creating directory: {}", e))?;
 
-    let file_name = format!("{}.json", file_path);
+    let file_name: String = if Some(true) == use_timestamp {
+        let timestamp = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map_err(|e| anyhow!("Error getting timestamp: {}", e))?;
+        format!("{}_{}.json", file_path, timestamp.as_millis())
+    } else {
+        format!("{}.json", file_path)
+    };
+
     let file = File::create(&file_name).map_err(|e| anyhow!("Error creating file: {}", e))?;
     serde_json::to_writer(file, data).map_err(|e| anyhow!("Error writing to file: {}", e))?;
 
@@ -369,6 +437,7 @@ pub enum CacheType {
     SuiAddress,
     TransactionDigest,
     ObjectID,
+    AddressWithCoinTypes,
 }
 
 impl fmt::Display for CacheType {
@@ -377,6 +446,7 @@ impl fmt::Display for CacheType {
             CacheType::SuiAddress => write!(f, "SuiAddress"),
             CacheType::TransactionDigest => write!(f, "TransactionDigest"),
             CacheType::ObjectID => write!(f, "ObjectID"),
+            CacheType::AddressWithCoinTypes => write!(f, "AddressesWithCoinTypes"),
         }
     }
 }
@@ -385,6 +455,13 @@ impl fmt::Display for CacheType {
 pub fn load_addresses_from_file(filepath: String) -> Vec<SuiAddress> {
     let path = format!("{}/{}", filepath, CacheType::SuiAddress);
     let addresses: Vec<SuiAddress> = read_data_from_file(&path).expect("Failed to read addresses");
+    addresses
+}
+
+pub fn load_addresses_with_coin_types_from_file(filepath: String) -> Vec<AddressWithCoinTypes> {
+    let path = format!("{}/{}", filepath, CacheType::AddressWithCoinTypes);
+    let addresses: Vec<AddressWithCoinTypes> =
+        read_data_from_file(&path).expect("Failed to read addresses");
     addresses
 }
 
@@ -504,7 +581,24 @@ async fn divide_get_all_balances_tasks(data: &GetAllBalances, num_threads: usize
     let chunked = chunk_entities(data.addresses.as_slice(), Some(per_thread_size));
     chunked
         .into_iter()
-        .map(|chunk| Command::new_get_all_balances(chunk, data.chunk_size))
+        .map(|chunk| Command::new_get_all_balances(chunk, data.chunk_size, data.record))
+        .collect()
+}
+
+async fn divide_get_balance_tasks(data: &GetBalance, num_threads: usize) -> Vec<Command> {
+    let per_thread_size = if data.addresses_with_coin_types.len() < num_threads {
+        1
+    } else {
+        data.addresses_with_coin_types.len() / num_threads
+    };
+
+    let chunked = chunk_entities(
+        data.addresses_with_coin_types.as_slice(),
+        Some(per_thread_size),
+    );
+    chunked
+        .into_iter()
+        .map(|chunk| Command::new_get_balance(chunk, data.chunk_size))
         .collect()
 }
 
