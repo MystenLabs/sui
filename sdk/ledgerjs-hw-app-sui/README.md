@@ -2,7 +2,7 @@
 [Ledger Developer Portal](https://developers.ledger.com/),
 [Ledger Developer Discord](https://developers.ledger.com/discord-pro)
 
-# ledgerjs-hw-sui-app
+# ledgerjs-hw-app-sui
 
 [Ledger Hardware Wallet](https://www.ledger.com/) JavaScript bindings for [Sui](https://sui.io/), based on [LedgerJS](https://github.com/LedgerHQ/ledgerjs).
 
@@ -12,7 +12,7 @@ Here is a sample app for Node:
 
 ```javascript
 const Transport = require('@ledgerhq/hw-transport').default;
-const Sui = require('@mysten/ledgerjs-hw-sui-app').default;
+const Sui = require('@mysten/ledgerjs-hw-app-sui').default;
 
 const getPublicKey = async () => {
     const sui = new Sui(await Transport.create());
@@ -68,7 +68,7 @@ doAll().catch((err) => console.log(err));
 ### Examples
 
 ```javascript
-import Sui from 'ledgerjs-hw-sui-app';
+import Sui from 'ledgerjs-hw-app-sui';
 const sui = new Sui(transport);
 ```
 
