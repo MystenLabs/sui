@@ -15,4 +15,8 @@ pub use header_store::*;
 pub use node_store::*;
 pub use payload_store::*;
 pub use proposer_store::*;
+use store::TypedStoreError;
 pub use vote_digest_store::*;
+
+/// Convenience type to propagate store errors.
+pub type StoreResult<T> = Result<T, TypedStoreError>;

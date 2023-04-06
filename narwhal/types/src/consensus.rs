@@ -9,7 +9,6 @@ use fastcrypto::hash::Hash;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use store::TypedStoreError;
 use tokio::sync::mpsc;
 use tracing::warn;
 
@@ -429,6 +428,3 @@ mod tests {
         );
     }
 }
-
-/// Convenience type to propagate store errors.
-pub type StoreResult<T> = Result<T, TypedStoreError>;

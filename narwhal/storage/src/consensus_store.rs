@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::NodeStorage;
+use crate::{NodeStorage, StoreResult};
 use config::AuthorityIdentifier;
 use std::collections::HashMap;
 use store::rocks::{open_cf, DBMap, MetricConf, ReadWriteOptions};
 use store::{reopen, Map, TypedStoreError};
 use types::{
     CommittedSubDag, CommittedSubDagShell, CompressedCommittedSubDag, CompressedCommittedSubDagV2,
-    Round, SequenceNumber, StoreResult,
+    Round, SequenceNumber,
 };
 
 /// The persistent storage of the sequencer.
