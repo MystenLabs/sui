@@ -92,4 +92,14 @@ pub trait IndexerApi {
         /// The Name of the dynamic field
         name: DynamicFieldName,
     ) -> RpcResult<SuiObjectResponse>;
+
+    /// Return the resolved address given resolver and name
+    #[method(name = "resolveNameServiceAddress")]
+    async fn resolve_name_service_address(
+        &self,
+        /// The resolver address
+        resolver_id: ObjectID,
+        /// The name to resolve
+        name: String,
+    ) -> RpcResult<SuiAddress>;
 }

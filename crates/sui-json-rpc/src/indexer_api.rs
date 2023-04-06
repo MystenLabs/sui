@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::anyhow;
@@ -13,12 +14,13 @@ use jsonrpsee::{RpcModule, SubscriptionSink};
 use serde::Serialize;
 use tracing::{debug, warn};
 
+use move_core_types::language_storage::TypeTag;
 use mysten_metrics::spawn_monitored_task;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
-    DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page, SuiObjectDataOptions,
-    SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockResponse,
-    SuiTransactionBlockResponseQuery, TransactionBlocksPage,
+    DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page, SuiMoveValue,
+    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiParsedMoveObject,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseQuery, TransactionBlocksPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SuiAddress};
@@ -215,6 +217,90 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         // TODO(chris): add options to `get_dynamic_field_object` API as well
         self.read_api
             .get_object(id, Some(SuiObjectDataOptions::full_content()))
+    }
+
+    async fn resolve_name_service_address(
+        &self,
+        resolver_id: ObjectID,
+        name: String,
+    ) -> RpcResult<SuiAddress> {
+        let resolver_object_read = self.state.get_object_read(&resolver_id).map_err(|e| {
+            warn!(
+                ?resolver_id,
+                "Failed to get object read of resolver {:?} with error: {:?}", resolver_id, e
+            );
+            anyhow!("{e}")
+        })?;
+        let resolved_parsed_move_object =
+            SuiParsedMoveObject::try_from_object_read(resolver_object_read)?;
+        // NOTE: "records" is the field name to get "records" Move struct
+        let records_value = resolved_parsed_move_object
+            .read_dynamic_field_value("records")
+            .ok_or_else(|| anyhow!("Cannot find records field in resolved object"))?;
+        let records_move_struct = match records_value {
+            SuiMoveValue::Struct(s) => Ok(s),
+            _ => Err(anyhow!("records field is not a Move struct")),
+        }?;
+        // NOTE: "id" is the field name to get dynamic field table object ID
+        let dynmaic_field_table_object_id_struct = records_move_struct
+            .read_dynamic_field_value("id")
+            .ok_or_else(|| anyhow!("Cannot find id field in records Move struct"))?;
+        let dynmaic_field_table_object_id = match dynmaic_field_table_object_id_struct {
+            SuiMoveValue::UID { id } => Ok(id),
+            _ => Err(anyhow!("id field is not a UID")),
+        }?;
+
+        // NOTE: 0x1::string::String is the type tag of fields in dynmaic_field_table
+        let ns_type_tag = TypeTag::from_str("0x1::string::String")?;
+        let ns_dynamic_field_name = DynamicFieldName {
+            type_: ns_type_tag,
+            value: name.clone().into(),
+        };
+
+        // record of the input `name`
+        let record_object_id = self
+            .state
+            .get_dynamic_field_object_id(dynmaic_field_table_object_id, &ns_dynamic_field_name)
+            .map_err(|e| {
+                anyhow!(
+                    "Read name service dynamic field table failed with error: {:?}",
+                    e
+                )
+            })?
+            .ok_or_else(|| {
+                anyhow!(
+                    "Record not found for name: {:?} in name service: {:?}",
+                    name,
+                    resolver_id
+                )
+            })?;
+        let record_object_read = self.state.get_object_read(&record_object_id).map_err(|e| {
+            warn!(
+                ?record_object_id,
+                "Failed to get object read of record {:?} with error: {:?}", record_object_id, e
+            );
+            anyhow!("{e}")
+        })?;
+        let record_parsed_move_object =
+            SuiParsedMoveObject::try_from_object_read(record_object_read)?;
+        // NOTE: "value" is the field name to get the address info
+        let address_info_move_value = record_parsed_move_object
+            .read_dynamic_field_value("value")
+            .ok_or_else(|| anyhow!("Cannot find value field in record Move struct"))?;
+        let address_info_move_struct = match address_info_move_value {
+            SuiMoveValue::Struct(a) => Ok(a),
+            _ => Err(anyhow!("value field is not found.")),
+        }?;
+        // NOTE: "by" is the field name to get the address
+        let address_str_move_value = address_info_move_struct
+            .read_dynamic_field_value("by")
+            .ok_or_else(|| anyhow!("Cannot find by field in address info Move struct"))?;
+        let address_str = match address_str_move_value {
+            SuiMoveValue::String(s) => Ok(s),
+            _ => Err(anyhow!("by field is not found.")),
+        }?;
+        let sui_addr = SuiAddress::from_str(&address_str)?;
+        Ok(sui_addr)
     }
 }
 
