@@ -3,94 +3,119 @@
 
 import { useRpcClient } from '@mysten/core';
 import {
-    type SuiObjectResponse,
+    Coin,
+    getObjectId,
     getObjectType,
     getObjectOwner,
-    Coin,
+    PaginatedObjectsResponse,
+    is,
+    getObjectDisplay,
 } from '@mysten/sui.js';
 import { useEffect, useState } from 'react';
 
-import PaginationContainer from '../PaginationContainer/PaginationContainer';
-import OwnedObject from './components/OwnedObject';
+import {
+    parseImageURL,
+    parseObjectType,
+    extractName,
+} from '../../utils/objectUtils';
+import { transformURL } from '../../utils/stringUtils';
+import { type DataType } from './OwnedObjectConstants';
+import OwnedObjectView from './views/OwnedObjectView';
 
-export const OBJECTS_PER_PAGE: number = 6;
+import styles from './styles/OwnedObjects.module.css';
 
-function OwnerCoins({ id }: { id: string }) {
-    const [results, setResults] = useState<SuiObjectResponse[]>([]);
+const DATATYPE_DEFAULT: DataType = [
+    {
+        id: '',
+        Type: '',
+        _isCoin: false,
+    },
+];
+
+function NoOwnedObjects() {
+    return <div className={styles.fail}>Failed to find Owned Objects</div>;
+}
+
+function OwnedObject({ id, byAddress }: { id: string; byAddress: boolean }) {
+    const [results, setResults] = useState(DATATYPE_DEFAULT);
     const [isLoaded, setIsLoaded] = useState(false);
     const [isFail, setIsFail] = useState(false);
-    const [currentSlice, setCurrentSlice] = useState(1);
     const rpc = useRpcClient();
 
     useEffect(() => {
-        rpc.getOwnedObjects({ owner: id,  options: {
-                    showType: true,
-                    showContent: true,
-                    showDisplay: true,
-                } })
-            .then((objects) => {
-                // console.log('objs', {objects})
-                // const ids: string[] = objects.data.map(
-                //     (obj) => obj.data?.objectId ?? ''
-                // );
-                // rpc.multiGetObjects({
-                //     ids,
-                //     options: {
-                //         showType: true,
-                //         showContent: true,
-                //         showDisplay: true,
-                //     },
-                // })
-                
-                // .then((results) => {
-                //     setResults(
-                //         results.filter((resp) => {
-                //             if (getObjectType(resp) === 'moveObject') {
-                //                 const owner = getObjectOwner(resp);
-                //                 const addressOwner =
-                //                     owner &&
-                //                     owner !== 'Immutable' &&
-                //                     'AddressOwner' in owner
-                //                         ? owner.AddressOwner
-                //                         : null;
-                //                 return (
-                //                     resp !== undefined && addressOwner === id
-                //                 );
-                //             }
-                //             return resp !== undefined && !Coin.isCoin(resp);
-                //         })
-                //     );
-                //     setIsLoaded(true);
-                // });
-            })
-            .catch((err) => {
-                setIsFail(true);
-            });
-    }, [id, rpc]);
+        setIsFail(false);
+        setIsLoaded(false);
+        const req = byAddress
+            ? rpc.getOwnedObjects({ owner: id })
+            : rpc.getDynamicFields({ parentId: id });
 
-    return (
-        <PaginationContainer
-            heading="NFTs"
-            isLoaded={isLoaded}
-            isFail={isFail}
-            itemsPerPage={OBJECTS_PER_PAGE}
-            paginatedContent={
-                <div className="flex flex-wrap">
-                    {results
-                        .slice(
-                            (currentSlice - 1) * OBJECTS_PER_PAGE,
-                            currentSlice * OBJECTS_PER_PAGE
-                        )
-                        .map((obj) => (
-                            <OwnedObject obj={obj} key={obj?.data?.objectId} />
-                        ))}
-                </div>
+        req.then((objects) => {
+            let ids: string[];
+            if (is(objects, PaginatedObjectsResponse)) {
+                ids = objects.data.map((resp) => getObjectId(resp));
+            } else {
+                ids = objects.data.map(({ objectId }) => objectId);
             }
-            totalItems={results.length}
-            currentPage={currentSlice}
-            setCurrentPage={setCurrentSlice}
-        />
-    );
+            return rpc
+                .multiGetObjects({
+                    ids,
+                    options: {
+                        showType: true,
+                        showContent: true,
+                        showDisplay: true,
+                    },
+                })
+                .then((results) => {
+                    setResults(
+                        results
+                            .filter((resp) => {
+                                if (
+                                    byAddress &&
+                                    getObjectType(resp) === 'moveObject'
+                                ) {
+                                    const owner = getObjectOwner(resp);
+                                    const addressOwner =
+                                        owner &&
+                                        owner !== 'Immutable' &&
+                                        'AddressOwner' in owner
+                                            ? owner.AddressOwner
+                                            : null;
+                                    return (
+                                        resp !== undefined &&
+                                        addressOwner === id
+                                    );
+                                }
+                                return resp !== undefined;
+                            })
+                            .map(
+                                (resp) => {
+                                    const displayMeta = getObjectDisplay(resp);
+                                    const url = parseImageURL(displayMeta.data);
+                                    return {
+                                        id: getObjectId(resp),
+                                        Type: parseObjectType(resp),
+                                        _isCoin: Coin.isCoin(resp),
+                                        display: url
+                                            ? transformURL(url)
+                                            : undefined,
+                                        balance: Coin.getBalance(resp),
+                                        name:
+                                            extractName(displayMeta.data) || '',
+                                    };
+                                }
+                                // TODO - add back version
+                            )
+                    );
+                    setIsLoaded(true);
+                });
+        }).catch(() => setIsFail(true));
+    }, [id, byAddress, rpc]);
+
+    if (isFail) return <NoOwnedObjects />;
+
+    if (isLoaded) return <OwnedObjectView results={results} />;
+
+    return <div className={styles.gray}>loading...</div>;
 }
 
-export default OwnerCoins;
+export default OwnedObject;

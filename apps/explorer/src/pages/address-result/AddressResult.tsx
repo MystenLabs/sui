@@ -7,7 +7,7 @@ import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import { TransactionsForAddress } from '../../components/transactions/TransactionsForAddress';
 
 import OwnedCoins from '~/components/OwnedCoins/OwnedCoins';
-import OwnedObjects from '~/components/OwnedObjects/OwnedObjects';
+import OwnedObjects from '~/components/OwnedObjectsV2/OwnedObjects';
 import { Heading } from '~/ui/Heading';
 import { PageHeader } from '~/ui/PageHeader';
 import { createContext } from 'react';
