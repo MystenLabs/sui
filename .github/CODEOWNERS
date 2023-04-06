@@ -15,9 +15,11 @@ CHANGELOG.md
 
 # Notify Narwhal changes to interested folks.
 /narwhal/crypto/ @joyqvq @kchalkias
-/narwhal/executor/ @asonnino @akichidis
+/narwhal/executor/ @asonnino @akichidis @laura-makdah
 /narwhal/examples/ @arun-koshy
 /narwhal/network/ @bmwill
 /narwhal/storage/ @akichidis
 /narwhal/primary/src/block_synchronizer/ @akichidis
 /narwhal/primary/src/block_waiter.rs @akichidis
+
+/crates/sui-core/src/consensus_adapter.rs @laura-makdah
