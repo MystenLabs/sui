@@ -53,6 +53,7 @@
         "react-error-boundary": "^3.1.4",
         "react-hook-form": "^7.43.9",
         "react-hot-toast": "^2.4.0",
+        "react-resizable-panels": "^0.0.39",
         "react-router-dom": "^6.9.0",
         "topojson-client": "^3.1.0",
         "web-vitals": "^3.3.0",
