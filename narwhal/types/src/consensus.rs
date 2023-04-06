@@ -36,7 +36,9 @@ pub struct CommittedSubDag {
     /// The timestamp that should identify this commit. This is guaranteed to be monotonically
     /// incremented. This is not necessarily the leader's timestamp. We compare the leader's timestamp
     /// with the previously committed sud dag timestamp and we always keep the max.
-    pub commit_timestamp: TimestampMs,
+    /// Property is explicitly private so the method commit_timestamp() should be used instead which
+    /// bears additional resolution logic.
+    commit_timestamp: TimestampMs,
 }
 
 impl CommittedSubDag {
@@ -64,6 +66,20 @@ impl CommittedSubDag {
             sub_dag_index,
             reputation_score,
             commit_timestamp,
+        }
+    }
+
+    pub fn from_compressed_sub_dag(
+        compressed: CompressedCommittedSubDag,
+        certificates: Vec<Certificate>,
+        leader: Certificate,
+    ) -> Self {
+        Self {
+            certificates,
+            leader,
+            sub_dag_index: compressed.sub_dag_index(),
+            reputation_score: compressed.reputation_score(),
+            commit_timestamp: compressed.commit_timestamp(),
         }
     }
 

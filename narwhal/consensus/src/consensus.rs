@@ -94,13 +94,11 @@ impl ConsensusState {
                 .unwrap()
                 .expect("Certificate should be found in database");
 
-            Some(CommittedSubDag {
+            Some(CommittedSubDag::from_compressed_sub_dag(
+                latest_sub_dag.clone(),
                 certificates,
                 leader,
-                sub_dag_index: latest_sub_dag.sub_dag_index(),
-                reputation_score: latest_sub_dag.reputation_score(),
-                commit_timestamp: latest_sub_dag.commit_timestamp(),
-            })
+            ))
         } else {
             None
         };

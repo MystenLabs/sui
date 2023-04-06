@@ -103,7 +103,6 @@ pub async fn get_restored_consensus_output<State: ExecutionState>(
 
     let mut sub_dags = Vec::new();
     for compressed_sub_dag in compressed_sub_dags {
-        let sub_dag_index = compressed_sub_dag.sub_dag_index();
         let certificate_digests: Vec<CertificateDigest> = compressed_sub_dag.certificates();
 
         let certificates = certificate_store
@@ -116,13 +115,11 @@ pub async fn get_restored_consensus_output<State: ExecutionState>(
             .read(compressed_sub_dag.leader())?
             .unwrap();
 
-        sub_dags.push(CommittedSubDag {
+        sub_dags.push(CommittedSubDag::from_compressed_sub_dag(
+            compressed_sub_dag,
             certificates,
             leader,
-            sub_dag_index,
-            reputation_score: compressed_sub_dag.reputation_score(),
-            commit_timestamp: compressed_sub_dag.commit_timestamp(),
-        });
+        ));
     }
 
     Ok(sub_dags)
