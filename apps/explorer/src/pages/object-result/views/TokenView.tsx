@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback } from 'react';
 
 import DisplayBox from '../../../components/displaybox/DisplayBox';
 import ModulesWrapper from '../../../components/module/ModulesWrapper';
-import OwnedObjects from '../../../components/ownedobjects-old/OwnedObjects';
+import OwnedObjects from '../../../components/ownedobjects/OwnedObjects';
 import {
     parseImageURL,
     checkIsPropertyType,
