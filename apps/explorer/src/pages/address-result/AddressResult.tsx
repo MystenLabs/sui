@@ -31,21 +31,13 @@ function AddressResult() {
                 </ErrorBoundary>
             </div>
 
-            <div>
-                <div className="border-b border-gray-45 pb-5">
-                    <Heading color="gray-90" variant="heading4/semibold">
-                        Transaction Blocks
-                    </Heading>
+            
+            <ErrorBoundary>
+                <div className="mt-2">
+                    <TransactionsForAddress address={addressID!} type="address"/>
                 </div>
-                <ErrorBoundary>
-                    <div className="mt-2">
-                        <TransactionsForAddress
-                            address={addressID!}
-                            type="address"
-                        />
-                    </div>
-                </ErrorBoundary>
-            </div>
+            </ErrorBoundary>
+            
         </div>
     );
 }

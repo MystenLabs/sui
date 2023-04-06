@@ -106,7 +106,6 @@ function PkgView({ data }: { data: DataType }) {
                     <PkgModulesWrapper id={data.id} modules={properties} />
                 </ErrorBoundary>
                 <div className={styles.txsection}>
-                    <h2 className={styles.header}>Transaction Blocks</h2>
                     <ErrorBoundary>
                         <TransactionsForAddress
                             address={viewedData.id}
