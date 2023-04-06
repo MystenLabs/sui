@@ -126,7 +126,7 @@ Array [
         "owner": Object {
             "AddressOwner": String("<PUBLISHER-ID>"),
         },
-        "objectType": String("<ORIGINAL-PACKAGE-ID>::sui_package::Example"),
+        "objectType": String("<ORIGINAL-PACKAGE-ID>::sui_package::<MODULE-NAME>"),
         "objectId": String("<PUBLISHER-ID>"),
         "version": Number(7),
         "digest": String("BC3KeuATKJozLNipbUz2GWzoDXbodXH4HLm59TxJSmVd"),
@@ -146,7 +146,7 @@ Array [
 
 The result includes an **Object changes** section with two pieces of information you need for upgrading, an `UpgradeCap` ID and your package ID. 
 
-You can identify the different objects using the `Object.objectType` value in the response. The `UpgradeCap` entry has a value of `String("0x2::package::UpgradeCap")` and the `objectType` for the package reads `String("<PACKAGE-ID>::sui_package::Example")`
+You can identify the different objects using the `Object.objectType` value in the response. The `UpgradeCap` entry has a value of `String("0x2::package::UpgradeCap")` and the `objectType` for the package reads `String("<PACKAGE-ID>::sui_package::<MODULE-NAME>")`
 
 To make sure your other packages can use this package as a dependency, you must update the manifest (Move.toml file) for your package to include this information. 
 
@@ -176,7 +176,7 @@ published-at = "<ORIGINAL-PACKAGE-ID>"
 sui_package = "0x0"
 ```    
 
-With the new manifest and code in place, it's time to use the `sui client upgrade` command to upgrade your package. Pass the `UpgradeCap` ID to the `--upgrade-capability` flag
+With the new manifest and code in place, it's time to use the `sui client upgrade` command to upgrade your package. Pass the `UpgradeCap` ID to the `--upgrade-capability` flag.
 
 ```shell
 sui client upgrade --gas-budget <GAS-BUDGET-AMOUNT> --upgrade-capability <UPGRADE-CAP-ID>
@@ -249,7 +249,7 @@ Array [
         "version": Number(2),
         "digest": String("8RDsE6kFND2V2gxGiytwxa815mctwxNh7A8YqRS4AJME"),
         "modules": Array [
-            String("my_module"),
+            String("<MODULE-NAME>"),
         ],
     },
 ]
