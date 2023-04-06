@@ -74,7 +74,6 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
             </Banner>
         );
     }
-
     const fieldsData = getObjectFields(data!);
     const fieldsNames = Object.entries(fieldsData || {});
     const filteredFieldNames =
