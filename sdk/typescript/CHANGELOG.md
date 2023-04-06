@@ -1,5 +1,18 @@
 # @mysten/sui.js
 
+## 0.31.0
+
+### Minor Changes
+
+- 976d3e1fe: Add new `getNetworkMetrics` endpoint to JSONRPCProvider.
+- 5a4e3e416: Change getOwnedObject to ignore checkpoint and return latest objects
+
+### Patch Changes
+
+- 0419b7c53: Match ts Publish schema to rust sdk
+- f3c096e3a: Fix PaginatedObjectsResponse schema
+- 27dec39eb: Make getOwnedObjects backward compatible from 0.29 to 0.30.
+
 ## 0.30.0
 
 ### Minor Changes
