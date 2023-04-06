@@ -33,7 +33,11 @@ static RELAY_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
     register_histogram_vec!(
         "relay_duration_seconds",
         "HistogramRelay's submit/export fn latencies in seconds.",
-        &["histogram_relay"]
+        &["histogram_relay"],
+        vec![
+            0.0008, 0.0016, 0.0032, 0.0064, 0.0128, 0.0256, 0.0512, 0.1024, 0.2048, 0.4096, 0.8192,
+            1.0, 1.25, 1.5, 1.75, 2.0, 4.0, 8.0, 10.0, 12.5, 15.0
+        ],
     )
     .unwrap()
 });
