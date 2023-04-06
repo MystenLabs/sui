@@ -157,7 +157,7 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
                                         ))}
                                     </Combobox.Options>
                                 </Combobox>
-                                <div className="max-h-[600px] min-h-full overflow-auto overflow-x-scroll py-3">
+                                <div className="max-h-[600px] min-h-full overflow-auto overflow-x-clip overflow-y-scroll py-3">
                                     <VerticalList>
                                         {normalizedStruct?.fields?.map(
                                             ({ name, type }) => {
@@ -168,7 +168,7 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
                                                 return (
                                                     <div
                                                         key={name}
-                                                        className="mx-0.5 mt-0.5 md:min-w-fit"
+                                                        className="mt-0.5 md:min-w-fit"
                                                     >
                                                         <ListItem
                                                             active={
@@ -181,24 +181,23 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
                                                                 )
                                                             }
                                                         >
-                                                            <div className="flex justify-between">
+                                                            <div className="flex flex-1 justify-between gap-2 truncate">
                                                                 <Text
                                                                     variant="body/medium"
                                                                     color="steel-darker"
                                                                 >
                                                                     {name.toString()}
                                                                 </Text>
-                                                                <div className="capitalize">
-                                                                    <Text
-                                                                        variant="subtitle/normal"
-                                                                        color="steel"
-                                                                    >
-                                                                        {getFieldTypeValue(
-                                                                            fieldType,
-                                                                            FieldTypeValue.NAME
-                                                                        )}
-                                                                    </Text>
-                                                                </div>
+
+                                                                <Text
+                                                                    variant="p3/normal"
+                                                                    color="steel"
+                                                                >
+                                                                    {getFieldTypeValue(
+                                                                        fieldType,
+                                                                        FieldTypeValue.NAME
+                                                                    )}
+                                                                </Text>
                                                             </div>
                                                         </ListItem>
                                                     </div>

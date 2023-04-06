@@ -33,7 +33,10 @@ export function FieldItem<T>({
             />
         );
     }
+
     const normalizedType = extractSerializationType(type);
+    const moduleName = getFieldTypeValue(normalizedType, FieldTypeValue.MODULE);
+    const address = getFieldTypeValue(normalizedType, FieldTypeValue.ADDRESS);
 
     if (typeof value === 'string' && normalizedType === 'Address') {
         return (
@@ -45,7 +48,8 @@ export function FieldItem<T>({
 
     if (
         typeof value === 'string' &&
-        getFieldTypeValue(normalizedType, FieldTypeValue.ADDRESS) === 'Address'
+        moduleName === 'object' &&
+        address === '0x2'
     ) {
         return (
             <div className="break-all">
@@ -63,10 +67,7 @@ export function FieldItem<T>({
         );
     }
 
-    if (
-        typeof value === 'string' &&
-        getFieldTypeValue(normalizedType, FieldTypeValue.MODULE) === 'url'
-    ) {
+    if (typeof value === 'string' && moduleName === 'url') {
         return (
             <div className="truncate break-all">
                 <Link href={value} variant="textHeroDark">
