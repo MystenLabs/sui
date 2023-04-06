@@ -11,7 +11,6 @@ use anyhow::Result;
 use serde::de::DeserializeOwned;
 use std::collections::BTreeMap;
 use std::fs::File;
-use std::io::Read;
 use std::path::{Path, PathBuf};
 use sui_config::genesis::Genesis;
 use sui_core::authority_client::AuthorityAPI;
@@ -113,6 +112,7 @@ pub enum ToolCommand {
         #[clap(long = "transactions")]
         transactions: PathBuf,
 
+        #[clap(long = "working-dir")]
         working_dir: PathBuf,
     },
 
@@ -283,8 +283,7 @@ impl ToolCommand {
                 fn load_bcs<T: DeserializeOwned>(
                     path: impl AsRef<Path>,
                 ) -> Result<T, anyhow::Error> {
-                    let file = File::open(path)?;
-                    let bytes: Vec<u8> = file.bytes().collect::<Result<_, _>>()?;
+                    let bytes = std::fs::read(path)?;
                     Ok(bcs::from_bytes(&bytes)?)
                 }
 

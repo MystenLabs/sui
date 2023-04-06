@@ -4,17 +4,21 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
-use futures::future::join_all;
 use futures::stream::{FuturesOrdered, FuturesUnordered};
 use futures::StreamExt;
+use futures::{
+    future::{join_all, ready},
+    FutureExt,
+};
 use itertools::Itertools;
 use shared_crypto::intent::Intent;
-use std::collections::{BTreeMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, HashSet};
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::{fs, io};
 use sui::client_commands::WalletContext;
-use sui_config::{genesis::Genesis, NodeConfig};
+use sui_config::{genesis::Genesis, NodeConfig, SUI_CLIENT_CONFIG};
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use sui_keys::keystore::AccountKeystore;
@@ -449,63 +453,94 @@ pub async fn replay_transactions(
     mut address_map: BTreeMap<SuiAddress, SuiAddress>,
     working_dir: PathBuf,
 ) {
-    let mut context = WalletContext::new(&working_dir, None).await.unwrap();
+    let config_path = working_dir.join(SUI_CLIENT_CONFIG);
+    let mut context = WalletContext::new(&config_path, None).await.unwrap();
 
     let (roots, txns) = transactions;
-    let mut forward_deps = BTreeMap::new();
-    let mut backward_deps = BTreeMap::new();
+    let mut forward_deps: BTreeMap<TransactionDigest, Vec<TransactionDigest>> = BTreeMap::new();
+    let mut backward_deps: BTreeMap<TransactionDigest, HashSet<TransactionDigest>> =
+        BTreeMap::new();
+
     for (tx_digest, (_, fx)) in txns.iter() {
         let deps = fx.dependencies();
-        forward_deps.insert(*tx_digest, deps.clone());
+        forward_deps.insert(*tx_digest, deps.to_vec());
         for dep in deps {
             backward_deps
-                .entry(dep)
-                .or_insert_with(Vec::new)
-                .push(*tx_digest);
+                .entry(*dep)
+                .or_insert_with(HashSet::new)
+                .insert(*tx_digest);
         }
     }
 
-    let mut queue = VecDeque::new();
-    queue.push_back(roots);
+    let txns: BTreeMap<TransactionDigest, VerifiedTransaction> = txns
+        .into_iter()
+        .map(|(tx_digest, (tx, _))| {
+            let mut tx_data = tx.transaction_data().clone();
+            let sender = tx_data.sender_mut();
 
-    while let Some(tx_digests) = queue.pop_front() {
-        let resigned_txns: Vec<_> = tx_digests
-            .into_iter()
-            .map(|tx_digest| {
-                let (tx, _) = txns.get(&tx_digest).unwrap().clone();
-
-                let mut tx_data = tx.transaction_data().clone();
-                let sender = tx_data.sender_mut();
-
-                let new_sender = if let Some(new_sender) = address_map.get(sender) {
-                    *new_sender
-                } else {
-                    let (new_sender, _, _) = context
-                        .config
-                        .keystore
-                        .generate_and_add_new_key(SignatureScheme::ED25519, None)
-                        .unwrap();
-                    address_map.insert(*sender, new_sender);
-                    new_sender
-                };
-
-                *sender = new_sender;
-                let sender = *sender;
-
-                // re-sign the tx
-                let signature = context
+            let new_sender = if let Some(new_sender) = address_map.get(sender) {
+                *new_sender
+            } else {
+                let (new_sender, _, _) = context
                     .config
                     .keystore
-                    .sign_secure(&sender, &tx_data, Intent::default())
+                    .generate_and_add_new_key(SignatureScheme::ED25519, None)
                     .unwrap();
+                address_map.insert(*sender, new_sender);
+                new_sender
+            };
 
-                Transaction::from_data(tx_data, Intent::default(), vec![signature])
+            *sender = new_sender;
+            let sender = *sender;
+
+            // re-sign the tx
+            let signature = context
+                .config
+                .keystore
+                .sign_secure(&sender, &tx_data, Intent::default())
+                .unwrap();
+
+            (
+                tx_digest,
+                Transaction::from_data(tx_data.clone(), Intent::default(), vec![signature])
                     .verify()
-                    .unwrap()
-            })
-            .collect();
+                    .unwrap_or_else(|_| panic!("tx_data: {:#?}", tx_data)),
+            )
+        })
+        .collect();
 
-        println!("resigned {} txns", resigned_txns.len());
+    let mut root_futures = FuturesUnordered::new();
+    let mut finished = FuturesUnordered::new();
+    root_futures.extend(roots.into_iter().map(|root| ready(root).boxed()));
+
+    let context = Arc::new(context);
+
+    loop {
+        tokio::select! {
+            Some(root) = root_futures.next() => {
+                let context = context.clone();
+                let txn = txns.get(&root).unwrap().clone();
+                finished.push(tokio::task::spawn(async move {
+                    context.execute_transaction_block(txn).await.unwrap();
+                    root
+                }));
+            }
+
+            Some(Ok(tx_digest)) = finished.next() => {
+                if let Some(deps) = forward_deps.get(&tx_digest) {
+                    for dep in deps {
+                        if let Some(deps) = backward_deps.get_mut(dep) {
+                            deps.remove(&tx_digest);
+                            if deps.is_empty() {
+                                root_futures.push(ready(*dep).boxed());
+                            }
+                        }
+                    }
+                }
+            }
+
+            else => break,
+        }
     }
 
     // rea
