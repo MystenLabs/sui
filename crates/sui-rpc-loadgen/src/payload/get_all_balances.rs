@@ -38,11 +38,13 @@ impl<'a> ProcessPayload<'a, &'a GetAllBalances> for RpcCommandProcessor {
             let mut client_coin_types: Vec<Vec<String>> = Vec::new();
             for (idx, balances) in result.into_iter().enumerate() {
                 if idx % clients.len() == 0 {
-                    let coin_types: Vec<String> = balances
-                        .iter()
-                        .map(|balance| balance.coin_type.clone())
-                        .collect();
-                    client_coin_types.push(coin_types);
+                    if let Some(balances) = balances {
+                        let coin_types: Vec<String> = balances
+                            .iter()
+                            .map(|balance| balance.coin_type.clone())
+                            .collect();
+                        client_coin_types.push(coin_types);
+                    }
                 }
             }
             for (address, coin_types) in chunk.into_iter().zip(client_coin_types.into_iter()) {
@@ -56,11 +58,9 @@ impl<'a> ProcessPayload<'a, &'a GetAllBalances> for RpcCommandProcessor {
 pub async fn get_all_balances(
     client: &SuiClient,
     owner_address: SuiAddress,
-) -> Result<Vec<Balance>> {
-    let balances = client
-        .coin_read_api()
-        .get_all_balances(owner_address)
-        .await
-        .unwrap();
-    Ok(balances)
+) -> Result<Option<Vec<Balance>>> {
+    match client.coin_read_api().get_all_balances(owner_address).await {
+        Ok(balances) => Ok(Some(balances)),
+        Err(e) => Ok(None),
+    }
 }
