@@ -8,10 +8,11 @@ use crate::{
 use config::{Committee, Stake};
 use fastcrypto::hash::Hash;
 use std::{collections::HashMap, sync::Arc};
+use storage::ConsensusStore;
 use tracing::{debug, error_span};
 use types::{
-    Certificate, CertificateAPI, CertificateDigest, CommittedSubDag, ConsensusStore, HeaderAPI,
-    ReputationScores, Round,
+    Certificate, CertificateAPI, CertificateDigest, CommittedSubDag, HeaderAPI, ReputationScores,
+    Round,
 };
 
 #[cfg(any(test))]
@@ -181,7 +182,8 @@ mod tests {
     use prometheus::Registry;
     use rand::Rng;
     use std::collections::BTreeSet;
-    use test_utils::{make_consensus_store, CommitteeFixture};
+    use storage::NodeStorage;
+    use test_utils::CommitteeFixture;
     use types::Certificate;
 
     #[tokio::test]
@@ -202,12 +204,12 @@ mod tests {
             test_utils::make_optimal_certificates(&committee, 1..=rounds, &genesis, &keys);
 
         let store_path = test_utils::temp_dir();
-        let store = make_consensus_store(&store_path);
+        let store = NodeStorage::reopen(&store_path, None);
 
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
         let mut state = ConsensusState::new(metrics, gc_depth);
-        let mut tusk = Tusk::new(committee, store, gc_depth);
+        let mut tusk = Tusk::new(committee, store.consensus_store, gc_depth);
         for certificate in certificates {
             tusk.process_certificate(&mut state, certificate).unwrap();
         }
@@ -247,12 +249,16 @@ mod tests {
         let arc_committee = Arc::new(ArcSwap::from_pointee(committee));
 
         let store_path = test_utils::temp_dir();
-        let store = make_consensus_store(&store_path);
+        let store = NodeStorage::reopen(&store_path, None);
 
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
         let mut state = ConsensusState::new(metrics, gc_depth);
-        let mut tusk = Tusk::new((**arc_committee.load()).clone(), store, gc_depth);
+        let mut tusk = Tusk::new(
+            (**arc_committee.load()).clone(),
+            store.consensus_store,
+            gc_depth,
+        );
 
         for certificate in certificates {
             tusk.process_certificate(&mut state, certificate).unwrap();

@@ -9,11 +9,12 @@ use crate::{
 use config::{AuthorityIdentifier, Committee, Stake};
 use fastcrypto::hash::Hash;
 use std::sync::Arc;
+use storage::ConsensusStore;
 use tokio::time::Instant;
 use tracing::{debug, error_span};
 use types::{
-    Certificate, CertificateAPI, CertificateDigest, CommittedSubDag, ConsensusStore, HeaderAPI,
-    ReputationScores, Round,
+    Certificate, CertificateAPI, CertificateDigest, CommittedSubDag, HeaderAPI, ReputationScores,
+    Round,
 };
 
 #[cfg(test)]

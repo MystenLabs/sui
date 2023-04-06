@@ -4,14 +4,12 @@
 
 use crate::{Batch, Certificate, CertificateAPI, CertificateDigest, HeaderAPI, Round, TimestampMs};
 use config::{AuthorityIdentifier, Committee};
+use enum_dispatch::enum_dispatch;
 use fastcrypto::hash::Hash;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use store::{
-    rocks::{DBMap, TypedStoreError},
-    traits::Map,
-};
+use store::TypedStoreError;
 use tokio::sync::mpsc;
 use tracing::warn;
 
@@ -95,6 +93,16 @@ impl CommittedSubDag {
     pub fn leader_round(&self) -> Round {
         self.leader.round()
     }
+
+    pub fn commit_timestamp(&self) -> TimestampMs {
+        // If commit_timestamp is zero, then safely assume that this is an upgraded node that is
+        // replaying this commit and field is never initialised. It's safe to fallback on leader's
+        // timestamp.
+        if self.commit_timestamp == 0 {
+            return *self.leader.header().created_at();
+        }
+        self.commit_timestamp
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, Eq, PartialEq)]
@@ -137,8 +145,62 @@ impl ReputationScores {
     }
 }
 
+#[enum_dispatch(CompressedCommittedSubDagAPI)]
+trait CompressedCommittedSubDagAPI {
+    fn certificates(&self) -> Vec<CertificateDigest>;
+    fn leader(&self) -> CertificateDigest;
+    fn leader_round(&self) -> Round;
+    fn sub_dag_index(&self) -> SequenceNumber;
+    fn reputation_score(&self) -> ReputationScores;
+    fn commit_timestamp(&self) -> TimestampMs;
+}
+
+// TODO: remove once the upgrade has been rolled out. We want to keep only the
+// CommittedSubDag
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CommittedSubDagShell {
+    /// The sequence of committed certificates' digests.
+    pub certificates: Vec<CertificateDigest>,
+    /// The leader certificate's digest responsible of committing this sub-dag.
+    pub leader: CertificateDigest,
+    /// The round of the leader
+    pub leader_round: Round,
+    /// Sequence number of the CommittedSubDag
+    pub sub_dag_index: SequenceNumber,
+    /// The so far calculated reputation score for nodes
+    pub reputation_score: ReputationScores,
+}
+
+impl CompressedCommittedSubDagAPI for CommittedSubDagShell {
+    fn certificates(&self) -> Vec<CertificateDigest> {
+        self.certificates.clone()
+    }
+
+    fn leader(&self) -> CertificateDigest {
+        self.leader
+    }
+
+    fn leader_round(&self) -> Round {
+        self.leader_round
+    }
+
+    fn sub_dag_index(&self) -> SequenceNumber {
+        self.sub_dag_index
+    }
+
+    fn reputation_score(&self) -> ReputationScores {
+        self.reputation_score.clone()
+    }
+
+    fn commit_timestamp(&self) -> TimestampMs {
+        // We explicitly return 0 as we don't have this information stored already. This will be
+        // handle accordingly to the CommittedSubdag struct.
+        0
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct CompressedCommittedSubDagV2 {
     /// The sequence of committed certificates' digests.
     pub certificates: Vec<CertificateDigest>,
     /// The leader certificate's digest responsible of committing this sub-dag.
@@ -154,7 +216,7 @@ pub struct CommittedSubDagShell {
     pub commit_timestamp: TimestampMs,
 }
 
-impl CommittedSubDagShell {
+impl CompressedCommittedSubDagV2 {
     pub fn from_sub_dag(sub_dag: &CommittedSubDag) -> Self {
         Self {
             certificates: sub_dag.certificates.iter().map(|x| x.digest()).collect(),
@@ -167,96 +229,97 @@ impl CommittedSubDagShell {
     }
 }
 
-/// Shutdown token dropped when a task is properly shut down.
-pub type ShutdownToken = mpsc::Sender<()>;
+impl CompressedCommittedSubDagAPI for CompressedCommittedSubDagV2 {
+    fn certificates(&self) -> Vec<CertificateDigest> {
+        self.certificates.clone()
+    }
 
-/// Convenience type to propagate store errors.
-pub type StoreResult<T> = Result<T, TypedStoreError>;
+    fn leader(&self) -> CertificateDigest {
+        self.leader
+    }
 
-/// The persistent storage of the sequencer.
-pub struct ConsensusStore {
-    /// The latest committed round of each validator.
-    last_committed: DBMap<AuthorityIdentifier, Round>,
-    /// The global consensus sequence.
-    committed_sub_dags_by_index: DBMap<SequenceNumber, CommittedSubDagShell>,
+    fn leader_round(&self) -> Round {
+        self.leader_round
+    }
+
+    fn sub_dag_index(&self) -> SequenceNumber {
+        self.sub_dag_index
+    }
+
+    fn reputation_score(&self) -> ReputationScores {
+        self.reputation_score.clone()
+    }
+
+    fn commit_timestamp(&self) -> TimestampMs {
+        self.commit_timestamp
+    }
 }
 
-impl ConsensusStore {
-    /// Create a new consensus store structure by using already loaded maps.
-    pub fn new(
-        last_committed: DBMap<AuthorityIdentifier, Round>,
-        sequence: DBMap<SequenceNumber, CommittedSubDagShell>,
-    ) -> Self {
-        Self {
-            last_committed,
-            committed_sub_dags_by_index: sequence,
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[enum_dispatch(CompressedCommittedSubDagAPI)]
+pub enum CompressedCommittedSubDag {
+    V1(CommittedSubDagShell),
+    V2(CompressedCommittedSubDagV2),
+}
+
+impl CompressedCommittedSubDag {
+    pub fn certificates(&self) -> Vec<CertificateDigest> {
+        match self {
+            CompressedCommittedSubDag::V1(sub_dag) => sub_dag.certificates(),
+            CompressedCommittedSubDag::V2(sub_dag) => sub_dag.certificates(),
         }
     }
 
-    /// Clear the store.
-    pub fn clear(&self) -> StoreResult<()> {
-        self.last_committed.clear()?;
-        self.committed_sub_dags_by_index.clear()?;
-        Ok(())
+    pub fn leader(&self) -> CertificateDigest {
+        match self {
+            CompressedCommittedSubDag::V1(sub_dag) => sub_dag.leader(),
+            CompressedCommittedSubDag::V2(sub_dag) => sub_dag.leader(),
+        }
     }
 
-    /// Persist the consensus state.
-    pub fn write_consensus_state(
-        &self,
-        last_committed: &HashMap<AuthorityIdentifier, Round>,
-        sub_dag: &CommittedSubDag,
-    ) -> Result<(), TypedStoreError> {
-        let shell = CommittedSubDagShell::from_sub_dag(sub_dag);
-
-        let mut write_batch = self.last_committed.batch();
-        write_batch.insert_batch(&self.last_committed, last_committed.iter())?;
-        write_batch.insert_batch(
-            &self.committed_sub_dags_by_index,
-            std::iter::once((sub_dag.sub_dag_index, shell)),
-        )?;
-        write_batch.write()
+    pub fn leader_round(&self) -> Round {
+        match self {
+            CompressedCommittedSubDag::V1(sub_dag) => sub_dag.leader_round(),
+            CompressedCommittedSubDag::V2(sub_dag) => sub_dag.leader_round(),
+        }
     }
 
-    /// Load the last committed round of each validator.
-    pub fn read_last_committed(&self) -> HashMap<AuthorityIdentifier, Round> {
-        self.last_committed.iter().collect()
+    pub fn sub_dag_index(&self) -> SequenceNumber {
+        match self {
+            CompressedCommittedSubDag::V1(sub_dag) => sub_dag.sub_dag_index(),
+            CompressedCommittedSubDag::V2(sub_dag) => sub_dag.sub_dag_index(),
+        }
     }
 
-    /// Gets the latest sub dag index from the store
-    pub fn get_latest_sub_dag_index(&self) -> SequenceNumber {
-        let s = self
-            .committed_sub_dags_by_index
-            .iter()
-            .skip_to_last()
-            .next()
-            .map(|(seq, _)| seq)
-            .unwrap_or_default();
-        s
+    pub fn reputation_score(&self) -> ReputationScores {
+        match self {
+            CompressedCommittedSubDag::V1(sub_dag) => sub_dag.reputation_score(),
+            CompressedCommittedSubDag::V2(sub_dag) => sub_dag.reputation_score(),
+        }
     }
 
-    /// Returns thet latest subdag committed. If none is committed yet, then
-    /// None is returned instead.
-    pub fn get_latest_sub_dag(&self) -> Option<CommittedSubDagShell> {
-        self.committed_sub_dags_by_index
-            .iter()
-            .skip_to_last()
-            .next()
-            .map(|(_, subdag)| subdag)
-    }
-
-    /// Load all the sub dags committed with sequence number of at least `from`.
-    pub fn read_committed_sub_dags_from(
-        &self,
-        from: &SequenceNumber,
-    ) -> StoreResult<Vec<CommittedSubDagShell>> {
-        Ok(self
-            .committed_sub_dags_by_index
-            .iter()
-            .skip_to(from)?
-            .map(|(_, sub_dag)| sub_dag)
-            .collect())
+    pub fn commit_timestamp(&self) -> TimestampMs {
+        match self {
+            CompressedCommittedSubDag::V1(sub_dag) => sub_dag.commit_timestamp(),
+            CompressedCommittedSubDag::V2(sub_dag) => sub_dag.commit_timestamp(),
+        }
     }
 }
+
+impl CommittedSubDagShell {
+    pub fn from_sub_dag(sub_dag: &CommittedSubDag) -> Self {
+        Self {
+            certificates: sub_dag.certificates.iter().map(|x| x.digest()).collect(),
+            leader: sub_dag.leader.digest(),
+            leader_round: sub_dag.leader.round(),
+            sub_dag_index: sub_dag.sub_dag_index,
+            reputation_score: sub_dag.reputation_score.clone(),
+        }
+    }
+}
+
+/// Shutdown token dropped when a task is properly shut down.
+pub type ShutdownToken = mpsc::Sender<()>;
 
 #[cfg(test)]
 mod tests {
@@ -266,6 +329,38 @@ mod tests {
     use indexmap::IndexMap;
     use std::collections::BTreeSet;
     use test_utils::CommitteeFixture;
+
+    #[test]
+    fn test_zero_timestamp_in_sub_dag() {
+        let fixture = CommitteeFixture::builder().build();
+        let committee = fixture.committee();
+
+        let header_builder = HeaderV1Builder::default();
+        let header = header_builder
+            .author(AuthorityIdentifier(1u16))
+            .round(2)
+            .epoch(0)
+            .created_at(50)
+            .payload(IndexMap::new())
+            .parents(BTreeSet::new())
+            .build()
+            .unwrap();
+
+        let certificate =
+            Certificate::new_unsigned(&committee, Header::V1(header), Vec::new()).unwrap();
+
+        // AND we initialise the sub dag via the "restore" way
+        let sub_dag_round = CommittedSubDag {
+            certificates: vec![certificate.clone()],
+            leader: certificate,
+            sub_dag_index: 1,
+            reputation_score: ReputationScores::default(),
+            commit_timestamp: 0,
+        };
+
+        // AND commit timestamp is the leader's timestamp
+        assert_eq!(sub_dag_round.commit_timestamp(), 50);
+    }
 
     #[test]
     fn test_monotonically_incremented_commit_timestamps() {
@@ -334,3 +429,6 @@ mod tests {
         );
     }
 }
+
+/// Convenience type to propagate store errors.
+pub type StoreResult<T> = Result<T, TypedStoreError>;
