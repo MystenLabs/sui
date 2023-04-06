@@ -102,7 +102,7 @@ export const SuiCallArg = union([
     type: literal('object'),
     objectType: literal('sharedObject'),
     objectId: ObjectId,
-    initialSharedVersion: SequenceNumber,
+    initialSharedVersion: number(),
     mutable: boolean(),
   }),
 ]);
