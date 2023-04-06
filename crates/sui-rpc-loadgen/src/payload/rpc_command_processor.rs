@@ -11,6 +11,7 @@ use shared_crypto::intent::{Intent, IntentMessage};
 use std::fmt;
 use std::fs::{self, File};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_json_rpc_types::{
@@ -50,6 +51,7 @@ pub struct RpcCommandProcessor {
     addresses: Arc<DashSet<SuiAddress>>,
     addresses_with_coin_types: Arc<DashMap<SuiAddress, Vec<String>>>,
     data_dir: String,
+    counter: Arc<AtomicUsize>,
 }
 
 impl RpcCommandProcessor {
@@ -71,6 +73,7 @@ impl RpcCommandProcessor {
             addresses: Arc::new(DashSet::new()),
             addresses_with_coin_types: Arc::new(DashMap::new()),
             data_dir,
+            counter: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -188,6 +191,10 @@ impl RpcCommandProcessor {
                 }
             }
         }
+    }
+
+    pub(crate) fn inc_counter(&self, count: usize) {
+        self.counter.fetch_add(count, Ordering::SeqCst);
     }
 
     pub(crate) fn dump_cache_to_file(&self) {

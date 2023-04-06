@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Instant;
+
 use crate::payload::{GetBalance, ProcessPayload, RpcCommandProcessor, SignerInfo};
 use anyhow::Result;
 use async_trait::async_trait;
@@ -36,7 +38,8 @@ impl<'a> ProcessPayload<'a, &'a GetBalance> for RpcCommandProcessor {
         let clients = self.get_clients().await?;
         let chunked = chunk_entities(&mapped, Some(op.chunk_size));
 
-        // TODO: generate this beforehand
+        let mut count = 0;
+
         for chunk in chunked {
             let mut tasks = Vec::new();
             for (owner_address, coin_type) in chunk {
@@ -47,8 +50,18 @@ impl<'a> ProcessPayload<'a, &'a GetBalance> for RpcCommandProcessor {
                     tasks.push(task);
                 }
             }
-            join_all(tasks).await;
+            let start = Instant::now();
+            let results = join_all(tasks).await;
+            let elapsed = start.elapsed();
+
+            for _ in results.into_iter().flatten().flatten() {
+                count += 1;
+            }
+            let rps = count as f64 / elapsed.as_secs_f64();
+            println!("rps: {}", rps);
         }
+
+        self.inc_counter(count);
         Ok(())
     }
 }
@@ -64,6 +77,6 @@ async fn get_balance(
         .await
     {
         Ok(balance) => Ok(Some(balance)),
-        Err(error) => Ok(None),
+        Err(_error) => Ok(None),
     }
 }
