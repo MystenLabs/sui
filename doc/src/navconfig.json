@@ -189,6 +189,10 @@
 						"fileName": "build/move/debug-publish"
 					},
 					{
+						"label": "Upgrade Move Packages",
+						"fileName": "build/package-upgrades"
+					},
+					{
 						"label": "Sui Move Library",
 						"fileName": "build/move/sui-move-library"
 					}
