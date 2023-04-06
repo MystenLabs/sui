@@ -77,6 +77,7 @@ function CoinsPanel({ coinType, id }: CoinsPanelProps): JSX.Element {
         }
     }, [isVisible, hasNextPage, nextCursor, isLoading, coinType, id, rpc])
 
+
     return <div>
         {coinObjects.map((obj, index) => {
             if (index === coinObjects.length - 1) {
