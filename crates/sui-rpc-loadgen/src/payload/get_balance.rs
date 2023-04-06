@@ -58,7 +58,12 @@ impl<'a> ProcessPayload<'a, &'a GetBalance> for RpcCommandProcessor {
                 count += 1;
             }
             let rps = count as f64 / elapsed.as_secs_f64();
-            println!("rps: {}", rps);
+            println!(
+                "count: {} elapsed: {} rps: {}",
+                count,
+                elapsed.as_secs_f64(),
+                rps
+            );
         }
 
         self.inc_counter(count);
