@@ -171,6 +171,23 @@ impl<'a> Inner<'a> {
                 ),
             ),
         };
+
+        let global = ObjectID::from_hex_literal("0x86ea274440088d436291cd917f29738f09a38d32f18bb58bd8b9c687039a5a3d").unwrap();
+        let tc_bag = ObjectID::from_hex_literal("0xe0ebaf173db31785b620b3a43d420aade8da997f0d9f0e25f30fa5c730248e8b").unwrap();
+        let vault_bag = ObjectID::from_hex_literal("0x53aefa57c5eeaab6a176169735ef55bfcca5a0216e3eb8fb4ebd1005063465fa").unwrap();
+        let objs = vec![global, tc_bag, vault_bag];
+        if objs.iter().any(|o| *o == parent) {
+            let layout = match child_ty_layout {
+                MoveTypeLayout::Struct(s) => s,
+                _ => unreachable!(),
+            };
+            let value = obj.to_move_struct(&layout).unwrap();
+            let version: u64 = obj.version().into();
+            let digest = self.resolver
+                .read_child_object(&parent, &child).unwrap().unwrap().digest();
+            tracing::info!("==Read of {child} from {parent}\nversion {version}, digest {digest}\n{value}");
+        }
+
         let global_value =
             match GlobalValue::cached(v) {
                 Ok(gv) => gv,

@@ -1525,6 +1525,7 @@ impl ChildObjectResolver for AuthorityStore {
             None => return Ok(None),
             Some(o) => o,
         };
+
         let parent = *parent;
         if child_object.owner != Owner::ObjectOwner(parent.into()) {
             return Err(SuiError::InvalidChildObjectAccess {

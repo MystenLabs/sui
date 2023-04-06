@@ -965,6 +965,13 @@ impl AuthorityState {
         self.check_owned_locks(&owned_object_refs).await?;
 
         let shared_object_refs = input_objects.filter_shared_objects();
+        let global = ObjectID::from_hex_literal("0x86ea274440088d436291cd917f29738f09a38d32f18bb58bd8b9c687039a5a3d").unwrap();
+        for o in &shared_object_refs {
+            if o.0 == global {
+                let digest = certificate.digest();
+                println!("Relevant transaction {digest}")
+            }
+        }
         let transaction_dependencies = input_objects.transaction_dependencies();
         let temporary_store = TemporaryStore::new(
             self.database.clone(),

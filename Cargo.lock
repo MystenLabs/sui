@@ -9242,6 +9242,7 @@ dependencies = [
  "sui-framework-build",
  "sui-protocol-config",
  "sui-types",
+ "tracing",
  "workspace-hack",
 ]
 
