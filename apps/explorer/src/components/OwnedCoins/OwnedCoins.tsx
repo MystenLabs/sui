@@ -13,7 +13,6 @@ import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Pagination } from '~/ui/Pagination';
 import { Text } from '~/ui/Text';
 
-
 export const COINS_PER_PAGE: number = 6;
 
 function OwnedCoins({ id }: { id: string }) {
@@ -26,9 +25,9 @@ function OwnedCoins({ id }: { id: string }) {
     useEffect(() => {
         setIsFail(false);
         setIsLoading(true);
-        rpc.getAllBalances({ owner: id, })
+        rpc.getAllBalances({ owner: id })
             .then((resp) => {
-                setUniqueCoins(resp)
+                setUniqueCoins(resp);
                 setIsLoading(false);
             })
             .catch((err) => {
@@ -39,14 +38,16 @@ function OwnedCoins({ id }: { id: string }) {
     if (isFail) {
         return (
             <div className="pt-2 font-sans font-semibold text-issue-dark">
-                Failed to load Coins.
+                Failed to load Coins
             </div>
         );
     }
 
     return (
         <>
-            {isLoading ? <LoadingSpinner /> :
+            {isLoading ? (
+                <LoadingSpinner />
+            ) : (
                 <div className="flex flex-col space-y-5 pt-5 text-left xl:pr-10">
                     <Heading color="gray-90" variant="heading4/semibold">
                         Coins
@@ -64,21 +65,29 @@ function OwnedCoins({ id }: { id: string }) {
                                     currentSlice * COINS_PER_PAGE
                                 )
                                 .map((coin) => (
-                                    <OwnedCoinView id={id} key={coin.coinType} coin={coin} />
+                                    <OwnedCoinView
+                                        id={id}
+                                        key={coin.coinType}
+                                        coin={coin}
+                                    />
                                 ))}
                         </div>
                     </div>
-                    {uniqueCoins.length > COINS_PER_PAGE && <Pagination
-                        onNext={() => setCurrentSlice(currentSlice + 1)}
-                        hasNext={currentSlice !==
-                            Math.ceil(uniqueCoins.length / COINS_PER_PAGE)}
-                        hasPrev={currentSlice !== 1}
-                        onPrev={() => setCurrentSlice(currentSlice - 1)}
-                        onFirst={() => setCurrentSlice(1)}
-                    />}
-                </div>}
+                    {uniqueCoins.length > COINS_PER_PAGE && (
+                        <Pagination
+                            onNext={() => setCurrentSlice(currentSlice + 1)}
+                            hasNext={
+                                currentSlice !==
+                                Math.ceil(uniqueCoins.length / COINS_PER_PAGE)
+                            }
+                            hasPrev={currentSlice !== 1}
+                            onPrev={() => setCurrentSlice(currentSlice - 1)}
+                            onFirst={() => setCurrentSlice(1)}
+                        />
+                    )}
+                </div>
+            )}
         </>
-
     );
 }
 

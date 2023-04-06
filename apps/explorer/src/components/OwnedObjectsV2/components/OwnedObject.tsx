@@ -25,9 +25,7 @@ function OwnedObject({ obj }: OwnedObjectTypes) {
     const displayMeta = getObjectDisplay(obj).data;
     const display = transformURL(parseImageURL(displayMeta));
     return (
-        <div
-            className="w-[50%] lg:flex lg:flex-wrap lg:justify-between"
-        >
+        <div className="w-[50%] lg:flex lg:flex-wrap lg:justify-between">
             <div className="my-2 flex h-fit min-h-[72px] w-full items-center truncate break-all sm:my-[1vh]">
                 <div className="mr-[20px] h-[60px] min-w-[60px] max-w-[60px]">
                     <DisplayBox display={display} />

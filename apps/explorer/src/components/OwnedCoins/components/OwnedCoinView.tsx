@@ -12,7 +12,7 @@ import { Text } from '~/ui/Text';
 
 type OwnedCoinViewProps = {
     coin: CoinBalance;
-    id: string
+    id: string;
 };
 
 function OwnedCoinView({ coin, id }: OwnedCoinViewProps) {
@@ -50,13 +50,11 @@ function OwnedCoinView({ coin, id }: OwnedCoinViewProps) {
 
             <Disclosure.Panel>
                 <div className="flex flex-col gap-1 bg-gray-40 p-3">
-                    <CoinsPanel
-                        id={id}
-                        coinType={coin.coinType} />
+                    <CoinsPanel id={id} coinType={coin.coinType} />
                 </div>
             </Disclosure.Panel>
         </Disclosure>
     );
 }
 
-export default OwnedCoinView
+export default OwnedCoinView;

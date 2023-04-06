@@ -58,5 +58,4 @@ export function useNetwork(): [string, (network: Network | string) => void] {
     return [network, setNetwork];
 }
 
-
 export const AddressContext = createContext('');

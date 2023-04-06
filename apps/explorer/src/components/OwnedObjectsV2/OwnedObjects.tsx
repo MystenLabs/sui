@@ -2,18 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useRpcClient } from '@mysten/core';
-import {
-    type SuiObjectResponse,
-    getObjectType,
-    getObjectOwner,
-    Coin,
-} from '@mysten/sui.js';
+import { type SuiObjectResponse, Coin } from '@mysten/sui.js';
 import { useEffect, useState } from 'react';
+
+import OwnedObject from './components/OwnedObject';
+
 import { Heading } from '~/ui/Heading';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Pagination } from '~/ui/Pagination';
-
-import OwnedObject from './components/OwnedObject';
 
 export const OBJECTS_PER_PAGE: number = 6;
 
@@ -25,52 +21,72 @@ function OwnerCoins({ id }: { id: string }) {
     const rpc = useRpcClient();
 
     useEffect(() => {
-        setIsLoading(true)
+        setIsLoading(true);
         rpc.getOwnedObjects({
             owner: id,
             options: {
                 showType: true,
                 showContent: true,
                 showDisplay: true,
-            }
+            },
         })
             .then((objects) => {
-                const res = objects.data.filter(() => !Coin.isCoin)
-                setResults(res)
-                setIsLoading(false)
+                const res = objects.data.filter(() => !Coin.isCoin);
+                setResults(res);
+                setIsLoading(false);
             })
             .catch((err) => {
                 setIsFail(true);
             });
     }, [id, rpc]);
 
-    return (
-        <div className="flex flex-col space-y-5 pt-5 text-left xl:pr-10">
-            <Heading color="gray-90" variant="heading4/semibold">
-                NFTs
-            </Heading>
-            {isLoading && <LoadingSpinner />}
-            <div className="flex max-h-80 flex-col overflow-auto">
-                <div className="flex flex-wrap">
-                    {results
-                        .slice(
-                            (currentSlice - 1) * OBJECTS_PER_PAGE,
-                            currentSlice * OBJECTS_PER_PAGE
-                        )
-                        .map((obj) => (
-                            <OwnedObject obj={obj} key={obj?.data?.objectId} />
-                        ))}
-                </div>
+    if (isFail) {
+        return (
+            <div className="pt-2 font-sans font-semibold text-issue-dark">
+                Failed to load NFTs
             </div>
-            {results.length > OBJECTS_PER_PAGE && <Pagination
-                onNext={() => setCurrentSlice(currentSlice + 1)}
-                hasNext={currentSlice !==
-                    Math.ceil(results.length / OBJECTS_PER_PAGE)}
-                hasPrev={currentSlice !== 1}
-                onPrev={() => setCurrentSlice(currentSlice - 1)}
-                onFirst={() => setCurrentSlice(1)}
-            />}
-        </div>
+        );
+    }
+    return (
+        <>
+            {isLoading ? (
+                <LoadingSpinner />
+            ) : (
+                <div className="flex flex-col space-y-5 pt-5 text-left xl:pr-10">
+                    <Heading color="gray-90" variant="heading4/semibold">
+                        NFTs
+                    </Heading>
+
+                    <div className="flex max-h-80 flex-col overflow-auto">
+                        <div className="flex flex-wrap">
+                            {results
+                                .slice(
+                                    (currentSlice - 1) * OBJECTS_PER_PAGE,
+                                    currentSlice * OBJECTS_PER_PAGE
+                                )
+                                .map((obj) => (
+                                    <OwnedObject
+                                        obj={obj}
+                                        key={obj?.data?.objectId}
+                                    />
+                                ))}
+                        </div>
+                    </div>
+                    {results.length > OBJECTS_PER_PAGE && (
+                        <Pagination
+                            onNext={() => setCurrentSlice(currentSlice + 1)}
+                            hasNext={
+                                currentSlice !==
+                                Math.ceil(results.length / OBJECTS_PER_PAGE)
+                            }
+                            hasPrev={currentSlice !== 1}
+                            onPrev={() => setCurrentSlice(currentSlice - 1)}
+                            onFirst={() => setCurrentSlice(1)}
+                        />
+                    )}
+                </div>
+            )}
+        </>
     );
 }
 
