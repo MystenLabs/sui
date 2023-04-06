@@ -99,7 +99,7 @@ export const DelegationStakingPool = object({
   fields: DelegationStakingPoolFields,
 });
 
-export const Validators = array(tuple([AuthorityName, number()]));
+export const Validators = array(tuple([AuthorityName, string()]));
 
 export const CommitteeInfo = object({
   epoch: EpochId,
