@@ -64,9 +64,6 @@ async fn get_balance(
         .await
     {
         Ok(balance) => Ok(Some(balance)),
-        Err(error) => {
-            println!("Error getting balance: {:?}", error);
-            Ok(None)
-        }
+        Err(error) => Ok(None),
     }
 }
