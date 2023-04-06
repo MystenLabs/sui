@@ -56,9 +56,9 @@ function UnderlyingObjectCard({ parentId, name }: UnderlyingObjectCardProps) {
         return null;
     }
     const display = getObjectDisplay(data);
-    const imgUrl = parseImageURL(display);
+    const imgUrl = parseImageURL(display.data);
     const objectType = parseObjectType(data);
-    const caption = extractName(display) || trimStdLibPrefix(objectType);
+    const caption = extractName(display.data) || trimStdLibPrefix(objectType);
 
     return imgUrl ? (
         <div className="mt-3 pt-3">
