@@ -38,10 +38,10 @@ import { Text } from '~/ui/Text';
 import { parseObjectType } from '~/utils/objectUtils';
 
 export function TokenView({ data }: { data: SuiObjectResponse }) {
-    const display = getObjectDisplay(data);
-    const imgUrl = parseImageURL(display.data);
+    const display = getObjectDisplay(data)?.data;
+    const imgUrl = parseImageURL(display);
     const objOwner = getObjectOwner(data);
-    const name = extractName(display.data);
+    const name = extractName(display);
 
     const objectId = getObjectId(data);
     const objectType = parseObjectType(data);
