@@ -84,8 +84,8 @@ export function TokenView({ data }: { data: SuiObjectResponse }) {
                                                     'Shared'
                                                 ) : 'ObjectOwner' in
                                                   objOwner ? (
-                                                    <ObjectLink
-                                                        objectId={
+                                                    <AddressLink
+                                                        address={
                                                             objOwner.ObjectOwner
                                                         }
                                                     />

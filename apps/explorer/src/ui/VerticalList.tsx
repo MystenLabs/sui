@@ -18,7 +18,7 @@ export function ListItem({ active, children, onClick }: ListItemProps) {
                 className={clsx(
                     'block w-full cursor-pointer rounded-md border px-2.5 py-2 text-left text-body',
                     active
-                        ? 'border-gray-50 bg-gray-45 font-semibold text-gray-90 shadow-sm'
+                        ? 'border-gray-40 bg-gray-40 font-semibold text-gray-90 shadow-sm'
                         : 'border-transparent bg-white font-medium text-gray-80'
                 )}
                 onClick={onClick}
