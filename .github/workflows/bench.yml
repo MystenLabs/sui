@@ -77,10 +77,10 @@ jobs:
     - name: Run benchmarks
       run: |
         set -o pipefail
-        cargo run --release --package sui-benchmark --bin stress -- --log-path /tmp/stress.log --num-client-threads 16 --num-server-threads 32 --num-transfer-accounts 2 bench --committee-size 4 --target-qps 500 --num-workers 16  --transfer-object 100 --run-duration 60s --stress-stat-collection 2>&1 | huniq | tee -a artifacts/owned_4_500.txt
-        cargo run --release --package sui-benchmark --bin stress -- --log-path /tmp/stress.log --num-client-threads 16 --num-server-threads 32 --num-transfer-accounts 2 bench --committee-size 4 --target-qps 500 --num-workers 16  --shared-counter 100 --run-duration 60s --stress-stat-collection 2>&1 | huniq | tee -a artifacts/shared_4_500.txt
-        cargo run --release --package sui-benchmark --bin stress -- --log-path /tmp/stress.log --num-client-threads 16 --num-server-threads 32 --num-transfer-accounts 2 bench --committee-size 20 --target-qps 150 --num-workers 16  --transfer-object 100 --run-duration 60s --stress-stat-collection 2>&1 | huniq | tee -a artifacts/owned_20_150.txt
-        cargo run --release --package sui-benchmark --bin stress -- --log-path /tmp/stress.log --num-client-threads 16 --num-server-threads 32 --num-transfer-accounts 2 bench --committee-size 20 --target-qps 50 --num-workers 16  --shared-counter 100 --run-duration 60s --stress-stat-collection 2>&1 | huniq | tee -a artifacts/shared_20_50.txt
+        cargo run --release --package sui-benchmark --bin stress -- --log-path /tmp/stress.log --num-client-threads 16 --num-server-threads 32 --num-transfer-accounts 2 bench --committee-size 4 --target-qps 1000 --num-workers 16  --transfer-object 100 --run-duration 60s --stress-stat-collection 2>&1 | huniq | tee -a artifacts/owned_4_500.txt
+        cargo run --release --package sui-benchmark --bin stress -- --log-path /tmp/stress.log --num-client-threads 16 --num-server-threads 32 --num-transfer-accounts 2 bench --committee-size 4 --target-qps 1000 --num-workers 16  --shared-counter 100 --run-duration 60s --stress-stat-collection 2>&1 | huniq | tee -a artifacts/shared_4_500.txt
+        cargo run --release --package sui-benchmark --bin stress -- --log-path /tmp/stress.log --num-client-threads 16 --num-server-threads 32 --num-transfer-accounts 2 bench --committee-size 20 --target-qps 200 --num-workers 16  --transfer-object 100 --run-duration 60s --stress-stat-collection 2>&1 | huniq | tee -a artifacts/owned_20_150.txt
+        cargo run --release --package sui-benchmark --bin stress -- --log-path /tmp/stress.log --num-client-threads 16 --num-server-threads 32 --num-transfer-accounts 2 bench --committee-size 20 --target-qps 200 --num-workers 16  --shared-counter 100 --run-duration 60s --stress-stat-collection 2>&1 | huniq | tee -a artifacts/shared_20_50.txt
         pushd narwhal/benchmark && fab local | tee -a ../../artifacts/narwhal.txt && popd
 
     - name: Retrieve benchmark results
