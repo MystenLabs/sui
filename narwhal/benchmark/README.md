@@ -348,16 +348,3 @@ plot_params = {
 The first graph ('latency') plots the latency versus the throughput. It shows that the latency is low until a fairly neat threshold after which it drastically increases. Determining this threshold is crucial to understanding the limits of the system.
 
 Another challenge is comparing apples-to-apples between different deployments of the system. The challenge here is again that latency and throughput are interdependent, as a result a throughput/number of nodes chart could be tricky to produce fairly. The way to do it is to define a maximum latency and measure the throughput at this point instead of simply pushing every system to its peak throughput (where latency is meaningless). The second graph ('tps') plots the maximum achievable throughput under a maximum latency for different numbers of nodes.
-
-## Benchmarks with failpoints
-
-[Fail points](https://docs.rs/failpoints/latest/failpoints/) are code instrumentations that allow errors and other behavior to be injected dynamically at runtime, primarily for testing purposes. Fail points are flexible and can be configured to exhibit a variety of behavior, including panics, early returns, and sleeping. They can be controlled both programmatically and via the environment, and can be triggered conditionally and probabilistically.
-
-Search the code base for `fail_point!()` macro to see the list instrumented failpoints.
-
-Example usage
-
-```
-$ FAILPOINTS='rpc-response-delay=5%sleep(10000);request-batch=5%return;report-our-batch=5%return;request-vote=5%return;certificate-store-panic=.01%return;certificate-store=5%return' \
-  fab failpoints
-```

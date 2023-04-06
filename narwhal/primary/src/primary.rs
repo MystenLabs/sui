@@ -1122,13 +1122,6 @@ impl WorkerToPrimary for WorkerReceiverHandler {
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         let message = request.into_body();
 
-        fail::fail_point!("report-our-batch", |_| {
-            Err(anemo::rpc::Status::internal(format!(
-                "Injected error in report our batch from worker_id {}",
-                message.worker_id
-            )))
-        });
-
         let (tx_ack, rx_ack) = oneshot::channel();
         let response = self
             .tx_our_digests

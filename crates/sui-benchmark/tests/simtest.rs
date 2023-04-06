@@ -4,7 +4,7 @@
 #[cfg(msim)]
 mod test {
 
-    use rand::{thread_rng, Rng};
+    use rand::{distributions::uniform::SampleRange, thread_rng, Rng};
     use std::str::FromStr;
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
@@ -137,8 +137,26 @@ mod test {
         }
     }
 
+    async fn delay_failpoint<R>(range_ms: R, probability: f64)
+    where
+        R: SampleRange<u64>,
+    {
+        let duration = {
+            let mut rng = thread_rng();
+            if rng.gen_range(0.0..1.0) < probability {
+                info!("Matched probability threshold for delay failpoint. Delaying...");
+                Some(Duration::from_millis(rng.gen_range(range_ms)))
+            } else {
+                None
+            }
+        };
+        if let Some(duration) = duration {
+            tokio::time::sleep(duration).await;
+        }
+    }
+
     #[sim_test(config = "test_config()")]
-    async fn test_simulated_load_reconfig_crashes() {
+    async fn test_simulated_load_reconfig_with_crashes_and_delays() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
         let test_cluster = build_test_cluster(4, 1000).await;
 
@@ -169,6 +187,21 @@ mod test {
                 handle_failpoint(dead_validator.clone(), client_node, 0.01);
             }
         });
+
+        // Narwhal fail points.
+        let dead_validator = dead_validator_orig.clone();
+        register_fail_points(
+            &[
+                "narwhal-rpc-response",
+                "narwhal-store-before-write",
+                "narwhal-store-after-write",
+            ],
+            move || {
+                handle_failpoint(dead_validator.clone(), client_node, 0.001);
+            },
+        );
+        register_fail_point_async("narwhal-delay", || delay_failpoint(10..20, 0.001));
+
         test_simulated_load(test_cluster, 120).await;
     }
 

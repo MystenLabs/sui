@@ -204,8 +204,7 @@ ethnum = { version = "1", default-features = false }
 event-listener = { version = "2", default-features = false }
 expect-test = { version = "1", default-features = false }
 eyre = { version = "0.6" }
-fail-9fbad63c4bcf4a8f = { package = "fail", version = "0.4", default-features = false }
-fail-d8f496e17d97b5cb = { package = "fail", version = "0.5", default-features = false }
+fail = { version = "0.4", default-features = false }
 fallible-iterator = { version = "0.2" }
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "84fd7c7428c5f59185aecc56a2e0a006e8e07de1", features = ["copy_key"] }
 fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "84fd7c7428c5f59185aecc56a2e0a006e8e07de1", default-features = false }
@@ -896,8 +895,7 @@ ethnum = { version = "1", default-features = false }
 event-listener = { version = "2", default-features = false }
 expect-test = { version = "1", default-features = false }
 eyre = { version = "0.6" }
-fail-9fbad63c4bcf4a8f = { package = "fail", version = "0.4", default-features = false }
-fail-d8f496e17d97b5cb = { package = "fail", version = "0.5", default-features = false }
+fail = { version = "0.4", default-features = false }
 fallible-iterator = { version = "0.2" }
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "84fd7c7428c5f59185aecc56a2e0a006e8e07de1", features = ["copy_key"] }
 fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "84fd7c7428c5f59185aecc56a2e0a006e8e07de1", default-features = false }

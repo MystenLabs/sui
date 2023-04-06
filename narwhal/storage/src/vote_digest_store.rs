@@ -6,6 +6,7 @@ use config::AuthorityIdentifier;
 use store::reopen;
 use store::rocks::{open_cf, MetricConf, ReadWriteOptions};
 use store::{rocks::DBMap, Map, TypedStoreError};
+use sui_macros::fail_point;
 use types::{Vote, VoteAPI, VoteInfo};
 
 /// The storage for the last votes digests per authority
@@ -35,8 +36,14 @@ impl VoteDigestStore {
 
     /// Insert the vote's basic details into the database for the corresponding
     /// header author key.
+    #[allow(clippy::let_and_return)]
     pub fn write(&self, vote: &Vote) -> Result<(), TypedStoreError> {
-        self.store.insert(&vote.origin(), &vote.into())
+        fail_point!("narwhal-store-before-write");
+
+        let result = self.store.insert(&vote.origin(), &vote.into());
+
+        fail_point!("narwhal-store-after-write");
+        result
     }
 
     /// Read the vote info based on the provided corresponding header author key
