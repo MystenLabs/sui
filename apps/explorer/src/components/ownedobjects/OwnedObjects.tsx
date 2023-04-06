@@ -23,38 +23,45 @@ function OwnerCoins({ id }: { id: string }) {
     const rpc = useRpcClient();
 
     useEffect(() => {
-        rpc.getOwnedObjects({ owner: id })
+        rpc.getOwnedObjects({ owner: id,  options: {
+                    showType: true,
+                    showContent: true,
+                    showDisplay: true,
+                } })
             .then((objects) => {
-                const ids: string[] = objects.data.map(
-                    (obj) => obj.data?.objectId ?? ''
-                );
-                rpc.multiGetObjects({
-                    ids,
-                    options: {
-                        showType: true,
-                        showContent: true,
-                        showDisplay: true,
-                    },
-                }).then((results) => {
-                    setResults(
-                        results.filter((resp) => {
-                            if (getObjectType(resp) === 'moveObject') {
-                                const owner = getObjectOwner(resp);
-                                const addressOwner =
-                                    owner &&
-                                    owner !== 'Immutable' &&
-                                    'AddressOwner' in owner
-                                        ? owner.AddressOwner
-                                        : null;
-                                return (
-                                    resp !== undefined && addressOwner === id
-                                );
-                            }
-                            return resp !== undefined && !Coin.isCoin(resp);
-                        })
-                    );
-                    setIsLoaded(true);
-                });
+                // console.log('objs', {objects})
+                // const ids: string[] = objects.data.map(
+                //     (obj) => obj.data?.objectId ?? ''
+                // );
+                // rpc.multiGetObjects({
+                //     ids,
+                //     options: {
+                //         showType: true,
+                //         showContent: true,
+                //         showDisplay: true,
+                //     },
+                // })
+                
+                // .then((results) => {
+                //     setResults(
+                //         results.filter((resp) => {
+                //             if (getObjectType(resp) === 'moveObject') {
+                //                 const owner = getObjectOwner(resp);
+                //                 const addressOwner =
+                //                     owner &&
+                //                     owner !== 'Immutable' &&
+                //                     'AddressOwner' in owner
+                //                         ? owner.AddressOwner
+                //                         : null;
+                //                 return (
+                //                     resp !== undefined && addressOwner === id
+                //                 );
+                //             }
+                //             return resp !== undefined && !Coin.isCoin(resp);
+                //         })
+                //     );
+                //     setIsLoaded(true);
+                // });
             })
             .catch((err) => {
                 setIsFail(true);

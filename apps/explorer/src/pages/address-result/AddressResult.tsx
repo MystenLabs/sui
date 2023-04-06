@@ -10,6 +10,9 @@ import OwnedCoins from '~/components/OwnedCoins/OwnedCoins';
 import OwnedObjects from '~/components/OwnedObjects/OwnedObjects';
 import { Heading } from '~/ui/Heading';
 import { PageHeader } from '~/ui/PageHeader';
+import { createContext } from 'react';
+
+export const AddressContext = createContext('');
 
 function AddressResult() {
     const { id: addressID } = useParams();
@@ -30,8 +33,11 @@ function AddressResult() {
                         [&>div:first-child]:border-r-[1px] [&>div:first-child]:border-solid 
                         [&>div:first-child]:border-gray-45 [&>div:last-child]:ml-[40px]`}
                     >
-                        <OwnedCoins id={addressID!} />
-                        <OwnedObjects id={addressID!} />
+                        <AddressContext.Provider value={addressID!}>
+                            <OwnedCoins id={addressID!} />
+                            <OwnedObjects id={addressID!} />
+                        </AddressContext.Provider>
+
                     </div>
                 </ErrorBoundary>
             </div>

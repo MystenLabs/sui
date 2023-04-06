@@ -34,13 +34,13 @@ function PaginatedContainer({
     isFail = false,
     isLoaded = true,
 }: PaginatedContainerPropTypes) {
-    if (!isLoaded) {
-        return (
-            <div className="p-[8px]">
-                <LoadingSpinner />
-            </div>
-        );
-    }
+    // if (!isLoaded) {
+    //     return (
+    //         <div className="p-[8px]">
+    //             <LoadingSpinner />
+    //         </div>
+    //     );
+    // }
 
     if (isFail) {
         return (

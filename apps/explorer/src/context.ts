@@ -57,3 +57,15 @@ export function useNetwork(): [string, (network: Network | string) => void] {
 
     return [network, setNetwork];
 }
+
+
+export const AddressContext = createContext('');
+
+// export default function App() {
+//   return (
+//     <UserContext.Provider value="Reed">
+//       <User />
+//     </UserContext.Provider>
+//   )
+// }
+
