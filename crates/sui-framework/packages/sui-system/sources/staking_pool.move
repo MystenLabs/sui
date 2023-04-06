@@ -156,8 +156,8 @@ module sui_system::staking_pool {
         if (is_inactive(pool)) process_pending_stake_withdraw(pool);
 
         // TODO: implement withdraw bonding period here.
-        balance::join(&mut principal_withdraw, rewards_withdraw);
         transfer::public_transfer(coin::from_balance(principal_withdraw, ctx), staker);
+        transfer::public_transfer(coin::from_balance(rewards_withdraw, ctx), staker);
         total_sui_withdraw_amount
     }
 

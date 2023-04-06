@@ -535,8 +535,8 @@ A proportional amount of pool token withdraw is recorded and processed at epoch 
     <b>if</b> (<a href="staking_pool.md#0x3_staking_pool_is_inactive">is_inactive</a>(pool)) <a href="staking_pool.md#0x3_staking_pool_process_pending_stake_withdraw">process_pending_stake_withdraw</a>(pool);
 
     // TODO: implement withdraw bonding period here.
-    <a href="_join">balance::join</a>(&<b>mut</b> principal_withdraw, rewards_withdraw);
     <a href="_public_transfer">transfer::public_transfer</a>(<a href="_from_balance">coin::from_balance</a>(principal_withdraw, ctx), staker);
+    <a href="_public_transfer">transfer::public_transfer</a>(<a href="_from_balance">coin::from_balance</a>(rewards_withdraw, ctx), staker);
     total_sui_withdraw_amount
 }
 </code></pre>
