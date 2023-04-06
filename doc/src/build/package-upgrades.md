@@ -210,7 +210,7 @@ Gas Budget: <GAS-BUDGET-AMOUNT>
 ----- Transaction Effects ----
 Status : Success
 Created Objects:
-  - ID: 0xfb74c669d1e833b4c21ea92a387dc8f6c1ffabef0a47a33a7e89844df75ecb48 , Owner: Immutable
+  - ID: <MODULE-ID> , Owner: Immutable
 Mutated Objects:
   - ID: <GAS-COIN-ID> , Owner: Account Address ( <PUBLISHER-ID> )
   - ID: <UPGRADE-CAP-ID> , Owner: Account Address ( <PUBLISHER-ID> )
@@ -245,7 +245,7 @@ Array [
     },
     Object {
         "type": String("published"),
-        "packageId": String("0xfb74c669d1e833b4c21ea92a387dc8f6c1ffabef0a47a33a7e89844df75ecb48"),
+        "packageId": String("<UPGRADED-PACKAGE-ID>"),
         "version": Number(2),
         "digest": String("8RDsE6kFND2V2gxGiytwxa815mctwxNh7A8YqRS4AJME"),
         "modules": Array [
@@ -274,7 +274,7 @@ The result provides a new ID for the upgraded package. As was the case before th
 [package]
 name = "sui_package"
 version = "0.0.1"
-published-at = "<NEW-PACKAGE-ID>"
+published-at = "<UPGRADED-PACKAGE-ID>"
 
 [addresses]
 sui_package = "<ORIGINAL-PACKAGE-ID>"
