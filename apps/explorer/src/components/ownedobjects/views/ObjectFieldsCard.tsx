@@ -15,7 +15,7 @@ import { useState } from 'react';
 import { ReactComponent as SearchIcon } from '~/assets/SVGIcons/24px/Search.svg';
 import {
     getFieldTypeValue,
-    FieldTypeValue,
+    FieldValueType,
     extractSerializationType,
 } from '~/components/ownedobjects/utils';
 import { FieldItem } from '~/components/ownedobjects/views/FieldItem';
@@ -194,7 +194,7 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
                                                                 >
                                                                     {getFieldTypeValue(
                                                                         fieldType,
-                                                                        FieldTypeValue.NAME
+                                                                        FieldValueType.NAME
                                                                     )}
                                                                 </Text>
                                                             </div>

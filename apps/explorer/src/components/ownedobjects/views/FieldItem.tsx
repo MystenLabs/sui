@@ -7,7 +7,7 @@ import { SyntaxHighlighter } from '~/components/SyntaxHighlighter';
 import {
     extractSerializationType,
     getFieldTypeValue,
-    FieldTypeValue,
+    FieldValueType,
 } from '~/components/ownedobjects/utils';
 import { AddressLink, ObjectLink } from '~/ui/InternalLink';
 import { Link } from '~/ui/Link';
@@ -35,9 +35,9 @@ export function FieldItem<T>({
     }
 
     const normalizedType = extractSerializationType(type);
-    const moduleName = getFieldTypeValue(normalizedType, FieldTypeValue.MODULE);
-    const address = getFieldTypeValue(normalizedType, FieldTypeValue.ADDRESS);
-    const name = getFieldTypeValue(normalizedType, FieldTypeValue.NAME);
+    const moduleName = getFieldTypeValue(normalizedType, FieldValueType.MODULE);
+    const address = getFieldTypeValue(normalizedType, FieldValueType.ADDRESS);
+    const name = getFieldTypeValue(normalizedType, FieldValueType.NAME);
 
     if (typeof value === 'string' && normalizedType === 'Address') {
         return (

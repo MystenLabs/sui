@@ -3,7 +3,7 @@
 
 import { type SuiMoveNormalizedType } from '@mysten/sui.js';
 
-export enum FieldTypeValue {
+export enum FieldValueType {
     ADDRESS = 'address',
     MODULE = 'module',
     NAME = 'name',
@@ -58,7 +58,7 @@ export function extractSerializationType(
 
 export function getFieldTypeValue(
     normalizedType: TypeReference,
-    structFieldName = FieldTypeValue.NAME
+    structFieldName = FieldValueType.NAME
 ) {
     if (
         typeof normalizedType === 'string' ||
