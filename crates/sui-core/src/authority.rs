@@ -3016,7 +3016,7 @@ impl AuthorityState {
     ) -> Vec<ObjectRef> {
         let Some(move_stdlib) = self.compare_system_package(
             MoveStdlib::ID,
-            MoveStdlib::as_modules(),
+            &framework_injection::get_modules::<MoveStdlib>(self.name),
             MoveStdlib::transitive_dependencies(),
             max_binary_format_version,
         ).await else {
@@ -3025,7 +3025,7 @@ impl AuthorityState {
 
         let Some(sui_framework) = self.compare_system_package(
             SuiFramework::ID,
-            SuiFramework::as_modules(),
+            &framework_injection::get_modules::<SuiFramework>(self.name),
             SuiFramework::transitive_dependencies(),
             max_binary_format_version,
         ).await else {
@@ -3034,7 +3034,7 @@ impl AuthorityState {
 
         let Some(sui_system) = self.compare_system_package(
             SuiSystem::ID,
-            &sui_system_injection::get_modules(self.name),
+            &framework_injection::get_modules::<SuiSystem>(self.name),
             SuiSystem::transitive_dependencies(),
             max_binary_format_version,
         ).await else {
@@ -3166,15 +3166,15 @@ impl AuthorityState {
 
             let (bytes, dependencies) = match system_package.0 {
                 MoveStdlib::ID => (
-                    MoveStdlib::as_bytes(),
+                    framework_injection::get_bytes::<MoveStdlib>(self.name),
                     MoveStdlib::transitive_dependencies(),
                 ),
                 SuiFramework::ID => (
-                    SuiFramework::as_bytes(),
+                    framework_injection::get_bytes::<SuiFramework>(self.name),
                     SuiFramework::transitive_dependencies(),
                 ),
                 SuiSystem::ID => (
-                    sui_system_injection::get_bytes(self.name),
+                    framework_injection::get_bytes::<SuiSystem>(self.name),
                     SuiSystem::transitive_dependencies(),
                 ),
                 _ => panic!("Unrecognised framework: {}", system_package.0),
@@ -3621,25 +3621,28 @@ mod tests {
 }
 
 #[cfg(msim)]
-pub mod sui_system_injection {
+pub mod framework_injection {
+    use move_binary_format::CompiledModule;
     use std::cell::RefCell;
+    use std::collections::BTreeMap;
+    use sui_framework::SystemPackage;
+    use sui_types::base_types::{AuthorityName, ObjectID};
 
-    use super::*;
+    type FrameworkOverrideConfig = BTreeMap<ObjectID, PackageOverrideConfig>;
 
     // Thread local cache because all simtests run in a single unique thread.
     thread_local! {
-        static OVERRIDE: RefCell<FrameworkOverrideConfig> = RefCell::new(FrameworkOverrideConfig::Default);
+        static OVERRIDE: RefCell<FrameworkOverrideConfig> = RefCell::new(FrameworkOverrideConfig::default());
     }
 
     type Framework = Vec<CompiledModule>;
 
-    type FrameworkUpgradeCallback =
+    type PackageUpgradeCallback =
         Box<dyn Fn(AuthorityName) -> Option<Framework> + Send + Sync + 'static>;
 
-    enum FrameworkOverrideConfig {
-        Default,
+    enum PackageOverrideConfig {
         Global(Framework),
-        PerValidator(FrameworkUpgradeCallback),
+        PerValidator(PackageUpgradeCallback),
     }
 
     fn compiled_modules_to_bytes(modules: &[CompiledModule]) -> Vec<Vec<u8>> {
@@ -3653,46 +3656,52 @@ pub mod sui_system_injection {
             .collect()
     }
 
-    pub fn set_override(modules: Vec<CompiledModule>) {
-        OVERRIDE.with(|bs| *bs.borrow_mut() = FrameworkOverrideConfig::Global(modules));
+    pub fn set_override<S: SystemPackage>(modules: Vec<CompiledModule>) {
+        OVERRIDE.with(|bs| {
+            bs.borrow_mut()
+                .insert(S::ID, PackageOverrideConfig::Global(modules))
+        });
     }
 
-    pub fn set_override_cb(func: FrameworkUpgradeCallback) {
-        OVERRIDE.with(|bs| *bs.borrow_mut() = FrameworkOverrideConfig::PerValidator(func));
+    pub fn set_override_cb<S: SystemPackage>(func: PackageUpgradeCallback) {
+        OVERRIDE.with(|bs| {
+            bs.borrow_mut()
+                .insert(S::ID, PackageOverrideConfig::PerValidator(func))
+        });
     }
 
-    pub fn get_bytes(name: AuthorityName) -> Vec<Vec<u8>> {
-        OVERRIDE.with(|cfg| match &*cfg.borrow() {
-            FrameworkOverrideConfig::Default => SuiSystem::as_bytes(),
-            FrameworkOverrideConfig::Global(framework) => compiled_modules_to_bytes(framework),
-            FrameworkOverrideConfig::PerValidator(func) => func(name)
+    pub fn get_bytes<S: SystemPackage>(name: AuthorityName) -> Vec<Vec<u8>> {
+        OVERRIDE.with(|cfg| match cfg.borrow().get(&S::ID) {
+            None => S::as_bytes(),
+            Some(PackageOverrideConfig::Global(framework)) => compiled_modules_to_bytes(framework),
+            Some(PackageOverrideConfig::PerValidator(func)) => func(name)
                 .map(|fw| compiled_modules_to_bytes(&fw))
-                .unwrap_or_else(SuiSystem::as_bytes),
+                .unwrap_or_else(S::as_bytes),
         })
     }
 
-    pub fn get_modules(name: AuthorityName) -> Vec<CompiledModule> {
-        OVERRIDE.with(|cfg| match &*cfg.borrow() {
-            FrameworkOverrideConfig::Default => SuiSystem::as_modules().to_owned(),
-            FrameworkOverrideConfig::Global(framework) => framework.clone(),
-            FrameworkOverrideConfig::PerValidator(func) => {
-                func(name).unwrap_or_else(|| SuiSystem::as_modules().to_owned())
+    pub fn get_modules<S: SystemPackage>(name: AuthorityName) -> Vec<CompiledModule> {
+        OVERRIDE.with(|cfg| match cfg.borrow().get(&S::ID) {
+            None => S::as_modules().to_owned(),
+            Some(PackageOverrideConfig::Global(framework)) => framework.clone(),
+            Some(PackageOverrideConfig::PerValidator(func)) => {
+                func(name).unwrap_or_else(|| S::as_modules().to_owned())
             }
         })
     }
 }
 
 #[cfg(not(msim))]
-pub mod sui_system_injection {
+pub mod framework_injection {
     use move_binary_format::CompiledModule;
+    use sui_framework::SystemPackage;
+    use sui_types::base_types::AuthorityName;
 
-    use super::*;
-
-    pub fn get_bytes(_name: AuthorityName) -> Vec<Vec<u8>> {
-        SuiSystem::as_bytes()
+    pub fn get_bytes<S: SystemPackage>(_name: AuthorityName) -> Vec<Vec<u8>> {
+        S::as_bytes()
     }
 
-    pub fn get_modules(_name: AuthorityName) -> Vec<CompiledModule> {
-        SuiSystem::as_modules().to_owned()
+    pub fn get_modules<S: SystemPackage>(_name: AuthorityName) -> Vec<CompiledModule> {
+        S::as_modules().to_owned()
     }
 }

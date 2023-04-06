@@ -64,7 +64,7 @@ mod sim_only_tests {
     use move_core_types::ident_str;
     use std::path::PathBuf;
     use std::sync::Arc;
-    use sui_core::authority::sui_system_injection;
+    use sui_core::authority::framework_injection;
     use sui_framework::{MoveStdlib, SuiFramework, SuiSystem, SystemPackage};
     use sui_framework_build::compiled_package::BuildConfig;
     use sui_json_rpc::api::WriteApiClient;
@@ -366,7 +366,7 @@ mod sim_only_tests {
     async fn run_framework_upgrade(from: &str, to: &str) -> TestCluster {
         ProtocolConfig::poison_get_for_min_version();
 
-        sui_system_injection::set_override(sui_system_modules(to));
+        framework_injection::set_override::<SuiSystem>(sui_system_modules(to));
         TestClusterBuilder::new()
             .with_epoch_duration_ms(20000)
             .with_objects([sui_system_package_object(from)])
@@ -460,7 +460,7 @@ mod sim_only_tests {
         ProtocolConfig::poison_get_for_min_version();
 
         // Even though a new framework is available, the required new protocol version is not.
-        sui_system_injection::set_override(sui_system_modules("compatible"));
+        framework_injection::set_override::<SuiSystem>(sui_system_modules("compatible"));
         let test_cluster = TestClusterBuilder::new()
             .with_epoch_duration_ms(20000)
             .with_objects([sui_system_package_object("base")])
@@ -493,7 +493,7 @@ mod sim_only_tests {
 
         let first = test_cluster.swarm.validators().next().unwrap();
         let first_name = first.name();
-        sui_system_injection::set_override_cb(Box::new(move |name| {
+        framework_injection::set_override_cb::<SuiSystem>(Box::new(move |name| {
             if name == first_name {
                 info!("node {:?} using compatible packages", name.concise());
                 Some(sui_system_modules("base"))
@@ -542,7 +542,7 @@ mod sim_only_tests {
         let mut validators = test_cluster.swarm.validators();
         let first = validators.next().unwrap().name();
         let second = validators.next().unwrap().name();
-        sui_system_injection::set_override_cb(Box::new(move |name| {
+        framework_injection::set_override_cb::<SuiSystem>(Box::new(move |name| {
             if name == first || name == second {
                 Some(sui_system_modules("compatible"))
             } else {
@@ -555,7 +555,7 @@ mod sim_only_tests {
 
     #[sim_test]
     async fn test_safe_mode_recovery() {
-        sui_system_injection::set_override(sui_system_modules("mock_sui_systems/base"));
+        framework_injection::set_override::<SuiSystem>(sui_system_modules("mock_sui_systems/base"));
         let test_cluster = TestClusterBuilder::new()
             .with_epoch_duration_ms(20000)
             // Overrides with a sui system package that would abort during epoch change txn
@@ -628,7 +628,9 @@ mod sim_only_tests {
             .build()
             .await
             .unwrap();
-        sui_system_injection::set_override(sui_system_modules("mock_sui_systems/shallow_upgrade"));
+        framework_injection::set_override::<SuiSystem>(sui_system_modules(
+            "mock_sui_systems/shallow_upgrade",
+        ));
         // Wait for the upgrade to finish. After the upgrade, the new framework will be installed,
         // but the system state object hasn't been upgraded yet.
         let system_state = test_cluster.wait_for_epoch(Some(1)).await;
@@ -660,7 +662,9 @@ mod sim_only_tests {
             .build()
             .await
             .unwrap();
-        sui_system_injection::set_override(sui_system_modules("mock_sui_systems/deep_upgrade"));
+        framework_injection::set_override::<SuiSystem>(sui_system_modules(
+            "mock_sui_systems/deep_upgrade",
+        ));
         // Wait for the upgrade to finish. After the upgrade, the new framework will be installed,
         // but the system state object hasn't been upgraded yet.
         let system_state = test_cluster.wait_for_epoch(Some(1)).await;
@@ -718,7 +722,7 @@ mod sim_only_tests {
             .await
             .unwrap();
         // TODO: Replace the path with the new framework path when we test it for real.
-        sui_system_injection::set_override(sui_system_modules(
+        framework_injection::set_override::<SuiSystem>(sui_system_modules(
             "../../../sui-framework/packages/sui-system",
         ));
         // Wait for the upgrade to finish. After the upgrade, the new framework will be installed,
