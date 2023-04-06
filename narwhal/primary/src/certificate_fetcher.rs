@@ -182,9 +182,19 @@ impl CertificateFetcher {
                     }
                 },
                 Some(result) = self.fetch_certificates_task.join_next(), if !self.fetch_certificates_task.is_empty() => {
-                    // propagate any panics. We don't expect for cancellations to get propagated as
-                    // we gracefully shutdown the component by exiting the loop first
-                    result.unwrap();
+                    match result {
+                        Ok(()) => {},
+                        Err(e) => {
+                            if e.is_cancelled() {
+                                // avoid crashing on ungraceful shutdown
+                            } else if e.is_panic() {
+                                // propagate panics.
+                                std::panic::resume_unwind(e.into_panic());
+                            } else {
+                                panic!("fetch certificates task failed: {e}");
+                            }
+                        },
+                    };
 
                     // Kick start another fetch task after the previous one terminates.
                     // If all targets have been fetched, the new task will clean up the targets and exit.
