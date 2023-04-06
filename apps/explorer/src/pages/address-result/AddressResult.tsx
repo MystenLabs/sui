@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { createContext } from 'react';
 import { useParams } from 'react-router-dom';
 
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
@@ -10,7 +11,6 @@ import OwnedCoins from '~/components/OwnedCoins/OwnedCoins';
 import OwnedObjects from '~/components/OwnedObjectsV2/OwnedObjects';
 import { Heading } from '~/ui/Heading';
 import { PageHeader } from '~/ui/PageHeader';
-import { createContext } from 'react';
 
 export const AddressContext = createContext('');
 
@@ -33,11 +33,8 @@ function AddressResult() {
                         [&>div:first-child]:border-r-[1px] [&>div:first-child]:border-solid 
                         [&>div:first-child]:border-gray-45 [&>div:last-child]:ml-[40px]`}
                     >
-                        <AddressContext.Provider value={addressID!}>
-                            <OwnedCoins id={addressID!} />
-                            <OwnedObjects id={addressID!} />
-                        </AddressContext.Provider>
-
+                        <OwnedCoins id={addressID!} />
+                        <OwnedObjects id={addressID!} />
                     </div>
                 </ErrorBoundary>
             </div>

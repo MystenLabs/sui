@@ -1,47 +1,92 @@
-import { useState, useRef, useEffect } from "react"
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+import { useRpcClient } from "@mysten/core"
+import { type CoinStruct } from "@mysten/sui.js"
+import { useState, useRef, useEffect, useMemo } from "react"
+
 import CoinItem from "./CoinItem"
 
-const CoinsPanel = ({ coins, fetchCoins, nextCursor, hasNextPage }: 
-    { hasNextPage: boolean, nextCursor?: string | null, coins: any[], fetchCoins: (nextCursor: string) => void 
-    }) => {
+import { LoadingSpinner } from "~/ui/LoadingSpinner"
+
+type CoinsPanelProps = {
+    coinType: string,
+    id: string
+}
+
+function CoinsPanel({ coinType, id }: CoinsPanelProps): JSX.Element {
+    const [coinObjects, setCoinObjects] = useState<CoinStruct[]>([])
+    const [isLoading, setIsLoading] = useState(false)
+    const [hasNextPage, setHasNextPage] = useState<boolean>(false)
+    const [nextCursor, setNextCursor] = useState<string | null>()
     const [isVisible, setIsVisible] = useState(false)
+    const rpc = useRpcClient();
+
+    useEffect(() => {
+        setIsLoading(true)
+        rpc.getCoins({ owner: id, coinType, limit: 10 })
+            .then((resp) => {
+                setCoinObjects((coinObjects) => [...coinObjects, ...resp.data]);
+                setHasNextPage(resp.hasNextPage);
+                setNextCursor(resp.nextCursor);
+                setIsLoading(false)
+            })
+    }, [id, coinType, rpc]);
+
     const containerRef = useRef(null)
-    const options = {
+
+    const options = useMemo(() => ({
         root: null,
         rootMargin: "0px",
-        threshold: 0.1
-    }
+        threshold: 1
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }), undefined)
+
+    const observer = useMemo(() => new IntersectionObserver(
+        (entries) => {
+            const last = entries.pop()
+            last && setIsVisible(last.isIntersecting)
+        },
+        options
+    ), [options]);
 
     useEffect(() => {
-        const observer = new IntersectionObserver((entries) => {
-            const entry = entries.pop()
-            entry && setIsVisible(entry.isIntersecting)
-        }, options)
+        const current = containerRef.current
 
-        if (containerRef.current) observer.observe(containerRef.current)
+        if (containerRef.current) {
+            observer.observe(containerRef.current)
+        }
 
         return () => {
-            if (containerRef.current) observer.unobserve(containerRef.current)
+            if (current) {
+                observer.unobserve(current)
+            }
         }
-    }, [containerRef, options])
+    }, [containerRef, observer])
 
     useEffect(() => {
-        if(isVisible && hasNextPage && nextCursor) {
-            console.log('fetching here')
-            fetchCoins(nextCursor)
+        if (isVisible && hasNextPage && nextCursor && !isLoading) {
+            setIsLoading(true)
+            rpc.getCoins({ owner: id, coinType, limit: 10, cursor: nextCursor })
+                .then((resp) => {
+                    setCoinObjects((coinObjects) => [...coinObjects, ...resp.data]);
+                    setHasNextPage(resp.hasNextPage);
+                    setNextCursor(resp.nextCursor);
+                    setIsLoading(false)
+                })
         }
-    }, [isVisible])
+    }, [isVisible, hasNextPage, nextCursor, isLoading, coinType, id, rpc])
 
-    return <div id="coinspanel">
-        {coins.map((obj, index) => {
-            if (index === coins.length - 1) {
-                console.log(obj.coinType)
-                return <div ref={containerRef} id="lastcoin">
-                    <CoinItem key={obj.coinObjectId} coin={obj} />
+    return <div>
+        {coinObjects.map((obj, index) => {
+            if (index === coinObjects.length - 1) {
+                return <div key={obj.coinObjectId} ref={containerRef}>
+                    <CoinItem coin={obj} />
                 </div>
             }
             return <CoinItem key={obj.coinObjectId} coin={obj} />
         })}
+        {isLoading && <LoadingSpinner />}
     </div>
 }
 export default CoinsPanel

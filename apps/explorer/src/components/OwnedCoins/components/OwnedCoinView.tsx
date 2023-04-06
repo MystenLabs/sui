@@ -2,42 +2,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Disclosure } from '@headlessui/react';
-import { useFormatCoin, useRpcClient } from '@mysten/core';
+import { useFormatCoin } from '@mysten/core';
 import { ArrowShowAndHideRight12 } from '@mysten/icons';
-import { CoinStruct, type CoinBalance } from '@mysten/sui.js';
+import { type CoinBalance } from '@mysten/sui.js';
+
+import CoinsPanel from './OwnedCoinsPanel';
 
 import { Text } from '~/ui/Text';
-import { useContext, useEffect, useState } from 'react';
-import { AddressContext } from '~/pages/address-result/AddressResult';
-import CoinsPanel from './OwnedCoinsPanel';
 
 type OwnedCoinViewProps = {
     coin: CoinBalance;
+    id: string
 };
 
-function OwnedCoinView({ coin }: OwnedCoinViewProps) {
-    const [coinObjects, setCoinObjects] = useState<CoinStruct[]>([])
-    const [hasNextPage, setHasNextPage] = useState<boolean>(false)
-    const [nextCursor, setNextCursor] = useState<string | null>()
-    const ownerId = useContext(AddressContext);
-    const rpc = useRpcClient();
+function OwnedCoinView({ coin, id }: OwnedCoinViewProps) {
     const [formattedTotalBalance, symbol] = useFormatCoin(
         coin.totalBalance,
         coin.coinType
     );
-
-    const getCoins = async (nextCursor?: string) => {
-        return rpc.getCoins({ owner: ownerId, coinType: coin.coinType, limit: 10, cursor: nextCursor }).then((resp) => {
-            nextCursor && console.log(resp.data)
-            setCoinObjects([...coinObjects, ...resp.data]);
-            setHasNextPage(resp.hasNextPage);
-            setNextCursor(resp.nextCursor);
-        })
-    }
-
-    useEffect(() => {
-       getCoins()
-    }, [ownerId, rpc]);
 
     return (
         <Disclosure>
@@ -68,10 +50,9 @@ function OwnedCoinView({ coin }: OwnedCoinViewProps) {
 
             <Disclosure.Panel>
                 <div className="flex flex-col gap-1 bg-gray-40 p-3">
-                    <CoinsPanel coins={coinObjects} 
-                    fetchCoins={getCoins} 
-                    nextCursor={nextCursor} 
-                    hasNextPage={hasNextPage} />
+                    <CoinsPanel
+                        id={id}
+                        coinType={coin.coinType} />
                 </div>
             </Disclosure.Panel>
         </Disclosure>
