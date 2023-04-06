@@ -29,6 +29,7 @@ use itertools::izip;
 use mysten_metrics::{spawn_monitored_task, MonitoredFutureExt};
 use prometheus::Registry;
 use sui_config::node::CheckpointExecutorConfig;
+use sui_macros::{fail_point, fail_point_async};
 use sui_types::message_envelope::Message;
 use sui_types::messages::VerifiedExecutableTransaction;
 use sui_types::{
@@ -156,6 +157,7 @@ impl CheckpointExecutor {
                     pending.is_empty(),
                     "Pending checkpoint execution buffer should be empty after processing last checkpoint of epoch",
                 );
+                fail_point_async!("crash");
                 return;
             }
             self.schedule_synced_checkpoints(
@@ -239,6 +241,8 @@ impl CheckpointExecutor {
         if seq % 10000 == 0 {
             info!("Finished syncing and executing checkpoint {}", seq);
         }
+
+        fail_point!("highest-executed-checkpoint");
 
         self.checkpoint_store
             .update_highest_executed_checkpoint(checkpoint)
