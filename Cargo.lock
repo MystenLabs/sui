@@ -9189,6 +9189,7 @@ dependencies = [
  "move-vm-runtime",
  "move-vm-types",
  "once_cell",
+ "serde 1.0.152",
  "smallvec",
  "sui-framework-build",
  "sui-protocol-config",
@@ -9213,6 +9214,20 @@ dependencies = [
  "sui-types",
  "sui-verifier",
  "tempfile",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-framework-snapshot"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "serde 1.0.152",
+ "serde_json",
+ "sui-framework",
+ "sui-protocol-config",
+ "sui-types",
  "workspace-hack",
 ]
 
