@@ -156,6 +156,10 @@
 				"fileName": "build/sui-local-network"
 			},
 			{
+				"label": "Sui Gas Charges",
+				"fileName": "build/sui-gas-charges"
+			},
+			{
 				"label": "Sui Object Display Standard",
 				"fileName": "build/sui-object-display"
 			},
