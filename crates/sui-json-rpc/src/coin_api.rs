@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::anyhow;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -147,19 +148,24 @@ impl CoinReadApi {
             .await?;
         let created: &[(ObjectRef, Owner)] = effect.created();
 
-        for ((id, version, _), _) in created {
-            if let Ok(past_object) = self.state.get_past_object_read(id, *version).await {
-                if let Ok(object) = past_object.into_object() {
-                    if matches!(object.type_(), Some(type_) if type_.is(&object_struct_tag)) {
-                        return Ok(object);
+        let object_id = async {
+            for ((id, version, _), _) in created {
+                if let Ok(past_object) = self.state.get_past_object_read(id, *version).await {
+                    if let Ok(object) = past_object.into_object() {
+                        if matches!(object.type_(), Some(type_) if type_.is(&object_struct_tag)) {
+                            return Ok(*id);
+                        }
                     }
                 }
             }
+            Err(anyhow!(
+                "Cannot find object [{}] from [{}] package event.",
+                object_struct_tag,
+                package_id
+            ))
         }
-        Err(Error::UnexpectedError(format!(
-            "Cannot find object [{}] from [{}] package event.",
-            object_struct_tag, package_id
-        )))
+        .await?;
+        Ok(self.state.get_object_read(&object_id)?.into_object()?)
     }
 }
 
