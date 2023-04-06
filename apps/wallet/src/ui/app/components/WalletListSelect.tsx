@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { cx } from 'class-variance-authority';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 import { useAccounts } from '../hooks/useAccounts';
 import { useDeriveNextAccountMutation } from '../hooks/useDeriveNextAccountMutation';
@@ -30,6 +30,7 @@ export function WalletListSelect({
     disabled = false,
     onChange,
 }: WalletListSelectProps) {
+    const [newAccounts, setNewAccounts] = useState<string[]>([]);
     const accounts = useAccounts();
     const filteredAccounts = useMemo(() => {
         if (visibleValues) {
@@ -77,7 +78,7 @@ export function WalletListSelect({
                                 selected={values.includes(address)}
                                 mode={mode}
                                 disabled={disabled}
-                                isNew={deriveNextAccount.data === address}
+                                isNew={newAccounts.includes(address)}
                             />
                         </li>
                     ))}
@@ -113,6 +114,10 @@ export function WalletListSelect({
                                 onClick={async () => {
                                     const newAccountAddress =
                                         await deriveNextAccount.mutateAsync();
+                                    setNewAccounts([
+                                        ...newAccounts,
+                                        newAccountAddress,
+                                    ]);
                                     if (
                                         !visibleValues ||
                                         visibleValues.includes(

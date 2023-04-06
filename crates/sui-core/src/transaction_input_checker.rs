@@ -3,11 +3,12 @@
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::AuthorityStore;
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
+use sui_adapter::adapter::run_metered_move_bytecode_verifier;
+use sui_macros::checked_arithmetic;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::ObjectRef;
 use sui_types::error::{UserInputError, UserInputResult};
-use sui_types::gas::SuiCostTable;
 use sui_types::messages::{
     TransactionKind, VerifiedExecutableTransaction, VersionedProtocolMessage,
 };
@@ -15,51 +16,39 @@ use sui_types::{
     base_types::{SequenceNumber, SuiAddress},
     error::SuiResult,
     fp_ensure,
-    gas::{self, SuiGasStatus},
-    messages::{
-        InputObjectKind, InputObjects, SingleTransactionKind, TransactionData, TransactionDataAPI,
-    },
+    gas::{SuiCostTable, SuiGasStatus},
+    messages::{InputObjectKind, InputObjects, TransactionData, TransactionDataAPI},
     object::{Object, Owner},
 };
 use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION};
 use tracing::instrument;
 
+checked_arithmetic! {
+
+// Entry point for all checks related to gas.
+// Called on both signing and execution.
+// On success the gas part of the transaction (gas data and gas coins)
+// is verified and good to go
 async fn get_gas_status(
     objects: &[Object],
+    gas: &[ObjectRef],
     epoch_store: &AuthorityPerEpochStore,
     transaction: &TransactionData,
 ) -> SuiResult<SuiGasStatus<'static>> {
-    let tx_kind = transaction.kind();
-
     // Get the first coin (possibly the only one) and make it "the gas coin", then
-    // keep track of all others that can contribute to gas (gas smashing and special
-    // pay transactions).
-    let gas = transaction.gas();
+    // keep track of all others that can contribute to gas (gas smashing).
     let gas_object_ref = gas.get(0).unwrap();
     // all other gas coins
     let more_gas_object_refs = gas[1..].to_vec();
-    // special transaction coins
-    let extra_gas_object_refs = match tx_kind {
-        TransactionKind::Single(SingleTransactionKind::PaySui(p)) => {
-            // gas length here must be one (validate checks that)
-            p.coins.clone().into_iter().skip(gas.len()).collect()
-        }
-        TransactionKind::Single(SingleTransactionKind::PayAllSui(p)) => {
-            // gas length here must be one (validate checks that)
-            p.coins.clone().into_iter().skip(gas.len()).collect()
-        }
-        _ => vec![],
-    };
 
     check_gas(
         objects,
         epoch_store,
         gas_object_ref,
+        more_gas_object_refs,
         transaction.gas_budget(),
         transaction.gas_price(),
         transaction.kind(),
-        more_gas_object_refs,
-        extra_gas_object_refs,
     )
     .await
 }
@@ -70,11 +59,33 @@ pub async fn check_transaction_input(
     epoch_store: &AuthorityPerEpochStore,
     transaction: &TransactionData,
 ) -> SuiResult<(SuiGasStatus<'static>, InputObjects)> {
-    transaction.check_version_supported(epoch_store.protocol_version())?;
+    transaction.check_version_supported(epoch_store.protocol_config())?;
     transaction.validity_check(epoch_store.protocol_config())?;
+    check_non_system_packages_to_be_published(transaction, epoch_store.protocol_config())?;
     let input_objects = transaction.input_objects()?;
-    let objects = store.check_input_objects(&input_objects)?;
-    let gas_status = get_gas_status(&objects, epoch_store, transaction).await?;
+    let objects = store.check_input_objects(&input_objects, epoch_store.protocol_config())?;
+    let gas_status = get_gas_status(&objects, transaction.gas(), epoch_store, transaction).await?;
+    let input_objects = check_objects(transaction, input_objects, objects)?;
+    Ok((gas_status, input_objects))
+}
+
+pub async fn check_transaction_input_with_given_gas(
+    store: &AuthorityStore,
+    epoch_store: &AuthorityPerEpochStore,
+    transaction: &TransactionData,
+    gas_object: Object,
+) -> SuiResult<(SuiGasStatus<'static>, InputObjects)> {
+    transaction.check_version_supported(epoch_store.protocol_config())?;
+    transaction.validity_check_no_gas_check(epoch_store.protocol_config())?;
+    check_non_system_packages_to_be_published(transaction, epoch_store.protocol_config())?;
+    let mut input_objects = transaction.input_objects()?;
+    let mut objects = store.check_input_objects(&input_objects, epoch_store.protocol_config())?;
+
+    let gas_object_ref = gas_object.compute_object_reference();
+    input_objects.push(InputObjectKind::ImmOrOwnedMoveObject(gas_object_ref));
+    objects.push(gas_object);
+
+    let gas_status = get_gas_status(&objects, &[gas_object_ref], epoch_store, transaction).await?;
     let input_objects = check_objects(transaction, input_objects, objects)?;
     Ok((gas_status, input_objects))
 }
@@ -88,26 +99,17 @@ pub(crate) async fn check_dev_inspect_input(
     gas_object: Object,
 ) -> Result<(ObjectRef, InputObjects), anyhow::Error> {
     let gas_object_ref = gas_object.compute_object_reference();
-    kind.validity_check(config, &[gas_object_ref])?;
-    for k in kind.single_transactions() {
-        match k {
-            SingleTransactionKind::TransferObject(_)
-            | SingleTransactionKind::Call(_)
-            | SingleTransactionKind::TransferSui(_)
-            | SingleTransactionKind::Pay(_)
-            | SingleTransactionKind::PaySui(_)
-            | SingleTransactionKind::PayAllSui(_) => (),
-            SingleTransactionKind::Publish(_)
-            | SingleTransactionKind::ChangeEpoch(_)
-            | SingleTransactionKind::Genesis(_)
-            | SingleTransactionKind::ConsensusCommitPrologue(_)
-            | SingleTransactionKind::ProgrammableTransaction(_) => {
-                anyhow::bail!("Transaction kind {} is not supported in dev-inspect", k)
-            }
+    kind.validity_check(config)?;
+    match kind {
+        TransactionKind::ProgrammableTransaction(_) => (),
+        TransactionKind::ChangeEpoch(_)
+        | TransactionKind::Genesis(_)
+        | TransactionKind::ConsensusCommitPrologue(_) => {
+            anyhow::bail!("Transaction kind {} is not supported in dev-inspect", kind)
         }
     }
     let mut input_objects = kind.input_objects()?;
-    let mut objects = store.check_input_objects(&input_objects)?;
+    let mut objects = store.check_input_objects(&input_objects, config)?;
     let mut used_objects: HashSet<SuiAddress> = HashSet::new();
     for object in &objects {
         if !object.is_immutable() {
@@ -137,113 +139,80 @@ pub async fn check_certificate_input(
     assert!(
         cert.data()
             .transaction_data()
-            .check_version_supported(protocol_version)
+            .check_version_supported(epoch_store.protocol_config())
             .is_ok(),
         "Certificate formed with unsupported message version {:?} for protocol version {:?}",
         cert.message_version(),
         protocol_version
     );
 
-    let tx_data = &cert.data().intent_message.value;
+    let tx_data = &cert.data().intent_message().value;
     let input_object_kinds = tx_data.input_objects()?;
     let input_object_data = if tx_data.is_change_epoch_tx() {
         // When changing the epoch, we update a the system object, which is shared, without going
         // through sequencing, so we must bypass the sequence checks here.
-        store.check_input_objects(&input_object_kinds)?
+        store.check_input_objects(&input_object_kinds, epoch_store.protocol_config())?
     } else {
         store.check_sequenced_input_objects(cert.digest(), &input_object_kinds, epoch_store)?
     };
-    let gas_status = get_gas_status(&input_object_data, epoch_store, tx_data).await?;
+    let gas_status =
+        get_gas_status(&input_object_data, tx_data.gas(), epoch_store, tx_data).await?;
     let input_objects = check_objects(tx_data, input_object_kinds, input_object_data)?;
     Ok((gas_status, input_objects))
 }
 
-/// Checking gas budget by fetching the gas object only from the store,
-/// and check whether the balance and budget satisfies the miminum requirement.
-/// Returns the gas object (to be able to reuse it latter) and a gas status
-/// that will be used in the entire lifecycle of the transaction execution.
+/// Check transaction gas data/info and gas coins consistency.
+/// Return the gas status to be used for the lifecycle of the transaction.
 #[instrument(level = "trace", skip_all)]
 async fn check_gas(
     objects: &[Object],
     epoch_store: &AuthorityPerEpochStore,
     gas_payment: &ObjectRef,
-    gas_budget: u64,
-    computation_gas_price: u64,
-    tx_kind: &TransactionKind,
     more_gas_object_refs: Vec<ObjectRef>,
-    additional_objects_for_gas_payment: Vec<ObjectRef>,
+    gas_budget: u64,
+    gas_price: u64,
+    tx_kind: &TransactionKind,
 ) -> SuiResult<SuiGasStatus<'static>> {
+    let protocol_config = epoch_store.protocol_config();
     if tx_kind.is_system_tx() {
-        Ok(SuiGasStatus::new_unmetered())
+        Ok(SuiGasStatus::new_unmetered(protocol_config))
     } else {
-        let gas_object = objects.iter().find(|o| o.id() == gas_payment.0);
-        let gas_object = gas_object.ok_or(UserInputError::ObjectNotFound {
-            object_id: gas_payment.0,
-            version: Some(gas_payment.1),
-        })?;
-
-        // If the transaction is TransferSui, we ensure that the gas balance is enough to cover
-        // both gas budget and the transfer amount.
-        let extra_amount = match tx_kind {
-            TransactionKind::Single(SingleTransactionKind::TransferSui(t)) => {
-                t.amount.unwrap_or_default()
-            }
-            TransactionKind::Single(SingleTransactionKind::PaySui(t)) => t.amounts.iter().sum(),
-            _ => 0,
-        };
-
+        // gas price must be bigger or equal to reference gas price
         let reference_gas_price = epoch_store.reference_gas_price();
-        if computation_gas_price < reference_gas_price {
+        if gas_price < reference_gas_price {
             return Err(UserInputError::GasPriceUnderRGP {
-                gas_price: computation_gas_price,
+                gas_price,
                 reference_gas_price,
             }
             .into());
         }
-        let protocol_config = epoch_store.protocol_config();
-        let cost_table = SuiCostTable::new(protocol_config);
-        let storage_gas_price = protocol_config.storage_gas_price();
 
-        // TODO: We should revisit how we compute gas price and compare to gas budget.
-        let gas_price = std::cmp::max(computation_gas_price, storage_gas_price);
+        // load all gas coins
+        let objects: BTreeMap<_, _> = objects.iter().map(|o| (o.id(), o)).collect();
 
+        let gas_object = objects.get(&gas_payment.0);
+        let gas_object = *gas_object.ok_or(UserInputError::ObjectNotFound {
+            object_id: gas_payment.0,
+            version: Some(gas_payment.1),
+        })?;
         let mut more_gas_objects = vec![];
         for obj_ref in more_gas_object_refs.iter() {
-            let obj = objects.iter().find(|o| o.id() == obj_ref.0);
-            let obj = obj.ok_or(UserInputError::ObjectNotFound {
+            let obj = objects.get(&obj_ref.0);
+            let obj = *obj.ok_or(UserInputError::ObjectNotFound {
                 object_id: obj_ref.0,
                 version: Some(obj_ref.1),
             })?;
-            more_gas_objects.push(obj.clone());
+            more_gas_objects.push(obj);
         }
 
-        let mut additional_objs = vec![];
-        for obj_ref in additional_objects_for_gas_payment.iter() {
-            let obj = objects.iter().find(|o| o.id() == obj_ref.0);
-            let obj = obj.ok_or(UserInputError::ObjectNotFound {
-                object_id: obj_ref.0,
-                version: Some(obj_ref.1),
-            })?;
-            additional_objs.push(obj.clone());
-        }
-
-        gas::check_gas_balance(
-            gas_object,
+        // check balance and coins consistency
+        let cost_table = SuiCostTable::new(protocol_config);
+        cost_table.check_gas_balance(gas_object, more_gas_objects, gas_budget, gas_price)?;
+        Ok(SuiGasStatus::new_with_budget(
             gas_budget,
             gas_price,
-            extra_amount,
-            more_gas_objects,
-            additional_objs,
-            &cost_table,
-        )?;
-
-        gas::start_gas_metering(
-            gas_budget,
-            computation_gas_price,
-            storage_gas_price,
-            cost_table,
-        )
-        .map_err(|e| e.into())
+            protocol_config,
+        ))
     }
 }
 
@@ -256,13 +225,6 @@ pub fn check_objects(
     objects: Vec<Object>,
 ) -> UserInputResult<InputObjects> {
     // We require that mutable objects cannot show up more than once.
-    // In [`SingleTransactionKind::input_objects`] we checked that there is no
-    // duplicate objects in the same SingleTransactionKind. However for a Batch
-    // Transaction, we still need to make sure that the same mutable object don't show
-    // up in more than one SingleTransactionKind.
-    // TODO: We should be able to allow the same shared object to show up
-    // in more than one SingleTransactionKind. We need to ensure that their
-    // version number only increases once at the end of the Batch execution.
     let mut used_objects: HashSet<SuiAddress> = HashSet::new();
     for object in objects.iter() {
         if !object.is_immutable() {
@@ -277,26 +239,8 @@ pub fn check_objects(
 
     // Gather all objects and errors.
     let mut all_objects = Vec::with_capacity(input_objects.len());
-    let transfer_object_ids: HashSet<_> = transaction
-        .kind()
-        .single_transactions()
-        .filter_map(|s| {
-            if let SingleTransactionKind::TransferObject(t) = s {
-                Some(t.object_ref.0)
-            } else {
-                None
-            }
-        })
-        .collect();
 
     for (object_kind, object) in input_objects.into_iter().zip(objects) {
-        if transfer_object_ids.contains(&object.id()) {
-            object.ensure_public_transfer_eligible().map_err(|_e| {
-                UserInputError::TransferObjectWithoutPublicTransferError {
-                    object_id: object.id(),
-                }
-            })?;
-        }
         // For Gas Object, we check the object is owned by gas owner
         // TODO: this is a quadratic check and though limits are low we should do it differently
         let owner_address = if transaction
@@ -434,4 +378,24 @@ fn check_one_object(
         }
     };
     Ok(())
+}
+
+/// Check package verification timeout
+#[instrument(level = "trace", skip_all)]
+pub fn check_non_system_packages_to_be_published(
+    transaction: &TransactionData,
+    protocol_config: &ProtocolConfig,
+) -> UserInputResult<()> {
+    // Only meter non-system TXes
+    if !transaction.is_system_tx() {
+        if let TransactionKind::ProgrammableTransaction(pt) = transaction.kind() {
+            pt.non_system_packages_to_be_published()
+                .try_for_each(|q| run_metered_move_bytecode_verifier(q, protocol_config))
+                .map_err(|e| UserInputError::PackageVerificationTimedout { err: e.to_string() })?;
+        }
+    }
+
+    Ok(())
+}
+
 }

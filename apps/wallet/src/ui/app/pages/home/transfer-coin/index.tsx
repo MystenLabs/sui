@@ -3,19 +3,16 @@
 
 import { useCoinDecimals } from '@mysten/core';
 import { ArrowRight16, ArrowLeft16 } from '@mysten/icons';
-import {
-    getTransactionDigest,
-    SUI_TYPE_ARG,
-    Transaction,
-} from '@mysten/sui.js';
+import { getTransactionDigest } from '@mysten/sui.js';
 import * as Sentry from '@sentry/react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { PreviewTransfer } from './PreviewTransfer';
 import { SendTokenForm } from './SendTokenForm';
+import { createTokenTransferTransaction } from './utils/transaction';
 import { Button } from '_app/shared/ButtonUI';
 import BottomMenuLayout, {
     Content,
@@ -23,9 +20,10 @@ import BottomMenuLayout, {
 } from '_app/shared/bottom-menu-layout';
 import { ActiveCoinsCard } from '_components/active-coins-card';
 import Overlay from '_components/overlay';
-import { parseAmount } from '_helpers';
-import { useSigner } from '_hooks';
 import { trackEvent } from '_src/shared/plausible';
+import { getSignerOperationErrorMessage } from '_src/ui/app/helpers/errorMessages';
+import { useSigner } from '_src/ui/app/hooks';
+import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
 
 import type { SubmitProps } from './SendTokenForm';
 
@@ -36,97 +34,48 @@ function TransferCoinPage() {
         useState<boolean>(false);
     const [formData, setFormData] = useState<SubmitProps>();
     const navigate = useNavigate();
-
     const [coinDecimals] = useCoinDecimals(coinType);
-
     const signer = useSigner();
+    const address = useActiveAddress();
     const queryClient = useQueryClient();
+
+    const transaction = useMemo(() => {
+        if (!coinType || !signer || !formData || !address) return null;
+
+        return createTokenTransferTransaction({
+            coinType,
+            coinDecimals,
+            ...formData,
+        });
+    }, [formData, signer, coinType, address, coinDecimals]);
+
     const executeTransfer = useMutation({
         mutationFn: async () => {
-            if (coinType === null || !signer || !formData) {
+            if (!transaction || !signer) {
                 throw new Error('Missing data');
             }
 
-            const transaction = Sentry.startTransaction({
+            const sentryTransaction = Sentry.startTransaction({
                 name: 'send-tokens',
             });
             try {
                 trackEvent('TransferCoins', {
-                    props: { coinType },
+                    props: { coinType: coinType! },
                 });
 
-                const tx = new Transaction();
-                tx.setGasBudget(formData.gasBudget);
-
-                if (formData.isPayAllSui && coinType === SUI_TYPE_ARG) {
-                    tx.add(
-                        Transaction.Commands.TransferObjects(
-                            [tx.gas],
-                            tx.input(formData.to)
-                        )
-                    );
-                    tx.setGasPayment(
-                        formData.coins
-                            .filter((coin) => coin.coinType === coinType)
-                            .map((coin) => ({
-                                objectId: coin.coinObjectId,
-                                digest: coin.digest,
-                                version: coin.version,
-                            }))
-                    );
-
-                    return signer.signAndExecuteTransaction(tx);
-                }
-
-                const bigIntAmount = parseAmount(formData.amount, coinDecimals);
-                const [primaryCoin, ...coins] = formData.coins.filter(
-                    (coin) => coin.coinType === coinType
-                );
-
-                if (coinType === SUI_TYPE_ARG) {
-                    const coin = tx.add(
-                        Transaction.Commands.SplitCoin(
-                            tx.gas,
-                            tx.input(bigIntAmount)
-                        )
-                    );
-                    tx.add(
-                        Transaction.Commands.TransferObjects(
-                            [coin],
-                            tx.input(formData.to)
-                        )
-                    );
-                } else {
-                    const primaryCoinInput = tx.input(primaryCoin);
-                    if (coins.length) {
-                        // TODO: This could just merge a subset of coins that meet the balance requirements instead of all of them.
-                        tx.add(
-                            Transaction.Commands.MergeCoins(
-                                primaryCoinInput,
-                                coins.map((coin) => tx.input(coin.coinObjectId))
-                            )
-                        );
-                    }
-                    const coin = tx.add(
-                        Transaction.Commands.SplitCoin(
-                            primaryCoinInput,
-                            tx.input(bigIntAmount)
-                        )
-                    );
-                    tx.add(
-                        Transaction.Commands.TransferObjects(
-                            [coin],
-                            tx.input(formData.to)
-                        )
-                    );
-                }
-
-                return signer.signAndExecuteTransaction(tx);
+                return signer.signAndExecuteTransactionBlock({
+                    transactionBlock: transaction,
+                    options: {
+                        showInput: true,
+                        showEffects: true,
+                        showEvents: true,
+                    },
+                });
             } catch (error) {
-                transaction.setTag('failure', true);
+                sentryTransaction.setTag('failure', true);
                 throw error;
             } finally {
-                transaction.finish();
+                sentryTransaction.finish();
             }
         },
         onSuccess: (response) => {
@@ -141,7 +90,7 @@ function TransferCoinPage() {
             toast.error(
                 <div className="max-w-xs overflow-hidden flex flex-col">
                     <small className="text-ellipsis overflow-hidden">
-                        {(error as Error).message || 'Something went wrong'}
+                        {getSignerOperationErrorMessage(error)}
                     </small>
                 </div>
             );
@@ -166,8 +115,8 @@ function TransferCoinPage() {
                                 coinType={coinType}
                                 amount={formData.amount}
                                 to={formData.to}
-                                gasCostEstimation={formData.gasBudget}
                                 approximation={formData.isPayAllSui}
+                                transaction={transaction}
                             />
                         </Content>
                         <Menu
@@ -208,7 +157,6 @@ function TransferCoinPage() {
                             coinType={coinType}
                             initialAmount={formData?.amount || ''}
                             initialTo={formData?.to || ''}
-                            initialGasEstimation={formData?.gasBudget || 0}
                         />
                     </>
                 )}

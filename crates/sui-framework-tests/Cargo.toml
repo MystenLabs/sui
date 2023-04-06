@@ -1,0 +1,19 @@
+[package]
+name = "sui-framework-tests"
+version = "0.1.0"
+edition = "2021"
+authors = ["Mysten Labs <eng@mystenlabs.com>"]
+description = "Runs Move tests for sui-framework"
+license = "Apache-2.0"
+publish = false
+
+[dev-dependencies]
+sui-move = { path = "../sui-move", features = ["unit_test"] }
+sui-framework = { path = "../sui-framework" }
+sui-framework-build = { path = "../sui-framework-build" }
+
+move-cli.workspace = true
+move-package.workspace = true
+
+[dependencies]
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

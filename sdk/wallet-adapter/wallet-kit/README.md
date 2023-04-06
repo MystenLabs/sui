@@ -27,14 +27,16 @@ export function App() {
 You can then add a **Connect Wallet** button to your page:
 
 ```tsx
-import { ConnectButton } from "@mysten/wallet-kit";
+import { ConnectButton, useWalletKit } from "@mysten/wallet-kit";
+import { formatAddress } from "@mysten/sui.js";
 
 function ConnectToWallet() {
+  const { currentAccount } = useWalletKit();
   return (
-    <div>
-      Connect wallet to get started:
-      <ConnectButton />
-    </div>
+    <ConnectButton
+      connectText={"Connect Wallet"}
+      connectedText={`Connected: ${formatAddress(currentAccount.address)}`}
+    />
   );
 }
 ```
@@ -42,27 +44,25 @@ function ConnectToWallet() {
 To get access to the currently connected wallet, use the `useWalletKit()` hook to interact with the wallet, such as proposing transactions:
 
 ```tsx
+import { TransactionBlock } from "@mysten/sui.js";
 import { useWalletKit } from "@mysten/wallet-kit";
 
 export function SendTransaction() {
-  const { signAndExecuteTransaction } = useWalletKit();
+  const { signAndExecuteTransactionBlock } = useWalletKit();
 
   const handleClick = async () => {
-    await signAndExecuteTransaction({
-      kind: "moveCall",
-      data: {
-        packageObjectId: "0x2",
-        module: "devnet_nft",
-        function: "mint",
-        typeArguments: [],
-        arguments: [
-          "name",
-          "capy",
-          "https://cdn.britannica.com/94/194294-138-B2CF7780/overview-capybara.jpg?w=800&h=450&c=crop",
-        ],
-        gasBudget: 10000,
-      },
+    const tx = new TransactionBlock();
+    tx.moveCall({
+      target: "0x2::devnet_nft::mint",
+      arguments: [
+        tx.pure("some name"),
+        tx.pure("some description"),
+        tx.pure(
+          "https://cdn.britannica.com/94/194294-138-B2CF7780/overview-capybara.jpg?w=800&h=450&c=crop"
+        ),
+      ],
     });
+    await signAndExecuteTransactionBlock({ transactionBlock: tx });
   };
 
   return (

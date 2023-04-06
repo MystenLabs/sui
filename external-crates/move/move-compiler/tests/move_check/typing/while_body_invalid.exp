@@ -1,0 +1,50 @@
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/while_body_invalid.move:3:22
+  │
+3 │         while (cond) 0;
+  │                      ^
+  │                      │
+  │                      Invalid loop body
+  │                      Expected: '()'
+  │                      Given: integer
+
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/while_body_invalid.move:4:22
+  │
+4 │         while (cond) false;
+  │                      ^^^^^
+  │                      │
+  │                      Invalid loop body
+  │                      Expected: '()'
+  │                      Given: 'bool'
+
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/while_body_invalid.move:5:22
+  │
+5 │         while (cond) { @0x0 };
+  │                      ^^^^^^^^
+  │                      │ │
+  │                      │ Given: 'address'
+  │                      Invalid loop body
+  │                      Expected: '()'
+
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/while_body_invalid.move:6:22
+  │
+6 │         while (cond) { let x = 0; x };
+  │                      ^^^^^^^^^^^^^^^^
+  │                      │     │
+  │                      │     Given: integer
+  │                      Invalid loop body
+  │                      Expected: '()'
+
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/while_body_invalid.move:7:22
+  │
+7 │         while (cond) { if (cond) 1 else 0 };
+  │                      ^^^^^^^^^^^^^^^^^^^^^^
+  │                      │                  │
+  │                      │                  Given: integer
+  │                      Invalid loop body
+  │                      Expected: '()'
+

@@ -131,8 +131,8 @@
         "name": "What's New",
         "sublist": [
           {
-            "name": "Doc Updates",
-            "url": "/doc-updates"
+            "name": "Sui Migration Guide",
+            "url": "/doc-updates/sui-migration-guide"
           },
           {
             "name": "Sui Breaking Changes",
@@ -175,8 +175,8 @@
             "external": true
           },
           {
-            "name": "Sui Partners",
-            "url": "https://sui.io/ecosystem/",
+            "name": "Sui Move by Example",
+            "url": "https://examples.sui.io",
             "external": true
           },
           {

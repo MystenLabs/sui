@@ -1,15 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import {
+    useGetRollingAverageApys,
+    formatPercentageDisplay,
+} from '@mysten/core';
+import { ArrowRight16 } from '@mysten/icons';
 import cl from 'classnames';
 import { useState, useMemo } from 'react';
 
-import { calculateAPY } from '../calculateAPY';
 import { calculateStakeShare } from '../calculateStakeShare';
 import { useSystemState } from '../useSystemState';
 import { ValidatorListItem } from './ValidatorListItem';
+import { Button } from '_app/shared/ButtonUI';
 import { Content, Menu } from '_app/shared/bottom-menu-layout';
-import Button from '_app/shared/button';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
@@ -26,9 +30,13 @@ export function SelectValidatorCard() {
     const [selectedValidator, setSelectedValidator] = useState<null | string>(
         null
     );
-    const [sortKey, setSortKey] = useState<SortKeys>('stakeShare');
+    const [sortKey, setSortKey] = useState<SortKeys | null>(null);
     const [sortAscending, setSortAscending] = useState(true);
     const { data, isLoading, isError } = useSystemState();
+
+    const { data: rollingAverageApys } = useGetRollingAverageApys(
+        data?.activeValidators.length || null
+    );
 
     const selectValidator = (address: string) => {
         setSelectedValidator((state) => (state !== address ? address : null));
@@ -43,37 +51,49 @@ export function SelectValidatorCard() {
 
     const totalStake = useMemo(() => {
         if (!data) return 0;
-        return data.validators.active_validators.reduce(
-            (acc, curr) => (acc += BigInt(curr.staking_pool.sui_balance)),
+        return data.activeValidators.reduce(
+            (acc, curr) => (acc += BigInt(curr.stakingPoolSuiBalance)),
             0n
         );
     }, [data]);
 
+    const validatorsRandomOrder = useMemo(
+        () =>
+            [...(data?.activeValidators || [])].sort(() => 0.5 - Math.random()),
+        [data?.activeValidators]
+    );
     const validatorList = useMemo(() => {
-        if (!data) return [];
-
-        const sortedAsc = data.validators.active_validators
-            .map((validator) => ({
-                name: validator.metadata.name,
-                address: validator.metadata.sui_address,
-                apy: calculateAPY(validator, +data.epoch),
-                stakeShare: calculateStakeShare(
-                    BigInt(validator.staking_pool.sui_balance),
-                    BigInt(totalStake)
-                ),
-                logo: validator.metadata.image_url,
-            }))
-            .sort((a, b) => {
+        const sortedAsc = validatorsRandomOrder.map((validator) => ({
+            name: validator.name,
+            address: validator.suiAddress,
+            apy: rollingAverageApys?.[validator.suiAddress] ?? null,
+            stakeShare: calculateStakeShare(
+                BigInt(validator.stakingPoolSuiBalance),
+                BigInt(totalStake)
+            ),
+        }));
+        if (sortKey) {
+            sortedAsc.sort((a, b) => {
                 if (sortKey === 'name') {
                     return a[sortKey].localeCompare(b[sortKey], 'en', {
                         sensitivity: 'base',
                         numeric: true,
                     });
                 }
-                return a[sortKey] - b[sortKey];
+                // since apy can be null, fallback to 0
+                return (a[sortKey] || 0) - (b[sortKey] || 0);
             });
-        return sortAscending ? sortedAsc : sortedAsc.reverse();
-    }, [sortAscending, sortKey, data, totalStake]);
+
+            return sortAscending ? sortedAsc : sortedAsc.reverse();
+        }
+        return sortedAsc;
+    }, [
+        validatorsRandomOrder,
+        sortAscending,
+        rollingAverageApys,
+        totalStake,
+        sortKey,
+    ]);
 
     if (isLoading) {
         return (
@@ -169,14 +189,12 @@ export function SelectValidatorCard() {
                                         selectedValidator === validator.address
                                     }
                                     validatorAddress={validator.address}
-                                    validatorName={validator.name}
-                                    label={sortKey}
-                                    value={
-                                        sortKey === 'name'
-                                            ? '-'
-                                            : `${validator[sortKey]}%`
-                                    }
-                                    logo={validator.logo}
+                                    value={formatPercentageDisplay(
+                                        !sortKey || sortKey === 'name'
+                                            ? null
+                                            : validator[sortKey],
+                                        '-'
+                                    )}
                                 />
                             </div>
                         ))}
@@ -188,19 +206,14 @@ export function SelectValidatorCard() {
                     className="w-full px-0 pb-5 mx-0 -bottom-5"
                 >
                     <Button
-                        size="large"
-                        mode="primary"
-                        href={`/stake/new?address=${encodeURIComponent(
+                        size="tall"
+                        variant="primary"
+                        to={`/stake/new?address=${encodeURIComponent(
                             selectedValidator
                         )}`}
-                        className="w-full"
-                    >
-                        Select Amount
-                        <Icon
-                            icon={SuiIcons.ArrowRight}
-                            className="text-captionSmall text-white font-normal"
-                        />
-                    </Button>
+                        text="Select Amount"
+                        after={<ArrowRight16 />}
+                    />
                 </Menu>
             )}
         </div>

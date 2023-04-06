@@ -13,6 +13,7 @@
     "sui-explorer",
     "@mysten/core",
     "sui-wallet-adapter-demo",
-    "wallet-kit-site"
+    "wallet-kit-site",
+    "sponsored-transactions"
   ]
 }

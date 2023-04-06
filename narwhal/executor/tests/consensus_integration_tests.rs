@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use bytes::Bytes;
 use consensus::bullshark::Bullshark;
+use consensus::consensus::ConsensusRound;
 use consensus::metrics::ConsensusMetrics;
 use consensus::Consensus;
 use fastcrypto::hash::Hash;
@@ -21,7 +22,7 @@ use types::{Certificate, PreSubscribedBroadcastSender, Round, TransactionProto};
 #[tokio::test]
 async fn test_recovery() {
     // Create storage
-    let storage = NodeStorage::reopen(temp_dir());
+    let storage = NodeStorage::reopen(temp_dir(), None);
 
     let consensus_store = storage.consensus_store;
     let certificate_store = storage.certificate_store;
@@ -31,27 +32,27 @@ async fn test_recovery() {
     let committee = fixture.committee();
 
     // Make certificates for rounds 1 and 2.
-    let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
+    let ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
     let genesis = Certificate::genesis(&committee)
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
     let (mut certificates, next_parents) =
-        test_utils::make_optimal_certificates(&committee, 1..=2, &genesis, &keys);
+        test_utils::make_optimal_certificates(&committee, 1..=2, &genesis, &ids);
 
     // Make two certificate (f+1) with round 3 to trigger the commits.
     let (_, certificate) =
-        test_utils::mock_certificate(&committee, keys[0].clone(), 3, next_parents.clone());
+        test_utils::mock_certificate(&committee, ids[0], 3, next_parents.clone());
     certificates.push_back(certificate);
-    let (_, certificate) =
-        test_utils::mock_certificate(&committee, keys[1].clone(), 3, next_parents);
+    let (_, certificate) = test_utils::mock_certificate(&committee, ids[1], 3, next_parents);
     certificates.push_back(certificate);
 
     // Spawn the consensus engine and sink the primary channel.
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
-    let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
+    let (tx_consensus_round_updates, _rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
@@ -61,7 +62,6 @@ async fn test_recovery() {
     let bullshark = Bullshark::new(
         committee.clone(),
         consensus_store.clone(),
-        GC_DEPTH,
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
     );

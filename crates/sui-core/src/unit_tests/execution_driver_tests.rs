@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::authority_tests::{send_consensus, send_consensus_no_execution};
-use crate::authority::{AuthorityState, EffectsNotifyRead, MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH};
+use crate::authority::{AuthorityState, EffectsNotifyRead};
 use crate::authority_aggregator::authority_aggregator_tests::{
     create_object_move_transaction, do_cert, do_transaction, extract_cert, get_latest_ref,
     transfer_object_move_transaction,
 };
+use crate::authority_server::{ValidatorService, MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH};
 use crate::safe_client::SafeClient;
 use crate::test_authority_clients::LocalAuthorityClient;
 use crate::test_utils::init_local_authorities;
@@ -95,7 +96,7 @@ async fn pending_exec_notify_ready_certificates() {
         let mut certs = Vec::new();
         while let Some(t) = transactions.pop() {
             let (_cert, effects) = sender_aggregator
-                .execute_transaction(&t)
+                .execute_transaction_block(&t)
                 .await
                 .expect("All ok.");
 
@@ -185,7 +186,7 @@ async fn pending_exec_full() {
         let mut certs = Vec::new();
         while let Some(t) = transactions.pop() {
             let (_cert, effects) = sender_aggregator
-                .execute_transaction(&t)
+                .execute_transaction_block(&t)
                 .await
                 .expect("All ok.");
 
@@ -512,8 +513,6 @@ async fn test_per_object_overload() {
     sleep(Duration::from_secs(1)).await;
 
     // Sign and try execute 1000 txns on the first three authorities. And enqueue them on the last authority.
-    let mut shared_txns = Vec::new();
-    let mut shared_certs = Vec::new();
     // First shared counter txn has input object available on authority 3. So to overload authority 3, 1 more
     // txn is needed.
     let num_txns = MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH + 1;
@@ -539,8 +538,6 @@ async fn test_per_object_overload() {
             send_consensus(authority, &shared_cert).await;
         }
         send_consensus(&authorities[3], &shared_cert).await;
-        shared_txns.push(shared_txn);
-        shared_certs.push(shared_cert);
     }
 
     // Trying to sign a new transaction would now fail.
@@ -554,13 +551,12 @@ async fn test_per_object_overload() {
         &key,
         None,
     );
-    let sign_result = authority_clients[3]
-        .handle_transaction(shared_txn.clone())
-        .await;
-    let message = format!("{sign_result:?}");
+
+    let res = ValidatorService::check_execution_overload(authorities[3].clone(), shared_txn.data());
+    let message = format!("{res:?}");
     assert!(
         message.contains("TooManyTransactionsPendingOnObject"),
-        "Signing should fail with backlogs on the shared counter: {}",
-        message,
+        "{}",
+        message
     );
 }

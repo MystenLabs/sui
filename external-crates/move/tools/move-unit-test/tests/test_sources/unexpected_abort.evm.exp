@@ -1,0 +1,26 @@
+Running Move unit tests
+[ PASS    ] 0x1::M::correct_abort_code
+[ PASS    ] 0x1::M::just_test_failure
+[ FAIL    ] 0x1::M::unexpected_abort
+[ FAIL    ] 0x1::M::unexpected_abort_in_other_function
+[ FAIL    ] 0x1::M::wrong_abort_code
+
+Test failures:
+
+Failures in 0x1::M:
+
+┌── unexpected_abort ──────
+│ Test was not expected to error, but it aborted with code 0 originating in an unknown location rooted here
+└──────────────────
+
+
+┌── unexpected_abort_in_other_function ──────
+│ Test was not expected to error, but it aborted with code 1 originating in an unknown location rooted here
+└──────────────────
+
+
+┌── wrong_abort_code ──────
+│ Test did not abort with expected code. Expected test to abort with code 1, but instead it aborted with code 0 originating in an unknown location rooted here
+└──────────────────
+
+Test result: FAILED. Total tests: 5; passed: 2; failed: 3

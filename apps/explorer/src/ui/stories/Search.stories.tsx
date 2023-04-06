@@ -65,7 +65,7 @@ export const Default: StoryObj<SearchProps> = {
                         isLoading={false}
                         onChange={(e) => setQuery(e.currentTarget.value)}
                         onSelectResult={(result) => setQuery(result.label)}
-                        placeholder="Search Addresses / Objects / Transactions / Epochs"
+                        placeholder="Search Addresses / Objects / Transactions"
                         options={filteredOptions}
                     />
                 </div>

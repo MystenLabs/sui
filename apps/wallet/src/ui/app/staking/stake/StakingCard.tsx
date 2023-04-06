@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useCoinDecimals } from '@mysten/core';
+import { ArrowLeft16 } from '@mysten/icons';
 import {
     getTransactionDigest,
     SUI_TYPE_ARG,
     type SuiAddress,
 } from '@mysten/sui.js';
+import * as Sentry from '@sentry/react';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { Formik } from 'formik';
 import { useCallback, useMemo } from 'react';
@@ -14,35 +16,37 @@ import { toast } from 'react-hot-toast';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
 import Alert from '../../components/alert';
-import { getStakingRewards } from '../getStakingRewards';
+import { getSignerOperationErrorMessage } from '../../helpers/errorMessages';
+import { getDelegationDataByStakeId } from '../getDelegationByStakeId';
+import { getStakeSuiBySuiId } from '../getStakeSuiBySuiId';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { useSystemState } from '../useSystemState';
-import { DelegationState, STATE_TO_COPY } from './../home/DelegationCard';
 import StakeForm from './StakeForm';
 import { UnStakeForm } from './UnstakeForm';
 import { ValidatorFormDetail } from './ValidatorFormDetail';
-import { createValidationSchema } from './validation';
+import {
+    createStakeTransaction,
+    createUnstakeTransaction,
+} from './utils/transaction';
+import { createValidationSchema } from './utils/validation';
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
+import { Button } from '_app/shared/ButtonUI';
 import BottomMenuLayout, {
     Content,
     Menu,
 } from '_app/shared/bottom-menu-layout';
-import Button from '_app/shared/button';
 import { Collapse } from '_app/shared/collapse';
-import Icon, { SuiIcons } from '_components/icon';
+import { Text } from '_app/shared/text';
 import Loading from '_components/loading';
-import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { parseAmount } from '_helpers';
 import { useSigner, useGetCoinBalance } from '_hooks';
 import { Coin } from '_redux/slices/sui-objects/Coin';
 import { trackEvent } from '_src/shared/plausible';
-import { Text } from '_src/ui/app/shared/text';
 
 import type { FormikHelpers } from 'formik';
 
 const initialValues = {
     amount: '',
-    gasBudget: '',
 };
 
 export type FormValues = typeof initialValues;
@@ -51,11 +55,11 @@ function StakingCard() {
     const coinType = SUI_TYPE_ARG;
     const accountAddress = useActiveAddress();
     const { data: suiBalance, isLoading: loadingSuiBalances } =
-        useGetCoinBalance(coinType, accountAddress);
+        useGetCoinBalance(SUI_TYPE_ARG, accountAddress);
     const coinBalance = BigInt(suiBalance?.totalBalance || 0);
     const [searchParams] = useSearchParams();
     const validatorAddress = searchParams.get('address');
-    const stakeIdParams = searchParams.get('staked');
+    const stakeSuiIdParams = searchParams.get('staked');
     const unstake = searchParams.get('unstake') === 'true';
     const { data: allDelegation, isLoading } = useGetDelegatedStake(
         accountAddress || ''
@@ -66,42 +70,25 @@ function StakingCard() {
     const totalTokenBalance = useMemo(() => {
         if (!allDelegation) return 0n;
         // return only the total amount of tokens staked for a specific stakeId
-        if (stakeIdParams) {
-            const balance =
-                allDelegation.find(
-                    ({ staked_sui }) => staked_sui.id.id === stakeIdParams
-                )?.staked_sui.principal.value || 0;
-            return BigInt(balance);
-        }
-        // return aggregate delegation
-        return allDelegation.reduce(
-            (acc, { staked_sui }) => acc + BigInt(staked_sui.principal.value),
-            0n
-        );
-    }, [allDelegation, stakeIdParams]);
+        return getStakeSuiBySuiId(allDelegation, stakeSuiIdParams);
+    }, [allDelegation, stakeSuiIdParams]);
 
-    const delegationData = useMemo(() => {
-        if (!allDelegation) return null;
-
-        return allDelegation.find(
-            ({ staked_sui }) => staked_sui.id.id === stakeIdParams
-        );
-    }, [allDelegation, stakeIdParams]);
+    const stakeData = useMemo(() => {
+        if (!allDelegation || !stakeSuiIdParams) return null;
+        // return delegation data for a specific stakeId
+        return getDelegationDataByStakeId(allDelegation, stakeSuiIdParams);
+    }, [allDelegation, stakeSuiIdParams]);
 
     const coinSymbol = useMemo(
         () => (coinType && Coin.getCoinSymbol(coinType)) || '',
         [coinType]
     );
 
-    const suiEarned = useMemo(() => {
-        if (!system || !delegationData) return 0;
-        return getStakingRewards(
-            system.validators.active_validators,
-            delegationData
-        );
-    }, [delegationData, system]);
+    const suiEarned = stakeData?.estimatedReward || 0;
 
     const [coinDecimals] = useCoinDecimals(coinType);
+    // set minimum stake amount to 1 SUI
+    const minimumStake = parseAmount('1', coinDecimals);
 
     const validationSchema = useMemo(
         () =>
@@ -109,17 +96,17 @@ function StakingCard() {
                 coinBalance,
                 coinSymbol,
                 coinDecimals,
-                unstake
+                unstake,
+                minimumStake
             ),
-        [coinBalance, coinSymbol, coinDecimals, unstake]
+        [coinBalance, coinSymbol, coinDecimals, unstake, minimumStake]
     );
 
     const queryClient = useQueryClient();
     const delegationId = useMemo(() => {
-        if (!delegationData || delegationData.delegation_status === 'Pending')
-            return null;
-        return delegationData.delegation_status.Active.id.id;
-    }, [delegationData]);
+        if (!stakeData || stakeData.status === 'Pending') return null;
+        return stakeData.stakedSuiId;
+    }, [stakeData]);
 
     const navigate = useNavigate();
     const signer = useSigner();
@@ -140,36 +127,52 @@ function StakingCard() {
             trackEvent('Stake', {
                 props: { validator: validatorAddress },
             });
-            const response = await Coin.stakeCoin(
-                signer,
-                amount,
-                validatorAddress
-            );
-            return response;
+            const sentryTransaction = Sentry.startTransaction({
+                name: 'stake',
+            });
+            try {
+                const transactionBlock = createStakeTransaction(
+                    amount,
+                    validatorAddress
+                );
+                return await signer.signAndExecuteTransactionBlock({
+                    transactionBlock,
+                    options: {
+                        showInput: true,
+                        showEffects: true,
+                        showEvents: true,
+                    },
+                });
+            } finally {
+                sentryTransaction.finish();
+            }
         },
     });
+
     const unStakeToken = useMutation({
-        mutationFn: async ({
-            delegationId,
-            stakeSuId,
-        }: {
-            delegationId: string;
-            stakeSuId: string;
-        }) => {
-            if (!delegationId || !stakeSuId || !signer) {
-                throw new Error(
-                    'Failed, missing required field (!principalWithdrawAmount | delegationId | stakeSuId).'
-                );
+        mutationFn: async ({ stakedSuiId }: { stakedSuiId: string }) => {
+            if (!stakedSuiId || !signer) {
+                throw new Error('Failed, missing required field.');
             }
 
             trackEvent('Unstake');
 
-            const response = await Coin.unStakeCoin(
-                signer,
-                delegationId,
-                stakeSuId
-            );
-            return response;
+            const sentryTransaction = Sentry.startTransaction({
+                name: 'stake',
+            });
+            try {
+                const transactionBlock = createUnstakeTransaction(stakedSuiId);
+                return await signer.signAndExecuteTransactionBlock({
+                    transactionBlock,
+                    options: {
+                        showInput: true,
+                        showEffects: true,
+                        showEvents: true,
+                    },
+                });
+            } finally {
+                sentryTransaction.finish();
+            }
         },
     });
 
@@ -188,16 +191,14 @@ function StakingCard() {
                 if (unstake) {
                     // check for delegation data
                     if (
-                        !delegationData ||
-                        !stakeIdParams ||
-                        delegationData.delegation_status === 'Pending'
+                        !stakeData ||
+                        !stakeSuiIdParams ||
+                        stakeData.status === 'Pending'
                     ) {
                         return;
                     }
                     response = await unStakeToken.mutateAsync({
-                        delegationId:
-                            delegationData.delegation_status.Active.id.id,
-                        stakeSuId: stakeIdParams,
+                        stakedSuiId: stakeSuiIdParams,
                     });
 
                     txDigest = getTransactionDigest(response);
@@ -227,16 +228,13 @@ function StakingCard() {
                         from: 'stake',
                     }).toString()}`
                 );
-            } catch (e) {
-                const msg = (e as Error)?.message;
+            } catch (error) {
                 toast.error(
                     <div className="max-w-xs overflow-hidden flex flex-col">
                         <strong>{unstake ? 'Unstake' : 'Stake'} failed</strong>
-                        {msg ? (
-                            <small className="text-ellipsis overflow-hidden">
-                                {msg}
-                            </small>
-                        ) : null}
+                        <small className="text-ellipsis overflow-hidden">
+                            {getSignerOperationErrorMessage(error)}
+                        </small>
                     </div>
                 );
             }
@@ -248,8 +246,8 @@ function StakingCard() {
             unstake,
             queryClient,
             navigate,
-            delegationData,
-            stakeIdParams,
+            stakeData,
+            stakeSuiIdParams,
             unStakeToken,
             stakeToken,
         ]
@@ -267,6 +265,7 @@ function StakingCard() {
                     initialValues={initialValues}
                     validationSchema={validationSchema}
                     onSubmit={onHandleSubmit}
+                    validateOnMount
                 >
                     {({
                         isSubmitting,
@@ -286,12 +285,15 @@ function StakingCard() {
 
                                 {unstake ? (
                                     <UnStakeForm
+                                        stakedSuiId={stakeSuiIdParams!}
                                         coinBalance={totalTokenBalance}
                                         coinType={coinType}
                                         stakingReward={suiEarned}
+                                        epoch={system?.epoch || 0}
                                     />
                                 ) : (
                                     <StakeForm
+                                        validatorAddress={validatorAddress}
                                         coinBalance={coinBalance}
                                         coinType={coinType}
                                         epoch={system?.epoch}
@@ -299,13 +301,13 @@ function StakingCard() {
                                 )}
 
                                 {(unstake || touched.amount) &&
-                                (errors.amount || errors.gasBudget) ? (
+                                errors.amount ? (
                                     <div className="mt-2 flex flex-col flex-nowrap">
                                         <Alert
                                             mode="warning"
                                             className="text-body"
                                         >
-                                            {errors.amount || errors.gasBudget}
+                                            {errors.amount}
                                         </Alert>
                                     </div>
                                 ) : null}
@@ -313,14 +315,7 @@ function StakingCard() {
                                 {!unstake && (
                                     <div className="flex-1 mt-7.5">
                                         <Collapse
-                                            title={
-                                                STATE_TO_COPY[
-                                                    delegationData?.delegation_status ===
-                                                    'Pending'
-                                                        ? DelegationState.WARM_UP
-                                                        : DelegationState.EARNING
-                                                ]
-                                            }
+                                            title="Staking Rewards"
                                             initialIsOpen
                                         >
                                             <Text
@@ -345,37 +340,25 @@ function StakingCard() {
                                 className="w-full px-0 pb-0 mx-0"
                             >
                                 <Button
-                                    size="large"
-                                    mode="neutral"
-                                    href="/stake"
+                                    size="tall"
+                                    variant="secondary"
+                                    to="/stake"
                                     disabled={isSubmitting}
-                                    className="!text-steel-darker w-1/2"
-                                >
-                                    <Icon
-                                        icon={SuiIcons.ArrowLeft}
-                                        className="text-body text-gray-65 font-normal"
-                                    />
-                                    Back
-                                </Button>
+                                    before={<ArrowLeft16 />}
+                                    text="Back"
+                                />
                                 <Button
-                                    size="large"
-                                    mode="primary"
+                                    size="tall"
+                                    variant="primary"
                                     onClick={submitForm}
-                                    className="w-1/2"
                                     disabled={
                                         !isValid ||
                                         isSubmitting ||
                                         (unstake && !delegationId)
                                     }
-                                >
-                                    {isSubmitting ? (
-                                        <LoadingIndicator color="inherit" />
-                                    ) : unstake ? (
-                                        'Unstake Now'
-                                    ) : (
-                                        'Stake Now'
-                                    )}
-                                </Button>
+                                    loading={isSubmitting}
+                                    text={unstake ? 'Unstake Now' : 'Stake Now'}
+                                />
                             </Menu>
                         </BottomMenuLayout>
                     )}

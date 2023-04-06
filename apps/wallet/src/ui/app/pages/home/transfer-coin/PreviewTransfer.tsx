@@ -1,36 +1,39 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useCoinDecimals, useFormatCoin } from '@mysten/core';
+import { useCoinDecimals } from '@mysten/core';
+import { type TransactionBlock } from '@mysten/sui.js';
 
 import { Text } from '_app/shared/text';
-import { IconTooltip } from '_app/shared/tooltip';
 import { TxnAddress } from '_components/receipt-card/TxnAddress';
 import { TxnAmount } from '_components/receipt-card/TxnAmount';
 import { parseAmount } from '_helpers';
-import { useAppSelector } from '_hooks';
-import { GAS_SYMBOL, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
+import { useTransactionGasBudget } from '_src/ui/app/hooks';
+import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
+import { GAS_SYMBOL } from '_src/ui/app/redux/slices/sui-objects/Coin';
 
 export type PreviewTransferProps = {
     coinType: string;
-    gasCostEstimation: number;
     to: string;
     amount: string;
     approximation?: boolean;
+    transaction: TransactionBlock | null;
 };
 
 export function PreviewTransfer({
     coinType,
-    gasCostEstimation,
     to,
     amount,
     approximation,
+    transaction,
 }: PreviewTransferProps) {
-    const accountAddress = useAppSelector(({ account }) => account.address);
+    const accountAddress = useActiveAddress();
     const [decimals] = useCoinDecimals(coinType);
     const amountWithoutDecimals = parseAmount(amount, decimals);
-
-    const [formattedGas] = useFormatCoin(gasCostEstimation, GAS_TYPE_ARG);
+    const { data: gasBudget } = useTransactionGasBudget(
+        accountAddress,
+        transaction
+    );
 
     return (
         <div className="divide-y divide-solid divide-steel/20 divide-x-0 flex flex-col px-2.5 w-full">
@@ -47,12 +50,9 @@ export function PreviewTransfer({
                     <Text variant="body" color="gray-80" weight="medium">
                         Estimated Gas Fees
                     </Text>
-                    <div className="text-gray-60 h-4 items-end flex">
-                        <IconTooltip tip="Estimated Gas Fees" placement="top" />
-                    </div>
                 </div>
                 <Text variant="body" color="gray-90" weight="medium">
-                    {formattedGas} {GAS_SYMBOL}
+                    {gasBudget} {GAS_SYMBOL}
                 </Text>
             </div>
         </div>

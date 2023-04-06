@@ -6,8 +6,10 @@ use async_trait::async_trait;
 use crypto::NetworkPublicKey;
 use tokio::task::JoinHandle;
 use types::{
-    Batch, BatchDigest, FetchCertificatesRequest, FetchCertificatesResponse,
-    GetCertificatesRequest, GetCertificatesResponse,
+    error::LocalClientError, Batch, BatchDigest, FetchBatchesRequest, FetchBatchesResponse,
+    FetchCertificatesRequest, FetchCertificatesResponse, GetCertificatesRequest,
+    GetCertificatesResponse, RequestBatchesRequest, RequestBatchesResponse,
+    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerSynchronizeMessage,
 };
 
 pub trait UnreliableNetwork<Request: Clone + Send + Sync> {
@@ -68,7 +70,7 @@ pub trait PrimaryToPrimaryRpc {
     async fn fetch_certificates(
         &self,
         peer: &NetworkPublicKey,
-        request: FetchCertificatesRequest,
+        request: impl anemo::types::request::IntoRequest<FetchCertificatesRequest> + Send,
     ) -> Result<FetchCertificatesResponse>;
 }
 
@@ -79,10 +81,44 @@ pub trait PrimaryToWorkerRpc {
 }
 
 #[async_trait]
+pub trait PrimaryToWorkerClient {
+    async fn synchronize(
+        &self,
+        worker_name: NetworkPublicKey,
+        request: WorkerSynchronizeMessage,
+    ) -> Result<(), LocalClientError>;
+
+    async fn fetch_batches(
+        &self,
+        worker_name: NetworkPublicKey,
+        request: FetchBatchesRequest,
+    ) -> Result<FetchBatchesResponse, LocalClientError>;
+}
+
+#[async_trait]
+pub trait WorkerToPrimaryClient {
+    async fn report_our_batch(
+        &self,
+        request: WorkerOurBatchMessage,
+    ) -> Result<(), LocalClientError>;
+
+    async fn report_others_batch(
+        &self,
+        request: WorkerOthersBatchMessage,
+    ) -> Result<(), LocalClientError>;
+}
+
+#[async_trait]
 pub trait WorkerRpc {
     async fn request_batch(
         &self,
         peer: NetworkPublicKey,
         batch: BatchDigest,
     ) -> Result<Option<Batch>>;
+
+    async fn request_batches(
+        &self,
+        peer: NetworkPublicKey,
+        request: impl anemo::types::request::IntoRequest<RequestBatchesRequest> + Send,
+    ) -> Result<RequestBatchesResponse>;
 }

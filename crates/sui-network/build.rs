@@ -42,6 +42,15 @@ fn main() -> Result<()> {
         )
         .method(
             Method::builder()
+                .name("submit_certificate")
+                .route_name("SubmitCertificate")
+                .input_type("sui_types::messages::CertifiedTransaction")
+                .output_type("sui_types::messages::SubmitCertificateResponse")
+                .codec_path(codec_path)
+                .build(),
+        )
+        .method(
+            Method::builder()
                 .name("object_info")
                 .route_name("ObjectInfo")
                 .input_type("sui_types::messages::ObjectInfoRequest")
@@ -72,7 +81,7 @@ fn main() -> Result<()> {
                 .name("get_system_state_object")
                 .route_name("GetSystemStateObject")
                 .input_type("sui_types::messages::SystemStateRequest")
-                .output_type("sui_types::sui_system_state::SuiSystemStateInnerBenchmark")
+                .output_type("sui_types::sui_system_state::SuiSystemState")
                 .codec_path(codec_path)
                 .build(),
         )
@@ -133,16 +142,7 @@ fn build_anemo_services(out_dir: &Path) {
                 .name("get_checkpoint_contents")
                 .route_name("GetCheckpointContents")
                 .request_type("sui_types::messages_checkpoint::CheckpointContentsDigest")
-                .response_type("Option<sui_types::messages_checkpoint::CheckpointContents>")
-                .codec_path(codec_path)
-                .build(),
-        )
-        .method(
-            anemo_build::manual::Method::builder()
-                .name("get_transaction_and_effects")
-                .route_name("GetTransactionAndEffects")
-                .request_type("sui_types::base_types::ExecutionDigests")
-                .response_type("Option<(sui_types::messages::Transaction, sui_types::messages::TransactionEffects)>")
+                .response_type("Option<sui_types::messages_checkpoint::FullCheckpointContents>")
                 .codec_path(codec_path)
                 .build(),
         )

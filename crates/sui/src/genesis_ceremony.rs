@@ -5,24 +5,26 @@ use anyhow::Result;
 use camino::Utf8PathBuf;
 use clap::Parser;
 use fastcrypto::encoding::{Encoding, Hex};
-use multiaddr::Multiaddr;
 use std::path::PathBuf;
 use sui_config::{
-    genesis::{Builder, GenesisTuple},
+    genesis::{Builder, UnsignedGenesis},
     SUI_GENESIS_FILENAME,
 };
+use sui_types::multiaddr::Multiaddr;
 use sui_types::{
-    base_types::{ObjectID, SuiAddress},
+    base_types::SuiAddress,
     committee::ProtocolVersion,
     crypto::{
         generate_proof_of_possession, AuthorityKeyPair, KeypairTraits, NetworkKeyPair, SuiKeyPair,
     },
-    object::Object,
+    message_envelope::Message,
 };
 
 use sui_keys::keypair_file::{
     read_authority_keypair_from_file, read_keypair_from_file, read_network_keypair_from_file,
 };
+
+use crate::genesis_inspector::examine_genesis_checkpoint;
 
 #[derive(Parser)]
 pub struct Ceremony {
@@ -45,6 +47,8 @@ impl Ceremony {
 #[derive(Parser)]
 pub enum CeremonyCommand {
     Init,
+
+    ValidateState,
 
     AddValidator {
         #[clap(long)]
@@ -73,16 +77,11 @@ pub enum CeremonyCommand {
         project_url: String,
     },
 
-    AddGasObject {
-        #[clap(long)]
-        address: SuiAddress,
-        #[clap(long)]
-        object_id: Option<ObjectID>,
-        #[clap(long)]
-        value: u64,
-    },
+    ListValidators,
 
     BuildUnsignedCheckpoint,
+
+    ExamineGenesisCheckpoint,
 
     VerifyAndSign {
         #[clap(long)]
@@ -111,6 +110,11 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             builder.save(dir)?;
         }
 
+        CeremonyCommand::ValidateState => {
+            let builder = Builder::load(&dir)?;
+            builder.validate()?;
+        }
+
         CeremonyCommand::AddValidator {
             name,
             validator_key_file,
@@ -136,10 +140,10 @@ pub fn run(cmd: Ceremony) -> Result<()> {
                     name,
                     protocol_key: keypair.public().into(),
                     worker_key: worker_keypair.public().clone(),
-                    account_key: account_keypair.public(),
+                    account_address: SuiAddress::from(&account_keypair.public()),
                     network_key: network_keypair.public().clone(),
-                    gas_price: 1,
-                    commission_rate: 0,
+                    gas_price: sui_config::ValidatorInfo::DEFAULT_GAS_PRICE,
+                    commission_rate: sui_config::ValidatorInfo::DEFAULT_COMMISSION_RATE,
                     network_address,
                     p2p_address,
                     narwhal_primary_address,
@@ -153,30 +157,52 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             builder.save(dir)?;
         }
 
-        CeremonyCommand::AddGasObject {
-            address,
-            object_id,
-            value,
-        } => {
-            let mut builder = Builder::load(&dir)?;
+        CeremonyCommand::ListValidators => {
+            let builder = Builder::load(&dir)?;
 
-            let object_id = object_id.unwrap_or_else(ObjectID::random);
-            let object = Object::with_id_owner_gas_for_testing(object_id, address, value);
-            builder = builder.add_object(object);
+            let mut writer = csv::Writer::from_writer(std::io::stdout());
 
-            builder.save(dir)?;
+            writer.write_record(["validator-name", "account-address"])?;
+
+            let mut validators = builder
+                .validators()
+                .values()
+                .map(|v| {
+                    (
+                        v.info.name().to_lowercase(),
+                        v.info.account_address.to_string(),
+                    )
+                })
+                .collect::<Vec<_>>();
+
+            validators.sort_by_key(|v| v.0.clone());
+
+            for (name, address) in validators {
+                writer.write_record([&name, &address])?;
+            }
         }
 
         CeremonyCommand::BuildUnsignedCheckpoint => {
             let mut builder = Builder::load(&dir)?;
-            let GenesisTuple(_, unsigned_checkpoint, ..) =
-                builder.build_unsigned_genesis_checkpoint();
+            let UnsignedGenesis { checkpoint, .. } = builder.build_unsigned_genesis_checkpoint();
             println!(
                 "Successfully built unsigned checkpoint: {}",
-                unsigned_checkpoint.digest()
+                checkpoint.digest()
             );
 
             builder.save(dir)?;
+        }
+
+        CeremonyCommand::ExamineGenesisCheckpoint => {
+            let builder = Builder::load(&dir)?;
+
+            let Some(unsigned_genesis) = builder.unsigned_genesis_checkpoint() else {
+                return Err(anyhow::anyhow!(
+                    "Unable to examine genesis checkpoint; it hasn't been built yet"
+                ));
+            };
+
+            examine_genesis_checkpoint(unsigned_genesis);
         }
 
         CeremonyCommand::VerifyAndSign { key_file } => {
@@ -194,7 +220,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             }
 
             builder = builder.add_validator_signature(&keypair);
-            let checkpoint = builder.unsigned_genesis_checkpoint().unwrap().1;
+            let UnsignedGenesis { checkpoint, .. } = builder.unsigned_genesis_checkpoint().unwrap();
             builder.save(dir)?;
 
             println!(
@@ -213,8 +239,8 @@ pub fn run(cmd: Ceremony) -> Result<()> {
 
             println!("Successfully built {SUI_GENESIS_FILENAME}");
             println!(
-                "{SUI_GENESIS_FILENAME} sha3-256: {}",
-                Hex::encode(genesis.sha3())
+                "{SUI_GENESIS_FILENAME} blake2b-256: {}",
+                Hex::encode(genesis.hash())
             );
         }
     }
@@ -260,10 +286,10 @@ mod test {
                     name: format!("validator-{i}"),
                     protocol_key: keypair.public().into(),
                     worker_key: worker_keypair.public().clone(),
-                    account_key: account_keypair.public().clone().into(),
+                    account_address: SuiAddress::from(account_keypair.public()),
                     network_key: network_keypair.public().clone(),
-                    gas_price: 1,
-                    commission_rate: 0,
+                    gas_price: ValidatorInfo::DEFAULT_GAS_PRICE,
+                    commission_rate: ValidatorInfo::DEFAULT_COMMISSION_RATE,
                     network_address: utils::new_tcp_network_address(),
                     p2p_address: utils::new_udp_network_address(),
                     narwhal_primary_address: utils::new_udp_network_address(),
@@ -328,6 +354,13 @@ mod test {
                 },
             };
             command.run()?;
+
+            Ceremony {
+                path: Some(dir.path().into()),
+                protocol_version: None,
+                command: CeremonyCommand::ValidateState,
+            }
+            .run()?;
         }
 
         // Build the unsigned checkpoint
@@ -348,6 +381,13 @@ mod test {
                 },
             };
             command.run()?;
+
+            Ceremony {
+                path: Some(dir.path().into()),
+                protocol_version: None,
+                command: CeremonyCommand::ValidateState,
+            }
+            .run()?;
         }
 
         // Finalize the Ceremony and build the Genesis object

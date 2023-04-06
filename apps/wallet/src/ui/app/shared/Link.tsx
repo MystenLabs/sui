@@ -9,14 +9,17 @@ import { ButtonOrLink, type ButtonOrLinkProps } from './utils/ButtonOrLink';
 const styles = cva(
     [
         'transition flex flex-nowrap items-center justify-center outline-none gap-1 w-full',
-        'no-underline bg-transparent p-0 border-none',
-        'text-bodySmall',
+        'bg-transparent p-0 border-none',
         'active:opacity-70',
         'disabled:opacity-40',
         'cursor-pointer group',
     ],
     {
         variants: {
+            underline: {
+                none: 'no-underline',
+                hover: 'no-underline hover:underline',
+            },
             color: {
                 steelDark: [
                     'text-steel-dark hover:text-steel-darker focus:text-steel-darker disabled:text-steel-dark',
@@ -29,6 +32,16 @@ const styles = cva(
             weight: {
                 semibold: 'font-semibold',
                 medium: 'font-medium',
+            },
+            size: {
+                bodySmall: 'text-bodySmall',
+                body: 'text-body',
+                base: 'text-base leading-none',
+                captionSmall: 'text-captionSmall',
+            },
+            mono: {
+                true: 'font-mono',
+                false: '',
             },
         },
     }
@@ -61,11 +74,21 @@ interface LinkProps
 
 export const Link = forwardRef(
     (
-        { before, after, text, color, weight, ...otherProps }: LinkProps,
+        {
+            before,
+            after,
+            text,
+            color,
+            weight,
+            size = 'bodySmall',
+            underline = 'none',
+            mono,
+            ...otherProps
+        }: LinkProps,
         ref: Ref<HTMLAnchorElement | HTMLButtonElement>
     ) => (
         <ButtonOrLink
-            className={styles({ color, weight })}
+            className={styles({ color, weight, size, underline, mono })}
             {...otherProps}
             ref={ref}
         >
@@ -73,7 +96,7 @@ export const Link = forwardRef(
                 <div className={iconStyles({ color })}>{before}</div>
             ) : null}
             {text ? (
-                <div className={'truncate leading-tight'}>{text}</div>
+                <div className={'truncate leading-none'}>{text}</div>
             ) : null}
             {after ? (
                 <div className={iconStyles({ color })}>{after}</div>
@@ -81,5 +104,3 @@ export const Link = forwardRef(
         </ButtonOrLink>
     )
 );
-
-Link.displayName = 'Link';

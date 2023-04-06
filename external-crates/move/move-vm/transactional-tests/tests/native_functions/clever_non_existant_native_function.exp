@@ -1,0 +1,28 @@
+processed 3 tasks
+
+task 0 'publish'. lines 1-5:
+Error: Unable to publish module '00000000000000000000000000000042::Hash'. Got VMError: {
+    major_status: MISSING_DEPENDENCY,
+    sub_status: None,
+    location: 0x42::Hash,
+    indices: [(FunctionHandle, 0)],
+    offsets: [],
+}
+
+task 1 'publish'. lines 7-10:
+Error: Unable to publish module '00000000000000000000000000000043::Hash'. Got VMError: {
+    major_status: MISSING_DEPENDENCY,
+    sub_status: None,
+    location: 0x43::Hash,
+    indices: [(FunctionHandle, 0)],
+    offsets: [],
+}
+
+task 2 'publish'. lines 12-15:
+Error: Unable to publish module '00000000000000000000000000000044::Hash'. Got VMError: {
+    major_status: MISSING_DEPENDENCY,
+    sub_status: None,
+    location: 0x44::Hash,
+    indices: [(FunctionHandle, 0)],
+    offsets: [],
+}

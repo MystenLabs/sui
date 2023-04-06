@@ -15,9 +15,9 @@ use crate::crypto::{
     get_key_pair, get_key_pair_from_bytes, AccountKeyPair, AuthorityKeyPair, AuthoritySignature,
     Signature, SuiAuthoritySignature, SuiSignature,
 };
-use crate::intent::{Intent, IntentMessage};
-use crate::OBJECT_START_VERSION;
+use crate::id::{ID, UID};
 use crate::{gas_coin::GasCoin, object::Object, SUI_FRAMEWORK_ADDRESS};
+use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use sui_protocol_config::ProtocolConfig;
 
 use super::*;
@@ -27,22 +27,33 @@ fn test_signatures() {
     let (addr1, sec1): (_, AccountKeyPair) = get_key_pair();
     let (addr2, _sec2): (_, AccountKeyPair) = get_key_pair();
 
-    let foo = Foo("hello".into());
-    let foox = Foo("hellox".into());
-    let bar = Bar("hello".into());
+    let foo = IntentMessage::new(Intent::sui_transaction(), Foo("hello".into()));
+    let foox = IntentMessage::new(Intent::sui_transaction(), Foo("hellox".into()));
+    let bar = IntentMessage::new(Intent::sui_transaction(), Bar("hello".into()));
 
-    let s = Signature::new(&foo, &sec1);
-    assert!(s.verify(&foo, addr1).is_ok());
-    assert!(s.verify(&foo, addr2).is_err());
-    assert!(s.verify(&foox, addr1).is_err());
-    assert!(s.verify(&bar, addr1).is_err());
+    let s = Signature::new_secure(&foo, &sec1);
+    assert!(s.verify_secure(&foo, addr1).is_ok());
+    assert!(s.verify_secure(&foo, addr2).is_err());
+    assert!(s.verify_secure(&foox, addr1).is_err());
+    assert!(s
+        .verify_secure(
+            &IntentMessage::new(
+                Intent::sui_app(IntentScope::SenderSignedTransaction),
+                Foo("hello".into())
+            ),
+            addr1
+        )
+        .is_err());
+
+    // The struct type is different, but the serialization is the same.
+    assert!(s.verify_secure(&bar, addr1).is_ok());
 }
 
 #[test]
 fn test_signatures_serde() {
     let (_, sec1): (_, AccountKeyPair) = get_key_pair();
     let foo = Foo("hello".into());
-    let s = Signature::new(&foo, &sec1);
+    let s = Signature::new_secure(&IntentMessage::new(Intent::sui_transaction(), foo), &sec1);
 
     let serialized = bcs::to_bytes(&s).unwrap();
     println!("{:?}", serialized);
@@ -113,14 +124,8 @@ fn test_object_id_conversions() {}
 #[test]
 fn test_object_id_display() {
     let hex = SAMPLE_ADDRESS;
-    let upper_hex = SAMPLE_ADDRESS.to_uppercase();
-
     let id = ObjectID::from_str(hex).unwrap();
     assert_eq!(format!("{:?}", id), format!("0x{hex}"));
-    assert_eq!(format!("{:X}", id), upper_hex);
-    assert_eq!(format!("{:x}", id), hex);
-    assert_eq!(format!("{:#x}", id), format!("0x{hex}"));
-    assert_eq!(format!("{:#X}", id), format!("0x{upper_hex}"));
 }
 
 #[test]
@@ -157,6 +162,10 @@ fn test_object_id_from_hex_literal() {
         "0x10000000000000000000000000000000000000000000000000000000000000001",
     )
     .unwrap_err();
+    assert_eq!(
+        "0x0000000000000000000000000000000000000000000000000000000000000001",
+        obj_id.to_hex_uncompressed()
+    );
 }
 
 #[test]
@@ -237,14 +246,8 @@ fn test_object_id_zero_padding() {
 #[test]
 fn test_address_display() {
     let hex = SAMPLE_ADDRESS;
-    let upper_hex = SAMPLE_ADDRESS.to_uppercase();
-
     let id = SuiAddress::from_str(hex).unwrap();
     assert_eq!(format!("{:?}", id), format!("0x{hex}"));
-    assert_eq!(format!("{:X}", id), upper_hex);
-    assert_eq!(format!("{:x}", id), hex);
-    assert_eq!(format!("{:#x}", id), format!("0x{hex}"));
-    assert_eq!(format!("{:#X}", id), format!("0x{upper_hex}"));
 }
 
 #[test]
@@ -307,7 +310,7 @@ fn test_transaction_digest_serde_human_readable() {
 fn test_authority_signature_serde_not_human_readable() {
     let (_, key): (_, AuthorityKeyPair) = get_key_pair();
     let sig = AuthoritySignature::new_secure(
-        &IntentMessage::new(Intent::default(), Foo("some data".to_string())),
+        &IntentMessage::new(Intent::sui_transaction(), Foo("some data".to_string())),
         &0,
         &key,
     );
@@ -323,7 +326,7 @@ fn test_authority_signature_serde_not_human_readable() {
 fn test_authority_signature_serde_human_readable() {
     let (_, key): (_, AuthorityKeyPair) = get_key_pair();
     let sig = AuthoritySignature::new_secure(
-        &IntentMessage::new(Intent::default(), Foo("some data".to_string())),
+        &IntentMessage::new(Intent::sui_transaction(), Foo("some data".to_string())),
         &0,
         &key,
     );
@@ -335,7 +338,6 @@ fn test_authority_signature_serde_human_readable() {
 
 #[test]
 fn test_object_id_from_empty_string() {
-    assert!(ObjectID::try_from("".to_string()).is_err());
     assert!(ObjectID::from_str("").is_err());
 }
 
@@ -356,25 +358,25 @@ fn test_move_object_size_for_gas_metering() {
 fn test_move_package_size_for_gas_metering() {
     let module = file_format::empty_module();
     let package = Object::new_package(
-        vec![module],
-        OBJECT_START_VERSION,
+        &[module],
         TransactionDigest::genesis(),
         ProtocolConfig::get_for_max_version().max_move_package_size(),
+        &[], // empty dependencies for empty package (no modules)
     )
     .unwrap();
     let size = package.object_size_for_gas_metering();
     let serialized = bcs::to_bytes(&package).unwrap();
     // If the following assertion breaks, it's likely you have changed MovePackage's fields.
     // Make sure to adjust `object_size_for_gas_metering()` to include those changes.
-    assert_eq!(size - 2, serialized.len());
+    assert_eq!(size, serialized.len());
 }
 
 // A sample address in hex generated by the current address derivation algorithm.
 #[cfg(test)]
-const SAMPLE_ADDRESS: &str = "32866f0109fa1ba911392dcd2d4260f1d824313316f5467abf64187b3eefa555";
+const SAMPLE_ADDRESS: &str = "af306e86c74e937552df132b41a6cb3af58559f5342c6e82a98f7d1f7a4a9f30";
 const SAMPLE_ADDRESS_VEC: [u8; 32] = [
-    50, 134, 111, 1, 9, 250, 27, 169, 17, 57, 45, 205, 45, 66, 96, 241, 216, 36, 49, 51, 22, 245,
-    70, 122, 191, 100, 24, 123, 62, 239, 165, 85,
+    175, 48, 110, 134, 199, 78, 147, 117, 82, 223, 19, 43, 65, 166, 203, 58, 245, 133, 89, 245, 52,
+    44, 110, 130, 169, 143, 125, 31, 122, 74, 159, 48,
 ];
 
 // Derive a sample address and public key tuple from KeyPair bytes.
@@ -402,4 +404,50 @@ fn test_address_backwards_compatibility() {
                derived address hex value. Note that existing deployments (i.e. devnet) might \
                also require updates if they use fixed values generated by the old algorithm."
     );
+}
+
+// tests translating into and out of a MoveObjectType from a StructTag
+#[test]
+fn move_object_type_consistency() {
+    // Tests consistency properties for the relationship between a StructTag and a MoveObjectType
+    fn assert_consistent(tag: &StructTag) -> MoveObjectType {
+        let ty: MoveObjectType = tag.clone().into();
+        // check into/out of the tag works
+        assert!(ty.is(tag));
+        let ty_as_tag: StructTag = ty.clone().into();
+        assert_eq!(&ty_as_tag, tag);
+        // test same type information
+        assert_eq!(ty.address(), tag.address);
+        assert_eq!(ty.module(), tag.module.as_ident_str());
+        assert_eq!(ty.name(), tag.name.as_ident_str());
+        assert_eq!(&ty.type_params(), &tag.type_params);
+        assert_eq!(ty.module_id(), tag.module_id());
+        // sanity check special cases
+        assert!(!ty.is_gas_coin() || ty.is_coin());
+        let cases = [
+            ty.is_coin(),
+            ty.is_staked_sui(),
+            ty.is_coin_metadata(),
+            ty.is_dynamic_field(),
+        ];
+        assert!(cases.into_iter().map(|is_ty| is_ty as u8).sum::<u8>() <= 1);
+        ty
+    }
+
+    let ty = assert_consistent(&GasCoin::type_());
+    assert!(ty.is_coin());
+    assert!(ty.is_gas_coin());
+    let ty = assert_consistent(&StakedSui::type_());
+    assert!(ty.is_staked_sui());
+    let ty = assert_consistent(&Coin::type_(TypeTag::U64));
+    assert!(ty.is_coin());
+    let ty = assert_consistent(&CoinMetadata::type_(GasCoin::type_()));
+    assert!(ty.is_coin_metadata());
+    let ty = assert_consistent(&DynamicFieldInfo::dynamic_field_type(
+        TypeTag::Struct(Box::new(ID::type_())),
+        TypeTag::U64,
+    ));
+    assert!(ty.is_dynamic_field());
+    assert_consistent(&UID::type_());
+    assert_consistent(&ID::type_());
 }

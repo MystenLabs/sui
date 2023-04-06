@@ -1,0 +1,11 @@
+# NPM dependencies
+node_modules
+# TypeScript build output directory
+out
+# Tests are run within a VS Code application that is downloaded
+# into this directory
+.vscode-test
+# VS Code extension package (VSIX) archive
+*.vsix
+# Yarn cache directory
+yarn.lock

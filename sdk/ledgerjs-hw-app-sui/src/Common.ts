@@ -153,7 +153,7 @@ export class Common {
     ): Promise<Buffer> {
         let rv = Buffer.alloc(0);
         let chunkSize = 230;
-        if (payload instanceof Array) {
+        if (Array.isArray(payload)) {
             payload = Buffer.concat(payload);
         }
         for (let i = 0; i < payload.length; i += chunkSize) {
@@ -184,7 +184,7 @@ export class Common {
         extraData: Map<String, Buffer> = new Map<String, Buffer>()
     ): Promise<Buffer> {
         let chunkSize = 180;
-        if (!(payload instanceof Array)) {
+        if (!Array.isArray(payload)) {
             payload = [payload];
         }
         let parameterList: Buffer[] = [];

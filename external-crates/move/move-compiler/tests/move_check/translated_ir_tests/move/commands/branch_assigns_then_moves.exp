@@ -1,0 +1,12 @@
+error[E06002]: use of unassigned variable
+   ┌─ tests/move_check/translated_ir_tests/move/commands/branch_assigns_then_moves.move:12:13
+   │
+ 7 │         y = move x;
+   │             ------
+   │             │
+   │             The value of 'x' might have been previously moved here.
+   │             Suggestion: use 'copy x' to avoid the move.
+   ·
+12 │     assert!(x == 5, 42);
+   │             ^ Invalid usage of previously moved variable 'x'.
+

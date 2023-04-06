@@ -6,11 +6,14 @@ use std::marker::PhantomData;
 
 use fastcrypto::encoding::Hex;
 use move_core_types::account_address::AccountAddress;
+use move_core_types::language_storage::{StructTag, TypeTag};
 use serde;
 use serde::de::{Deserializer, Error};
 use serde::ser::{Error as SerError, Serializer};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_with::{Bytes, DeserializeAs, SerializeAs};
+
+use crate::{parse_sui_struct_tag, parse_sui_type_tag};
 
 #[inline]
 fn to_custom_error<'de, D, E>(e: E) -> D::Error
@@ -171,4 +174,48 @@ macro_rules! serde_to_from_bytes {
             }
         }
     };
+}
+
+pub struct SuiStructTag;
+
+impl SerializeAs<StructTag> for SuiStructTag {
+    fn serialize_as<S>(value: &StructTag, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let s = value.to_string();
+        s.serialize(serializer)
+    }
+}
+
+impl<'de> DeserializeAs<'de, StructTag> for SuiStructTag {
+    fn deserialize_as<D>(deserializer: D) -> Result<StructTag, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        parse_sui_struct_tag(&s).map_err(D::Error::custom)
+    }
+}
+
+pub struct SuiTypeTag;
+
+impl SerializeAs<TypeTag> for SuiTypeTag {
+    fn serialize_as<S>(value: &TypeTag, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let s = value.to_string();
+        s.serialize(serializer)
+    }
+}
+
+impl<'de> DeserializeAs<'de, TypeTag> for SuiTypeTag {
+    fn deserialize_as<D>(deserializer: D) -> Result<TypeTag, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        parse_sui_type_tag(&s).map_err(D::Error::custom)
+    }
 }

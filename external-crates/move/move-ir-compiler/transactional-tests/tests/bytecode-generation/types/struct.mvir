@@ -1,0 +1,8 @@
+//# print-bytecode --input=module
+// Module names cannot be used as types.
+module 0x1d20.M {
+    f(m: Self.M) {
+    label b0:
+        return;
+    }
+}

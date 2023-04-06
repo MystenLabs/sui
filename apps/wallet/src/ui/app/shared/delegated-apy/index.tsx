@@ -1,15 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { roundFloat, useGetRollingAverageApys } from '@mysten/core';
 import { type SuiAddress } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
-import { calculateAPY } from '../../staking/calculateAPY';
 import { useSystemState } from '../../staking/useSystemState';
 import { Text } from '_app/shared/text';
 import { IconTooltip } from '_app/shared/tooltip';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
-import { roundFloat } from '_helpers';
 
 const APY_DECIMALS = 3;
 
@@ -19,23 +18,23 @@ type DelegatedAPYProps = {
 
 export function DelegatedAPY({ stakedValidators }: DelegatedAPYProps) {
     const { data, isLoading } = useSystemState();
+    const { data: rollingAverageApys } = useGetRollingAverageApys(
+        data?.activeValidators.length || null
+    );
 
     const averageNetworkAPY = useMemo(() => {
-        if (!data) return 0;
-        const validators = data.validators.active_validators;
+        if (!data || !rollingAverageApys) return null;
 
         let stakedAPYs = 0;
 
-        validators.forEach((validator) => {
-            if (stakedValidators.includes(validator.metadata.sui_address)) {
-                stakedAPYs += calculateAPY(validator, +data.epoch);
-            }
+        stakedValidators.forEach((validatorAddress) => {
+            stakedAPYs += rollingAverageApys?.[validatorAddress] || 0;
         });
 
         const averageAPY = stakedAPYs / stakedValidators.length;
 
         return roundFloat(averageAPY || 0, APY_DECIMALS);
-    }, [stakedValidators, data]);
+    }, [data, rollingAverageApys, stakedValidators]);
 
     if (isLoading) {
         return (
@@ -46,7 +45,7 @@ export function DelegatedAPY({ stakedValidators }: DelegatedAPYProps) {
     }
     return (
         <div className="flex gap-0.5 items-center">
-            {averageNetworkAPY > 0 ? (
+            {averageNetworkAPY !== null ? (
                 <>
                     <Text variant="body" weight="semibold" color="steel-dark">
                         {averageNetworkAPY}

@@ -1,0 +1,7 @@
+//# run
+main() {
+label loop:
+    return;
+    assert(false, 42);
+    jump loop;
+}

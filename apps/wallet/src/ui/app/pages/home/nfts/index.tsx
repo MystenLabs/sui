@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Coin } from '@mysten/sui.js';
+import { getObjectDisplay, type SuiObjectData } from '@mysten/sui.js';
 import { Link } from 'react-router-dom';
 
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
@@ -14,12 +14,15 @@ import PageTitle from '_src/ui/app/shared/PageTitle';
 
 function NftsPage() {
     const accountAddress = useActiveAddress();
-    const { data, isLoading, error, isError } =
-        useObjectsOwnedByAddress(accountAddress);
-    const nfts = data?.filter((obj) => !Coin.isCoin(obj));
-
+    const { data, isLoading, error, isError } = useObjectsOwnedByAddress(
+        accountAddress,
+        { options: { showType: true, showDisplay: true } }
+    );
+    const nfts = data?.data
+        ?.filter((resp) => !!getObjectDisplay(resp).data)
+        .map(({ data }) => data as SuiObjectData);
     return (
-        <div className="flex flex-col flex-nowrap items-center gap-4 flex-1">
+        <div className="flex flex-1 flex-col flex-nowrap items-center gap-4">
             <PageTitle title="NFTs" />
             <Loading loading={isLoading}>
                 {isError ? (
@@ -30,9 +33,8 @@ function NftsPage() {
                         <small>{(error as Error).message}</small>
                     </Alert>
                 ) : null}
-
                 {nfts?.length ? (
-                    <div className="grid grid-cols-2 gap-x-3.5 gap-y-4 w-full h-full">
+                    <div className="grid w-full grid-cols-2 gap-x-3.5 gap-y-4">
                         {nfts.map(({ objectId }) => (
                             <Link
                                 to={`/nft-details?${new URLSearchParams({
@@ -54,7 +56,7 @@ function NftsPage() {
                         ))}
                     </div>
                 ) : (
-                    <div className="text-steel-darker font-semibold text-caption flex-1 self-center flex items-center">
+                    <div className="flex flex-1 items-center self-center text-caption font-semibold text-steel-darker">
                         No NFTs found
                     </div>
                 )}

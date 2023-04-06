@@ -19,7 +19,6 @@ More entry functions might be added in the future depending on the use cases.
 -  [Struct `VersionUpdated`](#0x2_display_VersionUpdated)
 -  [Constants](#@Constants_0)
 -  [Function `new`](#0x2_display_new)
--  [Function `new_protected`](#0x2_display_new_protected)
 -  [Function `new_with_fields`](#0x2_display_new_with_fields)
 -  [Function `create_and_keep`](#0x2_display_create_and_keep)
 -  [Function `update_version`](#0x2_display_update_version)
@@ -232,33 +231,6 @@ with data right away via cheaper <code>set_owned</code> method.
 
 </details>
 
-<a name="0x2_display_new_protected"></a>
-
-## Function `new_protected`
-
-Protected method to create an empty Display for the <code>Collectible&lt;T&gt;</code>.
-Similar result can be achieved by freezing the Publisher for the
-Container package.
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="display.md#0x2_display_new_protected">new_protected</a>&lt;T: key&gt;(ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="display.md#0x2_display_new_protected">new_protected</a>&lt;T: key&gt;(ctx: &<b>mut</b> TxContext): <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt; {
-    <a href="display.md#0x2_display_create_internal">create_internal</a>(ctx)
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="0x2_display_new_with_fields"></a>
 
 ## Function `new_with_fields`
@@ -313,7 +285,7 @@ Create a new empty Display<T> object and keep it.
 
 
 <pre><code>entry <b>public</b> <b>fun</b> <a href="display.md#0x2_display_create_and_keep">create_and_keep</a>&lt;T: key&gt;(pub: &Publisher, ctx: &<b>mut</b> TxContext) {
-    <a href="transfer.md#0x2_transfer">transfer</a>(<a href="display.md#0x2_display_new">new</a>&lt;T&gt;(pub, ctx), sender(ctx))
+    <a href="transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(<a href="display.md#0x2_display_new">new</a>&lt;T&gt;(pub, ctx), sender(ctx))
 }
 </code></pre>
 

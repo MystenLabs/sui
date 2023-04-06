@@ -9,8 +9,9 @@ import {
 } from "@mysten/wallet-adapter-base";
 import { localStorageAdapter, StorageAdapter } from "./storage";
 import {
+  SuiSignAndExecuteTransactionBlockInput,
   SuiSignMessageInput,
-  SuiSignTransactionInput,
+  SuiSignTransactionBlockInput,
   WalletAccount,
 } from "@mysten/wallet-standard";
 
@@ -60,18 +61,18 @@ export interface WalletKitCore {
   signMessage(
     messageInput: OptionalProperties<SuiSignMessageInput, "account">
   ): ReturnType<WalletAdapter["signMessage"]>;
-  signTransaction: (
+  signTransactionBlock: (
     transactionInput: OptionalProperties<
-      SuiSignTransactionInput,
+      SuiSignTransactionBlockInput,
       "chain" | "account"
     >
-  ) => ReturnType<WalletAdapter["signTransaction"]>;
-  signAndExecuteTransaction: (
+  ) => ReturnType<WalletAdapter["signTransactionBlock"]>;
+  signAndExecuteTransactionBlock: (
     transactionInput: OptionalProperties<
-      SuiSignTransactionInput,
+      SuiSignAndExecuteTransactionBlockInput,
       "chain" | "account"
     >
-  ) => ReturnType<WalletAdapter["signAndExecuteTransaction"]>;
+  ) => ReturnType<WalletAdapter["signAndExecuteTransactionBlock"]>;
 }
 
 export type SubscribeHandler = (state: WalletKitCoreState) => void;
@@ -270,7 +271,7 @@ export function createWalletKitCore({
       });
     },
 
-    async signTransaction(transactionInput) {
+    async signTransactionBlock(transactionInput) {
       if (!internalState.currentWallet || !internalState.currentAccount) {
         throw new Error(
           "No wallet is currently connected, cannot call `signTransaction`."
@@ -283,17 +284,17 @@ export function createWalletKitCore({
       if (!chain) {
         throw new Error("Missing chain");
       }
-      return internalState.currentWallet.signTransaction({
+      return internalState.currentWallet.signTransactionBlock({
         ...transactionInput,
         account,
         chain,
       });
     },
 
-    async signAndExecuteTransaction(transactionInput) {
+    async signAndExecuteTransactionBlock(transactionInput) {
       if (!internalState.currentWallet || !internalState.currentAccount) {
         throw new Error(
-          "No wallet is currently connected, cannot call `signAndExecuteTransaction`."
+          "No wallet is currently connected, cannot call `signAndExecuteTransactionBlock`."
         );
       }
       const {
@@ -303,7 +304,7 @@ export function createWalletKitCore({
       if (!chain) {
         throw new Error("Missing chain");
       }
-      return internalState.currentWallet.signAndExecuteTransaction({
+      return internalState.currentWallet.signAndExecuteTransactionBlock({
         ...transactionInput,
         account,
         chain,

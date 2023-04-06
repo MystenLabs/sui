@@ -6,7 +6,7 @@ use fastcrypto::encoding::{Encoding, Hex};
 use std::collections::HashMap;
 use std::env;
 use std::sync::Arc;
-use sui_faucet::{Faucet, FaucetResponse, SimpleFaucet};
+use sui_faucet::{Faucet, FaucetConfig, FaucetResponse, SimpleFaucet};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::KeypairTraits;
 use tracing::{debug, info, info_span, Instrument};
@@ -31,10 +31,12 @@ impl FaucetClientFactory {
                     .await;
 
                 let prom_registry = prometheus::Registry::new();
+                let config = FaucetConfig::default();
                 let simple_faucet = SimpleFaucet::new(
                     wallet_context,
                     &prom_registry,
                     &cluster.config_directory().join("faucet.wal"),
+                    config,
                 )
                 .await
                 .unwrap();
@@ -114,7 +116,7 @@ impl FaucetClient for LocalFaucetClient {
     async fn request_sui_coins(&self, request_address: SuiAddress) -> FaucetResponse {
         let receipt = self
             .simple_faucet
-            .send(Uuid::new_v4(), request_address, &[200000; 5])
+            .send(Uuid::new_v4(), request_address, &[200_000_000_000; 5])
             .await
             .unwrap_or_else(|err| panic!("Failed to get gas tokens with error: {}", err));
 

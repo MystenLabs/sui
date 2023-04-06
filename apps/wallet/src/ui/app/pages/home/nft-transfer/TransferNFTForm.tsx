@@ -2,11 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ArrowRight16 } from '@mysten/icons';
-import {
-    getTransactionDigest,
-    SUI_TYPE_ARG,
-    Transaction,
-} from '@mysten/sui.js';
+import { getTransactionDigest, TransactionBlock } from '@mysten/sui.js';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Form, Field, Formik } from 'formik';
 import { toast } from 'react-hot-toast';
@@ -21,11 +17,8 @@ import BottomMenuLayout, {
 } from '_app/shared/bottom-menu-layout';
 import { Text } from '_app/shared/text';
 import { AddressInput } from '_components/address-input';
-import Alert from '_components/alert';
-import Loading from '_components/loading';
-import { useGetCoinBalance, useSigner } from '_hooks';
-import { DEFAULT_NFT_TRANSFER_GAS_FEE } from '_redux/slices/sui-objects/Coin';
-import { useGasBudgetInMist } from '_src/ui/app/hooks/useGasBudgetInMist';
+import { useSigner } from '_hooks';
+import { getSignerOperationErrorMessage } from '_src/ui/app/helpers/errorMessages';
 
 export function TransferNFTForm({ objectId }: { objectId: string }) {
     const activeAddress = useActiveAddress();
@@ -33,27 +26,25 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
         activeAddress || '',
         objectId
     );
-    const { data: coinBalance, isLoading: loadingBalances } = useGetCoinBalance(
-        SUI_TYPE_ARG,
-        activeAddress
-    );
     const signer = useSigner();
     const queryClient = useQueryClient();
     const navigate = useNavigate();
     const transferNFT = useMutation({
-        mutationFn: (to: string) => {
-            if (!to || !signer || isInsufficientGas) {
+        mutationFn: async (to: string) => {
+            if (!to || !signer) {
                 throw new Error('Missing data');
             }
-            const tx = new Transaction();
-            tx.setGasBudget(DEFAULT_NFT_TRANSFER_GAS_FEE);
-            tx.add(
-                Transaction.Commands.TransferObjects(
-                    [tx.input(objectId)],
-                    tx.input(to)
-                )
-            );
-            return signer.signAndExecuteTransaction(tx);
+            const tx = new TransactionBlock();
+            tx.transferObjects([tx.object(objectId)], tx.pure(to));
+
+            return signer.signAndExecuteTransactionBlock({
+                transactionBlock: tx,
+                options: {
+                    showInput: true,
+                    showEffects: true,
+                    showEvents: true,
+                },
+            });
         },
         onSuccess: (response) => {
             queryClient.invalidateQueries(['object', objectId]);
@@ -69,85 +60,63 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
             toast.error(
                 <div className="max-w-xs overflow-hidden flex flex-col">
                     <small className="text-ellipsis overflow-hidden">
-                        {(error as Error).message || 'Something went wrong'}
+                        {getSignerOperationErrorMessage(error)}
                     </small>
                 </div>
             );
         },
     });
 
-    const maxGasCoinBalance = coinBalance?.totalBalance || BigInt(0);
-    const { gasBudget: gasBudgetInMist } = useGasBudgetInMist(
-        DEFAULT_NFT_TRANSFER_GAS_FEE
-    );
-    const isInsufficientGas = maxGasCoinBalance < BigInt(gasBudgetInMist || 0);
     return (
-        <Loading loading={loadingBalances}>
-            <Formik
-                initialValues={{
-                    to: '',
-                }}
-                validateOnMount
-                validationSchema={validationSchema}
-                onSubmit={({ to }) => transferNFT.mutateAsync(to)}
-            >
-                {({ isValid }) => (
-                    <Form autoComplete="off" className="h-full">
-                        <BottomMenuLayout className="h-full">
-                            <Content>
-                                <div className="flex gap-2.5 flex-col">
-                                    <div className="px-2.5 tracking-wider">
-                                        <Text
-                                            variant="caption"
-                                            color="steel-dark"
-                                            weight="semibold"
-                                        >
-                                            Enter Recipient Address
-                                        </Text>
-                                    </div>
-                                    <div className="w-full flex relative items-center flex-col">
-                                        <Field
-                                            component={AddressInput}
-                                            allowNegative={false}
-                                            name="to"
-                                            placeholder="Enter Address"
-                                        />
-                                    </div>
+        <Formik
+            initialValues={{
+                to: '',
+            }}
+            validateOnMount
+            validationSchema={validationSchema}
+            onSubmit={({ to }) => transferNFT.mutateAsync(to)}
+        >
+            {({ isValid }) => (
+                <Form autoComplete="off" className="h-full">
+                    <BottomMenuLayout className="h-full">
+                        <Content>
+                            <div className="flex gap-2.5 flex-col">
+                                <div className="px-2.5 tracking-wider">
+                                    <Text
+                                        variant="caption"
+                                        color="steel-dark"
+                                        weight="semibold"
+                                    >
+                                        Enter Recipient Address
+                                    </Text>
                                 </div>
-                                {isInsufficientGas ? (
-                                    <div className="mt-2.5">
-                                        <Alert>
-                                            Insufficient balance, no individual
-                                            coin found with enough balance to
-                                            cover for the transfer cost
-                                        </Alert>
-                                    </div>
-                                ) : null}
-                            </Content>
-                            <Menu
-                                stuckClass="sendCoin-cta"
-                                className="w-full px-0 pb-0 mx-0 gap-2.5"
-                            >
-                                <Button
-                                    type="submit"
-                                    variant="primary"
-                                    loading={transferNFT.isLoading}
-                                    disabled={
-                                        !isValid ||
-                                        loadingBalances ||
-                                        isInsufficientGas ||
-                                        !gasBudgetInMist ||
-                                        loadingBalances
-                                    }
-                                    size="tall"
-                                    text="Send NFT Now"
-                                    after={<ArrowRight16 />}
-                                />
-                            </Menu>
-                        </BottomMenuLayout>
-                    </Form>
-                )}
-            </Formik>
-        </Loading>
+                                <div className="w-full flex relative items-center flex-col">
+                                    <Field
+                                        component={AddressInput}
+                                        allowNegative={false}
+                                        name="to"
+                                        placeholder="Enter Address"
+                                    />
+                                </div>
+                            </div>
+                        </Content>
+                        <Menu
+                            stuckClass="sendCoin-cta"
+                            className="w-full px-0 pb-0 mx-0 gap-2.5"
+                        >
+                            <Button
+                                type="submit"
+                                variant="primary"
+                                loading={transferNFT.isLoading}
+                                disabled={!isValid}
+                                size="tall"
+                                text="Send NFT Now"
+                                after={<ArrowRight16 />}
+                            />
+                        </Menu>
+                    </BottomMenuLayout>
+                </Form>
+            )}
+        </Formik>
     );
 }

@@ -1,0 +1,21 @@
+//# publish
+module 0x1.M {
+    public id<T>(x: T): T {
+    label b0:
+        return move(x);
+    }
+}
+
+
+
+//# run
+import 0x1.M;
+
+main() {
+    let x: u64;
+    let y: u64;
+label b0:
+    y = 42;
+    x = M.id<u64>(move(y));
+    return;
+}

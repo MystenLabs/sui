@@ -63,10 +63,7 @@ function SingleCoinView({
     const totalBalance =
         subObjList[0]._isCoin &&
         subObjList.every((el) => el.balance !== undefined)
-            ? subObjList.reduce(
-                  (prev, current) => prev + current.balance!,
-                  Coin.getZero()
-              )
+            ? subObjList.reduce((prev, current) => prev + current.balance!, 0n)
             : null;
 
     const extractedCoinType = Coin.getCoinType(coinType);

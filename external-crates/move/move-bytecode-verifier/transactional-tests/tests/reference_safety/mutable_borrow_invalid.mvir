@@ -1,0 +1,44 @@
+//# publish
+module 0x1.M {
+    struct S { f: u64, g: u64, h: u64 }
+
+
+    t1(root: &mut Self.S, cond: bool) {
+        let x: &mut u64;
+    label b0:
+        jump_if (move(cond)) b2;
+    label b1:
+        x = &mut copy(root).S::g;
+        jump b3;
+    label b2:
+        x = &mut copy(root).S::f;
+    label b3:
+        *(&mut copy(root).S::f) = 1; // INVALID x is still borrowing f
+        return;
+    }
+}
+
+//# publish
+module 0x1.M2 {
+
+    struct S { f: u64, g: u64, h: u64 }
+
+    t2(root: &mut Self.S, cond: bool) {
+        let x: &mut u64;
+    label b0:
+        jump_if (move(cond)) b2;
+    label b1:
+        x = &mut copy(root).S::g;
+        jump b3;
+    label b2:
+        x = &mut copy(root).S::f;
+    label b3:
+        Self.foo(move(x), &mut copy(root).S::f); // INVALID x and &mut root.f overlap
+        return;
+    }
+
+    foo(x: &mut u64, y: &mut u64) {
+    label b0:
+        return;
+    }
+}

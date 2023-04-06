@@ -19,7 +19,7 @@ pub fn verify_certificates(c: &mut Criterion) {
             .committee_size(committee_size.try_into().unwrap())
             .build();
         let committee = fixture.committee();
-        let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
+        let ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
 
         // process certificates for rounds, check we don't grow the dag too much
         let genesis = Certificate::genesis(&committee)
@@ -27,7 +27,7 @@ pub fn verify_certificates(c: &mut Criterion) {
             .map(|x| x.digest())
             .collect::<BTreeSet<_>>();
         let (certificates, _next_parents) =
-            make_optimal_certificates(&committee, 1..=1, &genesis, &keys);
+            make_optimal_certificates(&committee, 1..=1, &genesis, &ids);
         let certificate = certificates.front().unwrap().clone();
 
         let data_size: usize = bcs::to_bytes(&certificate).unwrap().len();

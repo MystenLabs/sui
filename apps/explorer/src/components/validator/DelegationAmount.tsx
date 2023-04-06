@@ -16,9 +16,12 @@ export function DelegationAmount({ amount, isStats }: DelegationAmountProps) {
     const [formattedAmount, symbol] = useFormatCoin(amount, SUI_TYPE_ARG);
 
     return isStats ? (
-        <div className="break-all">
-            <Heading as="div" variant="heading2/semibold" color="steel-darker">
+        <div className="flex items-end gap-1.5 break-all">
+            <Heading as="div" variant="heading3/semibold" color="steel-darker">
                 {formattedAmount}
+            </Heading>
+            <Heading variant="heading4/medium" color="steel-darker">
+                {symbol}
             </Heading>
         </div>
     ) : (

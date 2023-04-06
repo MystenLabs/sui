@@ -6,10 +6,11 @@ import {
   RawSigner,
   getExecutionStatusType,
   SuiSystemStateUtil,
+  SUI_TYPE_ARG,
 } from '../../src';
-import { DEFAULT_GAS_BUDGET, setup, TestToolbox } from './utils/setup';
+import { setup, TestToolbox } from './utils/setup';
 
-const DEFAULT_STAKED_AMOUNT = 1;
+const DEFAULT_STAKE_AMOUNT = 1000000000;
 
 describe('Governance API', () => {
   let toolbox: TestToolbox;
@@ -20,36 +21,30 @@ describe('Governance API', () => {
     signer = new RawSigner(toolbox.keypair, toolbox.provider);
   });
 
-  it('test requestAddDelegation', async () => {
-    const result = await addDelegation(signer);
+  it('test requestAddStake', async () => {
+    const result = await addStake(signer);
     expect(getExecutionStatusType(result)).toEqual('success');
   });
 
   it('test getDelegatedStakes', async () => {
-    const stakes = await toolbox.provider.getDelegatedStakes(toolbox.address());
+    await addStake(signer);
+    const stakes = await toolbox.provider.getStakes({
+      owner: toolbox.address(),
+    });
+    const stakesById = await toolbox.provider.getStakesByIds({
+      stakedSuiIds: [stakes[0].stakes[0].stakedSuiId],
+    });
     expect(stakes.length).greaterThan(0);
+    expect(stakesById[0].stakes[0]).toEqual(stakes[0].stakes[0]);
   });
 
-  it('test requestWithdrawDelegation', async () => {
+  it('test requestWithdrawStake', async () => {
     // TODO: implement this
-  });
-
-  it('test requestSwitchDelegation', async () => {
-    // TODO: implement this
-  });
-
-  it('test getValidators', async () => {
-    const validators = await toolbox.provider.getValidators();
-    expect(validators.length).greaterThan(0);
   });
 
   it('test getCommitteeInfo', async () => {
-    const committeeInfo = await toolbox.provider.getCommitteeInfo(0);
+    const committeeInfo = await toolbox.provider.getCommitteeInfo({ epoch: 0 });
     expect(committeeInfo.validators?.length).greaterThan(0);
-  });
-
-  it('test getSuiSystemState', async () => {
-    await toolbox.provider.getSuiSystemState();
   });
 
   it('test getLatestSuiSystemState', async () => {
@@ -57,21 +52,26 @@ describe('Governance API', () => {
   });
 });
 
-async function addDelegation(signer: RawSigner) {
-  const coins = await signer.provider.getGasObjectsOwnedByAddress(
-    await signer.getAddress(),
-  );
+async function addStake(signer: RawSigner) {
+  const coins = await signer.provider.getCoins({
+    owner: await signer.getAddress(),
+    coinType: SUI_TYPE_ARG,
+  });
 
-  const validators = await signer.provider.getValidators();
+  const system = await signer.provider.getLatestSuiSystemState();
+  const validators = system.activeValidators;
 
-  const tx = await SuiSystemStateUtil.newRequestAddDelegationTxn(
+  const tx = await SuiSystemStateUtil.newRequestAddStakeTxn(
     signer.provider,
-    [coins[0].objectId],
-    BigInt(DEFAULT_STAKED_AMOUNT),
-    validators[0].sui_address,
+    [coins.data[0].coinObjectId],
+    BigInt(DEFAULT_STAKE_AMOUNT),
+    validators[0].suiAddress,
   );
 
-  tx.setGasBudget(DEFAULT_GAS_BUDGET);
-
-  return await signer.signAndExecuteTransaction(tx);
+  return await signer.signAndExecuteTransactionBlock({
+    transactionBlock: tx,
+    options: {
+      showEffects: true,
+    },
+  });
 }

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::future::join_all;
+use move_core_types::ident_str;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::time::Duration;
@@ -11,29 +12,42 @@ use jsonrpsee::ws_client::WsClient;
 use jsonrpsee::ws_client::WsClientBuilder;
 use prometheus::Registry;
 use rand::{distributions::*, rngs::OsRng, seq::SliceRandom};
+use tokio::time::timeout;
 use tokio::{task::JoinHandle, time::sleep};
 use tracing::info;
 
+use crate::messages::get_sui_gas_object_with_wallet_context;
 use mysten_metrics::RegistryService;
 use sui::config::SuiEnv;
 use sui::{client_commands::WalletContext, config::SuiClientConfig};
 use sui_config::builder::{ProtocolVersionsConfig, SupportedProtocolVersionsCallback};
 use sui_config::genesis_config::GenesisConfig;
+use sui_config::node::DBCheckpointConfig;
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{FullnodeConfigBuilder, NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
+use sui_core::test_utils::MAX_GAS;
+use sui_framework::{SuiSystem, SystemPackage};
+use sui_json_rpc_types::{SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNode;
 use sui_node::SuiNodeHandle;
-use sui_protocol_config::SupportedProtocolVersions;
+use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
+use sui_sdk::error::SuiRpcResult;
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_swarm::memory::{Swarm, SwarmBuilder};
 use sui_types::base_types::{AuthorityName, SuiAddress};
 use sui_types::committee::EpochId;
-use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
-use sui_types::intent::Intent;
+use sui_types::crypto::{AccountKeyPair, KeypairTraits};
+use sui_types::messages::CallArg;
+use sui_types::messages::ObjectArg;
 use sui_types::messages::TransactionData;
 use sui_types::object::Object;
+use sui_types::sui_system_state::SuiSystemState;
+use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::utils::to_sender_signed_transaction;
+use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
+use sui_types::SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION;
 
 const NUM_VALIDAOTR: usize = 4;
 
@@ -103,19 +117,6 @@ impl TestCluster {
             .unwrap()
     }
 
-    // Sign a transaction with a key currently managed by the WalletContext
-    pub fn sign_transaction(
-        &self,
-        signer_address: &SuiAddress,
-        data: &TransactionData,
-    ) -> sui_types::crypto::Signature {
-        self.wallet
-            .config
-            .keystore
-            .sign_secure(signer_address, data, Intent::default())
-            .unwrap()
-    }
-
     pub fn fullnode_config_builder(&self) -> FullnodeConfigBuilder {
         self.swarm.config().fullnode_config_builder()
     }
@@ -144,6 +145,76 @@ impl TestCluster {
 
     pub fn random_node_restarter(self: &Arc<Self>) -> RandomNodeRestarter {
         RandomNodeRestarter::new(self.clone())
+    }
+
+    /// Wait for thet network to transition to the next or a specific epoch.
+    /// To detect whether the network has reached such state, we use the fullnode as the
+    /// source of truth, since a fullnode only does epoch transition when the network has
+    /// done so.
+    /// If target_epoch is specified, wait until the cluster reaches that epoch.
+    /// If target_epoch is None, wait until the cluster reaches the next epoch.
+    pub async fn wait_for_epoch(&self, target_epoch: Option<EpochId>) -> SuiSystemState {
+        let mut epoch_rx = self.fullnode_handle.sui_node.subscribe_to_epoch_change();
+        timeout(Duration::from_secs(60), async move {
+            while let Ok(system_state) = epoch_rx.recv().await {
+                info!("received epoch {}", system_state.epoch());
+                match target_epoch {
+                    Some(target_epoch) if system_state.epoch() >= target_epoch => {
+                        return system_state;
+                    }
+                    None => {
+                        return system_state;
+                    }
+                    _ => (),
+                }
+            }
+            unreachable!("Broken reconfig channel");
+        })
+        .await
+        .expect("Timed out waiting for cluster to target epoch")
+    }
+
+    pub async fn request_add_stake(
+        &self,
+        validator_address: SuiAddress,
+        sender: SuiAddress,
+        sender_keypair: &AccountKeyPair,
+    ) -> SuiRpcResult<SuiTransactionBlockResponse> {
+        let objects = get_sui_gas_object_with_wallet_context(&self.wallet, &sender).await;
+        let stake_tx_data = TransactionData::new_move_call_with_dummy_gas_price(
+            sender,
+            SuiSystem::ID,
+            ident_str!("sui_system").to_owned(),
+            ident_str!("request_add_stake").to_owned(),
+            vec![],
+            objects[0].1,
+            vec![
+                CallArg::Object(ObjectArg::SharedObject {
+                    id: SUI_SYSTEM_STATE_OBJECT_ID,
+                    initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                    mutable: true,
+                }),
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(objects[1].1)),
+                CallArg::Pure(bcs::to_bytes(&validator_address).unwrap()),
+            ],
+            MAX_GAS,
+        )
+        .unwrap();
+        let transaction = to_sender_signed_transaction(stake_tx_data, sender_keypair);
+
+        self.fullnode_handle
+            .sui_client
+            .quorum_driver()
+            .execute_transaction_block(transaction, SuiTransactionBlockResponseOptions::new(), None)
+            .await
+    }
+
+    #[cfg(msim)]
+    pub fn set_safe_mode_expected(&self, value: bool) {
+        for n in self.swarm.validator_node_handles() {
+            n.with(|node| node.set_safe_mode_expected(value));
+        }
+        self.fullnode_handle.sui_node.set_safe_mode_expected(value);
     }
 }
 
@@ -206,8 +277,10 @@ pub struct TestClusterBuilder {
     num_validators: Option<usize>,
     fullnode_rpc_port: Option<u16>,
     enable_fullnode_events: bool,
-    epoch_duration_ms: Option<u64>,
+    initial_protocol_version: ProtocolVersion,
     supported_protocol_versions_config: ProtocolVersionsConfig,
+    db_checkpoint_config_validators: DBCheckpointConfig,
+    db_checkpoint_config_fullnodes: DBCheckpointConfig,
 }
 
 impl TestClusterBuilder {
@@ -218,8 +291,10 @@ impl TestClusterBuilder {
             fullnode_rpc_port: None,
             num_validators: None,
             enable_fullnode_events: false,
-            epoch_duration_ms: None,
+            initial_protocol_version: SupportedProtocolVersions::SYSTEM_DEFAULT.max,
             supported_protocol_versions_config: ProtocolVersionsConfig::Default,
+            db_checkpoint_config_validators: DBCheckpointConfig::default(),
+            db_checkpoint_config_fullnodes: DBCheckpointConfig::default(),
         }
     }
 
@@ -248,13 +323,40 @@ impl TestClusterBuilder {
         self
     }
 
+    pub fn with_enable_db_checkpoints_validators(mut self) -> Self {
+        self.db_checkpoint_config_validators = DBCheckpointConfig {
+            perform_db_checkpoints_at_epoch_end: true,
+            checkpoint_path: None,
+            object_store_config: None,
+        };
+        self
+    }
+
+    pub fn with_enable_db_checkpoints_fullnodes(mut self) -> Self {
+        self.db_checkpoint_config_fullnodes = DBCheckpointConfig {
+            perform_db_checkpoints_at_epoch_end: true,
+            checkpoint_path: None,
+            object_store_config: None,
+        };
+        self
+    }
+
     pub fn with_epoch_duration_ms(mut self, epoch_duration_ms: u64) -> Self {
-        self.epoch_duration_ms = Some(epoch_duration_ms);
+        let mut genesis_config = self
+            .genesis_config
+            .unwrap_or_else(GenesisConfig::for_local_testing);
+        genesis_config.parameters.epoch_duration_ms = epoch_duration_ms;
+        self.genesis_config = Some(genesis_config);
         self
     }
 
     pub fn with_supported_protocol_versions(mut self, c: SupportedProtocolVersions) -> Self {
         self.supported_protocol_versions_config = ProtocolVersionsConfig::Global(c);
+        self
+    }
+
+    pub fn with_protocol_version(mut self, v: ProtocolVersion) -> Self {
+        self.initial_protocol_version = v;
         self
     }
 
@@ -286,6 +388,7 @@ impl TestClusterBuilder {
             .with_supported_protocol_versions_config(
                 self.supported_protocol_versions_config.clone(),
             )
+            .with_db_checkpoint_config(self.db_checkpoint_config_fullnodes)
             .set_event_store(self.enable_fullnode_events)
             .set_rpc_port(self.fullnode_rpc_port)
             .build()
@@ -324,16 +427,14 @@ impl TestClusterBuilder {
                 NonZeroUsize::new(self.num_validators.unwrap_or(NUM_VALIDAOTR)).unwrap(),
             )
             .with_objects(self.additional_objects.clone())
+            .with_protocol_version(self.initial_protocol_version)
+            .with_db_checkpoint_config(self.db_checkpoint_config_validators.clone())
             .with_supported_protocol_versions_config(
                 self.supported_protocol_versions_config.clone(),
             );
 
         if let Some(genesis_config) = self.genesis_config.take() {
             builder = builder.initial_accounts_config(genesis_config);
-        }
-
-        if let Some(epoch_duration_ms) = self.epoch_duration_ms {
-            builder = builder.with_epoch_duration_ms(epoch_duration_ms);
         }
 
         let mut swarm = builder.build();
@@ -399,21 +500,24 @@ pub async fn start_fullnode_from_config(
     })
 }
 
+pub async fn wait_for_node_transition_to_epoch(node: &SuiNodeHandle, expected_epoch: EpochId) {
+    node.with_async(|node| async move {
+        let mut rx = node.subscribe_to_epoch_change();
+        let epoch = node.current_epoch_for_testing();
+        if epoch != expected_epoch {
+            let system_state = rx.recv().await.unwrap();
+            assert_eq!(system_state.epoch(), expected_epoch);
+        }
+    })
+    .await
+}
+
 pub async fn wait_for_nodes_transition_to_epoch<'a>(
     nodes: impl Iterator<Item = &'a SuiNodeHandle>,
     expected_epoch: EpochId,
 ) {
     let handles: Vec<_> = nodes
-        .map(|handle| {
-            handle.with_async(|node| async move {
-                let mut rx = node.subscribe_to_epoch_change();
-                let epoch = node.current_epoch_for_testing();
-                if epoch != expected_epoch {
-                    let (committee, _) = rx.recv().await.unwrap();
-                    assert_eq!(committee.epoch(), expected_epoch);
-                }
-            })
-        })
+        .map(|handle| wait_for_node_transition_to_epoch(handle, expected_epoch))
         .collect();
     join_all(handles).await;
 }

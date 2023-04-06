@@ -16,8 +16,8 @@ use tokio::task::JoinHandle;
 use types::{
     Batch, BatchDigest, FetchCertificatesRequest, FetchCertificatesResponse,
     GetCertificatesRequest, GetCertificatesResponse, PrimaryToPrimaryClient, PrimaryToWorkerClient,
-    RequestBatchRequest, WorkerBatchMessage, WorkerDeleteBatchesMessage, WorkerOthersBatchMessage,
-    WorkerOurBatchMessage, WorkerSynchronizeMessage, WorkerToPrimaryClient, WorkerToWorkerClient,
+    RequestBatchRequest, RequestBatchesRequest, RequestBatchesResponse, WorkerBatchMessage,
+    WorkerDeleteBatchesMessage, WorkerSynchronizeMessage, WorkerToWorkerClient,
 };
 
 fn unreliable_send<F, R, Fut>(
@@ -105,10 +105,11 @@ impl PrimaryToPrimaryRpc for anemo::Network {
             .map_err(|e| format_err!("Network error {:?}", e))?;
         Ok(response.into_body())
     }
+
     async fn fetch_certificates(
         &self,
         peer: &NetworkPublicKey,
-        request: FetchCertificatesRequest,
+        request: impl anemo::types::request::IntoRequest<FetchCertificatesRequest> + Send,
     ) -> Result<FetchCertificatesResponse> {
         let peer_id = PeerId(peer.0.to_bytes());
         let peer = self
@@ -143,52 +144,6 @@ impl UnreliableNetwork<WorkerSynchronizeMessage> for anemo::Network {
                 .await
         };
         unreliable_send(self, peer, f)
-    }
-}
-
-//
-// Worker-to-Primary
-//
-
-impl ReliableNetwork<WorkerOurBatchMessage> for anemo::Network {
-    type Response = ();
-    fn send(
-        &self,
-        peer: NetworkPublicKey,
-        message: &WorkerOurBatchMessage,
-    ) -> CancelOnDropHandler<Result<anemo::Response<()>>> {
-        let message = message.to_owned();
-        let f = move |peer| {
-            let message = message.clone();
-            async move {
-                WorkerToPrimaryClient::new(peer)
-                    .report_our_batch(message)
-                    .await
-            }
-        };
-
-        send(self.clone(), peer, f)
-    }
-}
-
-impl ReliableNetwork<WorkerOthersBatchMessage> for anemo::Network {
-    type Response = ();
-    fn send(
-        &self,
-        peer: NetworkPublicKey,
-        message: &WorkerOthersBatchMessage,
-    ) -> CancelOnDropHandler<Result<anemo::Response<()>>> {
-        let message = message.to_owned();
-        let f = move |peer| {
-            let message = message.clone();
-            async move {
-                WorkerToPrimaryClient::new(peer)
-                    .report_others_batch(message)
-                    .await
-            }
-        };
-
-        send(self.clone(), peer, f)
     }
 }
 
@@ -261,12 +216,6 @@ impl WorkerRpc for anemo::Network {
 
         let peer_id = PeerId(peer.0.to_bytes());
 
-        fail::fail_point!("request-batch", |_| {
-            Err(format_err!(
-                "Injected error in request batch from peer {peer_id}"
-            ))
-        });
-
         let peer = self
             .peer(peer_id)
             .ok_or_else(|| format_err!("Network has no connection with peer {peer_id}"))?;
@@ -277,5 +226,21 @@ impl WorkerRpc for anemo::Network {
             .await
             .map_err(|e| format_err!("Network error {:?}", e))?;
         Ok(response.into_body().batch)
+    }
+
+    async fn request_batches(
+        &self,
+        peer: NetworkPublicKey,
+        request: impl anemo::types::request::IntoRequest<RequestBatchesRequest> + Send,
+    ) -> Result<RequestBatchesResponse> {
+        let peer_id = PeerId(peer.0.to_bytes());
+        let peer = self
+            .peer(peer_id)
+            .ok_or_else(|| format_err!("Network has no connection with peer {peer_id}"))?;
+        let response = WorkerToWorkerClient::new(peer)
+            .request_batches(request)
+            .await
+            .map_err(|e| format_err!("Network error {:?}", e))?;
+        Ok(response.into_body())
     }
 }

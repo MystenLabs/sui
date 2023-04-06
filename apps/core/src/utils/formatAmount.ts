@@ -3,11 +3,11 @@
 
 import BigNumber from 'bignumber.js';
 
-export function formatAmount(
+export function formatAmountParts(
     amount?: BigNumber | bigint | number | string | null
 ) {
     if (typeof amount === 'undefined' || amount === null) {
-        return '--';
+        return ['--'];
     }
 
     let postfix = '';
@@ -15,18 +15,24 @@ export function formatAmount(
 
     if (bn.gte(1_000_000_000)) {
         bn = bn.shiftedBy(-9);
-        postfix = ' B';
+        postfix = 'B';
     } else if (bn.gte(1_000_000)) {
         bn = bn.shiftedBy(-6);
-        postfix = ' M';
+        postfix = 'M';
     } else if (bn.gte(10_000)) {
         bn = bn.shiftedBy(-3);
-        postfix = ' K';
+        postfix = 'K';
     }
 
     if (bn.gte(1)) {
         bn = bn.decimalPlaces(3, BigNumber.ROUND_DOWN);
     }
 
-    return bn.toFormat() + postfix;
+    return [bn.toFormat(), postfix];
+}
+
+export function formatAmount(...args: Parameters<typeof formatAmountParts>) {
+    return formatAmountParts(...args)
+        .filter(Boolean)
+        .join(' ');
 }

@@ -98,16 +98,24 @@ impl StressStats {
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct BenchmarkStats {
     pub duration: Duration,
-    pub num_error: u64,
-    pub num_success: u64,
+    /// Number of transactions that ended in an error
+    pub num_error_txes: u64,
+    /// Number of transactions that were executed successfully
+    pub num_success_txes: u64,
+    /// Total number of commands in transactions that executed successfully
+    pub num_success_cmds: u64,
+    /// Total gas used
+    pub total_gas_used: u64,
     pub latency_ms: HistogramWrapper,
 }
 
 impl BenchmarkStats {
     pub fn update(&mut self, duration: Duration, sample_stat: &BenchmarkStats) {
         self.duration = duration;
-        self.num_error += sample_stat.num_error;
-        self.num_success += sample_stat.num_success;
+        self.num_error_txes += sample_stat.num_error_txes;
+        self.num_success_txes += sample_stat.num_success_txes;
+        self.num_success_cmds += sample_stat.num_success_cmds;
+        self.total_gas_used += sample_stat.total_gas_used;
         self.latency_ms
             .histogram
             .add(&sample_stat.latency_ms.histogram)
@@ -121,20 +129,35 @@ impl BenchmarkStats {
             .set_header(vec![
                 "duration(s)",
                 "tps",
+                "cps",
                 "error%",
                 "latency (min)",
                 "latency (p50)",
                 "latency (p99)",
+                "gas used (MIST total)",
+                "gas used/hr (MIST approx.)",
             ]);
         let mut row = Row::new();
         row.add_cell(Cell::new(self.duration.as_secs()));
-        row.add_cell(Cell::new(self.num_success / self.duration.as_secs()));
+        row.add_cell(Cell::new(self.num_success_txes / self.duration.as_secs()));
+        row.add_cell(Cell::new(self.num_success_cmds / self.duration.as_secs()));
         row.add_cell(Cell::new(
-            (100 * self.num_error) as f32 / (self.num_error + self.num_success) as f32,
+            (100 * self.num_error_txes) as f32
+                / (self.num_error_txes + self.num_success_txes) as f32,
         ));
         row.add_cell(Cell::new(self.latency_ms.histogram.min()));
         row.add_cell(Cell::new(self.latency_ms.histogram.value_at_quantile(0.5)));
         row.add_cell(Cell::new(self.latency_ms.histogram.value_at_quantile(0.99)));
+        row.add_cell(Cell::new(format_num_with_separators(
+            self.total_gas_used,
+            3,
+            ",",
+        )));
+        row.add_cell(Cell::new(format_num_with_separators(
+            self.total_gas_used * 60 * 60 / self.duration.as_secs(),
+            3,
+            ",",
+        )));
         table.add_row(row);
         table
     }
@@ -201,8 +224,8 @@ impl BenchmarkCmp<'_> {
         ]
     }
     pub fn cmp_tps(&self) -> Comparison {
-        let old_tps = self.old.num_success / self.old.duration.as_secs();
-        let new_tps = self.new.num_success / self.new.duration.as_secs();
+        let old_tps = self.old.num_success_txes / self.old.duration.as_secs();
+        let new_tps = self.new.num_success_txes / self.new.duration.as_secs();
         let diff = new_tps as i64 - old_tps as i64;
         let diff_ratio = diff as f64 / old_tps as f64;
         let speedup = 1.0 + diff_ratio;
@@ -216,8 +239,10 @@ impl BenchmarkCmp<'_> {
         }
     }
     pub fn cmp_error_rate(&self) -> Comparison {
-        let old_error_rate = self.old.num_error / (self.old.num_error + self.old.num_success);
-        let new_error_rate = self.new.num_error / (self.new.num_error + self.new.num_success);
+        let old_error_rate =
+            self.old.num_error_txes / (self.old.num_error_txes + self.old.num_success_txes);
+        let new_error_rate =
+            self.new.num_error_txes / (self.new.num_error_txes + self.new.num_success_txes);
         let diff = new_error_rate as i64 - old_error_rate as i64;
         let diff_ratio = diff as f64 / old_error_rate as f64;
         let speedup = 1.0 / (1.0 + diff_ratio);
@@ -350,4 +375,21 @@ impl BenchmarkCmp<'_> {
             speedup,
         }
     }
+}
+
+/// Convert an unsigned number into a string separated by `delim` every `step_size` digits
+/// For example used to make 100000 more readable as 100,000
+fn format_num_with_separators<T: Into<u128> + std::fmt::Display>(
+    x: T,
+    step_size: u8,
+    delim: &'static str,
+) -> String {
+    x.to_string()
+        .as_bytes()
+        .rchunks(step_size as usize)
+        .rev()
+        .map(std::str::from_utf8)
+        .collect::<Result<Vec<&str>, _>>()
+        .unwrap()
+        .join(delim)
 }

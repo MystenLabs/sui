@@ -1,41 +1,56 @@
+DO $$
+BEGIN
+-- SuiAddress and ObjectId type, 0x + 64 chars hex string
+CREATE DOMAIN address VARCHAR(66);
+-- Max char length for base58 encoded digest
+CREATE DOMAIN base58digest VARCHAR(44);
+EXCEPTION
+    WHEN duplicate_object THEN
+        -- Domain already exists, do nothing
+        NULL;
+END $$;
+
+
 CREATE TABLE transactions (
-    id BIGSERIAL PRIMARY KEY,
-    transaction_digest VARCHAR(255) NOT NULL,
-    sender VARCHAR(255) NOT NULL,
-    recipients TEXT[] NOT NULL,
-    checkpoint_sequence_number BIGINT NOT NULL,
-    transaction_time TIMESTAMP,
-    transaction_kinds TEXT[] NOT NULL,
+    id                          BIGSERIAL PRIMARY KEY,
+    transaction_digest          base58digest NOT NULL,
+    sender                      VARCHAR(255) NOT NULL,
+    recipients                  TEXT[]       NOT NULL,
+    checkpoint_sequence_number  BIGINT,
+    timestamp_ms                BIGINT,
+    transaction_kind            TEXT         NOT NULL,
+    transaction_count           BIGINT       NOT NULL,
     -- object related
-    created TEXT[] NOT NULL,
-    mutated TEXT[] NOT NULL,
-    deleted TEXT[] NOT NULL,
-    unwrapped TEXT[] NOT NULL,
-    wrapped TEXT[] NOT NULL,
+    created                     TEXT[]       NOT NULL,
+    mutated                     TEXT[]       NOT NULL,
+    deleted                     TEXT[]       NOT NULL,
+    unwrapped                   TEXT[]       NOT NULL,
+    wrapped                     TEXT[]       NOT NULL,
     -- each move call is <package>::<module>::<function>
-    move_calls TEXT[] NOT NULL,
+    move_calls                  TEXT[]       NOT NULL,
     -- gas object related
-    gas_object_id VARCHAR(255) NOT NULL,
-    gas_object_sequence BIGINT NOT NULL,
-    gas_object_digest VARCHAR(255) NOT NULL,
+    gas_object_id               address      NOT NULL,
+    gas_object_sequence         BIGINT       NOT NULL,
+    gas_object_digest           address      NOT NULL,
     -- gas budget & cost related
-    gas_budget BIGINT NOT NULL,
-    total_gas_cost BIGINT NOT NULL,
-    computation_cost BIGINT NOT NULL,
-    storage_cost BIGINT NOT NULL,
-    storage_rebate BIGINT NOT NULL,
+    gas_budget                  BIGINT       NOT NULL,
+    total_gas_cost              BIGINT       NOT NULL,
+    computation_cost            BIGINT       NOT NULL,
+    storage_cost                BIGINT       NOT NULL,
+    storage_rebate              BIGINT       NOT NULL,
+    non_refundable_storage_fee  BIGINT       NOT NULL,
     -- gas price from transaction data,
     -- not the reference gas price
-    gas_price BIGINT NOT NULL,
-    -- serialized transaction
-    transaction_content TEXT NOT NULL,
-    transaction_effects_content TEXT NOT NULL,
-    confirmed_local_execution BOOLEAN,
-    UNIQUE(transaction_digest) 
+    gas_price                   BIGINT       NOT NULL,
+    -- BCS serialized SenderSignedData
+    raw_transaction             bytea        NOT NULL,
+    transaction_content         TEXT         NOT NULL,
+    transaction_effects_content TEXT         NOT NULL,
+    confirmed_local_execution   BOOLEAN,
+    UNIQUE (transaction_digest)
 );
 
 CREATE INDEX transactions_transaction_digest ON transactions (transaction_digest);
-CREATE INDEX transactions_transaction_time ON transactions (transaction_time);
+CREATE INDEX transactions_timestamp_ms ON transactions (timestamp_ms);
 CREATE INDEX transactions_sender ON transactions (sender);
-CREATE INDEX transactions_gas_object_id ON transactions (gas_object_id);
 CREATE INDEX transactions_checkpoint_sequence_number ON transactions (checkpoint_sequence_number);

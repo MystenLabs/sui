@@ -1,0 +1,12 @@
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_check/typing/loop_result_type.move:19:13
+   │
+19 │         foo(loop {})
+   │             ^^^^^^^ Invalid use of a divergent expression. The code following the evaluation of this expression will be dead and should be removed.
+
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_check/typing/loop_result_type.move:25:23
+   │
+25 │         let x: X::R = loop { 0; };
+   │                       ^^^^^^^^^^^ Invalid use of a divergent expression. The code following the evaluation of this expression will be dead and should be removed.
+

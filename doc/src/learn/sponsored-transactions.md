@@ -3,24 +3,13 @@ title: Sui Sponsored Transactions
 ---
 
 A Sui Sponsored transaction is one where a Sui address (the sponsor’s) pays the gas fees for a transaction initialized by another address (the user’s). You can use Sponsored transactions to cover the fees for users on your site or app so that they do not get charged for them. This removes a significant obstacle that web2 users encounter when entering web3, as they often have to purchase tokens to perform a transaction on chain. For example, you could increase conversion rates for gamers by sponsoring their early transactions.
+
 Sponsored transactions also facilitate asset management as you don’t need to maintain multiple accounts with SUI tokens to transfer funds.
 
 You can use Sui Sponsored transactions to:
-
  * Sponsor (pay gas fees for) a transaction initiated by a user.
  * Sponsor transactions you initiate as the sponsor.
  * Provide a wildcard GasData object to users. The object covers the gas fees for a user transaction. The GasData object covers any fee amount determined for the transaction as long as the budget is sufficient.
-
-## Considerations for Sponsored Transactions
-
-Before you implement or agree to a sponsored transaction, you should consider the following information.
-In a sponsored transaction, the sponsor’s gas object covers fees for the transaction. This is contrary to certain types of Sui transaction types in which the gas object itself also transfers. As a result, Sui does not support sponsoring the following Sui transaction types:
- * [TransferSui](https://docs.sui.io/sui-jsonrpc#sui_transferSui)
- * [PaySui](https://docs.sui.io/sui-jsonrpc#sui_paySui)
- * [PayAllSui](https://docs.sui.io/sui-jsonrpc#sui_payAllSui)
-
- Also note that you can’t use Sponsored Transaction with `BatchTransaction`, which will be deprecated in a future release.
-
 
 ## Potential Risks Using Sponsored Transactions
 
@@ -55,8 +44,7 @@ pub struct GasLessTransactionData {
 ## Create a sponsor-initiated sponsored transaction  
 
 A sponsor-initiated sponsored transaction involves the following steps:
- 1. A sponsor constructs a `TransactionData` object that contains the transaction details and associated gas fee data. The sponsor signs it to generate a `Signature` before sending it to a user. 
- You can send the unsigned `TransactionData` via email, SMS, or an application interface.
+ 1. A sponsor constructs a `TransactionData` object that contains the transaction details and associated gas fee data. The sponsor signs it to generate a `Signature` before sending it to a user. You can send the unsigned `TransactionData` via email, SMS, or an application interface.
  1. The user checks the transaction and signs it to generate the second `Signature` for the transaction.
  1. The user submits the dual-signed transaction to a Sui Full node or sponsor to execute it.
 
@@ -115,7 +103,7 @@ pub fn submit_sole_signed_transaction(sole_signed_data: SenderSignedData) -> Res
 Alternatively, use the API endpoint to return a GasData object.
 
 ```rust
-pub fn request_gas(/*perhaps some requirement data*/) -> Result<GasData, Error>;
+pub fn request_gas(/*requirement data*/) -> Result<GasData, Error>;
 ```
 
 ### User and Sponsor-initiated transaction.

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Coin } from '@mysten/sui.js';
+import { Coin, CoinMetadata, SUI_TYPE_ARG } from '@mysten/sui.js';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import BigNumber from 'bignumber.js';
 import { useMemo } from 'react';
@@ -49,7 +49,21 @@ export function useCoinDecimals(coinType?: string | null) {
                 );
             }
 
-            return rpc.getCoinMetadata(coinType);
+            // Optimize the known case of SUI to avoid a network call:
+            if (coinType === SUI_TYPE_ARG) {
+                const metadata: CoinMetadata = {
+                    id: null,
+                    decimals: 9,
+                    description: '',
+                    iconUrl: null,
+                    name: 'Sui',
+                    symbol: 'SUI',
+                };
+
+                return metadata;
+            }
+
+            return rpc.getCoinMetadata({ coinType });
         },
         {
             // This is currently expected to fail for non-SUI tokens, so disable retries:

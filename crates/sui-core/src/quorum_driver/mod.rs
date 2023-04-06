@@ -7,17 +7,16 @@ pub use metrics::*;
 pub mod reconfig_observer;
 
 use arc_swap::ArcSwap;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 use std::time::Duration;
 use sui_types::base_types::{AuthorityName, ObjectRef, TransactionDigest};
-use sui_types::committee::{validity_threshold, Committee, EpochId, StakeUnit};
+use sui_types::committee::{Committee, EpochId, StakeUnit};
 use sui_types::quorum_driver_types::{
     QuorumDriverEffectsQueueResult, QuorumDriverError, QuorumDriverResult,
 };
 use tap::TapFallible;
-use thiserror::Error;
 use tokio::time::{sleep_until, Instant};
 
 use tokio::sync::mpsc::{self, Receiver, Sender};
@@ -25,18 +24,17 @@ use tokio::task::JoinHandle;
 use tracing::Instrument;
 use tracing::{debug, error, info, warn};
 
-use crate::authority::authority_notify_read::{NotifyRead, Registration};
 use crate::authority_aggregator::{
-    AuthorityAggregator, ProcessTransactionResult, QuorumExecuteCertificateError,
-    QuorumSignTransactionError,
+    AggregatorProcessCertificateError, AggregatorProcessTransactionError, AuthorityAggregator,
+    ProcessTransactionResult,
 };
 use crate::authority_client::AuthorityAPI;
-use crate::signature_verifier::{DefaultSignatureVerifier, SignatureVerifier};
+use mysten_common::sync::notify_read::{NotifyRead, Registration};
 use mysten_metrics::spawn_monitored_task;
 use std::fmt::Write;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
-    QuorumDriverResponse, VerifiedCertificate, VerifiedTransaction, VerifiedTransactionInfoResponse,
+    PlainTransactionInfoResponse, QuorumDriverResponse, VerifiedCertificate, VerifiedTransaction,
 };
 
 use self::reconfig_observer::ReconfigObserver;
@@ -47,30 +45,6 @@ mod tests;
 const TASK_QUEUE_SIZE: usize = 10000;
 const EFFECTS_QUEUE_SIZE: usize = 10000;
 const TX_MAX_RETRY_TIMES: u8 = 10;
-
-/// Quorum Driver Internal types
-#[derive(Error, Debug)]
-pub(crate) enum QuorumDriverInternalError {
-    #[error(
-        "Failed to get a quorum of validators to sign the transaction. Validator errors: {0:?}"
-    )]
-    TransactionError(QuorumSignTransactionError),
-    #[error(
-        "Failed to get a quorum of validators to sign the transaction because of locked objects: {:?}, retried a conflicting transaction {:?}, success: {:?}",
-        conflicting_txes,
-        retried_tx_digest,
-        retried_tx_success
-    )]
-    TransactionErrorWithConflictingTransactions {
-        conflicting_txes: BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
-        retried_tx_digest: Option<TransactionDigest>,
-        retried_tx_success: Option<bool>,
-    },
-    #[error(
-        "Failed to get a quorum of validators to process the certificate. Validator errors: {0:?}"
-    )]
-    CertificateError(QuorumExecuteCertificateError),
-}
 
 #[derive(Clone)]
 pub struct QuorumDriverTask {
@@ -91,8 +65,8 @@ impl Debug for QuorumDriverTask {
     }
 }
 
-pub struct QuorumDriver<A, S = DefaultSignatureVerifier> {
-    validators: ArcSwap<AuthorityAggregator<A, S>>,
+pub struct QuorumDriver<A> {
+    validators: ArcSwap<AuthorityAggregator<A>>,
     task_sender: Sender<QuorumDriverTask>,
     effects_subscribe_sender: tokio::sync::broadcast::Sender<QuorumDriverEffectsQueueResult>,
     notifier: Arc<NotifyRead<TransactionDigest, QuorumDriverResult>>,
@@ -100,9 +74,9 @@ pub struct QuorumDriver<A, S = DefaultSignatureVerifier> {
     max_retry_times: u8,
 }
 
-impl<A, S: SignatureVerifier + Default> QuorumDriver<A, S> {
+impl<A> QuorumDriver<A> {
     pub(crate) fn new(
-        validators: ArcSwap<AuthorityAggregator<A, S>>,
+        validators: ArcSwap<AuthorityAggregator<A>>,
         task_sender: Sender<QuorumDriverTask>,
         effects_subscribe_sender: tokio::sync::broadcast::Sender<QuorumDriverEffectsQueueResult>,
         notifier: Arc<NotifyRead<TransactionDigest, QuorumDriverResult>>,
@@ -119,7 +93,7 @@ impl<A, S: SignatureVerifier + Default> QuorumDriver<A, S> {
         }
     }
 
-    pub fn authority_aggregator(&self) -> &ArcSwap<AuthorityAggregator<A, S>> {
+    pub fn authority_aggregator(&self) -> &ArcSwap<AuthorityAggregator<A>> {
         &self.validators
     }
 
@@ -223,7 +197,7 @@ impl<A, S: SignatureVerifier + Default> QuorumDriver<A, S> {
     }
 }
 
-impl<A, S: SignatureVerifier + Default> QuorumDriver<A, S>
+impl<A> QuorumDriver<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
@@ -271,7 +245,7 @@ where
     pub(crate) async fn process_transaction(
         &self,
         transaction: VerifiedTransaction,
-    ) -> Result<ProcessTransactionResult, QuorumDriverInternalError> {
+    ) -> Result<ProcessTransactionResult, Option<QuorumDriverError>> {
         let tx_digest = *transaction.digest();
         let result = self
             .validators
@@ -280,94 +254,182 @@ where
             .instrument(tracing::debug_span!("aggregator_process_tx", ?tx_digest))
             .await;
 
+        self.process_transaction_result(result, tx_digest).await
+    }
+
+    async fn process_transaction_result(
+        &self,
+        result: Result<ProcessTransactionResult, AggregatorProcessTransactionError>,
+        tx_digest: TransactionDigest,
+    ) -> Result<ProcessTransactionResult, Option<QuorumDriverError>> {
         match result {
-            Err(QuorumSignTransactionError {
-                total_stake,
-                good_stake,
-                errors: _errors,
+            Ok(resp) => Ok(resp),
+            Err(AggregatorProcessTransactionError::RetryableConflictingTransaction {
+                conflicting_tx_digest_to_retry,
+                errors,
                 conflicting_tx_digests,
-            }) if !conflicting_tx_digests.is_empty() => {
+            }) => {
                 self.metrics
                     .total_err_process_tx_responses_with_nonzero_conflicting_transactions
                     .inc();
                 debug!(
                     ?tx_digest,
-                    ?total_stake,
-                    ?good_stake,
                     "Observed {} conflicting transactions: {:?}",
                     conflicting_tx_digests.len(),
                     conflicting_tx_digests
                 );
-                let attempt_result = self
-                    .attempt_conflicting_transactions_maybe(
-                        good_stake,
-                        &conflicting_tx_digests,
-                        &tx_digest,
+
+                if let Some(conflicting_tx_digest) = conflicting_tx_digest_to_retry {
+                    self.process_conflicting_tx(
+                        tx_digest,
+                        conflicting_tx_digest,
+                        conflicting_tx_digests,
                     )
-                    .await;
-                match attempt_result {
-                    Err(err) => {
-                        debug!(
-                            ?tx_digest,
-                            "Encountered error in attempt_conflicting_transactions_maybe: {:?}",
-                            err
-                        );
-                    }
-                    Ok(None) => {
-                        debug!(?tx_digest, "Did not retry any conflicting transactions");
-                    }
-                    Ok(Some((retried_tx_digest, success))) => {
-                        self.metrics
-                            .total_attempts_retrying_conflicting_transaction
-                            .inc();
-                        debug!(
-                            ?tx_digest,
-                            ?retried_tx_digest,
-                            "Retried conflicting transaction success: {}",
-                            success
-                        );
-                        if success {
-                            self.metrics
-                                .total_successful_attempts_retrying_conflicting_transaction
-                                .inc();
-                        }
-                        return Err(
-                            QuorumDriverInternalError::TransactionErrorWithConflictingTransactions {
-                                conflicting_txes: conflicting_tx_digests,
-                                retried_tx_digest: Some(retried_tx_digest),
-                                retried_tx_success: Some(success),
-                            },
-                        );
-                    }
+                    .await
+                } else {
+                    // If no retryable conflicting transaction was returned that means we have >= 2f+1 good stake for
+                    // the original transaction + retryable stake. Will continue to retry the original transaction.
+                    debug!(
+                        ?errors,
+                        "Observed Tx {tx_digest:} is still in retryable state. Conflicting Txes: {conflicting_tx_digests:?}", 
+                    );
+                    Err(None)
                 }
-                Err(
-                    QuorumDriverInternalError::TransactionErrorWithConflictingTransactions {
-                        conflicting_txes: conflicting_tx_digests,
-                        retried_tx_digest: None,
-                        retried_tx_success: None,
-                    },
-                )
             }
-            Ok(resp) => Ok(resp),
-            // TODO: we are particularly interested in what other errors could be returned
-            // and use that to shape the retry strategy
-            Err(err) => Err(QuorumDriverInternalError::TransactionError(err)),
+
+            Err(AggregatorProcessTransactionError::FatalConflictingTransaction {
+                errors,
+                conflicting_tx_digests,
+            }) => {
+                debug!(
+                    ?errors,
+                    "Observed Tx {tx_digest:} double spend attempted. Conflicting Txes: {conflicting_tx_digests:?}",
+                );
+                Err(Some(QuorumDriverError::ObjectsDoubleUsed {
+                    conflicting_txes: conflicting_tx_digests,
+                    retried_tx: None,
+                    retried_tx_success: None,
+                }))
+            }
+
+            Err(AggregatorProcessTransactionError::FatalTransaction { errors }) => {
+                debug!(?tx_digest, ?errors, "Nonretryable transaction error");
+                Err(Some(QuorumDriverError::NonRecoverableTransactionError {
+                    errors,
+                }))
+            }
+
+            Err(AggregatorProcessTransactionError::SystemOverload {
+                overloaded_stake,
+                errors,
+            }) => {
+                debug!(?tx_digest, ?errors, "System overload");
+                Err(Some(QuorumDriverError::SystemOverload {
+                    overloaded_stake,
+                    errors,
+                }))
+            }
+
+            Err(AggregatorProcessTransactionError::RetryableTransaction { errors }) => {
+                debug!(?tx_digest, ?errors, "Retryable transaction error");
+                Err(None)
+            }
+        }
+    }
+
+    async fn process_conflicting_tx(
+        &self,
+        tx_digest: TransactionDigest,
+        conflicting_tx_digest: TransactionDigest,
+        conflicting_tx_digests: BTreeMap<
+            TransactionDigest,
+            (Vec<(AuthorityName, ObjectRef)>, StakeUnit),
+        >,
+    ) -> Result<ProcessTransactionResult, Option<QuorumDriverError>> {
+        // Safe to unwrap because tx_digest_to_retry is generated from conflicting_tx_digests
+        // in ProcessTransactionState::conflicting_tx_digest_with_most_stake()
+        let (validators, _) = conflicting_tx_digests.get(&conflicting_tx_digest).unwrap();
+        let attempt_result = self
+            .attempt_conflicting_transaction(
+                &conflicting_tx_digest,
+                &tx_digest,
+                validators.iter().map(|(pub_key, _)| *pub_key).collect(),
+            )
+            .await;
+        self.metrics
+            .total_attempts_retrying_conflicting_transaction
+            .inc();
+
+        match attempt_result {
+            Err(err) => {
+                debug!(
+                    ?tx_digest,
+                    "Encountered error while attemptting conflicting transaction: {:?}", err
+                );
+                let err = Err(Some(QuorumDriverError::ObjectsDoubleUsed {
+                    conflicting_txes: conflicting_tx_digests,
+                    retried_tx: None,
+                    retried_tx_success: None,
+                }));
+                debug!(
+                    ?tx_digest,
+                    "Non retryable error when getting original tx cert: {err:?}"
+                );
+                err
+            }
+            Ok(success) => {
+                debug!(
+                    ?tx_digest,
+                    ?conflicting_tx_digest,
+                    "Retried conflicting transaction success: {}",
+                    success
+                );
+                if success {
+                    self.metrics
+                        .total_successful_attempts_retrying_conflicting_transaction
+                        .inc();
+                }
+                Err(Some(QuorumDriverError::ObjectsDoubleUsed {
+                    conflicting_txes: conflicting_tx_digests,
+                    retried_tx: Some(conflicting_tx_digest),
+                    retried_tx_success: Some(success),
+                }))
+            }
         }
     }
 
     pub(crate) async fn process_certificate(
         &self,
         certificate: VerifiedCertificate,
-    ) -> Result<QuorumDriverResponse, QuorumDriverInternalError> {
+    ) -> Result<QuorumDriverResponse, Option<QuorumDriverError>> {
+        let tx_digest = *certificate.digest();
         let (effects, events) = self
             .validators
             .load()
             .process_certificate(certificate.clone().into_inner())
-            .instrument(
-                tracing::debug_span!("aggregator_process_cert", tx_digest = ?certificate.digest()),
-            )
+            .instrument(tracing::debug_span!("aggregator_process_cert", ?tx_digest))
             .await
-            .map_err(QuorumDriverInternalError::CertificateError)?;
+            .map_err(|agg_err| match agg_err {
+                AggregatorProcessCertificateError::FatalExecuteCertificate {
+                    non_retryable_errors,
+                } => {
+                    // Normally a certificate shouldn't have fatal errors.
+                    error!(
+                        ?tx_digest,
+                        ?non_retryable_errors,
+                        "[WATCHOUT] Unexpected Fatal error for certificate"
+                    );
+                    Some(QuorumDriverError::NonRecoverableTransactionError {
+                        errors: non_retryable_errors,
+                    })
+                }
+                AggregatorProcessCertificateError::RetryableExecuteCertificate {
+                    retryable_errors,
+                } => {
+                    debug!(?retryable_errors, "Retryable certificate");
+                    None
+                }
+            })?;
         let response = QuorumDriverResponse {
             effects_cert: effects,
             events,
@@ -376,7 +438,7 @@ where
         Ok(response)
     }
 
-    pub async fn update_validators(&self, new_validators: Arc<AuthorityAggregator<A, S>>) {
+    pub async fn update_validators(&self, new_validators: Arc<AuthorityAggregator<A>>) {
         info!(
             "Quorum Driver updating AuthorityAggregator with committee {}",
             new_validators.committee
@@ -384,82 +446,11 @@ where
         self.validators.store(new_validators);
     }
 
-    // TODO currently this function is not epoch-boundary-safe. We need to make it so.
-    /// Returns Ok(None) if the no conflicting transaction was retried.
-    /// Returns Ok(Some((tx_digest, true))) if one conflicting transaction was retried and succeeded,
-    /// Some((tx_digest, false)) otherwise.
-    /// Returns Error on unexpected errors.
-    #[allow(clippy::type_complexity)]
-    async fn attempt_conflicting_transactions_maybe(
-        &self,
-        good_stake: StakeUnit,
-        conflicting_tx_digests: &BTreeMap<
-            TransactionDigest,
-            (Vec<(AuthorityName, ObjectRef)>, StakeUnit),
-        >,
-        original_tx_digest: &TransactionDigest,
-    ) -> SuiResult<Option<(TransactionDigest, bool)>> {
-        let validity = self.validators.load().committee.validity_threshold();
-
-        let mut conflicting_tx_digests = Vec::from_iter(conflicting_tx_digests.iter());
-        conflicting_tx_digests.sort_by(|lhs, rhs| rhs.1 .1.cmp(&lhs.1 .1));
-        if conflicting_tx_digests.is_empty() {
-            error!("This path in unreachable with an empty conflicting_tx_digests.");
-            return Ok(None);
-        }
-
-        // we checked emptiness above, safe to unwrap.
-        let (tx_digest, (validators, total_stake)) = conflicting_tx_digests.get(0).unwrap();
-
-        if good_stake >= validity && *total_stake >= validity {
-            warn!(
-                ?tx_digest,
-                ?original_tx_digest,
-                original_tx_stake = good_stake,
-                tx_stake = *total_stake,
-                "Equivocation detected: {:?}",
-                validators
-            );
-            self.metrics.total_equivocation_detected.inc();
-            return Ok(None);
-        }
-
-        // if we have >= f+1 good stake on the current transaction, no point in retrying conflicting ones
-        if good_stake >= validity {
-            return Ok(None);
-        }
-
-        // To be more conservative and try not to actually cause full equivocation,
-        // we only retry a transaction when at least f+1 validators claims this tx locks objects
-        if *total_stake < validity {
-            return Ok(None);
-        }
-
-        info!(
-            ?tx_digest,
-            ?total_stake,
-            ?original_tx_digest,
-            "retrying conflicting tx."
-        );
-        let is_tx_executed = self
-            .attempt_one_conflicting_transaction(
-                tx_digest,
-                original_tx_digest,
-                validators
-                    .iter()
-                    .map(|(name, _obj_ref)| *name)
-                    .collect::<BTreeSet<_>>(),
-            )
-            .await?;
-
-        Ok(Some((**tx_digest, is_tx_executed)))
-    }
-
     /// Returns Some(true) if the conflicting transaction is executed successfully
     /// (or already executed), or Some(false) if it did not.
-    async fn attempt_one_conflicting_transaction(
+    async fn attempt_conflicting_transaction(
         &self,
-        tx_digest: &&TransactionDigest,
+        tx_digest: &TransactionDigest,
         original_tx_digest: &TransactionDigest,
         validators: BTreeSet<AuthorityName>,
     ) -> SuiResult<bool> {
@@ -476,7 +467,7 @@ where
         // If we are able to get a certificate right away, we use it and execute the cert;
         // otherwise, we have to re-form a cert and execute it.
         let verified_transaction = match response {
-            VerifiedTransactionInfoResponse::ExecutedWithCert(cert, _, _) => {
+            PlainTransactionInfoResponse::ExecutedWithCert(cert, _, _) => {
                 self.metrics
                     .total_times_conflicting_transaction_already_finalized_when_retrying
                     .inc();
@@ -505,14 +496,16 @@ where
                 // We only try it once.
                 return Ok(result.is_ok());
             }
-            VerifiedTransactionInfoResponse::Signed(signed) => signed.into_unsigned(),
-            VerifiedTransactionInfoResponse::ExecutedWithoutCert(transaction, _, _) => transaction,
+            PlainTransactionInfoResponse::Signed(signed) => {
+                signed.verify(&self.clone_committee())?.into_unsigned()
+            }
+            PlainTransactionInfoResponse::ExecutedWithoutCert(transaction, _, _) => transaction,
         };
         // Now ask validators to execute this transaction.
         let result = self
             .validators
             .load()
-            .execute_transaction(&verified_transaction)
+            .execute_transaction_block(&verified_transaction)
             .await
             .tap_ok(|_resp| {
                 debug!(
@@ -534,22 +527,22 @@ where
     }
 }
 
-pub struct QuorumDriverHandler<A, S = DefaultSignatureVerifier> {
-    quorum_driver: Arc<QuorumDriver<A, S>>,
+pub struct QuorumDriverHandler<A> {
+    quorum_driver: Arc<QuorumDriver<A>>,
     effects_subscriber: tokio::sync::broadcast::Receiver<QuorumDriverEffectsQueueResult>,
     quorum_driver_metrics: Arc<QuorumDriverMetrics>,
-    reconfig_observer: Arc<dyn ReconfigObserver<A, S> + Sync + Send>,
+    reconfig_observer: Arc<dyn ReconfigObserver<A> + Sync + Send>,
     _processor_handle: JoinHandle<()>,
 }
 
-impl<A, S: SignatureVerifier + Default> QuorumDriverHandler<A, S>
+impl<A> QuorumDriverHandler<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
     pub(crate) fn new(
-        validators: Arc<AuthorityAggregator<A, S>>,
+        validators: Arc<AuthorityAggregator<A>>,
         notifier: Arc<NotifyRead<TransactionDigest, QuorumDriverResult>>,
-        reconfig_observer: Arc<dyn ReconfigObserver<A, S> + Sync + Send>,
+        reconfig_observer: Arc<dyn ReconfigObserver<A> + Sync + Send>,
         metrics: Arc<QuorumDriverMetrics>,
         max_retry_times: u8,
     ) -> Self {
@@ -656,7 +649,7 @@ where
         }
     }
 
-    pub fn clone_quorum_driver(&self) -> Arc<QuorumDriver<A, S>> {
+    pub fn clone_quorum_driver(&self) -> Arc<QuorumDriver<A>> {
         self.quorum_driver.clone()
     }
 
@@ -666,7 +659,7 @@ where
         self.effects_subscriber.resubscribe()
     }
 
-    pub fn authority_aggregator(&self) -> &ArcSwap<AuthorityAggregator<A, S>> {
+    pub fn authority_aggregator(&self) -> &ArcSwap<AuthorityAggregator<A>> {
         self.quorum_driver.authority_aggregator()
     }
 
@@ -677,7 +670,7 @@ where
     /// Process a QuorumDriverTask.
     /// The function has no return value - the corresponding actions of task result
     /// are performed in this call.
-    async fn process_task(quorum_driver: Arc<QuorumDriver<A, S>>, task: QuorumDriverTask) {
+    async fn process_task(quorum_driver: Arc<QuorumDriver<A>>, task: QuorumDriverTask) {
         debug!(?task, "Quorum Driver processing task");
         let QuorumDriverTask {
             transaction,
@@ -750,22 +743,20 @@ where
     }
 
     fn handle_error(
-        quorum_driver: Arc<QuorumDriver<A, S>>,
+        quorum_driver: Arc<QuorumDriver<A>>,
         transaction: VerifiedTransaction,
-        err: QuorumDriverInternalError,
+        err: Option<QuorumDriverError>,
         tx_cert: Option<VerifiedCertificate>,
         old_retry_times: u8,
         action: &'static str,
     ) {
         let tx_digest = *transaction.digest();
-        debug!(?tx_digest, "Failed to {action}: {}", err);
-        if let Some(qd_error) =
-            convert_to_quorum_driver_error_if_non_retryable(&quorum_driver, err, &tx_digest, action)
-        {
-            // If non-retryable failure, this task reaches terminal state for now, notify waiter.
+        if let Some(qd_error) = err {
+            debug!(?tx_digest, "Failed to {action}: {}", qd_error);
+            // non-retryable failure, this task reaches terminal state for now, notify waiter.
             quorum_driver.notify(&transaction, &Err(qd_error), old_retry_times + 1);
         } else {
-            // re-enqueue if retryable
+            debug!(?tx_digest, "Failed to {action} - Retrying");
             spawn_monitored_task!(quorum_driver.enqueue_again_maybe(
                 transaction.clone(),
                 tx_cert,
@@ -775,7 +766,7 @@ where
     }
 
     async fn task_queue_processor(
-        quorum_driver: Arc<QuorumDriver<A, S>>,
+        quorum_driver: Arc<QuorumDriver<A>>,
         mut task_receiver: Receiver<QuorumDriverTask>,
         metrics: Arc<QuorumDriverMetrics>,
     ) {
@@ -798,113 +789,19 @@ where
     }
 }
 
-// TODO: categorize all possible SuiErrors
-fn convert_to_quorum_driver_error_if_non_retryable<A, S: SignatureVerifier + Default>(
-    quorum_driver: &Arc<QuorumDriver<A, S>>,
-    err: QuorumDriverInternalError,
-    tx_digest: &TransactionDigest,
-    action: &'static str,
-) -> Option<QuorumDriverError> {
-    match err {
-        // TODO: rewrite the equivocation detection code to make it more deterministic
-        QuorumDriverInternalError::TransactionErrorWithConflictingTransactions {
-            conflicting_txes,
-            retried_tx_digest,
-            retried_tx_success,
-        } => {
-            let err = QuorumDriverError::ObjectsDoubleUsed {
-                conflicting_txes,
-                retried_tx: retried_tx_digest,
-                retried_tx_success,
-            };
-            debug!(?tx_digest, "Non retryable error when {action}: {err}");
-            Some(err)
-        }
-        QuorumDriverInternalError::TransactionError(QuorumSignTransactionError {
-            total_stake,
-            good_stake: _,
-            errors,
-            conflicting_tx_digests: _,
-        })
-        | QuorumDriverInternalError::CertificateError(QuorumExecuteCertificateError {
-            total_stake,
-            errors,
-        }) => {
-            let mut non_recoverable_bad_stake = 0;
-            let threshold = validity_threshold(total_stake);
-            let mut non_recoverable_errors = HashMap::new();
-            for (error, mut validators, stake) in errors {
-                let (retryable, categorized) = error.is_retryable();
-                if !categorized {
-                    // we should minimize possible uncategorized errors here
-                    // use ERROR for now to make them easier to spot.
-                    error!(?tx_digest, "uncategorized tx error: {error}");
-                }
-                if !retryable {
-                    non_recoverable_bad_stake += stake;
-                    let (stakes_entry, validators_entry) = non_recoverable_errors
-                        .entry(error.clone())
-                        .or_insert(((0_u64), vec![]));
-                    *stakes_entry += stake;
-                    validators_entry.append(&mut validators);
-                    if non_recoverable_bad_stake >= threshold {
-                        break;
-                    }
-                }
-            }
-
-            let is_tx_recoverable = non_recoverable_bad_stake < threshold;
-            // record non-retryable errors
-            for sui_err in non_recoverable_errors.keys() {
-                quorum_driver
-                    .metrics
-                    .total_aggregated_non_recoverable_err
-                    .with_label_values(&[
-                        sui_err.as_ref(),
-                        if is_tx_recoverable {
-                            "recoverable"
-                        } else {
-                            "non-recoverable"
-                        },
-                    ])
-                    .inc();
-            }
-
-            if is_tx_recoverable {
-                debug!(?tx_digest, "Non recoverable error stake < threshold when {action}: {non_recoverable_errors:?}");
-                return None;
-            }
-            debug!(
-                ?tx_digest,
-                "Non recoverable error stake >= threshold when {action}: {non_recoverable_errors:?}"
-            );
-            Some(QuorumDriverError::NonRecoverableTransactionError {
-                errors: Vec::from_iter(
-                    non_recoverable_errors
-                        .into_iter()
-                        .map(|(err, (stake, validators))| (err, validators, stake)),
-                ),
-            })
-        }
-    }
-}
-
-pub struct QuorumDriverHandlerBuilder<A, S = DefaultSignatureVerifier> {
-    validators: Arc<AuthorityAggregator<A, S>>,
+pub struct QuorumDriverHandlerBuilder<A> {
+    validators: Arc<AuthorityAggregator<A>>,
     metrics: Arc<QuorumDriverMetrics>,
     notifier: Option<Arc<NotifyRead<TransactionDigest, QuorumDriverResult>>>,
-    reconfig_observer: Option<Arc<dyn ReconfigObserver<A, S> + Sync + Send>>,
+    reconfig_observer: Option<Arc<dyn ReconfigObserver<A> + Sync + Send>>,
     max_retry_times: u8,
 }
 
-impl<A, S: SignatureVerifier + Default> QuorumDriverHandlerBuilder<A, S>
+impl<A> QuorumDriverHandlerBuilder<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    pub fn new(
-        validators: Arc<AuthorityAggregator<A, S>>,
-        metrics: Arc<QuorumDriverMetrics>,
-    ) -> Self {
+    pub fn new(validators: Arc<AuthorityAggregator<A>>, metrics: Arc<QuorumDriverMetrics>) -> Self {
         Self {
             validators,
             metrics,
@@ -924,7 +821,7 @@ where
 
     pub fn with_reconfig_observer(
         mut self,
-        reconfig_observer: Arc<dyn ReconfigObserver<A, S> + Sync + Send>,
+        reconfig_observer: Arc<dyn ReconfigObserver<A> + Sync + Send>,
     ) -> Self {
         self.reconfig_observer = Some(reconfig_observer);
         self
@@ -936,7 +833,7 @@ where
         self
     }
 
-    pub fn start(self) -> QuorumDriverHandler<A, S> {
+    pub fn start(self) -> QuorumDriverHandler<A> {
         QuorumDriverHandler::new(
             self.validators,
             self.notifier.unwrap_or_else(|| {

@@ -5,12 +5,13 @@ import { formatAddress, type SuiAddress } from '@mysten/sui.js';
 import cl from 'classnames';
 import { useMemo } from 'react';
 
-import { useGetValidatorMetaData } from '../useGetDelegatedStake';
+import { useSystemState } from '../useSystemState';
 import { Heading } from '_app/shared/heading';
 import { ImageIcon } from '_app/shared/image-icon';
 import { Text } from '_app/shared/text';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
+import { Badge } from '_src/ui/app/shared/Badge';
 
 interface ValidatorLogoProps {
     validatorAddress: SuiAddress;
@@ -19,6 +20,7 @@ interface ValidatorLogoProps {
     isTitle?: boolean;
     size: 'body' | 'subtitle';
     iconSize: 'sm' | 'md';
+    showActiveStatus?: boolean;
 }
 
 export function ValidatorLogo({
@@ -28,24 +30,33 @@ export function ValidatorLogo({
     isTitle,
     size,
     stacked,
+    showActiveStatus = false,
 }: ValidatorLogoProps) {
-    const { data: validatorsData, isLoading } = useGetValidatorMetaData();
+    const { data, isLoading } = useSystemState();
 
     const validatorMeta = useMemo(() => {
-        if (!validatorsData) return null;
+        if (!data) return null;
 
-        const validator = validatorsData.find(
-            ({ sui_address }) => sui_address === validatorAddress
+        return (
+            data.activeValidators.find(
+                (validator) => validator.suiAddress === validatorAddress
+            ) || null
         );
-        if (!validator) return null;
+    }, [validatorAddress, data]);
 
-        const logo = validator.image_url;
+    const stakingPoolActivationEpoch =
+        validatorMeta?.stakingPoolActivationEpoch || 0;
+    const currentEpoch = data?.epoch || 0;
 
-        return {
-            name: validator.name,
-            logo: logo,
-        };
-    }, [validatorAddress, validatorsData]);
+    // flag as new validator if the validator was activated in the last epoch
+    // for genesis validators, this will be false
+    const newValidator =
+        currentEpoch - stakingPoolActivationEpoch <= 1 && currentEpoch !== 0;
+
+    // flag if the validator is at risk of being removed from the active set
+    const isAtRisk = data?.atRiskValidators.some(
+        (item) => item[0] === validatorAddress
+    );
 
     if (isLoading) {
         return <div className="flex justify-center items-center">...</div>;
@@ -54,28 +65,46 @@ export function ValidatorLogo({
     return validatorMeta ? (
         <div
             className={cl(
-                ['w-full flex justify-start  font-semibold'],
+                'w-full flex justify-start font-semibold',
                 stacked ? 'flex-col items-start' : 'flex-row items-center',
                 isTitle ? 'gap-2.5' : 'gap-2'
             )}
         >
             <ImageIcon
-                src={validatorMeta.logo}
+                src={validatorMeta.imageUrl}
                 label={validatorMeta.name}
                 fallback={validatorMeta.name}
                 size={iconSize}
                 circle
             />
             <div className="flex flex-col gap-1.5">
-                {isTitle ? (
-                    <Heading as="h4" variant="heading4" color="steel-darker">
-                        {validatorMeta.name}
-                    </Heading>
-                ) : (
-                    <Text color="gray-90" variant={size} weight="semibold">
-                        {validatorMeta.name}
-                    </Text>
-                )}
+                <div className="flex">
+                    {isTitle ? (
+                        <Heading
+                            as="h4"
+                            variant="heading4"
+                            color="steel-darker"
+                            truncate
+                        >
+                            {validatorMeta.name}
+                        </Heading>
+                    ) : (
+                        <Text color="gray-90" variant={size} weight="semibold">
+                            {validatorMeta.name}
+                        </Text>
+                    )}
+
+                    {showActiveStatus && (
+                        <div className="ml-1 flex gap-1">
+                            {newValidator && (
+                                <Badge label="New" variant="success" />
+                            )}
+                            {isAtRisk && (
+                                <Badge label="At Risk" variant="warning" />
+                            )}
+                        </div>
+                    )}
+                </div>
                 {showAddress && (
                     <ExplorerLink
                         type={ExplorerLinkType.validator}

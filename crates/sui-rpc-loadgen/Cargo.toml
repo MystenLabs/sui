@@ -1,0 +1,62 @@
+[package]
+name = "sui-rpc-loadgen"
+version.workspace = true
+edition = "2021"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+rand = "0.8.4"
+anyhow = { version = "1.0.64", features = ["backtrace"] }
+async-trait = "0.1.61"
+axum.workspace = true
+clap = { version = "3.2.17", features = ["derive"] }
+thiserror = "1.0.34"
+tokio = { workspace = true, features = ["full"] }
+tracing = "0.1.36"
+serde = { version = "1.0.144", features = ["derive"] }
+tower = { version = "0.4.12", features = ["util", "timeout", "load-shed", "limit"] }
+tower-http = { version = "0.3.4", features = ["cors"] }
+tonic = "0.8"
+http = { version = "0.2.8" }
+futures = "0.3.23"
+uuid = {version = "1.1.2", features = [ "v4", "fast-rng"]}
+prometheus = "0.13.3"
+scopeguard = "1.1"
+tap = "1.0"
+dirs = "4.0.0"
+dashmap = "5.4.0"
+itertools = "0.10.4"
+
+eyre = "0.6.8"
+rocksdb = "0.20.1"
+tempfile = "3.3.0"
+shellexpand = "3.0.0"
+
+sui = { path = "../sui" }
+sui-node = { path = "../sui-node" }
+sui-json-rpc-types= { path = "../sui-json-rpc-types" }
+sui-types = { path = "../sui-types" }
+sui-config = { path = "../sui-config" }
+sui-keys = { path = "../sui-keys" }
+sui-sdk = { path = "../sui-sdk" }
+sui-json-rpc = { path = "../sui-json-rpc"}
+mysten-metrics = { path = "../../crates/mysten-metrics" }
+telemetry-subscribers.workspace = true
+typed-store.workspace = true
+typed-store-derive.workspace = true
+shared-crypto = { path = "../shared-crypto" }
+
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+serde_json = "1.0.95"
+strum = "0.24.1"
+strum_macros = "0.24.3"
+
+[dev-dependencies]
+test-utils = { path = "../test-utils" }
+
+
+[[bin]]
+name = "sui-rpc-loadgen"
+path = "src/main.rs"

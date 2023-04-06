@@ -12,22 +12,29 @@ use std::{
     sync::{Arc, Mutex},
     time::Duration,
 };
-use sui_config::NetworkConfig;
-use sui_config::{genesis::Genesis, ValidatorInfo};
-use sui_core::signature_verifier::IgnoreSignatureVerifier;
+use sui_config::genesis::Genesis;
 use sui_core::{
     authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
-    authority_client::{make_authority_clients, AuthorityAPI, NetworkAuthorityClient},
+    authority_client::{
+        make_authority_clients_with_timeout_config, AuthorityAPI, NetworkAuthorityClient,
+    },
     quorum_driver::{
         QuorumDriver, QuorumDriverHandler, QuorumDriverHandlerBuilder, QuorumDriverMetrics,
     },
 };
 use sui_json_rpc_types::{
-    SuiObjectDataOptions, SuiObjectResponse, SuiTransactionEffects, SuiTransactionEffectsAPI,
+    SuiObjectDataOptions, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
+    SuiTransactionBlockResponseOptions,
 };
 use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
 use sui_sdk::{SuiClient, SuiClientBuilder};
+use sui_types::base_types::SequenceNumber;
+use sui_types::messages::Argument;
+use sui_types::messages::CallArg;
+use sui_types::messages::ObjectArg;
 use sui_types::messages::TransactionEvents;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_types::{
     base_types::ObjectID,
     committee::{Committee, EpochId},
@@ -42,33 +49,34 @@ use sui_types::{
     },
     object::Object,
 };
-use sui_types::{
-    base_types::ObjectRef, crypto::AuthorityStrongQuorumSignInfo,
-    messages::ExecuteTransactionRequestType, object::Owner,
-};
+use sui_types::{base_types::ObjectRef, crypto::AuthorityStrongQuorumSignInfo, object::Owner};
 use sui_types::{
     base_types::{AuthorityName, SuiAddress},
     sui_system_state::SuiSystemStateTrait,
 };
-use sui_types::{error::SuiError, sui_system_state::SuiSystemState};
+use sui_types::{error::SuiError, gas::GasCostSummary};
 use tokio::{task::JoinSet, time::timeout};
 use tracing::{error, info};
 
+pub mod bank;
 pub mod benchmark_setup;
 pub mod drivers;
 pub mod embedded_reconfig_observer;
 pub mod fullnode_reconfig_observer;
+pub mod in_memory_wallet;
 pub mod options;
 pub mod system_state_observer;
 pub mod util;
 pub mod workloads;
+use futures::FutureExt;
 
+#[derive(Debug)]
 /// A wrapper on execution results to accommodate different types of
 /// responses from LocalValidatorAggregatorProxy and FullNodeProxy
 #[allow(clippy::large_enum_variant)]
 pub enum ExecutionEffects {
     CertifiedTransactionEffects(CertifiedTransactionEffects, TransactionEvents),
-    SuiTransactionEffects(SuiTransactionEffects),
+    SuiTransactionBlockEffects(SuiTransactionBlockEffects),
 }
 
 impl ExecutionEffects {
@@ -77,7 +85,7 @@ impl ExecutionEffects {
             ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
                 certified_effects.data().mutated().to_vec()
             }
-            ExecutionEffects::SuiTransactionEffects(sui_tx_effects) => sui_tx_effects
+            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => sui_tx_effects
                 .mutated()
                 .iter()
                 .map(|refe| (refe.reference.to_object_ref(), refe.owner))
@@ -90,10 +98,23 @@ impl ExecutionEffects {
             ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
                 certified_effects.data().created().to_vec()
             }
-            ExecutionEffects::SuiTransactionEffects(sui_tx_effects) => sui_tx_effects
+            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => sui_tx_effects
                 .created()
                 .iter()
                 .map(|refe| (refe.reference.to_object_ref(), refe.owner))
+                .collect(),
+        }
+    }
+
+    pub fn deleted(&self) -> Vec<ObjectRef> {
+        match self {
+            ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
+                certified_effects.data().deleted().to_vec()
+            }
+            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => sui_tx_effects
+                .deleted()
+                .iter()
+                .map(|refe| refe.to_object_ref())
                 .collect(),
         }
     }
@@ -103,7 +124,7 @@ impl ExecutionEffects {
             ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
                 Some(certified_effects.auth_sig())
             }
-            ExecutionEffects::SuiTransactionEffects(_) => None,
+            ExecutionEffects::SuiTransactionBlockEffects(_) => None,
         }
     }
 
@@ -112,11 +133,48 @@ impl ExecutionEffects {
             ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
                 *certified_effects.data().gas_object()
             }
-            ExecutionEffects::SuiTransactionEffects(sui_tx_effects) => {
+            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => {
                 let refe = &sui_tx_effects.gas_object();
                 (refe.reference.to_object_ref(), refe.owner)
             }
         }
+    }
+
+    pub fn sender(&self) -> SuiAddress {
+        match self.gas_object().1 {
+            Owner::AddressOwner(a) => a,
+            Owner::ObjectOwner(_) | Owner::Shared { .. } | Owner::Immutable => unreachable!(), // owner of gas object is always an address
+        }
+    }
+
+    pub fn is_ok(&self) -> bool {
+        match self {
+            ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
+                certified_effects.data().status().is_ok()
+            }
+            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => {
+                sui_tx_effects.status().is_ok()
+            }
+        }
+    }
+
+    pub fn gas_cost_summary(&self) -> GasCostSummary {
+        match self {
+            crate::ExecutionEffects::CertifiedTransactionEffects(a, _) => {
+                a.data().gas_cost_summary().clone()
+            }
+            crate::ExecutionEffects::SuiTransactionBlockEffects(b) => {
+                std::convert::Into::<GasCostSummary>::into(b.gas_cost_summary().clone())
+            }
+        }
+    }
+
+    pub fn gas_used(&self) -> u64 {
+        self.gas_cost_summary().gas_used()
+    }
+
+    pub fn net_gas_used(&self) -> i64 {
+        self.gas_cost_summary().net_gas_usage()
     }
 }
 
@@ -124,9 +182,9 @@ impl ExecutionEffects {
 pub trait ValidatorProxy {
     async fn get_object(&self, object_id: ObjectID) -> Result<Object, anyhow::Error>;
 
-    async fn get_latest_system_state_object(&self) -> Result<SuiSystemState, anyhow::Error>;
+    async fn get_latest_system_state_object(&self) -> Result<SuiSystemStateSummary, anyhow::Error>;
 
-    async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects>;
+    async fn execute_transaction_block(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects>;
 
     /// This function is similar to `execute_transaction` but does not check any validator's
     /// signature. It should only be used for benchmarks.
@@ -143,9 +201,9 @@ pub trait ValidatorProxy {
 
 // TODO: Eventually remove this proxy because we shouldn't rely on validators to read objects.
 pub struct LocalValidatorAggregatorProxy {
-    _qd_handler: QuorumDriverHandler<NetworkAuthorityClient, IgnoreSignatureVerifier>,
+    _qd_handler: QuorumDriverHandler<NetworkAuthorityClient>,
     // Stress client does not verify individual validator signatures since this is very expensive
-    qd: Arc<QuorumDriver<NetworkAuthorityClient, IgnoreSignatureVerifier>>,
+    qd: Arc<QuorumDriver<NetworkAuthorityClient>>,
     committee: Committee,
     clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,
     requests: Mutex<JoinSet<()>>,
@@ -162,54 +220,26 @@ impl LocalValidatorAggregatorProxy {
             .build()
             .unwrap();
 
-        let validator_info = genesis.validator_set();
-        let committee = Committee::new(0, ValidatorInfo::voting_rights(&validator_info)).unwrap();
-        let clients = make_authority_clients(
-            &validator_info,
+        let committee = genesis.committee_with_network();
+        let clients = make_authority_clients_with_timeout_config(
+            &committee,
             DEFAULT_CONNECT_TIMEOUT_SEC,
             DEFAULT_REQUEST_TIMEOUT_SEC,
-        );
-
-        Self::new_impl(
-            aggregator,
-            registry,
-            reconfig_fullnode_rpc_url,
-            clients,
-            committee,
         )
-        .await
-    }
-
-    pub async fn from_network_config(
-        configs: &NetworkConfig,
-        registry: &Registry,
-        reconfig_fullnode_rpc_url: Option<&str>,
-    ) -> Self {
-        let (aggregator, _) = AuthorityAggregatorBuilder::from_network_config(configs)
-            .with_registry(registry)
-            .build()
-            .unwrap();
-
-        let validator_info = configs.validator_set();
-        let committee = Committee::new(0, ValidatorInfo::voting_rights(&validator_info)).unwrap();
-        let clients = make_authority_clients(
-            &validator_info,
-            DEFAULT_CONNECT_TIMEOUT_SEC,
-            DEFAULT_REQUEST_TIMEOUT_SEC,
-        );
+        .unwrap();
 
         Self::new_impl(
             aggregator,
             registry,
             reconfig_fullnode_rpc_url,
             clients,
-            committee,
+            committee.committee,
         )
         .await
     }
 
     async fn new_impl(
-        aggregator: AuthorityAggregator<NetworkAuthorityClient, IgnoreSignatureVerifier>,
+        aggregator: AuthorityAggregator<NetworkAuthorityClient>,
         registry: &Registry,
         reconfig_fullnode_rpc_url: Option<&str>,
         clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,
@@ -270,15 +300,15 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             .await?)
     }
 
-    async fn get_latest_system_state_object(&self) -> Result<SuiSystemState, anyhow::Error> {
+    async fn get_latest_system_state_object(&self) -> Result<SuiSystemStateSummary, anyhow::Error> {
         let auth_agg = self.qd.authority_aggregator().load();
-        auth_agg
+        Ok(auth_agg
             .get_latest_system_state_object_for_testing()
-            .await
-            .map(SuiSystemState::new_for_benchmarking)
+            .await?
+            .into_sui_system_state_summary())
     }
 
-    async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
+    async fn execute_transaction_block(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
         if std::env::var("BENCH_MODE").is_ok() {
             return self.execute_bench_transaction(tx).await;
         }
@@ -317,8 +347,8 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
 
         // Send the transaction to all validators.
         let mut futures = FuturesUnordered::new();
-        for client in self.clients.values() {
-            let fut = client.handle_transaction(tx.clone());
+        for (name, client) in self.clients.iter() {
+            let fut = client.handle_transaction(tx.clone()).map(|r| (r, *name));
             futures.push(fut);
         }
 
@@ -328,7 +358,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         let mut total_stake = 0;
         let mut votes = Vec::new();
         let mut certificate = None;
-        while let Some(response) = futures.next().await {
+        while let Some((response, name)) = futures.next().await {
             match response {
                 Ok(response) => match response.status {
                     // If all goes well, the authority returns a vote.
@@ -350,7 +380,16 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                 },
                 // This typically happens when the validators are overloaded and the transaction is
                 // immediately rejected.
-                Err(e) => tracing::warn!("Failed to submit transaction: {e}"),
+                Err(e) => {
+                    self.qd
+                        .authority_aggregator()
+                        .load()
+                        .metrics
+                        .process_tx_errors
+                        .with_label_values(&[&name.concise().to_string(), e.as_ref()])
+                        .inc();
+                    tracing::warn!("Failed to submit transaction: {e}")
+                }
             }
 
             if total_stake >= self.committee.quorum_threshold() {
@@ -406,14 +445,20 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         total_stake = 0;
         let mut transaction_effects = None;
         let mut transaction_events = None;
-        for client in self.clients.values() {
+        for (name, client) in self.clients.iter() {
             let client = client.clone();
             let certificate = certified_transaction.clone();
-            futures.push(async move { client.handle_certificate(certificate).await });
+            let name = *name;
+            futures.push(async move {
+                client
+                    .handle_certificate(certificate)
+                    .map(move |r| (r, name))
+                    .await
+            });
         }
 
         // Wait for the replies from a quorum of validators.
-        while let Some(response) = futures.next().await {
+        while let Some((response, name)) = futures.next().await {
             match response {
                 // If all goes well, the validators reply with signed effects.
                 Ok(HandleCertificateResponse {
@@ -428,7 +473,16 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
 
                 // This typically happens when the validators are overloaded and the certificate is
                 // immediately rejected.
-                Err(e) => tracing::warn!("Failed to submit certificate: {e}"),
+                Err(e) => {
+                    self.qd
+                        .authority_aggregator()
+                        .load()
+                        .metrics
+                        .process_cert_errors
+                        .with_label_values(&[&name.concise().to_string(), e.as_ref()])
+                        .inc();
+                    tracing::warn!("Failed to submit certificate: {e}")
+                }
             }
 
             if total_stake >= self.committee.quorum_threshold() {
@@ -482,9 +536,9 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
     async fn get_validators(&self) -> Result<Vec<SuiAddress>, anyhow::Error> {
         let system_state = self.get_latest_system_state_object().await?;
         Ok(system_state
-            .get_validator_metadata_vec()
-            .into_iter()
-            .map(|metadata| metadata.sui_address)
+            .active_validators
+            .iter()
+            .map(|v| v.sui_address)
             .collect())
     }
 }
@@ -507,7 +561,8 @@ impl FullNodeProxy {
         let committee_vec = resp.validators;
         let committee_map =
             BTreeMap::from_iter(committee_vec.into_iter().map(|(name, stake)| (name, stake)));
-        let committee = Committee::new(epoch, committee_map)?;
+        let committee =
+            Committee::new_for_testing_with_normalized_voting_power(epoch, committee_map);
 
         Ok(Self {
             sui_client,
@@ -519,27 +574,30 @@ impl FullNodeProxy {
 #[async_trait]
 impl ValidatorProxy for FullNodeProxy {
     async fn get_object(&self, object_id: ObjectID) -> Result<Object, anyhow::Error> {
-        match self
+        let response = self
             .sui_client
             .read_api()
             .get_object_with_options(object_id, SuiObjectDataOptions::bcs_lossless())
-            .await?
-        {
-            SuiObjectResponse::Exists(sui_object) => sui_object.try_into(),
-            _ => bail!("Object {:?} not found", object_id),
+            .await?;
+
+        if let Some(sui_object) = response.data {
+            sui_object.try_into()
+        } else if let Some(error) = response.error {
+            bail!("Error getting object {:?}: {}", object_id, error)
+        } else {
+            bail!("Object {:?} not found and no error provided", object_id)
         }
     }
 
-    async fn get_latest_system_state_object(&self) -> Result<SuiSystemState, anyhow::Error> {
+    async fn get_latest_system_state_object(&self) -> Result<SuiSystemStateSummary, anyhow::Error> {
         Ok(self
             .sui_client
-            .read_api()
-            .get_sui_system_state()
-            .await?
-            .into())
+            .governance_api()
+            .get_latest_sui_system_state()
+            .await?)
     }
 
-    async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
+    async fn execute_transaction_block(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
         let tx_digest = *tx.digest();
         let tx = tx.verify()?;
         let mut retry_cnt = 0;
@@ -549,15 +607,17 @@ impl ValidatorProxy for FullNodeProxy {
             match self
                 .sui_client
                 .quorum_driver()
-                .execute_transaction(
+                .execute_transaction_block(
                     tx.clone(),
-                    // We need to use WaitForLocalExecution to make sure objects are updated on FN
-                    Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+                    SuiTransactionBlockResponseOptions::new().with_effects(),
+                    None,
                 )
                 .await
             {
                 Ok(resp) => {
-                    let effects = ExecutionEffects::SuiTransactionEffects(resp.effects);
+                    let effects = ExecutionEffects::SuiTransactionBlockEffects(
+                        resp.effects.expect("effects field should not be None"),
+                    );
                     return Ok(effects);
                 }
                 Err(err) => {
@@ -573,7 +633,7 @@ impl ValidatorProxy for FullNodeProxy {
     }
 
     async fn execute_bench_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
-        self.execute_transaction(tx).await
+        self.execute_transaction_block(tx).await
     }
 
     fn clone_committee(&self) -> Committee {
@@ -592,7 +652,132 @@ impl ValidatorProxy for FullNodeProxy {
     }
 
     async fn get_validators(&self) -> Result<Vec<SuiAddress>, anyhow::Error> {
-        let validators = self.sui_client.governance_api().get_validators().await?;
+        let validators = self
+            .sui_client
+            .governance_api()
+            .get_latest_sui_system_state()
+            .await?
+            .active_validators;
         Ok(validators.into_iter().map(|v| v.sui_address).collect())
     }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub enum BenchMoveCallArg {
+    Pure(Vec<u8>),
+    Shared((ObjectID, SequenceNumber, bool)),
+    ImmOrOwnedObject(ObjectRef),
+    ImmOrOwnedObjectVec(Vec<ObjectRef>),
+    SharedObjectVec(Vec<(ObjectID, SequenceNumber, bool)>),
+}
+
+impl From<bool> for BenchMoveCallArg {
+    fn from(b: bool) -> Self {
+        // unwrap safe because every u8 value is BCS-serializable
+        BenchMoveCallArg::Pure(bcs::to_bytes(&b).unwrap())
+    }
+}
+
+impl From<u8> for BenchMoveCallArg {
+    fn from(n: u8) -> Self {
+        // unwrap safe because every u8 value is BCS-serializable
+        BenchMoveCallArg::Pure(bcs::to_bytes(&n).unwrap())
+    }
+}
+
+impl From<u16> for BenchMoveCallArg {
+    fn from(n: u16) -> Self {
+        // unwrap safe because every u16 value is BCS-serializable
+        BenchMoveCallArg::Pure(bcs::to_bytes(&n).unwrap())
+    }
+}
+
+impl From<u32> for BenchMoveCallArg {
+    fn from(n: u32) -> Self {
+        // unwrap safe because every u32 value is BCS-serializable
+        BenchMoveCallArg::Pure(bcs::to_bytes(&n).unwrap())
+    }
+}
+
+impl From<u64> for BenchMoveCallArg {
+    fn from(n: u64) -> Self {
+        // unwrap safe because every u64 value is BCS-serializable
+        BenchMoveCallArg::Pure(bcs::to_bytes(&n).unwrap())
+    }
+}
+
+impl From<u128> for BenchMoveCallArg {
+    fn from(n: u128) -> Self {
+        // unwrap safe because every u128 value is BCS-serializable
+        BenchMoveCallArg::Pure(bcs::to_bytes(&n).unwrap())
+    }
+}
+
+impl From<&Vec<u8>> for BenchMoveCallArg {
+    fn from(v: &Vec<u8>) -> Self {
+        // unwrap safe because every vec<u8> value is BCS-serializable
+        BenchMoveCallArg::Pure(bcs::to_bytes(v).unwrap())
+    }
+}
+
+impl From<ObjectRef> for BenchMoveCallArg {
+    fn from(obj: ObjectRef) -> Self {
+        BenchMoveCallArg::ImmOrOwnedObject(obj)
+    }
+}
+
+impl From<CallArg> for BenchMoveCallArg {
+    fn from(ca: CallArg) -> Self {
+        match ca {
+            CallArg::Pure(p) => BenchMoveCallArg::Pure(p),
+            CallArg::Object(obj) => match obj {
+                ObjectArg::ImmOrOwnedObject(imo) => BenchMoveCallArg::ImmOrOwnedObject(imo),
+                ObjectArg::SharedObject {
+                    id,
+                    initial_shared_version,
+                    mutable,
+                } => BenchMoveCallArg::Shared((id, initial_shared_version, mutable)),
+            },
+        }
+    }
+}
+
+/// Convert MoveCallArg to Vector of Argument for PT
+pub fn convert_move_call_args(
+    args: &[BenchMoveCallArg],
+    pt_builder: &mut ProgrammableTransactionBuilder,
+) -> Vec<Argument> {
+    args.iter()
+        .map(|arg| match arg {
+            BenchMoveCallArg::Pure(bytes) => {
+                pt_builder.input(CallArg::Pure(bytes.clone())).unwrap()
+            }
+            BenchMoveCallArg::Shared((id, initial_shared_version, mutable)) => pt_builder
+                .input(CallArg::Object(ObjectArg::SharedObject {
+                    id: *id,
+                    initial_shared_version: *initial_shared_version,
+                    mutable: *mutable,
+                }))
+                .unwrap(),
+            BenchMoveCallArg::ImmOrOwnedObject(obj_ref) => {
+                pt_builder.input((*obj_ref).into()).unwrap()
+            }
+            BenchMoveCallArg::ImmOrOwnedObjectVec(obj_refs) => pt_builder
+                .make_obj_vec(obj_refs.iter().map(|q| ObjectArg::ImmOrOwnedObject(*q)))
+                .unwrap(),
+            BenchMoveCallArg::SharedObjectVec(obj_refs) => pt_builder
+                .make_obj_vec(
+                    obj_refs
+                        .iter()
+                        .map(
+                            |(id, initial_shared_version, mutable)| ObjectArg::SharedObject {
+                                id: *id,
+                                initial_shared_version: *initial_shared_version,
+                                mutable: *mutable,
+                            },
+                        ),
+                )
+                .unwrap(),
+        })
+        .collect()
 }

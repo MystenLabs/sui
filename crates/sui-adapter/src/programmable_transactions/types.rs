@@ -9,29 +9,41 @@ use move_core_types::{
     language_storage::{ModuleId, StructTag},
     resolver::{ModuleResolver, ResourceResolver},
 };
+use move_vm_runtime::{move_vm::MoveVM, session::Session};
 use move_vm_types::loaded_data::runtime_types::Type;
 use serde::Deserialize;
 use sui_types::{
-    base_types::{ObjectID, SequenceNumber, SuiAddress},
+    base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
     coin::Coin,
-    error::{ExecutionError, ExecutionErrorKind},
+    error::{ExecutionError, ExecutionErrorKind, SuiError},
     messages::CommandArgumentError,
     object::{Data, MoveObject, Object, Owner},
-    storage::{ChildObjectResolver, ObjectChange, ParentSync, Storage},
+    storage::{BackingPackageStore, ChildObjectResolver, ObjectChange, ParentSync, Storage},
+    TypeTag,
 };
 
-pub trait StorageView<E: std::fmt::Debug>:
-    ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage + ParentSync + ChildObjectResolver
+use super::{context::load_type, linkage_view::LinkageView};
+
+sui_macros::checked_arithmetic! {
+
+pub trait StorageView:
+    ResourceResolver<Error = SuiError>
+    + ModuleResolver<Error = SuiError>
+    + BackingPackageStore
+    + Storage
+    + ParentSync
+    + ChildObjectResolver
 {
 }
+
 impl<
-        E: std::fmt::Debug,
-        T: ResourceResolver<Error = E>
-            + ModuleResolver<Error = E>
+        T: ResourceResolver<Error = SuiError>
+            + ModuleResolver<Error = SuiError>
+            + BackingPackageStore
             + Storage
             + ParentSync
             + ChildObjectResolver,
-    > StorageView<E> for T
+    > StorageView for T
 {
 }
 
@@ -64,7 +76,7 @@ pub struct ResultValue {
     pub value: Option<Value>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UsageKind {
     BorrowImm,
     BorrowMut,
@@ -79,7 +91,7 @@ pub enum Value {
 
 #[derive(Debug, Clone)]
 pub struct ObjectValue {
-    pub type_: StructTag,
+    pub type_: Type,
     pub has_public_transfer: bool,
     // true if it has been used in a public, non-entry Move call
     // In other words, false if all usages have been with non-Move comamnds or
@@ -113,9 +125,10 @@ pub enum CommandKind<'a> {
     },
     MakeMoveVec,
     TransferObjects,
-    SplitCoin,
+    SplitCoins,
     MergeCoins,
     Publish,
+    Upgrade,
 }
 
 impl InputValue {
@@ -177,17 +190,25 @@ impl Value {
 }
 
 impl ObjectValue {
-    pub fn new(
-        type_: StructTag,
+    pub fn new<'vm, 'state, S: StorageView>(
+        vm: &'vm MoveVM,
+        session: &mut Session<'state, 'vm, LinkageView<'state, S>>,
+        type_: MoveObjectType,
         has_public_transfer: bool,
         used_in_non_entry_move_call: bool,
         contents: &[u8],
     ) -> Result<Self, ExecutionError> {
-        let contents = if Coin::is_coin(&type_) {
-            ObjectContents::Coin(Coin::from_bcs_bytes(contents)?)
+        let contents = if type_.is_coin() {
+            let Ok(coin) = Coin::from_bcs_bytes(contents) else{
+                invariant_violation!("Could not deserialize a coin")
+            };
+            ObjectContents::Coin(coin)
         } else {
             ObjectContents::Raw(contents.to_vec())
         };
+        let tag: StructTag = type_.into();
+        let type_ = load_type(session, &TypeTag::Struct(Box::new(tag)))
+            .map_err(|e| sui_types::error::convert_vm_error(e, vm, session.get_resolver()))?;
         Ok(Self {
             type_,
             has_public_transfer,
@@ -196,34 +217,42 @@ impl ObjectValue {
         })
     }
 
-    pub fn from_object(object: &Object) -> Result<Self, ExecutionError> {
+    pub fn from_object<'vm, 'state, S: StorageView>(
+        vm: &'vm MoveVM,
+        session: &mut Session<'state, 'vm, LinkageView<'state, S>>,
+        object: &Object,
+    ) -> Result<Self, ExecutionError> {
         let Object { data, .. } = object;
         match data {
             Data::Package(_) => invariant_violation!("Expected a Move object"),
-            Data::Move(move_object) => Self::from_move_object(move_object),
+            Data::Move(move_object) => Self::from_move_object(vm, session, move_object),
         }
     }
 
-    pub fn from_move_object(object: &MoveObject) -> Result<Self, ExecutionError> {
+    pub fn from_move_object<'vm, 'state, S: StorageView>(
+        vm: &'vm MoveVM,
+        session: &mut Session<'state, 'vm, LinkageView<'state, S>>,
+        object: &MoveObject,
+    ) -> Result<Self, ExecutionError> {
         Self::new(
-            object.type_.clone(),
+            vm,
+            session,
+            object.type_().clone(),
             object.has_public_transfer(),
             false,
             object.contents(),
         )
     }
 
-    pub fn coin(type_: StructTag, coin: Coin) -> Result<Self, ExecutionError> {
-        assert_invariant!(
-            Coin::is_coin(&type_),
-            "Cannot make a coin without a coin type"
-        );
-        Ok(Self {
+    /// # Safety
+    /// We must have the Type is the coin type, but we are unable to check it at this spot
+    pub unsafe fn coin(type_: Type, coin: Coin) -> Self {
+        Self {
             type_,
             has_public_transfer: true,
             used_in_non_entry_move_call: false,
             contents: ObjectContents::Coin(coin),
-        })
+        }
     }
 
     pub fn ensure_public_transfer_eligible(&self) -> Result<(), ExecutionError> {
@@ -255,7 +284,6 @@ impl TryFromValue for ObjectValue {
     fn try_from_value(value: Value) -> Result<Self, CommandArgumentError> {
         match value {
             Value::Object(o) => Ok(o),
-            // TODO support Any for dev inspect
             Value::Raw(RawValueType::Any, _) => Err(CommandArgumentError::TypeMismatch),
             Value::Raw(RawValueType::Loaded { .. }, _) => Err(CommandArgumentError::TypeMismatch),
         }
@@ -284,7 +312,7 @@ fn try_from_value_prim<'a, T: Deserialize<'a>>(
             bcs::from_bytes(bytes).map_err(|_| CommandArgumentError::InvalidBCSBytes)
         }
         Value::Raw(RawValueType::Loaded { ty, .. }, bytes) => {
-            if ty == &expected_ty {
+            if ty != &expected_ty {
                 return Err(CommandArgumentError::TypeMismatch);
             }
             bcs::from_bytes(bytes).map_err(|_| CommandArgumentError::InvalidBCSBytes)
@@ -297,4 +325,6 @@ pub fn command_argument_error(e: CommandArgumentError, arg_idx: usize) -> Execut
         e,
         arg_idx as u16,
     ))
+}
+
 }

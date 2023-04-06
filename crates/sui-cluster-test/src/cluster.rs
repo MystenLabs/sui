@@ -10,6 +10,8 @@ use sui::config::{SuiClientConfig, SuiEnv};
 use sui_config::genesis_config::GenesisConfig;
 use sui_config::Config;
 use sui_config::SUI_KEYSTORE_FILENAME;
+use sui_indexer::test_utils::start_test_indexer;
+use sui_indexer::IndexerConfig;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_swarm::memory::Swarm;
 use sui_types::base_types::SuiAddress;
@@ -24,7 +26,7 @@ const STAGING_FAUCET_ADDR: &str = "https://faucet.staging.sui.io:443";
 const CONTINUOUS_FAUCET_ADDR: &str = "https://faucet.ci.sui.io:443";
 const CONTINUOUS_NOMAD_FAUCET_ADDR: &str = "https://faucet.nomad.ci.sui.io:443";
 const TESTNET_FAUCET_ADDR: &str = "https://faucet.testnet.sui.io:443";
-const DEVNET_FULLNODE_ADDR: &str = "https://fullnode-faucet.devnet.sui.io:443";
+const DEVNET_FULLNODE_ADDR: &str = "https://rpc.devnet.sui.io:443";
 const STAGING_FULLNODE_ADDR: &str = "https://fullnode.staging.sui.io:443";
 const CONTINUOUS_FULLNODE_ADDR: &str = "https://fullnode.ci.sui.io:443";
 const CONTINUOUS_NOMAD_FULLNODE_ADDR: &str = "https://fullnode.nomad.ci.sui.io:443";
@@ -52,6 +54,7 @@ pub trait Cluster {
 
     fn fullnode_url(&self) -> &str;
     fn user_key(&self) -> AccountKeyPair;
+    fn indexer_url(&self) -> &Option<String>;
 
     /// Returns faucet url in a remote cluster.
     fn remote_faucet_url(&self) -> Option<&str>;
@@ -120,6 +123,10 @@ impl Cluster for RemoteRunningCluster {
         &self.fullnode_url
     }
 
+    fn indexer_url(&self) -> &Option<String> {
+        &None
+    }
+
     fn user_key(&self) -> AccountKeyPair {
         get_key_pair().1
     }
@@ -141,6 +148,7 @@ impl Cluster for RemoteRunningCluster {
 pub struct LocalNewCluster {
     test_cluster: TestCluster,
     fullnode_url: String,
+    indexer_url: Option<String>,
     faucet_key: AccountKeyPair,
     config_directory: tempfile::TempDir,
 }
@@ -156,7 +164,7 @@ impl LocalNewCluster {
 impl Cluster for LocalNewCluster {
     async fn start(options: &ClusterTestOpt) -> Result<Self, anyhow::Error> {
         // Let the faucet account hold 1000 gas objects on genesis
-        let genesis_config = GenesisConfig::custom_genesis(4, 1, 1000);
+        let genesis_config = GenesisConfig::custom_genesis(4, 1, 100);
 
         // TODO: options should contain port instead of address
         let fullnode_port = options.fullnode_address.as_ref().map(|addr| {
@@ -165,10 +173,18 @@ impl Cluster for LocalNewCluster {
                 .port()
         });
 
+        let indexer_address = options.indexer_address.as_ref().map(|addr| {
+            addr.parse::<SocketAddr>()
+                .expect("Unable to parse indexer address")
+        });
+
         let mut cluster_builder = TestClusterBuilder::new()
             .set_genesis_config(genesis_config)
             .enable_fullnode_events();
 
+        if let Some(epoch_duration_ms) = options.epoch_duration_ms {
+            cluster_builder = cluster_builder.with_epoch_duration_ms(epoch_duration_ms);
+        }
         if let Some(rpc_port) = fullnode_port {
             cluster_builder = cluster_builder.set_fullnode_rpc_port(rpc_port);
         }
@@ -183,6 +199,24 @@ impl Cluster for LocalNewCluster {
         // This cluster has fullnode handle, safe to unwrap
         let fullnode_url = test_cluster.fullnode_handle.rpc_url.clone();
 
+        let migrated_methods = if options.use_indexer_experimental_methods {
+            IndexerConfig::all_implemented_methods()
+        } else {
+            vec![]
+        };
+        if options.pg_address.is_some() && indexer_address.is_some() {
+            let config = IndexerConfig {
+                db_url: options.pg_address.clone().unwrap(),
+                rpc_client_url: fullnode_url.clone(),
+                rpc_server_url: indexer_address.as_ref().unwrap().ip().to_string(),
+                rpc_server_port: indexer_address.as_ref().unwrap().port(),
+                migrated_methods,
+                reset_db: true,
+                ..Default::default()
+            };
+            start_test_indexer(config).await.unwrap();
+        }
+
         // Let nodes connect to one another
         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
@@ -192,11 +226,16 @@ impl Cluster for LocalNewCluster {
             fullnode_url,
             faucet_key,
             config_directory: tempfile::tempdir()?,
+            indexer_url: options.indexer_address.clone(),
         })
     }
 
     fn fullnode_url(&self) -> &str {
         &self.fullnode_url
+    }
+
+    fn indexer_url(&self) -> &Option<String> {
+        &self.indexer_url
     }
 
     fn user_key(&self) -> AccountKeyPair {
@@ -226,6 +265,9 @@ impl Cluster for Box<dyn Cluster + Send + Sync> {
     }
     fn fullnode_url(&self) -> &str {
         (**self).fullnode_url()
+    }
+    fn indexer_url(&self) -> &Option<String> {
+        (**self).indexer_url()
     }
 
     fn user_key(&self) -> AccountKeyPair {

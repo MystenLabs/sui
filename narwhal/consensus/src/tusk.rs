@@ -6,11 +6,12 @@ use crate::{
     utils, ConsensusError, Outcome,
 };
 use config::{Committee, Stake};
-use fastcrypto::{hash::Hash, traits::EncodeDecodeBase64};
+use fastcrypto::hash::Hash;
 use std::{collections::HashMap, sync::Arc};
-use tracing::debug;
+use tracing::{debug, error_span};
 use types::{
-    Certificate, CertificateDigest, CommittedSubDag, ConsensusStore, ReputationScores, Round,
+    Certificate, CertificateAPI, CertificateDigest, CommittedSubDag, ConsensusStore, HeaderAPI,
+    ReputationScores, Round,
 };
 
 #[cfg(any(test))]
@@ -54,7 +55,7 @@ impl ConsensusProtocol for Tusk {
         // Get the certificate's digest of the leader of round r-2. If we already ordered this leader,
         // there is nothing to do.
         let leader_round = r - 2;
-        if leader_round <= state.last_committed_round {
+        if leader_round <= state.last_round.committed_round {
             return Ok((Outcome::LeaderBelowCommitRound, Vec::new()));
         }
         let (leader_digest, leader) = match Self::leader(&self.committee, leader_round, &state.dag)
@@ -69,8 +70,8 @@ impl ConsensusProtocol for Tusk {
             .get(&(r - 1))
             .expect("We should have the whole history by now")
             .values()
-            .filter(|(_, x)| x.header.parents.contains(leader_digest))
-            .map(|(_, x)| self.committee.stake(&x.origin()))
+            .filter(|(_, x)| x.header().parents().contains(leader_digest))
+            .map(|(_, x)| self.committee.stake_by_id(x.origin()))
             .sum();
 
         // If it is the case, we can commit the leader. But first, we need to recursively go back to
@@ -89,22 +90,25 @@ impl ConsensusProtocol for Tusk {
             .iter()
             .rev()
         {
+            let sub_dag_index = state.latest_sub_dag_index + 1;
+            let _span = error_span!("tusk_process_sub_dag", sub_dag_index);
+
             let mut sequence = Vec::new();
 
             // Starting from the oldest leader, flatten the sub-dag referenced by the leader.
-            for x in utils::order_dag(self.gc_depth, leader, state) {
+            for x in utils::order_dag(leader, state) {
                 // Update and clean up internal state.
-                state.update(&x, self.gc_depth);
+                state.update(&x);
 
                 // Add the certificate to the sequence.
                 sequence.push(x);
             }
+            debug!("Subdag has {} certificates", sequence.len());
 
-            let next_sub_dag_index = state.latest_sub_dag_index + 1;
             let sub_dag = CommittedSubDag {
                 certificates: sequence,
                 leader: leader.clone(),
-                sub_dag_index: next_sub_dag_index,
+                sub_dag_index,
                 reputation_score: ReputationScores::default(), // TODO compute the scores for Tusk as well
             };
 
@@ -113,7 +117,7 @@ impl ConsensusProtocol for Tusk {
                 .write_consensus_state(&state.last_committed, &sub_dag)?;
 
             // Increase the global consensus index.
-            state.latest_sub_dag_index = next_sub_dag_index;
+            state.latest_sub_dag_index = sub_dag_index;
 
             committed_sub_dags.push(sub_dag);
         }
@@ -122,7 +126,7 @@ impl ConsensusProtocol for Tusk {
         // Performance note: if tracing at the debug log level is disabled, this is cheap, see
         // https://github.com/tokio-rs/tracing/pull/326
         for (name, round) in &state.last_committed {
-            debug!("Latest commit of {}: Round {}", name.encode_base64(), round);
+            debug!("Latest commit of {}: Round {}", name, round);
         }
 
         Ok((Outcome::Commit, committed_sub_dags))
@@ -155,7 +159,7 @@ impl Tusk {
         cfg_if::cfg_if! {
             if #[cfg(test)] {
                 // consensus tests rely on returning the same leader.
-                let leader = committee.authorities.iter().next().expect("Empty authorities table!").0;
+                let leader = committee.authorities().next().expect("Empty authorities table!");
             } else {
                 // Elect the leader in a stake-weighted choice seeded by the round
                 let leader = &committee.leader(round);
@@ -163,7 +167,7 @@ impl Tusk {
         }
 
         // Return its certificate and the certificate's digest.
-        dag.get(&round).and_then(|x| x.get(leader))
+        dag.get(&round).and_then(|x| x.get(&leader.id()))
     }
 }
 
@@ -186,7 +190,7 @@ mod tests {
         // process certificates for rounds, check we don't grow the dag too much
         let fixture = CommitteeFixture::builder().build();
         let committee = fixture.committee();
-        let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
+        let keys: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
 
         let genesis = Certificate::genesis(&committee)
             .iter()
@@ -200,7 +204,7 @@ mod tests {
 
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
-        let mut state = ConsensusState::new(metrics, &committee);
+        let mut state = ConsensusState::new(metrics, &committee, gc_depth);
         let mut tusk = Tusk::new(committee, store, gc_depth);
         for certificate in certificates {
             tusk.process_certificate(&mut state, certificate).unwrap();
@@ -216,8 +220,9 @@ mod tests {
         // -- support level 1 (for L4)
         // -- support level 2 (for L4)
         //
-        let n = state.dag.len();
-        assert!(n <= 6, "DAG size: {}", n);
+        let n = state.last_committed.values().max().unwrap()
+            - state.last_committed.values().min().unwrap();
+        assert!(n <= 6, "Uncommitted depth: {}", n);
     }
 
     #[tokio::test]
@@ -228,7 +233,7 @@ mod tests {
         // process certificates for rounds, check we don't grow the dag too much
         let fixture = CommitteeFixture::builder().build();
         let committee = fixture.committee();
-        let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
+        let keys: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
 
         let genesis = Certificate::genesis(&committee)
             .iter()
@@ -244,7 +249,7 @@ mod tests {
 
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
-        let mut state = ConsensusState::new(metrics, &committee);
+        let mut state = ConsensusState::new(metrics, &committee, gc_depth);
         let mut tusk = Tusk::new((**arc_committee.load()).clone(), store, gc_depth);
 
         for certificate in certificates {
@@ -252,7 +257,8 @@ mod tests {
         }
 
         // with "less optimal" certificates (see `make_certificates`), we should keep at most gc_depth rounds lookbehind
-        let n = state.dag.len();
-        assert!(n <= gc_depth as usize, "DAG size: {}", n);
+        let n = state.last_committed.values().max().unwrap()
+            - state.last_committed.values().min().unwrap();
+        assert!(n <= gc_depth, "DAG size: {}", n);
     }
 }

@@ -1,0 +1,47 @@
+//# publish
+module 0x2.A {
+    struct G<T> has key, drop { x: T }
+
+    public store(account: &signer) {
+    label b0:
+        move_to<G<u64>>(move(account), G<u64> { x: 10 } );
+        return;
+    }
+
+    public get(account: address): Self.G<u64> {
+    label b0:
+        return move_from<G<u64>>(move(account));
+    }
+
+    public get_invalid(account: &signer): Self.G<u64> {
+    label b0:
+        return move_from<G<u64>>(move(account));
+    }
+}
+
+//# run --signers 0x1  --check-runtime-types
+import 0x2.A;
+main(account: signer) {
+label b0:
+    A.store(&account);
+    return;
+}
+
+//# run --signers 0x1  --check-runtime-types
+import 0x2.A;
+import 0x1.signer;
+main(account: signer) {
+    let a: address;
+label b0:
+    a = signer.address_of(&account);
+    _ = A.get(move(a));
+    return;
+}
+
+//# run --signers 0x1  --check-runtime-types
+import 0x2.A;
+main(account: signer) {
+label b0:
+    _ = A.get_invalid(&account);
+    return;
+}

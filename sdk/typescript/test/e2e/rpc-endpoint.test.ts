@@ -11,28 +11,27 @@ describe('Invoke any RPC endpoint', () => {
     toolbox = await setup();
   });
 
-  it('sui_getObjectsOwnedByAddress', async () => {
-    const gasObjectsExpected = await toolbox.provider.getObjectsOwnedByAddress(
+  it('suix_getOwnedObjects', async () => {
+    const gasObjectsExpected = await toolbox.provider.getOwnedObjects({
+      owner: toolbox.address(),
+    });
+    const gasObjects = await toolbox.provider.call('suix_getOwnedObjects', [
       toolbox.address(),
-    );
-    const gasObjects = await toolbox.provider.call(
-      'sui_getObjectsOwnedByAddress',
-      [toolbox.address()],
-    );
-    expect(gasObjects).toStrictEqual(gasObjectsExpected);
+    ]);
+    expect(gasObjects.data).toStrictEqual(gasObjectsExpected.data);
   });
 
   it('sui_getObjectOwnedByAddress Error', async () => {
     expect(
-      toolbox.provider.call('sui_getObjectsOwnedByAddress', []),
+      toolbox.provider.call('suix_getOwnedObjects', []),
     ).rejects.toThrowError();
   });
 
-  it('sui_getCommitteeInfo', async () => {
+  it('suix_getCommitteeInfo', async () => {
     const committeeInfoExpected = await toolbox.provider.getCommitteeInfo();
 
     const committeeInfo = await toolbox.provider.call(
-      'sui_getCommitteeInfo',
+      'suix_getCommitteeInfo',
       [],
     );
 

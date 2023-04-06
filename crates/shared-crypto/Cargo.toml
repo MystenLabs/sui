@@ -1,0 +1,15 @@
+[package]
+name = "shared-crypto"
+version = "0.0.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+serde = { version = "1.0.144", features = ["derive"] }
+serde_repr = "0.1"
+fastcrypto = { workspace = true, features = ["copy_key"] }
+eyre = "0.6.8"
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+bcs = "0.1.4"

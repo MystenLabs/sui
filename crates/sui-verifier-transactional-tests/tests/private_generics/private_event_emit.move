@@ -10,7 +10,7 @@ module a::m {
     struct S has copy, drop {}
 }
 
-//# publish
+//# publish --dependencies a
 module test::m {
     fun t(s: a::m::S) {
         sui::event::emit(s)

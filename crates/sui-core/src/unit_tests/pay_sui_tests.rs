@@ -13,57 +13,35 @@ use sui_types::crypto::AccountKeyPair;
 use sui_types::error::UserInputError;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
-    ExecutionFailureStatus, ExecutionStatus, PayAllSui, PaySui, SignedTransactionEffects,
-    SingleTransactionKind, TransactionData, TransactionEffectsAPI,
+    ExecutionFailureStatus, ExecutionStatus, SignedTransactionEffects, TransactionData,
+    TransactionEffectsAPI,
 };
 use sui_types::object::Object;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::utils::to_sender_signed_transaction;
-use sui_types::{
-    base_types::dbg_addr, crypto::get_key_pair, error::SuiError, messages::TransactionKind,
-};
+use sui_types::{base_types::dbg_addr, crypto::get_key_pair, error::SuiError};
 
 #[tokio::test]
 async fn test_pay_sui_failure_empty_recipients() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let coin1 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 1100);
+    let coin_id = ObjectID::random();
+    let coin1 = Object::with_id_owner_gas_for_testing(coin_id, sender, 2000000);
 
-    let res = execute_pay_sui(vec![coin1], vec![], vec![], sender, sender_key, 1100).await;
-
-    let effects = res.txn_result.unwrap().into_data();
-    assert_eq!(
-        *effects.status(),
-        ExecutionStatus::new_failure(ExecutionFailureStatus::EmptyRecipients, None)
-    );
-}
-
-#[tokio::test]
-async fn test_pay_sui_failure_arity_mismatch() {
-    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let recipient1 = dbg_addr(1);
-    let recipient2 = dbg_addr(2);
-    let coin1 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 1110);
-
-    let res = execute_pay_sui(
-        vec![coin1],
-        vec![recipient1, recipient2],
-        vec![10],
-        sender,
-        sender_key,
-        1100,
-    )
-    .await;
+    // an empty set of programmable transaction commands will still charge gas
+    let res = execute_pay_sui(vec![coin1], vec![], vec![], sender, sender_key, 2000000).await;
 
     let effects = res.txn_result.unwrap().into_data();
-    assert_eq!(
-        *effects.status(),
-        ExecutionStatus::new_failure(ExecutionFailureStatus::RecipientsAmountsArityMismatch, None)
-    );
+    assert_eq!(effects.status(), &ExecutionStatus::Success);
+    assert_eq!(effects.mutated().len(), 1);
+    assert_eq!(effects.mutated()[0].0 .0, coin_id);
+    assert!(effects.deleted().is_empty());
+    assert!(effects.created().is_empty());
 }
 
 #[tokio::test]
 async fn test_pay_sui_failure_insufficient_gas_balance_one_input_coin() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let coin1 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 1000);
+    let coin1 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 2000);
     let recipient1 = dbg_addr(1);
     let recipient2 = dbg_addr(2);
 
@@ -73,15 +51,15 @@ async fn test_pay_sui_failure_insufficient_gas_balance_one_input_coin() {
         vec![100, 100],
         sender,
         sender_key,
-        1200,
+        2200,
     )
     .await;
 
     assert_eq!(
         UserInputError::try_from(res.txn_result.unwrap_err()).unwrap(),
-        UserInputError::GasBalanceTooLowToCoverGasBudget {
-            gas_balance: 1000,
-            gas_budget: 1200,
+        UserInputError::GasBalanceTooLow {
+            gas_balance: 2000,
+            needed_gas_amount: 2200,
         }
     );
 }
@@ -89,7 +67,7 @@ async fn test_pay_sui_failure_insufficient_gas_balance_one_input_coin() {
 #[tokio::test]
 async fn test_pay_sui_failure_insufficient_total_balance_one_input_coin() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let coin1 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 1000);
+    let coin1 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 2600);
     let recipient1 = dbg_addr(1);
     let recipient2 = dbg_addr(2);
 
@@ -99,24 +77,24 @@ async fn test_pay_sui_failure_insufficient_total_balance_one_input_coin() {
         vec![100, 100],
         sender,
         sender_key,
-        900,
+        2500,
     )
     .await;
 
     assert_eq!(
-        UserInputError::try_from(res.txn_result.unwrap_err()).unwrap(),
-        UserInputError::GasBalanceTooLowToCoverGasBudget {
-            gas_balance: 1000,
-            gas_budget: 100 + 100 + 900,
-        }
+        res.txn_result.as_ref().unwrap().status(),
+        &ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::InsufficientCoinBalance,
+            command: Some(0) // SplitCoins is the first command in the implementation of pay
+        },
     );
 }
 
 #[tokio::test]
 async fn test_pay_sui_failure_insufficient_gas_balance_multiple_input_coins() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let coin1 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 400);
-    let coin2 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 600);
+    let coin1 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 800);
+    let coin2 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 700);
     let recipient1 = dbg_addr(1);
     let recipient2 = dbg_addr(2);
 
@@ -126,15 +104,15 @@ async fn test_pay_sui_failure_insufficient_gas_balance_multiple_input_coins() {
         vec![100, 100],
         sender,
         sender_key,
-        801,
+        2000,
     )
     .await;
 
     assert_eq!(
         UserInputError::try_from(res.txn_result.unwrap_err()).unwrap(),
-        UserInputError::GasBalanceTooLowToCoverGasBudget {
-            gas_balance: 400,
-            gas_budget: 801,
+        UserInputError::GasBalanceTooLow {
+            gas_balance: 1500,
+            needed_gas_amount: 2000,
         }
     );
 }
@@ -142,8 +120,8 @@ async fn test_pay_sui_failure_insufficient_gas_balance_multiple_input_coins() {
 #[tokio::test]
 async fn test_pay_sui_failure_insufficient_total_balance_multiple_input_coins() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let coin1 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 400);
-    let coin2 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 600);
+    let coin1 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 1400);
+    let coin2 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 1300);
     let recipient1 = dbg_addr(1);
     let recipient2 = dbg_addr(2);
 
@@ -153,15 +131,15 @@ async fn test_pay_sui_failure_insufficient_total_balance_multiple_input_coins() 
         vec![400, 400],
         sender,
         sender_key,
-        201,
+        2000,
     )
     .await;
     assert_eq!(
-        UserInputError::try_from(res.txn_result.unwrap_err()).unwrap(),
-        UserInputError::GasBalanceTooLowToCoverGasBudget {
-            gas_balance: 400 + 600,
-            gas_budget: 400 + 400 + 201,
-        }
+        res.txn_result.as_ref().unwrap().status(),
+        &ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::InsufficientCoinBalance,
+            command: Some(0) // SplitCoins is the first command in the implementation of pay
+        },
     );
 }
 
@@ -169,7 +147,7 @@ async fn test_pay_sui_failure_insufficient_total_balance_multiple_input_coins() 
 async fn test_pay_sui_success_one_input_coin() -> anyhow::Result<()> {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let object_id = ObjectID::random();
-    let coin_obj = Object::with_id_owner_gas_for_testing(object_id, sender, 2000);
+    let coin_obj = Object::with_id_owner_gas_for_testing(object_id, sender, 5000000);
     let recipient1 = dbg_addr(1);
     let recipient2 = dbg_addr(2);
     let recipient3 = dbg_addr(3);
@@ -181,7 +159,7 @@ async fn test_pay_sui_success_one_input_coin() -> anyhow::Result<()> {
         vec![100, 200, 300],
         sender,
         sender_key,
-        1000,
+        4000000,
     )
     .await;
 
@@ -231,11 +209,11 @@ async fn test_pay_sui_success_one_input_coin() -> anyhow::Result<()> {
     // the value is equal to all residual values after amounts transferred and gas payment.
     assert_eq!(effects.mutated()[0].0 .0, object_id);
     assert_eq!(effects.mutated()[0].1, sender);
-    let gas_used = effects.gas_cost_summary().gas_used();
+    let gas_used = effects.gas_cost_summary().net_gas_usage() as u64;
     let gas_object = res.authority_state.get_object(&object_id).await?.unwrap();
     assert_eq!(
         GasCoin::try_from(&gas_object)?.value(),
-        2000 - 100 - 200 - 300 - gas_used,
+        5000000 - 100 - 200 - 300 - gas_used,
     );
 
     Ok(())
@@ -247,7 +225,7 @@ async fn test_pay_sui_success_multiple_input_coins() -> anyhow::Result<()> {
     let object_id1 = ObjectID::random();
     let object_id2 = ObjectID::random();
     let object_id3 = ObjectID::random();
-    let coin_obj1 = Object::with_id_owner_gas_for_testing(object_id1, sender, 1000);
+    let coin_obj1 = Object::with_id_owner_gas_for_testing(object_id1, sender, 5000000);
     let coin_obj2 = Object::with_id_owner_gas_for_testing(object_id2, sender, 1000);
     let coin_obj3 = Object::with_id_owner_gas_for_testing(object_id3, sender, 1000);
     let recipient1 = dbg_addr(1);
@@ -259,7 +237,7 @@ async fn test_pay_sui_success_multiple_input_coins() -> anyhow::Result<()> {
         vec![500, 1500],
         sender,
         sender_key,
-        1000,
+        5000000,
     )
     .await;
     let recipient_amount_map: HashMap<_, u64> =
@@ -297,11 +275,11 @@ async fn test_pay_sui_success_multiple_input_coins() -> anyhow::Result<()> {
     // the value is equal to all residual values after amounts transferred and gas payment.
     assert_eq!(effects.mutated()[0].0 .0, object_id1);
     assert_eq!(effects.mutated()[0].1, sender);
-    let gas_used = effects.gas_cost_summary().gas_used();
+    let gas_used = effects.gas_cost_summary().net_gas_usage() as u64;
     let gas_object = res.authority_state.get_object(&object_id1).await?.unwrap();
     assert_eq!(
         GasCoin::try_from(&gas_object)?.value(),
-        3000 - 500 - 1500 - gas_used,
+        5002000 - 500 - 1500 - gas_used,
     );
 
     // make sure the second and third input coins are deleted
@@ -314,16 +292,16 @@ async fn test_pay_sui_success_multiple_input_coins() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_pay_all_sui_failure_insufficient_gas_one_input_coin() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let coin1 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 1000);
+    let coin1 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 1800);
     let recipient = dbg_addr(2);
 
     let res = execute_pay_all_sui(vec![&coin1], recipient, sender, sender_key, 2000).await;
 
     assert_eq!(
         UserInputError::try_from(res.txn_result.unwrap_err()).unwrap(),
-        UserInputError::GasBalanceTooLowToCoverGasBudget {
-            gas_balance: 1000,
-            gas_budget: 2000,
+        UserInputError::GasBalanceTooLow {
+            gas_balance: 1800,
+            needed_gas_amount: 2000,
         }
     );
 }
@@ -338,9 +316,9 @@ async fn test_pay_all_sui_failure_insufficient_gas_budget_multiple_input_coins()
 
     assert_eq!(
         UserInputError::try_from(res.txn_result.unwrap_err()).unwrap(),
-        UserInputError::GasBalanceTooLowToCoverGasBudget {
-            gas_balance: 1000,
-            gas_budget: 2500,
+        UserInputError::GasBalanceTooLow {
+            gas_balance: 2000,
+            needed_gas_amount: 2500,
         }
     );
 }
@@ -349,9 +327,9 @@ async fn test_pay_all_sui_failure_insufficient_gas_budget_multiple_input_coins()
 async fn test_pay_all_sui_success_one_input_coin() -> anyhow::Result<()> {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let object_id = ObjectID::random();
-    let coin_obj = Object::with_id_owner_gas_for_testing(object_id, sender, 2000);
+    let coin_obj = Object::with_id_owner_gas_for_testing(object_id, sender, 3000000);
     let recipient = dbg_addr(2);
-    let res = execute_pay_all_sui(vec![&coin_obj], recipient, sender, sender_key, 1000).await;
+    let res = execute_pay_all_sui(vec![&coin_obj], recipient, sender, sender_key, 2000000).await;
 
     let effects = res.txn_result.unwrap().into_data();
     assert_eq!(*effects.status(), ExecutionStatus::Success);
@@ -364,7 +342,7 @@ async fn test_pay_all_sui_success_one_input_coin() -> anyhow::Result<()> {
 
     let gas_used = effects.gas_cost_summary().gas_used();
     let gas_object = res.authority_state.get_object(&object_id).await?.unwrap();
-    assert_eq!(GasCoin::try_from(&gas_object)?.value(), 2000 - gas_used,);
+    assert_eq!(GasCoin::try_from(&gas_object)?.value(), 3000000 - gas_used,);
     Ok(())
 }
 
@@ -372,7 +350,7 @@ async fn test_pay_all_sui_success_one_input_coin() -> anyhow::Result<()> {
 async fn test_pay_all_sui_success_multiple_input_coins() -> anyhow::Result<()> {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let object_id1 = ObjectID::random();
-    let coin_obj1 = Object::with_id_owner_gas_for_testing(object_id1, sender, 2000);
+    let coin_obj1 = Object::with_id_owner_gas_for_testing(object_id1, sender, 3000000);
     let coin_obj2 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 1000);
     let coin_obj3 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 1000);
     let recipient = dbg_addr(2);
@@ -381,7 +359,7 @@ async fn test_pay_all_sui_success_multiple_input_coins() -> anyhow::Result<()> {
         recipient,
         sender,
         sender_key,
-        1000,
+        3000000,
     )
     .await;
 
@@ -396,11 +374,11 @@ async fn test_pay_all_sui_success_multiple_input_coins() -> anyhow::Result<()> {
 
     let gas_used = effects.gas_cost_summary().gas_used();
     let gas_object = res.authority_state.get_object(&object_id1).await?.unwrap();
-    assert_eq!(GasCoin::try_from(&gas_object)?.value(), 4000 - gas_used,);
+    assert_eq!(GasCoin::try_from(&gas_object)?.value(), 3002000 - gas_used,);
     Ok(())
 }
 
-struct PaySuiTransactionExecutionResult {
+struct PaySuiTransactionBlockExecutionResult {
     pub authority_state: Arc<AuthorityState>,
     pub txn_result: Result<SignedTransactionEffects, SuiError>,
 }
@@ -412,7 +390,7 @@ async fn execute_pay_sui(
     sender: SuiAddress,
     sender_key: AccountKeyPair,
     gas_budget: u64,
-) -> PaySuiTransactionExecutionResult {
+) -> PaySuiTransactionBlockExecutionResult {
     let authority_state = init_state().await;
 
     let input_coin_refs: Vec<ObjectRef> = input_coin_objects
@@ -424,20 +402,17 @@ async fn execute_pay_sui(
         .map(|obj| authority_state.insert_genesis_object(obj))
         .collect();
     join_all(handles).await;
-    let gas_object_ref = input_coin_refs[0];
 
-    let kind = TransactionKind::Single(SingleTransactionKind::PaySui(PaySui {
-        coins: input_coin_refs,
-        recipients,
-        amounts,
-    }));
-    let data = TransactionData::new(kind, sender, gas_object_ref, gas_budget, 1);
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder.pay_sui(recipients, amounts).unwrap();
+    let pt = builder.finish();
+    let data = TransactionData::new_programmable(sender, input_coin_refs, pt, gas_budget, 1);
     let tx = to_sender_signed_transaction(data, &sender_key);
     let txn_result = send_and_confirm_transaction(&authority_state, tx)
         .await
         .map(|(_, effects)| effects);
 
-    PaySuiTransactionExecutionResult {
+    PaySuiTransactionBlockExecutionResult {
         authority_state,
         txn_result,
     }
@@ -449,7 +424,7 @@ async fn execute_pay_all_sui(
     sender: SuiAddress,
     sender_key: AccountKeyPair,
     gas_budget: u64,
-) -> PaySuiTransactionExecutionResult {
+) -> PaySuiTransactionBlockExecutionResult {
     let dir = tempfile::TempDir::new().unwrap();
     let network_config = sui_config::builder::ConfigBuilder::new(&dir)
         .with_objects(
@@ -475,18 +450,16 @@ async fn execute_pay_all_sui(
             .compute_object_reference();
         input_coins.push(object_ref);
     }
-    let gas_object_ref = input_coins[0];
 
-    let kind = TransactionKind::Single(SingleTransactionKind::PayAllSui(PayAllSui {
-        coins: input_coins,
-        recipient,
-    }));
-    let data = TransactionData::new(kind, sender, gas_object_ref, gas_budget, 1);
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder.pay_all_sui(recipient);
+    let pt = builder.finish();
+    let data = TransactionData::new_programmable(sender, input_coins, pt, gas_budget, 1);
     let tx = to_sender_signed_transaction(data, &sender_key);
     let txn_result = send_and_confirm_transaction(&authority_state, tx)
         .await
         .map(|(_, effects)| effects);
-    PaySuiTransactionExecutionResult {
+    PaySuiTransactionBlockExecutionResult {
         authority_state,
         txn_result,
     }

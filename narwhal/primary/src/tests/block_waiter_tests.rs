@@ -14,8 +14,8 @@ use test_utils::{
     fixture_batch_with_transactions, fixture_payload, test_network, CommitteeFixture,
 };
 use types::{
-    Batch, BatchMessage, Certificate, CertificateDigest, MockWorkerToWorker, RequestBatchResponse,
-    WorkerToWorkerServer,
+    Batch, BatchAPI, BatchMessage, Certificate, CertificateDigest, Header, HeaderAPI,
+    MockWorkerToWorker, RequestBatchResponse, WorkerToWorkerServer,
 };
 
 #[tokio::test]
@@ -26,14 +26,16 @@ async fn test_successfully_retrieve_block() {
     let worker_cache = fixture.worker_cache();
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
-    let name = primary.public_key();
+    let id = primary.id();
 
     // AND store certificate
-    let header = author
-        .header_builder(&committee)
-        .payload(fixture_payload(2))
-        .build()
-        .unwrap();
+    let header = Header::V1(
+        author
+            .header_builder(&committee)
+            .payload(fixture_payload(2))
+            .build()
+            .unwrap(),
+    );
     let certificate = fixture.certificate(&header);
     let digest = certificate.digest();
 
@@ -48,11 +50,12 @@ async fn test_successfully_retrieve_block() {
     let mut mock_server = MockWorkerToWorker::new();
 
     // Mock the batch responses.
-    let expected_block_count = header.payload.len();
-    for (batch_digest, _) in header.payload {
+    let expected_block_count = header.payload().len();
+    for (batch_digest, _) in header.payload() {
+        let batch_digest_clone = *batch_digest;
         mock_server
             .expect_request_batch()
-            .withf(move |request| request.body().batch == batch_digest)
+            .withf(move |request| request.body().batch == batch_digest_clone)
             .returning(|_| {
                 Ok(anemo::Response::new(RequestBatchResponse {
                     batch: Some(Batch::new(vec![vec![10u8, 5u8, 2u8], vec![8u8, 2u8, 3u8]])),
@@ -62,7 +65,7 @@ async fn test_successfully_retrieve_block() {
     let routes = anemo::Router::new().add_rpc_service(WorkerToWorkerServer::new(mock_server));
     let _worker_network = worker.new_network(routes);
 
-    let address = network::multiaddr_to_address(worker_address).unwrap();
+    let address = worker_address.to_anemo_address().unwrap();
     let peer_id = PeerId(worker_name.0.to_bytes());
     network
         .connect_with_peer_id(address, peer_id)
@@ -85,7 +88,7 @@ async fn test_successfully_retrieve_block() {
 
     // WHEN we send a request to get a block
     let block_waiter =
-        BlockWaiter::new(name.clone(), worker_cache, network, Arc::new(mock_handler));
+        BlockWaiter::new(id, committee, worker_cache, network, Arc::new(mock_handler));
     let mut response = block_waiter.get_blocks(vec![digest]).await.unwrap();
 
     // THEN we should expect to get back the correct result
@@ -94,7 +97,7 @@ async fn test_successfully_retrieve_block() {
     assert_eq!(block.batches.len(), expected_block_count);
     assert_eq!(block.digest, digest.clone());
     for batch in block.batches {
-        assert_eq!(batch.batch.transactions.len(), 2);
+        assert_eq!(batch.batch.transactions().len(), 2);
     }
 }
 
@@ -106,7 +109,7 @@ async fn test_successfully_retrieve_multiple_blocks() {
     let worker_cache = fixture.worker_cache();
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
-    let name = primary.public_key();
+    let id = primary.id();
 
     let mut digests = Vec::new();
     let mut mock_server = MockWorkerToWorker::new();
@@ -186,7 +189,7 @@ async fn test_successfully_retrieve_multiple_blocks() {
         // sort the batches to make sure that the response is the expected one.
         batches.sort_by(|a, b| a.digest.cmp(&b.digest));
 
-        let header = builder.build().unwrap();
+        let header = Header::V1(builder.build().unwrap());
 
         let certificate = fixture.certificate(&header);
         certificates.push(certificate.clone());
@@ -223,7 +226,7 @@ async fn test_successfully_retrieve_multiple_blocks() {
     let routes = anemo::Router::new().add_rpc_service(WorkerToWorkerServer::new(mock_server));
     let _worker_network = worker.new_network(routes);
 
-    let address = network::multiaddr_to_address(worker_address).unwrap();
+    let address = worker_address.to_anemo_address().unwrap();
     let peer_id = PeerId(worker_name.0.to_bytes());
     network
         .connect_with_peer_id(address, peer_id)
@@ -253,7 +256,7 @@ async fn test_successfully_retrieve_multiple_blocks() {
 
     // WHEN we send a request to get a block
     let block_waiter =
-        BlockWaiter::new(name.clone(), worker_cache, network, Arc::new(mock_handler));
+        BlockWaiter::new(id, committee, worker_cache, network, Arc::new(mock_handler));
     let response = block_waiter.get_blocks(digests).await.unwrap();
 
     // THEN we should expect to get back the correct result
@@ -264,9 +267,10 @@ async fn test_successfully_retrieve_multiple_blocks() {
 async fn test_return_error_when_certificate_is_missing() {
     // GIVEN
     let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
     let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().nth(1).unwrap();
-    let name = primary.public_key();
+    let id = primary.id();
 
     // AND create a certificate but don't store it
     let certificate = Certificate::default();
@@ -289,7 +293,7 @@ async fn test_return_error_when_certificate_is_missing() {
 
     // WHEN we send a request to get a block
     let block_waiter =
-        BlockWaiter::new(name.clone(), worker_cache, network, Arc::new(mock_handler));
+        BlockWaiter::new(id, committee, worker_cache, network, Arc::new(mock_handler));
     let mut response = block_waiter.get_blocks(vec![digest]).await.unwrap();
 
     // THEN we should expect to get back the error
@@ -305,9 +309,10 @@ async fn test_return_error_when_certificate_is_missing() {
 async fn test_return_error_when_certificate_is_missing_when_get_blocks() {
     // GIVEN
     let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
     let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().nth(1).unwrap();
-    let name = primary.public_key();
+    let id = primary.id();
 
     // AND create a certificate but don't store it
     let certificate = Certificate::default();
@@ -333,7 +338,7 @@ async fn test_return_error_when_certificate_is_missing_when_get_blocks() {
 
     // WHEN we send a request to get a block
     let block_waiter =
-        BlockWaiter::new(name.clone(), worker_cache, network, Arc::new(mock_handler));
+        BlockWaiter::new(id, committee, worker_cache, network, Arc::new(mock_handler));
     let response = block_waiter.get_blocks(vec![digest]).await.unwrap();
     let r = response.blocks.get(0).unwrap().to_owned();
     let block_error = r.err().unwrap();

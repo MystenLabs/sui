@@ -11,6 +11,8 @@ use crate::{authority::AuthorityState, authority_client::AuthorityAPI};
 use async_trait::async_trait;
 use mysten_metrics::spawn_monitored_task;
 use sui_config::genesis::Genesis;
+use sui_types::messages::TransactionEvents;
+use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{
     committee::Committee,
     crypto::AuthorityKeyPair,
@@ -23,7 +25,6 @@ use sui_types::{
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},
 };
 use sui_types::{error::SuiResult, messages::HandleCertificateResponse};
-use sui_types::{messages::TransactionEvents, sui_system_state::SuiSystemStateInnerBenchmark};
 
 #[derive(Clone, Copy, Default)]
 pub struct LocalAuthorityClientFaultConfig {
@@ -106,12 +107,8 @@ impl AuthorityAPI for LocalAuthorityClient {
     async fn handle_system_state_object(
         &self,
         _request: SystemStateRequest,
-    ) -> Result<SuiSystemStateInnerBenchmark, SuiError> {
-        Ok(self
-            .state
-            .database
-            .get_sui_system_state_object()?
-            .into_benchmark_version())
+    ) -> Result<SuiSystemState, SuiError> {
+        Ok(self.state.database.get_sui_system_state_object()?)
     }
 }
 
@@ -156,7 +153,7 @@ impl LocalAuthorityClient {
             .into_inner();
 
         let events = if let Some(digest) = signed_effects.events_digest() {
-            state.get_transaction_events(*digest).await?
+            state.get_transaction_events(digest)?
         } else {
             TransactionEvents::default()
         };
@@ -251,7 +248,7 @@ impl AuthorityAPI for MockAuthorityApi {
     async fn handle_system_state_object(
         &self,
         _request: SystemStateRequest,
-    ) -> Result<SuiSystemStateInnerBenchmark, SuiError> {
+    ) -> Result<SuiSystemState, SuiError> {
         unimplemented!();
     }
 }
@@ -301,7 +298,7 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
     async fn handle_system_state_object(
         &self,
         _request: SystemStateRequest,
-    ) -> Result<SuiSystemStateInnerBenchmark, SuiError> {
+    ) -> Result<SuiSystemState, SuiError> {
         unimplemented!()
     }
 }
@@ -315,6 +312,10 @@ impl HandleTransactionTestAuthorityClient {
 
     pub fn set_tx_info_response(&mut self, resp: HandleTransactionResponse) {
         self.tx_info_resp_to_return = Ok(resp);
+    }
+
+    pub fn set_tx_info_response_error(&mut self, error: SuiError) {
+        self.tx_info_resp_to_return = Err(error);
     }
 
     pub fn reset_tx_info_response(&mut self) {

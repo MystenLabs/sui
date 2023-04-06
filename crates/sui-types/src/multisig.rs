@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    crypto::{CompressedSignature, SignatureScheme},
+    crypto::{CompressedSignature, DefaultHash, SignatureScheme},
     signature::AuthenticatorTrait,
     sui_serde::SuiBitmap,
 };
@@ -11,6 +11,7 @@ use fastcrypto::{
     ed25519::Ed25519PublicKey,
     encoding::Base64,
     error::FastCryptoError,
+    hash::HashFunction,
     secp256k1::Secp256k1PublicKey,
     secp256r1::Secp256r1PublicKey,
     traits::{ToFromBytes, VerifyingKey},
@@ -20,13 +21,13 @@ use roaring::RoaringBitmap;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use shared_crypto::intent::IntentMessage;
 use std::hash::{Hash, Hasher};
 
 use crate::{
     base_types::SuiAddress,
     crypto::{PublicKey, Signature},
     error::SuiError,
-    intent::IntentMessage,
 };
 
 #[cfg(test)]
@@ -44,13 +45,10 @@ impl AsRef<[u8]> for MultiSig {
     fn as_ref(&self) -> &[u8] {
         self.bytes
             .get_or_try_init::<_, eyre::Report>(|| {
-                let mut bytes = Vec::new();
+                let as_bytes = bcs::to_bytes(self).expect("BCS serialization should not fail");
+                let mut bytes = Vec::with_capacity(1 + as_bytes.len());
                 bytes.push(SignatureScheme::MultiSig.flag());
-                bytes.extend_from_slice(
-                    bcs::to_bytes(self)
-                        .expect("BCS serialization should not fail")
-                        .as_slice(),
-                );
+                bytes.extend_from_slice(as_bytes.as_slice());
                 Ok(bytes)
             })
             .expect("OnceCell invariant violated")
@@ -115,11 +113,14 @@ impl AuthenticatorTrait for MultiSig {
         }
         let mut weight_sum: u16 = 0;
         let message = bcs::to_bytes(&value).expect("Message serialization should not fail");
+        let mut hasher = DefaultHash::default();
+        hasher.update(message);
+        let digest = hasher.finalize().digest;
 
         // Verify each signature against its corresponding signature scheme and public key.
         // TODO: further optimization can be done because multiple Ed25519 signatures can be batch verified.
         for (sig, i) in self.sigs.iter().zip(&self.bitmap) {
-            let pk_map =
+            let (pk, weight) =
                 self.multisig_pk
                     .pk_map
                     .get(i as usize)
@@ -128,35 +129,35 @@ impl AuthenticatorTrait for MultiSig {
                     })?;
             let res = match sig {
                 CompressedSignature::Ed25519(s) => {
-                    let pk = Ed25519PublicKey::from_bytes(pk_map.0.as_ref()).map_err(|_| {
+                    let pk = Ed25519PublicKey::from_bytes(pk.as_ref()).map_err(|_| {
                         SuiError::InvalidSignature {
                             error: "Invalid public key".to_string(),
                         }
                     })?;
-                    pk.verify(&message, &s.try_into()?)
+                    pk.verify(&digest, &s.try_into()?)
                 }
                 CompressedSignature::Secp256k1(s) => {
-                    let pk = Secp256k1PublicKey::from_bytes(pk_map.0.as_ref()).map_err(|_| {
+                    let pk = Secp256k1PublicKey::from_bytes(pk.as_ref()).map_err(|_| {
                         SuiError::InvalidSignature {
                             error: "Invalid public key".to_string(),
                         }
                     })?;
-                    pk.verify(&message, &s.try_into()?)
+                    pk.verify(&digest, &s.try_into()?)
                 }
                 CompressedSignature::Secp256r1(s) => {
-                    let pk = Secp256r1PublicKey::from_bytes(pk_map.0.as_ref()).map_err(|_| {
+                    let pk = Secp256r1PublicKey::from_bytes(pk.as_ref()).map_err(|_| {
                         SuiError::InvalidSignature {
                             error: "Invalid public key".to_string(),
                         }
                     })?;
-                    pk.verify(&message, &s.try_into()?)
+                    pk.verify(&digest, &s.try_into()?)
                 }
             };
             if res.is_ok() {
-                weight_sum += pk_map.1 as u16;
+                weight_sum += *weight as u16;
             } else {
                 return Err(SuiError::InvalidSignature {
-                    error: format!("Invalid signature for pk={:?}", pk_map.0),
+                    error: format!("Invalid signature for pk={:?}", pk),
                 });
             }
         }
@@ -187,7 +188,7 @@ impl MultiSig {
             });
         }
         let mut bitmap = RoaringBitmap::new();
-        let mut sigs = Vec::new();
+        let mut sigs = Vec::with_capacity(full_sigs.len());
         for s in full_sigs {
             bitmap.insert(multisig_pk.get_index(s.to_public_key()?).ok_or(
                 SuiError::IncorrectSigner {
@@ -233,7 +234,12 @@ impl MultiSigPublicKey {
             || threshold == 0
             || pks.len() != weights.len()
             || pks.len() > MAX_SIGNER_IN_MULTISIG
-            || weights.iter().any(|w| w == &0)
+            || weights.iter().any(|w| *w == 0)
+            || weights
+                .iter()
+                .map(|w| *w as ThresholdUnit)
+                .sum::<ThresholdUnit>()
+                < threshold
         {
             return Err(SuiError::InvalidSignature {
                 error: "Invalid number of public keys".to_string(),
@@ -261,7 +267,13 @@ impl MultiSigPublicKey {
         if self.threshold == 0
             || self.pubkeys().is_empty()
             || self.pubkeys().len() > MAX_SIGNER_IN_MULTISIG
-            || self.pubkeys().iter().any(|pk_weight| pk_weight.1 == 0)
+            || self.pubkeys().iter().any(|(_pk, weight)| *weight == 0)
+            || self
+                .pubkeys()
+                .iter()
+                .map(|(_pk, weight)| *weight as ThresholdUnit)
+                .sum::<ThresholdUnit>()
+                < self.threshold
         {
             return Err(FastCryptoError::InvalidInput);
         }

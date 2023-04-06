@@ -1,26 +1,26 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crypto::PublicKey;
+use config::AuthorityIdentifier;
 use mysten_metrics::spawn_logged_monitored_task;
 use tap::TapFallible;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
 use types::{
     metered_channel::{Receiver, Sender},
-    Certificate, ConditionalBroadcastReceiver, Round,
+    Certificate, CertificateAPI, ConditionalBroadcastReceiver, HeaderAPI, Round,
 };
 
 /// Receives the highest round reached by consensus and update it for all tasks.
 pub struct StateHandler {
-    /// The public key of this authority.
-    name: PublicKey,
+    /// The id of this authority.
+    authority_id: AuthorityIdentifier,
     /// Receives the ordered certificates from consensus.
     rx_committed_certificates: Receiver<(Round, Vec<Certificate>)>,
     /// Channel to signal committee changes.
     rx_shutdown: ConditionalBroadcastReceiver,
     /// A channel to update the committed rounds
-    tx_commited_own_headers: Option<Sender<(Round, Vec<Round>)>>,
+    tx_committed_own_headers: Option<Sender<(Round, Vec<Round>)>>,
 
     network: anemo::Network,
 }
@@ -28,19 +28,19 @@ pub struct StateHandler {
 impl StateHandler {
     #[must_use]
     pub fn spawn(
-        name: PublicKey,
+        authority_id: AuthorityIdentifier,
         rx_committed_certificates: Receiver<(Round, Vec<Certificate>)>,
         rx_shutdown: ConditionalBroadcastReceiver,
-        tx_commited_own_headers: Option<Sender<(Round, Vec<Round>)>>,
+        tx_committed_own_headers: Option<Sender<(Round, Vec<Round>)>>,
         network: anemo::Network,
     ) -> JoinHandle<()> {
         spawn_logged_monitored_task!(
             async move {
                 Self {
-                    name,
+                    authority_id,
                     rx_committed_certificates,
                     rx_shutdown,
-                    tx_commited_own_headers,
+                    tx_committed_own_headers,
                     network,
                 }
                 .run()
@@ -55,8 +55,8 @@ impl StateHandler {
         let own_rounds_committed: Vec<_> = certificates
             .iter()
             .filter_map(|cert| {
-                if cert.header.author == self.name {
-                    Some(cert.header.round)
+                if cert.header().author() == self.authority_id {
+                    Some(cert.header().round())
                 } else {
                     None
                 }
@@ -69,7 +69,7 @@ impl StateHandler {
 
         // If a reporting channel is available send the committed own
         // headers to it.
-        if let Some(sender) = &self.tx_commited_own_headers {
+        if let Some(sender) = &self.tx_committed_own_headers {
             let _ = sender.send((commit_round, own_rounds_committed)).await;
         }
     }
@@ -77,7 +77,7 @@ impl StateHandler {
     async fn run(mut self) {
         info!(
             "StateHandler on node {} has started successfully.",
-            self.name
+            self.authority_id
         );
         loop {
             tokio::select! {

@@ -1,0 +1,10 @@
+Command `disassemble --name main`:
+// Move bytecode v6
+script {
+
+
+main() {
+B0:
+	0: Ret
+}
+}

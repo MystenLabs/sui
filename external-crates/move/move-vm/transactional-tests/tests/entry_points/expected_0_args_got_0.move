@@ -1,0 +1,5 @@
+//# run
+
+script {
+fun main() {}
+}

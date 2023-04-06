@@ -8,6 +8,8 @@ use crate::{id::UID, SUI_FRAMEWORK_ADDRESS};
 
 pub const CLOCK_MODULE_NAME: &IdentStr = ident_str!("clock");
 pub const CLOCK_STRUCT_NAME: &IdentStr = ident_str!("Clock");
+pub const CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME: &IdentStr =
+    ident_str!("consensus_commit_prologue");
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Clock {

@@ -4,15 +4,9 @@
 use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::{Display, Formatter, Write};
-use sui_types::base_types::{ObjectID, SuiAddress};
-use tracing::warn;
 
 use colored::Colorize;
 use itertools::Itertools;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
-
 use move_binary_format::file_format::{Ability, AbilitySet, StructTypeParameter, Visibility};
 use move_binary_format::normalized::{
     Field as NormalizedField, Function as SuiNormalizedFunction, Module as NormalizedModule,
@@ -21,6 +15,14 @@ use move_binary_format::normalized::{
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
 use move_core_types::value::{MoveStruct, MoveValue};
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use serde_with::serde_as;
+use tracing::warn;
+
+use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::sui_serde::SuiStructTag;
 
 pub type SuiMoveTypeParameterIndex = u16;
 
@@ -45,6 +47,7 @@ pub enum SuiMoveVisibility {
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct SuiMoveStructTypeParameter {
     pub constraints: SuiMoveAbilitySet,
     pub is_phantom: bool,
@@ -53,10 +56,12 @@ pub struct SuiMoveStructTypeParameter {
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub struct SuiMoveNormalizedField {
     pub name: String,
+    #[serde(rename = "type")]
     pub type_: SuiMoveNormalizedType,
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct SuiMoveNormalizedStruct {
     pub abilities: SuiMoveAbilitySet,
     pub type_parameters: Vec<SuiMoveStructTypeParameter>,
@@ -74,6 +79,7 @@ pub enum SuiMoveNormalizedType {
     U256,
     Address,
     Signer,
+    #[serde(rename_all = "camelCase")]
     Struct {
         address: String,
         module: String,
@@ -87,6 +93,7 @@ pub enum SuiMoveNormalizedType {
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct SuiMoveNormalizedFunction {
     pub visibility: SuiMoveVisibility,
     pub is_entry: bool,
@@ -102,6 +109,7 @@ pub struct SuiMoveModuleId {
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct SuiMoveNormalizedModule {
     pub file_format_version: u32,
     pub address: String,
@@ -131,10 +139,12 @@ impl From<NormalizedModule> for SuiMoveNormalizedModule {
                 .map(|(name, struct_)| (name.to_string(), SuiMoveNormalizedStruct::from(struct_)))
                 .collect::<BTreeMap<String, SuiMoveNormalizedStruct>>(),
             exposed_functions: module
-                .exposed_functions
+                .functions
                 .into_iter()
-                .map(|(name, function)| {
-                    (name.to_string(), SuiMoveNormalizedFunction::from(function))
+                .filter_map(|(name, function)| {
+                    // TODO: Do we want to expose the private functions as well?
+                    (function.is_entry || function.visibility != Visibility::Private)
+                        .then(|| (name.to_string(), SuiMoveNormalizedFunction::from(function)))
                 })
                 .collect::<BTreeMap<String, SuiMoveNormalizedFunction>>(),
         }
@@ -373,13 +383,16 @@ fn to_bytearray(value: &[MoveValue]) -> Option<Vec<u8>> {
     }
 }
 
+#[serde_as]
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
 #[serde(untagged, rename = "MoveStruct")]
 pub enum SuiMoveStruct {
     Runtime(Vec<SuiMoveValue>),
     WithTypes {
+        #[schemars(with = "String")]
         #[serde(rename = "type")]
-        type_: String,
+        #[serde_as(as = "SuiStructTag")]
+        type_: StructTag,
         fields: BTreeMap<String, SuiMoveValue>,
     },
     WithFields(BTreeMap<String, SuiMoveValue>),
@@ -510,7 +523,7 @@ impl From<MoveStruct> for SuiMoveStruct {
                     .collect(),
             ),
             MoveStruct::WithTypes { type_, fields } => SuiMoveStruct::WithTypes {
-                type_: type_.to_string(),
+                type_,
                 fields: fields
                     .into_iter()
                     .map(|(id, value)| (id.into_string(), value.into()))

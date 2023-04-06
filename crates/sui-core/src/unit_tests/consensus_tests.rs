@@ -6,12 +6,12 @@ use crate::authority::{authority_tests::init_state_with_objects, AuthorityState}
 use crate::checkpoints::CheckpointServiceNoop;
 use crate::consensus_handler::VerifiedSequencedConsensusTransaction;
 use move_core_types::{account_address::AccountAddress, ident_str};
-use multiaddr::Multiaddr;
 use narwhal_types::Transactions;
 use narwhal_types::TransactionsServer;
 use narwhal_types::{Empty, TransactionProto};
 use sui_network::tonic;
 use sui_types::crypto::deterministic_random_account_key;
+use sui_types::multiaddr::Multiaddr;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 use sui_types::{
@@ -68,7 +68,8 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
                 CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
             ],
             /* max_gas */ 10_000,
-        );
+        )
+        .unwrap();
 
         let transaction = to_sender_signed_transaction(data, &keypair);
 
@@ -111,22 +112,26 @@ async fn submit_transaction_to_consensus_adapter() {
             epoch_store: &Arc<AuthorityPerEpochStore>,
         ) -> SuiResult {
             epoch_store
-                .handle_consensus_transaction(
-                    VerifiedSequencedConsensusTransaction::new_test(transaction.clone()),
+                .process_consensus_transactions(
+                    vec![VerifiedSequencedConsensusTransaction::new_test(
+                        transaction.clone(),
+                    )],
                     &Arc::new(CheckpointServiceNoop {}),
-                    self.0.transaction_manager(),
                     self.0.db(),
                 )
-                .await
+                .await?;
+            Ok(())
         }
     }
     // Make a new consensus adapter instance.
-    let adapter = ConsensusAdapter::new(
+    let adapter = Arc::new(ConsensusAdapter::new(
         Box::new(SubmitDirectly(state.clone())),
         state.name,
         Box::new(Arc::new(ConnectionMonitorStatusForTests {})),
+        100_000,
+        100_000,
         metrics,
-    );
+    ));
 
     // Submit the transaction and ensure the adapter reports success to the caller. Note
     // that consensus may drop some transactions (so we may need to resubmit them).

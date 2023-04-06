@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(clippy::mutable_key_type)]
 
-use crate::{Batch, Certificate, CertificateDigest, Round};
-use config::Committee;
-use crypto::PublicKey;
+use crate::{Batch, Certificate, CertificateAPI, CertificateDigest, HeaderAPI, Round};
+use config::{AuthorityIdentifier, Committee};
 use fastcrypto::hash::Hash;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -50,7 +49,7 @@ impl CommittedSubDag {
     pub fn num_batches(&self) -> usize {
         self.certificates
             .iter()
-            .map(|x| x.header.payload.len())
+            .map(|x| x.header().payload().len())
             .sum()
     }
 
@@ -70,7 +69,7 @@ impl CommittedSubDag {
 pub struct ReputationScores {
     /// Holds the score for every authority. If an authority is not amongst
     /// the records of the map then we assume that its score is zero.
-    pub scores_per_authority: HashMap<PublicKey, u64>,
+    pub scores_per_authority: HashMap<AuthorityIdentifier, u64>,
     /// When true it notifies us that those scores will be the last updated scores of the
     /// current schedule before they get reset for the next schedule and start
     /// scoring from the beginning. In practice we can leverage this information to
@@ -82,10 +81,7 @@ impl ReputationScores {
     /// Creating a new ReputationScores instance pre-populating the authorities entries with
     /// zero score value.
     pub fn new(committee: &Committee) -> Self {
-        let scores_per_authority = committee
-            .authorities()
-            .map(|a| (a.0.clone(), 0_u64))
-            .collect();
+        let scores_per_authority = committee.authorities().map(|a| (a.id(), 0_u64)).collect();
 
         Self {
             scores_per_authority,
@@ -93,7 +89,7 @@ impl ReputationScores {
         }
     }
     /// Adds the provided `score` to the existing score for the provided `authority`
-    pub fn add_score(&mut self, authority: PublicKey, score: u64) {
+    pub fn add_score(&mut self, authority: AuthorityIdentifier, score: u64) {
         self.scores_per_authority
             .entry(authority)
             .and_modify(|value| *value += score)
@@ -144,7 +140,7 @@ pub type StoreResult<T> = Result<T, TypedStoreError>;
 /// The persistent storage of the sequencer.
 pub struct ConsensusStore {
     /// The latest committed round of each validator.
-    last_committed: DBMap<PublicKey, Round>,
+    last_committed: DBMap<AuthorityIdentifier, Round>,
     /// The global consensus sequence.
     committed_sub_dags_by_index: DBMap<SequenceNumber, CommittedSubDagShell>,
 }
@@ -152,7 +148,7 @@ pub struct ConsensusStore {
 impl ConsensusStore {
     /// Create a new consensus store structure by using already loaded maps.
     pub fn new(
-        last_committed: DBMap<PublicKey, Round>,
+        last_committed: DBMap<AuthorityIdentifier, Round>,
         sequence: DBMap<SequenceNumber, CommittedSubDagShell>,
     ) -> Self {
         Self {
@@ -171,14 +167,14 @@ impl ConsensusStore {
     /// Persist the consensus state.
     pub fn write_consensus_state(
         &self,
-        last_committed: &HashMap<PublicKey, Round>,
+        last_committed: &HashMap<AuthorityIdentifier, Round>,
         sub_dag: &CommittedSubDag,
     ) -> Result<(), TypedStoreError> {
         let shell = CommittedSubDagShell::from_sub_dag(sub_dag);
 
         let mut write_batch = self.last_committed.batch();
-        write_batch = write_batch.insert_batch(&self.last_committed, last_committed.iter())?;
-        write_batch = write_batch.insert_batch(
+        write_batch.insert_batch(&self.last_committed, last_committed.iter())?;
+        write_batch.insert_batch(
             &self.committed_sub_dags_by_index,
             std::iter::once((sub_dag.sub_dag_index, shell)),
         )?;
@@ -186,7 +182,7 @@ impl ConsensusStore {
     }
 
     /// Load the last committed round of each validator.
-    pub fn read_last_committed(&self) -> HashMap<PublicKey, Round> {
+    pub fn read_last_committed(&self) -> HashMap<AuthorityIdentifier, Round> {
         self.last_committed.iter().collect()
     }
 

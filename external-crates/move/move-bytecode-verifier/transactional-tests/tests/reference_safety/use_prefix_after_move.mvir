@@ -1,0 +1,54 @@
+//# publish
+module 0x42.B {
+    struct T has copy, drop {g: u64}
+
+    public new(g: u64): Self.T {
+    label b0:
+        return T{g: move(g)};
+    }
+
+    public t(this: &mut Self.T) {
+        let g: &mut u64;
+    label b0:
+        g = &mut move(this).T::g;
+        *move(g) = 3;
+        return;
+    }
+}
+
+//# publish
+module 0x42.A {
+    import 0x42.B;
+    struct T has drop {f: B.T}
+
+    public new(f: B.T): Self.T {
+    label b0:
+        return T{f: move(f)};
+    }
+
+    public t(this: &mut Self.T) {
+        let ref1: &mut B.T;
+        let ok: B.T;
+    label b0:
+        ref1 = &mut move(this).T::f;
+        B.t(copy(ref1));
+        ok = *move(ref1);
+        return;
+    }
+}
+
+//# run
+import 0x42.A;
+import 0x42.B;
+
+main() {
+    let b: B.T;
+    let x: A.T;
+    let x_ref: &mut A.T;
+label b0:
+    b = B.new(0);
+    x = A.new(move(b));
+    x_ref = &mut x;
+    A.t(move(x_ref));
+    return;
+}

@@ -1,0 +1,1 @@
+Failed to resolve dependencies for package 'NestedDeps': Resolving dependencies for package 'Nested': Path cannot access parent of current directory: ../out_of_repo

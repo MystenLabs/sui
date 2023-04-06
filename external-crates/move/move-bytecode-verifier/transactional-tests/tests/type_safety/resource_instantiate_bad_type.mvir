@@ -1,0 +1,14 @@
+//# publish
+
+module 0x42.Test {
+    struct A { b: bool }
+    struct B { b: bool }
+    struct T { ft: Self.B }
+
+    public t1(x: Self.A): Self.T {
+    label b0:
+        // arg type mismatch
+        return T{ft: move(x)};
+    }
+
+}

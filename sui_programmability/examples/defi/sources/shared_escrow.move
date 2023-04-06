@@ -42,7 +42,7 @@ module defi::shared_escrow {
         let creator = tx_context::sender(ctx);
         let id = object::new(ctx);
         let escrowed = option::some(escrowed_item);
-        transfer::share_object(
+        transfer::public_share_object(
             EscrowedObj<T,ExchangeForT> {
                 id, creator, recipient, exchange_for, escrowed
             }
@@ -60,8 +60,8 @@ module defi::shared_escrow {
         assert!(&tx_context::sender(ctx) == &escrow.recipient, EWrongRecipient);
         assert!(object::borrow_id(&obj) == &escrow.exchange_for, EWrongExchangeObject);
         // everything matches. do the swap!
-        transfer::transfer(escrowed_item, tx_context::sender(ctx));
-        transfer::transfer(obj, escrow.creator);
+        transfer::public_transfer(escrowed_item, tx_context::sender(ctx));
+        transfer::public_transfer(obj, escrow.creator);
     }
 
     /// The `creator` can cancel the escrow and get back the escrowed item
@@ -71,6 +71,6 @@ module defi::shared_escrow {
     ) {
         assert!(&tx_context::sender(ctx) == &escrow.creator, EWrongOwner);
         assert!(option::is_some(&escrow.escrowed), EAlreadyExchangedOrCancelled);
-        transfer::transfer(option::extract<T>(&mut escrow.escrowed), escrow.creator);
+        transfer::public_transfer(option::extract<T>(&mut escrow.escrowed), escrow.creator);
     }
 }

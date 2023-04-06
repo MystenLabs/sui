@@ -8,22 +8,19 @@ mod metrics;
 
 pub use errors::{SubscriberError, SubscriberResult};
 pub use state::ExecutionIndices;
-use tracing::info;
 
 use crate::metrics::ExecutorMetrics;
+use crate::subscriber::spawn_subscriber;
+
 use async_trait::async_trait;
-use config::{Committee, WorkerCache};
-use crypto::PublicKey;
-
+use config::{AuthorityIdentifier, Committee, WorkerCache};
+use mockall::automock;
+use network::client::NetworkClient;
 use prometheus::Registry;
-
 use std::sync::Arc;
 use storage::CertificateStore;
-
-use crate::subscriber::spawn_subscriber;
-use mockall::automock;
-use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
+use tracing::info;
 use types::{
     metered_channel, CertificateDigest, CommittedSubDag, ConditionalBroadcastReceiver,
     ConsensusOutput, ConsensusStore,
@@ -52,10 +49,10 @@ pub struct Executor;
 impl Executor {
     /// Spawn a new client subscriber.
     pub fn spawn<State>(
-        name: PublicKey,
-        network: oneshot::Receiver<anemo::Network>,
+        authority_id: AuthorityIdentifier,
         worker_cache: WorkerCache,
         committee: Committee,
+        client: NetworkClient,
         execution_state: State,
         shutdown_receivers: Vec<ConditionalBroadcastReceiver>,
         rx_sequence: metered_channel::Receiver<CommittedSubDag>,
@@ -67,15 +64,15 @@ impl Executor {
     {
         let metrics = ExecutorMetrics::new(registry);
 
-        // We expect this will ultimately be needed in the `Core` as well as the `Subscriber`.
+        // This will be needed in the `Subscriber`.
         let arc_metrics = Arc::new(metrics);
 
         // Spawn the subscriber.
         let subscriber_handle = spawn_subscriber(
-            name,
-            network,
+            authority_id,
             worker_cache,
             committee,
+            client,
             shutdown_receivers,
             rx_sequence,
             arc_metrics,

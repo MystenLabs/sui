@@ -1,0 +1,10 @@
+error[E04007]: incompatible types
+  ┌─ tests/move_check/translated_ir_tests/move/operators/boolean_not_non_boolean.move:3:6
+  │
+3 │     !0;
+  │      ^
+  │      │
+  │      Invalid argument to '!'
+  │      Expected: 'bool'
+  │      Given: integer
+

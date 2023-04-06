@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 use std::time::Duration;
-use sui_config::{NetworkConfig, ValidatorInfo};
+use sui_config::NetworkConfig;
 use sui_macros::*;
 use sui_node::SuiNodeHandle;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
@@ -12,9 +12,10 @@ use sui_types::messages::{
     CallArg, ExecutionFailureStatus, ExecutionStatus, ObjectArg, TransactionEffects,
     TransactionEffectsAPI, TransactionEvents,
 };
+use sui_types::multiaddr::Multiaddr;
 use sui_types::object::{generate_test_gas_objects, Object, Owner, OBJECT_START_VERSION};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
-use test_utils::authority::{spawn_test_authorities, test_authority_configs};
+use test_utils::authority::{spawn_test_authorities, test_authority_configs_with_objects};
 use test_utils::messages::move_transaction;
 use test_utils::transaction::{
     publish_package, submit_shared_object_transaction, submit_single_owner_transaction,
@@ -126,12 +127,12 @@ struct TestEnvironment {
 
 impl TestEnvironment {
     async fn new() -> Self {
-        let mut gas_objects = generate_test_gas_objects();
-        let configs = test_authority_configs();
-        let node_handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
+        let gas_objects = generate_test_gas_objects();
+        let (configs, mut gas_objects) = test_authority_configs_with_objects(gas_objects);
+        let node_handles = spawn_test_authorities(&configs).await;
 
         let move_package =
-            publish_move_package(gas_objects.pop().unwrap(), &configs.validator_set())
+            publish_move_package(gas_objects.pop().unwrap(), &configs.net_addresses())
                 .await
                 .0;
 
@@ -156,7 +157,7 @@ impl TestEnvironment {
                 self.move_package,
                 arguments,
             ),
-            &self.configs.validator_set(),
+            &self.configs.net_addresses(),
         )
         .await
     }
@@ -174,7 +175,7 @@ impl TestEnvironment {
                 self.move_package,
                 arguments,
             ),
-            &self.configs.validator_set(),
+            &self.configs.net_addresses(),
         )
         .await
     }
@@ -263,8 +264,8 @@ impl TestEnvironment {
     }
 }
 
-async fn publish_move_package(gas: Object, validators: &[ValidatorInfo]) -> ObjectRef {
+async fn publish_move_package(gas: Object, net_addresses: &[Multiaddr]) -> ObjectRef {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("tests/move_test_code");
-    publish_package(gas, path, validators).await
+    publish_package(gas, path, net_addresses).await
 }

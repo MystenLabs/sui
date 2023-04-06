@@ -87,12 +87,16 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
 #[sim_test]
 async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
-    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(600000)
+        .build()
+        .await?;
 
     let node = &test_cluster.fullnode_handle.sui_node;
 
     let temp_dir = tempfile::tempdir().unwrap();
     let reconfig_channel = node.subscribe_to_epoch_change();
+    tokio::task::yield_now().await;
     let orchestrator = TransactiondOrchestrator::new_with_network_clients(
         node.state(),
         reconfig_channel,
@@ -144,6 +148,7 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
 
     // Bring up 1 validator, we obtain quorum again and tx should succeed
     test_cluster.start_validator(validator_addresses[0]).await;
+    tokio::task::yield_now().await;
     execute_with_orchestrator(
         &orchestrator,
         txn,
@@ -167,7 +172,7 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
 async fn test_transaction_orchestrator_reconfig() {
     telemetry_subscribers::init_for_testing();
     let config = test_authority_configs();
-    let authorities = spawn_test_authorities([].into_iter(), &config).await;
+    let authorities = spawn_test_authorities(&config).await;
     let fullnode = spawn_fullnode(&config, None).await;
     let epoch = fullnode.with(|node| {
         node.transaction_orchestrator()
@@ -212,7 +217,7 @@ async fn test_tx_across_epoch_boundaries() {
     let (result_tx, mut result_rx) = tokio::sync::mpsc::channel::<FinalizedEffects>(total_tx_cnt);
 
     let (config, mut gas_objects) = test_authority_configs_with_objects(gas_objects);
-    let authorities = spawn_test_authorities([], &config).await;
+    let authorities = spawn_test_authorities(&config).await;
     let fullnode = spawn_fullnode(&config, None).await;
     let gas_object = gas_objects.swap_remove(0);
     let data = TransactionData::new_transfer_sui_with_dummy_gas_price(
@@ -242,7 +247,7 @@ async fn test_tx_across_epoch_boundaries() {
             let tx = tx.into_inner();
             tokio::task::spawn(async move {
                 match to
-                    .execute_transaction(ExecuteTransactionRequest {
+                    .execute_transaction_block(ExecuteTransactionRequest {
                         transaction: tx.clone(),
                         request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
                     })
@@ -292,7 +297,7 @@ async fn execute_with_orchestrator(
     request_type: ExecuteTransactionRequestType,
 ) -> Result<ExecuteTransactionResponse, QuorumDriverError> {
     orchestrator
-        .execute_transaction(ExecuteTransactionRequest {
+        .execute_transaction_block(ExecuteTransactionRequest {
             transaction: txn.into(),
             request_type,
         })

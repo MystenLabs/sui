@@ -1,5 +1,38 @@
 # Change Log
 
+## 0.7.0
+
+### Minor Changes
+
+- 19b567f21: Unified self- and delegated staking flows. Removed fields from `Validator` (`stake_amount`, `pending_stake`, and `pending_withdraw`) and renamed `delegation_staking_pool` to `staking_pool`. Additionally removed the `validator_stake` and `delegated_stake` fields in the `ValidatorSet` type and replaced them with a `total_stake` field.
+- 5c3b00cde: Add object id to staking pool and pool id to staked sui.
+- 3d9a04648: Adds `deactivation_epoch` to staking pool object, and adds `inactive_pools` to the validator set object.
+- a8049d159: Fixes the issue with deep nested generics by introducing array type names
+
+  - all of the methods (except for aliasing) now allow passing in arrays instead
+    of strings to allow for easier composition of generics and avoid using template
+    strings
+
+  ```js
+  // new syntax
+  bcs.registerStructType(["VecMap", "K", "V"], {
+    keys: ["vector", "K"],
+    values: ["vector", "V"],
+  });
+
+  // is identical to an old string definition
+  bcs.registerStructType("VecMap<K, V>", {
+    keys: "vector<K>",
+    values: "vector<V>",
+  });
+  ```
+
+  Similar approach applies to `bcs.ser()` and `bcs.de()` as well as to other register\* methods
+
+- a0955c479: Switch from 20 to 32-byte address. Match Secp256k1.deriveKeypair with Ed25519.
+- 0a7b42a6d: This changes almost all occurences of "delegate", "delegation" (and various capitalizations/forms) to their equivalent "stake"-based name. Function names, function argument names, RPC endpoints, Move functions, and object fields have been updated with this new naming convention.
+- 77bdf907f: When parsing u64, u128, and u256 values with bcs, they are now string encoded.
+
 ## 0.6.1
 
 ### Patch Changes
@@ -7,7 +40,6 @@
 - 0e202a543: Remove pending delegation switches.
 
 ## 0.6.0
-
 
 ```js
 // new syntax
@@ -19,7 +51,7 @@ bcs.registerStructType(["VecMap", "K", "V"], {
 // is identical to an old string definition
 bcs.registerStructType("VecMap<K, V>", {
   keys: "vector<K>",
-  values: "vector<V>"
+  values: "vector<V>",
 });
 ```
 

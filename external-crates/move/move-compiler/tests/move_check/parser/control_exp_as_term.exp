@@ -1,0 +1,36 @@
+warning[W09005]: dead or unreachable code
+  ┌─ tests/move_check/parser/control_exp_as_term.move:7:13
+  │
+7 │         1 + loop {} + 2;
+  │             ^^^^^^^ Invalid use of a divergent expression. The code following the evaluation of this expression will be dead and should be removed.
+
+warning[W09005]: dead or unreachable code
+  ┌─ tests/move_check/parser/control_exp_as_term.move:8:13
+  │
+8 │         1 + return + 0;
+  │             ^^^^^^ Invalid use of a divergent expression. The code following the evaluation of this expression will be dead and should be removed.
+
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_check/parser/control_exp_as_term.move:10:14
+   │
+10 │         foo(&if (cond) 0 else 1);
+   │              ^^^^^^^^^^^^^^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
+
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_check/parser/control_exp_as_term.move:11:14
+   │
+11 │         foo(&loop {});
+   │              ^^^^^^^ Invalid use of a divergent expression. The code following the evaluation of this expression will be dead and should be removed.
+
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_check/parser/control_exp_as_term.move:12:14
+   │
+12 │         foo(&return);
+   │              ^^^^^^ Invalid use of a divergent expression. The code following the evaluation of this expression will be dead and should be removed.
+
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_check/parser/control_exp_as_term.move:13:14
+   │
+13 │         foo(&abort 0);
+   │              ^^^^^^^ Invalid use of a divergent expression. The code following the evaluation of this expression will be dead and should be removed.
+

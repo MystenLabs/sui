@@ -9,21 +9,25 @@ use crate::{
         AccountKeyPair, AuthorityKeyPair, AuthoritySignature, Signature, SuiAuthoritySignature,
         SuiSignature,
     },
-    intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion, PersonalMessage},
     messages::{Transaction, TransactionData},
     object::Object,
 };
 
+use crate::crypto::get_key_pair;
+
+use shared_crypto::intent::{
+    AppId, Intent, IntentMessage, IntentScope, IntentVersion, PersonalMessage,
+};
+
 #[test]
 fn test_personal_message_intent() {
-    use crate::crypto::{get_key_pair, Signature};
     let (addr1, sec1): (_, AccountKeyPair) = get_key_pair();
     let message = "Hello".as_bytes().to_vec();
     let p_message = PersonalMessage { message };
     let p_message_2 = p_message.clone();
     let p_message_bcs = bcs::to_bytes(&p_message).unwrap();
 
-    let intent = Intent::default().with_scope(IntentScope::PersonalMessage);
+    let intent = Intent::sui_app(IntentScope::PersonalMessage);
     let intent1 = intent.clone();
     let intent2 = intent.clone();
     let intent_bcs = bcs::to_bytes(&IntentMessage::new(intent, &p_message)).unwrap();
@@ -50,7 +54,6 @@ fn test_personal_message_intent() {
 
 #[test]
 fn test_authority_signature_intent() {
-    use crate::crypto::get_key_pair;
     let kp: AuthorityKeyPair = get_key_pair().1;
 
     // Create a signed user transaction.
@@ -65,38 +68,33 @@ fn test_authority_signature_intent() {
         object.compute_object_reference(),
         10000,
     );
-    let data1 = data.clone();
-    let data2 = data.clone();
-    let signature =
-        Signature::new_secure(&IntentMessage::new(Intent::default(), data1), &sender_key);
-    let tx = Transaction::from_data(data2, Intent::default(), vec![signature]);
+    let signature = Signature::new_secure(
+        &IntentMessage::new(Intent::sui_transaction(), data.clone()),
+        &sender_key,
+    );
+    let tx = Transaction::from_data(data, Intent::sui_transaction(), vec![signature]);
     let tx1 = tx.clone();
     assert!(tx.verify().is_ok());
 
-    // signature does not sign on intent fails.
-    let signature_insecure = Signature::new(&data, &sender_key);
-    let tx_1 = Transaction::from_data(data, Intent::default(), vec![signature_insecure]);
-    assert!(tx_1.verify().is_err());
-
     // Create an intent with signed data.
-    let intent_bcs = bcs::to_bytes(&tx1.intent_message).unwrap();
+    let intent_bcs = bcs::to_bytes(tx1.intent_message()).unwrap();
 
     // Check that the first 3 bytes are the domain separation information.
     assert_eq!(
         &intent_bcs[..3],
         vec![
+            IntentScope::TransactionData as u8,
             IntentVersion::V0 as u8,
             AppId::Sui as u8,
-            IntentScope::TransactionData as u8,
         ]
     );
 
     // Check that intent's last bytes match the signed_data's bsc bytes.
-    let signed_data_bcs = bcs::to_bytes(&tx1.data().intent_message.value).unwrap();
+    let signed_data_bcs = bcs::to_bytes(&tx1.data().intent_message().value).unwrap();
     assert_eq!(&intent_bcs[3..], signed_data_bcs);
 
     // Let's ensure we can sign and verify intents.
-    let s = AuthoritySignature::new_secure(&tx1.data().intent_message, &0, &kp);
-    let verification = s.verify_secure(&tx1.data().intent_message, 0, kp.public().into());
+    let s = AuthoritySignature::new_secure(tx1.data().intent_message(), &0, &kp);
+    let verification = s.verify_secure(tx1.data().intent_message(), 0, kp.public().into());
     assert!(verification.is_ok())
 }

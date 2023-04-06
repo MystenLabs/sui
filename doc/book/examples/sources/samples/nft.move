@@ -72,14 +72,14 @@ module examples::devnet_nft {
             name: nft.name,
         });
 
-        transfer::transfer(nft, sender);
+        transfer::public_transfer(nft, sender);
     }
 
     /// Transfer `nft` to `recipient`
     public entry fun transfer(
         nft: DevNetNFT, recipient: address, _: &mut TxContext
     ) {
-        transfer::transfer(nft, recipient)
+        transfer::public_transfer(nft, recipient)
     }
 
     /// Update the `description` of `nft` to `new_description`

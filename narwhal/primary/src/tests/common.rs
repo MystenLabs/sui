@@ -1,29 +1,25 @@
+use std::num::NonZeroUsize;
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use config::WorkerId;
+use config::{AuthorityIdentifier, WorkerId};
 use crypto::NetworkKeyPair;
 use std::time::Duration;
-use storage::CertificateStore;
-use store::{reopen, rocks, rocks::DBMap, rocks::ReadWriteOptions, Store};
+use storage::{CertificateStore, CertificateStoreCache, HeaderStore, PayloadStore};
+use store::{reopen, rocks, rocks::DBMap, rocks::ReadWriteOptions};
 use test_utils::{
     temp_dir, PrimaryToWorkerMockServer, CERTIFICATES_CF, CERTIFICATE_DIGEST_BY_ORIGIN_CF,
-    CERTIFICATE_DIGEST_BY_ROUND_CF, HEADERS_CF, PAYLOAD_CF, VOTES_CF,
+    CERTIFICATE_DIGEST_BY_ROUND_CF, HEADERS_CF, PAYLOAD_CF,
 };
 use types::{
-    BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, Round, VoteInfo,
+    BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, Round,
     WorkerSynchronizeMessage,
 };
 
-use crypto::PublicKey;
 use storage::PayloadToken;
 use store::rocks::MetricConf;
 use tokio::{task::JoinHandle, time::Instant};
 
-pub fn create_db_stores() -> (
-    Store<HeaderDigest, Header>,
-    CertificateStore,
-    Store<(BatchDigest, WorkerId), PayloadToken>,
-) {
+pub fn create_db_stores() -> (HeaderStore, CertificateStore, PayloadStore) {
     // Create a new test store.
     let rocksdb = rocks::open_cf(
         temp_dir(),
@@ -48,34 +44,27 @@ pub fn create_db_stores() -> (
     ) = reopen!(&rocksdb,
         HEADERS_CF;<HeaderDigest, Header>,
         CERTIFICATES_CF;<CertificateDigest, Certificate>,
-        CERTIFICATE_DIGEST_BY_ROUND_CF;<(Round, PublicKey), CertificateDigest>,
-        CERTIFICATE_DIGEST_BY_ORIGIN_CF;<(PublicKey, Round), CertificateDigest>,
+        CERTIFICATE_DIGEST_BY_ROUND_CF;<(Round, AuthorityIdentifier), CertificateDigest>,
+        CERTIFICATE_DIGEST_BY_ORIGIN_CF;<(AuthorityIdentifier, Round), CertificateDigest>,
         PAYLOAD_CF;<(BatchDigest, WorkerId), PayloadToken>);
 
     (
-        Store::new(header_map),
+        HeaderStore::new(header_map),
         CertificateStore::new(
             certificate_map,
             certificate_digest_by_round_map,
             certificate_digest_by_origin_map,
+            CertificateStoreCache::new(NonZeroUsize::new(100).unwrap(), None),
         ),
-        Store::new(payload_map),
+        PayloadStore::new(payload_map),
     )
-}
-
-pub fn create_test_vote_store() -> Store<PublicKey, VoteInfo> {
-    // Create a new test store.
-    let rocksdb = rocks::open_cf(temp_dir(), None, MetricConf::default(), &[VOTES_CF])
-        .expect("Failed creating database");
-    let votes_map = reopen!(&rocksdb, VOTES_CF;<PublicKey, VoteInfo>);
-    Store::new(votes_map)
 }
 
 #[must_use]
 pub fn worker_listener(
     // -1 means receive unlimited messages until timeout expires
     num_of_expected_responses: i32,
-    address: multiaddr::Multiaddr,
+    address: mysten_network::Multiaddr,
     keypair: NetworkKeyPair,
 ) -> JoinHandle<Vec<WorkerSynchronizeMessage>> {
     tokio::spawn(async move {

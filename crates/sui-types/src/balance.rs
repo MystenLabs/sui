@@ -12,6 +12,8 @@ use serde::Deserialize;
 use serde::Serialize;
 pub const BALANCE_MODULE_NAME: &IdentStr = ident_str!("balance");
 pub const BALANCE_STRUCT_NAME: &IdentStr = ident_str!("Balance");
+pub const BALANCE_CREATE_REWARDS_FUNCTION_NAME: &IdentStr = ident_str!("create_staking_rewards");
+pub const BALANCE_DESTROY_REBATES_FUNCTION_NAME: &IdentStr = ident_str!("destroy_storage_rebates");
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct Supply {
@@ -28,25 +30,35 @@ impl Balance {
         Self { value }
     }
 
-    pub fn type_(type_param: StructTag) -> StructTag {
+    pub fn type_(type_param: TypeTag) -> StructTag {
         StructTag {
             address: SUI_FRAMEWORK_ADDRESS,
             module: BALANCE_MODULE_NAME.to_owned(),
             name: BALANCE_STRUCT_NAME.to_owned(),
-            type_params: vec![TypeTag::Struct(Box::new(type_param))],
+            type_params: vec![type_param],
         }
+    }
+
+    pub fn is_balance(s: &StructTag) -> bool {
+        s.address == SUI_FRAMEWORK_ADDRESS
+            && s.module.as_ident_str() == BALANCE_MODULE_NAME
+            && s.name.as_ident_str() == BALANCE_STRUCT_NAME
     }
 
     pub fn withdraw(&mut self, amount: u64) -> Result<(), ExecutionError> {
         fp_ensure!(
             self.value >= amount,
             ExecutionError::new_with_source(
-                ExecutionErrorKind::InvalidTransferSuiInsufficientBalance,
+                ExecutionErrorKind::InsufficientCoinBalance,
                 format!("balance: {} required: {}", self.value, amount)
             )
         );
         self.value -= amount;
         Ok(())
+    }
+
+    pub fn deposit_for_safe_mode(&mut self, amount: u64) {
+        self.value += amount;
     }
 
     pub fn value(&self) -> u64 {
@@ -57,7 +69,7 @@ impl Balance {
         bcs::to_bytes(&self).unwrap()
     }
 
-    pub fn layout(type_param: StructTag) -> MoveStructLayout {
+    pub fn layout(type_param: TypeTag) -> MoveStructLayout {
         MoveStructLayout::WithTypes {
             type_: Self::type_(type_param),
             fields: vec![MoveFieldLayout::new(

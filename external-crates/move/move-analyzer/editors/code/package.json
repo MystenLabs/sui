@@ -1,0 +1,137 @@
+{
+	"name": "move-analyzer",
+	"displayName": "move-analyzer",
+	"description": "A language server and basic grammar for the Move programming language.",
+	"publisher": "move",
+	"icon": "images/move.png",
+	"license": "Apache-2.0",
+	"version": "0.0.10",
+	"preview": true,
+	"homepage": "https://github.com/move-language/move",
+	"repository": {
+		"url": "https://github.com/move-language/move.git",
+		"type": "git"
+	},
+	"bugs": {
+		"url": "https://github.com/move-language/move/issues"
+	},
+	"engines": {
+		"vscode": "^1.58.2"
+	},
+	"categories": [
+		"Programming Languages"
+	],
+	"keywords": [
+		"move"
+	],
+	"main": "./out/src/main.js",
+	"activationEvents": [
+		"onLanguage:move",
+		"workspaceContains:Move.toml"
+	],
+	"contributes": {
+		"commands": [
+			{
+				"command": "move-analyzer.serverVersion",
+				"title": "Show Server Version",
+				"category": "Move Analyzer"
+			}
+		],
+		"configuration": {
+			"type": "object",
+			"title": "Move Analyzer",
+			"properties": {
+				"move-analyzer.server.path": {
+					"type": "string",
+					"default": "move-analyzer",
+					"markdownDescription": "Path and filename of the move-analyzer executable, e.g. `/usr/bin/move-analyzer`."
+				},
+				"move-analyzer.trace.server": {
+					"type": "string",
+					"scope": "window",
+					"enum": [
+						"off",
+						"messages",
+						"verbose"
+					],
+					"enumDescriptions": [
+						"Do not log any messages.",
+						"Log short summaries of each message.",
+						"Log each message and its contents."
+					],
+					"default": "off",
+					"description": "Traces the communication between the move-analyzer language server and Visual Studio Code. Note that this log can be very verbose, and so not recommended for anyone besides people working on or debugging move-analyzer itself."
+				}
+			}
+		},
+		"languages": [
+			{
+				"id": "move",
+				"aliases": [
+					"Move",
+					"move"
+				],
+				"extensions": [
+					".move"
+				],
+				"configuration": "./language-configuration.json"
+			}
+		],
+		"menus": {
+			"commandPalette": [
+				{
+					"command": "move-analyzer.serverVersion"
+				}
+			]
+		}
+	},
+	"scripts": {
+		"compile": "tsc -p ./ && cd ../../ && cargo build",
+		"watch": "tsc -watch -p ./",
+		"lint": "eslint . --ext ts --max-warnings 0",
+		"fix": "eslint . --ext ts --fix",
+		"copy-tests-files": "copyfiles \"tests/**/*.move\" \"tests/**/*.exp\" \"tests/**/*.toml\" \"tests/**/*.code-workspace\" out",
+		"pretest": "npm run compile && npm run lint && npm run copy-tests-files",
+		"test": "node ./out/tests/runTests.js",
+		"dev": "npm run pretest && cross-env mode=dev node ./out/tests/runTests.js",
+		"vscode:prepublish": "npm run pretest",
+		"package": "npm run pretest && vsce package -o move-analyzer.vsix",
+		"publish": "npm run pretest && npm run test && vsce publish"
+	},
+	"extensionDependencies": [
+		"damirka.move-syntax"
+	],
+	"dependencies": {
+		"command-exists": "^1.2.9",
+		"vscode-languageclient": "6.1.4",
+		"lru-cache": "^4.1.3"
+	},
+	"devDependencies": {
+		"@types/command-exists": "^1.2.0",
+		"@types/fs-extra": "^9.0.13",
+		"@types/glob": "^7.1.4",
+		"@types/mocha": "^9.0.0",
+		"@types/node": "^14.17.22",
+		"@types/vscode": "^1.58.2",
+		"@typescript-eslint/eslint-plugin": "^4.33.0",
+		"@typescript-eslint/parser": "^4.33.0",
+		"@vscode/test-electron": "^2.0.0",
+		"copyfiles": "2.4.1",
+		"cross-env": "^7.0.3",
+		"eslint": "^7.32.0",
+		"eslint-plugin-tsdoc": "^0.2.14",
+		"fs-extra": "10.0.1",
+		"glob": "^7.1.7",
+		"mocha": "^9.1.1",
+		"typescript": "^4.4.4",
+		"typescript-formatter": "^7.2.2",
+		"vsce": "^2.5.1",
+		"vscode-test": "^1.6.1"
+	},
+	"__metadata": {
+		"id": "71e74fc8-23c2-47b7-8594-ed00192d96a6",
+		"publisherDisplayName": "move",
+		"publisherId": "40d7def1-c662-4965-9ead-c06109c7cc6d",
+		"isPreReleaseVersion": false
+	}
+}

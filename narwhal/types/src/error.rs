@@ -2,12 +2,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{CertificateDigest, HeaderDigest, Round, TimestampMs, VoteDigest};
+use anemo::PeerId;
 use config::Epoch;
 use fastcrypto::hash::Digest;
-use std::sync::{Arc, Mutex};
+use mysten_common::sync::notify_once::NotifyOnce;
+use std::sync::Arc;
 use store::StoreError;
 use thiserror::Error;
-use tokio::sync::broadcast;
 
 #[cfg(test)]
 #[path = "./tests/error_test.rs"]
@@ -32,8 +33,7 @@ macro_rules! ensure {
 pub type DagResult<T> = Result<T, DagError>;
 
 // Notification for certificate accepted.
-// TODO: use a lighter weight alternative to broadcast::channel.
-pub type AcceptNotification = Arc<Mutex<Option<broadcast::Receiver<()>>>>;
+pub type AcceptNotification = Arc<NotifyOnce>;
 
 #[derive(Clone, Debug, Error)]
 pub enum DagError {
@@ -57,6 +57,9 @@ pub enum DagError {
 
     #[error("Header {0} has parents with invalid round numbers")]
     HeaderHasInvalidParentRoundNumbers(HeaderDigest),
+
+    #[error("Header {0} has parents with invalid timestamp")]
+    HeaderHasInvalidParentTimestamp(HeaderDigest),
 
     #[error("Header {0} has more than one parent certificate with the same authority")]
     HeaderHasDuplicateParentAuthorities(HeaderDigest),
@@ -140,6 +143,17 @@ impl<T> From<tokio::sync::mpsc::error::TrySendError<T>> for DagError {
     }
 }
 
-pub fn new_accept_notification(receiver: broadcast::Receiver<()>) -> AcceptNotification {
-    Arc::new(std::sync::Mutex::new(Some(receiver)))
+#[derive(Clone, Debug, Error)]
+pub enum LocalClientError {
+    #[error("Primary {0} has not started yet.")]
+    PrimaryNotStarted(PeerId),
+
+    #[error("Worker {0} has not started yet.")]
+    WorkerNotStarted(PeerId),
+
+    #[error("Handler encountered internal error {0}.")]
+    Internal(String),
+
+    #[error("Narwhal is shutting down.")]
+    ShuttingDown,
 }

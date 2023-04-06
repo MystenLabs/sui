@@ -15,17 +15,17 @@ export function useOwnedNFT(
     nftObjectId: string | null,
     address: SuiAddress | null
 ) {
-    const data = useGetObject(nftObjectId!);
+    const data = useGetObject(nftObjectId);
     const { data: objectData } = data;
     const objectDetails = useMemo(() => {
-        if (!objectData || !is(objectData.details, SuiObjectData) || !address)
+        if (!objectData || !is(objectData.data, SuiObjectData) || !address)
             return null;
         const objectOwner = getObjectOwner(objectData);
         return objectOwner &&
             objectOwner !== 'Immutable' &&
             'AddressOwner' in objectOwner &&
             objectOwner.AddressOwner === address
-            ? objectData.details
+            ? objectData.data
             : null;
     }, [address, objectData]);
     return { ...data, data: objectDetails };

@@ -6,6 +6,7 @@ use std::{
     sync::Arc,
 };
 
+use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use sui_types::{
     base_types::ObjectID,
@@ -14,7 +15,7 @@ use sui_types::{
 };
 use sui_types::{base_types::TransactionDigest, error::SuiResult};
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, trace, warn};
 
 use crate::authority::{
     authority_per_epoch_store::AuthorityPerEpochStore, authority_store::InputKey,
@@ -132,7 +133,7 @@ impl TransactionManager {
                     .inc();
                 continue;
             }
-            let input_object_kinds = cert.data().intent_message.value.input_objects()?;
+            let input_object_kinds = cert.data().intent_message().value.input_objects()?;
             let input_object_keys = self.authority_store.get_input_object_keys(
                 &digest,
                 &input_object_kinds,
@@ -163,6 +164,7 @@ impl TransactionManager {
 
         // Internal lock is held only for updating the internal state.
         let mut inner = self.inner.write();
+        let _scope = monitored_scope("TransactionManager::enqueue::wlock");
 
         for pending_cert in pending {
             // Tx lock is not held here, which makes it possible to send duplicated transactions to
@@ -214,6 +216,9 @@ impl TransactionManager {
                     .transaction_manager_num_enqueued_certificates
                     .with_label_values(&["ready"])
                     .inc();
+                // Record as an executing certificate.
+                assert!(inner.executing_certificates.insert(digest));
+                // Send to execution driver for execution.
                 self.certificate_ready(pending_cert.certificate);
                 continue;
             }
@@ -295,6 +300,7 @@ impl TransactionManager {
         let mut ready_digests = Vec::new();
 
         let inner = &mut self.inner.write();
+        let _scope = monitored_scope("TransactionManager::objects_available::wlock");
         if inner.epoch != epoch_store.epoch() {
             warn!(
                 "Ignoring objects committed from wrong epoch. Expected={} Actual={} \
@@ -323,13 +329,15 @@ impl TransactionManager {
                 assert!(pending_cert.missing.remove(&input_key));
                 // When a certificate has no missing input, it is ready to execute.
                 if pending_cert.missing.is_empty() {
-                    debug!(tx_digest = ?digest, "certificate ready");
+                    trace!(tx_digest = ?digest, "certificate ready");
                     let pending_cert = inner.pending_certificates.remove(&digest).unwrap();
                     assert!(inner.executing_certificates.insert(digest));
                     ready_digests.push(digest);
                     self.certificate_ready(pending_cert.certificate);
                 } else {
-                    debug!(tx_digest = ?digest, missing = ?pending_cert.missing, "Certificate waiting on missing inputs");
+                    // TODO: we should start logging this at a higher level after some period of
+                    // time has elapsed.
+                    debug!(missing = ?pending_cert.missing, "Certificate waiting on missing inputs");
                 }
             }
         }
@@ -353,6 +361,7 @@ impl TransactionManager {
     ) {
         {
             let inner = &mut self.inner.write();
+            let _scope = monitored_scope("TransactionManager::certificate_executed::wlock");
             if inner.epoch != epoch_store.epoch() {
                 warn!("Ignoring committed certificate from wrong epoch. Expected={} Actual={} CertificateDigest={:?}", inner.epoch, epoch_store.epoch(), digest);
                 return;
@@ -369,6 +378,16 @@ impl TransactionManager {
     fn certificate_ready(&self, certificate: VerifiedExecutableTransaction) {
         self.metrics.transaction_manager_num_ready.inc();
         let _ = self.tx_ready_certificates.send(certificate);
+        self.metrics.execution_driver_dispatch_queue.inc();
+    }
+
+    /// Gets the missing input object keys for the given transaction.
+    pub(crate) fn get_missing_input(&self, digest: &TransactionDigest) -> Option<Vec<InputKey>> {
+        let inner = self.inner.read();
+        inner
+            .pending_certificates
+            .get(digest)
+            .map(|cert| cert.missing.clone().into_iter().collect())
     }
 
     // Returns the number of transactions waiting on each object ID.
@@ -382,6 +401,12 @@ impl TransactionManager {
                 )
             })
             .collect()
+    }
+
+    // Returns the number of certificates pending execution or being executed by the execution driver right now.
+    pub(crate) fn execution_queue_len(&self) -> usize {
+        let inner = self.inner.read();
+        inner.pending_certificates.len() + inner.executing_certificates.len()
     }
 
     // Reconfigures the TransactionManager for a new epoch. Existing transactions will be dropped

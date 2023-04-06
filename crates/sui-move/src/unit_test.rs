@@ -10,22 +10,21 @@ use move_cli::base::{
 use move_package::BuildConfig;
 use move_unit_test::{extensions::set_extension_hook, UnitTestingConfig};
 use move_vm_runtime::native_extensions::NativeContextExtensions;
-use move_vm_test_utils::gas_schedule::INITIAL_COST_SCHEDULE;
 use once_cell::sync::Lazy;
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
 };
 use sui_core::authority::TemporaryStore;
+use sui_cost_tables::bytecode_tables::initial_cost_schedule_for_unit_tests;
 use sui_framework::natives::{self, object_runtime::ObjectRuntime, NativesCostTable};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     digests::TransactionDigest, in_memory_storage::InMemoryStorage, messages::InputObjects,
-    MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 
 // Move unit tests will halt after executing this many steps. This is a protection to avoid divergence
-const MAX_UNIT_TEST_INSTRUCTIONS: u64 = 100_000;
+const MAX_UNIT_TEST_INSTRUCTIONS: u64 = 1_000_000;
 
 #[derive(Parser)]
 pub struct Test {
@@ -46,6 +45,7 @@ impl Test {
         let with_unpublished_deps = false;
         let dump_bytecode_as_base64 = false;
         let generate_struct_layouts: bool = false;
+        let dump_package_digest = false;
         build::Build::execute_internal(
             &rerooted_path,
             BuildConfig {
@@ -55,6 +55,7 @@ impl Test {
             with_unpublished_deps,
             dump_bytecode_as_base64,
             generate_struct_layouts,
+            dump_package_digest,
         )?;
         run_move_unit_tests(
             &rerooted_path,
@@ -89,8 +90,8 @@ pub fn run_move_unit_tests(
             report_stacktrace_on_abort: true,
             ..config
         },
-        natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS),
-        Some(INITIAL_COST_SCHEDULE.clone()),
+        natives::all_natives(),
+        Some(initial_cost_schedule_for_unit_tests()),
         compute_coverage,
         &mut std::io::stdout(),
     )

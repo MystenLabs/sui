@@ -1,16 +1,15 @@
 processed 4 tasks
 
 init:
-A: object(100)
+A: object(103)
 
 task 1 'publish'. lines 10-31:
 created: object(105)
-written: object(104)
+mutated: object(104)
 
 task 2 'run'. lines 33-33:
 created: object(107), object(108), object(109)
-written: object(106)
+mutated: object(106)
 
 task 3 'run'. lines 35-35:
-Error: Transaction Effects Status: Move Runtime Abort. Location: sui::dynamic_field::add (function index 0) at offset 15, Abort Code: 0
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 0, instruction: 15, function_name: Some("add") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("sui::dynamic_field::add at offset 15"), exec_state: Some(ExecutionState { stack_trace: [(Some(ModuleId { address: sui, name: Identifier("dynamic_object_field") }), FunctionDefinitionIndex(0), 9), (Some(ModuleId { address: a, name: Identifier("m") }), FunctionDefinitionIndex(1), 6)] }), location: Module(ModuleId { address: sui, name: Identifier("dynamic_field") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 15)] }), command: Some(0) } }
+Error: Object 0xa3520bbf03b9236b44e2b6a098cba4be28ffa57169ce6da445dd879ce497858e is owned by object 0x4eeb215c80c209f03da8950d2505b4254774d1dedd8888f73462ef17de06de8d. Objects owned by other objects cannot be used as input arguments.

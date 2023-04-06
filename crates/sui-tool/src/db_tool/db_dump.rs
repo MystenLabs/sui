@@ -3,29 +3,25 @@
 
 use anyhow::anyhow;
 use clap::{Parser, ValueEnum};
-use eyre::eyre;
+use comfy_table::{Cell, ContentArrangement, Row, Table};
 use rocksdb::MultiThreaded;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
+use std::str;
 use strum_macros::EnumString;
 use sui_core::authority::authority_per_epoch_store::AuthorityEpochTables;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
-use sui_core::authority::authority_store_types::StoreData;
-use sui_core::epoch::committee_store::CommitteeStore;
-use sui_storage::default_db_options;
-use sui_storage::write_ahead_log::DBWriteAheadLogTables;
+use sui_core::authority::authority_store_types::{StoreData, StoreObject};
+use sui_core::epoch::committee_store::CommitteeStoreTables;
 use sui_storage::IndexStoreTables;
 use sui_types::base_types::{EpochId, ObjectID};
-use sui_types::messages::{SignedTransactionEffects, TrustedCertificate};
-use sui_types::temporary_store::InnerTemporaryStore;
-use typed_store::rocks::MetricConf;
+use typed_store::rocks::{default_db_options, MetricConf};
 use typed_store::traits::{Map, TableSummary};
 
 #[derive(EnumString, Clone, Parser, Debug, ValueEnum)]
 pub enum StoreName {
     Validator,
     Index,
-    Wal,
     Epoch,
     // TODO: Add the new checkpoint v2 tables.
 }
@@ -36,23 +32,20 @@ impl std::fmt::Display for StoreName {
 }
 
 pub fn list_tables(path: PathBuf) -> anyhow::Result<Vec<String>> {
-    rocksdb::DBWithThreadMode::<MultiThreaded>::list_cf(
-        &default_db_options(None, None).0.options,
-        path,
-    )
-    .map_err(|e| e.into())
-    .map(|q| {
-        q.iter()
-            .filter_map(|s| {
-                // The `default` table is not used
-                if s != "default" {
-                    Some(s.clone())
-                } else {
-                    None
-                }
-            })
-            .collect()
-    })
+    rocksdb::DBWithThreadMode::<MultiThreaded>::list_cf(&default_db_options().options, path)
+        .map_err(|e| e.into())
+        .map(|q| {
+            q.iter()
+                .filter_map(|s| {
+                    // The `default` table is not used
+                    if s != "default" {
+                        Some(s.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        })
 }
 
 pub fn table_summary(
@@ -75,19 +68,81 @@ pub fn table_summary(
             IndexStoreTables::get_read_only_handle(db_path, None, None, MetricConf::default())
                 .table_summary(table_name)
         }
-        StoreName::Wal => {
-            DBWriteAheadLogTables::<
-                TrustedCertificate,
-                (InnerTemporaryStore, SignedTransactionEffects),
-            >::get_read_only_handle(db_path, None, None, MetricConf::default())
-            .table_summary(table_name)
-        }
         StoreName::Epoch => {
-            CommitteeStore::get_read_only_handle(db_path, None, None, MetricConf::default())
+            CommitteeStoreTables::get_read_only_handle(db_path, None, None, MetricConf::default())
                 .table_summary(table_name)
         }
     }
     .map_err(|err| anyhow!(err.to_string()))
+}
+
+pub fn print_table_metadata(
+    store_name: StoreName,
+    epoch: Option<EpochId>,
+    db_path: PathBuf,
+    table_name: &str,
+) -> anyhow::Result<()> {
+    let db = match store_name {
+        StoreName::Validator => {
+            let epoch_tables = AuthorityEpochTables::describe_tables();
+            if epoch_tables.contains_key(table_name) {
+                let epoch = epoch.ok_or_else(|| anyhow!("--epoch is required"))?;
+                AuthorityEpochTables::open_readonly(epoch, &db_path)
+                    .next_shared_object_versions
+                    .rocksdb
+            } else {
+                AuthorityPerpetualTables::open_readonly(&db_path)
+                    .objects
+                    .rocksdb
+            }
+        }
+        StoreName::Index => {
+            IndexStoreTables::get_read_only_handle(db_path, None, None, MetricConf::default())
+                .event_by_move_module
+                .rocksdb
+        }
+        StoreName::Epoch => {
+            CommitteeStoreTables::get_read_only_handle(db_path, None, None, MetricConf::default())
+                .committee_map
+                .rocksdb
+        }
+    };
+
+    let mut table = Table::new();
+    table
+        .set_content_arrangement(ContentArrangement::Dynamic)
+        .set_width(200)
+        .set_header(vec![
+            "name",
+            "level",
+            "num_entries",
+            "start_key",
+            "end_key",
+            "num_deletions",
+            "file_size",
+        ]);
+
+    for file in db.live_files()?.iter() {
+        if file.column_family_name != table_name {
+            continue;
+        }
+        let mut row = Row::new();
+        row.add_cell(Cell::new(&file.name));
+        row.add_cell(Cell::new(file.level));
+        row.add_cell(Cell::new(file.num_entries));
+        row.add_cell(Cell::new(hex::encode(
+            file.start_key.as_ref().unwrap_or(&"".as_bytes().to_vec()),
+        )));
+        row.add_cell(Cell::new(hex::encode(
+            file.end_key.as_ref().unwrap_or(&"".as_bytes().to_vec()),
+        )));
+        row.add_cell(Cell::new(file.num_deletions));
+        row.add_cell(Cell::new(file.size));
+        table.add_row(row);
+    }
+
+    eprintln!("{}", table);
+    Ok(())
 }
 
 pub fn duplicate_objects_summary(db_path: PathBuf) -> (usize, usize, usize, usize) {
@@ -102,18 +157,20 @@ pub fn duplicate_objects_summary(db_path: PathBuf) -> (usize, usize, usize, usiz
     let mut data: HashMap<Vec<u8>, usize> = HashMap::new();
 
     for (key, value) in iter {
-        if let StoreData::Move(object) = value.data {
-            if object_id != key.0 {
-                for (k, cnt) in data.iter() {
-                    total_bytes += k.len() * cnt;
-                    duplicated_bytes += k.len() * (cnt - 1);
-                    total_count += cnt;
-                    duplicate_count += cnt - 1;
+        if let StoreObject::Value(store_object) = value.migrate().into_inner() {
+            if let StoreData::Move(object) = store_object.data {
+                if object_id != key.0 {
+                    for (k, cnt) in data.iter() {
+                        total_bytes += k.len() * cnt;
+                        duplicated_bytes += k.len() * (cnt - 1);
+                        total_count += cnt;
+                        duplicate_count += cnt - 1;
+                    }
+                    object_id = key.0;
+                    data.clear();
                 }
-                object_id = key.0;
-                data.clear();
+                *data.entry(object.contents().to_vec()).or_default() += 1;
             }
-            *data.entry(object.contents().to_vec()).or_default() += 1;
         }
     }
     (total_count, duplicate_count, total_bytes, duplicated_bytes)
@@ -153,15 +210,9 @@ pub fn dump_table(
                 page_number,
             )
         }
-        StoreName::Wal => Err(eyre!(
-            "Dumping WAL not yet supported. It requires kmowing the value type"
-        )),
         StoreName::Epoch => {
-            CommitteeStore::get_read_only_handle(db_path, None, None, MetricConf::default()).dump(
-                table_name,
-                page_size,
-                page_number,
-            )
+            CommitteeStoreTables::get_read_only_handle(db_path, None, None, MetricConf::default())
+                .dump(table_name, page_size, page_number)
         }
     }
     .map_err(|err| anyhow!(err.to_string()))

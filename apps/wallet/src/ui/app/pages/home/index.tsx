@@ -12,17 +12,16 @@ import { usePageView } from '_shared/utils';
 
 interface Props {
     disableNavigation?: boolean;
-    limitToPopUpSize?: boolean;
 }
 
-const HomePage = ({ disableNavigation, limitToPopUpSize = true }: Props) => {
+const HomePage = ({ disableNavigation }: Props) => {
     const initChecking = useInitializedGuard(true);
     const lockedChecking = useLockedGuard(false);
     const guardChecking = initChecking || lockedChecking;
 
     usePageView();
     return (
-        <PageLayout limitToPopUpSize={limitToPopUpSize}>
+        <PageLayout>
             <Loading loading={guardChecking}>
                 <PageMainLayout
                     bottomNavEnabled={!disableNavigation}
@@ -39,7 +38,7 @@ const HomePage = ({ disableNavigation, limitToPopUpSize = true }: Props) => {
 export default HomePage;
 export { default as NftsPage } from './nfts';
 export { default as TokensPage } from './tokens';
-export { default as TransactionsPage } from './transactions';
+export { default as TransactionBlocksPage } from './transactions';
 export { default as TransferCoinPage } from './transfer-coin';
 export { default as NFTDetailsPage } from './nft-details';
 export { default as NftTransferPage } from './nft-transfer';

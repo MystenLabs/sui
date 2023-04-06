@@ -18,6 +18,7 @@ building block for core collection types
 -  [Function `borrow_mut`](#0x2_dynamic_field_borrow_mut)
 -  [Function `remove`](#0x2_dynamic_field_remove)
 -  [Function `exists_`](#0x2_dynamic_field_exists_)
+-  [Function `remove_if_exists`](#0x2_dynamic_field_remove_if_exists)
 -  [Function `exists_with_type`](#0x2_dynamic_field_exists_with_type)
 -  [Function `field_info`](#0x2_dynamic_field_field_info)
 -  [Function `field_info_mut`](#0x2_dynamic_field_field_info_mut)
@@ -30,7 +31,8 @@ building block for core collection types
 -  [Function `has_child_object_with_ty`](#0x2_dynamic_field_has_child_object_with_ty)
 
 
-<pre><code><b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
+<pre><code><b>use</b> <a href="">0x1::option</a>;
+<b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
 </code></pre>
 
 
@@ -194,7 +196,7 @@ Aborts with <code><a href="dynamic_field.md#0x2_dynamic_field_EFieldTypeMismatch
 type.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="dynamic_field.md#0x2_dynamic_field_borrow">borrow</a>&lt;Name: <b>copy</b>, drop, store, Value: store&gt;(<a href="object.md#0x2_object">object</a>: &<a href="object.md#0x2_object_UID">object::UID</a>, name: Name): &Value
+<pre><code><b>public</b> <b>fun</b> <a href="borrow.md#0x2_borrow">borrow</a>&lt;Name: <b>copy</b>, drop, store, Value: store&gt;(<a href="object.md#0x2_object">object</a>: &<a href="object.md#0x2_object_UID">object::UID</a>, name: Name): &Value
 </code></pre>
 
 
@@ -203,7 +205,7 @@ type.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="dynamic_field.md#0x2_dynamic_field_borrow">borrow</a>&lt;Name: <b>copy</b> + drop + store, Value: store&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="borrow.md#0x2_borrow">borrow</a>&lt;Name: <b>copy</b> + drop + store, Value: store&gt;(
     <a href="object.md#0x2_object">object</a>: &UID,
     name: Name,
 ): &Value {
@@ -360,6 +362,38 @@ Returns true if and only if the <code><a href="object.md#0x2_object">object</a><
     <b>let</b> object_addr = <a href="object.md#0x2_object_uid_to_address">object::uid_to_address</a>(<a href="object.md#0x2_object">object</a>);
     <b>let</b> <a href="hash.md#0x2_hash">hash</a> = <a href="dynamic_field.md#0x2_dynamic_field_hash_type_and_key">hash_type_and_key</a>(object_addr, name);
     <a href="dynamic_field.md#0x2_dynamic_field_has_child_object">has_child_object</a>(object_addr, <a href="hash.md#0x2_hash">hash</a>)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_dynamic_field_remove_if_exists"></a>
+
+## Function `remove_if_exists`
+
+Removes the dynamic field if it exists. Returns the <code>some(Value)</code> if it exists or none otherwise.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="dynamic_field.md#0x2_dynamic_field_remove_if_exists">remove_if_exists</a>&lt;Name: <b>copy</b>, drop, store, Value: store&gt;(<a href="object.md#0x2_object">object</a>: &<b>mut</b> <a href="object.md#0x2_object_UID">object::UID</a>, name: Name): <a href="_Option">option::Option</a>&lt;Value&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="dynamic_field.md#0x2_dynamic_field_remove_if_exists">remove_if_exists</a>&lt;Name: <b>copy</b> + drop + store, Value: store&gt;(
+    <a href="object.md#0x2_object">object</a>: &<b>mut</b> UID,
+    name: Name
+): Option&lt;Value&gt; {
+    <b>if</b> (<a href="dynamic_field.md#0x2_dynamic_field_exists_">exists_</a>&lt;Name&gt;(<a href="object.md#0x2_object">object</a>, name)) {
+        <a href="_some">option::some</a>(<a href="dynamic_field.md#0x2_dynamic_field_remove">remove</a>(<a href="object.md#0x2_object">object</a>, name))
+    } <b>else</b> {
+        <a href="_none">option::none</a>()
+    }
 }
 </code></pre>
 

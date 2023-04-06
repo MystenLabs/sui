@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::block_synchronizer::handler::Handler;
 use anyhow::Result;
-use config::WorkerCache;
-use crypto::PublicKey;
+use config::{AuthorityIdentifier, Committee, WorkerCache};
 use fastcrypto::hash::Hash;
 use futures::{
     stream::{FuturesOrdered, StreamExt as _},
@@ -14,7 +13,8 @@ use std::{collections::HashSet, sync::Arc};
 
 use tracing::{debug, instrument};
 use types::{
-    BatchMessage, BlockError, BlockErrorKind, BlockResult, Certificate, CertificateDigest,
+    BatchMessage, BlockError, BlockErrorKind, BlockResult, Certificate, CertificateAPI,
+    CertificateDigest, HeaderAPI,
 };
 
 #[cfg(test)]
@@ -37,8 +37,10 @@ pub struct GetBlocksResponse {
 /// downstream worker nodes. A block is basically the aggregate
 /// of batches of transactions for a given certificate.
 pub struct BlockWaiter<SynchronizerHandler: Handler + Send + Sync + 'static> {
-    /// The public key of this primary.
-    name: PublicKey,
+    /// The id of this primary.
+    authority_id: AuthorityIdentifier,
+    /// The network's committee
+    committee: Committee,
 
     /// The worker information cache.
     worker_cache: WorkerCache,
@@ -55,13 +57,15 @@ pub struct BlockWaiter<SynchronizerHandler: Handler + Send + Sync + 'static> {
 impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<SynchronizerHandler> {
     #[must_use]
     pub fn new(
-        name: PublicKey,
+        authority_id: AuthorityIdentifier,
+        committee: Committee,
         worker_cache: WorkerCache,
         worker_network: anemo::Network,
         block_synchronizer_handler: Arc<SynchronizerHandler>,
     ) -> BlockWaiter<SynchronizerHandler> {
         Self {
-            name,
+            authority_id,
+            committee,
             worker_cache,
             worker_network,
             block_synchronizer_handler,
@@ -123,14 +127,20 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<Synchroni
         // Send batch requests to workers.
         let certificate = certificate.unwrap();
         let batch_requests: Vec<_> = certificate
-            .header
-            .payload
+            .header()
+            .payload()
             .iter()
             .map(|(batch_digest, (worker_id, _))| {
                 debug!("Sending batch {batch_digest} request to worker id {worker_id}");
                 let worker_name = self
                     .worker_cache
-                    .worker(&self.name, worker_id)
+                    .worker(
+                        self.committee
+                            .authority(&self.authority_id)
+                            .unwrap()
+                            .protocol_key(),
+                        worker_id,
+                    )
                     .expect("Worker id not found")
                     .name;
                 self.worker_network

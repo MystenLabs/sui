@@ -1,0 +1,20 @@
+//# run
+main() {
+label b0:
+    _ = vec_pack_0<u64, bool>();
+    return;
+}
+
+//# run
+main() {
+label b0:
+    _ = vec_pack_0<>();
+    return;
+}
+
+//# run
+main() {
+label b0:
+    _ = vec_pack_0<&u64>();
+    return;
+}

@@ -4,7 +4,9 @@ use anyhow::anyhow;
 use bip32::DerivationPath;
 use clap::*;
 use fastcrypto::encoding::{decode_bytes_hex, Base64, Encoding};
+use fastcrypto::hash::HashFunction;
 use fastcrypto::traits::KeyPair;
+use shared_crypto::intent::{Intent, IntentMessage};
 use std::fs;
 use std::path::{Path, PathBuf};
 use sui_keys::key_derive::generate_new_key;
@@ -12,16 +14,14 @@ use sui_keys::keypair_file::{
     read_authority_keypair_from_file, read_keypair_from_file, write_authority_keypair_to_file,
     write_keypair_to_file,
 };
-use sui_types::crypto::{PublicKey, Signature};
-use sui_types::intent::{Intent, IntentMessage};
+use sui_keys::keystore::{AccountKeystore, Keystore};
+use sui_types::base_types::SuiAddress;
+use sui_types::crypto::{get_authority_key_pair, EncodeDecodeBase64, SignatureScheme, SuiKeyPair};
+use sui_types::crypto::{DefaultHash, PublicKey, Signature};
 use sui_types::messages::TransactionData;
 use sui_types::multisig::{MultiSig, MultiSigPublicKey, ThresholdUnit, WeightUnit};
 use sui_types::signature::GenericSignature;
 use tracing::info;
-
-use sui_keys::keystore::{AccountKeystore, Keystore};
-use sui_types::base_types::SuiAddress;
-use sui_types::crypto::{get_authority_key_pair, EncodeDecodeBase64, SignatureScheme, SuiKeyPair};
 #[cfg(test)]
 #[path = "unit_tests/keytool_tests.rs"]
 mod keytool_tests;
@@ -32,13 +32,16 @@ mod keytool_tests;
 pub enum KeyToolCommand {
     /// Generate a new keypair with key scheme flag {ed25519 | secp256k1 | secp256r1}
     /// with optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or
-    /// m/54'/784'/0'/0/0 for secp256k1 or m/74'/784'/0'/0/0 for secp256r1.
+    /// m/54'/784'/0'/0/0 for secp256k1 or m/74'/784'/0'/0/0 for secp256r1. Word
+    /// length can be { word12 | word15 | word18 | word21 | word24} default to word12
+    /// if not specified.
     ///
     /// The keypair file is output to the current directory. The content of the file is
     /// a Base64 encoded string of 33-byte `flag || privkey`. Note: To generate and add keypair
     /// to sui.keystore, use `sui client new-address`), see more at [enum SuiClientCommands].
     Generate {
         key_scheme: SignatureScheme,
+        word_length: Option<String>,
         derivation_path: Option<DerivationPath>,
     },
     /// This reads the content at the provided file path. The accepted format can be
@@ -68,7 +71,7 @@ pub enum KeyToolCommand {
     },
     /// Add a new key to sui.key based on the input mnemonic phrase, the key scheme flag {ed25519 | secp256k1 | secp256r1}
     /// and an optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1
-    /// or m/74'/784'/0'/0/0 for secp256r1.
+    /// or m/74'/784'/0'/0/0 for secp256r1. Supports mnemonic phrase of word length 12, 15, 18`, 21, 24.
     Import {
         mnemonic_phrase: String,
         key_scheme: SignatureScheme,
@@ -112,6 +115,7 @@ impl KeyToolCommand {
             KeyToolCommand::Generate {
                 key_scheme,
                 derivation_path,
+                word_length,
             } => {
                 if "bls12381" == key_scheme.to_string() {
                     // Generate BLS12381 key for authority without key derivation.
@@ -120,7 +124,8 @@ impl KeyToolCommand {
                     let file_name = format!("bls-{address}.key");
                     write_authority_keypair_to_file(&keypair, file_name)?;
                 } else {
-                    let (address, kp, scheme, _) = generate_new_key(key_scheme, derivation_path)?;
+                    let (address, kp, scheme, _) =
+                        generate_new_key(key_scheme, derivation_path, word_length)?;
                     let file = format!("{address}.key");
                     write_keypair_to_file(&kp, &file)?;
                     println!(
@@ -135,6 +140,10 @@ impl KeyToolCommand {
                     Ok(keypair) => {
                         println!("Public Key: {}", keypair.public().encode_base64());
                         println!("Flag: {}", keypair.public().flag());
+                        if let PublicKey::Ed25519(public_key) = keypair.public() {
+                            let peer_id = anemo::PeerId(public_key.0.into());
+                            println!("PeerId: {}", peer_id);
+                        }
                     }
                     Err(_) => {
                         let res = read_authority_keypair_from_file(&file);
@@ -176,7 +185,7 @@ impl KeyToolCommand {
             } => {
                 println!("Signer address: {}", address);
                 println!("Raw tx_bytes to execute: {}", data);
-                let intent = intent.unwrap_or_default();
+                let intent = intent.unwrap_or_else(Intent::sui_transaction);
                 println!("Intent: {:?}", intent);
                 let msg: TransactionData =
                     bcs::from_bytes(&Base64::decode(&data).map_err(|e| {
@@ -184,10 +193,13 @@ impl KeyToolCommand {
                     })?)?;
                 let intent_msg = IntentMessage::new(intent, msg);
                 println!(
-                    "Intent message to sign: {:?}",
+                    "Raw intent message: {:?}",
                     Base64::encode(bcs::to_bytes(&intent_msg)?)
                 );
-
+                let mut hasher = DefaultHash::default();
+                hasher.update(bcs::to_bytes(&intent_msg)?);
+                let digest = hasher.finalize().digest;
+                println!("Digest to sign: {:?}", Base64::encode(digest));
                 let sui_signature =
                     keystore.sign_secure(&address, &intent_msg.value, intent_msg.intent)?;
                 println!(

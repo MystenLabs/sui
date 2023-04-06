@@ -4,10 +4,9 @@
 import {
   Ed25519Keypair,
   JsonRpcProvider,
-  LocalTxnDataSerializer,
   RawSigner,
   Connection,
-  devnetConnection,
+  localnetConnection,
 } from "@mysten/sui.js";
 import {
   WalletAdapter,
@@ -28,20 +27,19 @@ export class UnsafeBurnerWalletAdapter implements WalletAdapter {
   #signer: RawSigner;
   #account: ReadonlyWalletAccount;
 
-  constructor(network: Connection = devnetConnection) {
+  constructor(network: Connection = localnetConnection) {
     this.#keypair = new Ed25519Keypair();
     this.#provider = new JsonRpcProvider(network);
     this.#account = new ReadonlyWalletAccount({
       address: this.#keypair.getPublicKey().toSuiAddress(),
       chains: ["sui:unknown"],
-      features: ["sui:signAndExecuteTransaction", "sui:signTransaction"],
+      features: [
+        "sui:signAndExecuteTransactionBlock",
+        "sui:signTransactionBlock",
+      ],
       publicKey: this.#keypair.getPublicKey().toBytes(),
     });
-    this.#signer = new RawSigner(
-      this.#keypair,
-      this.#provider,
-      new LocalTxnDataSerializer(this.#provider)
-    );
+    this.#signer = new RawSigner(this.#keypair, this.#provider);
     this.connecting = false;
     this.connected = false;
 
@@ -55,21 +53,24 @@ export class UnsafeBurnerWalletAdapter implements WalletAdapter {
   }
 
   signMessage: WalletAdapter["signMessage"] = async (messageInput) => {
-    return this.#signer.signMessage(messageInput.message);
+    return this.#signer.signMessage({ message: messageInput.message });
   };
 
-  signTransaction: WalletAdapter["signTransaction"] = async (
+  signTransactionBlock: WalletAdapter["signTransactionBlock"] = async (
     transactionInput
   ) => {
-    return this.#signer.signTransaction(transactionInput.transaction);
+    return this.#signer.signTransactionBlock({
+      transactionBlock: transactionInput.transactionBlock,
+    });
   };
 
-  signAndExecuteTransaction: WalletAdapter["signAndExecuteTransaction"] =
+  signAndExecuteTransactionBlock: WalletAdapter["signAndExecuteTransactionBlock"] =
     async (transactionInput) => {
-      return await this.#signer.signAndExecuteTransaction(
-        transactionInput.transaction,
-        transactionInput.options?.requestType
-      );
+      return await this.#signer.signAndExecuteTransactionBlock({
+        transactionBlock: transactionInput.transactionBlock,
+        options: transactionInput.options,
+        requestType: transactionInput.requestType,
+      });
     };
 
   async connect() {

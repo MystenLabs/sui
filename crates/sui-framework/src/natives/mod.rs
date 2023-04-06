@@ -17,7 +17,7 @@ mod validator;
 use crate::make_native;
 use better_any::{Tid, TidAble};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_core_types::{account_address::AccountAddress, identifier::Identifier};
+use move_core_types::{gas_algebra::InternalGas, identifier::Identifier};
 use move_stdlib::natives::{GasParameters, NurseryGasParameters};
 use move_vm_runtime::native_functions::{NativeFunction, NativeFunctionTable};
 use move_vm_types::{
@@ -26,67 +26,453 @@ use move_vm_types::{
 };
 use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
+use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS};
 
 use self::{
     address::{AddressFromBytesCostParams, AddressFromU256CostParams, AddressToU256CostParams},
-    crypto::{bls12381, ecdsa_k1, ecdsa_r1, ecvrf, ed25519, groth16, hash, hmac, tbls},
+    crypto::{bls12381, ecdsa_k1, ecdsa_r1, ecvrf, ed25519, groth16, hash, hmac},
+    crypto::{
+        bls12381::{Bls12381Bls12381MinPkVerifyCostParams, Bls12381Bls12381MinSigVerifyCostParams},
+        ecdsa_k1::{
+            EcdsaK1DecompressPubkeyCostParams, EcdsaK1EcrecoverCostParams,
+            EcdsaK1Secp256k1VerifyCostParams,
+        },
+        ecdsa_r1::{EcdsaR1EcrecoverCostParams, EcdsaR1Secp256R1VerifyCostParams},
+        ecvrf::EcvrfEcvrfVerifyCostParams,
+        ed25519::Ed25519VerifyCostParams,
+        groth16::{
+            Groth16PrepareVerifyingKeyCostParams, Groth16VerifyGroth16ProofInternalCostParams,
+        },
+        hash::{HashBlake2b256CostParams, HashKeccak256CostParams},
+        hmac::HmacHmacSha3256CostParams,
+    },
+    dynamic_field::{
+        DynamicFieldAddChildObjectCostParams, DynamicFieldBorrowChildObjectCostParams,
+        DynamicFieldHasChildObjectCostParams, DynamicFieldHasChildObjectWithTyCostParams,
+        DynamicFieldHashTypeAndKeyCostParams, DynamicFieldRemoveChildObjectCostParams,
+    },
     event::EventEmitCostParams,
+    object::{BorrowUidCostParams, DeleteImplCostParams, RecordNewIdCostParams},
+    transfer::{
+        TransferFreezeObjectCostParams, TransferInternalCostParams, TransferShareObjectCostParams,
+    },
+    tx_context::TxContextDeriveIdCostParams,
+    types::TypesIsOneTimeWitnessCostParams,
+    validator::ValidatorValidateMetadataBcsCostParams,
 };
 
 #[derive(Tid)]
 pub struct NativesCostTable {
+    // Address natives
     pub address_from_bytes_cost_params: AddressFromBytesCostParams,
     pub address_to_u256_cost_params: AddressToU256CostParams,
     pub address_from_u256_cost_params: AddressFromU256CostParams,
+
+    // Dynamic field natives
+    pub dynamic_field_hash_type_and_key_cost_params: DynamicFieldHashTypeAndKeyCostParams,
+    pub dynamic_field_add_child_object_cost_params: DynamicFieldAddChildObjectCostParams,
+    pub dynamic_field_borrow_child_object_cost_params: DynamicFieldBorrowChildObjectCostParams,
+    pub dynamic_field_remove_child_object_cost_params: DynamicFieldRemoveChildObjectCostParams,
+    pub dynamic_field_has_child_object_cost_params: DynamicFieldHasChildObjectCostParams,
+    pub dynamic_field_has_child_object_with_ty_cost_params:
+        DynamicFieldHasChildObjectWithTyCostParams,
+
+    // Event natives
     pub event_emit_cost_params: EventEmitCostParams,
+
+    // Object
+    pub borrow_uid_cost_params: BorrowUidCostParams,
+    pub delete_impl_cost_params: DeleteImplCostParams,
+    pub record_new_id_cost_params: RecordNewIdCostParams,
+
+    // Transfer
+    pub transfer_transfer_internal_cost_params: TransferInternalCostParams,
+    pub transfer_freeze_object_cost_params: TransferFreezeObjectCostParams,
+    pub transfer_share_object_cost_params: TransferShareObjectCostParams,
+
+    // TxContext
+    pub tx_context_derive_id_cost_params: TxContextDeriveIdCostParams,
+
+    // Type
+    pub type_is_one_time_witness_cost_params: TypesIsOneTimeWitnessCostParams,
+
+    // Validator
+    pub validator_validate_metadata_bcs_cost_params: ValidatorValidateMetadataBcsCostParams,
+
+    // Crypto natives
+    pub crypto_invalid_arguments_cost: InternalGas,
+    // bls12381
+    pub bls12381_bls12381_min_sig_verify_cost_params: Bls12381Bls12381MinSigVerifyCostParams,
+    pub bls12381_bls12381_min_pk_verify_cost_params: Bls12381Bls12381MinPkVerifyCostParams,
+
+    // ecdsak1
+    pub ecdsa_k1_ecrecover_cost_params: EcdsaK1EcrecoverCostParams,
+    pub ecdsa_k1_decompress_pubkey_cost_params: EcdsaK1DecompressPubkeyCostParams,
+    pub ecdsa_k1_secp256k1_verify_cost_params: EcdsaK1Secp256k1VerifyCostParams,
+
+    // ecdsar1
+    pub ecdsa_r1_ecrecover_cost_params: EcdsaR1EcrecoverCostParams,
+    pub ecdsa_r1_secp256_r1_verify_cost_params: EcdsaR1Secp256R1VerifyCostParams,
+
+    // ecvrf
+    pub ecvrf_ecvrf_verify_cost_params: EcvrfEcvrfVerifyCostParams,
+
+    // ed25519
+    pub ed25519_verify_cost_params: Ed25519VerifyCostParams,
+
+    // groth16
+    pub groth16_prepare_verifying_key_cost_params: Groth16PrepareVerifyingKeyCostParams,
+    pub groth16_verify_groth16_proof_internal_cost_params:
+        Groth16VerifyGroth16ProofInternalCostParams,
+
+    // hash
+    pub hash_blake2b256_cost_params: HashBlake2b256CostParams,
+    pub hash_keccak256_cost_params: HashKeccak256CostParams,
+
+    // hmac
+    pub hmac_hmac_sha3_256_cost_params: HmacHmacSha3256CostParams,
 }
 
 impl NativesCostTable {
     pub fn from_protocol_config(protocol_config: &ProtocolConfig) -> NativesCostTable {
         Self {
             address_from_bytes_cost_params: AddressFromBytesCostParams {
-                copy_bytes_to_address_cost_per_byte: protocol_config
-                    .copy_bytes_to_address_cost_per_byte()
-                    .into(),
+                address_from_bytes_cost_base: protocol_config.address_from_bytes_cost_base().into(),
             },
             address_to_u256_cost_params: AddressToU256CostParams {
-                address_to_vec_cost_per_byte: protocol_config.address_to_vec_cost_per_byte().into(),
-                address_vec_reverse_cost_per_byte: protocol_config
-                    .address_vec_reverse_cost_per_byte()
-                    .into(),
-                copy_convert_to_u256_cost_per_byte: protocol_config
-                    .copy_convert_to_u256_cost_per_byte()
-                    .into(),
+                address_to_u256_cost_base: protocol_config.address_to_u256_cost_base().into(),
             },
             address_from_u256_cost_params: AddressFromU256CostParams {
-                u256_to_bytes_to_vec_cost_per_byte: protocol_config
-                    .u256_to_bytes_to_vec_cost_per_byte()
+                address_from_u256_cost_base: protocol_config.address_from_u256_cost_base().into(),
+            },
+
+            dynamic_field_hash_type_and_key_cost_params: DynamicFieldHashTypeAndKeyCostParams {
+                dynamic_field_hash_type_and_key_cost_base: protocol_config
+                    .dynamic_field_hash_type_and_key_cost_base()
                     .into(),
-                u256_bytes_vec_reverse_cost_per_byte: protocol_config
-                    .u256_bytes_vec_reverse_cost_per_byte()
+                dynamic_field_hash_type_and_key_type_cost_per_byte: protocol_config
+                    .dynamic_field_hash_type_and_key_type_cost_per_byte()
                     .into(),
-                copy_convert_to_address_cost_per_byte: protocol_config
-                    .u256_bytes_vec_reverse_cost_per_byte()
+                dynamic_field_hash_type_and_key_value_cost_per_byte: protocol_config
+                    .dynamic_field_hash_type_and_key_value_cost_per_byte()
+                    .into(),
+                dynamic_field_hash_type_and_key_type_tag_cost_per_byte: protocol_config
+                    .dynamic_field_hash_type_and_key_type_tag_cost_per_byte()
                     .into(),
             },
+            dynamic_field_add_child_object_cost_params: DynamicFieldAddChildObjectCostParams {
+                dynamic_field_add_child_object_cost_base: protocol_config
+                    .dynamic_field_add_child_object_cost_base()
+                    .into(),
+                dynamic_field_add_child_object_type_cost_per_byte: protocol_config
+                    .dynamic_field_add_child_object_type_cost_per_byte()
+                    .into(),
+                dynamic_field_add_child_object_value_cost_per_byte: protocol_config
+                    .dynamic_field_add_child_object_value_cost_per_byte()
+                    .into(),
+                dynamic_field_add_child_object_struct_tag_cost_per_byte: protocol_config
+                    .dynamic_field_add_child_object_struct_tag_cost_per_byte()
+                    .into(),
+            },
+            dynamic_field_borrow_child_object_cost_params:
+                DynamicFieldBorrowChildObjectCostParams {
+                    dynamic_field_borrow_child_object_cost_base: protocol_config
+                        .dynamic_field_borrow_child_object_cost_base()
+                        .into(),
+                    dynamic_field_borrow_child_object_child_ref_cost_per_byte: protocol_config
+                        .dynamic_field_borrow_child_object_child_ref_cost_per_byte()
+                        .into(),
+                    dynamic_field_borrow_child_object_type_cost_per_byte: protocol_config
+                        .dynamic_field_borrow_child_object_type_cost_per_byte()
+                        .into(),
+                },
+            dynamic_field_remove_child_object_cost_params:
+                DynamicFieldRemoveChildObjectCostParams {
+                    dynamic_field_remove_child_object_cost_base: protocol_config
+                        .dynamic_field_remove_child_object_cost_base()
+                        .into(),
+                    dynamic_field_remove_child_object_child_cost_per_byte: protocol_config
+                        .dynamic_field_remove_child_object_child_cost_per_byte()
+                        .into(),
+                    dynamic_field_remove_child_object_type_cost_per_byte: protocol_config
+                        .dynamic_field_remove_child_object_type_cost_per_byte()
+                        .into(),
+                },
+            dynamic_field_has_child_object_cost_params: DynamicFieldHasChildObjectCostParams {
+                dynamic_field_has_child_object_cost_base: protocol_config
+                    .dynamic_field_has_child_object_cost_base()
+                    .into(),
+            },
+            dynamic_field_has_child_object_with_ty_cost_params:
+                DynamicFieldHasChildObjectWithTyCostParams {
+                    dynamic_field_has_child_object_with_ty_cost_base: protocol_config
+                        .dynamic_field_has_child_object_with_ty_cost_base()
+                        .into(),
+                    dynamic_field_has_child_object_with_ty_type_cost_per_byte: protocol_config
+                        .dynamic_field_has_child_object_with_ty_type_cost_per_byte()
+                        .into(),
+                    dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte: protocol_config
+                        .dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte()
+                        .into(),
+                },
+
             event_emit_cost_params: EventEmitCostParams {
-                event_value_size_derivation_cost_per_byte: protocol_config
-                    .event_value_size_derivation_cost_per_byte()
+                event_emit_value_size_derivation_cost_per_byte: protocol_config
+                    .event_emit_value_size_derivation_cost_per_byte()
                     .into(),
-                event_tag_size_derivation_cost_per_byte: protocol_config
-                    .event_tag_size_derivation_cost_per_byte()
+                event_emit_tag_size_derivation_cost_per_byte: protocol_config
+                    .event_emit_tag_size_derivation_cost_per_byte()
                     .into(),
-                event_emit_cost_per_byte: protocol_config.event_emit_cost_per_byte().into(),
+                event_emit_output_cost_per_byte: protocol_config
+                    .event_emit_output_cost_per_byte()
+                    .into(),
+                event_emit_cost_base: protocol_config.event_emit_cost_base().into(),
+            },
+
+            borrow_uid_cost_params: BorrowUidCostParams {
+                object_borrow_uid_cost_base: protocol_config.object_borrow_uid_cost_base().into(),
+            },
+            delete_impl_cost_params: DeleteImplCostParams {
+                object_delete_impl_cost_base: protocol_config.object_delete_impl_cost_base().into(),
+            },
+            record_new_id_cost_params: RecordNewIdCostParams {
+                object_record_new_uid_cost_base: protocol_config
+                    .object_record_new_uid_cost_base()
+                    .into(),
+            },
+
+            // Crypto
+            crypto_invalid_arguments_cost: protocol_config.crypto_invalid_arguments_cost().into(),
+            // ed25519
+            ed25519_verify_cost_params: Ed25519VerifyCostParams {
+                ed25519_ed25519_verify_cost_base: protocol_config
+                    .ed25519_ed25519_verify_cost_base()
+                    .into(),
+                ed25519_ed25519_verify_msg_cost_per_byte: protocol_config
+                    .ed25519_ed25519_verify_msg_cost_per_byte()
+                    .into(),
+                ed25519_ed25519_verify_msg_cost_per_block: protocol_config
+                    .ed25519_ed25519_verify_msg_cost_per_block()
+                    .into(),
+            },
+            // hash
+            hash_blake2b256_cost_params: HashBlake2b256CostParams {
+                hash_blake2b256_cost_base: protocol_config.hash_blake2b256_cost_base().into(),
+                hash_blake2b256_data_cost_per_byte: protocol_config
+                    .hash_blake2b256_data_cost_per_byte()
+                    .into(),
+                hash_blake2b256_data_cost_per_block: protocol_config
+                    .hash_blake2b256_data_cost_per_block()
+                    .into(),
+            },
+            hash_keccak256_cost_params: HashKeccak256CostParams {
+                hash_keccak256_cost_base: protocol_config.hash_keccak256_cost_base().into(),
+                hash_keccak256_data_cost_per_byte: protocol_config
+                    .hash_keccak256_data_cost_per_byte()
+                    .into(),
+                hash_keccak256_data_cost_per_block: protocol_config
+                    .hash_keccak256_data_cost_per_block()
+                    .into(),
+            },
+            transfer_transfer_internal_cost_params: TransferInternalCostParams {
+                transfer_transfer_internal_cost_base: protocol_config
+                    .transfer_transfer_internal_cost_base()
+                    .into(),
+            },
+            transfer_freeze_object_cost_params: TransferFreezeObjectCostParams {
+                transfer_freeze_object_cost_base: protocol_config
+                    .transfer_freeze_object_cost_base()
+                    .into(),
+            },
+            transfer_share_object_cost_params: TransferShareObjectCostParams {
+                transfer_share_object_cost_base: protocol_config
+                    .transfer_share_object_cost_base()
+                    .into(),
+            },
+            tx_context_derive_id_cost_params: TxContextDeriveIdCostParams {
+                tx_context_derive_id_cost_base: protocol_config
+                    .tx_context_derive_id_cost_base()
+                    .into(),
+            },
+            type_is_one_time_witness_cost_params: TypesIsOneTimeWitnessCostParams {
+                types_is_one_time_witness_cost_base: protocol_config
+                    .types_is_one_time_witness_cost_base()
+                    .into(),
+                types_is_one_time_witness_type_tag_cost_per_byte: protocol_config
+                    .types_is_one_time_witness_type_tag_cost_per_byte()
+                    .into(),
+                types_is_one_time_witness_type_cost_per_byte: protocol_config
+                    .types_is_one_time_witness_type_cost_per_byte()
+                    .into(),
+            },
+            validator_validate_metadata_bcs_cost_params: ValidatorValidateMetadataBcsCostParams {
+                validator_validate_metadata_cost_base: protocol_config
+                    .validator_validate_metadata_cost_base()
+                    .into(),
+                validator_validate_metadata_data_cost_per_byte: protocol_config
+                    .validator_validate_metadata_data_cost_per_byte()
+                    .into(),
+            },
+            bls12381_bls12381_min_sig_verify_cost_params: Bls12381Bls12381MinSigVerifyCostParams {
+                bls12381_bls12381_min_sig_verify_cost_base: protocol_config
+                    .bls12381_bls12381_min_sig_verify_cost_base()
+                    .into(),
+                bls12381_bls12381_min_sig_verify_msg_cost_per_byte: protocol_config
+                    .bls12381_bls12381_min_sig_verify_msg_cost_per_byte()
+                    .into(),
+                bls12381_bls12381_min_sig_verify_msg_cost_per_block: protocol_config
+                    .bls12381_bls12381_min_sig_verify_msg_cost_per_block()
+                    .into(),
+            },
+            bls12381_bls12381_min_pk_verify_cost_params: Bls12381Bls12381MinPkVerifyCostParams {
+                bls12381_bls12381_min_pk_verify_cost_base: protocol_config
+                    .bls12381_bls12381_min_pk_verify_cost_base()
+                    .into(),
+                bls12381_bls12381_min_pk_verify_msg_cost_per_byte: protocol_config
+                    .bls12381_bls12381_min_pk_verify_msg_cost_per_byte()
+                    .into(),
+                bls12381_bls12381_min_pk_verify_msg_cost_per_block: protocol_config
+                    .bls12381_bls12381_min_pk_verify_msg_cost_per_block()
+                    .into(),
+            },
+            ecdsa_k1_ecrecover_cost_params: EcdsaK1EcrecoverCostParams {
+                ecdsa_k1_ecrecover_keccak256_cost_base: protocol_config
+                    .ecdsa_k1_ecrecover_keccak256_cost_base()
+                    .into(),
+                ecdsa_k1_ecrecover_keccak256_msg_cost_per_byte: protocol_config
+                    .ecdsa_k1_ecrecover_keccak256_msg_cost_per_byte()
+                    .into(),
+                ecdsa_k1_ecrecover_keccak256_msg_cost_per_block: protocol_config
+                    .ecdsa_k1_ecrecover_keccak256_msg_cost_per_block()
+                    .into(),
+                ecdsa_k1_ecrecover_sha256_cost_base: protocol_config
+                    .ecdsa_k1_ecrecover_sha256_cost_base()
+                    .into(),
+                ecdsa_k1_ecrecover_sha256_msg_cost_per_byte: protocol_config
+                    .ecdsa_k1_ecrecover_sha256_msg_cost_per_byte()
+                    .into(),
+                ecdsa_k1_ecrecover_sha256_msg_cost_per_block: protocol_config
+                    .ecdsa_k1_ecrecover_sha256_msg_cost_per_block()
+                    .into(),
+            },
+            ecdsa_k1_decompress_pubkey_cost_params: EcdsaK1DecompressPubkeyCostParams {
+                ecdsa_k1_decompress_pubkey_cost_base: protocol_config
+                    .ecdsa_k1_decompress_pubkey_cost_base()
+                    .into(),
+            },
+            ecdsa_k1_secp256k1_verify_cost_params: EcdsaK1Secp256k1VerifyCostParams {
+                ecdsa_k1_secp256k1_verify_keccak256_cost_base: protocol_config
+                    .ecdsa_k1_secp256k1_verify_keccak256_cost_base()
+                    .into(),
+                ecdsa_k1_secp256k1_verify_keccak256_msg_cost_per_byte: protocol_config
+                    .ecdsa_k1_secp256k1_verify_keccak256_msg_cost_per_byte()
+                    .into(),
+                ecdsa_k1_secp256k1_verify_keccak256_msg_cost_per_block: protocol_config
+                    .ecdsa_k1_secp256k1_verify_keccak256_msg_cost_per_block()
+                    .into(),
+                ecdsa_k1_secp256k1_verify_sha256_cost_base: protocol_config
+                    .ecdsa_k1_secp256k1_verify_sha256_cost_base()
+                    .into(),
+                ecdsa_k1_secp256k1_verify_sha256_msg_cost_per_byte: protocol_config
+                    .ecdsa_k1_secp256k1_verify_sha256_msg_cost_per_byte()
+                    .into(),
+                ecdsa_k1_secp256k1_verify_sha256_msg_cost_per_block: protocol_config
+                    .ecdsa_k1_secp256k1_verify_sha256_msg_cost_per_block()
+                    .into(),
+            },
+            ecdsa_r1_ecrecover_cost_params: EcdsaR1EcrecoverCostParams {
+                ecdsa_r1_ecrecover_keccak256_cost_base: protocol_config
+                    .ecdsa_r1_ecrecover_keccak256_cost_base()
+                    .into(),
+                ecdsa_r1_ecrecover_keccak256_msg_cost_per_byte: protocol_config
+                    .ecdsa_r1_ecrecover_keccak256_msg_cost_per_byte()
+                    .into(),
+                ecdsa_r1_ecrecover_keccak256_msg_cost_per_block: protocol_config
+                    .ecdsa_r1_ecrecover_keccak256_msg_cost_per_block()
+                    .into(),
+                ecdsa_r1_ecrecover_sha256_cost_base: protocol_config
+                    .ecdsa_r1_ecrecover_sha256_cost_base()
+                    .into(),
+                ecdsa_r1_ecrecover_sha256_msg_cost_per_byte: protocol_config
+                    .ecdsa_r1_ecrecover_sha256_msg_cost_per_byte()
+                    .into(),
+                ecdsa_r1_ecrecover_sha256_msg_cost_per_block: protocol_config
+                    .ecdsa_r1_ecrecover_sha256_msg_cost_per_block()
+                    .into(),
+            },
+            ecdsa_r1_secp256_r1_verify_cost_params: EcdsaR1Secp256R1VerifyCostParams {
+                ecdsa_r1_secp256r1_verify_keccak256_cost_base: protocol_config
+                    .ecdsa_r1_secp256r1_verify_keccak256_cost_base()
+                    .into(),
+                ecdsa_r1_secp256r1_verify_keccak256_msg_cost_per_byte: protocol_config
+                    .ecdsa_r1_secp256r1_verify_keccak256_msg_cost_per_byte()
+                    .into(),
+                ecdsa_r1_secp256r1_verify_keccak256_msg_cost_per_block: protocol_config
+                    .ecdsa_r1_secp256r1_verify_keccak256_msg_cost_per_block()
+                    .into(),
+                ecdsa_r1_secp256r1_verify_sha256_cost_base: protocol_config
+                    .ecdsa_r1_secp256r1_verify_sha256_cost_base()
+                    .into(),
+                ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_byte: protocol_config
+                    .ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_byte()
+                    .into(),
+                ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_block: protocol_config
+                    .ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_block()
+                    .into(),
+            },
+            ecvrf_ecvrf_verify_cost_params: EcvrfEcvrfVerifyCostParams {
+                ecvrf_ecvrf_verify_cost_base: protocol_config.ecvrf_ecvrf_verify_cost_base().into(),
+                ecvrf_ecvrf_verify_alpha_string_cost_per_byte: protocol_config
+                    .ecvrf_ecvrf_verify_alpha_string_cost_per_byte()
+                    .into(),
+                ecvrf_ecvrf_verify_alpha_string_cost_per_block: protocol_config
+                    .ecvrf_ecvrf_verify_alpha_string_cost_per_block()
+                    .into(),
+            },
+            groth16_prepare_verifying_key_cost_params: Groth16PrepareVerifyingKeyCostParams {
+                groth16_prepare_verifying_key_bls12381_cost_base: protocol_config
+                    .groth16_prepare_verifying_key_bls12381_cost_base()
+                    .into(),
+                groth16_prepare_verifying_key_bn254_cost_base: protocol_config
+                    .groth16_prepare_verifying_key_bn254_cost_base()
+                    .into(),
+            },
+            groth16_verify_groth16_proof_internal_cost_params:
+                Groth16VerifyGroth16ProofInternalCostParams {
+                    groth16_verify_groth16_proof_internal_bls12381_cost_base: protocol_config
+                        .groth16_verify_groth16_proof_internal_bls12381_cost_base()
+                        .into(),
+                    groth16_verify_groth16_proof_internal_bls12381_cost_per_public_input:
+                        protocol_config
+                            .groth16_verify_groth16_proof_internal_bls12381_cost_per_public_input()
+                            .into(),
+                    groth16_verify_groth16_proof_internal_bn254_cost_base: protocol_config
+                        .groth16_verify_groth16_proof_internal_bn254_cost_base()
+                        .into(),
+                    groth16_verify_groth16_proof_internal_bn254_cost_per_public_input:
+                        protocol_config
+                            .groth16_verify_groth16_proof_internal_bn254_cost_per_public_input()
+                            .into(),
+                    groth16_verify_groth16_proof_internal_public_input_cost_per_byte:
+                        protocol_config
+                            .groth16_verify_groth16_proof_internal_public_input_cost_per_byte()
+                            .into(),
+                },
+            hmac_hmac_sha3_256_cost_params: HmacHmacSha3256CostParams {
+                hmac_hmac_sha3_256_cost_base: protocol_config.hmac_hmac_sha3_256_cost_base().into(),
+                hmac_hmac_sha3_256_input_cost_per_byte: protocol_config
+                    .hmac_hmac_sha3_256_input_cost_per_byte()
+                    .into(),
+                hmac_hmac_sha3_256_input_cost_per_block: protocol_config
+                    .hmac_hmac_sha3_256_input_cost_per_block()
+                    .into(),
             },
         }
     }
 }
 
-pub fn all_natives(
-    move_stdlib_addr: AccountAddress,
-    sui_framework_addr: AccountAddress,
-) -> NativeFunctionTable {
-    let sui_natives: &[(&str, &str, NativeFunction)] = &[
+pub fn all_natives() -> NativeFunctionTable {
+    let sui_framework_natives: &[(&str, &str, NativeFunction)] = &[
         ("address", "from_bytes", make_native!(address::from_bytes)),
         ("address", "to_u256", make_native!(address::to_u256)),
         ("address", "from_u256", make_native!(address::from_u256)),
@@ -175,14 +561,10 @@ pub fn all_natives(
         ),
         (
             "groth16",
-            "prepare_verifying_key",
-            make_native!(groth16::prepare_verifying_key),
+            "prepare_verifying_key_internal",
+            make_native!(groth16::prepare_verifying_key_internal),
         ),
-        (
-            "hmac",
-            "native_hmac_sha3_256",
-            make_native!(hmac::hmac_sha3_256),
-        ),
+        ("hmac", "hmac_sha3_256", make_native!(hmac::hmac_sha3_256)),
         ("hash", "keccak256", make_native!(hash::keccak256)),
         ("object", "delete_impl", make_native!(object::delete_impl)),
         ("object", "borrow_uid", make_native!(object::borrow_uid)),
@@ -190,16 +572,6 @@ pub fn all_natives(
             "object",
             "record_new_uid",
             make_native!(object::record_new_uid),
-        ),
-        (
-            "randomness",
-            "native_tbls_verify_signature",
-            make_native!(tbls::tbls_verify_signature),
-        ),
-        (
-            "randomness",
-            "native_tbls_sign",
-            make_native!(tbls::tbls_sign),
         ),
         (
             "test_scenario",
@@ -258,17 +630,17 @@ pub fn all_natives(
         ),
         (
             "transfer",
-            "transfer_internal",
+            "transfer_impl",
             make_native!(transfer::transfer_internal),
         ),
         (
             "transfer",
-            "freeze_object",
+            "freeze_object_impl",
             make_native!(transfer::freeze_object),
         ),
         (
             "transfer",
-            "share_object",
+            "share_object_impl",
             make_native!(transfer::share_object),
         ),
         (
@@ -281,11 +653,6 @@ pub fn all_natives(
             "is_one_time_witness",
             make_native!(types::is_one_time_witness),
         ),
-        (
-            "validator",
-            "validate_metadata_bcs",
-            make_native!(validator::validate_metadata_bcs),
-        ),
         ("test_utils", "destroy", make_native!(test_utils::destroy)),
         (
             "test_utils",
@@ -293,24 +660,42 @@ pub fn all_natives(
             make_native!(test_utils::create_one_time_witness),
         ),
     ];
-    sui_natives
+    let sui_framework_natives_iter =
+        sui_framework_natives
+            .iter()
+            .cloned()
+            .map(|(module_name, func_name, func)| {
+                (
+                    SUI_FRAMEWORK_ADDRESS,
+                    Identifier::new(module_name).unwrap(),
+                    Identifier::new(func_name).unwrap(),
+                    func,
+                )
+            });
+    let sui_system_natives: &[(&str, &str, NativeFunction)] = &[(
+        "validator",
+        "validate_metadata_bcs",
+        make_native!(validator::validate_metadata_bcs),
+    )];
+    sui_system_natives
         .iter()
         .cloned()
         .map(|(module_name, func_name, func)| {
             (
-                sui_framework_addr,
+                SUI_SYSTEM_ADDRESS,
                 Identifier::new(module_name).unwrap(),
                 Identifier::new(func_name).unwrap(),
                 func,
             )
         })
+        .chain(sui_framework_natives_iter)
         .chain(move_stdlib::natives::all_natives(
-            move_stdlib_addr,
+            MOVE_STDLIB_ADDRESS,
             // TODO: tune gas params
             GasParameters::zeros(),
         ))
         .chain(move_stdlib::natives::nursery_natives(
-            move_stdlib_addr,
+            MOVE_STDLIB_ADDRESS,
             // TODO: tune gas params
             NurseryGasParameters::zeros(),
         ))

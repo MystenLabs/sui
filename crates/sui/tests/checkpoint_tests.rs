@@ -8,21 +8,21 @@ use std::time::Duration;
 use sui_core::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
 
 use sui_core::safe_client::SafeClientMetricsBase;
-use sui_core::signature_verifier::DefaultSignatureVerifier;
 use sui_core::test_utils::make_transfer_sui_transaction;
 use sui_macros::sim_test;
 
 use sui_types::crypto::get_account_key_pair;
 
 use sui_types::object::Object;
-use test_utils::authority::{spawn_test_authorities, test_authority_configs};
+use test_utils::authority::{spawn_test_authorities, test_authority_configs_with_objects};
 
 #[sim_test]
 async fn basic_checkpoints_integration_test() {
     let (sender, keypair) = get_account_key_pair();
     let gas1 = Object::with_owner_for_testing(sender);
-    let authorities =
-        spawn_test_authorities([gas1.clone()].into_iter(), &test_authority_configs()).await;
+    let (configs, mut objects) = test_authority_configs_with_objects([gas1]);
+    let gas1 = objects.pop().expect("Should contain a single gas object");
+    let authorities = spawn_test_authorities(&configs).await;
     let registry = Registry::new();
 
     // gas1 transaction is committed
@@ -34,7 +34,7 @@ async fn basic_checkpoints_integration_test() {
         &keypair,
         None,
     );
-    let net = AuthorityAggregator::<_, DefaultSignatureVerifier>::new_from_local_system_state(
+    let net = AuthorityAggregator::new_from_local_system_state(
         &authorities[0].with(|node| node.state().db()),
         &authorities[0].with(|node| node.state().committee_store().clone()),
         SafeClientMetricsBase::new(&registry),

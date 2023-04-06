@@ -1,0 +1,10 @@
+//# run
+main() {
+    let v: u64;
+    let ref_v: &u64;
+label b0:
+    v = 5;
+    ref_v = &v;
+    _ = &ref_v; // cannot borrow a reference
+    return;
+}

@@ -1,0 +1,15 @@
+//# run
+main() {
+    let x: u64;
+label b0:
+    jump_if (true) b2;
+label b1:
+    x = 100;
+    jump b3;
+label b2:
+    assert(true, 42);
+label b3:
+    // invalid copy
+    assert(copy(x) == 100, 42);
+    return;
+}

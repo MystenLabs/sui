@@ -5,32 +5,31 @@ import { useRpcClient } from '@mysten/core';
 import { type SuiObjectResponse, normalizeSuiAddress } from '@mysten/sui.js';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
-export function useGetValidators() {
-    const rpc = useRpcClient();
-    return useQuery(['system', 'validators'], () => rpc.getValidators());
-}
-
 export function useGetSystemObject() {
     const rpc = useRpcClient();
-    return useQuery(['system', 'state'], () => rpc.getSuiSystemState());
+    return useQuery(['system', 'state'], () => rpc.getLatestSuiSystemState());
 }
 
 export function useGetObject(
-    objectId: string
+    objectId?: string | null
 ): UseQueryResult<SuiObjectResponse, unknown> {
     const rpc = useRpcClient();
-    const normalizedObjId = normalizeSuiAddress(objectId);
+    const normalizedObjId = objectId && normalizeSuiAddress(objectId);
     const response = useQuery(
         ['object', normalizedObjId],
         async () =>
-            rpc.getObject(normalizedObjId, {
-                showType: true,
-                showContent: true,
-                showOwner: true,
-                showPreviousTransaction: true,
-                showStorageRebate: true,
+            rpc.getObject({
+                id: normalizedObjId!,
+                options: {
+                    showType: true,
+                    showContent: true,
+                    showOwner: true,
+                    showPreviousTransaction: true,
+                    showStorageRebate: true,
+                    showDisplay: true,
+                },
             }),
-        { enabled: !!objectId }
+        { enabled: !!normalizedObjId }
     );
 
     return response;

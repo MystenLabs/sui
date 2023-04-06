@@ -5,13 +5,14 @@
 use anyhow::Result;
 use futures::future::join_all;
 use itertools::Itertools;
-use multiaddr::Multiaddr;
 use std::collections::BTreeMap;
 use std::fmt::Write;
-use std::path::PathBuf;
-use sui_config::{genesis::Genesis, ValidatorInfo};
+use std::path::{Path, PathBuf};
+use std::{fs, io};
+use sui_config::{genesis::Genesis, NodeConfig};
 use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use sui_network::default_mysten_network_config;
+use sui_types::multiaddr::Multiaddr;
 use sui_types::object::ObjectFormatOptions;
 use sui_types::{base_types::*, messages::*, object::Owner};
 use tokio::time::Instant;
@@ -23,20 +24,21 @@ pub mod db_tool;
 
 fn make_clients(
     genesis: PathBuf,
-) -> Result<BTreeMap<AuthorityName, (ValidatorInfo, NetworkAuthorityClient)>> {
+) -> Result<BTreeMap<AuthorityName, (Multiaddr, NetworkAuthorityClient)>> {
     let net_config = default_mysten_network_config();
 
     let genesis = Genesis::load(genesis)?;
 
     let mut authority_clients = BTreeMap::new();
 
-    for validator in genesis.validator_set() {
+    for validator in genesis.validator_set_for_tooling() {
+        let metadata = validator.verified_metadata();
         let channel = net_config
-            .connect_lazy(validator.network_address())
+            .connect_lazy(&metadata.net_address)
             .map_err(|err| anyhow!(err.to_string()))?;
         let client = NetworkAuthorityClient::new(channel);
-        let public_key_bytes = validator.protocol_key();
-        authority_clients.insert(public_key_bytes, (validator, client));
+        let public_key_bytes = metadata.sui_pubkey_bytes();
+        authority_clients.insert(public_key_bytes, (metadata.net_address.clone(), client));
     }
 
     Ok(authority_clients)
@@ -285,9 +287,9 @@ pub async fn get_object(
                     true
                 }
             })
-            .map(|(name, (v, client))| async {
+            .map(|(name, (address, client))| async {
                 let object_versions = get_object_impl(client, obj_id, version, history).await;
-                (*name, v.network_address().clone(), object_versions)
+                (*name, address.clone(), object_versions)
             }),
     )
     .await;
@@ -298,10 +300,13 @@ pub async fn get_object(
     })
 }
 
-pub async fn get_transaction(tx_digest: TransactionDigest, genesis: PathBuf) -> Result<String> {
+pub async fn get_transaction_block(
+    tx_digest: TransactionDigest,
+    genesis: PathBuf,
+) -> Result<String> {
     let clients = make_clients(genesis)?;
     let timer = Instant::now();
-    let responses = join_all(clients.iter().map(|(name, (v, client))| async {
+    let responses = join_all(clients.iter().map(|(name, (address, client))| async {
         let result = client
             .handle_transaction_info_request(TransactionInfoRequest {
                 transaction_digest: tx_digest,
@@ -309,7 +314,7 @@ pub async fn get_transaction(tx_digest: TransactionDigest, genesis: PathBuf) -> 
             .await;
         (
             *name,
-            v.network_address().clone(),
+            address.clone(),
             result,
             timer.elapsed().as_secs_f64(),
         )
@@ -523,14 +528,39 @@ pub(crate) fn make_anemo_config() -> anemo_cli::Config {
                         get_checkpoint_contents,
                         sui_types::messages_checkpoint::CheckpointContentsDigest
                     ),
-                )
-                .add_method(
-                    "GetTransactionAndEffects",
-                    anemo_cli::ron_method!(
-                        StateSyncClient,
-                        get_transaction_and_effects,
-                        sui_types::base_types::ExecutionDigests
-                    ),
                 ),
         )
+}
+
+fn copy_dir_all(
+    src: impl AsRef<Path>,
+    dst: impl AsRef<Path>,
+    skip: Vec<PathBuf>,
+) -> io::Result<()> {
+    fs::create_dir_all(&dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        if skip.contains(&entry.path()) {
+            continue;
+        }
+        if ty.is_dir() {
+            copy_dir_all(
+                entry.path(),
+                dst.as_ref().join(entry.file_name()),
+                skip.clone(),
+            )?;
+        } else {
+            fs::copy(entry.path(), dst.as_ref().join(entry.file_name()))?;
+        }
+    }
+    Ok(())
+}
+
+pub async fn restore_from_db_checkpoint(
+    config: &NodeConfig,
+    db_checkpoint_path: &Path,
+) -> Result<(), anyhow::Error> {
+    copy_dir_all(db_checkpoint_path, config.db_path(), vec![])?;
+    Ok(())
 }

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-  extractMutableReference,
   extractStructTag,
   ID_STRUCT_NAME,
   isValidSuiAddress,
@@ -50,7 +49,6 @@ const isSameStruct = (a: any, b: any) =>
 export function isTxContext(param: SuiMoveNormalizedType): boolean {
   const struct = extractStructTag(param)?.Struct;
   return (
-    extractMutableReference(param) != null &&
     struct?.address === '0x2' &&
     struct?.module === 'tx_context' &&
     struct?.name === 'TxContext'
@@ -140,7 +138,7 @@ export function getPureSerializationType(
       return 'address';
     } else if (isSameStruct(normalizedType.Struct, RESOLVED_STD_OPTION)) {
       const optionToVec: SuiMoveNormalizedType = {
-        Vector: normalizedType.Struct.type_arguments[0],
+        Vector: normalizedType.Struct.typeArguments[0],
       };
       return getPureSerializationType(optionToVec, argVal);
     }

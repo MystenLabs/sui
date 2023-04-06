@@ -5,7 +5,7 @@ use arc_swap::ArcSwap;
 use config::{Committee, Stake};
 use crypto::PublicKey;
 use fastcrypto::traits::ToFromBytes;
-use multiaddr::Multiaddr;
+use mysten_network::Multiaddr;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
@@ -93,7 +93,7 @@ impl Configuration for NarwhalConfiguration {
         if epoch_number != self.committee.load().epoch() {
             return Err(Status::invalid_argument(format!(
                 "Passed in epoch {epoch_number} does not match current epoch {}",
-                self.committee.load().epoch
+                self.committee.load().epoch()
             )));
         }
         let validators = new_network_info_request.validators;

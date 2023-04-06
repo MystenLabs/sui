@@ -16,19 +16,19 @@ import {
 let SECP_TEST_CASES = new Map<string, string>([
   [
     'AwTC3jVFRxXc3RJIFgoQcv486QdqwYa8vBp4bgSq0gsI',
-    '35057079b5dfc60d650768e2f4f92318f4ea5a77875d0e35a8941368f19f981a',
+    '0xcdce00b4326fb908fdac83c35bcfbda323bfcc0618b47c66ccafbdced850efaa',
   ],
   [
     'A1F2CtldIGolO92Pm9yuxWXs5E07aX+6ZEHAnSuKOhii',
-    '0187cf4234ff80862d5a1665d840df400fef29a0ac204cd2d1c01547c1476994',
+    '0xb588e58ed8967b6a6f9dbce76386283d374cf7389fb164189551257e32b023b2',
   ],
   [
     'Ak5rsa5Od4T6YFN/V3VIhZ/azMMYPkUilKQwc+RiaId+',
-    '70eaff6b7973c57842c2272f00aa19af9f20dc1b6ffdbf81f02bcc8ec13e33ce',
+    '0x694dd74af1e82b968822a82fb5e315f6d20e8697d5d03c0b15e0178c1a1fcfa0',
   ],
   [
     'A4XbJ3fLvV/8ONsnLHAW1nORKsoCYsHaXv9FK1beMtvY',
-    'deb28f733d9f59910cb210d56a46614f9dd28360a0192c43c1b39c869499ab35',
+    '0x78acc6ca0003457737d755ade25a6f3a144e5e44ed6f8e6af4982c5cc75e55e7',
   ],
 ]);
 describe('Secp256k1PublicKey', () => {

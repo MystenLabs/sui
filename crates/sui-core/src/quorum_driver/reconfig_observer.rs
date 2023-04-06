@@ -3,12 +3,10 @@
 
 use async_trait::async_trait;
 use std::sync::Arc;
-use sui_protocol_config::ProtocolVersion;
-use sui_types::committee::CommitteeWithNetworkMetadata;
+use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{info, warn};
 
-use crate::signature_verifier::{DefaultSignatureVerifier, SignatureVerifier};
 use crate::{
     authority::AuthorityStore,
     authority_aggregator::{AuthAggMetrics, AuthorityAggregator},
@@ -20,15 +18,15 @@ use crate::{
 use super::QuorumDriver;
 
 #[async_trait]
-pub trait ReconfigObserver<A, S = DefaultSignatureVerifier> {
-    async fn run(&mut self, quorum_driver: Arc<QuorumDriver<A, S>>);
-    fn clone_boxed(&self) -> Box<dyn ReconfigObserver<A, S> + Send + Sync>;
+pub trait ReconfigObserver<A> {
+    async fn run(&mut self, quorum_driver: Arc<QuorumDriver<A>>);
+    fn clone_boxed(&self) -> Box<dyn ReconfigObserver<A> + Send + Sync>;
 }
 
 /// A ReconfigObserver that subscribes to a reconfig channel of new committee.
 /// This is used in TransactionOrchestrator.
 pub struct OnsiteReconfigObserver {
-    reconfig_rx: tokio::sync::broadcast::Receiver<(CommitteeWithNetworkMetadata, ProtocolVersion)>,
+    reconfig_rx: tokio::sync::broadcast::Receiver<SuiSystemState>,
     authority_store: Arc<AuthorityStore>,
     committee_store: Arc<CommitteeStore>,
     safe_client_metrics_base: SafeClientMetricsBase,
@@ -37,10 +35,7 @@ pub struct OnsiteReconfigObserver {
 
 impl OnsiteReconfigObserver {
     pub fn new(
-        reconfig_rx: tokio::sync::broadcast::Receiver<(
-            CommitteeWithNetworkMetadata,
-            ProtocolVersion,
-        )>,
+        reconfig_rx: tokio::sync::broadcast::Receiver<SuiSystemState>,
         authority_store: Arc<AuthorityStore>,
         committee_store: Arc<CommitteeStore>,
         safe_client_metrics_base: SafeClientMetricsBase,
@@ -55,17 +50,15 @@ impl OnsiteReconfigObserver {
         }
     }
 
-    async fn create_authority_aggregator_from_system_state<S: SignatureVerifier + Default>(
+    async fn create_authority_aggregator_from_system_state(
         &self,
-    ) -> AuthorityAggregator<NetworkAuthorityClient, S> {
+    ) -> AuthorityAggregator<NetworkAuthorityClient> {
         AuthorityAggregator::new_from_local_system_state(
             &self.authority_store,
             &self.committee_store,
             self.safe_client_metrics_base.clone(),
             self.auth_agg_metrics.clone(),
         )
-        // TODO: we should tolerate when <= f validators give invalid addresses
-        // GH issue: https://github.com/MystenLabs/sui/issues/7019
         .unwrap_or_else(|e| {
             panic!(
                 "Failed to create AuthorityAggregator from System State: {:?}",
@@ -76,10 +69,8 @@ impl OnsiteReconfigObserver {
 }
 
 #[async_trait]
-impl<S: SignatureVerifier + Default> ReconfigObserver<NetworkAuthorityClient, S>
-    for OnsiteReconfigObserver
-{
-    fn clone_boxed(&self) -> Box<dyn ReconfigObserver<NetworkAuthorityClient, S> + Send + Sync> {
+impl ReconfigObserver<NetworkAuthorityClient> for OnsiteReconfigObserver {
+    fn clone_boxed(&self) -> Box<dyn ReconfigObserver<NetworkAuthorityClient> + Send + Sync> {
         Box::new(Self {
             reconfig_rx: self.reconfig_rx.resubscribe(),
             authority_store: self.authority_store.clone(),
@@ -89,7 +80,7 @@ impl<S: SignatureVerifier + Default> ReconfigObserver<NetworkAuthorityClient, S>
         })
     }
 
-    async fn run(&mut self, quorum_driver: Arc<QuorumDriver<NetworkAuthorityClient, S>>) {
+    async fn run(&mut self, quorum_driver: Arc<QuorumDriver<NetworkAuthorityClient>>) {
         // A tiny optimization: when a very stale node just starts, the
         // channel may fill up committees quickly. Here we skip directly to
         // the last known committee by looking at SuiSystemState.
@@ -101,8 +92,12 @@ impl<S: SignatureVerifier + Default> ReconfigObserver<NetworkAuthorityClient, S>
         }
         loop {
             match self.reconfig_rx.recv().await {
-                Ok((committee, _protocol_version)) => {
-                    info!("Got reconfig message: {}", committee);
+                Ok(system_state) => {
+                    let committee = system_state.get_current_epoch_committee();
+                    info!(
+                        "Got reconfig message. New committee: {}",
+                        committee.committee
+                    );
                     if committee.epoch() > quorum_driver.current_epoch() {
                         let authority_agg =
                             self.create_authority_aggregator_from_system_state().await;
@@ -127,13 +122,13 @@ impl<S: SignatureVerifier + Default> ReconfigObserver<NetworkAuthorityClient, S>
 pub struct DummyReconfigObserver;
 
 #[async_trait]
-impl<A, S: SignatureVerifier> ReconfigObserver<A, S> for DummyReconfigObserver
+impl<A> ReconfigObserver<A> for DummyReconfigObserver
 where
     A: AuthorityAPI + Send + Sync + 'static,
 {
-    fn clone_boxed(&self) -> Box<dyn ReconfigObserver<A, S> + Send + Sync> {
+    fn clone_boxed(&self) -> Box<dyn ReconfigObserver<A> + Send + Sync> {
         Box::new(Self {})
     }
 
-    async fn run(&mut self, _quorum_driver: Arc<QuorumDriver<A, S>>) {}
+    async fn run(&mut self, _quorum_driver: Arc<QuorumDriver<A>>) {}
 }

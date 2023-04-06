@@ -2,11 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use proc_macro::TokenStream;
-use quote::quote;
+use quote::{quote, quote_spanned, ToTokens};
+use syn::{
+    fold::{fold_expr, fold_item_macro, fold_stmt, Fold},
+    parse::Parser,
+    parse2, parse_macro_input,
+    punctuated::Punctuated,
+    spanned::Spanned,
+    Attribute, BinOp, Expr, ExprBinary, ExprMacro, Item, ItemMacro, Stmt, StmtMacro, Token, UnOp,
+};
 
 #[proc_macro_attribute]
 pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenStream {
-    let mut input = syn::parse_macro_input!(item as syn::ItemFn);
+    let mut input = parse_macro_input!(item as syn::ItemFn);
 
     let body = &input.block;
     input.block = syn::parse2(quote! {
@@ -27,19 +35,32 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
             // be very important for being able to reproduce a failure that occurs in the Nth
             // iteration of a multi-iteration test run.
             std::thread::spawn(|| {
+                use sui_simulator::sui_framework::SystemPackage;
+                use sui_protocol_config::ProtocolConfig;
                 ::sui_simulator::telemetry_subscribers::init_for_testing();
-                ::sui_simulator::sui_framework::get_move_stdlib();
-                ::sui_simulator::sui_framework::get_sui_framework();
-                ::sui_simulator::sui_types::gas::SuiGasStatus::new_unmetered();
+                ::sui_simulator::sui_framework::MoveStdlib::as_modules();
+                ::sui_simulator::sui_framework::SuiFramework::as_modules();
+                ::sui_simulator::sui_framework::SuiSystem::as_modules();
+                ::sui_simulator::sui_types::gas::SuiGasStatus::new_unmetered(
+                    &ProtocolConfig::get_for_min_version(),
+                );
+
+                // For reasons I can't understand, LruCache causes divergent behavior the second
+                // time one is constructed and inserted into, so construct one before the first
+                // test run for determinism.
+                let mut cache = ::sui_simulator::lru::LruCache::new(1.try_into().unwrap());
+                cache.put(1, 1);
 
                 {
                     // Initialize the static initializers here:
                     // https://github.com/move-language/move/blob/652badf6fd67e1d4cc2aa6dc69d63ad14083b673/language/tools/move-package/src/package_lock.rs#L12
                     use std::path::PathBuf;
-                    use sui_simulator::sui_framework_build::compiled_package::BuildConfig;
+                    use sui_simulator::sui_framework_build::compiled_package::{BuildConfig, SuiPackageHooks};
                     use sui_simulator::sui_framework::build_move_package;
                     use sui_simulator::tempfile::TempDir;
+                    use sui_simulator::move_package::package_hooks::register_package_hooks;
 
+                    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks {}));
                     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
                     path.push("../../sui_programmability/examples/basics");
                     let mut build_config = BuildConfig::default();
@@ -138,24 +159,23 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
 /// This should be used for tests that can meaningfully run in either environment.
 #[proc_macro_attribute]
 pub fn sui_test(args: TokenStream, item: TokenStream) -> TokenStream {
-    let input = syn::parse_macro_input!(item as syn::ItemFn);
-    let args = syn::parse_macro_input!(args as syn::AttributeArgs);
+    let input = parse_macro_input!(item as syn::ItemFn);
+    let arg_parser = Punctuated::<syn::Meta, Token![,]>::parse_terminated;
+    let args = arg_parser.parse(args).unwrap().into_iter();
 
     let header = if cfg!(msim) {
         quote! {
-            #[::sui_simulator::sim_test(crate = "sui_simulator", #(#args)*)]
-            #[::sui_macros::init_static_initializers]
+            #[::sui_simulator::sim_test(crate = "sui_simulator", #(#args)* )]
         }
     } else {
         quote! {
             #[::tokio::test(#(#args)*)]
-            // though this is not required for tokio, we do it to get logs as well.
-            #[::sui_macros::init_static_initializers]
         }
     };
 
     let result = quote! {
         #header
+        #[::sui_macros::init_static_initializers]
         #input
     };
 
@@ -170,8 +190,9 @@ pub fn sui_test(args: TokenStream, item: TokenStream) -> TokenStream {
 /// `check_determinism`, which is not understood by tokio.
 #[proc_macro_attribute]
 pub fn sim_test(args: TokenStream, item: TokenStream) -> TokenStream {
-    let input = syn::parse_macro_input!(item as syn::ItemFn);
-    let args = syn::parse_macro_input!(args as syn::AttributeArgs);
+    let input = parse_macro_input!(item as syn::ItemFn);
+    let arg_parser = Punctuated::<syn::Meta, Token![,]>::parse_terminated;
+    let args = arg_parser.parse(args).unwrap().into_iter();
 
     let result = if cfg!(msim) {
         quote! {
@@ -211,4 +232,283 @@ pub fn sim_test(args: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     result.into()
+}
+
+#[proc_macro]
+pub fn checked_arithmetic(input: TokenStream) -> TokenStream {
+    let input_file = CheckArithmetic.fold_file(parse_macro_input!(input));
+
+    let output_items = input_file.items;
+
+    let output = quote! {
+        #(#output_items)*
+    };
+
+    TokenStream::from(output)
+}
+
+#[proc_macro_attribute]
+pub fn with_checked_arithmetic(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let input_item = parse_macro_input!(item as Item);
+    match input_item {
+        Item::Fn(input_fn) => {
+            let transformed_fn = CheckArithmetic.fold_item_fn(input_fn);
+            TokenStream::from(quote! { #transformed_fn })
+        }
+        Item::Impl(input_impl) => {
+            let transformed_impl = CheckArithmetic.fold_item_impl(input_impl);
+            TokenStream::from(quote! { #transformed_impl })
+        }
+        _ => {
+            let err = syn::Error::new_spanned(
+                input_item,
+                "The with_checked_arithmetic attribute can only be applied to functions and impl blocks",
+            );
+            err.to_compile_error().into()
+        }
+    }
+}
+
+struct CheckArithmetic;
+
+impl CheckArithmetic {
+    fn maybe_skip_macro(&self, attrs: &mut Vec<Attribute>) -> bool {
+        if let Some(idx) = attrs
+            .iter()
+            .position(|attr| attr.path().is_ident("skip_checked_arithmetic"))
+        {
+            // Skip processing macro because it is annotated with
+            // #[skip_checked_arithmetic]
+            attrs.remove(idx);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn process_macro_contents(
+        &mut self,
+        tokens: proc_macro2::TokenStream,
+    ) -> syn::Result<proc_macro2::TokenStream> {
+        // Parse the macro's contents as a comma-separated list of expressions.
+        let parser = Punctuated::<Expr, Token![,]>::parse_terminated;
+        let Ok(exprs) = parser.parse(tokens.clone().into()) else {
+            return Err(syn::Error::new_spanned(
+                tokens,
+                "could not process macro contents - use #[skip_checked_arithmetic] to skip this macro"
+            ));
+        };
+
+        // Fold each sub expression.
+        let folded_exprs = exprs
+            .into_iter()
+            .map(|expr| self.fold_expr(expr))
+            .collect::<Vec<_>>();
+
+        // Convert the folded expressions back into tokens and reconstruct the macro.
+        let mut folded_tokens = proc_macro2::TokenStream::new();
+        for (i, folded_expr) in folded_exprs.into_iter().enumerate() {
+            if i > 0 {
+                folded_tokens.extend(std::iter::once::<proc_macro2::TokenTree>(
+                    proc_macro2::Punct::new(',', proc_macro2::Spacing::Alone).into(),
+                ));
+            }
+            folded_expr.to_tokens(&mut folded_tokens);
+        }
+
+        Ok(folded_tokens)
+    }
+}
+
+impl Fold for CheckArithmetic {
+    fn fold_stmt(&mut self, stmt: Stmt) -> Stmt {
+        let stmt = fold_stmt(self, stmt);
+        if let Stmt::Macro(stmt_macro) = stmt {
+            let StmtMacro {
+                mut attrs,
+                mut mac,
+                semi_token,
+            } = stmt_macro;
+
+            if self.maybe_skip_macro(&mut attrs) {
+                Stmt::Macro(StmtMacro {
+                    attrs,
+                    mac,
+                    semi_token,
+                })
+            } else {
+                match self.process_macro_contents(mac.tokens.clone()) {
+                    Ok(folded_tokens) => {
+                        mac.tokens = folded_tokens;
+                        Stmt::Macro(StmtMacro {
+                            attrs,
+                            mac,
+                            semi_token,
+                        })
+                    }
+                    Err(error) => parse2(error.to_compile_error()).unwrap(),
+                }
+            }
+        } else {
+            stmt
+        }
+    }
+
+    fn fold_item_macro(&mut self, mut item_macro: ItemMacro) -> ItemMacro {
+        if !self.maybe_skip_macro(&mut item_macro.attrs) {
+            let err = syn::Error::new_spanned(
+                item_macro.to_token_stream(),
+                "cannot process macros - use #[skip_checked_arithmetic] to skip \
+                    processing this macro",
+            );
+
+            return parse2(err.to_compile_error()).unwrap();
+        }
+        fold_item_macro(self, item_macro)
+    }
+
+    fn fold_expr(&mut self, expr: Expr) -> Expr {
+        let span = expr.span();
+        let expr = fold_expr(self, expr);
+        let expr = match expr {
+            Expr::Macro(expr_macro) => {
+                let ExprMacro { mut attrs, mut mac } = expr_macro;
+
+                if self.maybe_skip_macro(&mut attrs) {
+                    return Expr::Macro(ExprMacro { attrs, mac });
+                } else {
+                    match self.process_macro_contents(mac.tokens.clone()) {
+                        Ok(folded_tokens) => {
+                            mac.tokens = folded_tokens;
+                            let expr_macro = Expr::Macro(ExprMacro { attrs, mac });
+                            quote!(#expr_macro)
+                        }
+                        Err(error) => {
+                            return Expr::Verbatim(error.to_compile_error());
+                        }
+                    }
+                }
+            }
+
+            Expr::Binary(expr_binary) => {
+                let ExprBinary {
+                    attrs,
+                    mut left,
+                    op,
+                    mut right,
+                } = expr_binary;
+
+                fn remove_parens(expr: &mut Expr) {
+                    if let Expr::Paren(paren) = expr {
+                        // i don't even think rust allows this, but just in case
+                        assert!(paren.attrs.is_empty(), "TODO: attrs on parenthesized");
+                        *expr = *paren.expr.clone();
+                    }
+                }
+
+                macro_rules! wrap_op {
+                    ($left: expr, $right: expr, $method: ident, $span: expr) => {{
+                        // Remove parens from exprs since both sides get assigned to tmp variables.
+                        // otherwise we get lint errors
+                        remove_parens(&mut $left);
+                        remove_parens(&mut $right);
+
+                        quote_spanned!($span => {
+                            // assign in one stmt in case either #left or #right contains
+                            // references to `left` or `right` symbols.
+                            let (left, right) = (#left, #right);
+                            left.$method(right)
+                                .unwrap_or_else(||
+                                    panic!(
+                                        "Overflow or underflow in {} {} + {}",
+                                        stringify!($method),
+                                        left,
+                                        right,
+                                    )
+                                )
+                        })
+                    }};
+                }
+
+                macro_rules! wrap_op_assign {
+                    ($left: expr, $right: expr, $method: ident, $span: expr) => {{
+                        // Remove parens from exprs since both sides get assigned to tmp variables.
+                        // otherwise we get lint errors
+                        remove_parens(&mut $left);
+                        remove_parens(&mut $right);
+
+                        quote_spanned!($span => {
+                            // assign in one stmt in case either #left or #right contains
+                            // references to `left` or `right` symbols.
+                            let (left, right) = (&mut #left, #right);
+                            *left = (*left).$method(right)
+                                .unwrap_or_else(||
+                                    panic!(
+                                        "Overflow or underflow in {} {} + {}",
+                                        stringify!($method),
+                                        *left,
+                                        right
+                                    )
+                                )
+                        })
+                    }};
+                }
+
+                match op {
+                    BinOp::Add(_) => {
+                        wrap_op!(left, right, checked_add, span)
+                    }
+                    BinOp::Sub(_) => {
+                        wrap_op!(left, right, checked_sub, span)
+                    }
+                    BinOp::Mul(_) => {
+                        wrap_op!(left, right, checked_mul, span)
+                    }
+                    BinOp::Div(_) => {
+                        wrap_op!(left, right, checked_div, span)
+                    }
+                    BinOp::Rem(_) => {
+                        wrap_op!(left, right, checked_rem, span)
+                    }
+                    BinOp::AddAssign(_) => {
+                        wrap_op_assign!(left, right, checked_add, span)
+                    }
+                    BinOp::SubAssign(_) => {
+                        wrap_op_assign!(left, right, checked_sub, span)
+                    }
+                    BinOp::MulAssign(_) => {
+                        wrap_op_assign!(left, right, checked_mul, span)
+                    }
+                    BinOp::DivAssign(_) => {
+                        wrap_op_assign!(left, right, checked_div, span)
+                    }
+                    BinOp::RemAssign(_) => {
+                        wrap_op_assign!(left, right, checked_rem, span)
+                    }
+                    _ => {
+                        let expr_binary = ExprBinary {
+                            attrs,
+                            left,
+                            op,
+                            right,
+                        };
+                        quote_spanned!(span => #expr_binary)
+                    }
+                }
+            }
+            Expr::Unary(expr_unary) => {
+                let op = &expr_unary.op;
+                let operand = &expr_unary.expr;
+                match op {
+                    UnOp::Neg(_) => {
+                        quote_spanned!(span => #operand.checked_neg().expect("Overflow or underflow in negation"))
+                    }
+                    _ => quote_spanned!(span => #expr_unary),
+                }
+            }
+            _ => quote_spanned!(span => #expr),
+        };
+
+        parse2(expr).unwrap()
+    }
 }

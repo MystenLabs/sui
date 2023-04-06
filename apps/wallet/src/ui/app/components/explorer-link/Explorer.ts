@@ -44,7 +44,7 @@ export function getTransactionUrl(
     customRPC: string
 ) {
     return getExplorerUrl(
-        `/transaction/${encodeURIComponent(txDigest)}`,
+        `/txblock/${encodeURIComponent(txDigest)}`,
         apiEnv,
         customRPC
     );

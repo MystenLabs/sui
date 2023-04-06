@@ -2,24 +2,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { getTransactionDigest } from '@mysten/sui.js';
-import { memo } from 'react';
 
 import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
 import { TransactionCard } from '_components/transactions-card';
 import { NoActivityCard } from '_components/transactions-card/NoActivityCard';
-import { useAppSelector, useGetTransactionsByAddress } from '_hooks';
+import { useQueryTransactionsByAddress } from '_hooks';
 import Alert from '_src/ui/app/components/alert';
+import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 
-function TransactionsPage() {
-    const activeAddress = useAppSelector(({ account: { address } }) => address);
+function TransactionBlocksPage() {
+    const activeAddress = useActiveAddress();
     const {
         data: txns,
         isLoading,
         error,
         isError,
-    } = useGetTransactionsByAddress(activeAddress);
+    } = useQueryTransactionsByAddress(activeAddress);
 
     if (isError) {
         return (
@@ -57,4 +57,4 @@ function TransactionsPage() {
     );
 }
 
-export default memo(TransactionsPage);
+export default TransactionBlocksPage;

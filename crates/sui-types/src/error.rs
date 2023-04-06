@@ -5,24 +5,21 @@
 use crate::{
     base_types::*,
     committee::{Committee, EpochId, StakeUnit},
-    messages::{CommandIndex, ExecutionFailureStatus, MoveLocation},
+    messages::{CommandIndex, ExecutionFailureStatus, MoveLocation, MoveLocationOpt},
     object::Owner,
 };
 use fastcrypto::error::FastCryptoError;
-use move_binary_format::access::ModuleAccess;
-use move_binary_format::{
-    errors::{Location, PartialVMError, VMError},
-    file_format::FunctionDefinitionIndex,
-};
+use move_binary_format::{access::ModuleAccess, errors::VMError};
+use move_binary_format::{errors::Location, file_format::FunctionDefinitionIndex};
 use move_core_types::{
-    resolver::{ModuleResolver, ResourceResolver},
+    resolver::MoveResolver,
     vm_status::{StatusCode, StatusType},
 };
 pub use move_vm_runtime::move_vm::MoveVM;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt::Debug};
 use strum_macros::{AsRefStr, IntoStaticStr};
-use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
 use thiserror::Error;
 use tonic::Status;
 use typed_store::rocks::TypedStoreError;
@@ -54,7 +51,8 @@ macro_rules! exit_main {
         match $result {
             Ok(_) => (),
             Err(err) => {
-                println!("{}", err.to_string().bold().red());
+                let err = format!("{:?}", err);
+                println!("{}", err.bold().red());
                 std::process::exit(1);
             }
         }
@@ -83,6 +81,8 @@ pub enum UserInputError {
         provided_obj_ref: ObjectRef,
         current_version: SequenceNumber,
     },
+    #[error("Package verification failed: {err:?}")]
+    PackageVerificationTimedout { err: String },
     #[error("Dependent package not found on-chain: {package_id:?}")]
     DependentPackageNotFound { package_id: ObjectID },
     #[error("Mutable parameter provided, immutable parameter expected.")]
@@ -128,11 +128,14 @@ pub enum UserInputError {
     #[error("Gas budget: {:?} is lower than min: {:?}.", gas_budget, min_budget)]
     GasBudgetTooLow { gas_budget: u64, min_budget: u64 },
     #[error(
-        "Balance of gas object {:?} is lower than gas budget: {:?}.",
+        "Balance of gas object {:?} is lower than the needed amount: {:?}.",
         gas_balance,
-        gas_budget
+        needed_gas_amount
     )]
-    GasBalanceTooLowToCoverGasBudget { gas_balance: u128, gas_budget: u128 },
+    GasBalanceTooLow {
+        gas_balance: u128,
+        needed_gas_amount: u128,
+    },
     #[error("Transaction kind does not support Sponsored Transaction")]
     UnsupportedSponsoredTransactionKind,
     #[error(
@@ -183,6 +186,43 @@ pub enum UserInputError {
     Unsupported(String),
 }
 
+#[derive(
+    Eq,
+    PartialEq,
+    Clone,
+    Debug,
+    Serialize,
+    Deserialize,
+    Hash,
+    AsRefStr,
+    IntoStaticStr,
+    JsonSchema,
+    Error,
+)]
+#[serde(tag = "code", rename = "ObjectResponseError", rename_all = "camelCase")]
+pub enum SuiObjectResponseError {
+    #[error("Object {:?} does not exist.", object_id)]
+    NotExists { object_id: ObjectID },
+    #[error(
+        "Object has been deleted object_id: {:?} at version: {:?} in digest {:?}",
+        object_id,
+        version,
+        digest
+    )]
+    Deleted {
+        object_id: ObjectID,
+        /// Object version.
+        version: SequenceNumber,
+        /// Base64 string representing the object digest
+        digest: ObjectDigest,
+    },
+    #[error("Unknown Error.")]
+    Unknown,
+    #[error("Display Error: {:?}", error)]
+    DisplayError { error: String },
+    // TODO: also integrate SuiPastObjectResponse (VersionNotFound,  VersionTooHigh)
+}
+
 /// Custom error type for Sui.
 #[derive(
     Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash, AsRefStr, IntoStaticStr,
@@ -190,8 +230,18 @@ pub enum UserInputError {
 pub enum SuiError {
     #[error("Error checking transaction input objects: {:?}", error)]
     UserInputError { error: UserInputError },
+
+    #[error("Error checking transaction object: {:?}", error)]
+    SuiObjectResponseError { error: SuiObjectResponseError },
+
     #[error("Expecting a single owner, shared ownership found")]
     UnexpectedOwnerType,
+
+    #[error("There are already {queue_len} transactions pending, above threshold of {threshold}")]
+    TooManyTransactionsPendingExecution { queue_len: usize, threshold: usize },
+
+    #[error("There are too many transactions pending in consensus")]
+    TooManyTransactionsPendingConsensus,
 
     #[error("Input {object_id} already has {queue_len} transactions pending, above threshold of {threshold}")]
     TooManyTransactionsPendingOnObject {
@@ -260,7 +310,7 @@ pub enum SuiError {
     // Move module publishing related errors
     #[error("Failed to verify the Move module, reason: {error:?}.")]
     ModuleVerificationFailure { error: String },
-    #[error("Failed to verify the Move module, reason: {error:?}.")]
+    #[error("Failed to deserialize the Move module, reason: {error:?}.")]
     ModuleDeserializationFailure { error: String },
     #[error("Failed to publish the Move module(s), reason: {error:?}.")]
     ModulePublishFailure { error: String },
@@ -350,6 +400,8 @@ pub enum SuiError {
     TransactionOrchestratorLocalExecutionError { error: String },
 
     // Errors returned by authority and client read API's
+    #[error("Failure serializing transaction in the requested format: {:?}", error)]
+    TransactionSerializationError { error: String },
     #[error("Failure serializing object in the requested format: {:?}", error)]
     ObjectSerializationError { error: String },
     #[error("Failure deserializing object in the requested format: {:?}", error)]
@@ -367,6 +419,8 @@ pub enum SuiError {
     FullNodeInvalidTxRangeQuery { error: String },
 
     // Errors related to the authority-consensus interface.
+    #[error("Failed to submit transaction to consensus: {0}")]
+    FailedToSubmitToConsensus(String),
     #[error("Failed to connect with consensus node: {0}")]
     ConsensusConnectionBroken(String),
     #[error("Failed to hear back from consensus: {0}")]
@@ -385,6 +439,10 @@ pub enum SuiError {
     KeyConversionError(String),
     #[error("Invalid Private Key provided")]
     InvalidPrivateKey,
+
+    // Unsupported Operations on Fullnode
+    #[error("Fullnode does not support handle_certificate")]
+    FullNodeCantHandleCertificate,
 
     // Epoch related errors.
     #[error("Validator temporarily stopped processing transactions due to epoch change")]
@@ -421,23 +479,33 @@ pub enum SuiError {
     #[error("Index store not available on this Fullnode.")]
     IndexStoreNotAvailable,
 
-    #[error("Failed to get the system state object content")]
-    SuiSystemStateNotFound,
+    #[error("Failed to read dynamic field from table in the object store: {0}")]
+    DynamicFieldReadError(String),
 
-    #[error("Found the sui system state object but it has an unexpected version")]
-    SuiSystemStateUnexpectedVersion,
+    #[error("Failed to read or deserialize system state related data structures on-chain: {0}")]
+    SuiSystemStateReadError(String),
 
-    #[error("Message version is not supported at the current protocol version")]
-    WrongMessageVersion {
-        message_version: u64,
-        // the range in which the given message version is supported
-        supported: SupportedProtocolVersions,
-        // the current protocol version which is outside of that range
-        current_protocol_version: ProtocolVersion,
-    },
+    #[error("Unexpected version error: {0}")]
+    UnexpectedVersion(String),
+
+    #[error("Message version is not supported at the current protocol version: {error}")]
+    WrongMessageVersion { error: String },
 
     #[error("unknown error: {0}")]
     Unknown(String),
+
+    #[error("Failed to perform file operation: {0}")]
+    FileIOError(String),
+}
+
+#[repr(u64)]
+#[allow(non_camel_case_types)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+/// Sub-status codes for the `UNKNOWN_VERIFICATION_ERROR` VM Status Code which provides more context
+/// TODO: add more Vm Status errors. We use `UNKNOWN_VERIFICATION_ERROR` as a catchall for now.
+pub enum VMMVerifierErrorSubStatusCode {
+    MULTIPLE_RETURN_VALUES_NOT_ALLOWED = 0,
+    INVALID_OBJECT_CREATION = 1,
 }
 
 #[repr(u64)]
@@ -450,31 +518,22 @@ pub enum VMMemoryLimitExceededSubStatusCode {
     NEW_ID_COUNT_LIMIT_EXCEEDED = 2,
     DELETED_ID_COUNT_LIMIT_EXCEEDED = 3,
     TRANSFER_ID_COUNT_LIMIT_EXCEEDED = 4,
+    OBJECT_RUNTIME_CACHE_LIMIT_EXCEEDED = 5,
+    OBJECT_RUNTIME_STORE_LIMIT_EXCEEDED = 6,
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;
 pub type UserInputResult<T = ()> = Result<T, UserInputError>;
 
-// TODO these are both horribly wrong, categorization needs to be considered
-impl From<PartialVMError> for SuiError {
-    fn from(error: PartialVMError) -> Self {
-        SuiError::ModuleVerificationFailure {
-            error: error.to_string(),
-        }
+impl From<sui_protocol_config::Error> for SuiError {
+    fn from(error: sui_protocol_config::Error) -> Self {
+        SuiError::WrongMessageVersion { error: error.0 }
     }
 }
 
 impl From<ExecutionError> for SuiError {
     fn from(error: ExecutionError) -> Self {
         SuiError::ExecutionError(error.to_string())
-    }
-}
-
-impl From<VMError> for SuiError {
-    fn from(error: VMError) -> Self {
-        SuiError::ModuleVerificationFailure {
-            error: error.to_string(),
-        }
     }
 }
 
@@ -541,6 +600,12 @@ impl From<UserInputError> for SuiError {
     }
 }
 
+impl From<SuiObjectResponseError> for SuiError {
+    fn from(error: SuiObjectResponseError) -> Self {
+        SuiError::SuiObjectResponseError { error }
+    }
+}
+
 impl SuiError {
     pub fn individual_error_indicates_epoch_change(&self) -> bool {
         matches!(
@@ -572,14 +637,43 @@ impl SuiError {
                 }
             }
 
+            // Overload errors
+            SuiError::TooManyTransactionsPendingExecution { .. } => (true, true),
+            SuiError::TooManyTransactionsPendingOnObject { .. } => (true, true),
+            SuiError::TooManyTransactionsPendingConsensus => (true, true),
+
             // Non retryable error
             SuiError::ExecutionError(..) => (false, true),
             SuiError::ByzantineAuthoritySuspicion { .. } => (false, true),
             SuiError::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction { .. } => {
                 (false, true)
             }
+            SuiError::ObjectLockConflict { .. } => (false, true),
+
             _ => (false, false),
         }
+    }
+
+    pub fn is_object_or_package_not_found(&self) -> bool {
+        match self {
+            SuiError::UserInputError { error } => {
+                matches!(
+                    error,
+                    UserInputError::ObjectNotFound { .. }
+                        | UserInputError::DependentPackageNotFound { .. }
+                )
+            }
+            _ => false,
+        }
+    }
+
+    pub fn is_overload(&self) -> bool {
+        matches!(
+            self,
+            SuiError::TooManyTransactionsPendingExecution { .. }
+                | SuiError::TooManyTransactionsPendingOnObject { .. }
+                | SuiError::TooManyTransactionsPendingConsensus
+        )
     }
 }
 
@@ -612,6 +706,10 @@ impl ExecutionError {
 
     pub fn new_with_source<E: Into<BoxError>>(kind: ExecutionErrorKind, source: E) -> Self {
         Self::new(kind, Some(source.into()))
+    }
+
+    pub fn invariant_violation<E: Into<BoxError>>(source: E) -> Self {
+        Self::new_with_source(ExecutionFailureStatus::InvariantViolation, source)
     }
 
     pub fn with_command_index(mut self, command: CommandIndex) -> Self {
@@ -658,14 +756,10 @@ impl From<ExecutionErrorKind> for ExecutionError {
     }
 }
 
-pub fn convert_vm_error<
-    'r,
-    E: Debug,
-    S: ResourceResolver<Error = E> + ModuleResolver<Error = E>,
->(
+pub fn convert_vm_error<S: MoveResolver<Err = SuiError>>(
     error: VMError,
-    vm: &'r MoveVM,
-    state_view: &'r S,
+    vm: &MoveVM,
+    state_view: &S,
 ) -> ExecutionError {
     let kind = match (error.major_status(), error.sub_status(), error.location()) {
         (StatusCode::EXECUTED, _, _) => {
@@ -729,7 +823,7 @@ pub fn convert_vm_error<
                     }
                     _ => None,
                 };
-                ExecutionFailureStatus::MovePrimitiveRuntimeError(location)
+                ExecutionFailureStatus::MovePrimitiveRuntimeError(MoveLocationOpt(location))
             }
             StatusType::Validation
             | StatusType::Verification

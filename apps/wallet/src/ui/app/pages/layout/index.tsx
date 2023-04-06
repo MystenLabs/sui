@@ -13,14 +13,12 @@ import type { ReactNode } from 'react';
 import st from './Layout.module.scss';
 
 export type PageLayoutProps = {
-    limitToPopUpSize?: boolean;
     forceFullscreen?: boolean;
     children: ReactNode | ReactNode[];
     className?: string;
 };
 
 function PageLayout({
-    limitToPopUpSize = false,
     forceFullscreen = false,
     children,
     className,
@@ -31,15 +29,17 @@ function PageLayout({
         <Loading loading={guardLoading}>
             <div
                 className={cl(
+                    'w-popup-width h-popup-height',
                     st.container,
                     className,
-                    limitToPopUpSize ? st.forcedPopupSize : st.dynamicSize,
                     {
                         [st.navHidden]: !isNavVisible,
                     }
                 )}
             >
                 {children}
+                <div id="overlay-portal-container"></div>
+                <div id="toaster-portal-container"></div>
             </div>
         </Loading>
     );

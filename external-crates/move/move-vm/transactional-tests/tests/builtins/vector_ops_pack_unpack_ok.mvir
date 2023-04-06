@@ -1,0 +1,29 @@
+//# run
+main() {
+    let v1: vector<u64>;
+    let v2: vector<u64>;
+    let e: u64;
+label b0:
+    v1 = vec_pack_1<u64>(42);
+    e = vec_unpack_1<u64>(move(v1));
+    v2 = vec_pack_1<u64>(move(e));
+    assert(*vec_imm_borrow<u64>(&v2, 0) == 42, 42);
+
+    return;
+}
+
+//# run
+main() {
+    let v1: vector<u64>;
+    let v2: vector<u64>;
+    let e1: u64;
+    let e2: u64;
+label b0:
+    v1 = vec_pack_2<u64>(42, 43);
+    e1, e2 = vec_unpack_2<u64>(move(v1));
+    v2 = vec_pack_2<u64>(move(e1), move(e2));
+    assert(*vec_imm_borrow<u64>(&v2, 0) == 42, 42);
+    assert(*vec_imm_borrow<u64>(&v2, 1) == 43, 43);
+
+    return;
+}

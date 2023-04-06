@@ -1,0 +1,8 @@
+//# run --signers 0x1  --check-runtime-types
+import 0x1.signer;
+main(account: signer) {
+    let u: &address;
+label b0:
+    u = signer.address_of(&account);
+    return;
+}

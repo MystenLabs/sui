@@ -1,21 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_indexer::errors::IndexerError;
-use sui_indexer::{new_pg_connection_pool, Indexer};
-use sui_node::metrics::start_prometheus_server;
-
 use clap::Parser;
+use tracing::{error, info};
 
+use sui_indexer::errors::IndexerError;
 use sui_indexer::store::PgIndexerStore;
+use sui_indexer::utils::reset_database;
+use sui_indexer::{get_pg_pool_connection, new_pg_connection_pool, Indexer, IndexerConfig};
+use sui_node::metrics::start_prometheus_server;
 
 #[tokio::main]
 async fn main() -> Result<(), IndexerError> {
+    // NOTE: this is to print out tracing like info, warn & error.
     let _guard = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .init();
 
     let indexer_config = IndexerConfig::parse();
+    info!("Parsed indexer config: {:#?}", indexer_config);
     let registry_service = start_prometheus_server(
         // NOTE: this parses the input host addr and port number for socket addr,
         // so unwrap() is safe here.
@@ -28,25 +31,34 @@ async fn main() -> Result<(), IndexerError> {
     );
 
     let registry = registry_service.default_registry();
-    let pg_connection_pool = new_pg_connection_pool(&indexer_config.db_url).await?;
-    let store = PgIndexerStore::new(pg_connection_pool);
+    let (blocking_cp, async_cp) = new_pg_connection_pool(&indexer_config.db_url)
+        .await
+        .map_err(|e| {
+            error!(
+                "Failed creating Postgres connection pool with error {:?}",
+                e
+            );
+            e
+        })?;
+    if indexer_config.reset_db {
+        let mut conn = get_pg_pool_connection(&blocking_cp).map_err(|e| {
+            error!(
+                "Failed getting Postgres connection from connection pool with error {:?}",
+                e
+            );
+            e
+        })?;
+        reset_database(&mut conn, /* drop_all */ true).map_err(|e| {
+            let db_err_msg = format!(
+                "Failed resetting database with url: {:?} and error: {:?}",
+                indexer_config.db_url.clone(),
+                e
+            );
+            error!("{}", db_err_msg);
+            IndexerError::PostgresResetError(db_err_msg)
+        })?;
+    }
+    let store = PgIndexerStore::new(async_cp, blocking_cp).await;
 
-    Indexer::start(&indexer_config.rpc_client_url, &registry, store).await
-}
-
-#[derive(Parser)]
-#[clap(
-    name = "Sui indexer",
-    about = "An off-fullnode service serving data from Sui protocol",
-    rename_all = "kebab-case"
-)]
-pub struct IndexerConfig {
-    #[clap(long)]
-    pub db_url: String,
-    #[clap(long)]
-    pub rpc_client_url: String,
-    #[clap(long, default_value = "0.0.0.0", global = true)]
-    pub client_metric_host: String,
-    #[clap(long, default_value = "9184", global = true)]
-    pub client_metric_port: u16,
+    Indexer::start(&indexer_config, &registry, store).await
 }

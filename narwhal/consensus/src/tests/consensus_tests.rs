@@ -13,10 +13,14 @@ use test_utils::{temp_dir, CommitteeFixture};
 use tokio::sync::watch;
 
 use crate::bullshark::Bullshark;
+use crate::consensus::ConsensusRound;
+use crate::consensus_utils::NUM_SUB_DAGS_PER_SCHEDULE;
 use crate::metrics::ConsensusMetrics;
 use crate::Consensus;
 use crate::NUM_SHUTDOWN_RECEIVERS;
-use types::{Certificate, PreSubscribedBroadcastSender, ReputationScores};
+use types::{
+    Certificate, CertificateAPI, HeaderAPI, PreSubscribedBroadcastSender, ReputationScores,
+};
 
 /// This test is trying to compare the output of the Consensus algorithm when:
 /// (1) running without any crash for certificates processed from round 1 to 5 (inclusive)
@@ -33,30 +37,30 @@ async fn test_consensus_recovery_with_bullshark() {
     let _guard = setup_tracing();
 
     // GIVEN
-    let storage = NodeStorage::reopen(temp_dir());
+    let storage = NodeStorage::reopen(temp_dir(), None);
 
     let consensus_store = storage.consensus_store;
     let certificate_store = storage.certificate_store;
-    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
 
     // AND Setup consensus
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
 
     // AND make certificates for rounds 1 to 7 (inclusive)
-    let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
+    let ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
     let genesis = Certificate::genesis(&committee)
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
     let (certificates, _next_parents) =
-        test_utils::make_optimal_certificates(&committee, 1..=7, &genesis, &keys);
+        test_utils::make_optimal_certificates(&committee, 1..=7, &genesis, &ids);
 
     // AND Spawn the consensus engine.
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(100);
     let (tx_primary, _rx_primary) = test_utils::test_channel!(100);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
-    let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
+    let (tx_consensus_round_updates, _rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
@@ -65,7 +69,6 @@ async fn test_consensus_recovery_with_bullshark() {
     let bullshark = Bullshark::new(
         committee.clone(),
         consensus_store.clone(),
-        gc_depth,
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
     );
@@ -129,11 +132,11 @@ async fn test_consensus_recovery_with_bullshark() {
     // AND the last committed store should be updated correctly
     let last_committed = consensus_store.read_last_committed();
 
-    for key in keys.clone() {
-        let last_round = *last_committed.get(&key).unwrap();
+    for id in ids.clone() {
+        let last_round = *last_committed.get(&id).unwrap();
 
         // For the leader of round 6 we expect to have last committed round of 6.
-        if key == Bullshark::leader_authority(&committee, 6) {
+        if id == Bullshark::leader_authority(&committee, 6) {
             assert_eq!(last_round, 6);
         } else {
             // For the others should be 5.
@@ -150,9 +153,10 @@ async fn test_consensus_recovery_with_bullshark() {
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(100);
     let (tx_primary, _rx_primary) = test_utils::test_channel!(100);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
-    let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
+    let (tx_consensus_round_updates, _rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
 
-    let storage = NodeStorage::reopen(temp_dir());
+    let storage = NodeStorage::reopen(temp_dir(), None);
 
     let consensus_store = storage.consensus_store;
     let certificate_store = storage.certificate_store;
@@ -160,7 +164,6 @@ async fn test_consensus_recovery_with_bullshark() {
     let bullshark = Bullshark::new(
         committee.clone(),
         consensus_store.clone(),
-        gc_depth,
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
     );
@@ -185,10 +188,10 @@ async fn test_consensus_recovery_with_bullshark() {
     // We omit round 7 so we can feed those later after "crash" to trigger a new leader
     // election round and commit.
     for certificate in certificates.iter() {
-        if certificate.header.round <= 3 {
+        if certificate.header().round() <= 3 {
             tx_waiter.send(certificate.clone()).await.unwrap();
         }
-        if certificate.header.round <= 6 {
+        if certificate.header().round() <= 6 {
             certificate_store.write(certificate.clone()).unwrap();
         }
     }
@@ -224,12 +227,12 @@ async fn test_consensus_recovery_with_bullshark() {
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(100);
     let (tx_primary, _rx_primary) = test_utils::test_channel!(100);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
-    let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
+    let (tx_consensus_round_updates, _rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
 
     let bullshark = Bullshark::new(
         committee.clone(),
         consensus_store.clone(),
-        gc_depth,
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
     );
@@ -251,7 +254,7 @@ async fn test_consensus_recovery_with_bullshark() {
     // WHEN send the certificates of round >= 5 to trigger a leader election for round 4
     // and start committing.
     for certificate in certificates.iter() {
-        if certificate.header.round >= 5 {
+        if certificate.header().round() >= 5 {
             tx_waiter.send(certificate.clone()).await.unwrap();
         }
     }

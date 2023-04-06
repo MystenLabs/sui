@@ -2,12 +2,12 @@
 	"sideMenu": {
 		"title": "QUICK LINKS",
 		"items": [{
-				"label": "Sui Doc Updates",
-				"link": "doc-updates"
+				"label": "Sui Migration Guide",
+				"link": "doc-updates/sui-migration-guide"
 			},
 			{
-				"label": "Sui Upcoming Breaking Changes",
-				"link": "doc-updates/sui-breaking-changes"
+				"label": "Sui Doc Updates",
+				"link": "doc-updates"
 			},
 			{
 				"label": "Sui Developer Forums",
@@ -52,6 +52,10 @@
 						"fileName": "learn/objects"
 					},
 					{
+						"label": "Object and Package Versioning",
+						"fileName": "learn/object-package-versions"
+					},
+					{
 						"label": "Transactions",
 						"fileName": "learn/transactions"
 					},
@@ -86,6 +90,10 @@
 						"fileName": "learn/tokenomics/gas-pricing"
 					},
 					{
+						"label": "Gas in Sui",
+						"fileName": "learn/tokenomics/gas-in-sui"
+					},
+					{
 						"label": "Sui Storage Fund",
 						"fileName": "learn/tokenomics/storage-fund"
 					},
@@ -101,6 +109,28 @@
 				]
 			},
 			{
+				"label": "Sui Cryptography",
+				"fileName": "learn/cryptography/index",
+				"title": "Sui Cryptography",
+				"items": [{
+						"label": "Sui Intent Signing",
+						"fileName": "learn/cryptography/sui-intent-signing"
+					},
+					{
+						"label": "Sui Offline Signing",
+						"fileName": "learn/cryptography/sui-offline-signing"
+					},
+					{
+						"label": "Sui Multisig",
+						"fileName": "learn/cryptography/sui-multisig"
+					},
+					{
+						"label": "Sui Keys and Addresses",
+						"fileName": "learn/cryptography/sui-wallet-specs"
+					}
+				]
+			},
+			{
 				"label": "Sui Exchange Integration Guide",
 				"fileName": "learn/exchange-integration-guide"
 			}
@@ -110,7 +140,7 @@
 				"fileName": "build/install"
 			},
 			{
-				"label": "Connect to Sui Devnet",
+				"label": "Connect to a Sui Network",
 				"fileName": "build/devnet"
 			},
 			{
@@ -126,10 +156,27 @@
 				"fileName": "build/sui-local-network"
 			},
 			{
+				"label": "Sui Object Display Standard",
+				"fileName": "build/sui-object-display"
+			},
+			{
 				"label": "Create Smart Contracts with Move",
 				"fileName": "build/move/index",
 				"title": "Smart Contracts with Move",
-				"items": [{
+				"items": [
+					{
+						"label": "Move.toml File",
+						"fileName": "build/move/manifest"
+					},
+					{
+						"label": "Move.lock File",
+						"fileName": "build/move/lock-file"
+					},
+					{
+						"label": "Accessing Time in Sui Move",
+						"fileName": "build/move/time"
+					},
+					{
 						"label": "Write Move Packages",
 						"fileName": "build/move/write-package"
 					},
@@ -181,7 +228,12 @@
 				"label": "Connect to Sui",
 				"fileName": "build/comms",
 				"title": "Connect to Sui",
-				"items": [{
+				"items": [
+					{
+						"label": "Programmable Transaction Blocks with TypeScript SDK",
+						"fileName": "build/prog-trans-ts-sdk"
+					},
+					{
 						"label": "JSON-RPC API",
 						"fileName": "build/json-rpc"
 					},
@@ -195,8 +247,16 @@
 						"external": true
 					},
 					{
-						"label": "Sui Full node",
+						"label": "Sui Full Node",
 						"fileName": "build/fullnode"
+					},
+					{
+						"label": "Sui Validator Node",
+						"fileName": "build/validator-node"
+					},
+					{
+						"label": "Database Snapshots",
+						"fileName": "build/snapshot"
 					},
 					{
 						"label": "Event Query and Subscription",
@@ -205,7 +265,7 @@
 				]
 			}
 		],
-		"reference": [{
+			"reference": [{
 				"label": "TypeScript/JavaScript SDK",
 				"link": "https://github.com/MystenLabs/sui/tree/main/sdk/typescript",
 				"external": true
@@ -222,28 +282,6 @@
 		"explore": [{
 				"label": "Sui Explorer",
 				"fileName": "explore/sui-explorer"
-			},
-			{
-				"label": "Sui Move by Example",
-				"fileName": "explore/move-examples/index",
-				"title": "Sui Move by Example",
-				"items": [{
-						"label": "Basics",
-						"fileName": "explore/move-examples/basics"
-					},
-					{
-						"label": "Patterns",
-						"fileName": "explore/move-examples/patterns"
-					},
-					{
-						"label": "Samples",
-						"fileName": "explore/move-examples/samples"
-					},
-					{
-						"label": "Additional Resources",
-						"fileName": "explore/move-examples/additional-resources"
-					}
-				]
 			},
 			{
 				"label": "Sui Wallet",

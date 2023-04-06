@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use anyhow::{anyhow, Context, Result};
 use clap::*;
 
@@ -59,13 +60,13 @@ async fn main() -> Result<()> {
     };
 
     let max_num_new_move_object_ids = protocol_config.max_num_new_move_object_ids();
-    let max_num_transfered_move_object_ids = protocol_config.max_num_transfered_move_object_ids();
+    let max_num_transferred_move_object_ids = protocol_config.max_num_transferred_move_object_ids();
 
-    if (opts.gas_request_chunk_size > max_num_new_move_object_ids as u64)
-        || (opts.gas_request_chunk_size > max_num_transfered_move_object_ids as u64)
+    if (opts.gas_request_chunk_size > max_num_new_move_object_ids)
+        || (opts.gas_request_chunk_size > max_num_transferred_move_object_ids)
     {
         eprintln!(
-            "`gas-request-chunk-size` must be less than the maximum number of new IDs {max_num_new_move_object_ids} and the maximum number of transferred IDs {max_num_transfered_move_object_ids}",
+            "`gas-request-chunk-size` must be less than the maximum number of new IDs {max_num_new_move_object_ids} and the maximum number of transferred IDs {max_num_transferred_move_object_ids}",
         );
     }
 
@@ -92,16 +93,15 @@ async fn main() -> Result<()> {
         // whole network.
         let mut system_state_observer = SystemStateObserver::new(
             bench_setup
-                .proxy_and_coins
+                .proxies
                 .choose(&mut rand::thread_rng())
                 .context("Failed to get proxy for system state observer")?
-                .proxy
                 .clone(),
         );
-        system_state_observer.reference_gas_price.changed().await?;
+        system_state_observer.state.changed().await?;
         eprintln!(
-            "Found reference gas price from system state object = {:?}",
-            *system_state_observer.reference_gas_price.borrow()
+            "Found new state (reference gas price and/or protocol config) from system state object = {:?}",
+            system_state_observer.state.borrow().reference_gas_price
         );
         Arc::new(system_state_observer)
     };
@@ -119,19 +119,12 @@ async fn main() -> Result<()> {
     let registry_clone = registry.clone();
     let handle = std::thread::spawn(move || {
         client_runtime.block_on(async move {
-            let workload_configuration = if opts.disjoint_mode {
-                WorkloadConfiguration::Disjoint
-            } else {
-                WorkloadConfiguration::Combined
-            };
-
-            let proxy_workloads = workload_configuration
-                .configure(
-                    bench_setup.proxy_and_coins,
-                    &opts,
-                    system_state_observer.clone(),
-                )
-                .await?;
+            let workloads = WorkloadConfiguration::configure(
+                bench_setup.bank,
+                &opts,
+                system_state_observer.clone(),
+            )
+            .await?;
             let interval = opts.run_duration;
             // We only show continuous progress in stderr
             // if benchmark is running in unbounded mode,
@@ -141,7 +134,8 @@ async fn main() -> Result<()> {
             let driver = BenchDriver::new(opts.stat_collection_interval, stress_stat_collection);
             driver
                 .run(
-                    proxy_workloads,
+                    bench_setup.proxies,
+                    workloads,
                     system_state_observer,
                     &registry_clone,
                     show_progress,
@@ -163,34 +157,41 @@ async fn main() -> Result<()> {
             .server_handle
             .join()
             .expect("Failed to join the server handle");
-        let (benchmark_stats, stress_stats) = joined.unwrap().unwrap();
-        let benchmark_table = benchmark_stats.to_table();
-        eprintln!("Benchmark Report:");
-        eprintln!("{}", benchmark_table);
+        match joined {
+            Ok(result) => match result {
+                Ok((benchmark_stats, stress_stats)) => {
+                    let benchmark_table = benchmark_stats.to_table();
+                    eprintln!("Benchmark Report:");
+                    eprintln!("{}", benchmark_table);
 
-        if stress_stat_collection {
-            eprintln!("Stress Performance Report:");
-            let stress_stats_table = stress_stats.to_table();
-            eprintln!("{}", stress_stats_table);
-        }
+                    if stress_stat_collection {
+                        eprintln!("Stress Performance Report:");
+                        let stress_stats_table = stress_stats.to_table();
+                        eprintln!("{}", stress_stats_table);
+                    }
 
-        if !prev_benchmark_stats_path.is_empty() {
-            let data = std::fs::read_to_string(&prev_benchmark_stats_path)?;
-            let prev_stats: BenchmarkStats = serde_json::from_str(&data)?;
-            let cmp = BenchmarkCmp {
-                new: &benchmark_stats,
-                old: &prev_stats,
-            };
-            let cmp_table = cmp.to_table();
-            eprintln!(
-                "Benchmark Comparison Report[{}]:",
-                prev_benchmark_stats_path
-            );
-            eprintln!("{}", cmp_table);
-        }
-        if !curr_benchmark_stats_path.is_empty() {
-            let serialized = serde_json::to_string(&benchmark_stats)?;
-            std::fs::write(curr_benchmark_stats_path, serialized)?;
+                    if !prev_benchmark_stats_path.is_empty() {
+                        let data = std::fs::read_to_string(&prev_benchmark_stats_path)?;
+                        let prev_stats: BenchmarkStats = serde_json::from_str(&data)?;
+                        let cmp = BenchmarkCmp {
+                            new: &benchmark_stats,
+                            old: &prev_stats,
+                        };
+                        let cmp_table = cmp.to_table();
+                        eprintln!(
+                            "Benchmark Comparison Report[{}]:",
+                            prev_benchmark_stats_path
+                        );
+                        eprintln!("{}", cmp_table);
+                    }
+                    if !curr_benchmark_stats_path.is_empty() {
+                        let serialized = serde_json::to_string(&benchmark_stats)?;
+                        std::fs::write(curr_benchmark_stats_path, serialized)?;
+                    }
+                }
+                Err(e) => eprintln!("{e}"),
+            },
+            Err(e) => eprintln!("{e:?}"),
         }
         Ok(())
     }

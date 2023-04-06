@@ -7,7 +7,7 @@ import { cva, cx } from 'class-variance-authority';
 import { Heading } from '_app/shared/heading';
 import Loading from '_components/loading';
 import { NftImage, type NftImageProps } from '_components/nft-display/NftImage';
-import { useGetNFTMeta, useFileExtensionType, useOriginbyteNft } from '_hooks';
+import { useGetNFTMeta, useFileExtensionType } from '_hooks';
 
 import type { VariantProps } from 'class-variance-authority';
 
@@ -42,29 +42,16 @@ export function NFTDisplayCard({
     borderRadius = 'md',
 }: NFTsProps) {
     const { data: nftMeta, isLoading } = useGetNFTMeta(objectId);
-    const { data: originByteNft, isLoading: originByteLoading } =
-        useOriginbyteNft(objectId);
-    const nftName =
-        typeof nftMeta?.name === 'string'
-            ? nftMeta?.name
-            : formatAddress(objectId);
-
-    // display title is the either originByteNft field name or default nft name or fall back to it the object id
-    const displayTitle = originByteNft?.fields.name || nftName;
-    const nftUrl = nftMeta?.url;
-    const fileExtensionType = useFileExtensionType(nftUrl || '');
-
+    const nftName = nftMeta?.name || formatAddress(objectId);
+    const nftImageUrl = nftMeta?.imageUrl || '';
+    const fileExtensionType = useFileExtensionType(nftImageUrl);
     return (
         <div className={nftDisplayCardStyles({ animateHover, wideView })}>
-            <Loading loading={isLoading || originByteLoading}>
+            <Loading loading={isLoading}>
                 <NftImage
-                    name={originByteNft?.fields.name || nftName!}
-                    src={originByteNft?.fields.url || nftUrl}
-                    title={
-                        originByteNft?.fields.description ||
-                        nftMeta?.description ||
-                        ''
-                    }
+                    name={nftName}
+                    src={nftImageUrl}
+                    title={nftMeta?.description || ''}
                     animateHover={true}
                     showLabel={!wideView}
                     borderRadius={borderRadius}
@@ -73,11 +60,10 @@ export function NFTDisplayCard({
                 {wideView && (
                     <div className="flex flex-col gap-1 flex-1 min-w-0 ml-1">
                         <Heading variant="heading6" color="gray-90" truncate>
-                            {displayTitle}
+                            {nftName}
                         </Heading>
-
                         <div className="text-gray-75 text-body font-medium">
-                            {nftUrl ? (
+                            {nftImageUrl ? (
                                 `${fileExtensionType.name} ${fileExtensionType.type}`
                             ) : (
                                 <span className="uppercase font-normal text-bodySmall">
@@ -96,7 +82,7 @@ export function NFTDisplayCard({
                                 : ''
                         )}
                     >
-                        {displayTitle}
+                        {nftName}
                     </div>
                 )}
             </Loading>

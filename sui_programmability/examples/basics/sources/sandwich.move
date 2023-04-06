@@ -105,7 +105,7 @@ module basics::sandwich {
         // Take a transferable `Coin` from a `Balance`
         let coin = coin::take(&mut grocery.profits, amount, ctx);
 
-        transfer::transfer(coin, tx_context::sender(ctx));
+        transfer::public_transfer(coin, tx_context::sender(ctx));
     }
 
     #[test_only]

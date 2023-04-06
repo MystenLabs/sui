@@ -4,10 +4,13 @@
 use super::*;
 use crate::authority::authority_tests::init_state_with_ids_and_object_basics;
 use bcs;
-use sui_types::utils::to_sender_signed_transaction;
+use sui_types::{
+    object::MAX_GAS_BUDGET_FOR_TESTING,
+    programmable_transaction_builder::ProgrammableTransactionBuilder,
+    utils::to_sender_signed_transaction,
+};
 
-use authority_tests::{init_state_with_ids, send_and_confirm_transaction};
-use move_binary_format::file_format;
+use authority_tests::send_and_confirm_transaction;
 use move_core_types::{account_address::AccountAddress, ident_str};
 use sui_types::{
     crypto::{get_key_pair, AccountKeyPair},
@@ -27,38 +30,42 @@ async fn test_batch_transaction_ok() -> anyhow::Result<()> {
         [sender; TOTAL].into_iter().zip(all_ids.clone().into_iter()),
     )
     .await;
-    let mut transactions = vec![];
+    let mut builder = ProgrammableTransactionBuilder::new();
     for obj_id in all_ids.iter().take(N) {
-        transactions.push(SingleTransactionKind::TransferObject(TransferObject {
-            recipient,
-            object_ref: authority_state
-                .get_object(obj_id)
-                .await?
-                .unwrap()
-                .compute_object_reference(),
-        }));
+        builder
+            .transfer_object(
+                recipient,
+                authority_state
+                    .get_object(obj_id)
+                    .await?
+                    .unwrap()
+                    .compute_object_reference(),
+            )
+            .unwrap()
     }
     for _ in 0..N {
-        transactions.push(SingleTransactionKind::Call(MoveCall {
-            package: package.0,
-            module: ident_str!("object_basics").to_owned(),
-            function: ident_str!("create").to_owned(),
-            type_arguments: vec![],
-            arguments: vec![
-                CallArg::Pure(16u64.to_le_bytes().to_vec()),
-                CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
-            ],
-        }));
+        builder
+            .move_call(
+                package.0,
+                ident_str!("object_basics").to_owned(),
+                ident_str!("create").to_owned(),
+                vec![],
+                vec![
+                    CallArg::Pure(16u64.to_le_bytes().to_vec()),
+                    CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
+                ],
+            )
+            .unwrap();
     }
-    let data = TransactionData::new_with_dummy_gas_price(
-        TransactionKind::Batch(transactions),
+    let data = TransactionData::new_programmable_with_dummy_gas_price(
         sender,
-        authority_state
+        vec![authority_state
             .get_object(&all_ids[N])
             .await?
             .unwrap()
-            .compute_object_reference(),
-        1000000,
+            .compute_object_reference()],
+        builder.finish(),
+        MAX_GAS_BUDGET_FOR_TESTING,
     );
 
     let tx = to_sender_signed_transaction(data, &sender_key);
@@ -99,26 +106,30 @@ async fn test_batch_transaction_last_one_fail() -> anyhow::Result<()> {
         [sender; TOTAL].into_iter().zip(all_ids.clone().into_iter()),
     )
     .await;
-    let mut transactions = vec![];
+    let mut builder = ProgrammableTransactionBuilder::new();
     for obj_id in all_ids.iter().take(N) {
-        transactions.push(SingleTransactionKind::TransferObject(TransferObject {
-            recipient,
-            object_ref: authority_state
-                .get_object(obj_id)
-                .await?
-                .unwrap()
-                .compute_object_reference(),
-        }));
+        builder
+            .transfer_object(
+                recipient,
+                authority_state
+                    .get_object(obj_id)
+                    .await?
+                    .unwrap()
+                    .compute_object_reference(),
+            )
+            .unwrap()
     }
-    transactions.push(SingleTransactionKind::Call(MoveCall {
-        package: package.0,
-        module: ident_str!("object_basics").to_owned(),
-        function: ident_str!("create").to_owned(),
-        type_arguments: vec![],
-        arguments: vec![],
-    }));
+    builder
+        .move_call(
+            package.0,
+            ident_str!("object_basics").to_owned(),
+            ident_str!("create").to_owned(),
+            vec![],
+            vec![],
+        )
+        .unwrap();
     let data = TransactionData::new_with_dummy_gas_price(
-        TransactionKind::Batch(transactions),
+        TransactionKind::programmable(builder.finish()),
         sender,
         authority_state
             .get_object(&all_ids[N])
@@ -142,68 +153,6 @@ async fn test_batch_transaction_last_one_fail() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn test_batch_contains_publish() -> anyhow::Result<()> {
-    // Test that a batch transaction containing publish will fail.
-    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let gas_object_id = ObjectID::random();
-    let authority_state = init_state_with_ids([(sender, gas_object_id)]).await;
-    let module = file_format::empty_module();
-    let mut module_bytes = Vec::new();
-    module.serialize(&mut module_bytes).unwrap();
-    let module_bytes = vec![module_bytes];
-    let transactions = vec![SingleTransactionKind::Publish(MoveModulePublish {
-        modules: module_bytes,
-    })];
-    let data = TransactionData::new_with_dummy_gas_price(
-        TransactionKind::Batch(transactions),
-        sender,
-        authority_state
-            .get_object(&gas_object_id)
-            .await?
-            .unwrap()
-            .compute_object_reference(),
-        100000,
-    );
-    let tx = to_sender_signed_transaction(data, &sender_key);
-    let response = send_and_confirm_transaction(&authority_state, tx).await;
-    assert!(matches!(
-        UserInputError::try_from(response.unwrap_err()).unwrap(),
-        UserInputError::InvalidBatchTransaction { .. }
-    ));
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_batch_contains_transfer_sui() -> anyhow::Result<()> {
-    // Test that a batch transaction containing TransferSui will fail.
-    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let gas_object_id = ObjectID::random();
-    let authority_state = init_state_with_ids([(sender, gas_object_id)]).await;
-    let transactions = vec![SingleTransactionKind::TransferSui(TransferSui {
-        recipient: Default::default(),
-        amount: None,
-    })];
-    let data = TransactionData::new_with_dummy_gas_price(
-        TransactionKind::Batch(transactions),
-        sender,
-        authority_state
-            .get_object(&gas_object_id)
-            .await?
-            .unwrap()
-            .compute_object_reference(),
-        100000,
-    );
-
-    let tx = to_sender_signed_transaction(data, &sender_key);
-    let response = send_and_confirm_transaction(&authority_state, tx).await;
-    assert!(matches!(
-        UserInputError::try_from(response.unwrap_err()).unwrap(),
-        UserInputError::InvalidBatchTransaction { .. }
-    ));
-    Ok(())
-}
-
-#[tokio::test]
 async fn test_batch_insufficient_gas_balance() -> anyhow::Result<()> {
     // This test creates 10 Move call transactions batch, each with a budget of 5000.
     // However we provide a gas coin with only 49999 balance.
@@ -220,21 +169,23 @@ async fn test_batch_insufficient_gas_balance() -> anyhow::Result<()> {
         .await;
 
     const N: usize = 10;
-    let mut transactions = vec![];
+    let mut builder = ProgrammableTransactionBuilder::new();
     for _ in 0..N {
-        transactions.push(SingleTransactionKind::Call(MoveCall {
-            package: package.0,
-            module: ident_str!("object_basics").to_owned(),
-            function: ident_str!("create").to_owned(),
-            type_arguments: vec![],
-            arguments: vec![
-                CallArg::Pure(16u64.to_le_bytes().to_vec()),
-                CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
-            ],
-        }));
+        builder
+            .move_call(
+                package.0,
+                ident_str!("object_basics").to_owned(),
+                ident_str!("create").to_owned(),
+                vec![],
+                vec![
+                    CallArg::Pure(16u64.to_le_bytes().to_vec()),
+                    CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
+                ],
+            )
+            .unwrap();
     }
     let data = TransactionData::new_with_dummy_gas_price(
-        TransactionKind::Batch(transactions),
+        TransactionKind::programmable(builder.finish()),
         sender,
         gas_object.compute_object_reference(),
         100000,
@@ -245,7 +196,7 @@ async fn test_batch_insufficient_gas_balance() -> anyhow::Result<()> {
 
     assert!(matches!(
         UserInputError::try_from(response.unwrap_err()).unwrap(),
-        UserInputError::GasBalanceTooLowToCoverGasBudget { .. }
+        UserInputError::GasBalanceTooLow { .. }
     ));
 
     Ok(())

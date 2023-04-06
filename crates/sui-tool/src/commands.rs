@@ -3,8 +3,8 @@
 
 use crate::{
     db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand},
-    get_object, get_transaction, make_clients, ConciseObjectOutput, GroupedObjectOutput,
-    VerboseObjectOutput,
+    get_object, get_transaction_block, make_clients, restore_from_db_checkpoint,
+    ConciseObjectOutput, GroupedObjectOutput, VerboseObjectOutput,
 };
 use anyhow::Result;
 use std::path::PathBuf;
@@ -14,6 +14,7 @@ use sui_core::authority_client::AuthorityAPI;
 use sui_types::{base_types::*, object::Owner};
 
 use clap::*;
+use sui_config::Config;
 use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
@@ -130,6 +131,14 @@ pub enum ToolCommand {
         #[clap(next_help_heading = "foo", flatten)]
         args: anemo_cli::Args,
     },
+
+    #[clap(name = "restore-db")]
+    RestoreFromDBCheckpoint {
+        #[clap(long = "config-path")]
+        config_path: PathBuf,
+        #[clap(long = "db-checkpoint-path")]
+        db_checkpoint_path: PathBuf,
+    },
 }
 
 trait OptionDebug<T> {
@@ -216,7 +225,7 @@ impl ToolCommand {
                 }
             }
             ToolCommand::FetchTransaction { genesis, digest } => {
-                print!("{}", get_transaction(digest, genesis).await?);
+                print!("{}", get_transaction_block(digest, genesis).await?);
             }
             ToolCommand::DbTool { db_path, cmd } => {
                 let path = PathBuf::from(db_path);
@@ -228,16 +237,17 @@ impl ToolCommand {
             ToolCommand::DumpValidators { genesis, concise } => {
                 let genesis = Genesis::load(genesis).unwrap();
                 if !concise {
-                    println!("{:#?}", genesis.validator_set());
+                    println!("{:#?}", genesis.validator_set_for_tooling());
                 } else {
-                    for (i, val_info) in genesis.validator_set().iter().enumerate() {
+                    for (i, val_info) in genesis.validator_set_for_tooling().iter().enumerate() {
+                        let metadata = val_info.verified_metadata();
                         println!(
                             "#{:<2} {:<20} {:?<66} {:?} {}",
                             i,
-                            val_info.name(),
-                            val_info.protocol_key(),
-                            val_info.network_address(),
-                            anemo::PeerId(val_info.network_key().0.to_bytes()),
+                            metadata.name,
+                            metadata.protocol_pubkey,
+                            metadata.net_address,
+                            anemo::PeerId(metadata.network_pubkey.0.to_bytes()),
                         )
                     }
                 }
@@ -252,7 +262,7 @@ impl ToolCommand {
             } => {
                 let clients = make_clients(genesis)?;
 
-                for (name, (_val, client)) in clients {
+                for (name, (_, client)) in clients {
                     let resp = client
                         .handle_checkpoint(CheckpointRequest {
                             sequence_number,
@@ -272,6 +282,13 @@ impl ToolCommand {
             ToolCommand::Anemo { args } => {
                 let config = crate::make_anemo_config();
                 anemo_cli::run(config, args).await
+            }
+            ToolCommand::RestoreFromDBCheckpoint {
+                config_path,
+                db_checkpoint_path,
+            } => {
+                let config = sui_config::NodeConfig::load(config_path)?;
+                restore_from_db_checkpoint(&config, &db_checkpoint_path).await?;
             }
         };
         Ok(())

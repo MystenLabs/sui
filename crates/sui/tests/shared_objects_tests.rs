@@ -6,15 +6,15 @@ use std::time::{Duration, SystemTime};
 use sui_core::authority_client::AuthorityAPI;
 use sui_core::consensus_adapter::position_submit_certificate;
 use sui_types::messages::{
-    CallArg, EntryArgumentError, EntryArgumentErrorKind, ExecutionFailureStatus, ExecutionStatus,
-    ObjectArg, ObjectInfoRequest, TransactionEffectsAPI,
+    CallArg, CommandArgumentError, ExecutionFailureStatus, ExecutionStatus, ObjectArg,
+    ObjectInfoRequest, TransactionEffectsAPI,
 };
 use test_utils::authority::get_client;
 use test_utils::transaction::{
     publish_counter_package, submit_shared_object_transaction, submit_single_owner_transaction,
 };
 use test_utils::{
-    authority::{spawn_test_authorities, test_authority_configs},
+    authority::{spawn_test_authorities, test_authority_configs_with_objects},
     messages::{move_transaction, test_shared_object_transactions},
 };
 
@@ -26,20 +26,26 @@ use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION};
 /// Send a simple shared object transaction to Sui and ensures the client gets back a response.
 #[sim_test]
 async fn shared_object_transaction() {
-    let mut objects = generate_test_gas_objects();
-    objects.push(Object::shared_for_testing());
+    let gas_objects = generate_test_gas_objects();
+    let mut objects = vec![Object::shared_for_testing()];
+    objects.extend(gas_objects.into_iter());
 
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
-    let configs = test_authority_configs();
-    let _handles = spawn_test_authorities(objects, &configs).await;
+    let (configs, objects) = test_authority_configs_with_objects(objects);
+    let mut objects = objects.into_iter();
+    let shared_object = objects.next().unwrap();
+    let gas_objects: Vec<_> = objects.collect();
+    let _handles = spawn_test_authorities(&configs).await;
 
     // Make a test shared object certificate.
-    let transaction = test_shared_object_transactions().pop().unwrap();
+    let transaction = test_shared_object_transactions(Some(shared_object), Some(gas_objects))
+        .pop()
+        .unwrap();
 
     // Submit the transaction. Note that this transaction is random and we do not expect
     // it to be successfully executed by the Move execution engine.
-    let _effects = submit_shared_object_transaction(transaction, &configs.validator_set())
+    let _effects = submit_shared_object_transaction(transaction, &configs.net_addresses())
         .await
         .unwrap();
 }
@@ -47,20 +53,27 @@ async fn shared_object_transaction() {
 /// Same as `shared_object_transaction` but every authorities submit the transaction.
 #[sim_test]
 async fn many_shared_object_transactions() {
-    let mut objects = generate_test_gas_objects();
-    objects.push(Object::shared_for_testing());
+    let gas_objects = generate_test_gas_objects();
+    let mut objects = vec![Object::shared_for_testing()];
+    objects.extend(gas_objects.into_iter());
 
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
-    let configs = test_authority_configs();
-    let _handles = spawn_test_authorities(objects, &configs).await;
+    let (configs, objects) = test_authority_configs_with_objects(objects);
+    let mut objects = objects.into_iter();
+    let shared_object = objects.next().unwrap();
+    let gas_objects: Vec<_> = objects.collect();
+
+    let _handles = spawn_test_authorities(&configs).await;
 
     // Make a test shared object certificate.
-    let transaction = test_shared_object_transactions().pop().unwrap();
+    let transaction = test_shared_object_transactions(Some(shared_object), Some(gas_objects))
+        .pop()
+        .unwrap();
 
     // Submit the transaction. Note that this transaction is random and we do not expect
     // it to be successfully executed by the Move execution engine.
-    let _effects = submit_shared_object_transaction(transaction, &configs.validator_set())
+    let _effects = submit_shared_object_transaction(transaction, &configs.net_addresses())
         .await
         .unwrap();
 }
@@ -69,15 +82,15 @@ async fn many_shared_object_transactions() {
 /// but tests the end-to-end flow from Sui to consensus.
 #[sim_test]
 async fn call_shared_object_contract() {
-    let mut gas_objects = generate_test_gas_objects();
+    let gas_objects = generate_test_gas_objects();
 
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
-    let configs = test_authority_configs();
-    let _handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
+    let (configs, mut gas_objects) = test_authority_configs_with_objects(gas_objects);
+    let _handles = spawn_test_authorities(&configs).await;
 
     // Publish the move package to all authorities and get its package ID.
-    let package_id = publish_counter_package(gas_objects.pop().unwrap(), &configs.validator_set())
+    let package_id = publish_counter_package(gas_objects.pop().unwrap(), &configs.net_addresses())
         .await
         .0;
 
@@ -89,7 +102,7 @@ async fn call_shared_object_contract() {
         package_id,
         /* arguments */ Vec::default(),
     );
-    let (effects, _) = submit_single_owner_transaction(transaction, &configs.validator_set()).await;
+    let (effects, _) = submit_single_owner_transaction(transaction, &configs.net_addresses()).await;
     assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
     let counter_creation_transaction = *effects.transaction_digest();
     let ((counter_id, counter_initial_shared_version, _), _) = effects.created()[0];
@@ -117,14 +130,14 @@ async fn call_shared_object_contract() {
                 CallArg::Pure(0u64.to_le_bytes().to_vec()),
             ],
         );
-        let (effects, _) = submit_shared_object_transaction(transaction, &configs.validator_set())
+        let (effects, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
             .await
             .unwrap();
         assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
-        // Only gas object transaction and counter creation are dependencies
+        // Only genesis, assert_value, and counter creation are dependencies
         // Note that this assert would fail for second transaction
         // if they send counter_object_arg instead of counter_object_arg_imm
-        assert_eq!(effects.dependencies().len(), 2);
+        assert_eq!(effects.dependencies().len(), 3);
         assert!(effects
             .dependencies()
             .contains(&counter_creation_transaction));
@@ -138,14 +151,14 @@ async fn call_shared_object_contract() {
         package_id,
         vec![CallArg::Object(counter_object_arg)],
     );
-    let (effects, _) = submit_shared_object_transaction(transaction, &configs.validator_set())
+    let (effects, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
         .await
         .unwrap();
     let increment_transaction = *effects.transaction_digest();
     assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
-    // Again - only gas object transaction and counter creation are dependencies
+    // Again - only genesis, increment, and counter creation are dependencies
     // Previously executed assert_value transaction(s) are not a dependency because they took immutable reference to shared object
-    assert_eq!(effects.dependencies().len(), 2);
+    assert_eq!(effects.dependencies().len(), 3);
     assert!(effects
         .dependencies()
         .contains(&counter_creation_transaction));
@@ -169,12 +182,12 @@ async fn call_shared_object_contract() {
                 CallArg::Pure(1u64.to_le_bytes().to_vec()),
             ],
         );
-        let (effects, _) = submit_shared_object_transaction(transaction, &configs.validator_set())
+        let (effects, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
             .await
             .unwrap();
         assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
-        // Gas object transaction and increment transaction are dependencies
-        assert_eq!(effects.dependencies().len(), 2);
+        // Genesis, assert_value, and increment transaction are dependencies
+        assert_eq!(effects.dependencies().len(), 3);
         assert!(effects.dependencies().contains(&increment_transaction));
         assert_value_mut_transaction = Some(*effects.transaction_digest());
     }
@@ -189,21 +202,21 @@ async fn call_shared_object_contract() {
         package_id,
         vec![CallArg::Object(counter_object_arg_imm)],
     );
-    let (effects, _) = submit_shared_object_transaction(transaction, &configs.validator_set())
+    let (effects, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
         .await
         .unwrap();
     // Transaction fails
-    assert!(matches!(
+    assert_eq!(
         effects.status(),
-        ExecutionStatus::Failure {
-            error: ExecutionFailureStatus::EntryArgumentError(EntryArgumentError {
-                kind: EntryArgumentErrorKind::ObjectMutabilityMismatch,
-                ..
-            }),
-            ..
+        &ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::CommandArgumentError {
+                arg_idx: 0,
+                kind: CommandArgumentError::InvalidObjectByMutRef,
+            },
+            command: Some(0),
         }
-    ));
-    assert_eq!(effects.dependencies().len(), 2);
+    );
+    assert_eq!(effects.dependencies().len(), 3);
     assert!(effects
         .dependencies()
         .contains(&assert_value_mut_transaction));
@@ -211,15 +224,15 @@ async fn call_shared_object_contract() {
 
 #[sim_test]
 async fn access_clock_object_test() {
-    let mut gas_objects = generate_test_gas_objects();
+    let gas_objects = generate_test_gas_objects();
 
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
-    let configs = test_authority_configs();
-    let handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
+    let (configs, mut gas_objects) = test_authority_configs_with_objects(gas_objects);
+    let handles = spawn_test_authorities(&configs).await;
 
     // Publish the move package to all authorities and get its package ID.
-    let package_id = publish_counter_package(gas_objects.pop().unwrap(), &configs.validator_set())
+    let package_id = publish_counter_package(gas_objects.pop().unwrap(), &configs.net_addresses())
         .await
         .0;
 
@@ -240,7 +253,7 @@ async fn access_clock_object_test() {
     let start = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap();
-    let (effects, events) = submit_shared_object_transaction(transaction, &configs.validator_set())
+    let (effects, events) = submit_shared_object_transaction(transaction, &configs.net_addresses())
         .await
         .unwrap();
     let finish = SystemTime::now()
@@ -248,9 +261,9 @@ async fn access_clock_object_test() {
         .unwrap();
     assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
 
-    assert_eq!(2, events.data.len());
-    let event = events.data.get(1).unwrap();
-    let Event::MoveEvent { contents, .. } = event else { panic!("Expected move event, got {:?}", event) };
+    assert_eq!(1, events.data.len());
+    let event = events.data.get(0).unwrap();
+    let Event { contents, .. } = event;
 
     use serde::{Deserialize, Serialize};
     #[derive(Serialize, Deserialize)]
@@ -282,7 +295,7 @@ async fn access_clock_object_test() {
 
         // Timestamp that we have read in a smart contract
         // should match timestamp of the checkpoint where transaction is included
-        assert_eq!(checkpoint.summary.timestamp_ms, event.timestamp_ms);
+        assert_eq!(checkpoint.timestamp_ms, event.timestamp_ms);
         break;
     }
 }
@@ -292,15 +305,15 @@ async fn access_clock_object_test() {
 #[sim_test]
 async fn shared_object_flood() {
     telemetry_subscribers::init_for_testing();
-    let mut gas_objects = generate_test_gas_objects();
+    let gas_objects = generate_test_gas_objects();
 
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
-    let configs = test_authority_configs();
-    let _handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
+    let (configs, mut gas_objects) = test_authority_configs_with_objects(gas_objects);
+    let _handles = spawn_test_authorities(&configs).await;
 
     // Publish the move package to all authorities and get its package ID.
-    let package_id = publish_counter_package(gas_objects.pop().unwrap(), &configs.validator_set())
+    let package_id = publish_counter_package(gas_objects.pop().unwrap(), &configs.net_addresses())
         .await
         .0;
 
@@ -312,7 +325,7 @@ async fn shared_object_flood() {
         package_id,
         /* arguments */ Vec::default(),
     );
-    let (effects, _) = submit_single_owner_transaction(transaction, &configs.validator_set()).await;
+    let (effects, _) = submit_single_owner_transaction(transaction, &configs.net_addresses()).await;
     assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
     let ((counter_id, counter_initial_shared_version, _), _) = effects.created()[0];
     let counter_object_arg = ObjectArg::SharedObject {
@@ -332,7 +345,7 @@ async fn shared_object_flood() {
             CallArg::Pure(0u64.to_le_bytes().to_vec()),
         ],
     );
-    let (effects, _) = submit_shared_object_transaction(transaction, &configs.validator_set())
+    let (effects, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
         .await
         .unwrap();
     assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
@@ -345,7 +358,7 @@ async fn shared_object_flood() {
         package_id,
         vec![CallArg::Object(counter_object_arg)],
     );
-    let (effects, _) = submit_shared_object_transaction(transaction, &configs.validator_set())
+    let (effects, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
         .await
         .unwrap();
     assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
@@ -361,7 +374,7 @@ async fn shared_object_flood() {
             CallArg::Pure(1u64.to_le_bytes().to_vec()),
         ],
     );
-    let (effects, _) = submit_shared_object_transaction(transaction, &configs.validator_set())
+    let (effects, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
         .await
         .unwrap();
     assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
@@ -370,15 +383,15 @@ async fn shared_object_flood() {
 #[sim_test]
 async fn shared_object_sync() {
     telemetry_subscribers::init_for_testing();
-    let mut gas_objects = generate_test_gas_objects();
+    let gas_objects = generate_test_gas_objects();
 
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
-    let configs = test_authority_configs();
-    let _handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
+    let (configs, mut gas_objects) = test_authority_configs_with_objects(gas_objects);
+    let _handles = spawn_test_authorities(&configs).await;
 
     // Publish the move package to all authorities and get its package ID.
-    let package_id = publish_counter_package(gas_objects.pop().unwrap(), &configs.validator_set())
+    let package_id = publish_counter_package(gas_objects.pop().unwrap(), &configs.net_addresses())
         .await
         .0;
 
@@ -391,19 +404,24 @@ async fn shared_object_sync() {
         /* arguments */ Vec::default(),
     );
 
-    let (slow_validators, fast_validators): (Vec<_>, Vec<_>) =
-        configs.validator_set().iter().cloned().partition(|info| {
+    let committee = configs.committee_with_network();
+    let (slow_validators, fast_validators): (Vec<_>, Vec<_>) = committee
+        .network_metadata
+        .into_iter()
+        .partition(|(name, _net)| {
             position_submit_certificate(
-                &configs.committee(),
-                &info.protocol_key(),
+                &committee.committee,
+                name,
                 create_counter_transaction.digest(),
             ) > 0
         });
 
     let (effects, _) = submit_single_owner_transaction(
         create_counter_transaction.clone(),
-        //&configs.validator_set()[1..],
-        &slow_validators,
+        &slow_validators
+            .iter()
+            .map(|(_, net)| net.network_address.clone())
+            .collect::<Vec<_>>(),
     )
     .await;
     assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
@@ -416,9 +434,8 @@ async fn shared_object_sync() {
 
     // Check that the counter object exists in at least one of the validators the transaction was
     // sent to.
-    let validator_set = configs.validator_set();
-    let has_counter = stream::iter(&validator_set[1..]).any(|config| async move {
-        get_client(config)
+    let has_counter = stream::iter(&slow_validators).any(|(_, net)| async move {
+        get_client(&net.network_address)
             .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
                 counter_id, None,
             ))
@@ -429,7 +446,7 @@ async fn shared_object_sync() {
     assert!(has_counter.await);
 
     // Check that the validator that wasn't sent the transaction is unaware of the counter object
-    assert!(get_client(&fast_validators[0])
+    assert!(get_client(&fast_validators[0].1.network_address)
         .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
             counter_id, None,
         ))
@@ -448,7 +465,7 @@ async fn shared_object_sync() {
     // Let's submit the transaction to the original set of validators.
     let (effects, _) = submit_shared_object_transaction(
         increment_counter_transaction.clone(),
-        &configs.validator_set()[1..],
+        &configs.net_addresses()[1..],
     )
     .await
     .unwrap();
@@ -458,7 +475,7 @@ async fn shared_object_sync() {
     // It will succeed because we share owned object certificates through narwhal
     let (effects, _) = submit_shared_object_transaction(
         increment_counter_transaction,
-        &configs.validator_set()[0..1],
+        &configs.net_addresses()[0..1],
     )
     .await
     .unwrap();
@@ -468,15 +485,15 @@ async fn shared_object_sync() {
 /// Send a simple shared object transaction to Sui and ensures the client gets back a response.
 #[sim_test]
 async fn replay_shared_object_transaction() {
-    let mut gas_objects = generate_test_gas_objects();
+    let gas_objects = generate_test_gas_objects();
 
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
-    let configs = test_authority_configs();
-    let _handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
+    let (configs, mut gas_objects) = test_authority_configs_with_objects(gas_objects);
+    let _handles = spawn_test_authorities(&configs).await;
 
     // Publish the move package to all authorities and get its package ID
-    let package_id = publish_counter_package(gas_objects.pop().unwrap(), &configs.validator_set())
+    let package_id = publish_counter_package(gas_objects.pop().unwrap(), &configs.net_addresses())
         .await
         .0;
 
@@ -493,7 +510,7 @@ async fn replay_shared_object_transaction() {
     for _ in 0..2 {
         let (effects, _) = submit_single_owner_transaction(
             create_counter_transaction.clone(),
-            &configs.validator_set(),
+            &configs.net_addresses(),
         )
         .await;
         assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));

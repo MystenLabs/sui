@@ -46,7 +46,7 @@ module nfts::discount_coupon {
             expiration,
         };
         transfer::transfer(coupon, recipient);
-        transfer::transfer(coin, recipient);
+        transfer::public_transfer(coin, recipient);
     }
 
     /// Burn DiscountCoupon.

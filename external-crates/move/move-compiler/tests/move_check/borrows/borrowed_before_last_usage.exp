@@ -1,0 +1,13 @@
+error[E07006]: ambiguous usage of variable
+  ┌─ tests/move_check/borrows/borrowed_before_last_usage.move:5:13
+  │
+4 │     let r = &x;
+  │             -- It is still being borrowed by this reference
+5 │     let y = x;
+  │             ^
+  │             │
+  │             Ambiguous usage of variable 'x'
+  │             Try an explicit annotation, e.g. 'move x' or 'copy x'
+  │
+  = Ambiguous inference of 'move' or 'copy' for a borrowed variable's last usage: A 'move' would invalidate the borrowing reference, but a 'copy' might not be the expected implicit behavior since this the last direct usage of the variable.
+

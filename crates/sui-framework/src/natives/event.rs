@@ -4,29 +4,29 @@
 use crate::natives::{object_runtime::ObjectRuntime, NativesCostTable};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{gas_algebra::InternalGas, language_storage::TypeTag, vm_status::StatusCode};
-use move_vm_runtime::{
-    native_charge_gas_early_exit, native_functions::NativeContext, native_gas_total_cost,
-};
+use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
 use move_vm_types::{
     loaded_data::runtime_types::Type, natives::function::NativeResult, values::Value,
 };
 use smallvec::smallvec;
-use std::{collections::VecDeque, ops::Mul};
+use std::collections::VecDeque;
 use sui_types::error::VMMemoryLimitExceededSubStatusCode;
 
 #[derive(Clone, Debug)]
 pub struct EventEmitCostParams {
-    pub event_value_size_derivation_cost_per_byte: InternalGas,
-    pub event_tag_size_derivation_cost_per_byte: InternalGas,
-    pub event_emit_cost_per_byte: InternalGas,
+    pub event_emit_cost_base: InternalGas,
+    pub event_emit_value_size_derivation_cost_per_byte: InternalGas,
+    pub event_emit_tag_size_derivation_cost_per_byte: InternalGas,
+    pub event_emit_output_cost_per_byte: InternalGas,
 }
 /***************************************************************************************************
  * native fun emit
  * Implementation of the Move native function `event::emit<T: copy + drop>(event: T)`
  * Adds an event to the transaction's event log
- *   gas cost: event_value_size_derivation_cost_per_byte * event_size     | derivation of size
- *              + event_tag_size_derivation_cost_per_byte * tag_size      | converting type
- *              + event_emit_cost_per_byte * (tag_size + event_size)      | emitting the actual event
+ *   gas cost: event_emit_cost_base                  |  covers various fixed costs in the oper
+ *              + event_emit_value_size_derivation_cost_per_byte * event_size     | derivation of size
+ *              + event_emit_tag_size_derivation_cost_per_byte * tag_size         | converting type
+ *              + event_emit_output_cost_per_byte * (tag_size + event_size)       | emitting the actual event
  **************************************************************************************************/
 pub fn emit(
     context: &mut NativeContext,
@@ -35,11 +35,14 @@ pub fn emit(
 ) -> PartialVMResult<NativeResult> {
     debug_assert!(ty_args.len() == 1);
     debug_assert!(args.len() == 1);
-    let mut gas_left = context.gas_budget();
-    let event_emit_cost_params = {
-        let natvies_cost_table: &NativesCostTable = context.extensions().get();
-        natvies_cost_table.event_emit_cost_params.clone()
-    };
+
+    let event_emit_cost_params = context
+        .extensions_mut()
+        .get::<NativesCostTable>()
+        .event_emit_cost_params
+        .clone();
+
+    native_charge_gas_early_exit!(context, event_emit_cost_params.event_emit_cost_base);
 
     let ty = ty_args.pop().unwrap();
     let event_value = args.pop_back().unwrap();
@@ -49,10 +52,8 @@ pub fn emit(
     // Deriving event value size can be expensive due to recursion overhead
     native_charge_gas_early_exit!(
         context,
-        gas_left,
-        event_emit_cost_params
-            .event_value_size_derivation_cost_per_byte
-            .mul(u64::from(event_value_size).into())
+        event_emit_cost_params.event_emit_value_size_derivation_cost_per_byte
+            * u64::from(event_value_size).into()
     );
 
     let tag = match context.type_to_type_tag(&ty)? {
@@ -69,10 +70,8 @@ pub fn emit(
     // Converting type to typetag be expensive due to recursion overhead
     native_charge_gas_early_exit!(
         context,
-        gas_left,
-        event_emit_cost_params
-            .event_tag_size_derivation_cost_per_byte
-            .mul(u64::from(tag_size).into())
+        event_emit_cost_params.event_emit_tag_size_derivation_cost_per_byte
+            * u64::from(tag_size).into()
     );
 
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
@@ -87,19 +86,15 @@ pub fn emit(
                 VMMemoryLimitExceededSubStatusCode::EVENT_SIZE_LIMIT_EXCEEDED as u64,
             ));
     }
-    let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
 
     // Emitting an event is cheap since its a vector push
     native_charge_gas_early_exit!(
         context,
-        gas_left,
-        event_emit_cost_params
-            .event_emit_cost_per_byte
-            .mul(ev_size.into())
+        event_emit_cost_params.event_emit_output_cost_per_byte * ev_size.into()
     );
-    obj_runtime.emit_event(*tag, event_value)?;
-    Ok(NativeResult::ok(
-        native_gas_total_cost!(context, gas_left),
-        smallvec![],
-    ))
+
+    let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
+
+    obj_runtime.emit_event(ty, *tag, event_value)?;
+    Ok(NativeResult::ok(context.gas_used(), smallvec![]))
 }

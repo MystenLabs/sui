@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ArrowUpRight12 } from '@mysten/icons';
-import { type SuiAddress } from '@mysten/sui.js/src';
+import { type SuiAddress } from '@mysten/sui.js';
 import { cx } from 'class-variance-authority';
 import { useMemo } from 'react';
 

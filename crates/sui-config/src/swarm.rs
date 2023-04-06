@@ -1,15 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::node::AuthorityStorePruningConfig;
 use crate::node::{
-    default_end_of_epoch_broadcast_channel_capacity, default_epoch_duration_ms,
-    AuthorityKeyPairWithPath, KeyPairWithPath,
+    default_end_of_epoch_broadcast_channel_capacity, AuthorityKeyPairWithPath, DBCheckpointConfig,
+    KeyPairWithPath,
 };
-use crate::node::{AuthorityStorePruningConfig, StateSnapshotConfig};
 use crate::p2p::{P2pConfig, SeedPeer};
 use crate::{
     builder::{self, ProtocolVersionsConfig, SupportedProtocolVersionsCallback},
-    genesis, utils, Config, NodeConfig, ValidatorInfo,
+    genesis, utils, Config, NodeConfig,
 };
 use fastcrypto::traits::KeyPair;
 use rand::rngs::OsRng;
@@ -20,10 +20,11 @@ use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use sui_protocol_config::SupportedProtocolVersions;
-use sui_types::committee::Committee;
+use sui_types::committee::CommitteeWithNetworkMetadata;
 use sui_types::crypto::{
     get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, NetworkKeyPair, SuiKeyPair,
 };
+use sui_types::multiaddr::Multiaddr;
 
 /// This is a config that is used for testing or local use as it contains the config and keys for
 /// all validators
@@ -42,12 +43,17 @@ impl NetworkConfig {
         &self.validator_configs
     }
 
-    pub fn validator_set(&self) -> Vec<ValidatorInfo> {
-        self.genesis.validator_set()
+    pub fn net_addresses(&self) -> Vec<Multiaddr> {
+        self.genesis
+            .committee_with_network()
+            .network_metadata
+            .into_values()
+            .map(|n| n.network_address)
+            .collect()
     }
 
-    pub fn committee(&self) -> Committee {
-        self.genesis.committee().unwrap()
+    pub fn committee_with_network(&self) -> CommitteeWithNetworkMetadata {
+        self.genesis.committee_with_network()
     }
 
     pub fn into_validator_configs(self) -> Vec<NodeConfig> {
@@ -88,6 +94,7 @@ pub struct FullnodeConfigBuilder<'a> {
     // port for admin interface
     admin_port: Option<u16>,
     supported_protocol_versions_config: ProtocolVersionsConfig,
+    db_checkpoint_config: DBCheckpointConfig,
 }
 
 impl<'a> FullnodeConfigBuilder<'a> {
@@ -102,6 +109,7 @@ impl<'a> FullnodeConfigBuilder<'a> {
             rpc_port: None,
             admin_port: None,
             supported_protocol_versions_config: ProtocolVersionsConfig::Default,
+            db_checkpoint_config: DBCheckpointConfig::default(),
         }
     }
 
@@ -175,6 +183,11 @@ impl<'a> FullnodeConfigBuilder<'a> {
 
     pub fn with_supported_protocol_versions_config(mut self, c: ProtocolVersionsConfig) -> Self {
         self.supported_protocol_versions_config = c;
+        self
+    }
+
+    pub fn with_db_checkpoint_config(mut self, db_checkpoint_config: DBCheckpointConfig) -> Self {
+        self.db_checkpoint_config = db_checkpoint_config;
         self
     }
 
@@ -260,7 +273,6 @@ impl<'a> FullnodeConfigBuilder<'a> {
             json_rpc_address,
             consensus_config: None,
             enable_event_processing: self.enable_event_store,
-            epoch_duration_ms: default_epoch_duration_ms(),
             genesis: validator_config.genesis.clone(),
             grpc_load_shed: None,
             grpc_concurrency_limit: None,
@@ -271,7 +283,10 @@ impl<'a> FullnodeConfigBuilder<'a> {
             checkpoint_executor_config: Default::default(),
             metrics: None,
             supported_protocol_versions: Some(supported_protocol_versions),
-            state_snapshot_config: StateSnapshotConfig::fullnode_config(),
+            db_checkpoint_config: self.db_checkpoint_config,
+            indirect_objects_threshold: usize::MAX,
+            // Copy the expensive safety check config from the first validator config.
+            expensive_safety_check_config: validator_config.expensive_safety_check_config.clone(),
         })
     }
 }

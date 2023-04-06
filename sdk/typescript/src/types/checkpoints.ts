@@ -4,21 +4,23 @@
 import {
   array,
   Infer,
-  literal,
   number,
   object,
   string,
-  union,
   tuple,
+  boolean,
   optional,
+  any,
+  nullable,
 } from 'superstruct';
 
 import { TransactionDigest, TransactionEffectsDigest } from './common';
 
 export const GasCostSummary = object({
-  computation_cost: number(),
-  storage_cost: number(),
-  storage_rebate: number(),
+  computationCost: number(),
+  storageCost: number(),
+  storageRebate: number(),
+  nonRefundableStorageFee: number(),
 });
 export type GasCostSummary = Infer<typeof GasCostSummary>;
 
@@ -28,11 +30,21 @@ export type CheckPointContentsDigest = Infer<typeof CheckPointContentsDigest>;
 export const CheckpointDigest = string();
 export type CheckpointDigest = Infer<typeof CheckpointDigest>;
 
+export const ECMHLiveObjectSetDigest = object({
+  digest: array(number()),
+});
+export type ECMHLiveObjectSetDigest = Infer<typeof ECMHLiveObjectSetDigest>;
+
+export const CheckpointCommitment = any();
+export type CheckpointCommitment = Infer<typeof CheckpointCommitment>;
+
+export const ValidatorSignature = string();
+export type ValidatorSignature = Infer<typeof ValidatorSignature>;
+
 export const EndOfEpochData = object({
-  next_epoch_committee: array(tuple([string(), number()])),
-  next_epoch_protocol_version: number(),
-  // Need to remove optional after we hit the next network version
-  root_state_digest: optional(array(number())),
+  nextEpochCommittee: array(tuple([string(), number()])),
+  nextEpochProtocolVersion: number(),
+  epochCommitments: array(CheckpointCommitment),
 });
 export type EndOfEpochData = Infer<typeof EndOfEpochData>;
 
@@ -43,13 +55,23 @@ export const ExecutionDigests = object({
 
 export const Checkpoint = object({
   epoch: number(),
-  sequenceNumber: number(),
+  sequenceNumber: string(),
   digest: CheckpointDigest,
   networkTotalTransactions: number(),
-  previousDigest: union([CheckpointDigest, literal(null)]),
+  previousDigest: optional(CheckpointDigest),
   epochRollingGasCostSummary: GasCostSummary,
-  timestampMs: union([number(), literal(null)]),
-  endOfEpochData: union([EndOfEpochData, literal(null)]),
+  timestampMs: number(),
+  endOfEpochData: optional(EndOfEpochData),
+  // TODO(jian): remove optional after 0.30.0 is released
+  validatorSignature: optional(ValidatorSignature),
   transactions: array(TransactionDigest),
+  checkpointCommitments: array(CheckpointCommitment),
 });
 export type Checkpoint = Infer<typeof Checkpoint>;
+
+export const CheckpointPage = object({
+  data: array(Checkpoint),
+  nextCursor: nullable(string()),
+  hasNextPage: boolean(),
+});
+export type CheckpointPage = Infer<typeof CheckpointPage>;

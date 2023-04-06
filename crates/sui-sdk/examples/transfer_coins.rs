@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use shared_crypto::intent::Intent;
+use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::{
     types::{
@@ -9,7 +11,6 @@ use sui_sdk::{
     },
     SuiClientBuilder,
 };
-use sui_types::intent::Intent;
 use sui_types::messages::ExecuteTransactionRequestType;
 
 #[tokio::main]
@@ -35,13 +36,15 @@ async fn main() -> Result<(), anyhow::Error> {
 
     // Sign transaction
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
-    let signature = keystore.sign_secure(&my_address, &transfer_tx, Intent::default())?;
+    let signature = keystore.sign_secure(&my_address, &transfer_tx, Intent::sui_transaction())?;
 
     // Execute the transaction
     let transaction_response = sui
         .quorum_driver()
-        .execute_transaction(
-            Transaction::from_data(transfer_tx, Intent::default(), vec![signature]).verify()?,
+        .execute_transaction_block(
+            Transaction::from_data(transfer_tx, Intent::sui_transaction(), vec![signature])
+                .verify()?,
+            SuiTransactionBlockResponseOptions::full_content(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;

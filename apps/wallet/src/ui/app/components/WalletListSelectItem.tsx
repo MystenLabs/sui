@@ -31,8 +31,8 @@ const styles = cva(
                 disabled: false,
                 className: 'hover:text-steel-dark',
             },
-            { mode: 'select', selected: true, className: 'text-steel-dark' },
-            { mode: 'select', selected: false, className: 'text-steel' },
+            { mode: 'select', selected: true, className: 'text-steel-darker' },
+            { mode: 'select', selected: false, className: 'text-steel-dark' },
             {
                 mode: 'disconnect',
                 selected: true,
@@ -41,7 +41,7 @@ const styles = cva(
             {
                 mode: 'disconnect',
                 selected: false,
-                className: 'text-steel-dark',
+                className: 'text-steel-darker',
             },
         ],
     }
@@ -76,9 +76,13 @@ export function WalletListSelectItem({
             clearTimeout(timeout);
         };
     }, [isNew]);
+
+    const isDisconnect = mode === 'disconnect';
+    const isSelect = mode === 'select';
+
     return (
         <div ref={elementRef} className={styles({ selected, mode, disabled })}>
-            {mode === 'select' ? (
+            {isSelect ? (
                 <CheckFill16
                     className={cx(
                         selected ? 'text-success' : 'text-gray-50',
@@ -86,20 +90,20 @@ export function WalletListSelectItem({
                     )}
                 />
             ) : null}
-            {mode === 'disconnect' && selected ? (
+            {isDisconnect && selected ? (
                 <XFill16 className="text-issue-dark text-base font-bold" />
             ) : null}
             <Text mono variant="body" weight="semibold">
                 {formatAddress(address)}
             </Text>
-            {mode === 'disconnect' && !selected ? (
+            {isDisconnect && !selected ? (
                 <div className="flex flex-1 justify-end text-issue-dark">
                     <Text variant="subtitle" weight="normal">
                         Disconnect
                     </Text>
                 </div>
             ) : null}
-            {mode === 'select' && isNew ? (
+            {isSelect && isNew ? (
                 <div className="flex-1 flex justify-end">
                     <Text variant="subtitleSmall" color="steel">
                         NEW

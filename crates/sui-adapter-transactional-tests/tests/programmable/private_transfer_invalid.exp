@@ -1,0 +1,44 @@
+processed 11 tasks
+
+init:
+A: object(103)
+
+task 1 'publish'. lines 8-20:
+created: object(105)
+mutated: object(104)
+
+task 2 'programmable'. lines 22-24:
+Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call sui::transfer::transfer. Use the public variant instead, sui::transfer::public_transfer"), command: Some(1) } }
+
+task 3 'programmable'. lines 26-28:
+Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call sui::transfer::share_object. Use the public variant instead, sui::transfer::public_share_object"), command: Some(1) } }
+
+task 4 'programmable'. lines 30-35:
+Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call sui::transfer::freeze_object. Use the public variant instead, sui::transfer::public_freeze_object"), command: Some(1) } }
+
+task 5 'programmable'. lines 37-39:
+Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call sui::transfer::transfer. Use the public variant instead, sui::transfer::public_transfer"), command: Some(1) } }
+
+task 6 'programmable'. lines 41-43:
+Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call sui::transfer::share_object. Use the public variant instead, sui::transfer::public_share_object"), command: Some(1) } }
+
+task 7 'programmable'. lines 45-50:
+Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call sui::transfer::freeze_object. Use the public variant instead, sui::transfer::public_freeze_object"), command: Some(1) } }
+
+task 8 'programmable'. lines 52-54:
+Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: CONSTRAINT_NOT_SATISFIED, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [] }), command: Some(1) } }
+
+task 9 'programmable'. lines 56-58:
+Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: CONSTRAINT_NOT_SATISFIED, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [] }), command: Some(1) } }
+
+task 10 'programmable'. lines 60-62:
+Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: CONSTRAINT_NOT_SATISFIED, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [] }), command: Some(1) } }

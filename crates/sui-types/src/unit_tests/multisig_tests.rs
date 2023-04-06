@@ -8,18 +8,17 @@ use once_cell::sync::OnceCell;
 use rand::{rngs::StdRng, SeedableRng};
 use roaring::RoaringBitmap;
 
+use super::{MultiSigPublicKey, ThresholdUnit, WeightUnit};
 use crate::{
     base_types::SuiAddress,
     crypto::{
         get_key_pair, get_key_pair_from_rng, Ed25519SuiSignature, Signature, SuiKeyPair,
         SuiSignatureInner,
     },
-    intent::{Intent, IntentMessage, PersonalMessage},
     multisig::{MultiSig, MAX_SIGNER_IN_MULTISIG},
     signature::{AuthenticatorTrait, GenericSignature},
 };
-
-use super::{MultiSigPublicKey, ThresholdUnit, WeightUnit};
+use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
 
 pub fn keys() -> Vec<SuiKeyPair> {
     let mut seed = StdRng::from_seed([0; 32]);
@@ -44,7 +43,7 @@ fn multisig_scenarios() {
     .unwrap();
     let addr = SuiAddress::from(multisig_pk.clone());
     let msg = IntentMessage::new(
-        Intent::default(),
+        Intent::sui_transaction(),
         PersonalMessage {
             message: "Hello".as_bytes().to_vec(),
         },
@@ -117,7 +116,7 @@ fn multisig_scenarios() {
     // A bad sig in the multisig fails, even though sig2 and sig3 verifies and weights meets threshold.
     let bad_sig = Signature::new_secure(
         &IntentMessage::new(
-            Intent::default(),
+            Intent::sui_transaction(),
             PersonalMessage {
                 message: "Bad message".as_bytes().to_vec(),
             },
@@ -151,7 +150,7 @@ fn test_combine_sigs() {
     let multisig_pk = MultiSigPublicKey::new(vec![pk1, pk2], vec![1, 1], 2).unwrap();
 
     let msg = IntentMessage::new(
-        Intent::default(),
+        Intent::sui_transaction(),
         PersonalMessage {
             message: "Hello".as_bytes().to_vec(),
         },
@@ -169,7 +168,7 @@ fn test_combine_sigs() {
 #[test]
 fn test_serde_roundtrip() {
     let msg = IntentMessage::new(
-        Intent::default(),
+        Intent::sui_transaction(),
         PersonalMessage {
             message: "Hello".as_bytes().to_vec(),
         },
@@ -192,7 +191,7 @@ fn test_serde_roundtrip() {
         assert_eq!(generic_sig_bytes.first().unwrap(), &0x03);
     }
 
-    // Malformed multisig cannot be serialized
+    // Malformed multisig cannot be deserialized
     let multisig_pk = MultiSigPublicKey {
         pk_map: vec![(keys()[0].public(), 1)],
         threshold: 1,
@@ -208,7 +207,7 @@ fn test_serde_roundtrip() {
     let generic_sig_bytes = generic_sig.as_bytes();
     assert!(GenericSignature::from_bytes(generic_sig_bytes).is_err());
 
-    // Malformed multisig_pk cannot be serialized
+    // Malformed multisig_pk cannot be deserialized
     let multisig_pk_1 = MultiSigPublicKey {
         pk_map: vec![],
         threshold: 0,
@@ -244,7 +243,7 @@ fn single_sig_port_works() {
     let kp: SuiKeyPair = SuiKeyPair::Ed25519(get_key_pair().1);
     let addr = SuiAddress::from(&kp.public());
     let msg = IntentMessage::new(
-        Intent::default(),
+        Intent::sui_transaction(),
         PersonalMessage {
             message: "Hello".as_bytes().to_vec(),
         },
@@ -303,7 +302,7 @@ fn test_multisig_address() {
         MultiSigPublicKey::new(vec![pk1, pk2, pk3], vec![w1, w2, w3], threshold).unwrap();
     let address: SuiAddress = multisig_pk.into();
     assert_eq!(
-        SuiAddress::from_str("0x43247fc96101763052ccc4f0417257a4270a537c45576ec6cd631c712085f389")
+        SuiAddress::from_str("0xe35c69eb504de34afdbd9f307fb3ca152646c92d549fea00065d26fc422109ea")
             .unwrap(),
         address
     );
@@ -312,7 +311,7 @@ fn test_multisig_address() {
 #[test]
 fn test_max_sig() {
     let msg = IntentMessage::new(
-        Intent::default(),
+        Intent::sui_transaction(),
         PersonalMessage {
             message: "Hello".as_bytes().to_vec(),
         },
@@ -331,11 +330,19 @@ fn test_max_sig() {
     )
     .is_err());
 
-    // multisig_pk with max weights for each pk and max threshold is ok.
+    // multisig_pk with unreachable threshold fails.
+    assert!(MultiSigPublicKey::new(
+        vec![keys[0].public(); 5],
+        vec![3; MAX_SIGNER_IN_MULTISIG],
+        16
+    )
+    .is_err());
+
+    // multisig_pk with max weights for each pk and max reachable threshold is ok.
     let high_threshold_pk = MultiSigPublicKey::new(
         vec![keys[0].public(); MAX_SIGNER_IN_MULTISIG],
-        vec![WeightUnit::MAX; 10],
-        ThresholdUnit::MAX,
+        vec![WeightUnit::MAX; MAX_SIGNER_IN_MULTISIG],
+        (WeightUnit::MAX as ThresholdUnit) * (MAX_SIGNER_IN_MULTISIG as ThresholdUnit),
     )
     .unwrap();
     let address: SuiAddress = high_threshold_pk.clone().into();

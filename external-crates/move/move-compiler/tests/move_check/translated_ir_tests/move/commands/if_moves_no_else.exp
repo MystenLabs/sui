@@ -1,0 +1,12 @@
+error[E06002]: use of unassigned variable
+  ┌─ tests/move_check/translated_ir_tests/move/commands/if_moves_no_else.move:8:13
+  │
+5 │         let y = move x;
+  │                 ------
+  │                 │
+  │                 The value of 'x' might have been previously moved here.
+  │                 Suggestion: use 'copy x' to avoid the move.
+  ·
+8 │     assert!(x == 0, 42);
+  │             ^ Invalid usage of previously moved variable 'x'.
+

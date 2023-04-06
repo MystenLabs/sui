@@ -1,0 +1,35 @@
+{
+    "compilerOptions": {
+        "module": "CommonJS",
+        "target": "es2020",
+        "outDir": "out",
+        "lib": [
+            "es2020"
+        ],
+        "sourceMap": true,
+        "rootDir": ".",
+        "newLine": "LF",
+        "strict": true,
+        "allowUnreachableCode": false,
+        "allowUnusedLabels": false,
+        "exactOptionalPropertyTypes": true,
+        "noFallthroughCasesInSwitch": true,
+        "noImplicitAny": true,
+        "noImplicitOverride": true,
+        "noImplicitReturns": true,
+        "noImplicitThis": true,
+        "noPropertyAccessFromIndexSignature": true,
+        "noUncheckedIndexedAccess": true,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true
+    },
+    "exclude": [
+        "node_modules",
+        ".vscode-test"
+    ],
+    "include": [
+        "src",
+        "tests",
+        "types"
+    ]
+}

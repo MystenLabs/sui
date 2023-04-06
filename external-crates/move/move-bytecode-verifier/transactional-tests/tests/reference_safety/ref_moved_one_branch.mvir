@@ -1,0 +1,21 @@
+//# publish
+module 0x1.A {
+    struct S {value: u64}
+
+    public t(changed: bool, s: &mut Self.S) {
+    label b0:
+        // valid to move a reference in one branch and not the other
+        jump_if (move(changed)) b2;
+    label b1:
+        return;
+    label b2:
+        Self.foo(&mut move(s).S::value);
+        return;
+    }
+
+    foo(x: &mut u64) {
+    label b0:
+        *copy(x) = *copy(x) + 1;
+        return;
+    }
+}

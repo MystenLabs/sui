@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
+    getPureSerializationType,
     getExecutionStatusType,
     getExecutionStatusError,
+    TransactionBlock,
 } from '@mysten/sui.js';
 import { useWalletKit, ConnectButton } from '@mysten/wallet-kit';
 import { useMutation } from '@tanstack/react-query';
@@ -45,14 +47,14 @@ export function ModuleFunction({
     functionName,
     functionDetails,
 }: ModuleFunctionProps) {
-    const { isConnected, signAndExecuteTransaction } = useWalletKit();
+    const { isConnected, signAndExecuteTransactionBlock } = useWalletKit();
     const { handleSubmit, formState, register, control } = useZodForm({
         schema: argsSchema,
     });
     const { isValidating, isValid, isSubmitting } = formState;
 
     const typeArguments = useFunctionTypeArguments(
-        functionDetails.type_parameters
+        functionDetails.typeParameters
     );
     const formTypeInputs = useWatch({ control, name: 'types' });
     const resolvedTypeArguments = useMemo(
@@ -66,19 +68,29 @@ export function ModuleFunction({
         functionDetails.parameters,
         resolvedTypeArguments
     );
+
     const execute = useMutation({
         mutationFn: async ({ params, types }: TypeOf<typeof argsSchema>) => {
-            const result = await signAndExecuteTransaction({
-                transaction: {
-                    kind: 'moveCall',
-                    data: {
-                        packageObjectId: packageId,
-                        module: moduleName,
-                        function: functionName,
-                        arguments: params || [],
-                        typeArguments: types || [],
-                        gasBudget: 2000,
-                    },
+            const tx = new TransactionBlock();
+            tx.moveCall({
+                target: `${packageId}::${moduleName}::${functionName}`,
+                typeArguments: types ?? [],
+                arguments:
+                    params?.map((param, i) =>
+                        getPureSerializationType(
+                            functionDetails.parameters[i],
+                            param
+                        )
+                            ? tx.pure(param)
+                            : tx.object(param)
+                    ) ?? [],
+            });
+            const result = await signAndExecuteTransactionBlock({
+                transactionBlock: tx,
+                options: {
+                    showEffects: true,
+                    showEvents: true,
+                    showInput: true,
                 },
             });
             if (getExecutionStatusType(result) === 'failure') {

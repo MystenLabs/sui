@@ -1,39 +1,40 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::error::{Error, SuiRpcResult};
-use crate::{RpcClient, WAIT_FOR_TX_TIMEOUT_SEC};
-use fastcrypto::encoding::Base64;
-use futures::stream;
-use futures_core::Stream;
-use jsonrpsee::core::client::Subscription;
 use std::collections::BTreeMap;
 use std::future;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+
+use fastcrypto::encoding::Base64;
+use futures::stream;
+use futures::StreamExt;
+use futures_core::Stream;
+use jsonrpsee::core::client::Subscription;
+
 use sui_json_rpc::api::GovernanceReadApiClient;
+use sui_json_rpc::api::{
+    CoinReadApiClient, IndexerApiClient, MoveUtilsClient, ReadApiClient, WriteApiClient,
+};
 use sui_json_rpc_types::{
-    Balance, Checkpoint, CheckpointId, Coin, CoinPage, DryRunTransactionResponse, DynamicFieldPage,
-    EventPage, SuiCoinMetadata, SuiCommittee, SuiEventEnvelope, SuiEventFilter,
-    SuiMoveNormalizedModule, SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse,
-    SuiPastObjectResponse, SuiSystemStateRpc, SuiTransactionEffectsAPI, SuiTransactionResponse,
-    TransactionsPage,
+    Balance, Checkpoint, CheckpointId, Coin, CoinPage, DelegatedStake,
+    DryRunTransactionBlockResponse, DynamicFieldPage, EventFilter, EventPage, ObjectsPage,
+    SuiCoinMetadata, SuiCommittee, SuiEvent, SuiGetPastObjectRequest, SuiMoveNormalizedModule,
+    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiPastObjectResponse,
+    SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    SuiTransactionBlockResponseQuery, TransactionBlocksPage,
 };
 use sui_types::balance::Supply;
-use sui_types::base_types::{
-    ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxSequenceNumber,
-};
+use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::committee::EpochId;
 use sui_types::error::TRANSACTION_NOT_FOUND_MSG_PREFIX;
 use sui_types::event::EventID;
 use sui_types::messages::{ExecuteTransactionRequestType, TransactionData, VerifiedTransaction};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use sui_types::query::{EventQuery, TransactionQuery};
-use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorMetadata;
+use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 
-use futures::StreamExt;
-use sui_json_rpc::api::{CoinReadApiClient, EventReadApiClient, ReadApiClient, WriteApiClient};
-use sui_types::governance::DelegatedStake;
+use crate::error::{Error, SuiRpcResult};
+use crate::{RpcClient, WAIT_FOR_TX_TIMEOUT_SEC};
 
 #[derive(Debug)]
 pub struct ReadApi {
@@ -45,11 +46,18 @@ impl ReadApi {
         Self { api }
     }
 
-    pub async fn get_objects_owned_by_address(
+    pub async fn get_owned_objects(
         &self,
         address: SuiAddress,
-    ) -> SuiRpcResult<Vec<SuiObjectInfo>> {
-        Ok(self.api.http.get_objects_owned_by_address(address).await?)
+        query: Option<SuiObjectResponseQuery>,
+        cursor: Option<ObjectID>,
+        limit: Option<usize>,
+    ) -> SuiRpcResult<ObjectsPage> {
+        Ok(self
+            .api
+            .http
+            .get_owned_objects(address, query, cursor, limit)
+            .await?)
     }
 
     pub async fn get_dynamic_fields(
@@ -78,59 +86,81 @@ impl ReadApi {
             .await?)
     }
 
+    pub async fn try_multi_get_parsed_past_object(
+        &self,
+        past_objects: Vec<SuiGetPastObjectRequest>,
+        options: SuiObjectDataOptions,
+    ) -> SuiRpcResult<Vec<SuiPastObjectResponse>> {
+        Ok(self
+            .api
+            .http
+            .try_multi_get_past_objects(past_objects, Some(options))
+            .await?)
+    }
+
     pub async fn get_object_with_options(
         &self,
         object_id: ObjectID,
         options: SuiObjectDataOptions,
     ) -> SuiRpcResult<SuiObjectResponse> {
+        Ok(self.api.http.get_object(object_id, Some(options)).await?)
+    }
+
+    pub async fn multi_get_object_with_options(
+        &self,
+        object_ids: Vec<ObjectID>,
+        options: SuiObjectDataOptions,
+    ) -> SuiRpcResult<Vec<SuiObjectResponse>> {
         Ok(self
             .api
             .http
-            .get_object_with_options(object_id, Some(options))
+            .multi_get_objects(object_ids, Some(options))
             .await?)
     }
 
-    pub async fn get_total_transaction_number(&self) -> SuiRpcResult<u64> {
-        Ok(self.api.http.get_total_transaction_number().await?)
+    pub async fn get_total_transaction_blocks(&self) -> SuiRpcResult<u64> {
+        Ok(self.api.http.get_total_transaction_blocks().await?.into())
     }
 
-    pub async fn get_transactions_in_range(
-        &self,
-        start: TxSequenceNumber,
-        end: TxSequenceNumber,
-    ) -> SuiRpcResult<Vec<TransactionDigest>> {
-        Ok(self.api.http.get_transactions_in_range(start, end).await?)
-    }
-
-    pub async fn get_transaction(
+    pub async fn get_transaction_with_options(
         &self,
         digest: TransactionDigest,
-    ) -> SuiRpcResult<SuiTransactionResponse> {
-        Ok(self.api.http.get_transaction(digest).await?)
+        options: SuiTransactionBlockResponseOptions,
+    ) -> SuiRpcResult<SuiTransactionBlockResponse> {
+        Ok(self
+            .api
+            .http
+            .get_transaction_block(digest, Some(options))
+            .await?)
     }
 
-    pub async fn multi_get_transactions(
+    pub async fn multi_get_transactions_with_options(
         &self,
         digests: Vec<TransactionDigest>,
-    ) -> SuiRpcResult<Vec<SuiTransactionResponse>> {
-        Ok(self.api.http.multi_get_transactions(digests).await?)
+        options: SuiTransactionBlockResponseOptions,
+    ) -> SuiRpcResult<Vec<SuiTransactionBlockResponse>> {
+        Ok(self
+            .api
+            .http
+            .multi_get_transaction_blocks(digests, Some(options))
+            .await?)
     }
 
     pub async fn get_committee_info(&self, epoch: Option<EpochId>) -> SuiRpcResult<SuiCommittee> {
         Ok(self.api.http.get_committee_info(epoch).await?)
     }
 
-    pub async fn get_transactions(
+    pub async fn query_transaction_blocks(
         &self,
-        query: TransactionQuery,
+        query: SuiTransactionBlockResponseQuery,
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
         descending_order: bool,
-    ) -> SuiRpcResult<TransactionsPage> {
+    ) -> SuiRpcResult<TransactionBlocksPage> {
         Ok(self
             .api
             .http
-            .get_transactions(query, cursor, limit, Some(descending_order))
+            .query_transaction_blocks(query, cursor, limit, Some(descending_order))
             .await?)
     }
 
@@ -147,15 +177,16 @@ impl ReadApi {
             .api
             .http
             .get_latest_checkpoint_sequence_number()
-            .await?)
+            .await?
+            .into())
     }
 
     pub fn get_transactions_stream(
         &self,
-        query: TransactionQuery,
+        query: SuiTransactionBlockResponseQuery,
         cursor: Option<TransactionDigest>,
         descending_order: bool,
-    ) -> impl Stream<Item = TransactionDigest> + '_ {
+    ) -> impl Stream<Item = SuiTransactionBlockResponse> + '_ {
         stream::unfold(
             (vec![], cursor, true, query),
             move |(mut data, cursor, first, query)| async move {
@@ -163,7 +194,12 @@ impl ReadApi {
                     Some((item, (data, cursor, false, query)))
                 } else if (cursor.is_none() && first) || cursor.is_some() {
                     let page = self
-                        .get_transactions(query.clone(), cursor, Some(100), descending_order)
+                        .query_transaction_blocks(
+                            query.clone(),
+                            cursor,
+                            Some(100),
+                            descending_order,
+                        )
                         .await
                         .ok()?;
                     let mut data = page.data;
@@ -188,22 +224,19 @@ impl ReadApi {
             .await?)
     }
 
-    pub async fn get_sui_system_state(&self) -> SuiRpcResult<SuiSystemStateRpc> {
-        Ok(self.api.http.get_sui_system_state().await?)
-    }
-
+    // TODO(devx): we can probably cache this given an epoch
     pub async fn get_reference_gas_price(&self) -> SuiRpcResult<u64> {
-        Ok(self.api.http.get_reference_gas_price().await?)
+        Ok(self.api.http.get_reference_gas_price().await?.into())
     }
 
-    pub async fn dry_run_transaction(
+    pub async fn dry_run_transaction_block(
         &self,
         tx: TransactionData,
-    ) -> SuiRpcResult<DryRunTransactionResponse> {
+    ) -> SuiRpcResult<DryRunTransactionBlockResponse> {
         Ok(self
             .api
             .http
-            .dry_run_transaction(Base64::from_bytes(&bcs::to_bytes(&tx)?))
+            .dry_run_transaction_block(Base64::from_bytes(&bcs::to_bytes(&tx)?))
             .await?)
     }
 }
@@ -331,12 +364,11 @@ impl EventApi {
 
     pub async fn subscribe_event(
         &self,
-        filter: SuiEventFilter,
-    ) -> SuiRpcResult<impl Stream<Item = SuiRpcResult<SuiEventEnvelope>>> {
+        filter: EventFilter,
+    ) -> SuiRpcResult<impl Stream<Item = SuiRpcResult<SuiEvent>>> {
         match &self.api.ws {
             Some(c) => {
-                let subscription: Subscription<SuiEventEnvelope> =
-                    c.subscribe_event(filter).await?;
+                let subscription: Subscription<SuiEvent> = c.subscribe_event(filter).await?;
                 Ok(subscription.map(|item| Ok(item?)))
             }
             _ => Err(Error::Subscription(
@@ -345,9 +377,13 @@ impl EventApi {
         }
     }
 
-    pub async fn get_events(
+    pub async fn get_events(&self, digest: TransactionDigest) -> SuiRpcResult<Vec<SuiEvent>> {
+        Ok(self.api.http.get_events(digest).await?)
+    }
+
+    pub async fn query_events(
         &self,
-        query: EventQuery,
+        query: EventFilter,
         cursor: Option<EventID>,
         limit: Option<usize>,
         descending_order: bool,
@@ -355,16 +391,16 @@ impl EventApi {
         Ok(self
             .api
             .http
-            .get_events(query, cursor, limit, Some(descending_order))
+            .query_events(query, cursor, limit, Some(descending_order))
             .await?)
     }
 
     pub fn get_events_stream(
         &self,
-        query: EventQuery,
+        query: EventFilter,
         cursor: Option<EventID>,
         descending_order: bool,
-    ) -> impl Stream<Item = SuiEventEnvelope> + '_ {
+    ) -> impl Stream<Item = SuiEvent> + '_ {
         stream::unfold(
             (vec![], cursor, true, query),
             move |(mut data, cursor, first, query)| async move {
@@ -372,7 +408,7 @@ impl EventApi {
                     Some((item, (data, cursor, false, query)))
                 } else if (cursor.is_none() && first) || cursor.is_some() {
                     let page = self
-                        .get_events(query.clone(), cursor, Some(100), descending_order)
+                        .query_events(query.clone(), cursor, Some(100), descending_order)
                         .await
                         .ok()?;
                     let mut data = page.data;
@@ -404,18 +440,23 @@ impl QuorumDriver {
     /// the fullnode until the fullnode recognizes this transaction, or
     /// until times out (see WAIT_FOR_TX_TIMEOUT_SEC). If it times out, an
     /// error is returned from this call.
-    pub async fn execute_transaction(
+    pub async fn execute_transaction_block(
         &self,
         tx: VerifiedTransaction,
+        options: SuiTransactionBlockResponseOptions,
         request_type: Option<ExecuteTransactionRequestType>,
-    ) -> SuiRpcResult<SuiTransactionResponse> {
+    ) -> SuiRpcResult<SuiTransactionBlockResponse> {
         let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
-        let request_type =
-            request_type.unwrap_or(ExecuteTransactionRequestType::WaitForLocalExecution);
-        let mut response: SuiTransactionResponse = self
+        let request_type = request_type.unwrap_or_else(|| options.default_execution_request_type());
+        let mut response: SuiTransactionBlockResponse = self
             .api
             .http
-            .submit_transaction(tx_bytes, signatures, request_type.clone())
+            .execute_transaction_block(
+                tx_bytes,
+                signatures,
+                Some(options),
+                Some(request_type.clone()),
+            )
             .await?;
 
         Ok(match request_type {
@@ -425,7 +466,13 @@ impl QuorumDriver {
                     if !confirmed_local_execution {
                         Self::wait_until_fullnode_sees_tx(
                             &self.api,
-                            *response.effects.transaction_digest(),
+                            *response
+                                .effects
+                                .as_ref()
+                                .map(|e| e.transaction_digest())
+                                .ok_or_else(|| {
+                                    Error::DataError("Expect effects to be non-empty".to_string())
+                                })?,
                         )
                         .await?;
                     }
@@ -442,7 +489,12 @@ impl QuorumDriver {
     ) -> SuiRpcResult<()> {
         let start = Instant::now();
         loop {
-            let resp = ReadApiClient::get_transaction(&c.http, tx_digest).await;
+            let resp = ReadApiClient::get_transaction_block(
+                &c.http,
+                tx_digest,
+                Some(SuiTransactionBlockResponseOptions::new()),
+            )
+            .await;
             if let Err(err) = resp {
                 if err.to_string().contains(TRANSACTION_NOT_FOUND_MSG_PREFIX) {
                     tokio::time::sleep(Duration::from_millis(300)).await;
@@ -474,16 +526,8 @@ impl GovernanceApi {
     }
 
     /// Return all [DelegatedStake].
-    pub async fn get_delegated_stakes(
-        &self,
-        owner: SuiAddress,
-    ) -> SuiRpcResult<Vec<DelegatedStake>> {
-        Ok(self.api.http.get_delegated_stakes(owner).await?)
-    }
-
-    /// Return all validators available for stake delegation.
-    pub async fn get_validators(&self) -> SuiRpcResult<Vec<ValidatorMetadata>> {
-        Ok(self.api.http.get_validators().await?)
+    pub async fn get_stakes(&self, owner: SuiAddress) -> SuiRpcResult<Vec<DelegatedStake>> {
+        Ok(self.api.http.get_stakes(owner).await?)
     }
 
     /// Return the committee information for the asked `epoch`.
@@ -492,8 +536,13 @@ impl GovernanceApi {
         Ok(self.api.http.get_committee_info(epoch).await?)
     }
 
-    /// Return [SuiSystemStateRpc]
-    pub async fn get_sui_system_state(&self) -> SuiRpcResult<SuiSystemStateRpc> {
-        Ok(self.api.http.get_sui_system_state().await?)
+    /// Return the latest SUI system state object on-chain.
+    pub async fn get_latest_sui_system_state(&self) -> SuiRpcResult<SuiSystemStateSummary> {
+        Ok(self.api.http.get_latest_sui_system_state().await?)
+    }
+
+    /// Return the reference gas price for the network
+    pub async fn get_reference_gas_price(&self) -> SuiRpcResult<u64> {
+        Ok(self.api.http.get_reference_gas_price().await?.into())
     }
 }

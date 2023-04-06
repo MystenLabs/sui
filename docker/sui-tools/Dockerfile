@@ -12,11 +12,11 @@ RUN apt-get update && apt-get install -y cmake clang
 #      crate, from the workspace Cargo.toml file.
 #   3. Update the lockfile in order to reflect the changes to the
 #      root Cargo.toml file.
-FROM chef AS planner
-COPY Cargo.toml Cargo.lock ./
-COPY crates/workspace-hack crates/workspace-hack
-RUN sed -i '/crates\/workspace-hack/b; /crates/d; /narwhal/d' Cargo.toml \
-    && cargo metadata -q >/dev/null
+# FROM chef AS planner
+# COPY Cargo.toml Cargo.lock ./
+# COPY crates/workspace-hack crates/workspace-hack
+# RUN sed -i '/crates\/workspace-hack/b; /crates/d; /narwhal/d' Cargo.toml \
+#    && cargo metadata -q >/dev/null
 
 # Build and cache all dependencies.
 #
@@ -24,10 +24,10 @@ RUN sed -i '/crates\/workspace-hack/b; /crates/d; /narwhal/d' Cargo.toml \
 # and run `cargo build` in order to create a caching Docker layer
 # with all dependencies built.
 FROM chef AS builder 
-COPY --from=planner /sui/Cargo.toml Cargo.toml
-COPY --from=planner /sui/Cargo.lock Cargo.lock
-COPY --from=planner /sui/crates/workspace-hack crates/workspace-hack
-RUN cargo build --release
+# COPY --from=planner /sui/Cargo.toml Cargo.toml
+# COPY --from=planner /sui/Cargo.lock Cargo.lock
+# COPY --from=planner /sui/crates/workspace-hack crates/workspace-hack
+# RUN cargo build --release
 
 # Build application
 #
@@ -37,12 +37,12 @@ RUN cargo build --release
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
 COPY narwhal narwhal
+COPY external-crates external-crates
 RUN cargo build --release \
     --bin sui-node \
     --bin sui \
     --bin sui-faucet \
     --bin stress \
-    --bin sui-indexer \
     --bin sui-cluster-test
 
 # Production Image
@@ -52,9 +52,6 @@ COPY --from=builder /sui/target/release/sui-node /usr/local/bin
 COPY --from=builder /sui/target/release/sui /usr/local/bin
 COPY --from=builder /sui/target/release/sui-faucet /usr/local/bin
 COPY --from=builder /sui/target/release/stress /usr/local/bin
-COPY --from=builder /sui/target/release/sui-indexer /usr/local/bin
-# sui-indexer needs postgres libpq5 and ca-certificates
-RUN apt update && apt install -y libpq5 ca-certificates
 COPY --from=builder /sui/target/release/sui-cluster-test /usr/local/bin
 
 ARG BUILD_DATE

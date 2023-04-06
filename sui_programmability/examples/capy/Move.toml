@@ -3,7 +3,7 @@ name = "sui-capybaras"
 version = "0.1.0"
 
 [dependencies]
-Sui = { local = "../../../crates/sui-framework" }
+Sui = { local = "../../../crates/sui-framework/packages/sui-framework" }
 
 [addresses]
 capy = "0x0"

@@ -9,6 +9,8 @@ import { useParams } from 'react-router-dom';
 import { DAppPermissionsList } from '../../components/DAppPermissionsList';
 import { SummaryCard } from '../../components/SummaryCard';
 import { WalletListSelect } from '../../components/WalletListSelect';
+import { useActiveAddress } from '../../hooks/useActiveAddress';
+import { PageMainLayoutTitle } from '../../shared/page-main-layout/PageMainLayoutTitle';
 import { Text } from '../../shared/text';
 import Loading from '_components/loading';
 import { UserApproveContainer } from '_components/user-approve-container';
@@ -38,15 +40,15 @@ function SiteConnectPage() {
     );
     const dispatch = useAppDispatch();
     const permissionRequest = useAppSelector(permissionSelector);
-    const activeAccount = useAppSelector(({ account }) => account.address);
+    const activeAddress = useActiveAddress();
     const isMultiAccountEnabled = useFeature(FEATURES.WALLET_MULTI_ACCOUNTS).on;
     const [accountsToConnect, setAccountsToConnect] = useState<SuiAddress[]>(
-        () => (activeAccount ? [activeAccount] : [])
+        () => (activeAddress ? [activeAddress] : [])
     );
     const handleOnSubmit = useCallback(
-        (allowed: boolean) => {
+        async (allowed: boolean) => {
             if (requestID && accountsToConnect) {
-                dispatch(
+                await dispatch(
                     respondToPermissionRequest({
                         id: requestID,
                         accounts: allowed ? accountsToConnect : [],
@@ -75,11 +77,11 @@ function SiteConnectPage() {
     const [displayWarning, setDisplayWarning] = useState(!isSecure);
 
     const handleHideWarning = useCallback(
-        (allowed: boolean) => {
+        async (allowed: boolean) => {
             if (allowed) {
                 setDisplayWarning(false);
             } else {
-                handleOnSubmit(false);
+                await handleOnSubmit(false);
             }
         },
         [handleOnSubmit]
@@ -100,9 +102,9 @@ function SiteConnectPage() {
                         rejectTitle="Reject"
                         onSubmit={handleHideWarning}
                         isWarning
-                        isConnect
                         addressHidden
                     >
+                        <PageMainLayoutTitle title="Insecure Website" />
                         <div className={st.warningWrapper}>
                             <h1 className={st.warningTitle}>
                                 Your Connection is Not Secure
@@ -125,10 +127,10 @@ function SiteConnectPage() {
                         approveTitle="Connect"
                         rejectTitle="Reject"
                         onSubmit={handleOnSubmit}
-                        isConnect
                         addressHidden
                         approveDisabled={!accountsToConnect.length}
                     >
+                        <PageMainLayoutTitle title="Approve Connection" />
                         <SummaryCard
                             header="Permissions requested"
                             body={
@@ -153,8 +155,8 @@ function SiteConnectPage() {
                                         variant="body"
                                         weight="semibold"
                                     >
-                                        {activeAccount
-                                            ? formatAddress(activeAccount)
+                                        {activeAddress
+                                            ? formatAddress(activeAddress)
                                             : null}
                                     </Text>
                                 }

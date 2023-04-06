@@ -11,7 +11,8 @@ import {
     setToLocalStorage,
     setToSessionStorage,
 } from '../storage-utils';
-import { type Account } from './Account';
+import { type DerivedAccount } from './DerivedAccount';
+import { type ImportedAccount } from './ImportedAccount';
 import { Vault } from './Vault';
 import { getRandomEntropy, toEntropy } from '_shared/utils/bip39';
 
@@ -139,7 +140,7 @@ class VaultStorageClass {
     public async importKeypair(
         keypair: ExportedKeypair,
         password: string,
-        existingAccounts: Account[]
+        existingAccounts: (ImportedAccount | DerivedAccount)[]
     ) {
         if (!this.#vault) {
             throw new Error('Error, vault is locked. Unlock the vault first.');
@@ -147,8 +148,7 @@ class VaultStorageClass {
         const keypairToImport = fromExportedKeypair(keypair);
         const importedAddress = keypairToImport.getPublicKey().toSuiAddress();
         const isDuplicate = existingAccounts.some(
-            (anAccount) =>
-                anAccount.publicKey.toSuiAddress() === importedAddress
+            (anAccount) => anAccount.address === importedAddress
         );
         if (isDuplicate) {
             return null;
