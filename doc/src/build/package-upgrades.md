@@ -127,7 +127,7 @@ Array [
             "AddressOwner": String("<PUBLISHER-ID>"),
         },
         "objectType": String("<ORIGINAL-PACKAGE-ID>::sui_package::<MODULE-NAME>"),
-        "objectId": String("<PUBLISHER-ID>"),
+        "objectId": String("<PACKAGE-ID>"),
         "version": Number(7),
         "digest": String("BC3KeuATKJozLNipbUz2GWzoDXbodXH4HLm59TxJSmVd"),
     },
@@ -176,7 +176,7 @@ published-at = "<ORIGINAL-PACKAGE-ID>"
 sui_package = "0x0"
 ```    
 
-With the new manifest and code in place, it's time to use the `sui client upgrade` command to upgrade your package. Pass the `UpgradeCap` ID to the `--upgrade-capability` flag.
+With the new manifest and code in place, it's time to use the `sui client upgrade` command to upgrade your package. Pass the `UpgradeCap` ID (the `<UPGRADE-CAP-ID>` value from the example) to the `--upgrade-capability` flag.
 
 ```shell
 sui client upgrade --gas-budget <GAS-BUDGET-AMOUNT> --upgrade-capability <UPGRADE-CAP-ID>
@@ -280,4 +280,4 @@ published-at = "<UPGRADED-PACKAGE-ID>"
 sui_package = "<ORIGINAL-PACKAGE-ID>"
 ```
 
-The `published-at` value changes with every upgrade. The ID for the `sui_package` in the `[addresses]` section always points to the original ID after upgrading. You must always change that value back to `0x0`, however, before running the `upgrade` command so the validator knows to create a new ID for the upgrade. 
+The `published-at` value changes with every upgrade. The ID for the `sui_package` in the `[addresses]` section always points to the original package ID after upgrading. You must always change that value back to `0x0`, however, before running the `upgrade` command so the validator knows to create a new ID for the upgrade. 
