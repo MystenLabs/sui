@@ -95,7 +95,7 @@ export const SuiCallArg = union([
     type: literal('object'),
     objectType: literal('immOrOwnedObject'),
     objectId: ObjectId,
-    version: SequenceNumber,
+    version: number(),
     digest: ObjectDigest,
   }),
   object({
