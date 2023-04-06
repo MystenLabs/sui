@@ -17,8 +17,8 @@ use tracing::info;
 
 use crate::load_test::{LoadTest, LoadTestConfig};
 use crate::payload::{
-    load_addresses_from_file, load_digests_from_file, load_objects_from_file, Command,
-    RpcCommandProcessor, SignerInfo,
+    load_addresses_from_file, load_addresses_with_coin_types_from_file, load_digests_from_file,
+    load_objects_from_file, Command, RpcCommandProcessor, SignerInfo,
 };
 
 #[derive(Parser)]
@@ -56,6 +56,9 @@ pub struct CommonOptions {
     /// different chunks will be executed concurrently on the same thread
     #[clap(long, default_value_t = 1)]
     num_chunks_per_thread: usize,
+
+    #[clap(long, default_value_t = 20)]
+    chunk_size: usize,
 }
 
 #[derive(Parser)]
@@ -114,17 +117,19 @@ pub enum ClapCommand {
     },
     #[clap(name = "get-object")]
     GetObject {
-        #[clap(long)]
-        chunk_size: usize,
-
         #[clap(flatten)]
         common: CommonOptions,
     },
     #[clap(name = "get-all-balances")]
     GetAllBalances {
         #[clap(long)]
-        chunk_size: usize,
+        skip_record: bool,
 
+        #[clap(flatten)]
+        common: CommonOptions,
+    },
+    #[clap(name = "get-balance")]
+    GetBalance {
         #[clap(flatten)]
         common: CommonOptions,
     },
@@ -228,10 +233,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 false,
             )
         }
-        ClapCommand::GetAllBalances { common, chunk_size } => {
+        ClapCommand::GetAllBalances {
+            common,
+            skip_record,
+        } => {
             let addresses = load_addresses_from_file(expand_path(&opts.data_directory));
             (
-                Command::new_get_all_balances(addresses, chunk_size),
+                Command::new_get_all_balances(addresses, common.chunk_size, !skip_record),
+                common,
+                false,
+            )
+        }
+        ClapCommand::GetBalance { common } => {
+            let addresses_with_coin_types =
+                load_addresses_with_coin_types_from_file(expand_path(&opts.data_directory));
+            (
+                Command::new_get_balance(addresses_with_coin_types, common.chunk_size),
                 common,
                 false,
             )
@@ -248,9 +265,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 false,
             )
         }
-        ClapCommand::GetObject { common, chunk_size } => {
+        ClapCommand::GetObject { common } => {
             let objects = load_objects_from_file(expand_path(&opts.data_directory));
-            (Command::new_get_object(objects, chunk_size), common, false)
+            (
+                Command::new_get_object(objects, common.chunk_size),
+                common,
+                false,
+            )
         }
     };
 
