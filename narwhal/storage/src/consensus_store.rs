@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::NodeStorage;
 use config::AuthorityIdentifier;
 use std::collections::HashMap;
-use store::rocks::DBMap;
-use store::{Map, TypedStoreError};
+use store::rocks::{open_cf, DBMap, MetricConf, ReadWriteOptions};
+use store::{reopen, Map, TypedStoreError};
 use types::{
     CommittedSubDag, CommittedSubDagShell, CompressedCommittedSubDag, CompressedCommittedSubDagV2,
     Round, SequenceNumber, StoreResult,
@@ -33,6 +34,22 @@ impl ConsensusStore {
             committed_sub_dags_by_index: sequence,
             committed_sub_dags_by_index_v2: committed_sub_dags_map,
         }
+    }
+
+    pub fn new_for_tests() -> Self {
+        let rocksdb = open_cf(
+            tempfile::tempdir().unwrap(),
+            None,
+            MetricConf::default(),
+            &[
+                NodeStorage::LAST_COMMITTED_CF,
+                NodeStorage::SUB_DAG_INDEX_CF,
+                NodeStorage::COMMITTED_SUB_DAG_INDEX_CF,
+            ],
+        )
+        .expect("Cannot open database");
+        let (last_committed_map, sub_dag_index_map, committed_sub_dag_map) = reopen!(&rocksdb, NodeStorage::LAST_COMMITTED_CF;<AuthorityIdentifier, Round>, NodeStorage::SUB_DAG_INDEX_CF;<SequenceNumber, CommittedSubDagShell>, NodeStorage::COMMITTED_SUB_DAG_INDEX_CF;<SequenceNumber, CompressedCommittedSubDag>);
+        Self::new(last_committed_map, sub_dag_index_map, committed_sub_dag_map)
     }
 
     /// Clear the store.
@@ -135,5 +152,74 @@ impl ConsensusStore {
         );
 
         Ok(sub_dags)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::ConsensusStore;
+    use store::Map;
+    use types::{
+        CommittedSubDagShell, CompressedCommittedSubDag, CompressedCommittedSubDagV2, TimestampMs,
+    };
+
+    #[tokio::test]
+    async fn test_v1_v2_backwards_compatibility() {
+        let store = ConsensusStore::new_for_tests();
+
+        // Create few sub dags of V1 and write in the committed_sub_dags_by_index storage
+        for i in 0..3 {
+            let s = CommittedSubDagShell {
+                certificates: vec![],
+                leader: Default::default(),
+                leader_round: 2,
+                sub_dag_index: i,
+                reputation_score: Default::default(),
+            };
+
+            store
+                .committed_sub_dags_by_index
+                .insert(&s.sub_dag_index, &s)
+                .unwrap();
+        }
+
+        // Create few sub dags of V2 and write in the committed_sub_dags_by_index_v2 storage
+        for i in 3..6 {
+            let s = CompressedCommittedSubDagV2 {
+                certificates: vec![],
+                leader: Default::default(),
+                leader_round: 2,
+                sub_dag_index: i,
+                reputation_score: Default::default(),
+                commit_timestamp: i,
+            };
+
+            store
+                .committed_sub_dags_by_index_v2
+                .insert(&s.sub_dag_index.clone(), &CompressedCommittedSubDag::V2(s))
+                .unwrap();
+        }
+
+        // Read from index 0, all the sub dags should be returned
+        let sub_dags = store.read_committed_sub_dags_from(&0).unwrap();
+
+        assert_eq!(sub_dags.len(), 6);
+
+        for (index, sub_dag) in sub_dags.iter().enumerate() {
+            assert_eq!(sub_dag.sub_dag_index(), index as u64);
+            if index < 3 {
+                assert_eq!(sub_dag.commit_timestamp(), 0);
+            } else {
+                assert_eq!(sub_dag.commit_timestamp(), index as TimestampMs);
+            }
+        }
+
+        // Read the last sub dag, and the sub dag with index 5 should be returned
+        let last_sub_dag = store.get_latest_sub_dag();
+        assert_eq!(last_sub_dag.unwrap().sub_dag_index(), 5);
+
+        // Read the last sub dag index
+        let index = store.get_latest_sub_dag_index();
+        assert_eq!(index, 5);
     }
 }
