@@ -4,8 +4,8 @@ use crate::payload_store::PayloadStore;
 use crate::proposer_store::ProposerKey;
 use crate::vote_digest_store::VoteDigestStore;
 use crate::{
-    CertificateStore, CertificateStoreCache, CertificateStoreCacheMetrics, HeaderStore,
-    ProposerStore,
+    CertificateStore, CertificateStoreCache, CertificateStoreCacheMetrics, ConsensusStore,
+    HeaderStore, ProposerStore,
 };
 use config::{AuthorityIdentifier, WorkerId};
 use std::num::NonZeroUsize;
@@ -16,7 +16,7 @@ use store::reopen;
 use store::rocks::DBMap;
 use store::rocks::{open_cf, MetricConf, ReadWriteOptions};
 use types::{
-    Batch, BatchDigest, Certificate, CertificateDigest, CommittedSubDagShell, ConsensusStore,
+    Batch, BatchDigest, Certificate, CertificateDigest, CommittedSubDagShell, ConsensusCommit,
     Header, HeaderDigest, Round, SequenceNumber, VoteInfo,
 };
 
@@ -47,6 +47,7 @@ impl NodeStorage {
     pub(crate) const BATCHES_CF: &'static str = "batches";
     pub(crate) const LAST_COMMITTED_CF: &'static str = "last_committed";
     pub(crate) const SUB_DAG_INDEX_CF: &'static str = "sub_dag";
+    pub(crate) const COMMITTED_SUB_DAG_INDEX_CF: &'static str = "committed_sub_dag";
 
     // 100 nodes * 60 rounds (assuming 1 round/sec this will hold data for about the last 1 minute
     // which should be more than enough for advancing the protocol and also help other nodes)
@@ -75,6 +76,7 @@ impl NodeStorage {
                 Self::BATCHES_CF,
                 Self::LAST_COMMITTED_CF,
                 Self::SUB_DAG_INDEX_CF,
+                Self::COMMITTED_SUB_DAG_INDEX_CF,
             ],
         )
         .expect("Cannot open database");
@@ -90,6 +92,7 @@ impl NodeStorage {
             batch_map,
             last_committed_map,
             sub_dag_index_map,
+            committed_sub_dag_map,
         ) = reopen!(&rocksdb,
             Self::LAST_PROPOSED_CF;<ProposerKey, Header>,
             Self::VOTES_CF;<AuthorityIdentifier, VoteInfo>,
@@ -100,7 +103,8 @@ impl NodeStorage {
             Self::PAYLOAD_CF;<(BatchDigest, WorkerId), PayloadToken>,
             Self::BATCHES_CF;<BatchDigest, Batch>,
             Self::LAST_COMMITTED_CF;<AuthorityIdentifier, Round>,
-            Self::SUB_DAG_INDEX_CF;<SequenceNumber, CommittedSubDagShell>
+            Self::SUB_DAG_INDEX_CF;<SequenceNumber, CommittedSubDagShell>,
+            Self::COMMITTED_SUB_DAG_INDEX_CF;<SequenceNumber, ConsensusCommit>
         );
 
         let proposer_store = ProposerStore::new(last_proposed_map);
@@ -119,7 +123,11 @@ impl NodeStorage {
         );
         let payload_store = PayloadStore::new(payload_map);
         let batch_store = batch_map;
-        let consensus_store = Arc::new(ConsensusStore::new(last_committed_map, sub_dag_index_map));
+        let consensus_store = Arc::new(ConsensusStore::new(
+            last_committed_map,
+            sub_dag_index_map,
+            committed_sub_dag_map,
+        ));
 
         Self {
             proposer_store,

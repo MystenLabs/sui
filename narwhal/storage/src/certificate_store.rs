@@ -10,13 +10,14 @@ use std::sync::Arc;
 use std::{cmp::Ordering, collections::BTreeMap, iter};
 use tap::Tap;
 
+use crate::StoreResult;
 use config::AuthorityIdentifier;
 use mysten_common::sync::notify_read::NotifyRead;
 use store::{
     rocks::{DBMap, TypedStoreError::RocksDBError},
     Map,
 };
-use types::{Certificate, CertificateDigest, Round, StoreResult};
+use types::{Certificate, CertificateDigest, Round};
 
 #[derive(Clone)]
 pub struct CertificateStoreCacheMetrics {

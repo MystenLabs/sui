@@ -14,6 +14,7 @@ use narwhal_consensus as consensus;
 use pprof::criterion::{Output, PProfProfiler};
 use prometheus::Registry;
 use std::{collections::BTreeSet, sync::Arc};
+use storage::NodeStorage;
 use test_utils::{make_consensus_store, make_optimal_certificates, temp_dir, CommitteeFixture};
 use tokio::time::Instant;
 use types::{Certificate, Round};
@@ -41,10 +42,10 @@ pub fn process_certificates(c: &mut Criterion) {
             make_optimal_certificates(&committee, 1..=rounds, &genesis, &keys);
 
         let store_path = temp_dir();
-        let store = make_consensus_store(&store_path);
+        let store = NodeStorage::reopen(&store_path, None);
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
-        let mut state = ConsensusState::new(metrics.clone(), &committee, gc_depth);
+        let mut state = ConsensusState::new(metrics.clone(), gc_depth);
 
         let data_size: usize = certificates
             .iter()
@@ -54,7 +55,7 @@ pub fn process_certificates(c: &mut Criterion) {
 
         let mut ordering_engine = Bullshark {
             committee: committee.clone(),
-            store,
+            store: store.consensus_store,
             metrics,
             last_successful_leader_election_timestamp: Instant::now(),
             last_leader_election: Default::default(),

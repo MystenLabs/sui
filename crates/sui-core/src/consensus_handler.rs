@@ -29,7 +29,6 @@ use sui_types::messages::{
     ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
     VerifiedExecutableTransaction, VerifiedTransaction,
 };
-
 use sui_types::storage::ParentSync;
 
 use tracing::{debug, error, instrument};
@@ -131,8 +130,22 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
 
         /* (serialized, transaction, output_cert) */
         let mut transactions = vec![];
-        // Narwhal enforces some invariants on the header.created_at, so we can use it as a timestamp
-        let timestamp = *consensus_output.sub_dag.leader.header().created_at();
+        let timestamp = consensus_output.sub_dag.commit_timestamp();
+        let leader_author = consensus_output.sub_dag.leader.header().author();
+
+        let epoch_start = self
+            .epoch_store
+            .epoch_start_config()
+            .epoch_start_timestamp_ms();
+        let timestamp = if timestamp < epoch_start {
+            error!(
+                "Unexpected commit timestamp {timestamp} less then epoch start time {epoch_start}, author {leader_author}, round {round}",
+
+            );
+            epoch_start
+        } else {
+            timestamp
+        };
 
         let prologue_transaction = self.consensus_commit_prologue_transaction(round, timestamp);
         transactions.push((
@@ -152,12 +165,7 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
 
         self.metrics
             .consensus_committed_subdags
-            .with_label_values(&[&consensus_output
-                .sub_dag
-                .leader
-                .header()
-                .author()
-                .to_string()])
+            .with_label_values(&[&leader_author.to_string()])
             .inc();
         for (cert, batches) in consensus_output.batches {
             let author = cert.header().author();
