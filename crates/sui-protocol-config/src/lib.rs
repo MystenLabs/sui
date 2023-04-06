@@ -19,7 +19,8 @@ const MAX_PROTOCOL_VERSION: u64 = 4;
 // Version 3: gas model v2, including all sui conservation fixes. Fix for loaded child object
 //            changes, enable package upgrades, add limits on `max_size_written_objects`,
 //            `max_size_written_objects_system_tx`
-// Version 4: New reward slashing rate.
+// Version 4: New reward slashing rate. Framework changes to skip stake susbidy when the epoch
+//            length is short.
 
 #[derive(
     Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, JsonSchema,

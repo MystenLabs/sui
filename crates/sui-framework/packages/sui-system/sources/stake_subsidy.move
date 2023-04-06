@@ -90,4 +90,10 @@ module sui_system::stake_subsidy {
     public fun current_epoch_subsidy_amount(self: &StakeSubsidy): u64 {
         math::min(self.current_distribution_amount, balance::value(&self.balance))
     }
+
+    #[test_only]
+    /// Returns the number of distributions that have occurred.
+    public(friend) fun get_distribution_counter(self: &StakeSubsidy): u64 {
+        self.distribution_counter
+    }
 }

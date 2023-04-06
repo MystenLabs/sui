@@ -842,6 +842,7 @@ module sui_system::sui_system_state_inner {
         epoch_start_timestamp_ms: u64, // Timestamp of the epoch start
         ctx: &mut TxContext,
     ) : Balance<SUI> {
+        let prev_epoch_start_timestamp = self.epoch_start_timestamp_ms;
         self.epoch_start_timestamp_ms = epoch_start_timestamp_ms;
 
         let bps_denominator_u64 = (BASIS_POINT_DENOMINATOR as u64);
@@ -871,11 +872,15 @@ module sui_system::sui_system_state_inner {
 
         // Include stake subsidy in the rewards given out to validators and stakers.
         // Delay distributing any stake subsidies until after `stake_subsidy_start_epoch`.
-        let stake_subsidy = if (tx_context::epoch(ctx) >= self.parameters.stake_subsidy_start_epoch) {
-            stake_subsidy::advance_epoch(&mut self.stake_subsidy)
-        } else {
-            balance::zero()
-        };
+        // And if this epoch is shorter than the regular epoch duration, don't distribute any stake subsidy.
+        let stake_subsidy =
+            if (tx_context::epoch(ctx) >= self.parameters.stake_subsidy_start_epoch  &&
+                epoch_start_timestamp_ms >= prev_epoch_start_timestamp + self.parameters.epoch_duration_ms)
+            {
+                stake_subsidy::advance_epoch(&mut self.stake_subsidy)
+            } else {
+                balance::zero()
+            };
 
         let stake_subsidy_amount = balance::value(&stake_subsidy);
         balance::join(&mut computation_reward, stake_subsidy);
@@ -1072,6 +1077,11 @@ module sui_system::sui_system_state_inner {
     /// Return the currently candidate validator by address
     public(friend) fun candidate_validator_by_address(self: &SuiSystemStateInnerV2, validator_address: address): &Validator {
         validator_set::get_candidate_validator_ref(validators(self), validator_address)
+    }
+
+    #[test_only]
+    public(friend) fun get_stake_subsidy_distribution_counter(self: &SuiSystemStateInnerV2): u64 {
+        stake_subsidy::get_distribution_counter(&self.stake_subsidy)
     }
 
     #[test_only]
