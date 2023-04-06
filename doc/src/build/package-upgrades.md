@@ -274,10 +274,10 @@ The result provides a new ID for the upgraded package. As was the case before th
 [package]
 name = "sui_package"
 version = "0.0.1"
-published-at = "<ORIGINAL-PACKAGE-ID>"
+published-at = "<NEW-PACKAGE-ID>"
 
 [addresses]
-sui_package = "<NEW-PACKAGE-ID>"
+sui_package = "<ORIGINAL-PACKAGE-ID>"
 ```
 
-You must always change the value of `sui_package` back to `0x0` before running the `upgrade` command so the validator knows to create a new ID for the upgrade.  
+The `published-at` value changes with every upgrade. The ID for the `sui_package` in the `[addresses]` section always points to the original ID after upgrading. You must always change that value back to `0x0`, however, before running the `upgrade` command so the validator knows to create a new ID for the upgrade. 
