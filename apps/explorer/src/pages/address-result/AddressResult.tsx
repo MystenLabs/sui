@@ -9,6 +9,7 @@ import { TransactionsForAddress } from '../../components/transactions/Transactio
 
 import OwnedCoins from '~/components/OwnedCoins/OwnedCoins';
 import OwnedObjects from '~/components/OwnedObjectsV2/OwnedObjects';
+import OwnedObjectsOld from '~/components/ownedobjects/OwnedObjects';
 import { Heading } from '~/ui/Heading';
 import { PageHeader } from '~/ui/PageHeader';
 
@@ -27,7 +28,6 @@ function AddressResult() {
                     </Heading>
                 </div>
                 <ErrorBoundary>
-                    {/* <OwnedObjects id={addressID!} byAddress /> */}
                     <div
                         className={`grid w-full grid-cols-1 md:grid-cols-2 
                         [&>div:first-child]:border-r-[1px] [&>div:first-child]:border-solid 

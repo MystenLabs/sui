@@ -31,7 +31,7 @@ function OwnerCoins({ id }: { id: string }) {
             },
         })
             .then((objects) => {
-                const res = objects.data.filter(() => !Coin.isCoin);
+                const res = objects.data.filter((resp) => !Coin.isCoin(resp));
                 setResults(res);
                 setIsLoading(false);
             })
