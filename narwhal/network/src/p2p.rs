@@ -216,12 +216,6 @@ impl WorkerRpc for anemo::Network {
 
         let peer_id = PeerId(peer.0.to_bytes());
 
-        fail::fail_point!("request-batch", |_| {
-            Err(format_err!(
-                "Injected error in request batch from peer {peer_id}"
-            ))
-        });
-
         let peer = self
             .peer(peer_id)
             .ok_or_else(|| format_err!("Network has no connection with peer {peer_id}"))?;
