@@ -46,7 +46,16 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
         data: normalizedStruct,
         isLoading: loadingNormalizedStruct,
         isError: errorNormalizedMoveStruct,
-    } = useGetNormalizedMoveStruct(packageId, moduleName, functionName);
+    } = useGetNormalizedMoveStruct({
+        packageId,
+        module: moduleName,
+        struct: functionName,
+        onSuccess: (data) => {
+            if (data?.fields) {
+                setActiveFieldName(data.fields[0].name);
+            }
+        },
+    });
 
     if (isLoading || loadingNormalizedStruct) {
         return (
@@ -64,9 +73,6 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
     }
 
     // Set the active field name to the first field in the struct on load
-    if (isSuccess && normalizedStruct?.fields && activeFieldName === '') {
-        setActiveFieldName(normalizedStruct.fields[0].name);
-    }
 
     const fieldsData = getObjectFields(data!);
 
