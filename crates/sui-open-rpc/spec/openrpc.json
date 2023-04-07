@@ -186,7 +186,7 @@
                         "type": "object",
                         "objectType": "immOrOwnedObject",
                         "objectId": "0x4f82f1c8587b98d64c00bfb46c3843bd8bf6ccfa7c65a86138698cd1fdcac3dc",
-                        "version": 2,
+                        "version": "2",
                         "digest": "Cv7n2YaM7Am1ssZGu4khsFkcKHnpgVhwFCSs4kLjrtLW"
                       }
                     ],
@@ -832,7 +832,7 @@
                         "type": "object",
                         "objectType": "immOrOwnedObject",
                         "objectId": "0x5eeb1d449e2516166d57d71fdeb154d0dc9ecdb7b30057d0a932684cac352cdc",
-                        "version": 2,
+                        "version": "2",
                         "digest": "GK4NxEKSrK88XkPNeuBqtJYPmU9yMTWMD7K9TdU4ybKN"
                       }
                     ],
