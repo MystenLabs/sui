@@ -26,7 +26,6 @@ function CoinsPanel({ coinType, id }: CoinsPanelProps): JSX.Element {
         id,
         nextCursor
     );
-   
 
     const update = (resp: PaginatedCoins) => {
         setCoinObjects((coinObjects) => [...coinObjects, ...resp.data]);
@@ -40,7 +39,6 @@ function CoinsPanel({ coinType, id }: CoinsPanelProps): JSX.Element {
         }
     }, [data]);
 
-    
     useEffect(() => {
         if (
             isIntersecting &&
