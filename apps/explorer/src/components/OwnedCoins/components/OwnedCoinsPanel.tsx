@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useRpcClient } from '@mysten/core';
 import { type PaginatedCoins, type CoinStruct } from '@mysten/sui.js';
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 
 import CoinItem from './CoinItem';
 
+import { useGetCoins } from '~/hooks/useGetCoins';
+import { useOnScreen } from '~/hooks/useOnScreen';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 
 type CoinsPanelProps = {
@@ -14,92 +15,67 @@ type CoinsPanelProps = {
     id: string;
 };
 
-const MAX_COIN_LIMIT = 10;
-
 function CoinsPanel({ coinType, id }: CoinsPanelProps): JSX.Element {
     const [coinObjects, setCoinObjects] = useState<CoinStruct[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
     const [hasNextPage, setHasNextPage] = useState<boolean>(false);
     const [nextCursor, setNextCursor] = useState<string | null>();
-    const [isVisible, setIsVisible] = useState(false);
-    const rpc = useRpcClient();
+    const { data, refetch, isLoading, isFetching } = useGetCoins(
+        coinType,
+        id,
+        nextCursor
+    );
 
     const update = (resp: PaginatedCoins) => {
         setCoinObjects((coinObjects) => [...coinObjects, ...resp.data]);
         setHasNextPage(resp.hasNextPage);
         setNextCursor(resp.nextCursor);
-        setIsLoading(false);
     };
 
     useEffect(() => {
-        setIsLoading(true);
-        rpc.getCoins({ owner: id, coinType, limit: MAX_COIN_LIMIT }).then((resp) => {
-            update(resp);
-        });
-    }, [id, coinType, rpc]);
+        if (data) {
+            update(data);
+        }
+    }, [data]);
 
-    const containerRef = useRef(null);
-
-    const options = useMemo(
-        () => ({
-            root: null,
-            rootMargin: '0px',
-            threshold: 1,
-        }),
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        undefined
-    );
-
-    const observer = useMemo(
-        () =>
-            new IntersectionObserver((entries) => {
-                const last = entries.pop();
-                last && setIsVisible(last.isIntersecting);
-            }, options),
-        [options]
-    );
+    const { containerRef, isIntersecting, observer } = useOnScreen();
 
     useEffect(() => {
-        const current = containerRef.current;
-
-        if (containerRef.current) {
-            observer.observe(containerRef.current);
+        if (
+            isIntersecting &&
+            hasNextPage &&
+            nextCursor &&
+            !isLoading &&
+            !isFetching
+        ) {
+            refetch();
+            observer?.disconnect();
         }
-
-        return () => {
-            if (current) {
-                observer.unobserve(current);
-            }
-        };
-    }, [containerRef, observer]);
-
-    useEffect(() => {
-        if (isVisible && hasNextPage && nextCursor && !isLoading) {
-            setIsLoading(true);
-            rpc.getCoins({
-                owner: id,
-                coinType,
-                limit: MAX_COIN_LIMIT,
-                cursor: nextCursor,
-            }).then((resp) => {
-                update(resp);
-            });
-        }
-    }, [isVisible, hasNextPage, nextCursor, isLoading, coinType, id, rpc]);
+    }, [
+        isIntersecting,
+        hasNextPage,
+        nextCursor,
+        isLoading,
+        isFetching,
+        refetch,
+        observer,
+    ]);
 
     return (
         <div>
             {coinObjects.map((obj, index) => {
                 if (index === coinObjects.length - 1) {
                     return (
-                        <div key={obj.coinObjectId} ref={containerRef}>
+                        <div
+                            key={`${obj.coinObjectId}-${index}`}
+                            ref={containerRef}
+                        >
                             <CoinItem coin={obj} />
                         </div>
                     );
                 }
                 return <CoinItem key={obj.coinObjectId} coin={obj} />;
             })}
-            {isLoading && <LoadingSpinner />}
+            {(isLoading || isFetching) && <LoadingSpinner />}
         </div>
     );
 }
