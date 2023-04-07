@@ -1816,12 +1816,9 @@ pub fn base_db_options() -> DBOptions {
         opt.set_max_open_files((limit / 8) as i32);
     }
 
-    let row_cache = rocksdb::Cache::new_lru_cache(300_000).expect("Cache is ok");
-    opt.set_row_cache(&row_cache);
-
     // The table cache is locked for updates and this determines the number
     // of shards, ie 2^6. Increase in case of lock contentions.
-    opt.set_table_cache_num_shard_bits(6);
+    opt.set_table_cache_num_shard_bits(10);
 
     opt.set_min_level_to_compress(2);
     opt.set_compression_type(rocksdb::DBCompressionType::Lz4);
