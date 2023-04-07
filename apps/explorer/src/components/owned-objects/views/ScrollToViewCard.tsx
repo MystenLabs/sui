@@ -5,22 +5,19 @@ import { useEffect, useRef, type ReactNode } from 'react';
 
 interface ScrollToViewCardProps {
     children: ReactNode;
-    strollTo: boolean;
+    inView: boolean;
 }
 
-export function ScrollToViewCard({
-    children,
-    strollTo,
-}: ScrollToViewCardProps) {
+export function ScrollToViewCard({ children, inView }: ScrollToViewCardProps) {
     const scrollViewRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
-        if (!scrollViewRef?.current || !strollTo) return;
+        if (!scrollViewRef?.current || !inView) return;
 
         scrollViewRef.current.scrollIntoView({
             behavior: 'smooth',
             block: 'nearest',
         });
-    }, [strollTo, scrollViewRef]);
+    }, [inView, scrollViewRef]);
     return <div ref={scrollViewRef}>{children}</div>;
 }

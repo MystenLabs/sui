@@ -210,7 +210,7 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
                                         ({ name, type }) => (
                                             <ScrollToViewCard
                                                 key={name}
-                                                strollTo={
+                                                inView={
                                                     name === activeFieldName
                                                 }
                                             >
