@@ -1322,10 +1322,10 @@ fn write_sep<T: Display>(
 ) -> std::fmt::Result {
     let mut xs = items.into_iter().peekable();
     while let Some(x) = xs.next() {
+        write!(f, "{x}")?;
         if xs.peek().is_some() {
             write!(f, "{sep}")?;
         }
-        write!(f, "{x}")?;
     }
     Ok(())
 }
