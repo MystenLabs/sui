@@ -119,29 +119,27 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
                                                 No results
                                             </div>
                                         )}
-                                        {normalizedStruct?.fields?.map(
-                                            ({ name }) => (
-                                                <Combobox.Option
-                                                    key={name}
-                                                    value={name}
-                                                    className="list-none md:min-w-fit"
-                                                >
-                                                    {({ active }) => (
-                                                        <button
-                                                            type="button"
-                                                            className={clsx(
-                                                                'mt-0.5 block w-full cursor-pointer rounded-md border px-1.5 py-2 text-left text-body',
-                                                                active
-                                                                    ? 'border-transparent bg-gray-40 text-steel-darker'
-                                                                    : 'border-transparent bg-white font-medium text-steel-darker'
-                                                            )}
-                                                        >
-                                                            {name}
-                                                        </button>
-                                                    )}
-                                                </Combobox.Option>
-                                            )
-                                        )}
+                                        {filteredFieldNames?.map(({ name }) => (
+                                            <Combobox.Option
+                                                key={name}
+                                                value={name}
+                                                className="list-none md:min-w-fit"
+                                            >
+                                                {({ active }) => (
+                                                    <button
+                                                        type="button"
+                                                        className={clsx(
+                                                            'mt-0.5 block w-full cursor-pointer rounded-md border px-1.5 py-2 text-left text-body',
+                                                            active
+                                                                ? 'border-transparent bg-gray-40 text-steel-darker'
+                                                                : 'border-transparent bg-white font-medium text-steel-darker'
+                                                        )}
+                                                    >
+                                                        {name}
+                                                    </button>
+                                                )}
+                                            </Combobox.Option>
+                                        ))}
                                     </Combobox.Options>
                                 </Combobox>
                                 <div className="max-h-[600px] min-h-full overflow-auto overflow-x-clip overflow-y-scroll py-3">
