@@ -43,7 +43,7 @@ export function useGetTransferAmount(txnData: SuiTransactionBlockResponse) {
 
     return {
         balanceChanges: changes,
-        coinType: change.coinType,
+        coinType: change?.coinType,
         gas,
         sender,
         amount,
