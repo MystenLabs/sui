@@ -222,7 +222,7 @@ impl SuiCommand {
                         println!(
                             "{} - {}",
                             validator.network_address(),
-                            validator.sui_address()
+                            validator.protocol_key_pair().public(),
                         );
                     }
                 }

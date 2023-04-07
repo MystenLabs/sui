@@ -8,6 +8,7 @@
 //! Example usage:
 //! sui fire-drill metadata-rotation \
 //! --sui-node-config-path validator.yaml \
+//! --account-key-path account.key \
 //! --fullnode-rpc-url http://fullnode-my-local-net:9000
 
 use anyhow::bail;
@@ -22,6 +23,7 @@ use sui_config::utils;
 use sui_config::{node::AuthorityKeyPairWithPath, Config, NodeConfig, PersistedConfig};
 use sui_framework::{SuiSystem, SystemPackage};
 use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionBlockResponseOptions};
+use sui_keys::keypair_file::read_keypair_from_file;
 use sui_sdk::{rpc_types::SuiTransactionBlockEffectsAPI, SuiClient, SuiClientBuilder};
 use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::crypto::{generate_proof_of_possession, get_key_pair, SuiKeyPair};
@@ -38,9 +40,12 @@ pub enum FireDrill {
 
 #[derive(Parser)]
 pub struct MetadataRotation {
-    /// Path to the existing sui node config.
+    /// Path to sui node config.
     #[clap(long = "sui-node-config-path")]
     sui_node_config_path: PathBuf,
+    /// Path to account key file.
+    #[clap(long = "account-key-path")]
+    account_key_path: PathBuf,
     /// Jsonrpc url for a reliable fullnode.
     #[clap(long = "fullnode-rpc-url")]
     fullnode_rpc_url: String,
@@ -58,9 +63,10 @@ pub async fn run_fire_drill(fire_drill: FireDrill) -> anyhow::Result<()> {
 async fn run_metadata_rotation(metadata_rotation: MetadataRotation) -> anyhow::Result<()> {
     let MetadataRotation {
         sui_node_config_path,
+        account_key_path,
         fullnode_rpc_url,
     } = metadata_rotation;
-
+    let account_key = read_keypair_from_file(&account_key_path)?;
     let config: NodeConfig = PersistedConfig::read(&sui_node_config_path).map_err(|err| {
         err.context(format!(
             "Cannot open Sui Node Config file at {:?}",
@@ -69,13 +75,14 @@ async fn run_metadata_rotation(metadata_rotation: MetadataRotation) -> anyhow::R
     })?;
 
     let sui_client = SuiClientBuilder::default().build(fullnode_rpc_url).await?;
-    let sui_address = config.sui_address();
+    let sui_address = SuiAddress::from(&account_key.public());
     let starting_epoch = current_epoch(&sui_client).await?;
     info!("Running Metadata Rotation fire drill for validator address {sui_address} in epoch {starting_epoch}.");
 
     // Prepare new metadata for next epoch
     let new_config_path =
-        update_next_epoch_metadata(&sui_node_config_path, &config, &sui_client).await?;
+        update_next_epoch_metadata(&sui_node_config_path, &config, &sui_client, &account_key)
+            .await?;
 
     let current_epoch = current_epoch(&sui_client).await?;
     if current_epoch > starting_epoch {
@@ -114,6 +121,7 @@ async fn update_next_epoch_metadata(
     sui_node_config_path: &Path,
     config: &NodeConfig,
     sui_client: &SuiClient,
+    account_key: &SuiKeyPair,
 ) -> anyhow::Result<PathBuf> {
     // Save backup config just in case
     let mut backup_config_path = sui_node_config_path.to_path_buf();
@@ -122,14 +130,14 @@ async fn update_next_epoch_metadata(
     let backup_config = config.clone();
     backup_config.persisted(&backup_config_path).save()?;
 
-    let sui_address = config.sui_address();
+    let sui_address = SuiAddress::from(&account_key.public());
 
     let mut new_config = config.clone();
 
     // protocol key
     let new_protocol_key_pair = get_authority_key_pair().1;
     let new_protocol_key_pair_copy = new_protocol_key_pair.copy();
-    let pop = generate_proof_of_possession(&new_protocol_key_pair, config.sui_address());
+    let pop = generate_proof_of_possession(&new_protocol_key_pair, sui_address);
     new_config.protocol_key_pair = AuthorityKeyPairWithPath::new(new_protocol_key_pair);
 
     // network key
@@ -217,7 +225,7 @@ async fn update_next_epoch_metadata(
 
     // update protocol pubkey on chain
     update_metadata_on_chain(
-        config,
+        account_key,
         "update_validator_next_epoch_protocol_pubkey",
         vec![
             CallArg::Pure(
@@ -225,73 +233,66 @@ async fn update_next_epoch_metadata(
             ),
             CallArg::Pure(bcs::to_bytes(&pop.as_bytes().to_vec()).unwrap()),
         ],
-        config.sui_address(),
         sui_client,
     )
     .await?;
 
     // update network pubkey on chain
     update_metadata_on_chain(
-        config,
+        account_key,
         "update_validator_next_epoch_network_pubkey",
         vec![CallArg::Pure(
             bcs::to_bytes(&new_network_key_pair_copy.public().as_bytes().to_vec()).unwrap(),
         )],
-        config.sui_address(),
         sui_client,
     )
     .await?;
 
     // update worker pubkey on chain
     update_metadata_on_chain(
-        config,
+        account_key,
         "update_validator_next_epoch_worker_pubkey",
         vec![CallArg::Pure(
             bcs::to_bytes(&new_worker_key_pair_copy.public().as_bytes().to_vec()).unwrap(),
         )],
-        config.sui_address(),
         sui_client,
     )
     .await?;
 
     // update network address
     update_metadata_on_chain(
-        config,
+        account_key,
         "update_validator_next_epoch_network_address",
         vec![CallArg::Pure(bcs::to_bytes(&new_network_address).unwrap())],
-        config.sui_address(),
         sui_client,
     )
     .await?;
 
     // update p2p address
     update_metadata_on_chain(
-        config,
+        account_key,
         "update_validator_next_epoch_p2p_address",
         vec![CallArg::Pure(bcs::to_bytes(&new_external_address).unwrap())],
-        config.sui_address(),
         sui_client,
     )
     .await?;
 
     // update primary address
     update_metadata_on_chain(
-        config,
+        account_key,
         "update_validator_next_epoch_primary_address",
         vec![CallArg::Pure(
             bcs::to_bytes(&new_primary_addresses).unwrap(),
         )],
-        config.sui_address(),
         sui_client,
     )
     .await?;
 
     // update worker address
     update_metadata_on_chain(
-        config,
+        account_key,
         "update_validator_next_epoch_worker_address",
         vec![CallArg::Pure(bcs::to_bytes(&new_worker_addresses).unwrap())],
-        config.sui_address(),
         sui_client,
     )
     .await?;
@@ -300,12 +301,12 @@ async fn update_next_epoch_metadata(
 }
 
 async fn update_metadata_on_chain(
-    config: &NodeConfig,
+    account_key: &SuiKeyPair,
     function: &'static str,
     call_args: Vec<CallArg>,
-    sui_address: SuiAddress,
     sui_client: &SuiClient,
 ) -> anyhow::Result<()> {
+    let sui_address = SuiAddress::from(&account_key.public());
     let gas_obj_ref = get_gas_obj_ref(sui_address, sui_client, 10000 * 100).await?;
     let mut args = vec![CallArg::Object(ObjectArg::SharedObject {
         id: SUI_SYSTEM_STATE_OBJECT_ID,
@@ -314,7 +315,7 @@ async fn update_metadata_on_chain(
     })];
     args.extend(call_args);
     let tx_data = TransactionData::new_move_call(
-        config.sui_address(),
+        sui_address,
         SuiSystem::ID,
         ident_str!("sui_system").to_owned(),
         ident_str!(function).to_owned(),
@@ -325,23 +326,20 @@ async fn update_metadata_on_chain(
         1,
     )
     .unwrap();
-    execute_tx(config, sui_client, tx_data, function).await?;
+    execute_tx(account_key, sui_client, tx_data, function).await?;
     tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
     Ok(())
 }
 
 async fn execute_tx(
-    config: &NodeConfig,
+    account_key: &SuiKeyPair,
     sui_client: &SuiClient,
     tx_data: TransactionData,
     action: &str,
 ) -> anyhow::Result<()> {
-    let tx = Transaction::from_data_and_signer(
-        tx_data,
-        Intent::sui_transaction(),
-        vec![config.account_key_pair()],
-    )
-    .verify()?;
+    let tx =
+        Transaction::from_data_and_signer(tx_data, Intent::sui_transaction(), vec![account_key])
+            .verify()?;
     info!("Executing {:?}", tx.digest());
     let tx_digest = *tx.digest();
     let resp = sui_client

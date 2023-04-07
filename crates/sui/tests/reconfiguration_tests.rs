@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use fastcrypto::ed25519::Ed25519KeyPair;
 use futures::future::join_all;
 use move_core_types::ident_str;
 use mysten_metrics::RegistryService;
 use prometheus::Registry;
 use rand::{rngs::StdRng, SeedableRng};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_config::builder::ConfigBuilder;
@@ -534,6 +535,7 @@ async fn test_validator_candidate_pool_read() {
         gas_objects[3].compute_object_reference(),
         new_node_config,
         new_validator.verified_metadata(),
+        &new_validator_key,
     )
     .await;
     // Check that the candidate can be found in the candidate table now.
@@ -740,6 +742,7 @@ async fn test_reconfig_with_committee_change_basic() {
         stake.compute_object_reference(),
         new_node_config,
         new_validator.verified_metadata(),
+        &new_validator_key,
     )
     .await;
 
@@ -775,7 +778,7 @@ async fn test_reconfig_with_committee_change_basic() {
     let _effects = execute_leave_committee_tx(
         &authorities,
         gas_objects[3].compute_object_reference(),
-        new_node_config,
+        &new_validator_key,
     )
     .await;
 
@@ -802,6 +805,10 @@ async fn test_reconfig_with_committee_change_stress() {
     // This needs to be written to genesis for all validators, present and future
     // (either that or we create these objects via Transaction later, but that's more work)
     let all_validator_keys = gen_keys(11);
+    let address_key_mapping: BTreeMap<SuiAddress, Ed25519KeyPair> = all_validator_keys
+        .iter()
+        .map(|key| (key.public().into(), key.copy()))
+        .collect();
 
     let object_set: HashMap<SuiAddress, (Vec<Object>, Object)> = all_validator_keys
         .iter()
@@ -863,6 +870,15 @@ async fn test_reconfig_with_committee_change_stress() {
         .with_validator_account_keys(all_validator_keys)
         .with_objects(genesis_objects.clone())
         .build();
+    let validator_superset_mapping = validator_superset
+        .genesis
+        .validator_set_for_tooling()
+        .into_iter()
+        .map(|v| {
+            let name: AuthorityName = v.verified_metadata().sui_pubkey_bytes();
+            (name, v.verified_metadata().sui_address)
+        })
+        .collect::<HashMap<_, _>>();
 
     let mut validator_handles = spawn_test_authorities(&initial_network).await;
     assert_eq!(validator_handles.len(), 5);
@@ -938,7 +954,7 @@ async fn test_reconfig_with_committee_change_stress() {
 
         // request to add new validators
         for (validator, node_config) in joining_validators.clone() {
-            let sender = node_config.sui_address();
+            let sender = validator.verified_metadata().sui_address;
             let (gas_objects, stake) = object_map.get(&sender).unwrap();
             let effects = execute_join_committee_txes(
                 &validator_handles,
@@ -946,6 +962,7 @@ async fn test_reconfig_with_committee_change_stress() {
                 *stake,
                 node_config,
                 validator.verified_metadata(),
+                address_key_mapping.get(&sender).unwrap(),
             )
             .await;
 
@@ -961,16 +978,15 @@ async fn test_reconfig_with_committee_change_stress() {
         // last 2 validators request to leave
         let auth_len = validator_handles.len();
         for auth in &validator_handles[auth_len - 2..] {
-            let node_config = validator_superset
-                .validator_configs()
-                .iter()
-                .find(|config| config.protocol_public_key() == auth.with(|node| node.state().name))
-                .unwrap();
-
-            let sender = node_config.sui_address();
-            let (gas_objects, stake) = object_map.get(&sender).unwrap();
-            let effects =
-                execute_leave_committee_tx(&validator_handles, gas_objects[3], node_config).await;
+            let name = auth.with(|node| node.state().name);
+            let sender = validator_superset_mapping.get(&name).unwrap();
+            let (gas_objects, stake) = object_map.get(sender).unwrap();
+            let effects = execute_leave_committee_tx(
+                &validator_handles,
+                gas_objects[3],
+                address_key_mapping.get(sender).unwrap(),
+            )
+            .await;
 
             let gas_objects = vec![
                 gas_objects[0],
@@ -978,7 +994,7 @@ async fn test_reconfig_with_committee_change_stress() {
                 gas_objects[2],
                 effects.gas_object().0,
             ];
-            object_map.insert(sender, (gas_objects, *stake));
+            object_map.insert(*sender, (gas_objects, *stake));
         }
 
         trigger_reconfiguration(&validator_handles).await;
@@ -1132,6 +1148,7 @@ async fn execute_add_validator_candidate_tx(
     gas_object: ObjectRef,
     node_config: &NodeConfig,
     val: &VerifiedValidatorMetadataV1,
+    account_kp: &Ed25519KeyPair,
 ) -> CertifiedTransactionEffects {
     let sender = val.sui_address;
     let proof_of_possession = generate_proof_of_possession(node_config.protocol_key_pair(), sender);
@@ -1167,8 +1184,7 @@ async fn execute_add_validator_candidate_tx(
         GAS_BUDGET,
     )
     .unwrap();
-    let transaction =
-        to_sender_signed_transaction(candidate_tx_data, node_config.account_key_pair());
+    let transaction = to_sender_signed_transaction(candidate_tx_data, account_kp);
     let effects = execute_transaction_block(authorities, transaction)
         .await
         .unwrap();
@@ -1182,14 +1198,21 @@ async fn execute_join_committee_txes(
     stake: ObjectRef,
     node_config: &NodeConfig,
     val: &VerifiedValidatorMetadataV1,
+    account_kp: &Ed25519KeyPair,
 ) -> Vec<CertifiedTransactionEffects> {
     assert_eq!(node_config.protocol_public_key(), val.sui_pubkey_bytes());
     let mut effects_ret = vec![];
     let sender = val.sui_address;
 
     // Step 1: Add the new node as a validator candidate.
-    let effects =
-        execute_add_validator_candidate_tx(authorities, gas_objects[0], node_config, val).await;
+    let effects = execute_add_validator_candidate_tx(
+        authorities,
+        gas_objects[0],
+        node_config,
+        val,
+        account_kp,
+    )
+    .await;
 
     effects_ret.push(effects);
 
@@ -1213,7 +1236,7 @@ async fn execute_join_committee_txes(
         GAS_BUDGET,
     )
     .unwrap();
-    let transaction = to_sender_signed_transaction(stake_tx_data, node_config.account_key_pair());
+    let transaction = to_sender_signed_transaction(stake_tx_data, account_kp);
     let effects = execute_transaction_block(authorities, transaction)
         .await
         .unwrap();
@@ -1237,8 +1260,7 @@ async fn execute_join_committee_txes(
         GAS_BUDGET,
     )
     .unwrap();
-    let transaction =
-        to_sender_signed_transaction(activation_tx_data, node_config.account_key_pair());
+    let transaction = to_sender_signed_transaction(activation_tx_data, account_kp);
     let effects = execute_transaction_block(authorities, transaction)
         .await
         .unwrap();
@@ -1251,10 +1273,11 @@ async fn execute_join_committee_txes(
 async fn execute_leave_committee_tx(
     authorities: &[SuiNodeHandle],
     gas: ObjectRef,
-    node_config: &NodeConfig,
+    account_kp: &Ed25519KeyPair,
 ) -> CertifiedTransactionEffects {
+    let sui_address: SuiAddress = account_kp.public().into();
     let tx_data = TransactionData::new_move_call_with_dummy_gas_price(
-        node_config.sui_address(),
+        sui_address,
         SuiSystem::ID,
         ident_str!("sui_system").to_owned(),
         ident_str!("request_remove_validator").to_owned(),
@@ -1269,7 +1292,7 @@ async fn execute_leave_committee_tx(
     )
     .unwrap();
 
-    let transaction = to_sender_signed_transaction(tx_data, node_config.account_key_pair());
+    let transaction = to_sender_signed_transaction(tx_data, account_kp);
     let effects = execute_transaction_block(authorities, transaction)
         .await
         .unwrap();
