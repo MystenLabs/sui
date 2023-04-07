@@ -71,7 +71,7 @@ export function useGetRollingAverageApys(numberOfValidators: number | null) {
             }
             const { stakeSubsidyStartEpoch, epoch, activeValidators } =
                 data || {};
-            // return 0 for all validators if the stake subsidy has not started yet
+            // return 0 for all validators if the epoch is less than the stake subsidy start epoch
             if (epoch < stakeSubsidyStartEpoch) {
                 return activeValidators.reduce((acc, validator) => {
                     acc[validator.suiAddress] = 0;
@@ -79,10 +79,11 @@ export function useGetRollingAverageApys(numberOfValidators: number | null) {
                 }, {} as ApyByValidator);
             }
 
-            // The rolling average should start from the stake subsidy start epoch
+            // The rolling average epoch is the current epoch - the stake subsidy start epoch
             const rollingAverageFromSubsidy =
                 ROLLING_AVERAGE - stakeSubsidyStartEpoch;
-            // If the rolling average is less than 0, set it to 0
+
+            // prevent negative rolling average epoch by setting it to 0
             const avgRollingAvgAfterSubsidy =
                 rollingAverageFromSubsidy < 0 ? 0 : rollingAverageFromSubsidy;
             const apyGroups: ApyGroups = {};
