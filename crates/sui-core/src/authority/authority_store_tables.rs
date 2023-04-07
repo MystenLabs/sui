@@ -406,7 +406,7 @@ fn owned_object_transaction_locks_table_default_config() -> DBOptions {
 fn objects_table_default_config() -> DBOptions {
     DBOptions {
         options: optimized_for_high_throughput_options(
-            read_size_from_env(ENV_VAR_OBJECTS_BLOCK_CACHE_SIZE).unwrap_or(5 * 1024),
+            read_size_from_env(ENV_VAR_OBJECTS_BLOCK_CACHE_SIZE).unwrap_or(10 * 1024),
             false,
         )
         .options,

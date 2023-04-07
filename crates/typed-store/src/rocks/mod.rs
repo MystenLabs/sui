@@ -1797,7 +1797,7 @@ pub fn base_db_options() -> DBOptions {
     let mut opt = rocksdb::Options::default();
 
     opt.enable_statistics();
-    opt.set_stats_dump_period_sec(60);
+    //opt.set_stats_dump_period_sec(300);
 
     // One common issue when running tests on Mac is that the default ulimit is too low,
     // leading to I/O errors such as "Too many open files". Raising fdlimit to bypass it.
@@ -1808,7 +1808,7 @@ pub fn base_db_options() -> DBOptions {
 
     // The table cache is locked for updates and this determines the number
     // of shards, ie 2^6. Increase in case of lock contentions.
-    opt.set_table_cache_num_shard_bits(10);
+    opt.set_table_cache_num_shard_bits(6);
 
     opt.set_min_level_to_compress(2);
     opt.set_compression_type(rocksdb::DBCompressionType::Lz4);
