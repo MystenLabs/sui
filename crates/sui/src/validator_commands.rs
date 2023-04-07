@@ -14,7 +14,7 @@ use sui_framework::{SuiSystem, SystemPackage};
 
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
-    crypto::{AuthorityPublicKey, NetworkPublicKey},
+    crypto::{AuthorityPublicKey, NetworkPublicKey, Signable, DEFAULT_EPOCH_ID},
     multiaddr::Multiaddr,
     object::Owner,
     sui_system_state::{
@@ -28,10 +28,13 @@ use crate::client_commands::WalletContext;
 use crate::fire_drill::get_gas_obj_ref;
 use clap::*;
 use colored::Colorize;
-use fastcrypto::traits::KeyPair;
 use fastcrypto::traits::ToFromBytes;
+use fastcrypto::{
+    encoding::{Base64, Encoding},
+    traits::KeyPair,
+};
 use serde::Serialize;
-use shared_crypto::intent::Intent;
+use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
@@ -134,6 +137,17 @@ pub enum SuiValidatorCommand {
         #[clap(name = "gas-budget", long)]
         gas_budget: Option<u64>,
     },
+    /// Serialize the payload that is used to generate Proof of Possession.
+    /// This is useful to take the payload offline for an Authority protocol keypair to sign.
+    #[clap(name = "serialize-payload-pop")]
+    SerializePayloadForPoP {
+        /// Authority account address encoded in hex with 0x prefix.
+        #[clap(name = "account-address", long)]
+        account_address: SuiAddress,
+        /// Authority protocol public key encoded in hex.
+        #[clap(name = "protocol-public-key", long)]
+        protocol_public_key: AuthorityPublicKeyBytes,
+    },
 }
 
 #[derive(Serialize)]
@@ -147,6 +161,7 @@ pub enum SuiValidatorCommandResponse {
     UpdateMetadata(SuiTransactionBlockResponse),
     UpdateGasPrice(SuiTransactionBlockResponse),
     ReportValidator(SuiTransactionBlockResponse),
+    SerializedPayload(String),
 }
 
 fn make_key_files(
@@ -375,6 +390,22 @@ impl SuiValidatorCommand {
                 .await?;
                 SuiValidatorCommandResponse::ReportValidator(resp)
             }
+
+            SuiValidatorCommand::SerializePayloadForPoP {
+                account_address,
+                protocol_public_key,
+            } => {
+                let mut msg: Vec<u8> = Vec::new();
+                msg.extend_from_slice(protocol_public_key.as_bytes());
+                msg.extend_from_slice(account_address.as_ref());
+                let mut intent_msg_bytes = bcs::to_bytes(&IntentMessage::new(
+                    Intent::sui_app(IntentScope::ProofOfPossession),
+                    msg,
+                ))
+                .expect("Message serialization should not fail");
+                DEFAULT_EPOCH_ID.write(&mut intent_msg_bytes);
+                SuiValidatorCommandResponse::SerializedPayload(Base64::encode(&intent_msg_bytes))
+            }
         });
         ret
     }
@@ -586,6 +617,9 @@ impl Display for SuiValidatorCommandResponse {
             }
             SuiValidatorCommandResponse::ReportValidator(response) => {
                 write!(writer, "{}", write_transaction_response(response)?)?;
+            }
+            SuiValidatorCommandResponse::SerializedPayload(response) => {
+                write!(writer, "Serialized payload: {}", response)?;
             }
         }
         write!(f, "{}", writer.trim_end_matches('\n'))
