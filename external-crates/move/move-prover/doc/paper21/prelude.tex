@@ -1,0 +1,200 @@
+
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{inconsolata}
+\usepackage{relsize}
+%\usepackage{amsmath,amssymb,array}
+\usepackage{mathpartir}
+\usepackage{graphicx}
+\usepackage{xspace}
+\usepackage{xurl}
+%\usepackage{breakurl}
+%\def\UrlBreaks{\do\/\do-}
+\usepackage{caption}
+\usepackage{bbding}
+\usepackage[paperheight=235mm, paperwidth=155mm,textwidth=12.2cm,textheight=19.3cm]{geometry}
+
+\usepackage[bookmarks,unicode,colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue]{hyperref}
+%\makeatletter
+%\RequirePackage[bookmarks,unicode,colorlinks=true]{hyperref}%
+%   \def\@citecolor{blue}%
+%   \def\@urlcolor{blue}%
+%   \def\@linkcolor{blue}%
+\def\UrlFont{\rmfamily}
+%\def\orcidID#1{\smash{\href{http://orcid.org/#1}{\protect\raisebox{-1.25pt}{\protect\includegraphics{orcid_color.eps}}}}}
+%\makeatother
+
+
+
+\newcommand{\Section}[1]{\vspace{-0.5ex}\section{#1}}
+\newcommand{\SubSection}[1]{\vspace{-1.0ex}\subsection{#1}}
+\newcommand{\Paragraph}[1]{\vspace{-1.0ex}\subsubsection{#1}} % lncs
+
+\newcommand{\TODO}[2]{%
+  \noindent\textcolor{gray}{%
+      {\scriptsize\textbf{TODO(#1)}: #2}
+  }
+}
+
+\setlength{\belowcaptionskip}{-1ex}
+\setlength{\textfloatsep}{0.2ex}
+\newenvironment{Figure}{
+  \begin{figure}[tb]
+} {
+  \end{figure}
+}
+
+\newcommand{\MVP}[0]{\textsf{MVP}\xspace}
+\newcommand{\solidity}[0]{\textsf{Solidity}\xspace}
+\newcommand{\kay}[0]{\textsf{K}\xspace}
+\newcommand{\fstar}[0]{\textsf{f*}\xspace}
+
+
+
+% Source Transformation
+
+\newcommand{\transform}[0]{\Large{$\leadsto$}}
+
+
+%%%% Code
+
+\usepackage[charter]{mathdesign}
+%\def\rmdefault{bch}
+%\def\ttdefault{blg}
+
+\lstdefinestyle{MoveStyle}{
+  basicstyle=\ttfamily,
+  keywordstyle=\color{black}, % don't bold keywords which is the default
+  escapechar=@, % use to embed LaTeX into code
+  breaklines=true,
+}
+
+
+\lstdefinelanguage{Move}{
+  morekeywords={
+    abort,
+    aborts_if,
+    acquires,
+    address,
+    as,
+    assert,
+    assume,
+    borrow_global,
+    borrow_global_mut,
+    break,
+    const,
+    continue,
+    copy,
+    copyable,
+    define,
+    drop,
+    else,
+    ensures,
+    exists,
+    false,
+    forall,
+    friend,
+    fun,
+    global,
+    has,
+    havoc,
+    if,
+    include,
+    invariant,
+    key,
+    let,
+    loop,
+    modifies,
+    module,
+    move,
+    move_from,
+    move_to,
+    mut,
+    native,
+    num,
+    old,
+    onabort,
+    pragma,
+    public,
+    requires,
+    resource,
+    return,
+    schema,
+    script,
+    signer,
+    spec,
+    store,
+    struct,
+    true,
+    u8,
+    u64,
+    u128,
+    update,
+    use,
+    with,
+    where,
+    while},
+  sensitive=true,
+  morecomment=[l]{//},
+  morecomment=[s]{/*}{*/},
+}
+
+% This allows us to use |<move code>| for inline code.
+\lstMakeShortInline[language=Move,style=MoveStyle]|
+
+
+% This defines a new environment for Move code.
+\lstnewenvironment{Move}{
+  \lstset{
+    language=Move,
+    style=MoveStyle,
+    basicstyle=\relsize{-1}\ttfamily,
+    keywordstyle=\color{blue},
+  }
+}{
+}
+
+% This defines a new environment for Move code in a box, without line numbers.
+\lstnewenvironment{MoveBox}{
+  \lstset{
+    language=Move,
+    style=MoveStyle,
+    basicstyle=\relsize{-1}\ttfamily,
+    keywordstyle=\color{blue},
+    %numbers=left,
+    %numberstyle=\scriptsize\color{gray},
+    %frame=single,
+  }
+}{
+}
+
+% This defines a new environment for Move code in a box, with line numbers.
+\lstnewenvironment{MoveBoxNumbered}{
+  \lstset{
+    language=Move,
+    style=MoveStyle,
+    basicstyle=\relsize{-1}\ttfamily,
+    keywordstyle=\color{blue},
+    numbers=left,
+    numberstyle=\scriptsize\color{gray},
+    %frame=single,
+  }
+}{
+}
+
+% This defines a new environment for diagnostics as produced by the prover.
+\lstnewenvironment{MoveDiag}{
+  \lstset{
+    style=MoveStyle,
+    basicstyle=\relsize{-2}\ttfamily,
+  }
+}{
+}
+
+
+
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "main"
+%%% End:

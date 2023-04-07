@@ -1,0 +1,19 @@
+//# run
+main() {
+    let x: u64;
+label b0:
+    jump_if (true) b2;
+label b1:
+    x = 0;
+    jump b5;
+label b2:
+    jump_if (false) b4;
+label b3:
+    return;
+label b4:
+    return;
+label b5:
+    // valid copy, other branches return
+    assert(copy(x) == 5, 42);
+    return;
+}

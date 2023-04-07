@@ -77,6 +77,14 @@ pub struct PendingCheckpoint {
     pub details: PendingCheckpointInfo,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BuilderCheckpointSummary {
+    pub summary: CheckpointSummary,
+    // Commit form which this checkpoint summary was built. None for genesis checkpoint
+    pub commit_height: Option<CheckpointCommitHeight>,
+    pub position_in_commit: usize,
+}
+
 #[derive(DBMapUtils)]
 pub struct CheckpointStore {
     /// Maps checkpoint contents digest to checkpoint contents
@@ -268,9 +276,8 @@ impl CheckpointStore {
         &self,
         checkpoint: &VerifiedCheckpoint,
     ) -> Result<(), TypedStoreError> {
-        let mut batch = self
-            .certified_checkpoints
-            .batch()
+        let mut batch = self.certified_checkpoints.batch();
+        batch
             .insert_batch(
                 &self.certified_checkpoints,
                 [(checkpoint.sequence_number(), checkpoint.serializable_ref())],
@@ -280,7 +287,7 @@ impl CheckpointStore {
                 [(checkpoint.digest(), checkpoint.serializable_ref())],
             )?;
         if checkpoint.next_epoch_committee().is_some() {
-            batch = batch.insert_batch(
+            batch.insert_batch(
                 &self.epoch_last_checkpoint_map,
                 [(&checkpoint.epoch(), checkpoint.sequence_number())],
             )?;
@@ -383,6 +390,25 @@ impl CheckpointStore {
             .checkpoint_db(path)
             .map_err(SuiError::StorageError)
     }
+
+    pub fn delete_highest_executed_checkpoint_test_only(&self) -> Result<(), TypedStoreError> {
+        let mut wb = self.watermarks.batch();
+        wb.delete_batch(
+            &self.watermarks,
+            std::iter::once(CheckpointWatermark::HighestExecuted),
+        )?;
+        wb.write()?;
+        Ok(())
+    }
+
+    pub fn reset_db_for_execution_since_genesis(&self) -> SuiResult {
+        self.delete_highest_executed_checkpoint_test_only()?;
+        self.watermarks
+            .rocksdb
+            .flush()
+            .map_err(SuiError::StorageError)?;
+        Ok(())
+    }
 }
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
@@ -467,9 +493,9 @@ impl CheckpointBuilder {
                 }
                 Ok(false) => (),
             };
-            let mut last_processed_height: Option<u64> = None;
-            for (height, pending) in self.epoch_store.get_pending_checkpoints() {
-                last_processed_height = Some(height);
+            let mut last = self.epoch_store.last_built_checkpoint_commit_height();
+            for (height, pending) in self.epoch_store.get_pending_checkpoints(last) {
+                last = Some(height);
                 debug!("Making checkpoint at commit height {height}");
                 if let Err(e) = self.make_checkpoint(height, pending).await {
                     error!("Error while making checkpoint, will retry in 1s: {:?}", e);
@@ -478,7 +504,7 @@ impl CheckpointBuilder {
                     continue 'main;
                 }
             }
-            debug!("Waiting for more checkpoints from consensus after processing {last_processed_height:?}");
+            debug!("Waiting for more checkpoints from consensus after processing {last:?}");
             match select(self.exit.changed().boxed(), self.notify.notified().boxed()).await {
                 Either::Left(_) => {
                     // break loop on exit signal
@@ -538,7 +564,7 @@ impl CheckpointBuilder {
                 .last_constructed_checkpoint
                 .set(sequence_number as i64);
 
-            batch = batch.insert_batch(
+            batch.insert_batch(
                 &self.tables.checkpoint_content,
                 [(contents.digest(), contents)],
             )?;
@@ -546,7 +572,7 @@ impl CheckpointBuilder {
         batch.write()?;
         self.notify_aggregator.notify_one();
         self.epoch_store
-            .process_pending_checkpoint(height, &new_checkpoint)?;
+            .process_pending_checkpoint(height, new_checkpoint)?;
         Ok(())
     }
 
@@ -817,6 +843,8 @@ impl CheckpointBuilder {
                 previous_gas_costs.computation_cost + current_gas_costs.computation_cost,
                 previous_gas_costs.storage_cost + current_gas_costs.storage_cost,
                 previous_gas_costs.storage_rebate + current_gas_costs.storage_rebate,
+                previous_gas_costs.non_refundable_storage_fee
+                    + current_gas_costs.non_refundable_storage_fee,
             )
         } else {
             current_gas_costs
@@ -1179,12 +1207,13 @@ impl CheckpointServiceNotify for CheckpointService {
     ) -> SuiResult {
         let sequence = info.summary.sequence_number;
         let signer = info.summary.auth_sig().authority.concise();
-        if let Some((last_certified, _)) = self
+        if let Some(last_certified) = self
             .tables
             .certified_checkpoints
-            .iter()
+            .keys()
             .skip_to_last()
             .next()
+            .transpose()?
         {
             if sequence <= last_certified {
                 debug!(
@@ -1338,19 +1367,19 @@ mod tests {
         let mut store = HashMap::<TransactionDigest, TransactionEffects>::new();
         store.insert(
             d(1),
-            e(d(1), vec![d(2), d(3)], GasCostSummary::new(11, 12, 13)),
+            e(d(1), vec![d(2), d(3)], GasCostSummary::new(11, 12, 11, 1)),
         );
         store.insert(
             d(2),
-            e(d(2), vec![d(3), d(4)], GasCostSummary::new(21, 22, 23)),
+            e(d(2), vec![d(3), d(4)], GasCostSummary::new(21, 22, 21, 1)),
         );
-        store.insert(d(3), e(d(3), vec![], GasCostSummary::new(31, 32, 33)));
-        store.insert(d(4), e(d(4), vec![], GasCostSummary::new(41, 42, 43)));
+        store.insert(d(3), e(d(3), vec![], GasCostSummary::new(31, 32, 31, 1)));
+        store.insert(d(4), e(d(4), vec![], GasCostSummary::new(41, 42, 41, 1)));
         for i in [10, 11, 12, 13] {
-            store.insert(d(i), e(d(i), vec![], GasCostSummary::new(41, 42, 43)));
+            store.insert(d(i), e(d(i), vec![], GasCostSummary::new(41, 42, 41, 1)));
         }
         for i in [15, 16, 17] {
-            store.insert(d(i), e(d(i), vec![], GasCostSummary::new(51, 52, 53)));
+            store.insert(d(i), e(d(i), vec![], GasCostSummary::new(51, 52, 51, 1)));
         }
         let all_digests: Vec<_> = store.keys().copied().collect();
         for digest in all_digests {
@@ -1410,7 +1439,7 @@ mod tests {
         assert_eq!(c1s.sequence_number, 0);
         assert_eq!(
             c1s.epoch_rolling_gas_cost_summary,
-            GasCostSummary::new(41, 42, 43)
+            GasCostSummary::new(41, 42, 41, 1)
         );
 
         assert_eq!(c2t, vec![d(3), d(2), d(1)]);
@@ -1418,7 +1447,7 @@ mod tests {
         assert_eq!(c2s.sequence_number, 1);
         assert_eq!(
             c2s.epoch_rolling_gas_cost_summary,
-            GasCostSummary::new(104, 108, 112)
+            GasCostSummary::new(104, 108, 104, 4)
         );
 
         // Pending at index 2 had 4 transactions, and we configured 3 transactions max.

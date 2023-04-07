@@ -50,6 +50,7 @@ use tap::Pipe;
 use thiserror::Error;
 use tracing::trace;
 
+// TODO: use RGP instead.
 pub const DUMMY_GAS_PRICE: u64 = 1;
 
 const BLOCKED_MOVE_FUNCTIONS: [(ObjectID, &str, &str); 0] = [];
@@ -821,6 +822,18 @@ impl TransactionKind {
         )
     }
 
+    /// If this is advance epoch transaction, returns (total gas charged, total gas rebated).
+    /// TODO: We should use GasCostSummary directly in ChangeEpoch struct, and return that
+    /// directly.
+    pub fn get_advance_epoch_tx_gas_summary(&self) -> Option<(u64, u64)> {
+        match self {
+            Self::ChangeEpoch(e) => {
+                Some((e.computation_charge + e.storage_charge, e.storage_rebate))
+            }
+            _ => None,
+        }
+    }
+
     pub fn contains_shared_object(&self) -> bool {
         self.shared_input_objects().next().is_some()
     }
@@ -1509,6 +1522,9 @@ pub trait TransactionDataAPI {
     fn is_change_epoch_tx(&self) -> bool;
     fn is_genesis_tx(&self) -> bool;
 
+    /// Check if the transaction is sponsored (namely gas owner != sender)
+    fn is_sponsored_tx(&self) -> bool;
+
     #[cfg(test)]
     fn sender_mut(&mut self) -> &mut SuiAddress;
 
@@ -1611,6 +1627,11 @@ impl TransactionDataAPI for TransactionDataV1 {
     fn validity_check_no_gas_check(&self, config: &ProtocolConfig) -> UserInputResult {
         self.kind().validity_check(config)?;
         self.check_sponsorship()
+    }
+
+    /// Check if the transaction is sponsored (namely gas owner != sender)
+    fn is_sponsored_tx(&self) -> bool {
+        self.gas_owner() != self.sender
     }
 
     /// Check if the transaction is compliant with sponsorship.
@@ -1855,6 +1876,10 @@ impl<S> Envelope<SenderSignedData, S> {
     pub fn is_system_tx(&self) -> bool {
         self.data().intent_message().value.is_system_tx()
     }
+
+    pub fn is_sponsored_tx(&self) -> bool {
+        self.data().intent_message().value.is_sponsored_tx()
+    }
 }
 
 impl Transaction {
@@ -1962,7 +1987,7 @@ impl VerifiedTransaction {
             .pipe(|data| {
                 SenderSignedData::new_from_sender_signature(
                     data,
-                    Intent::default(),
+                    Intent::sui_transaction(),
                     Ed25519SuiSignature::from_bytes(&[0; Ed25519SuiSignature::LENGTH])
                         .unwrap()
                         .into(),
@@ -2210,6 +2235,12 @@ pub struct HandleCertificateResponse {
     pub events: TransactionEvents,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SubmitCertificateResponse {
+    /// If transaction is already executed, return same result as handle_certificate
+    pub executed: Option<HandleCertificateResponse>,
+}
+
 #[derive(Clone, Debug)]
 pub struct VerifiedHandleCertificateResponse {
     pub signed_effects: VerifiedSignedTransactionEffects,
@@ -2371,6 +2402,13 @@ pub enum ExecutionFailureStatus {
 
     #[error("Invalid package upgrade. {upgrade_error}")]
     PackageUpgradeError { upgrade_error: PackageUpgradeError },
+
+    // Indicates the transaction tried to write objects too large to storage
+    #[error(
+        "Written objects of {current_size} bytes too large. \
+    Limit is {max_size} bytes"
+    )]
+    WrittenObjectsTooLarge { current_size: u64, max_size: u64 },
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
 }
@@ -3143,6 +3181,10 @@ impl InputObjects {
             .filter_map(|(_, object)| object.data.try_as_move().map(MoveObject::version));
 
         SequenceNumber::lamport_increment(input_versions)
+    }
+
+    pub fn into_objects(self) -> Vec<(InputObjectKind, Object)> {
+        self.objects
     }
 
     pub fn into_object_map(self) -> BTreeMap<ObjectID, Object> {

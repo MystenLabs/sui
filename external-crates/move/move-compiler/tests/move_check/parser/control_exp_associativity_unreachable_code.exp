@@ -1,0 +1,72 @@
+warning[W09002]: unused variable
+  ┌─ tests/move_check/parser/control_exp_associativity_unreachable_code.move:9:11
+  │
+9 │     fun t(cond: bool): u64 {
+  │           ^^^^ Unused parameter 'cond'. Consider removing or prefixing with an underscore: '_cond'
+
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_check/parser/control_exp_associativity_unreachable_code.move:11:13
+   │
+11 │         1 + loop { foo() } + 2;
+   │             ^^^^^^^^^^^^^^ Invalid use of a divergent expression. The code following the evaluation of this expression will be dead and should be removed.
+
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_check/parser/control_exp_associativity_unreachable_code.move:12:13
+   │
+12 │         1 + loop foo();
+   │             ^^^^^^^^^^ Invalid use of a divergent expression. The code following the evaluation of this expression will be dead and should be removed.
+
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_check/parser/control_exp_associativity_unreachable_code.move:12:18
+   │
+12 │         1 + loop foo();
+   │                  ^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
+
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_check/parser/control_exp_associativity_unreachable_code.move:13:9
+   │
+13 │         loop { foo() } + 1;
+   │         ^^^^^^^^^^^^^^ Invalid use of a divergent expression. The code following the evaluation of this expression will be dead and should be removed.
+
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_check/parser/control_exp_associativity_unreachable_code.move:13:16
+   │
+13 │         loop { foo() } + 1;
+   │                ^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
+
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_check/parser/control_exp_associativity_unreachable_code.move:17:9
+   │
+17 │         return { 1 + 2 };
+   │         ^^^^^^^^^^^^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
+
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_check/parser/control_exp_associativity_unreachable_code.move:18:9
+   │
+18 │         return { 1 } && false;
+   │         ^^^^^^^^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
+
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_check/parser/control_exp_associativity_unreachable_code.move:18:9
+   │
+18 │         return { 1 } && false;
+   │         ^^^^^^^^^^^^ Invalid use of a divergent expression. The code following the evaluation of this expression will be dead and should be removed.
+
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_check/parser/control_exp_associativity_unreachable_code.move:22:9
+   │
+22 │         abort { 1 + 2 };
+   │         ^^^^^^^^^^^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
+
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_check/parser/control_exp_associativity_unreachable_code.move:23:9
+   │
+23 │         abort { 1 } && false;
+   │         ^^^^^^^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
+
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_check/parser/control_exp_associativity_unreachable_code.move:23:9
+   │
+23 │         abort { 1 } && false;
+   │         ^^^^^^^^^^^ Invalid use of a divergent expression. The code following the evaluation of this expression will be dead and should be removed.
+

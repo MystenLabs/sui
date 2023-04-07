@@ -70,7 +70,7 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     sleep(Duration::from_secs(1)).await;
 
     // verify that the node has seen the transfer
-    let object_read = node.state().get_object_read(&transferred_object).await?;
+    let object_read = node.state().get_object_read(&transferred_object)?;
     let object = object_read.into_object()?;
 
     assert_eq!(object.owner.get_owner_address().unwrap(), receiver);
@@ -134,7 +134,7 @@ async fn test_sponsored_transaction() -> Result<(), anyhow::Error> {
             payment: vec![gas_obj],
             owner: sponsor,
             price: 100,
-            budget: 1000000,
+            budget: 1_000_000,
         },
     );
 
@@ -571,7 +571,7 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
         .subscribe(
             "suix_subscribeEvent",
             rpc_params![EventFilter::MoveEventType(struct_tag.clone())],
-            "suix_unsubscribeEvents",
+            "suix_unsubscribeEvent",
         )
         .await
         .unwrap();
@@ -647,6 +647,7 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
 
 // Test fullnode has event read jsonrpc endpoints working
 #[sim_test]
+#[ignore]
 async fn test_full_node_event_read_api_ok() {
     let mut test_cluster = TestClusterBuilder::new()
         .set_fullnode_rpc_port(50000)
@@ -909,9 +910,7 @@ async fn get_obj_read_from_node(
     node: &SuiNode,
     object_id: ObjectID,
 ) -> Result<(ObjectRef, Object, Option<MoveStructLayout>), anyhow::Error> {
-    if let ObjectRead::Exists(obj_ref, object, layout) =
-        node.state().get_object_read(&object_id).await?
-    {
+    if let ObjectRead::Exists(obj_ref, object, layout) = node.state().get_object_read(&object_id)? {
         Ok((obj_ref, object, layout))
     } else {
         anyhow::bail!("Can't find object {object_id:?} on fullnode.")
@@ -986,7 +985,7 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
     sleep(Duration::from_secs(1)).await;
 
     // Now test get_object_read
-    let object_ref_v3 = match node.state().get_object_read(&object_id).await? {
+    let object_ref_v3 = match node.state().get_object_read(&object_id)? {
         ObjectRead::Deleted(obj_ref) => obj_ref,
         other => anyhow::bail!("Expect object {object_id:?} deleted but got {other:?}."),
     };

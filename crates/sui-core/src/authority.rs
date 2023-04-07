@@ -43,11 +43,13 @@ use shared_crypto::intent::{Intent, IntentScope};
 use sui_adapter::execution_engine;
 use sui_adapter::{adapter, execution_mode};
 use sui_config::genesis::Genesis;
-use sui_config::node::{AuthorityStorePruningConfig, DBCheckpointConfig};
+use sui_config::node::{
+    AuthorityStorePruningConfig, DBCheckpointConfig, ExpensiveSafetyCheckConfig,
+};
 use sui_framework::{MoveStdlib, SuiFramework, SuiSystem, SystemPackage};
 use sui_json_rpc_types::{
     Checkpoint, DevInspectResults, DryRunTransactionBlockResponse, EventFilter, SuiEvent,
-    SuiMoveValue, SuiObjectDataFilter, SuiTransactionBlockEvents,
+    SuiMoveValue, SuiObjectDataFilter, SuiTransactionBlockData, SuiTransactionBlockEvents,
 };
 use sui_macros::{fail_point, fail_point_async, nondeterministic};
 use sui_protocol_config::SupportedProtocolVersions;
@@ -55,13 +57,14 @@ use sui_storage::indexes::ObjectIndexChanges;
 use sui_storage::IndexStore;
 use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::{
-    default_hash, AuthorityKeyPair, AuthoritySignInfo, NetworkKeyPair, Signer,
+    default_hash, AggregateAuthoritySignature, AuthorityKeyPair, AuthoritySignInfo, NetworkKeyPair,
+    Signer,
 };
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType, Field};
 use sui_types::error::UserInputError;
 use sui_types::event::{Event, EventID};
-use sui_types::gas::{GasCostSummary, GasPrice, SuiCostTable, SuiGasStatus};
+use sui_types::gas::{GasCostSummary, SuiGasStatus};
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
     CheckpointCommitment, CheckpointContents, CheckpointContentsDigest, CheckpointDigest,
@@ -94,14 +97,16 @@ use crate::authority::authority_store::{ExecutionLockReadGuard, InputKey, Object
 use crate::authority::authority_store_pruner::AuthorityStorePruner;
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
+use crate::checkpoints::checkpoint_executor::CheckpointExecutor;
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::event_handler::EventHandler;
 use crate::execution_driver::execution_process;
 use crate::module_cache_metrics::ResolverMetrics;
-use crate::signature_verifier::VerifiedDigestCacheMetrics;
+use crate::signature_verifier::SignatureVerifierMetrics;
 use crate::stake_aggregator::StakeAggregator;
+use crate::state_accumulator::StateAccumulator;
 use crate::{transaction_input_checker, transaction_manager::TransactionManager};
 
 #[cfg(test)]
@@ -135,14 +140,6 @@ pub mod epoch_start_configuration;
 pub(crate) mod authority_notify_read;
 pub(crate) mod authority_store;
 
-// Reject a transaction if the number of certificates pending execution is above this threshold.
-// 20000 = 10k TPS * 2s resident time in transaction manager.
-pub(crate) const MAX_EXECUTION_QUEUE_LENGTH: usize = 20_000;
-
-// Reject a transaction if the number of pending transactions depending on the object
-// is above the threshold.
-pub(crate) const MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH: usize = 1000;
-
 pub type ReconfigConsensusMessage = (
     AuthorityKeyPair,
     NetworkKeyPair,
@@ -165,6 +162,7 @@ pub struct AuthorityMetrics {
     total_cert_attempts: IntCounter,
     total_effects: IntCounter,
     pub shared_obj_tx: IntCounter,
+    sponsored_tx: IntCounter,
     tx_already_processed: IntCounter,
     num_input_objs: Histogram,
     num_shared_objects: Histogram,
@@ -251,6 +249,14 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
+
+            sponsored_tx: register_int_counter_with_registry!(
+                "num_sponsored_tx",
+                "Number of sponsored transactions",
+                registry,
+            )
+            .unwrap(),
+
             tx_already_processed: register_int_counter_with_registry!(
                 "num_tx_already_processed",
                 "Number of transaction orders already processed previously",
@@ -487,6 +493,9 @@ pub struct AuthorityState {
 
     /// Take db checkpoints af different dbs
     db_checkpoint_config: DBCheckpointConfig,
+
+    /// Config controlling what kind of expensive safety checks to perform.
+    expensive_safety_check_config: ExpensiveSafetyCheckConfig,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -537,36 +546,12 @@ impl AuthorityState {
         transaction: VerifiedTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<VerifiedSignedTransaction> {
-        let execution_queue_len = self.transaction_manager.execution_queue_len();
-        if execution_queue_len >= MAX_EXECUTION_QUEUE_LENGTH {
-            return Err(SuiError::TooManyTransactionsPendingExecution {
-                queue_len: execution_queue_len,
-                threshold: MAX_EXECUTION_QUEUE_LENGTH,
-            });
-        }
         let (_gas_status, input_objects) = transaction_input_checker::check_transaction_input(
             &self.database,
             epoch_store.as_ref(),
             &transaction.data().intent_message().value,
         )
         .await?;
-
-        for (object_id, queue_len) in self.transaction_manager.objects_queue_len(
-            input_objects
-                .mutable_inputs()
-                .into_iter()
-                .map(|r| r.0)
-                .collect(),
-        ) {
-            // When this occurs, most likely transactions piled up on a shared object.
-            if queue_len >= MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH {
-                return Err(SuiError::TooManyTransactionsPendingOnObject {
-                    object_id,
-                    queue_len,
-                    threshold: MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH,
-                });
-            }
-        }
 
         let owned_objects = input_objects.filter_owned_objects();
 
@@ -928,6 +913,10 @@ impl AuthorityState {
             self.metrics.shared_obj_tx.inc();
         }
 
+        if certificate.is_sponsored_tx() {
+            self.metrics.sponsored_tx.inc();
+        }
+
         self.metrics
             .num_input_objs
             .observe(input_object_count as f64);
@@ -1029,6 +1018,14 @@ impl AuthorityState {
         if !self.is_fullnode(&epoch_store) {
             return Err(anyhow!("dry-exec is only supported on fullnodes"));
         }
+        match transaction.kind() {
+            TransactionKind::ProgrammableTransaction(_) => (),
+            TransactionKind::ChangeEpoch(_)
+            | TransactionKind::Genesis(_)
+            | TransactionKind::ConsensusCommitPrologue(_) => {
+                return Err(anyhow!("dry-exec does not support system transactions"));
+            }
+        }
 
         // make a gas object if one was not provided
         let mut gas_object_refs = transaction.gas().to_vec();
@@ -1065,17 +1062,20 @@ impl AuthorityState {
         let shared_object_refs = input_objects.filter_shared_objects();
 
         let transaction_dependencies = input_objects.transaction_dependencies();
-        let temporary_store = TemporaryStore::new(
+        let temporary_store = TemporaryStore::new_for_mock_transaction(
             self.database.clone(),
             input_objects,
             transaction_digest,
             epoch_store.protocol_config(),
         );
         let (kind, signer, _) = transaction.execution_parts();
+        // don't bother with paranoid checks in dry run
+        let enable_move_vm_paranoid_checks = false;
         let move_vm = Arc::new(
             adapter::new_move_vm(
                 epoch_store.native_functions().clone(),
                 epoch_store.protocol_config(),
+                enable_move_vm_paranoid_checks,
             )
             .expect("We defined natives to not fail here"),
         );
@@ -1106,6 +1106,7 @@ impl AuthorityState {
 
         Ok((
             DryRunTransactionBlockResponse {
+                input: SuiTransactionBlockData::try_from(transaction.clone(), &module_cache)?,
                 effects: effects.clone().try_into()?,
                 events: SuiTransactionBlockEvents::try_from(
                     inner_temp_store.events.clone(),
@@ -1135,12 +1136,18 @@ impl AuthorityState {
 
         transaction_kind.check_version_supported(epoch_store.protocol_config())?;
 
-        let gas_price = gas_price.unwrap_or_else(|| epoch_store.reference_gas_price());
-
+        let gas_price = match gas_price {
+            None => epoch_store.reference_gas_price(),
+            Some(gas) => {
+                if gas == 0 {
+                    epoch_store.reference_gas_price()
+                } else {
+                    gas
+                }
+            }
+        };
         let protocol_config = epoch_store.protocol_config();
-
         let max_tx_gas = protocol_config.max_tx_gas();
-        let storage_gas_price = protocol_config.storage_gas_price();
 
         let gas_object_id = ObjectID::random();
         // give the gas object 2x the max gas to have coin balance to play with during execution
@@ -1158,8 +1165,6 @@ impl AuthorityState {
         .await?;
         let shared_object_refs = input_objects.filter_shared_objects();
 
-        // TODO should we error instead for 0?
-        let gas_price = std::cmp::max(gas_price, 1);
         let gas_budget = max_tx_gas;
         let data = TransactionData::new(
             transaction_kind,
@@ -1171,22 +1176,19 @@ impl AuthorityState {
         let transaction_digest = TransactionDigest::new(default_hash(&data));
         let transaction_kind = data.into_kind();
         let transaction_dependencies = input_objects.transaction_dependencies();
-        let temporary_store = TemporaryStore::new(
+        let temporary_store = TemporaryStore::new_for_mock_transaction(
             self.database.clone(),
             input_objects,
             transaction_digest,
             protocol_config,
         );
-        let gas_status = SuiGasStatus::new_with_budget(
-            max_tx_gas,
-            GasPrice::from(gas_price),
-            storage_gas_price.into(),
-            SuiCostTable::new(protocol_config),
-        );
+        let gas_status = SuiGasStatus::new_with_budget(max_tx_gas, gas_price, protocol_config);
         let move_vm = Arc::new(
             adapter::new_move_vm(
                 epoch_store.native_functions().clone(),
                 epoch_store.protocol_config(),
+                self.expensive_safety_check_config
+                    .enable_move_vm_paranoid_checks(),
             )
             .expect("We defined natives to not fail here"),
         );
@@ -1627,6 +1629,7 @@ impl AuthorityState {
         pruning_config: AuthorityStorePruningConfig,
         genesis_objects: &[Object],
         db_checkpoint_config: &DBCheckpointConfig,
+        expensive_safety_check_config: ExpensiveSafetyCheckConfig,
     ) -> Arc<Self> {
         Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
 
@@ -1648,6 +1651,7 @@ impl AuthorityState {
             store.objects_lock_table.clone(),
             pruning_config,
             epoch_store.epoch_start_state().epoch_duration_ms(),
+            prometheus_registry,
         );
         let state = Arc::new(AuthorityState {
             name,
@@ -1664,6 +1668,7 @@ impl AuthorityState {
             _objects_pruner,
             _authority_per_epoch_pruner,
             db_checkpoint_config: db_checkpoint_config.clone(),
+            expensive_safety_check_config,
         });
 
         // Start a task to execute ready certificates.
@@ -1714,7 +1719,7 @@ impl AuthorityState {
         );
         let registry = Registry::new();
         let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
-        let signature_verifier_metrics = VerifiedDigestCacheMetrics::new(&registry);
+        let signature_verifier_metrics = SignatureVerifierMetrics::new(&registry);
         let epoch_store = AuthorityPerEpochStore::new(
             name,
             Arc::new(genesis_committee.clone()),
@@ -1725,6 +1730,7 @@ impl AuthorityState {
             store.clone(),
             cache_metrics,
             signature_verifier_metrics,
+            &ExpensiveSafetyCheckConfig::default(),
         );
 
         let epochs = Arc::new(CommitteeStore::new(
@@ -1749,6 +1755,7 @@ impl AuthorityState {
             AuthorityStorePruningConfig::default(),
             genesis.objects(),
             &DBCheckpointConfig::default(),
+            ExpensiveSafetyCheckConfig::new_enable_all(),
         )
         .await;
 
@@ -1826,6 +1833,9 @@ impl AuthorityState {
         supported_protocol_versions: SupportedProtocolVersions,
         new_committee: Committee,
         epoch_start_configuration: EpochStartConfiguration,
+        checkpoint_executor: &CheckpointExecutor,
+        accumulator: Arc<StateAccumulator>,
+        expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
     ) -> SuiResult<Arc<AuthorityPerEpochStore>> {
         Self::check_protocol_version(
             supported_protocol_versions,
@@ -1839,6 +1849,12 @@ impl AuthorityState {
         let mut execution_lock = db.execution_lock_for_reconfiguration().await;
         self.revert_uncommitted_epoch_transactions(cur_epoch_store)
             .await?;
+        self.check_system_consistency(
+            cur_epoch_store,
+            checkpoint_executor,
+            accumulator,
+            expensive_safety_check_config.enable_state_consistency_check(),
+        );
         if let Some(checkpoint_path) = &self.db_checkpoint_config.checkpoint_path {
             if self
                 .db_checkpoint_config
@@ -1852,7 +1868,12 @@ impl AuthorityState {
         }
         let new_epoch = new_committee.epoch;
         let new_epoch_store = self
-            .reopen_epoch_db(cur_epoch_store, new_committee, epoch_start_configuration)
+            .reopen_epoch_db(
+                cur_epoch_store,
+                new_committee,
+                epoch_start_configuration,
+                expensive_safety_check_config,
+            )
             .await?;
         assert_eq!(new_epoch_store.epoch(), new_epoch);
         self.transaction_manager.reconfigure(new_epoch);
@@ -1861,6 +1882,34 @@ impl AuthorityState {
         // see also assert in AuthorityState::process_certificate
         // on the epoch store and execution lock epoch match
         Ok(new_epoch_store)
+    }
+
+    fn check_system_consistency(
+        &self,
+        cur_epoch_store: &AuthorityPerEpochStore,
+        checkpoint_executor: &CheckpointExecutor,
+        accumulator: Arc<StateAccumulator>,
+        enable_state_consistency_check: bool,
+    ) {
+        if let Err(err) = self.database.expensive_check_sui_conservation() {
+            if cfg!(debug_assertions) {
+                panic!("{}", err);
+            } else {
+                // We cannot panic in production yet because it is known that there are some
+                // inconsistencies in testnet. We will enable this once we make it balanced again in testnet.
+                warn!("System consistency check failed: {}", err);
+            }
+        }
+
+        // check for root state hash consistency with live object set
+        if enable_state_consistency_check {
+            self.database.expensive_check_is_consistent_state(
+                checkpoint_executor,
+                accumulator,
+                cur_epoch_store.epoch(),
+                cfg!(debug_assertions), // panic in debug mode only
+            );
+        }
     }
 
     pub fn db(&self) -> Arc<AuthorityStore> {
@@ -1983,7 +2032,7 @@ impl AuthorityState {
         Ok(checkpoint)
     }
 
-    pub async fn get_object_read(&self, object_id: &ObjectID) -> Result<ObjectRead, SuiError> {
+    pub fn get_object_read(&self, object_id: &ObjectID) -> Result<ObjectRead, SuiError> {
         match self.database.get_object_or_tombstone(*object_id)? {
             None => Ok(ObjectRead::NotExists(*object_id)),
             Some(obj_ref) => {
@@ -2023,7 +2072,7 @@ impl AuthorityState {
     where
         T: DeserializeOwned,
     {
-        let o = self.get_object_read(object_id).await?.into_object()?;
+        let o = self.get_object_read(object_id)?.into_object()?;
         if let Some(move_object) = o.data.try_as_move() {
             Ok(bcs::from_bytes(move_object.contents()).map_err(|e| {
                 SuiError::ObjectDeserializationError {
@@ -2253,7 +2302,7 @@ impl AuthorityState {
         transaction.ok_or_else(|| anyhow!(SuiError::TransactionNotFound { digest }))
     }
 
-    pub async fn get_executed_effects(
+    pub fn get_executed_effects(
         &self,
         digest: TransactionDigest,
     ) -> Result<TransactionEffects, anyhow::Error> {
@@ -2261,21 +2310,21 @@ impl AuthorityState {
         effects.ok_or_else(|| anyhow!(SuiError::TransactionNotFound { digest }))
     }
 
-    pub async fn multi_get_executed_transactions(
+    pub fn multi_get_executed_transactions(
         &self,
         digests: &[TransactionDigest],
     ) -> Result<Vec<Option<VerifiedTransaction>>, anyhow::Error> {
         Ok(self.database.multi_get_transaction_blocks(digests)?)
     }
 
-    pub async fn multi_get_executed_effects(
+    pub fn multi_get_executed_effects(
         &self,
         digests: &[TransactionDigest],
     ) -> Result<Vec<Option<TransactionEffects>>, anyhow::Error> {
         Ok(self.database.multi_get_executed_effects(digests)?)
     }
 
-    pub async fn multi_get_transaction_checkpoint(
+    pub fn multi_get_transaction_checkpoint(
         &self,
         digests: &[TransactionDigest],
     ) -> Result<Vec<Option<(EpochId, CheckpointSequenceNumber)>>, anyhow::Error> {
@@ -2389,6 +2438,38 @@ impl AuthorityState {
         }
     }
 
+    pub fn get_verified_checkpoint_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> Result<VerifiedCheckpoint, anyhow::Error> {
+        let verified_checkpoint = self
+            .get_checkpoint_store()
+            .get_checkpoint_by_sequence_number(sequence_number)?;
+        match verified_checkpoint {
+            Some(verified_checkpoint) => Ok(verified_checkpoint),
+            None => Err(anyhow!(
+                "Verified checkpoint not found for sequence number {}",
+                sequence_number
+            )),
+        }
+    }
+
+    pub fn get_verified_checkpoint_summary_by_digest(
+        &self,
+        digest: CheckpointDigest,
+    ) -> Result<VerifiedCheckpoint, anyhow::Error> {
+        let verified_checkpoint = self
+            .get_checkpoint_store()
+            .get_checkpoint_by_digest(&digest)?;
+        match verified_checkpoint {
+            Some(verified_checkpoint) => Ok(verified_checkpoint),
+            None => Err(anyhow!(
+                "Verified checkpoint not found for digest: {}",
+                Base58::encode(digest)
+            )),
+        }
+    }
+
     pub fn get_checkpoint_contents(
         &self,
         digest: CheckpointContentsDigest,
@@ -2432,17 +2513,25 @@ impl AuthorityState {
             .get_checkpoint_store()
             .multi_get_checkpoint_by_sequence_number(&checkpoint_numbers)?;
 
-        let checkpoint_summaries: Vec<CheckpointSummary> = verified_checkpoints
+        let checkpoint_summaries_and_signatures: Vec<(
+            CheckpointSummary,
+            AggregateAuthoritySignature,
+        )> = verified_checkpoints
             .into_iter()
             .flatten()
-            .map(|check| check.into_summary_and_sequence().1)
+            .map(|check| {
+                (
+                    check.clone().into_summary_and_sequence().1,
+                    check.get_validator_signature(),
+                )
+            })
             .collect();
 
-        let checkpoint_contents_digest: Vec<CheckpointContentsDigest> = checkpoint_summaries
-            .iter()
-            .map(|summary| summary.content_digest)
-            .collect();
-
+        let checkpoint_contents_digest: Vec<CheckpointContentsDigest> =
+            checkpoint_summaries_and_signatures
+                .iter()
+                .map(|summary| summary.0.content_digest)
+                .collect();
         let checkpoint_contents = self
             .get_checkpoint_store()
             .multi_get_checkpoint_content(checkpoint_contents_digest.as_slice())?;
@@ -2450,8 +2539,15 @@ impl AuthorityState {
 
         let mut checkpoints: Vec<Checkpoint> = vec![];
 
-        for (summary, content) in checkpoint_summaries.into_iter().zip(contents.into_iter()) {
-            checkpoints.push(Checkpoint::from((summary, content)));
+        for (summary_and_sig, content) in checkpoint_summaries_and_signatures
+            .into_iter()
+            .zip(contents.into_iter())
+        {
+            checkpoints.push(Checkpoint::from((
+                summary_and_sig.0,
+                content,
+                summary_and_sig.1,
+            )));
         }
 
         Ok(checkpoints)
@@ -2464,7 +2560,7 @@ impl AuthorityState {
         Ok(self.get_indexes()?.get_timestamp_ms(digest)?)
     }
 
-    pub async fn query_events(
+    pub fn query_events(
         &self,
         query: EventFilter,
         // If `Some`, the query will start from the next item after the specified cursor
@@ -2760,7 +2856,7 @@ impl AuthorityState {
             Some(AuthoritySignInfo::new(
                 epoch_store.epoch(),
                 effects,
-                Intent::default().with_scope(IntentScope::TransactionEffects),
+                Intent::sui_app(IntentScope::TransactionEffects),
                 self.name,
                 &*self.secret,
             ))
@@ -2914,7 +3010,7 @@ impl AuthorityState {
     ) -> Vec<ObjectRef> {
         let Some(move_stdlib) = self.compare_system_package(
             MoveStdlib::ID,
-            MoveStdlib::as_modules(),
+            &framework_injection::get_modules::<MoveStdlib>(self.name),
             MoveStdlib::transitive_dependencies(),
             max_binary_format_version,
         ).await else {
@@ -2923,7 +3019,7 @@ impl AuthorityState {
 
         let Some(sui_framework) = self.compare_system_package(
             SuiFramework::ID,
-            SuiFramework::as_modules(),
+            &framework_injection::get_modules::<SuiFramework>(self.name),
             SuiFramework::transitive_dependencies(),
             max_binary_format_version,
         ).await else {
@@ -2932,7 +3028,7 @@ impl AuthorityState {
 
         let Some(sui_system) = self.compare_system_package(
             SuiSystem::ID,
-            sui_system_injection::get_modules(self.name),
+            &framework_injection::get_modules::<SuiSystem>(self.name),
             SuiSystem::transitive_dependencies(),
             max_binary_format_version,
         ).await else {
@@ -2953,10 +3049,10 @@ impl AuthorityState {
     ///   framework (indicates support for a protocol upgrade without a framework upgrade).
     /// - Returns the digest of the new framework (and version) if it is compatible (indicates
     ///   support for a protocol upgrade with a framework upgrade).
-    async fn compare_system_package<'p>(
+    async fn compare_system_package(
         &self,
         id: ObjectID,
-        modules: Vec<CompiledModule>,
+        modules: &[CompiledModule],
         dependencies: Vec<ObjectID>,
         max_binary_format_version: u32,
     ) -> Option<ObjectRef> {
@@ -2993,14 +3089,12 @@ impl AuthorityState {
             return Some(cur_ref);
         }
 
-        let check_struct_and_pub_function_linking = true;
-        let check_struct_layout = true;
-        let check_friend_linking = false;
-        let compatibility = Compatibility::new(
-            check_struct_and_pub_function_linking,
-            check_struct_layout,
-            check_friend_linking,
-        );
+        let compatibility = Compatibility {
+            check_struct_and_pub_function_linking: true,
+            check_struct_layout: true,
+            check_friend_linking: false,
+            check_private_entry_linking: true,
+        };
 
         let new_pkg = new_object
             .data
@@ -3066,28 +3160,30 @@ impl AuthorityState {
 
             let (bytes, dependencies) = match system_package.0 {
                 MoveStdlib::ID => (
-                    MoveStdlib::as_bytes(),
+                    framework_injection::get_bytes::<MoveStdlib>(self.name),
                     MoveStdlib::transitive_dependencies(),
                 ),
                 SuiFramework::ID => (
-                    SuiFramework::as_bytes(),
+                    framework_injection::get_bytes::<SuiFramework>(self.name),
                     SuiFramework::transitive_dependencies(),
                 ),
                 SuiSystem::ID => (
-                    sui_system_injection::get_bytes(self.name),
+                    framework_injection::get_bytes::<SuiSystem>(self.name),
                     SuiSystem::transitive_dependencies(),
                 ),
                 _ => panic!("Unrecognised framework: {}", system_package.0),
             };
 
+            let modules: Vec<_> = bytes
+                .iter()
+                .map(|m| {
+                    CompiledModule::deserialize_with_max_version(m, move_binary_format_version)
+                        .unwrap()
+                })
+                .collect();
+
             let new_object = Object::new_system_package(
-                bytes
-                    .iter()
-                    .map(|m| {
-                        CompiledModule::deserialize_with_max_version(m, move_binary_format_version)
-                            .unwrap()
-                    })
-                    .collect(),
+                &modules,
                 system_package.1,
                 dependencies.clone(),
                 cur_object.previous_transaction,
@@ -3213,7 +3309,7 @@ impl AuthorityState {
             Self::choose_protocol_version_and_system_packages(
                 epoch_store.protocol_version(),
                 epoch_store.committee(),
-                epoch_store.get_capabilities(),
+                epoch_store.get_capabilities()?,
                 buffer_stake_bps,
             );
 
@@ -3337,8 +3433,9 @@ impl AuthorityState {
         }
         let pending_certificates = epoch_store.pending_consensus_certificates();
         info!(
-            "Reverting {} locally executed transactions that was not included in the epoch",
-            pending_certificates.len()
+            "Reverting {} locally executed transactions that was not included in the epoch: {:?}",
+            pending_certificates.len(),
+            pending_certificates,
         );
         for digest in pending_certificates {
             if self
@@ -3360,6 +3457,7 @@ impl AuthorityState {
         cur_epoch_store: &AuthorityPerEpochStore,
         new_committee: Committee,
         epoch_start_configuration: EpochStartConfiguration,
+        expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
     ) -> SuiResult<Arc<AuthorityPerEpochStore>> {
         let new_epoch = new_committee.epoch;
         info!(new_epoch = ?new_epoch, "re-opening AuthorityEpochTables for new epoch");
@@ -3376,6 +3474,7 @@ impl AuthorityState {
             new_committee,
             epoch_start_configuration,
             self.db(),
+            expensive_safety_check_config,
         );
         self.epoch_store.store(new_epoch_store.clone());
         cur_epoch_store.epoch_terminated().await;
@@ -3516,25 +3615,28 @@ mod tests {
 }
 
 #[cfg(msim)]
-pub mod sui_system_injection {
+pub mod framework_injection {
+    use move_binary_format::CompiledModule;
     use std::cell::RefCell;
+    use std::collections::BTreeMap;
+    use sui_framework::SystemPackage;
+    use sui_types::base_types::{AuthorityName, ObjectID};
 
-    use super::*;
+    type FrameworkOverrideConfig = BTreeMap<ObjectID, PackageOverrideConfig>;
 
     // Thread local cache because all simtests run in a single unique thread.
     thread_local! {
-        static OVERRIDE: RefCell<FrameworkOverrideConfig> = RefCell::new(FrameworkOverrideConfig::Default);
+        static OVERRIDE: RefCell<FrameworkOverrideConfig> = RefCell::new(FrameworkOverrideConfig::default());
     }
 
     type Framework = Vec<CompiledModule>;
 
-    type FrameworkUpgradeCallback =
+    type PackageUpgradeCallback =
         Box<dyn Fn(AuthorityName) -> Option<Framework> + Send + Sync + 'static>;
 
-    enum FrameworkOverrideConfig {
-        Default,
+    enum PackageOverrideConfig {
         Global(Framework),
-        PerValidator(FrameworkUpgradeCallback),
+        PerValidator(PackageUpgradeCallback),
     }
 
     fn compiled_modules_to_bytes(modules: &[CompiledModule]) -> Vec<Vec<u8>> {
@@ -3548,46 +3650,52 @@ pub mod sui_system_injection {
             .collect()
     }
 
-    pub fn set_override(modules: Vec<CompiledModule>) {
-        OVERRIDE.with(|bs| *bs.borrow_mut() = FrameworkOverrideConfig::Global(modules));
+    pub fn set_override<S: SystemPackage>(modules: Vec<CompiledModule>) {
+        OVERRIDE.with(|bs| {
+            bs.borrow_mut()
+                .insert(S::ID, PackageOverrideConfig::Global(modules))
+        });
     }
 
-    pub fn set_override_cb(func: FrameworkUpgradeCallback) {
-        OVERRIDE.with(|bs| *bs.borrow_mut() = FrameworkOverrideConfig::PerValidator(func));
+    pub fn set_override_cb<S: SystemPackage>(func: PackageUpgradeCallback) {
+        OVERRIDE.with(|bs| {
+            bs.borrow_mut()
+                .insert(S::ID, PackageOverrideConfig::PerValidator(func))
+        });
     }
 
-    pub fn get_bytes(name: AuthorityName) -> Vec<Vec<u8>> {
-        OVERRIDE.with(|cfg| match &*cfg.borrow() {
-            FrameworkOverrideConfig::Default => SuiSystem::as_bytes(),
-            FrameworkOverrideConfig::Global(framework) => compiled_modules_to_bytes(framework),
-            FrameworkOverrideConfig::PerValidator(func) => func(name)
+    pub fn get_bytes<S: SystemPackage>(name: AuthorityName) -> Vec<Vec<u8>> {
+        OVERRIDE.with(|cfg| match cfg.borrow().get(&S::ID) {
+            None => S::as_bytes(),
+            Some(PackageOverrideConfig::Global(framework)) => compiled_modules_to_bytes(framework),
+            Some(PackageOverrideConfig::PerValidator(func)) => func(name)
                 .map(|fw| compiled_modules_to_bytes(&fw))
-                .unwrap_or_else(SuiSystem::as_bytes),
+                .unwrap_or_else(S::as_bytes),
         })
     }
 
-    pub fn get_modules(name: AuthorityName) -> Vec<CompiledModule> {
-        OVERRIDE.with(|cfg| match &*cfg.borrow() {
-            FrameworkOverrideConfig::Default => SuiSystem::as_modules(),
-            FrameworkOverrideConfig::Global(framework) => framework.clone(),
-            FrameworkOverrideConfig::PerValidator(func) => {
-                func(name).unwrap_or_else(SuiSystem::as_modules)
+    pub fn get_modules<S: SystemPackage>(name: AuthorityName) -> Vec<CompiledModule> {
+        OVERRIDE.with(|cfg| match cfg.borrow().get(&S::ID) {
+            None => S::as_modules().to_owned(),
+            Some(PackageOverrideConfig::Global(framework)) => framework.clone(),
+            Some(PackageOverrideConfig::PerValidator(func)) => {
+                func(name).unwrap_or_else(|| S::as_modules().to_owned())
             }
         })
     }
 }
 
 #[cfg(not(msim))]
-pub mod sui_system_injection {
+pub mod framework_injection {
     use move_binary_format::CompiledModule;
+    use sui_framework::SystemPackage;
+    use sui_types::base_types::AuthorityName;
 
-    use super::*;
-
-    pub fn get_bytes(_name: AuthorityName) -> Vec<Vec<u8>> {
-        SuiSystem::as_bytes()
+    pub fn get_bytes<S: SystemPackage>(_name: AuthorityName) -> Vec<Vec<u8>> {
+        S::as_bytes()
     }
 
-    pub fn get_modules(_name: AuthorityName) -> Vec<CompiledModule> {
-        SuiSystem::as_modules()
+    pub fn get_modules<S: SystemPackage>(_name: AuthorityName) -> Vec<CompiledModule> {
+        S::as_modules().to_owned()
     }
 }

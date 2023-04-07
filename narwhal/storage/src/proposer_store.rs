@@ -3,6 +3,7 @@
 
 use store::rocks::{open_cf, MetricConf};
 use store::{reopen, rocks::DBMap, rocks::ReadWriteOptions, Map};
+use sui_macros::fail_point;
 use types::{Header, StoreResult};
 
 pub type ProposerKey = u32;
@@ -35,8 +36,14 @@ impl ProposerStore {
     }
 
     /// Inserts a proposed header into the store
+    #[allow(clippy::let_and_return)]
     pub fn write_last_proposed(&self, header: &Header) -> StoreResult<()> {
-        self.last_proposed.insert(&LAST_PROPOSAL_KEY, header)
+        fail_point!("narwhal-store-before-write");
+
+        let result = self.last_proposed.insert(&LAST_PROPOSAL_KEY, header);
+
+        fail_point!("narwhal-store-after-write");
+        result
     }
 
     /// Get the last header

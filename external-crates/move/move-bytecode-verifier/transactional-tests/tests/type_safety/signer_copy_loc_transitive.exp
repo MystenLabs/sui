@@ -1,0 +1,10 @@
+processed 1 task
+
+task 0 'publish'. lines 1-11:
+Error: Unable to publish module '00000000000000000000000000000042::M'. Got VMError: {
+    major_status: COPYLOC_WITHOUT_COPY_ABILITY,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 3)],
+}

@@ -9,3 +9,5 @@ export * from './hooks/useGetValidatorsEvents';
 export * from './hooks/useGetRollingAverageApys';
 export * from './utils/formatAmount';
 export * from './utils/roundFloat';
+export * from './PostHogAnalyticsProvider';
+export * from './utils/formatPercentageDisplay';

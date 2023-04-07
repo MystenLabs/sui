@@ -14,6 +14,7 @@ use std::future::Future;
 use std::iter;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use sui_config::node::ExpensiveSafetyCheckConfig;
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::{AuthorityName, EpochId, ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::committee::Committee;
@@ -35,8 +36,8 @@ use typed_store::traits::{TableSummary, TypedStoreDebug};
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::authority::{AuthorityStore, ResolverWrapper};
 use crate::checkpoints::{
-    CheckpointCommitHeight, CheckpointServiceNotify, EpochStats, PendingCheckpoint,
-    PendingCheckpointInfo,
+    BuilderCheckpointSummary, CheckpointCommitHeight, CheckpointServiceNotify, EpochStats,
+    PendingCheckpoint, PendingCheckpointInfo,
 };
 use crate::consensus_handler::{
     SequencedConsensusTransaction, SequencedConsensusTransactionKey,
@@ -274,7 +275,7 @@ pub struct AuthorityEpochTables {
     user_signatures_for_checkpoints: DBMap<TransactionDigest, Vec<GenericSignature>>,
 
     /// Maps sequence number to checkpoint summary, used by CheckpointBuilder to build checkpoint within epoch
-    builder_checkpoint_summary: DBMap<CheckpointSequenceNumber, CheckpointSummary>,
+    builder_checkpoint_summary_v2: DBMap<CheckpointSequenceNumber, BuilderCheckpointSummary>,
 
     // Maps checkpoint sequence number to an accumulator with accumulated state
     // only for the checkpoint that the key references. Append-only, i.e.,
@@ -340,7 +341,8 @@ impl AuthorityPerEpochStore {
         epoch_start_configuration: EpochStartConfiguration,
         store: Arc<AuthorityStore>,
         cache_metrics: Arc<ResolverMetrics>,
-        signature_verifier_metrics: Arc<VerifiedDigestCacheMetrics>,
+        signature_verifier_metrics: Arc<SignatureVerifierMetrics>,
+        expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
     ) -> Arc<Self> {
         let current_time = Instant::now();
         let epoch_id = committee.epoch;
@@ -376,7 +378,12 @@ impl AuthorityPerEpochStore {
             .protocol_version();
         let protocol_config = ProtocolConfig::get_for_version(protocol_version);
 
-        let execution_component = ExecutionComponents::new(&protocol_config, store, cache_metrics);
+        let execution_component = ExecutionComponents::new(
+            &protocol_config,
+            store,
+            cache_metrics,
+            expensive_safety_check_config,
+        );
         let signature_verifier =
             SignatureVerifier::new(committee.clone(), signature_verifier_metrics);
         let s = Arc::new(Self {
@@ -424,6 +431,7 @@ impl AuthorityPerEpochStore {
         new_committee: Committee,
         epoch_start_configuration: EpochStartConfiguration,
         store: Arc<AuthorityStore>,
+        expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
     ) -> Arc<Self> {
         assert_eq!(self.epoch() + 1, new_committee.epoch);
         self.record_reconfig_halt_duration_metric();
@@ -438,6 +446,7 @@ impl AuthorityPerEpochStore {
             store,
             self.execution_component.metrics(),
             self.signature_verifier.metrics.clone(),
+            expensive_safety_check_config,
         )
     }
 
@@ -514,12 +523,13 @@ impl AuthorityPerEpochStore {
     fn store_reconfig_state_batch(
         &self,
         new_state: &ReconfigState,
-        batch: DBBatch,
-    ) -> SuiResult<DBBatch> {
-        Ok(batch.insert_batch(
+        batch: &mut DBBatch,
+    ) -> SuiResult {
+        batch.insert_batch(
             &self.tables.reconfig_state,
             [(&RECONFIG_STATE_INDEX, new_state)],
-        )?)
+        )?;
+        Ok(())
     }
 
     pub fn insert_signed_transaction(&self, transaction: VerifiedSignedTransaction) -> SuiResult {
@@ -553,13 +563,13 @@ impl AuthorityPerEpochStore {
     ) -> SuiResult {
         let mut batch = self.tables.effects_signatures.batch();
         if let Some(cert_sig) = cert_sig {
-            batch = batch.insert_batch(
+            batch.insert_batch(
                 &self.tables.transaction_cert_signatures,
                 [(tx_digest, cert_sig)],
             )?;
         }
         if let Some(effects_signature) = effects_signature {
-            batch = batch.insert_batch(
+            batch.insert_batch(
                 &self.tables.effects_signatures,
                 [(tx_digest, effects_signature)],
             )?;
@@ -735,7 +745,7 @@ impl AuthorityPerEpochStore {
         retry_transaction_forever!({
             // This code may still be correct without using a transaction snapshot, but I couldn't
             // convince myself of that.
-            let db_transaction = self.tables.next_shared_object_versions.transaction()?;
+            let mut db_transaction = self.tables.next_shared_object_versions.transaction()?;
 
             let next_versions = db_transaction.multi_get(
                 &self.tables.next_shared_object_versions,
@@ -789,8 +799,8 @@ impl AuthorityPerEpochStore {
                 "initializing next_shared_object_versions"
             );
             db_transaction
-                .insert_batch(&self.tables.next_shared_object_versions, versions_to_write)?
-                .commit()
+                .insert_batch(&self.tables.next_shared_object_versions, versions_to_write)?;
+            db_transaction.commit()
         })?;
 
         // this case only occurs when there were uninitialized versions, which is rare, so its much
@@ -907,7 +917,8 @@ impl AuthorityPerEpochStore {
         &self,
         certs: &[TrustedExecutableTransaction],
     ) -> Result<(), TypedStoreError> {
-        let batch = self.tables.pending_execution.batch().insert_batch(
+        let mut batch = self.tables.pending_execution.batch();
+        batch.insert_batch(
             &self.tables.pending_execution,
             certs
                 .iter()
@@ -1039,7 +1050,7 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
-    pub fn get_capabilities(&self) -> Vec<AuthorityCapabilities> {
+    pub fn get_capabilities(&self) -> Result<Vec<AuthorityCapabilities>, TypedStoreError> {
         self.tables.authority_capabilities.values().collect()
     }
 
@@ -1057,8 +1068,7 @@ impl AuthorityPerEpochStore {
             .get_reconfig_state_read_lock_guard()
             .should_accept_consensus_certs()
         {
-            write_batch =
-                write_batch.insert_batch(&self.tables.end_of_publish, [(authority, ())])?;
+            write_batch.insert_batch(&self.tables.end_of_publish, [(authority, ())])?;
             self.end_of_publish.try_lock()
                 .expect("No contention on Authority::end_of_publish as it is only accessed from consensus handler")
                 .insert_generic(authority, ()).is_quorum_reached()
@@ -1075,8 +1085,8 @@ impl AuthorityPerEpochStore {
             let mut lock = self.get_reconfig_state_write_lock_guard();
             lock.close_all_certs();
             // We store reconfig_state and end_of_publish in same batch to avoid dealing with inconsistency here on restart
-            write_batch = self.store_reconfig_state_batch(&lock, write_batch)?;
-            write_batch = write_batch.insert_batch(
+            self.store_reconfig_state_batch(&lock, &mut write_batch)?;
+            write_batch.insert_batch(
                 &self.tables.final_epoch_checkpoint,
                 [(
                     &FINAL_EPOCH_CHECKPOINT_INDEX,
@@ -1218,13 +1228,12 @@ impl AuthorityPerEpochStore {
             ?assigned_versions,
             "finish_assign_shared_object_versions"
         );
-        write_batch = write_batch.insert_batch(
+        write_batch.insert_batch(
             &self.tables.assigned_shared_object_versions,
             iter::once((tx_digest, assigned_versions)),
         )?;
 
-        write_batch =
-            write_batch.insert_batch(&self.tables.next_shared_object_versions, next_versions)?;
+        write_batch.insert_batch(&self.tables.next_shared_object_versions, next_versions)?;
 
         self.finish_consensus_certificate_process_with_batch(
             write_batch,
@@ -1242,15 +1251,15 @@ impl AuthorityPerEpochStore {
     /// Self::consensus_message_processed returns true after this call for given certificate
     fn finish_consensus_transaction_process_with_batch(
         &self,
-        batch: DBBatch,
+        mut batch: DBBatch,
         key: SequencedConsensusTransactionKey,
         consensus_index: ExecutionIndicesWithHash,
     ) -> SuiResult {
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.last_consensus_index,
             [(LAST_CONSENSUS_INDEX_ADDR, consensus_index)],
         )?;
-        let batch = batch.insert_batch(&self.tables.consensus_message_processed, [(key, true)])?;
+        batch.insert_batch(&self.tables.consensus_message_processed, [(key, true)])?;
         batch.write()?;
         self.consensus_notify_read.notify(&key, &());
         Ok(())
@@ -1276,17 +1285,17 @@ impl AuthorityPerEpochStore {
 
     fn finish_consensus_certificate_process_with_batch(
         &self,
-        batch: DBBatch,
+        mut batch: DBBatch,
         key: SequencedConsensusTransactionKey,
         certificate: &VerifiedExecutableTransaction,
         consensus_index: ExecutionIndicesWithHash,
     ) -> SuiResult {
         let transaction_digest = *certificate.digest();
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.consensus_message_order,
             [(consensus_index.index, transaction_digest)],
         )?;
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.pending_execution,
             [(*certificate.digest(), certificate.clone().serializable())],
         )?;
@@ -1296,7 +1305,7 @@ impl AuthorityPerEpochStore {
             .tables
             .user_signatures_for_checkpoints
             .contains_key(certificate.digest())?);
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.user_signatures_for_checkpoints,
             [(*certificate.digest(), certificate.tx_signatures().to_vec())],
         )?;
@@ -1496,11 +1505,29 @@ impl AuthorityPerEpochStore {
         Ok(VerifiedSequencedConsensusTransaction(transaction))
     }
 
-    /// Depending on the type of the VerifiedSequencedConsensusTransaction wrapper,
-    /// - Verify and initialize the state to execute the certificate.
-    ///   Returns a VerifiedCertificate only if this succeeds.
-    /// - Or update the state for checkpoint or epoch change protocol. Returns None.
-    pub(crate) async fn process_consensus_transaction<C: CheckpointServiceNotify>(
+    /// Depending on the type of the VerifiedSequencedConsensusTransaction wrappers,
+    /// - Verify and initialize the state to execute the certificates.
+    ///   Return VerifiedCertificates for each executable certificate
+    /// - Or update the state for checkpoint or epoch change protocol.
+    pub(crate) async fn process_consensus_transactions<C: CheckpointServiceNotify>(
+        &self,
+        transactions: Vec<VerifiedSequencedConsensusTransaction>,
+        checkpoint_service: &Arc<C>,
+        parent_sync_store: impl ParentSync,
+    ) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
+        let mut verified_certificates = Vec::new();
+        for tx in transactions {
+            if let Some(cert) = self
+                .process_consensus_transaction(tx, checkpoint_service, &parent_sync_store)
+                .await?
+            {
+                verified_certificates.push(cert);
+            }
+        }
+        Ok(verified_certificates)
+    }
+
+    async fn process_consensus_transaction<C: CheckpointServiceNotify>(
         &self,
         transaction: VerifiedSequencedConsensusTransaction,
         checkpoint_service: &Arc<C>,
@@ -1685,8 +1712,17 @@ impl AuthorityPerEpochStore {
         self.record_checkpoint_boundary(round)
     }
 
-    pub fn get_pending_checkpoints(&self) -> Vec<(CheckpointCommitHeight, PendingCheckpoint)> {
-        self.tables.pending_checkpoints.iter().collect()
+    pub fn get_pending_checkpoints(
+        &self,
+        last: Option<CheckpointCommitHeight>,
+    ) -> Vec<(CheckpointCommitHeight, PendingCheckpoint)> {
+        let mut iter = self.tables.pending_checkpoints.iter();
+        if let Some(last_processed_height) = last {
+            iter = iter
+                .skip_to(&(last_processed_height + 1))
+                .expect("Unexpected storage error");
+        }
+        iter.collect()
     }
 
     pub fn get_pending_checkpoint(
@@ -1707,20 +1743,28 @@ impl AuthorityPerEpochStore {
     pub fn process_pending_checkpoint(
         &self,
         commit_height: CheckpointCommitHeight,
-        content_info: &[(CheckpointSummary, CheckpointContents)],
+        content_info: Vec<(CheckpointSummary, CheckpointContents)>,
     ) -> Result<(), TypedStoreError> {
+        // All created checkpoints are inserted in builder_checkpoint_summary in a single batch.
+        // This means that upon restart we can use BuilderCheckpointSummary::commit_height
+        // from the last built summary to resume building checkpoints.
         let mut batch = self.tables.pending_checkpoints.batch();
-        batch = batch.delete_batch(&self.tables.pending_checkpoints, [commit_height])?;
-        for (summary, transactions) in content_info {
-            batch = batch.insert_batch(
-                &self.tables.builder_checkpoint_summary,
-                [(&summary.sequence_number, summary)],
+        for (position_in_commit, (summary, transactions)) in content_info.into_iter().enumerate() {
+            let sequence_number = summary.sequence_number;
+            let summary = BuilderCheckpointSummary {
+                summary,
+                commit_height: Some(commit_height),
+                position_in_commit,
+            };
+            batch.insert_batch(
+                &self.tables.builder_checkpoint_summary_v2,
+                [(&sequence_number, summary)],
             )?;
-            batch = batch.insert_batch(
+            batch.insert_batch(
                 &self.tables.builder_digest_to_checkpoint,
                 transactions
                     .iter()
-                    .map(|tx| (tx.transaction, summary.sequence_number)),
+                    .map(|tx| (tx.transaction, sequence_number)),
             )?;
         }
 
@@ -1744,10 +1788,24 @@ impl AuthorityPerEpochStore {
                 .builder_digest_to_checkpoint
                 .insert(&digest, &sequence)?;
         }
+        let builder_summary = BuilderCheckpointSummary {
+            summary: summary.clone(),
+            commit_height: None,
+            position_in_commit: 0,
+        };
         self.tables
-            .builder_checkpoint_summary
-            .insert(summary.sequence_number(), summary)?;
+            .builder_checkpoint_summary_v2
+            .insert(summary.sequence_number(), &builder_summary)?;
         Ok(())
+    }
+
+    pub fn last_built_checkpoint_commit_height(&self) -> Option<CheckpointCommitHeight> {
+        self.tables
+            .builder_checkpoint_summary_v2
+            .iter()
+            .skip_to_last()
+            .next()
+            .and_then(|(_, b)| b.commit_height)
     }
 
     pub fn last_built_checkpoint_summary(
@@ -1755,17 +1813,22 @@ impl AuthorityPerEpochStore {
     ) -> SuiResult<Option<(CheckpointSequenceNumber, CheckpointSummary)>> {
         Ok(self
             .tables
-            .builder_checkpoint_summary
+            .builder_checkpoint_summary_v2
             .iter()
             .skip_to_last()
-            .next())
+            .next()
+            .map(|(seq, s)| (seq, s.summary)))
     }
 
     pub fn get_built_checkpoint_summary(
         &self,
         sequence: CheckpointSequenceNumber,
     ) -> SuiResult<Option<CheckpointSummary>> {
-        Ok(self.tables.builder_checkpoint_summary.get(&sequence)?)
+        Ok(self
+            .tables
+            .builder_checkpoint_summary_v2
+            .get(&sequence)?
+            .map(|s| s.summary))
     }
 
     pub fn builder_included_transaction_in_checkpoint(
@@ -1901,11 +1964,16 @@ impl ExecutionComponents {
         protocol_config: &ProtocolConfig,
         store: Arc<AuthorityStore>,
         metrics: Arc<ResolverMetrics>,
+        expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
     ) -> Self {
         let native_functions = sui_framework::natives::all_natives();
         let move_vm = Arc::new(
-            adapter::new_move_vm(native_functions.clone(), protocol_config)
-                .expect("We defined natives to not fail here"),
+            adapter::new_move_vm(
+                native_functions.clone(),
+                protocol_config,
+                expensive_safety_check_config.enable_move_vm_paranoid_checks(),
+            )
+            .expect("We defined natives to not fail here"),
         );
         let module_cache = Arc::new(SyncModuleCache::new(ResolverWrapper::new(
             store,

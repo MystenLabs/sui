@@ -1,0 +1,30 @@
+//# publish
+module 0x1.A {
+    public foo(t: u64): u64 * u64 {
+        let k: u64;
+    label b0:
+        jump_if (copy(t) % 2 == 0) b2;
+    label b1:
+        k = 3 * copy(t);
+        jump b3;
+    label b2:
+        k = 2 * copy(t);
+        jump b3;
+    label b3:
+        return (move(t), move(k) + 1);
+    }
+}
+
+
+//# run
+import 0x1.A;
+
+main() {
+    let y: u64;
+    let z: u64;
+label b0:
+    y, z = A.foo(10);
+    assert(move(y) == 10, 42);
+    assert(move(z) == 21, 42);
+    return;
+}

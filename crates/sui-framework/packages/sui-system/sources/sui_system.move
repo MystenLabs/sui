@@ -1,6 +1,43 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+/// Sui System State Type Upgrade Guide
+/// `SuiSystemState` is a thin wrapper around `SuiSystemStateInner` that provides a versioned interface.
+/// The `SuiSystemState` object has a fixed ID 0x5, and the `SuiSystemStateInner` object is stored as a dynamic field.
+/// There are a few different ways to upgrade the `SuiSystemStateInner` type:
+///
+/// The simplest and one that doesn't involve a real upgrade is to just add dynamic fields to the `extra_fields` field
+/// of `SuiSystemStateInner` or any of its sub type. This is useful when we are in a rush, or making a small change,
+/// or still experimenting a new field.
+///
+/// To properly upgrade the `SuiSystemStateInner` type, we need to ship a new framework that does the following:
+/// 1. Define a new `SuiSystemStateInner`type (e.g. `SuiSystemStateInnerV2`).
+/// 2. Define a data migration function that migrates the old `SuiSystemStateInner` to the new one (i.e. SuiSystemStateInnerV2).
+/// 3. Replace all uses of `SuiSystemStateInner` with `SuiSystemStateInnerV2` in both sui_system.move and sui_system_state_inner.move,
+///    with the exception of the `sui_system_state_inner::create` function, which should always return the genesis type.
+/// 4. Inside `load_inner_maybe_upgrade` function, check the current version in the wrapper, and if it's not the latest version,
+///   call the data migration function to upgrade the inner object. Make sure to also update the version in the wrapper.
+/// A detailed example can be found in sui/tests/framework_upgrades/mock_sui_systems/shallow_upgrade.
+/// Along with the Move change, we also need to update the Rust code to support the new type. This includes:
+/// 1. Define a new `SuiSystemStateInner` struct type that matches the new Move type, and implement the SuiSystemStateTrait.
+/// 2. Update the `SuiSystemState` struct to include the new version as a new enum variant.
+/// 3. Update the `get_sui_system_state` function to handle the new version.
+/// To test that the upgrade will be successful, we need to modify `sui_system_state_production_upgrade_test` test in
+/// protocol_version_tests and trigger a real upgrade using the new framework. We will need to keep this directory as old version,
+/// put the new framework in a new directory, and run the test to exercise the upgrade.
+///
+/// To upgrade Validator type, besides everything above, we also need to:
+/// 1. Define a new Validator type (e.g. ValidatorV2).
+/// 2. Define a data migration function that migrates the old Validator to the new one (i.e. ValidatorV2).
+/// 3. Replace all uses of Validator with ValidatorV2 except the genesis creation function.
+/// 4. In validator_wrapper::upgrade_to_latest, check the current version in the wrapper, and if it's not the latest version,
+///  call the data migration function to upgrade it.
+/// In Rust, we also need to add a new case in `get_validator_from_table`.
+/// Note that it is possible to upgrade SuiSystemStateInner without upgrading Validator, but not the other way around.
+/// And when we only upgrade SuiSystemStateInner, the version of Validator in the wrapper will not be updated, and hence may become
+/// inconsistent with the version of SuiSystemStateInner. This is fine as long as we don't use the Validator version to determine
+/// the SuiSystemStateInner version, or vice versa.
+
 module sui_system::sui_system {
     use sui::balance::Balance;
 
@@ -12,7 +49,7 @@ module sui_system::sui_system {
     use sui::tx_context::{Self, TxContext};
     use sui_system::validator::Validator;
     use sui_system::validator_cap::UnverifiedValidatorOperationCap;
-    use sui_system::sui_system_state_inner::{Self, SystemParameters, SuiSystemStateInner};
+    use sui_system::sui_system_state_inner::{Self, SystemParameters, SuiSystemStateInnerV2};
     use sui_system::stake_subsidy::StakeSubsidy;
     use std::option;
     use sui::dynamic_field;
@@ -28,11 +65,16 @@ module sui_system::sui_system {
 
     #[test_only]
     friend sui_system::governance_test_utils;
+    #[test_only]
+    friend sui_system::sui_system_tests;
 
     struct SuiSystemState has key {
         id: UID,
         version: u64,
     }
+
+    const ENotSystemAddress: u64 = 0;
+    const EWrongInnerVersion: u64 = 1;
 
     // ==== functions that can only be called by genesis ====
 
@@ -476,7 +518,7 @@ module sui_system::sui_system {
     ) : Balance<SUI> {
         let self = load_system_state_mut(wrapper);
         // Validator will make a special system call with sender set as 0x0.
-        assert!(tx_context::sender(ctx) == @0x0, 0);
+        assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
         let storage_rebate = sui_system_state_inner::advance_epoch(
             self,
             new_epoch,
@@ -494,51 +536,24 @@ module sui_system::sui_system {
         storage_rebate
     }
 
-    /// An extremely simple version of advance_epoch.
-    /// This is called in two situations:
-    ///   - When the call to advance_epoch failed due to a bug, and we want to be able to keep the
-    ///     system running and continue making epoch changes.
-    ///   - When advancing to a new protocol version, we want to be able to change the protocol
-    ///     version
-    fun advance_epoch_safe_mode(
-        storage_reward: Balance<SUI>,
-        computation_reward: Balance<SUI>,
-        wrapper: &mut SuiSystemState,
-        new_epoch: u64,
-        next_protocol_version: u64,
-        storage_rebate: u64,
-        non_refundable_storage_fee: u64,
-        ctx: &mut TxContext,
-    ) {
-        let self = load_system_state_mut(wrapper);
-        // Validator will make a special system call with sender set as 0x0.
-        assert!(tx_context::sender(ctx) == @0x0, 0);
-        sui_system_state_inner::advance_epoch_safe_mode(
-            self,
-            new_epoch,
-            next_protocol_version,
-            storage_reward,
-            computation_reward,
-            storage_rebate,
-            non_refundable_storage_fee,
-            ctx
-        )
-    }
-
-    fun load_system_state(self: &mut SuiSystemState): &SuiSystemStateInner {
+    fun load_system_state(self: &mut SuiSystemState): &SuiSystemStateInnerV2 {
         load_inner_maybe_upgrade(self)
     }
 
-    fun load_system_state_mut(self: &mut SuiSystemState): &mut SuiSystemStateInner {
+    fun load_system_state_mut(self: &mut SuiSystemState): &mut SuiSystemStateInnerV2 {
         load_inner_maybe_upgrade(self)
     }
 
-    fun load_inner_maybe_upgrade(self: &mut SuiSystemState): &mut SuiSystemStateInner {
-        let version = self.version;
-        // TODO: This is where we check the version and perform upgrade if necessary.
+    fun load_inner_maybe_upgrade(self: &mut SuiSystemState): &mut SuiSystemStateInnerV2 {
+        if (self.version == 1) {
+          let v1 = dynamic_field::remove(&mut self.id, self.version);
+          let v2 = sui_system_state_inner::v1_to_v2(v1);
+          self.version = 2;
+          dynamic_field::add(&mut self.id, self.version, v2);
+        };
 
-        let inner: &mut SuiSystemStateInner = dynamic_field::borrow_mut(&mut self.id, version);
-        assert!(sui_system_state_inner::system_state_version(inner) == version, 0);
+        let inner = dynamic_field::borrow_mut(&mut self.id, self.version);
+        assert!(sui_system_state_inner::system_state_version(inner) == self.version, EWrongInnerVersion);
         inner
     }
 
@@ -640,6 +655,12 @@ module sui_system::sui_system {
         sui_system_state_inner::get_storage_fund_object_rebates(self)
     }
 
+    #[test_only]
+    public fun get_stake_subsidy_distribution_counter(wrapper: &mut SuiSystemState): u64 {
+        let self = load_system_state(wrapper);
+        sui_system_state_inner::get_stake_subsidy_distribution_counter(self)
+    }
+
     // CAUTION: THIS CODE IS ONLY FOR TESTING AND THIS MACRO MUST NEVER EVER BE REMOVED.  Creates a
     // candidate validator - bypassing the proof of possession check and other metadata validation
     // in the process.
@@ -714,31 +735,5 @@ module sui_system::sui_system {
             ctx,
         );
         storage_rebate
-    }
-
-    // CAUTION: THIS CODE IS ONLY FOR TESTING AND THIS MACRO MUST NEVER EVER BE REMOVED.
-    #[test_only]
-    public(friend) fun advance_epoch_safe_mode_for_testing(
-        wrapper: &mut SuiSystemState,
-        new_epoch: u64,
-        next_protocol_version: u64,
-        storage_charge: u64,
-        computation_charge: u64,
-        storage_rebate: u64,
-        non_refundable_storage_fee: u64,
-        ctx: &mut TxContext,
-    ) {
-        let storage_reward = balance::create_for_testing(storage_charge);
-        let computation_reward = balance::create_for_testing(computation_charge);
-        advance_epoch_safe_mode(
-            storage_reward,
-            computation_reward,
-            wrapper,
-            new_epoch,
-            next_protocol_version,
-            storage_rebate,
-            non_refundable_storage_fee,
-            ctx,
-        );
     }
 }

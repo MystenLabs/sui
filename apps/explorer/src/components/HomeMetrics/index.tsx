@@ -1,31 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFeature } from '@growthbook/growthbook-react';
-import { formatAmount, roundFloat, useRpcClient } from '@mysten/core';
+import { formatAmountParts, roundFloat, useRpcClient } from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
 
 import { MetricGroup } from './MetricGroup';
 
-import { useNetwork } from '~/context';
-import { useAppsBackend } from '~/hooks/useAppsBackend';
-import { useGetSystemObject } from '~/hooks/useGetObject';
+import { useEnhancedRpcClient } from '~/hooks/useEnhancedRpc';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
 import { Stats, type StatsProps } from '~/ui/Stats';
-import { GROWTHBOOK_FEATURES } from '~/utils/growthbook';
-
-interface CountsResponse {
-    addresses: number;
-    objects: number;
-    packages: number;
-    transactions: number;
-}
-
-interface TPSCheckpointResponse {
-    tps: number;
-    checkpoint: string;
-}
 
 // Simple wrapper around stats to avoid text wrapping:
 function StatsWrapper(props: StatsProps) {
@@ -36,31 +20,42 @@ function StatsWrapper(props: StatsProps) {
     );
 }
 
+function FormattedStatsAmount({
+    amount,
+    ...props
+}: Omit<StatsProps, 'children'> & { amount?: string | number | bigint }) {
+    const [formattedAmount, postfix] = formatAmountParts(amount);
+
+    return (
+        <StatsWrapper {...props} postfix={postfix}>
+            {formattedAmount}
+        </StatsWrapper>
+    );
+}
+
+const HOME_REFETCH_INTERVAL = 5 * 1000;
+
 export function HomeMetrics() {
-    const [network] = useNetwork();
-    const enabled = useFeature(GROWTHBOOK_FEATURES.EXPLORER_METRICS).on;
-
-    const request = useAppsBackend();
-    const { data: systemData } = useGetSystemObject();
-
     const rpc = useRpcClient();
-    const { data: gasData } = useQuery(['reference-gas-price'], () =>
+
+    // todo: remove this hook when we enable enhanced rpc client by default
+    const enhancedRpc = useEnhancedRpcClient();
+
+    const { data: gasData } = useQuery(['home', 'reference-gas-price'], () =>
         rpc.getReferenceGasPrice()
     );
 
-    const { data: countsData } = useQuery(
-        ['home', 'counts'],
-        () => request<CountsResponse>('counts', { network }),
-        { enabled, refetchInterval: 60 * 1000 }
+    const { data: transactionCount } = useQuery(
+        ['home', 'transaction-count'],
+        () => rpc.getTotalTransactionBlocks(),
+        { refetchInterval: HOME_REFETCH_INTERVAL }
     );
 
-    const { data: tpsData } = useQuery(
-        ['home', 'tps-checkpoints'],
-        () => request<TPSCheckpointResponse>('tps-checkpoints', { network }),
-        { enabled, refetchInterval: 10 * 1000 }
+    const { data: networkMetrics } = useQuery(
+        ['home', 'metrics'],
+        () => enhancedRpc.getNetworkMetrics(),
+        { refetchInterval: HOME_REFETCH_INTERVAL }
     );
-
-    if (!enabled) return null;
 
     return (
         <Card spacing="lg">
@@ -70,48 +65,58 @@ export function HomeMetrics() {
 
             <div className="mt-8 space-y-7">
                 <MetricGroup label="Current">
-                    <StatsWrapper label="TPS" tooltip="Transactions per second">
-                        {tpsData?.tps ? roundFloat(tpsData.tps, 2) : null}
+                    <StatsWrapper
+                        label="TPS Now / Peak 30D"
+                        tooltip="Peak TPS in the past 30 days excluding this epoch"
+                        postfix={`/ ${
+                            networkMetrics?.tps30Days
+                                ? roundFloat(networkMetrics.tps30Days, 2)
+                                : '--'
+                        }`}
+                    >
+                        {networkMetrics?.currentTps
+                            ? roundFloat(networkMetrics.currentTps, 2)
+                            : '--'}
                     </StatsWrapper>
-                    <StatsWrapper label="Gas Price" tooltip="Current gas price">
-                        {gasData ? `${gasData} MIST` : null}
+                    <StatsWrapper
+                        label="Gas Price"
+                        tooltip="Current gas price"
+                        postfix="MIST"
+                    >
+                        {gasData ? String(gasData) : null}
                     </StatsWrapper>
                     <StatsWrapper label="Epoch" tooltip="The current epoch">
-                        {systemData?.epoch}
+                        {networkMetrics?.currentEpoch}
                     </StatsWrapper>
                     <StatsWrapper
                         label="Checkpoint"
-                        tooltip="The current checkpoint (updates every one min)"
+                        tooltip="The current checkpoint"
                     >
-                        {tpsData?.checkpoint}
+                        {networkMetrics?.currentCheckpoint}
                     </StatsWrapper>
                 </MetricGroup>
 
                 <MetricGroup label="Total">
-                    <StatsWrapper
+                    <FormattedStatsAmount
                         label="Packages"
-                        tooltip="Total packages counter (updates every one min)"
-                    >
-                        {formatAmount(countsData?.packages)}
-                    </StatsWrapper>
-                    <StatsWrapper
+                        tooltip="Total packages counter"
+                        amount={networkMetrics?.totalPackages}
+                    />
+                    <FormattedStatsAmount
                         label="Objects"
-                        tooltip="Total objects counter (updates every one min)"
-                    >
-                        {formatAmount(countsData?.objects)}
-                    </StatsWrapper>
-                    <StatsWrapper
-                        label="Transactions"
-                        tooltip="Total transactions counter (updates every one min)"
-                    >
-                        {formatAmount(countsData?.transactions)}
-                    </StatsWrapper>
-                    <StatsWrapper
+                        tooltip="Total objects counter"
+                        amount={networkMetrics?.totalObjects}
+                    />
+                    <FormattedStatsAmount
+                        label="Transaction Blocks"
+                        tooltip="Total transaction blocks counter"
+                        amount={transactionCount}
+                    />
+                    <FormattedStatsAmount
                         label="Addresses"
-                        tooltip="Total addresses counter (updates every one min)"
-                    >
-                        {formatAmount(countsData?.addresses)}
-                    </StatsWrapper>
+                        tooltip="Addresses that have participated in at least one transaction since network genesis"
+                        amount={networkMetrics?.totalAddresses}
+                    />
                 </MetricGroup>
             </div>
         </Card>

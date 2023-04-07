@@ -1,0 +1,6 @@
+//# publish
+module 0x42.M {
+    // cannot have mutually recursive structs
+    struct A{b: Self.B}
+    struct B{a: Self.A}
+}

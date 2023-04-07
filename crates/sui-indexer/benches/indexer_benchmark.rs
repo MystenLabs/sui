@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use chrono::Utc;
 use criterion::Criterion;
+use tokio::runtime::Runtime;
 
 use sui_indexer::models::checkpoints::Checkpoint;
 use sui_indexer::models::objects::{NamedBcsBytes, Object as DBObject, ObjectStatus};
@@ -21,6 +22,7 @@ use sui_indexer::store::{
 use sui_indexer::utils::reset_database;
 use sui_json_rpc_types::CheckpointId;
 use sui_types::base_types::{ObjectDigest, ObjectID, SequenceNumber, SuiAddress};
+use sui_types::crypto::AggregateAuthoritySignature;
 use sui_types::digests::TransactionDigest;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::TransactionData;
@@ -33,21 +35,27 @@ fn indexer_benchmark(c: &mut Criterion) {
     let pw = env::var("POSTGRES_PASSWORD").unwrap_or_else(|_| "postgrespw".into());
     let db_url = format!("postgres://postgres:{pw}@{pg_host}:{pg_port}");
 
-    let pg_connection_pool = new_pg_connection_pool(&db_url).unwrap();
-    reset_database(&mut pg_connection_pool.get().unwrap(), true).unwrap();
-    let store = PgIndexerStore::new(pg_connection_pool);
+    let rt = Runtime::new().unwrap();
+    let (mut checkpoints, store) = rt.block_on(async {
+        let (blocking_cp, async_cp) = new_pg_connection_pool(&db_url).await.unwrap();
+        reset_database(&mut blocking_cp.get().unwrap(), true).unwrap();
+        let store = PgIndexerStore::new(async_cp, blocking_cp).await;
 
-    let mut checkpoints = (0..150).map(create_checkpoint).collect::<Vec<_>>();
+        let checkpoints = (0..150).map(create_checkpoint).collect::<Vec<_>>();
+        (checkpoints, store)
+    });
 
     c.bench_function("persist_checkpoint", |b| {
-        b.iter(|| store.persist_checkpoint(&checkpoints.pop().unwrap()))
+        b.iter(|| rt.block_on(store.persist_checkpoint(&checkpoints.pop().unwrap())))
     });
 
     let mut checkpoints = (20..100)
         .cycle()
         .map(|i| CheckpointId::SequenceNumber(i.into()));
+
     c.bench_function("get_checkpoint", |b| {
-        b.iter(|| store.get_checkpoint(checkpoints.next().unwrap()).unwrap())
+        b.to_async(Runtime::new().unwrap())
+            .iter(|| store.get_checkpoint(checkpoints.next().unwrap()))
     });
 }
 
@@ -60,6 +68,7 @@ fn create_checkpoint(sequence_number: i64) -> TemporaryCheckpointStore {
             transactions: vec![],
             previous_checkpoint_digest: Some(CheckpointDigest::random().base58_encode()),
             end_of_epoch: false,
+            validator_signature: AggregateAuthoritySignature::default().to_string(),
             total_gas_cost: i64::MAX,
             total_computation_cost: i64::MAX,
             total_storage_cost: i64::MAX,
@@ -74,7 +83,7 @@ fn create_checkpoint(sequence_number: i64) -> TemporaryCheckpointStore {
             .collect(),
         events: vec![],
         objects_changes: vec![TransactionObjectChanges {
-            mutated_objects: (1..1000).map(|_| create_object(sequence_number)).collect(),
+            changed_objects: (1..1000).map(|_| create_object(sequence_number)).collect(),
             deleted_objects: vec![],
         }],
         addresses: vec![],
@@ -106,8 +115,8 @@ fn create_transaction(sequence_number: i64) -> Transaction {
         transaction_digest: TransactionDigest::random().base58_encode(),
         sender: SuiAddress::random_for_testing_only().to_string(),
         recipients: vec![],
-        checkpoint_sequence_number: sequence_number,
-        timestamp_ms: Utc::now().timestamp_millis(),
+        checkpoint_sequence_number: Some(sequence_number),
+        timestamp_ms: Some(Utc::now().timestamp_millis()),
         transaction_kind: "test".to_string(),
         transaction_count: 0,
         created: vec![],

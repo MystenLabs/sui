@@ -49,6 +49,7 @@ diesel::table! {
         total_transactions -> Int8,
         network_total_transactions -> Int8,
         timestamp_ms -> Int8,
+        validator_signature -> Text,
     }
 }
 
@@ -88,7 +89,6 @@ diesel::table! {
         module -> Text,
         event_type -> Text,
         event_time_ms -> Nullable<Int8>,
-        parsed_json -> Jsonb,
         event_bcs -> Bytea,
     }
 }
@@ -147,7 +147,7 @@ diesel::table! {
     use super::sql_types::ObjectStatus;
     use super::sql_types::BcsBytes;
 
-    objects_history (checkpoint, object_id, version) {
+    objects_history (object_id, version, checkpoint) {
         epoch -> Int8,
         checkpoint -> Int8,
         object_id -> Varchar,
@@ -223,8 +223,8 @@ diesel::table! {
         transaction_digest -> Varchar,
         sender -> Varchar,
         recipients -> Array<Nullable<Text>>,
-        checkpoint_sequence_number -> Int8,
-        timestamp_ms -> Int8,
+        checkpoint_sequence_number -> Nullable<Int8>,
+        timestamp_ms -> Nullable<Int8>,
         transaction_kind -> Text,
         transaction_count -> Int8,
         created -> Array<Nullable<Text>>,

@@ -5,7 +5,7 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 
 use sui_json_rpc_types::{
-    CheckpointedObjectID, EpochInfo, EpochPage, MoveCallMetrics, NetworkMetrics, ObjectsPage,
+    CheckpointedObjectID, EpochInfo, EpochPage, MoveCallMetrics, NetworkMetrics, QueryObjectsPage,
     SuiObjectResponseQuery,
 };
 use sui_open_rpc_macros::open_rpc;
@@ -40,7 +40,7 @@ pub trait ExtendedApi {
         cursor: Option<CheckpointedObjectID>,
         /// Max number of items returned per page, default to [QUERY_MAX_RESULT_LIMIT_OBJECTS] if not specified.
         limit: Option<usize>,
-    ) -> RpcResult<ObjectsPage>;
+    ) -> RpcResult<QueryObjectsPage>;
 
     /// Return Network metrics
     #[method(name = "getNetworkMetrics")]

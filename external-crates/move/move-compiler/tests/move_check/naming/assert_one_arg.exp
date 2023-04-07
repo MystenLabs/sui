@@ -1,0 +1,33 @@
+error[E04016]: too few arguments
+  ┌─ tests/move_check/naming/assert_one_arg.move:3:9
+  │
+3 │         assert!(false);
+  │         ^^^^^^^^^^^^^^
+  │         │      │
+  │         │      Found 1 argument(s) here
+  │         Invalid call of 'assert'. The call expected 2 argument(s) but got 1
+
+error[E04016]: too few arguments
+  ┌─ tests/move_check/naming/assert_one_arg.move:4:9
+  │
+4 │         assert!(0 != 1);
+  │         ^^^^^^^^^^^^^^^
+  │         │      │
+  │         │      Found 1 argument(s) here
+  │         Invalid call of 'assert'. The call expected 2 argument(s) but got 1
+
+error[E04016]: too few arguments
+  ┌─ tests/move_check/naming/assert_one_arg.move:5:9
+  │
+5 │         assert!(x != y);
+  │         ^^^^^^^^^^^^^^^
+  │         │      │
+  │         │      Found 1 argument(s) here
+  │         Invalid call of 'assert'. The call expected 2 argument(s) but got 1
+
+error[E03009]: unbound variable
+  ┌─ tests/move_check/naming/assert_one_arg.move:5:22
+  │
+5 │         assert!(x != y);
+  │                      ^ Invalid variable usage. Unbound variable 'y'
+

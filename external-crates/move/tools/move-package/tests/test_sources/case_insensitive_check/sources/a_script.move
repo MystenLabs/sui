@@ -1,0 +1,3 @@
+script {
+    fun a() { }
+}

@@ -1,0 +1,10 @@
+//# publish
+module 0x1.M {
+    struct R has store { b: bool }
+    f() {
+        let v: vector<Self.R>;
+    label b0:
+        v = vec_pack_0<Self.R>();
+        return;
+    }
+}

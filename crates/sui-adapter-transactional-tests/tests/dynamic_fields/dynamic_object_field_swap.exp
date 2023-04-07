@@ -1,0 +1,35 @@
+processed 8 tasks
+
+init:
+A: object(0,0)
+
+task 1 'publish'. lines 6-62:
+created: object(1,0)
+mutated: object(0,1)
+
+task 2 'run'. lines 64-64:
+created: object(2,0)
+mutated: object(0,0)
+
+task 3 'run'. lines 66-66:
+created: object(3,0)
+mutated: object(0,0)
+
+task 4 'run'. lines 68-68:
+created: object(4,0)
+mutated: object(0,0), object(2,0), object(3,0)
+
+task 5 'view-object'. lines 70-70:
+Owner: Object ID: ( fake(4,0) )
+Version: 4
+Contents: test::m::Child {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, value: 0u64}
+
+task 6 'run'. lines 72-72:
+created: object(6,0)
+mutated: object(0,0), object(2,0), object(3,0)
+deleted: object(4,0)
+
+task 7 'view-object'. lines 74-74:
+Owner: Account Address ( A )
+Version: 5
+Contents: test::m::Child {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, value: 0u64}

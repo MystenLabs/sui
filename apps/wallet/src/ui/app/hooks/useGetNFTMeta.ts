@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { is, SuiObjectData } from '@mysten/sui.js';
+import { getObjectDisplay } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { useGetObject } from './useGetObject';
@@ -16,14 +16,16 @@ export function useGetNFTMeta(objectID: string) {
     const resp = useGetObject(objectID);
     const nftMeta = useMemo(() => {
         if (!resp.data) return null;
-        const { data } = resp.data || {};
-        if (!is(data, SuiObjectData) || !data.display) return null;
-        const { name, description, creator, img_url, link, project_url } =
-            data.display;
+        const display = getObjectDisplay(resp.data);
+        if (!display.data) {
+            return null;
+        }
+        const { name, description, creator, image_url, link, project_url } =
+            display.data;
         return {
             name: name || null,
             description: description || null,
-            imageUrl: img_url || null,
+            imageUrl: image_url || null,
             link: link || null,
             projectUrl: project_url || null,
             creator: creator || null,

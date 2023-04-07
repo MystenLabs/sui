@@ -1,0 +1,69 @@
+error: expect a boolean value or a valid intrinsic type
+   ┌─ tests/sources/intrinsic_decl_err.move:16:9
+   │
+16 │         pragma intrinsic = 0x42::M::MyTable;
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: unknown intrinsic type: no_such_map
+   ┌─ tests/sources/intrinsic_decl_err.move:19:9
+   │
+19 │         pragma intrinsic = no_such_map;
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: property `map_no_such_fun` is not valid in this context
+   ┌─ tests/sources/intrinsic_decl_err.move:22:9
+   │
+22 │ ╭         pragma intrinsic = map,
+23 │ │             map_no_such_fun = new;
+   │ ╰──────────────────────────────────^
+
+error: invalid intrinsic function mapping: map_len
+   ┌─ tests/sources/intrinsic_decl_err.move:26:9
+   │
+26 │ ╭         pragma intrinsic = map,
+27 │ │             map_len = true;
+   │ ╰───────────────────────────^
+
+error: an intrinsic function mapping can only refer to functions declared in the same module while `signer::address_of` is not
+   ┌─ tests/sources/intrinsic_decl_err.move:30:9
+   │
+30 │ ╭         pragma intrinsic = map,
+31 │ │             map_len = 0x1::signer::address_of;
+   │ ╰──────────────────────────────────────────────^
+
+error: unable to find move function for intrinsic mapping: M::no_such_move_fun
+   ┌─ tests/sources/intrinsic_decl_err.move:34:9
+   │
+34 │ ╭         pragma intrinsic = map,
+35 │ │             map_len = no_such_move_fun;
+   │ ╰───────────────────────────────────────^
+
+error: unable to find spec function for intrinsic mapping: M::no_such_spec_fun
+   ┌─ tests/sources/intrinsic_decl_err.move:38:9
+   │
+38 │ ╭         pragma intrinsic = map,
+39 │ │             map_spec_len = no_such_spec_fun;
+   │ ╰────────────────────────────────────────────^
+
+error: unable to find move function for intrinsic mapping: M::spec_len
+   ┌─ tests/sources/intrinsic_decl_err.move:42:9
+   │
+42 │ ╭         pragma intrinsic = map,
+43 │ │             map_len = spec_len;
+   │ ╰───────────────────────────────^
+
+error: duplicated intrinsic mapping for move function: M::length
+   ┌─ tests/sources/intrinsic_decl_err.move:46:9
+   │
+46 │ ╭         pragma intrinsic = map,
+47 │ │             map_len = length,
+48 │ │             map_borrow_mut = length;
+   │ ╰────────────────────────────────────^
+
+error: duplicated intrinsic mapping for spec function: M::spec_len
+   ┌─ tests/sources/intrinsic_decl_err.move:51:9
+   │
+51 │ ╭         pragma intrinsic = map,
+52 │ │             map_spec_len = spec_len,
+53 │ │             map_spec_set = spec_len;
+   │ ╰────────────────────────────────────^

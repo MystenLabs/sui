@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::{cmp::Ordering, collections::BTreeMap, iter};
+use sui_macros::fail_point;
 use tap::Tap;
 
 use config::AuthorityIdentifier;
@@ -238,28 +239,24 @@ impl<T: Cache> CertificateStore<T> {
 
     /// Inserts a certificate to the store
     pub fn write(&self, certificate: Certificate) -> StoreResult<()> {
-        fail::fail_point!("certificate-store-panic", |_| {
-            Err(RocksDBError(format!(
-                "Injected error in certificate store write"
-            )))
-        });
+        fail_point!("narwhal-store-before-write");
 
         let mut batch = self.certificates_by_id.batch();
 
         let id = certificate.digest();
 
         // write the certificate by its id
-        batch = batch.insert_batch(
+        batch.insert_batch(
             &self.certificates_by_id,
             iter::once((id, certificate.clone())),
         )?;
 
         // Index the certificate id by its round and origin.
-        batch = batch.insert_batch(
+        batch.insert_batch(
             &self.certificate_id_by_round,
             iter::once(((certificate.round(), certificate.origin()), id)),
         )?;
-        batch = batch.insert_batch(
+        batch.insert_batch(
             &self.certificate_id_by_origin,
             iter::once(((certificate.origin(), certificate.round()), id)),
         )?;
@@ -274,6 +271,7 @@ impl<T: Cache> CertificateStore<T> {
         // insert in cache
         self.cache.write(certificate);
 
+        fail_point!("narwhal-store-after-write");
         result
     }
 
@@ -284,11 +282,7 @@ impl<T: Cache> CertificateStore<T> {
         &self,
         certificates: impl IntoIterator<Item = Certificate>,
     ) -> StoreResult<()> {
-        fail::fail_point!("certificate-store", |_| {
-            Err(RocksDBError(format!(
-                "Injected error in certificate store write all"
-            )))
-        });
+        fail_point!("narwhal-store-before-write");
 
         let mut batch = self.certificates_by_id.batch();
 
@@ -298,7 +292,7 @@ impl<T: Cache> CertificateStore<T> {
             .collect();
 
         // write the certificates by their ids
-        batch = batch.insert_batch(&self.certificates_by_id, certificates.clone())?;
+        batch.insert_batch(&self.certificates_by_id, certificates.clone())?;
 
         // write the certificates id by their rounds
         let values = certificates.iter().map(|(digest, c)| {
@@ -306,7 +300,7 @@ impl<T: Cache> CertificateStore<T> {
             let value = digest;
             (key, value)
         });
-        batch = batch.insert_batch(&self.certificate_id_by_round, values)?;
+        batch.insert_batch(&self.certificate_id_by_round, values)?;
 
         // write the certificates id by their origins
         let values = certificates.iter().map(|(digest, c)| {
@@ -314,7 +308,7 @@ impl<T: Cache> CertificateStore<T> {
             let value = digest;
             (key, value)
         });
-        batch = batch.insert_batch(&self.certificate_id_by_origin, values)?;
+        batch.insert_batch(&self.certificate_id_by_origin, values)?;
 
         // execute the batch (atomically) and return the result
         let result = batch.write();
@@ -333,18 +327,13 @@ impl<T: Cache> CertificateStore<T> {
                 .collect(),
         );
 
+        fail_point!("narwhal-store-after-write");
         result
     }
 
     /// Retrieves a certificate from the store. If not found
     /// then None is returned as result.
     pub fn read(&self, id: CertificateDigest) -> StoreResult<Option<Certificate>> {
-        fail::fail_point!("certificate-store-panic", |_| {
-            Err(RocksDBError(format!(
-                "Injected error in certificate store read"
-            )))
-        });
-
         if let Some(certificate) = self.cache.read(&id) {
             return Ok(Some(certificate));
         }
@@ -359,12 +348,6 @@ impl<T: Cache> CertificateStore<T> {
         origin: AuthorityIdentifier,
         round: Round,
     ) -> StoreResult<Option<Certificate>> {
-        fail::fail_point!("certificate-store", |_| {
-            Err(RocksDBError(format!(
-                "Injected error in certificate store read by index"
-            )))
-        });
-
         match self.certificate_id_by_origin.get(&(origin, round))? {
             Some(d) => self.read(d),
             None => Ok(None),
@@ -374,12 +357,6 @@ impl<T: Cache> CertificateStore<T> {
     /// Retrieves a certificate from the store. If not found
     /// then None is returned as result.
     pub fn contains(&self, id: &CertificateDigest) -> StoreResult<bool> {
-        fail::fail_point!("certificate-store-panic", |_| {
-            Err(RocksDBError(format!(
-                "Injected error in certificate store contains_digest"
-            )))
-        });
-
         if self.cache.contains(id) {
             return Ok(true);
         }
@@ -393,12 +370,6 @@ impl<T: Cache> CertificateStore<T> {
         &self,
         ids: impl IntoIterator<Item = CertificateDigest>,
     ) -> StoreResult<Vec<Option<Certificate>>> {
-        fail::fail_point!("certificate-store", |_| {
-            Err(RocksDBError(format!(
-                "Injected error in certificate store read all"
-            )))
-        });
-
         let mut found = HashMap::new();
         let mut missing = Vec::new();
 
@@ -449,6 +420,7 @@ impl<T: Cache> CertificateStore<T> {
 
     /// Deletes a single certificate by its digest.
     pub fn delete(&self, id: CertificateDigest) -> StoreResult<()> {
+        fail_point!("narwhal-store-before-write");
         // first read the certificate to get the round - we'll need in order
         // to delete the secondary index
         let cert = match self.read(id)? {
@@ -459,12 +431,12 @@ impl<T: Cache> CertificateStore<T> {
         let mut batch = self.certificates_by_id.batch();
 
         // write the certificate by its id
-        batch = batch.delete_batch(&self.certificates_by_id, iter::once(id))?;
+        batch.delete_batch(&self.certificates_by_id, iter::once(id))?;
 
         // write the certificate index by its round
         let key = (cert.round(), cert.origin());
 
-        batch = batch.delete_batch(&self.certificate_id_by_round, iter::once(key))?;
+        batch.delete_batch(&self.certificate_id_by_round, iter::once(key))?;
 
         // execute the batch (atomically) and return the result
         let result = batch.write();
@@ -473,11 +445,13 @@ impl<T: Cache> CertificateStore<T> {
             self.cache.remove(&id);
         }
 
+        fail_point!("narwhal-store-after-write");
         result
     }
 
     /// Deletes multiple certificates in an atomic way.
     pub fn delete_all(&self, ids: impl IntoIterator<Item = CertificateDigest>) -> StoreResult<()> {
+        fail_point!("narwhal-store-before-write");
         // first read the certificates to get their rounds - we'll need in order
         // to delete the secondary index
         let ids: Vec<CertificateDigest> = ids.into_iter().collect();
@@ -493,10 +467,10 @@ impl<T: Cache> CertificateStore<T> {
         let mut batch = self.certificates_by_id.batch();
 
         // delete the certificates from the secondary index
-        batch = batch.delete_batch(&self.certificate_id_by_round, keys_by_round)?;
+        batch.delete_batch(&self.certificate_id_by_round, keys_by_round)?;
 
         // delete the certificates by its ids
-        batch = batch.delete_batch(&self.certificates_by_id, ids.clone())?;
+        batch.delete_batch(&self.certificates_by_id, ids.clone())?;
 
         // execute the batch (atomically) and return the result
         let result = batch.write();
@@ -505,6 +479,7 @@ impl<T: Cache> CertificateStore<T> {
             self.cache.remove_all(ids);
         }
 
+        fail_point!("narwhal-store-after-write");
         result
     }
 
@@ -671,9 +646,14 @@ impl<T: Cache> CertificateStore<T> {
 
     /// Clears both the main storage of the certificates and the secondary index
     pub fn clear(&self) -> StoreResult<()> {
+        fail_point!("narwhal-store-before-write");
+
         self.certificates_by_id.clear()?;
         self.certificate_id_by_round.clear()?;
-        self.certificate_id_by_origin.clear()
+        self.certificate_id_by_origin.clear()?;
+
+        fail_point!("narwhal-store-after-write");
+        Ok(())
     }
 
     /// Checks whether the storage is empty. The main storage is

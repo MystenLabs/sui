@@ -6,6 +6,7 @@ use std::sync::{Arc, Weak};
 use std::thread;
 use sui_config::NodeConfig;
 use sui_node::{metrics, SuiNode, SuiNodeHandle};
+use sui_types::crypto::{AuthorityPublicKeyBytes, KeypairTraits};
 use tracing::{info, trace};
 
 use super::node::RuntimeType;
@@ -46,7 +47,7 @@ impl Container {
             let span = tracing::span!(
                 tracing::Level::INFO,
                 "node",
-                name =% config.sui_address()
+                name =% AuthorityPublicKeyBytes::from(config.protocol_key_pair().public()).concise(),
             );
             let _guard = span.enter();
 

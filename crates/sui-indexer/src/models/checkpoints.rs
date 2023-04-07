@@ -3,14 +3,16 @@
 
 use diesel::prelude::*;
 
+use fastcrypto::traits::EncodeDecodeBase64;
 use sui_json_rpc_types::Checkpoint as RpcCheckpoint;
 use sui_types::base_types::TransactionDigest;
+use sui_types::crypto::AggregateAuthoritySignature;
 use sui_types::digests::CheckpointDigest;
 use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::EndOfEpochData;
 
 use crate::errors::IndexerError;
-use crate::schema::checkpoints;
+use crate::schema::checkpoints::{self};
 
 #[derive(Queryable, Insertable, Debug, Clone, Default)]
 #[diesel(table_name = checkpoints)]
@@ -29,6 +31,7 @@ pub struct Checkpoint {
     pub total_transactions: i64,
     pub network_total_transactions: i64,
     pub timestamp_ms: i64,
+    pub validator_signature: String,
 }
 
 impl Checkpoint {
@@ -68,6 +71,7 @@ impl Checkpoint {
             network_total_transactions: rpc_checkpoint.network_total_transactions as i64,
             timestamp_ms: rpc_checkpoint.timestamp_ms as i64,
             total_transactions: total_transactions as i64,
+            validator_signature: rpc_checkpoint.validator_signature.encode_base64(),
         })
     }
 
@@ -110,6 +114,13 @@ impl Checkpoint {
                 })
             })
             .collect::<Result<Vec<TransactionDigest>, IndexerError>>()?;
+        let validator_sig = AggregateAuthoritySignature::decode_base64(&self.validator_signature)
+            .map_err(|e| {
+            IndexerError::SerdeError(format!(
+                "Failed to decode validator signature: {:?} with err: {:?}",
+                self.validator_signature, e
+            ))
+        })?;
 
         Ok(RpcCheckpoint {
             epoch: self.epoch as u64,
@@ -117,6 +128,7 @@ impl Checkpoint {
             digest: parsed_digest,
             previous_digest: parsed_previous_digest,
             end_of_epoch_data,
+            validator_signature: validator_sig,
             epoch_rolling_gas_cost_summary: GasCostSummary {
                 computation_cost: self.total_computation_cost as u64,
                 storage_cost: self.total_storage_cost as u64,

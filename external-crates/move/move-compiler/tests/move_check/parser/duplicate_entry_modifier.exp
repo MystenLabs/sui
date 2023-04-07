@@ -1,0 +1,8 @@
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_check/parser/duplicate_entry_modifier.move:2:11
+  │
+2 │     entry entry fun foo() {}
+  │     ----- ^^^^^ Duplicate 'entry' modifier
+  │     │      
+  │     'entry' modifier previously given here
+

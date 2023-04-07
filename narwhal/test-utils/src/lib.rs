@@ -18,12 +18,14 @@ use fastcrypto::{
 use indexmap::IndexMap;
 use mysten_network::Multiaddr;
 use once_cell::sync::OnceCell;
+use rand::distributions::Bernoulli;
+use rand::distributions::Distribution;
 use rand::{
     rngs::{OsRng, StdRng},
-    thread_rng, Rng, SeedableRng,
+    thread_rng, Rng, RngCore, SeedableRng,
 };
 use std::{
-    collections::{BTreeMap, BTreeSet, VecDeque},
+    collections::{BTreeMap, BTreeSet, HashMap, VecDeque},
     num::NonZeroUsize,
     ops::RangeInclusive,
     sync::Arc,
@@ -35,14 +37,14 @@ use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing::info;
 use types::{
     Batch, BatchDigest, Certificate, CertificateAPI, CertificateDigest, CommittedSubDagShell,
-    ConsensusStore, FetchCertificatesRequest, FetchCertificatesResponse, GetCertificatesRequest,
-    GetCertificatesResponse, Header, HeaderAPI, HeaderV1Builder, PayloadAvailabilityRequest,
-    PayloadAvailabilityResponse, PrimaryToPrimary, PrimaryToPrimaryServer, PrimaryToWorker,
-    PrimaryToWorkerServer, RequestBatchRequest, RequestBatchResponse, RequestBatchesRequest,
-    RequestBatchesResponse, RequestVoteRequest, RequestVoteResponse, Round, SendCertificateRequest,
-    SendCertificateResponse, SequenceNumber, TimestampMs, Transaction, Vote, VoteAPI,
-    WorkerBatchMessage, WorkerDeleteBatchesMessage, WorkerSynchronizeMessage, WorkerToWorker,
-    WorkerToWorkerServer,
+    ConsensusStore, FetchBatchesRequest, FetchBatchesResponse, FetchCertificatesRequest,
+    FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header, HeaderAPI,
+    HeaderV1Builder, PayloadAvailabilityRequest, PayloadAvailabilityResponse, PrimaryToPrimary,
+    PrimaryToPrimaryServer, PrimaryToWorker, PrimaryToWorkerServer, RequestBatchRequest,
+    RequestBatchResponse, RequestBatchesRequest, RequestBatchesResponse, RequestVoteRequest,
+    RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse, SequenceNumber,
+    TimestampMs, Transaction, Vote, VoteAPI, WorkerBatchMessage, WorkerDeleteBatchesMessage,
+    WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerServer,
 };
 
 pub mod cluster;
@@ -170,6 +172,35 @@ pub fn fixture_batch_with_transactions(number_of_transactions: u32) -> Batch {
     Batch::new(transactions)
 }
 
+pub fn fixture_payload_with_rand<R: Rng + ?Sized>(
+    number_of_batches: u8,
+    rand: &mut R,
+) -> IndexMap<BatchDigest, (WorkerId, TimestampMs)> {
+    let mut payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)> = IndexMap::new();
+
+    for _ in 0..number_of_batches {
+        let batch_digest = batch_with_rand(rand).digest();
+
+        payload.insert(batch_digest, (0, 0));
+    }
+
+    payload
+}
+
+pub fn transaction_with_rand<R: Rng + ?Sized>(rand: &mut R) -> Transaction {
+    // generate random value transactions, but the length will be always 100 bytes
+    (0..100)
+        .map(|_v| rand.gen_range(u8::MIN..=u8::MAX))
+        .collect()
+}
+
+pub fn batch_with_rand<R: Rng + ?Sized>(rand: &mut R) -> Batch {
+    Batch::new(vec![
+        transaction_with_rand(rand),
+        transaction_with_rand(rand),
+    ])
+}
+
 // Fixture
 pub fn transaction() -> Transaction {
     // generate random value transactions, but the length will be always 100 bytes
@@ -279,6 +310,15 @@ impl PrimaryToWorker for PrimaryToWorkerMockServer {
         Ok(anemo::Response::new(()))
     }
 
+    async fn fetch_batches(
+        &self,
+        _request: anemo::Request<FetchBatchesRequest>,
+    ) -> Result<anemo::Response<FetchBatchesResponse>, anemo::rpc::Status> {
+        Ok(anemo::Response::new(FetchBatchesResponse {
+            batches: HashMap::new(),
+        }))
+    }
+
     async fn delete_batches(
         &self,
         _request: anemo::Request<WorkerDeleteBatchesMessage>,
@@ -374,7 +414,7 @@ pub fn batch_with_transactions(num_of_transactions: usize) -> Batch {
 
 const BATCHES_CF: &str = "batches";
 
-pub fn open_batch_store() -> DBMap<BatchDigest, Batch> {
+pub fn create_batch_store() -> DBMap<BatchDigest, Batch> {
     DBMap::<BatchDigest, Batch>::open(
         temp_dir(),
         MetricConf::default(),
@@ -482,6 +522,8 @@ pub fn make_certificates_with_slow_nodes(
     names: &[AuthorityIdentifier],
     slow_nodes: &[(AuthorityIdentifier, f64)],
 ) -> (VecDeque<Certificate>, Vec<Certificate>) {
+    let mut rand = StdRng::seed_from_u64(1);
+
     // ensure provided slow nodes do not account > f
     let slow_nodes_stake: Stake = slow_nodes
         .iter()
@@ -498,7 +540,7 @@ pub fn make_certificates_with_slow_nodes(
         next_parents.clear();
         for name in names {
             let this_cert_parents =
-                this_cert_parents_with_slow_nodes(name, parents.clone(), slow_nodes);
+                this_cert_parents_with_slow_nodes(name, parents.clone(), slow_nodes, &mut rand);
             let (_, certificate) = mock_certificate(committee, *name, round, this_cert_parents);
             certificates.push_back(certificate.clone());
             next_parents.push(certificate);
@@ -514,10 +556,11 @@ pub fn make_certificates_with_slow_nodes(
 // If probability to use it is 0.0, then the parent node will NEVER be used.
 // If probability to use it is 1.0, then the parent node will ALWAYS be used.
 // We always make sure to include our "own" certificate, thus the `name` property is needed.
-fn this_cert_parents_with_slow_nodes(
+pub fn this_cert_parents_with_slow_nodes(
     authority_id: &AuthorityIdentifier,
     ancestors: Vec<Certificate>,
     slow_nodes: &[(AuthorityIdentifier, f64)],
+    rand: &mut StdRng,
 ) -> BTreeSet<CertificateDigest> {
     let mut parents = BTreeSet::new();
     for parent in ancestors {
@@ -527,11 +570,10 @@ fn this_cert_parents_with_slow_nodes(
             .iter()
             .find(|(id, _)| *id != *authority_id && *id == parent.header().author())
         {
-            let f: f64 = thread_rng().gen_range(0_f64..1_f64);
+            let b = Bernoulli::new(*inclusion_probability).unwrap();
+            let should_include = b.sample(rand);
 
-            // if we are within the probability to include the node,
-            // then we add it as parent.
-            if f < *inclusion_probability {
+            if should_include {
                 parents.insert(parent.digest());
             }
         } else {
@@ -591,6 +633,26 @@ pub fn make_signed_certificates(
         failure_probability,
         generator,
     )
+}
+
+pub fn mock_certificate_with_rand<R: RngCore + ?Sized>(
+    committee: &Committee,
+    origin: AuthorityIdentifier,
+    round: Round,
+    parents: BTreeSet<CertificateDigest>,
+    rand: &mut R,
+) -> (CertificateDigest, Certificate) {
+    let header_builder = HeaderV1Builder::default();
+    let header = header_builder
+        .author(origin)
+        .round(round)
+        .epoch(0)
+        .parents(parents)
+        .payload(fixture_payload_with_rand(1, rand))
+        .build()
+        .unwrap();
+    let certificate = Certificate::new_unsigned(committee, Header::V1(header), Vec::new()).unwrap();
+    (certificate.digest(), certificate)
 }
 
 // Creates a badly signed certificate from its given round, origin and parents,
@@ -661,6 +723,7 @@ pub struct Builder<R = OsRng> {
     number_of_workers: NonZeroUsize,
     randomize_ports: bool,
     epoch: Epoch,
+    stake: VecDeque<Stake>,
 }
 
 impl Default for Builder {
@@ -677,6 +740,7 @@ impl Builder {
             committee_size: NonZeroUsize::new(4).unwrap(),
             number_of_workers: NonZeroUsize::new(4).unwrap(),
             randomize_ports: false,
+            stake: VecDeque::new(),
         }
     }
 }
@@ -702,6 +766,11 @@ impl<R> Builder<R> {
         self
     }
 
+    pub fn stake_distribution(mut self, stake: VecDeque<Stake>) -> Self {
+        self.stake = stake;
+        self
+    }
+
     pub fn rng<N: rand::RngCore + rand::CryptoRng>(self, rng: N) -> Builder<N> {
         Builder {
             rng,
@@ -709,12 +778,17 @@ impl<R> Builder<R> {
             committee_size: self.committee_size,
             number_of_workers: self.number_of_workers,
             randomize_ports: self.randomize_ports,
+            stake: self.stake,
         }
     }
 }
 
 impl<R: rand::RngCore + rand::CryptoRng> Builder<R> {
     pub fn build(mut self) -> CommitteeFixture {
+        if !self.stake.is_empty() {
+            assert_eq!(self.stake.len(), self.committee_size.get(), "Stake vector has been provided but is different length the committe - it should be the same");
+        }
+
         let mut authorities: Vec<AuthorityFixture> = (0..self.committee_size.get())
             .map(|_| {
                 AuthorityFixture::generate(
@@ -731,12 +805,16 @@ impl<R: rand::RngCore + rand::CryptoRng> Builder<R> {
             })
             .collect();
 
+        // now order the AuthorityFixtures by the authority PublicKey so when we iterate either via the
+        // committee.authorities() or via the fixture.authorities() we'll get the same order.
+        authorities.sort_by_key(|a1| a1.public_key());
+
         // create the committee in order to assign the ids to the authorities
         let mut committee_builder = CommitteeBuilder::new(self.epoch);
         for a in authorities.iter() {
             committee_builder = committee_builder.add_authority(
                 a.public_key().clone(),
-                a.stake,
+                self.stake.pop_front().unwrap_or(1),
                 a.address.clone(),
                 a.network_public_key(),
             );
@@ -749,11 +827,17 @@ impl<R: rand::RngCore + rand::CryptoRng> Builder<R> {
                 .authority_by_key(authority.keypair.public())
                 .unwrap();
             authority.authority = OnceCell::with_value(a.clone());
+            authority.stake = a.stake();
         }
 
-        // now order the AuthorityFixtures by the authority id so when we iterate either via the
-        // committee.authorities() or via the fixture.authorities() we'll get the same order.
-        authorities.sort_by_key(|a1| a1.authority().id());
+        // Now update the stake to follow the order of the authorities so we produce expected results
+        let authorities: Vec<AuthorityFixture> = authorities
+            .into_iter()
+            .map(|mut authority| {
+                authority.stake = self.stake.pop_front().unwrap_or(1);
+                authority
+            })
+            .collect();
 
         CommitteeFixture {
             authorities,

@@ -55,7 +55,7 @@ fn async_verifier_bench(c: &mut Criterion) {
     group.sample_size(10);
 
     let registry = Registry::new();
-    let metrics = VerifiedDigestCacheMetrics::new(&registry);
+    let metrics = SignatureVerifierMetrics::new(&registry);
 
     let num_cpus = num_cpus::get() as u64;
     for num_threads in [1, num_cpus / 2, num_cpus] {

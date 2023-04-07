@@ -1,0 +1,18 @@
+//# publish
+module 0x1.M {
+    struct Coin { value: u64 }
+    zero(): Self.Coin {
+    label b0:
+        return Coin { value: 0 };
+    }
+}
+
+//# run
+import 0x1.M;
+
+main() {
+    let z: M.Coin;
+label b0:
+    z = M.zero();
+    abort 0; // valid that z is unused
+}

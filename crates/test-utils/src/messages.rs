@@ -18,7 +18,7 @@ use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::committee::Committee;
 use sui_types::crypto::{
     deterministic_random_account_key, get_key_pair, AccountKeyPair, AuthorityKeyPair,
-    AuthorityPublicKeyBytes, AuthoritySignInfo, KeypairTraits,
+    AuthorityPublicKeyBytes, AuthoritySignInfo, KeypairTraits, Signature, Signer,
 };
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::SignedTransactionEffects;
@@ -39,8 +39,8 @@ use sui_types::{
 };
 
 /// The maximum gas per transaction.
-pub const MAX_GAS: u64 = 2_000;
-pub const MAX_DELEGATION_GAS: u64 = 15_000;
+pub const MAX_GAS: u64 = 5_000_000_000;
+pub const MAX_DELEGATION_GAS: u64 = MAX_GAS - 50_000;
 
 /// A helper function to get all accounts and their owned GasCoin
 /// with a WalletContext
@@ -159,8 +159,10 @@ pub async fn make_transactions_with_wallet_context(
                 recipient,
                 *address,
                 Some(2),
-                // TODO (jian)
-                obj.clone().into_object().expect("REASON").object_ref(),
+                obj.clone()
+                    .into_object()
+                    .expect("Gas coin could not be converted to object ref.")
+                    .object_ref(),
                 MAX_GAS,
             );
             let tx = to_sender_signed_transaction(
@@ -171,6 +173,79 @@ pub async fn make_transactions_with_wallet_context(
         }
     }
     res
+}
+
+pub async fn make_transactions_with_wallet_context_and_budget(
+    context: &mut WalletContext,
+    max_txn_num: usize,
+    gas_budget: u64,
+) -> Vec<VerifiedTransaction> {
+    let recipient = get_key_pair::<AuthorityKeyPair>().0;
+    let accounts_and_objs = get_account_and_gas_objects(context).await;
+    let mut res = Vec::with_capacity(max_txn_num);
+    let client = context.get_client().await.unwrap();
+    let gas_price = client
+        .governance_api()
+        .get_reference_gas_price()
+        .await
+        .unwrap();
+    for (address, objs) in &accounts_and_objs {
+        for obj in objs {
+            if res.len() >= max_txn_num {
+                return res;
+            }
+            let data = TransactionData::new_transfer_sui(
+                recipient,
+                *address,
+                Some(2),
+                obj.clone()
+                    .into_object()
+                    .expect("Gas coin could not be converted to object ref.")
+                    .object_ref(),
+                gas_budget,
+                gas_price,
+            );
+            let tx = to_sender_signed_transaction(
+                data,
+                context.config.keystore.get_key(address).unwrap(),
+            );
+            res.push(tx);
+        }
+    }
+    res
+}
+
+pub async fn make_staking_transaction_with_wallet_context(
+    context: &mut WalletContext,
+    validator_address: SuiAddress,
+) -> VerifiedTransaction {
+    let accounts_and_objs = get_account_and_gas_objects(context).await;
+    let sender = accounts_and_objs[0].0;
+    let gas_object = accounts_and_objs[0].1[0]
+        .clone()
+        .into_object()
+        .expect("Gas coin could not be converted to object ref.")
+        .object_ref();
+    let stake_object = accounts_and_objs[0].1[1]
+        .clone()
+        .into_object()
+        .expect("Stake coin could not be converted to object ref.")
+        .object_ref();
+    let client = context.get_client().await.unwrap();
+    let gas_price = client
+        .governance_api()
+        .get_reference_gas_price()
+        .await
+        .unwrap();
+
+    make_staking_transaction(
+        gas_object,
+        stake_object,
+        validator_address,
+        sender,
+        context.config.keystore.get_key(&sender).unwrap(),
+        Some(gas_price),
+    )
 }
 
 pub async fn make_counter_increment_transaction_with_wallet_context(
@@ -398,7 +473,7 @@ pub fn make_staking_transaction(
     coin: ObjectRef,
     validator: SuiAddress,
     sender: SuiAddress,
-    keypair: &AccountKeyPair,
+    keypair: &dyn Signer<Signature>,
     gas_price: Option<u64>,
 ) -> VerifiedTransaction {
     let data = TransactionData::new_move_call(

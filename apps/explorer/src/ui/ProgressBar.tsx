@@ -16,7 +16,7 @@ export function ProgressBar({ progress }: ProgressBarProps) {
                 animate={{
                     width: `${progress}%`,
                     type: 'spring',
-                    transition: { delay: 0.25, duration: 2 },
+                    transition: { delay: 0.25, duration: 0.5 },
                 }}
             />
         </div>

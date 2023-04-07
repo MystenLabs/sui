@@ -85,8 +85,8 @@ export const DEFAULT_CLIENT_OPTIONS: WebsocketClientOptions = {
   maxReconnects: 5,
 };
 
-const SUBSCRIBE_EVENT_METHOD = 'sui_subscribeEvent';
-const UNSUBSCRIBE_EVENT_METHOD = 'sui_unsubscribeEvent';
+const SUBSCRIBE_EVENT_METHOD = 'suix_subscribeEvent';
+const UNSUBSCRIBE_EVENT_METHOD = 'suix_unsubscribeEvent';
 
 /**
  * Interface with a Sui node's websocket capabilities

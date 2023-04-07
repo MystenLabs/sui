@@ -222,7 +222,7 @@ export class TransactionBlock {
 
   constructor(transaction?: TransactionBlock) {
     this.#blockData = new TransactionBlockDataBuilder(
-      transaction ? transaction.#blockData : undefined,
+      transaction ? transaction.blockData : undefined,
     );
   }
 
@@ -266,6 +266,22 @@ export class TransactionBlock {
       (i) => i.type === 'object' && id === getIdFromCallArg(i.value),
     );
     return inserted ?? this.#input('object', value);
+  }
+
+  /**
+   * Add a new object input to the transaction using the fully-resolved object reference.
+   * If you only have an object ID, use `builder.object(id)` instead.
+   */
+  objectRef(...args: Parameters<(typeof Inputs)['ObjectRef']>) {
+    return this.object(Inputs.ObjectRef(...args));
+  }
+
+  /**
+   * Add a new shared object input to the transaction using the fully-resolved shared object reference.
+   * If you only have an object ID, use `builder.object(id)` instead.
+   */
+  sharedObjectRef(...args: Parameters<(typeof Inputs)['SharedObjectRef']>) {
+    return this.object(Inputs.SharedObjectRef(...args));
   }
 
   /**
@@ -624,16 +640,19 @@ export class TransactionBlock {
           provider,
         );
       }
-
       if (!this.blockData.gasConfig.budget) {
         const dryRunResult = await expectProvider(
           provider,
         ).dryRunTransactionBlock({
           transactionBlock: this.#blockData.build({
-            overrides: { gasConfig: { budget: String(MAX_GAS), payment: [] } },
+            overrides: {
+              gasConfig: {
+                budget: String(MAX_GAS),
+                payment: [],
+              },
+            },
           }),
         });
-
         if (dryRunResult.effects.status.status !== 'success') {
           throw new Error(
             'Dry run failed, could not automatically determine a budget',

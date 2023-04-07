@@ -21,9 +21,9 @@ module test::m1 {
 //> 0: test::m1::r();
 //> TransferObjects([Result(0)], Input(0))
 
-//# programmable --sender A --inputs object(107)
+//# programmable --sender A --inputs object(2,0)
 //> 0: test::m1::dirty(Input(0));
 //> test::m1::priv1(Input(0));
 
-//# programmable --sender A --inputs object(107)
+//# programmable --sender A --inputs object(2,0)
 //> test::m1::priv1(Input(0));

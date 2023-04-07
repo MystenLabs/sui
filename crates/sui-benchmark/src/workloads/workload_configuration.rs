@@ -10,9 +10,10 @@ use crate::workloads::shared_counter::SharedCounterWorkloadBuilder;
 use crate::workloads::transfer_object::TransferObjectWorkloadBuilder;
 use crate::workloads::WorkloadInfo;
 use anyhow::Result;
+use std::str::FromStr;
 use std::sync::Arc;
 
-use super::adversarial::AdversarialWorkloadBuilder;
+use super::adversarial::{AdversarialPayloadCfg, AdversarialWorkloadBuilder};
 
 pub struct WorkloadConfiguration;
 
@@ -22,7 +23,7 @@ impl WorkloadConfiguration {
         opts: &Opts,
         system_state_observer: Arc<SystemStateObserver>,
     ) -> Result<Vec<WorkloadInfo>> {
-        match opts.run_spec {
+        match opts.run_spec.clone() {
             RunSpec::Bench {
                 target_qps,
                 num_workers,
@@ -32,6 +33,7 @@ impl WorkloadConfiguration {
                 delegation,
                 batch_payment,
                 adversarial,
+                adversarial_cfg,
                 batch_payment_size,
                 shared_counter_hotness_factor,
                 ..
@@ -44,6 +46,7 @@ impl WorkloadConfiguration {
                     delegation,
                     batch_payment,
                     adversarial,
+                    AdversarialPayloadCfg::from_str(&adversarial_cfg).unwrap(),
                     batch_payment_size,
                     shared_counter_hotness_factor,
                     target_qps,
@@ -65,6 +68,7 @@ impl WorkloadConfiguration {
         delegation_weight: u32,
         batch_payment_weight: u32,
         adversarial_weight: u32,
+        adversarial_cfg: AdversarialPayloadCfg,
         batch_payment_size: u32,
         shared_counter_hotness_factor: u32,
         target_qps: u64,
@@ -115,6 +119,7 @@ impl WorkloadConfiguration {
             target_qps,
             num_workers,
             in_flight_ratio,
+            adversarial_cfg,
         );
         workload_builders.push(adversarial_workload);
         let (workload_params, workload_builders): (Vec<_>, Vec<_>) = workload_builders

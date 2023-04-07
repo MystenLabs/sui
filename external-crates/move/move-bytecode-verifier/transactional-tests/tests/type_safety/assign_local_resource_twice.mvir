@@ -1,0 +1,13 @@
+//# publish
+module 0x42.A {
+    struct Coin has store { value: u64 }
+    struct T { f: Self.Coin }
+
+    public t(resource_ref: &mut Self.Coin, resource1: Self.Coin, resource2: Self.Coin) {
+    label b0:
+        // cannot modify without drop ability
+        *move(resource_ref) = move(resource1);
+        *move(resource_ref) = move(resource2);
+        return;
+    }
+}

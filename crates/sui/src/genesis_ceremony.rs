@@ -12,13 +12,12 @@ use sui_config::{
 };
 use sui_types::multiaddr::Multiaddr;
 use sui_types::{
-    base_types::{ObjectID, SuiAddress},
+    base_types::SuiAddress,
     committee::ProtocolVersion,
     crypto::{
         generate_proof_of_possession, AuthorityKeyPair, KeypairTraits, NetworkKeyPair, SuiKeyPair,
     },
     message_envelope::Message,
-    object::Object,
 };
 
 use sui_keys::keypair_file::{
@@ -79,15 +78,6 @@ pub enum CeremonyCommand {
     },
 
     ListValidators,
-
-    AddGasObject {
-        #[clap(long)]
-        address: SuiAddress,
-        #[clap(long)]
-        object_id: Option<ObjectID>,
-        #[clap(long)]
-        value: u64,
-    },
 
     BuildUnsignedCheckpoint,
 
@@ -152,8 +142,8 @@ pub fn run(cmd: Ceremony) -> Result<()> {
                     worker_key: worker_keypair.public().clone(),
                     account_address: SuiAddress::from(&account_keypair.public()),
                     network_key: network_keypair.public().clone(),
-                    gas_price: 1,
-                    commission_rate: 0,
+                    gas_price: sui_config::ValidatorInfo::DEFAULT_GAS_PRICE,
+                    commission_rate: sui_config::ValidatorInfo::DEFAULT_COMMISSION_RATE,
                     network_address,
                     p2p_address,
                     narwhal_primary_address,
@@ -190,20 +180,6 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             for (name, address) in validators {
                 writer.write_record([&name, &address])?;
             }
-        }
-
-        CeremonyCommand::AddGasObject {
-            address,
-            object_id,
-            value,
-        } => {
-            let mut builder = Builder::load(&dir)?;
-
-            let object_id = object_id.unwrap_or_else(ObjectID::random);
-            let object = Object::with_id_owner_gas_for_testing(object_id, address, value);
-            builder = builder.add_object(object);
-
-            builder.save(dir)?;
         }
 
         CeremonyCommand::BuildUnsignedCheckpoint => {
@@ -312,8 +288,8 @@ mod test {
                     worker_key: worker_keypair.public().clone(),
                     account_address: SuiAddress::from(account_keypair.public()),
                     network_key: network_keypair.public().clone(),
-                    gas_price: 1,
-                    commission_rate: 0,
+                    gas_price: ValidatorInfo::DEFAULT_GAS_PRICE,
+                    commission_rate: ValidatorInfo::DEFAULT_COMMISSION_RATE,
                     network_address: utils::new_tcp_network_address(),
                     p2p_address: utils::new_udp_network_address(),
                     narwhal_primary_address: utils::new_udp_network_address(),

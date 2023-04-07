@@ -9,6 +9,7 @@
 -  [Struct `GenesisChainParameters`](#0x3_genesis_GenesisChainParameters)
 -  [Struct `TokenDistributionSchedule`](#0x3_genesis_TokenDistributionSchedule)
 -  [Struct `TokenAllocation`](#0x3_genesis_TokenAllocation)
+-  [Constants](#@Constants_0)
 -  [Function `create`](#0x3_genesis_create)
 -  [Function `allocate_tokens`](#0x3_genesis_allocate_tokens)
 -  [Function `activate_validators`](#0x3_genesis_activate_validators)
@@ -306,6 +307,31 @@
 
 </details>
 
+<a name="@Constants_0"></a>
+
+## Constants
+
+
+<a name="0x3_genesis_EDuplicateValidator"></a>
+
+The <code>create</code> function was called with duplicate validators.
+
+
+<pre><code><b>const</b> <a href="genesis.md#0x3_genesis_EDuplicateValidator">EDuplicateValidator</a>: u64 = 1;
+</code></pre>
+
+
+
+<a name="0x3_genesis_ENotCalledAtGenesis"></a>
+
+The <code>create</code> function was called at a non-genesis epoch.
+
+
+<pre><code><b>const</b> <a href="genesis.md#0x3_genesis_ENotCalledAtGenesis">ENotCalledAtGenesis</a>: u64 = 0;
+</code></pre>
+
+
+
 <a name="0x3_genesis_create"></a>
 
 ## Function `create`
@@ -333,7 +359,7 @@ all the information we need in the system.
     ctx: &<b>mut</b> TxContext,
 ) {
     // Ensure this is only called at <a href="genesis.md#0x3_genesis">genesis</a>
-    <b>assert</b>!(<a href="_epoch">tx_context::epoch</a>(ctx) == 0, 0);
+    <b>assert</b>!(<a href="_epoch">tx_context::epoch</a>(ctx) == 0, <a href="genesis.md#0x3_genesis_ENotCalledAtGenesis">ENotCalledAtGenesis</a>);
 
     <b>let</b> <a href="genesis.md#0x3_genesis_TokenDistributionSchedule">TokenDistributionSchedule</a> {
         stake_subsidy_fund_mist,
@@ -391,7 +417,7 @@ all the information we need in the system.
         // Ensure that each <a href="validator.md#0x3_validator">validator</a> is unique
         <b>assert</b>!(
             !<a href="validator_set.md#0x3_validator_set_is_duplicate_validator">validator_set::is_duplicate_validator</a>(&validators, &<a href="validator.md#0x3_validator">validator</a>),
-            2,
+            <a href="genesis.md#0x3_genesis_EDuplicateValidator">EDuplicateValidator</a>,
         );
 
         <a href="_push_back">vector::push_back</a>(&<b>mut</b> validators, <a href="validator.md#0x3_validator">validator</a>);

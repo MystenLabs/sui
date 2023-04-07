@@ -16,20 +16,19 @@ use tracing::{debug, warn};
 use mysten_metrics::spawn_monitored_task;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
-    CheckpointedObjectID, DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page,
-    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockResponse,
+    DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page, SuiObjectDataOptions,
+    SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseQuery, TransactionBlocksPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::digests::TransactionDigest;
 use sui_types::dynamic_field::DynamicFieldName;
-use sui_types::error::UserInputError;
 use sui_types::event::EventID;
 
-use crate::api::IndexerApiServer;
-use crate::api::ReadApiServer;
-use crate::api::{cap_page_limit, validate_limit, QUERY_MAX_RESULT_LIMIT_OBJECTS};
+use crate::api::{
+    cap_page_limit, validate_limit, IndexerApiServer, ReadApiServer, QUERY_MAX_RESULT_LIMIT_OBJECTS,
+};
 use crate::SuiRpcModule;
 
 pub fn spawn_subscription<S, T>(mut sink: SubscriptionSink, rx: S)
@@ -64,52 +63,33 @@ impl<R: ReadApiServer> IndexerApi<R> {
 
 #[async_trait]
 impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
-    async fn get_owned_objects(
+    fn get_owned_objects(
         &self,
         address: SuiAddress,
         query: Option<SuiObjectResponseQuery>,
-        // If `Some`, the query will start from the next item after the specified cursor
-        cursor: Option<CheckpointedObjectID>,
+        cursor: Option<ObjectID>,
         limit: Option<usize>,
     ) -> RpcResult<ObjectsPage> {
-        if let Some(CheckpointedObjectID {
-            at_checkpoint: Some(_),
-            ..
-        }) = cursor
-        {
-            return Err(anyhow!(UserInputError::Unsupported(
-                "at_checkpoint param currently not supported".to_string()
-            ))
-            .into());
-        }
-
-        let object_id_cursor = cursor.as_ref().map(|c| c.object_id);
-
         let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_OBJECTS)?;
         let SuiObjectResponseQuery { filter, options } = query.unwrap_or_default();
         let options = options.unwrap_or_default();
-
         let mut objects = self
             .state
-            .get_owner_objects(address, object_id_cursor, limit + 1, filter)
+            .get_owner_objects(address, cursor, limit + 1, filter)
             .map_err(|e| anyhow!("{e}"))?;
 
         // objects here are of size (limit + 1), where the last one is the cursor for the next page
         let has_next_page = objects.len() > limit;
         objects.truncate(limit);
-        let next_cursor = objects.last().cloned().map_or(cursor, |o_info| {
-            Some(CheckpointedObjectID {
-                at_checkpoint: None,
-                object_id: o_info.object_id,
-            })
-        });
+        let next_cursor = objects
+            .last()
+            .cloned()
+            .map_or(cursor, |o_info| Some(o_info.object_id));
 
         let data = match options.is_not_in_object_info() {
             true => {
                 let object_ids = objects.iter().map(|obj| obj.object_id).collect();
-                self.read_api
-                    .multi_get_objects(object_ids, Some(options.clone()))
-                    .await?
+                self.read_api.multi_get_objects(object_ids, Some(options))?
             }
             false => objects
                 .into_iter()
@@ -124,7 +104,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         })
     }
 
-    async fn query_transaction_blocks(
+    fn query_transaction_blocks(
         &self,
         query: SuiTransactionBlockResponseQuery,
         // If `Some`, the query will start from the next item after the specified cursor
@@ -153,8 +133,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 .collect()
         } else {
             self.read_api
-                .multi_get_transaction_blocks(digests, Some(opts))
-                .await?
+                .multi_get_transaction_blocks(digests, Some(opts))?
         };
 
         Ok(Page {
@@ -163,7 +142,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
             has_next_page,
         })
     }
-    async fn query_events(
+    fn query_events(
         &self,
         query: EventFilter,
         // exclusive cursor if `Some`, otherwise start from the beginning
@@ -183,8 +162,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         // Retrieve 1 extra item for next cursor
         let mut data = self
             .state
-            .query_events(query, cursor.clone(), limit + 1, descending)
-            .await?;
+            .query_events(query, cursor.clone(), limit + 1, descending)?;
         let has_next_page = data.len() > limit;
         data.truncate(limit);
         let next_cursor = data.last().map_or(cursor, |e| Some(e.id.clone()));
@@ -200,7 +178,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         Ok(())
     }
 
-    async fn get_dynamic_fields(
+    fn get_dynamic_fields(
         &self,
         parent_object_id: ObjectID,
         // If `Some`, the query will start from the next item after the specified cursor
@@ -237,7 +215,6 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         // TODO(chris): add options to `get_dynamic_field_object` API as well
         self.read_api
             .get_object(id, Some(SuiObjectDataOptions::full_content()))
-            .await
     }
 }
 

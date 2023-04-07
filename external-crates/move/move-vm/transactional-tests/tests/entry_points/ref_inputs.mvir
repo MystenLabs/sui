@@ -1,0 +1,60 @@
+//# publish
+
+// ref arguments are now allowed
+
+module 0x42.M {
+    struct S has drop { f: u64 }
+
+    public t1(r1: &u64) {
+        label l0:
+        return;
+    }
+
+    public t2(r1: &mut bool) {
+        label l0:
+        return;
+    }
+
+    public t3(r1: &u64, r2: &mut bool, r3: &Self.S, r4: &mut Self.S) {
+        label l0:
+        return;
+    }
+
+    public tgen<T1, T2, T3, T4>(r1: &T1, r2: &mut T2, r3: &T3, r4: &mut T4) {
+        label l0:
+        return;
+    }
+}
+
+//# run --args 0
+main(r1: &u64) {
+    label l0:
+    return;
+}
+
+//# run --args false
+main(r1: &mut bool) {
+    label l0:
+    return;
+}
+
+//# run --args 0 false 0 0
+import 0x42.M;
+main(r1: &u64, r2: &mut bool, r3: &M.S, r4: &mut M.S) {
+    label l0:
+    return;
+}
+
+//# run --type-args u64 bool 0x42::M::S 0x42::M::S --args 0 false 0 0
+main<T1, T2, T3, T4>(r1: &T1, r2: &mut T2, r3: &T3, r4: &mut T4) {
+    label l0:
+    return;
+}
+
+//# run 0x42::M::t1 --args 0
+
+//# run 0x42::M::t2 --args false
+
+//# run 0x42::M::t3 --args 0 false 0 0
+
+//# run 0x42::M::tgen --type-args u64 bool 0x42::M::S 0x42::M::S --args 0 false 0 0

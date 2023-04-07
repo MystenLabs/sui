@@ -40,8 +40,10 @@ use crate::authority::authority_store_types::{
 };
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 
+use super::authority_store_tables::LiveObject;
 use super::{authority_store_tables::AuthorityPerpetualTables, *};
 use mysten_common::sync::notify_read::NotifyRead;
+use typed_store::rocks::util::is_ref_count_value;
 
 const NUM_SHARDS: usize = 4096;
 
@@ -71,6 +73,9 @@ pub struct AuthorityStore {
     pub(crate) objects_lock_table: Arc<RwLockTable<ObjectContentDigest>>,
 
     indirect_objects_threshold: usize,
+
+    /// Whether to enable expensive SUI conservation check at epoch boundaries.
+    enable_epoch_sui_conservation_check: bool,
 }
 
 pub type ExecutionLockReadGuard<'a> = RwLockReadGuard<'a, EpochId>;
@@ -85,6 +90,7 @@ impl AuthorityStore {
         genesis: &Genesis,
         committee_store: &Arc<CommitteeStore>,
         indirect_objects_threshold: usize,
+        enable_epoch_sui_conservation_check: bool,
     ) -> SuiResult<Self> {
         let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(path, db_options.clone()));
         if perpetual_tables.database_is_empty()? {
@@ -105,6 +111,7 @@ impl AuthorityStore {
             perpetual_tables,
             &committee,
             indirect_objects_threshold,
+            enable_epoch_sui_conservation_check,
         )
         .await
     }
@@ -125,6 +132,7 @@ impl AuthorityStore {
             perpetual_tables,
             committee,
             indirect_objects_threshold,
+            true,
         )
         .await
     }
@@ -134,6 +142,7 @@ impl AuthorityStore {
         perpetual_tables: Arc<AuthorityPerpetualTables>,
         committee: &Committee,
         indirect_objects_threshold: usize,
+        enable_epoch_sui_conservation_check: bool,
     ) -> SuiResult<Self> {
         let epoch = committee.epoch;
 
@@ -146,6 +155,7 @@ impl AuthorityStore {
             execution_lock: RwLock::new(epoch),
             objects_lock_table: Arc::new(RwLockTable::new(NUM_SHARDS)),
             indirect_objects_threshold,
+            enable_epoch_sui_conservation_check,
         };
         // Only initialize an empty database.
         if store
@@ -182,6 +192,13 @@ impl AuthorityStore {
                 .enumerate()
                 .map(|(i, e)| ((event_digests, i), e));
             store.perpetual_tables.events.multi_insert(events).unwrap();
+            // When we are opening the db table, the only time when it's safe to
+            // check SUI conservation is at genesis. Otherwise we may be in the middle of
+            // an epoch and the SUI conservation check will fail. This also initialize
+            // the expected_network_sui_amount table.
+            store
+                .expensive_check_sui_conservation()
+                .expect("SUI conservation check cannot fail at genesis");
         }
 
         Ok(store)
@@ -310,11 +327,11 @@ impl AuthorityStore {
         epoch: EpochId,
         sequence: CheckpointSequenceNumber,
     ) -> SuiResult {
-        let batch = self
+        let mut batch = self
             .perpetual_tables
             .executed_transactions_to_checkpoint
             .batch();
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.perpetual_tables.executed_transactions_to_checkpoint,
             digests.iter().map(|d| (*d, (epoch, sequence))),
         )?;
@@ -609,12 +626,12 @@ impl AuthorityStore {
         // Insert object
         let StoreObjectPair(store_object, indirect_object) =
             get_store_object_pair(object.clone(), self.indirect_objects_threshold);
-        write_batch = write_batch.insert_batch(
+        write_batch.insert_batch(
             &self.perpetual_tables.objects,
             std::iter::once((ObjectKey::from(object_ref), store_object)),
         )?;
         if let Some(indirect_obj) = indirect_object {
-            write_batch = write_batch.insert_batch(
+            write_batch.insert_batch(
                 &self.perpetual_tables.indirect_move_objects,
                 std::iter::once((indirect_obj.inner().digest(), indirect_obj)),
             )?;
@@ -624,7 +641,7 @@ impl AuthorityStore {
         if object.get_single_owner().is_some() {
             // Only initialize lock for address owned objects.
             if !object.is_child_object() {
-                write_batch = self.initialize_locks_impl(write_batch, &[object_ref], false)?;
+                self.initialize_locks_impl(&mut write_batch, &[object_ref], false)?;
             }
         }
 
@@ -641,7 +658,7 @@ impl AuthorityStore {
             .map(|o| (o.compute_object_reference(), o))
             .collect();
 
-        batch = batch
+        batch
             .insert_batch(
                 &self.perpetual_tables.objects,
                 ref_and_objects.iter().map(|(oref, o)| {
@@ -666,8 +683,8 @@ impl AuthorityStore {
             .map(|(oref, _)| *oref)
             .collect();
 
-        batch = self.initialize_locks_impl(
-            batch,
+        self.initialize_locks_impl(
+            &mut batch,
             &non_child_object_refs,
             false, // is_force_reset
         )?;
@@ -709,22 +726,21 @@ impl AuthorityStore {
 
         // Store the certificate indexed by transaction digest
         let transaction_digest = transaction.digest();
-        write_batch = write_batch.insert_batch(
+        write_batch.insert_batch(
             &self.perpetual_tables.transactions,
             iter::once((transaction_digest, transaction.serializable_ref())),
         )?;
 
         // Add batched writes for objects and locks.
         let effects_digest = effects.digest();
-        write_batch = self
-            .update_objects_and_locks(write_batch, inner_temporary_store)
+        self.update_objects_and_locks(&mut write_batch, inner_temporary_store)
             .await?;
 
         // Store the signed effects of the transaction
         // We can't write this until after sequencing succeeds (which happens in
         // batch_update_objects), as effects_exists is used as a check in many places
         // for "did the tx finish".
-        write_batch = write_batch
+        write_batch
             .insert_batch(&self.perpetual_tables.effects, [(effects_digest, effects)])?
             .insert_batch(
                 &self.perpetual_tables.executed_effects,
@@ -774,9 +790,9 @@ impl AuthorityStore {
     /// Helper function for updating the objects and locks in the state
     async fn update_objects_and_locks(
         &self,
-        mut write_batch: DBBatch,
+        write_batch: &mut DBBatch,
         inner_temporary_store: InnerTemporaryStore,
-    ) -> SuiResult<DBBatch> {
+    ) -> SuiResult {
         let InnerTemporaryStore {
             objects,
             mutable_inputs: active_inputs,
@@ -794,7 +810,7 @@ impl AuthorityStore {
             .cloned()
             .collect();
 
-        write_batch = write_batch.insert_batch(
+        write_batch.insert_batch(
             &self.perpetual_tables.objects,
             deleted.iter().map(|(object_id, (version, kind))| {
                 let tombstone: StoreObjectWrapper = if *kind == DeleteKind::Wrap {
@@ -824,24 +840,23 @@ impl AuthorityStore {
         let existing_digests = self
             .perpetual_tables
             .indirect_move_objects
-            .multi_get(indirect_objects.iter().map(|(digest, _)| digest))?;
+            .multi_get_raw_bytes(indirect_objects.iter().map(|(digest, _)| digest))?;
         // split updates to existing and new indirect objects
         // for new objects full merge needs to be triggered. For existing ref count increment is sufficient
         let (existing_indirect_objects, new_indirect_objects): (Vec<_>, Vec<_>) = indirect_objects
             .into_iter()
             .enumerate()
-            .partition(|(idx, _)| existing_digests[*idx].is_some());
+            .partition(|(idx, _)| matches!(&existing_digests[*idx], Some(value) if !is_ref_count_value(value)));
 
-        write_batch =
-            write_batch.insert_batch(&self.perpetual_tables.objects, new_objects.into_iter())?;
+        write_batch.insert_batch(&self.perpetual_tables.objects, new_objects.into_iter())?;
         if !new_indirect_objects.is_empty() {
-            write_batch = write_batch.merge_batch(
+            write_batch.merge_batch(
                 &self.perpetual_tables.indirect_move_objects,
                 new_indirect_objects.into_iter().map(|(_, pair)| pair),
             )?;
         }
         if !existing_indirect_objects.is_empty() {
-            write_batch = write_batch.partial_merge_batch(
+            write_batch.partial_merge_batch(
                 &self.perpetual_tables.indirect_move_objects,
                 existing_indirect_objects
                     .into_iter()
@@ -856,7 +871,7 @@ impl AuthorityStore {
             .enumerate()
             .map(|(i, e)| ((event_digest, i), e));
 
-        write_batch = write_batch.insert_batch(&self.perpetual_tables.events, events)?;
+        write_batch.insert_batch(&self.perpetual_tables.events, events)?;
 
         let new_locks_to_init: Vec<_> = written
             .iter()
@@ -880,7 +895,7 @@ impl AuthorityStore {
         //    tx effects exist.
         self.check_owned_object_locks_exist(&owned_inputs)?;
 
-        write_batch = self.initialize_locks_impl(write_batch, &new_locks_to_init, false)?;
+        self.initialize_locks_impl(write_batch, &new_locks_to_init, false)?;
         self.delete_locks(write_batch, &owned_inputs)
     }
 
@@ -964,14 +979,12 @@ impl AuthorityStore {
 
         if !locks_to_write.is_empty() {
             trace!(?locks_to_write, "Writing locks");
-            self.perpetual_tables
-                .owned_object_transaction_locks
-                .batch()
-                .insert_batch(
-                    &self.perpetual_tables.owned_object_transaction_locks,
-                    locks_to_write,
-                )?
-                .write()?;
+            let mut batch = self.perpetual_tables.owned_object_transaction_locks.batch();
+            batch.insert_batch(
+                &self.perpetual_tables.owned_object_transaction_locks,
+                locks_to_write,
+            )?;
+            batch.write()?;
         }
 
         Ok(())
@@ -1069,10 +1082,10 @@ impl AuthorityStore {
     /// Returns SuiError::ObjectLockAlreadyInitialized if the lock already exists and is locked to a transaction
     fn initialize_locks_impl(
         &self,
-        write_batch: DBBatch,
+        write_batch: &mut DBBatch,
         objects: &[ObjectRef],
         is_force_reset: bool,
-    ) -> SuiResult<DBBatch> {
+    ) -> SuiResult {
         trace!(?objects, "initialize_locks");
 
         let locks = self
@@ -1100,19 +1113,21 @@ impl AuthorityStore {
             }
         }
 
-        Ok(write_batch.insert_batch(
+        write_batch.insert_batch(
             &self.perpetual_tables.owned_object_transaction_locks,
             objects.iter().map(|obj_ref| (obj_ref, None)),
-        )?)
+        )?;
+        Ok(())
     }
 
     /// Removes locks for a given list of ObjectRefs.
-    fn delete_locks(&self, write_batch: DBBatch, objects: &[ObjectRef]) -> SuiResult<DBBatch> {
+    fn delete_locks(&self, write_batch: &mut DBBatch, objects: &[ObjectRef]) -> SuiResult {
         trace!(?objects, "delete_locks");
-        Ok(write_batch.delete_batch(
+        write_batch.delete_batch(
             &self.perpetual_tables.owned_object_transaction_locks,
             objects.iter(),
-        )?)
+        )?;
+        Ok(())
     }
 
     #[cfg(test)]
@@ -1126,23 +1141,19 @@ impl AuthorityStore {
             epoch_store.delete_signed_transaction_for_test(tx);
         }
 
-        self.perpetual_tables
-            .owned_object_transaction_locks
-            .batch()
+        let mut batch = self.perpetual_tables.owned_object_transaction_locks.batch();
+        batch
             .delete_batch(
                 &self.perpetual_tables.owned_object_transaction_locks,
                 objects.iter(),
             )
-            .unwrap()
-            .write()
             .unwrap();
+        batch.write().unwrap();
 
-        let write_batch = self.perpetual_tables.owned_object_transaction_locks.batch();
-
-        self.initialize_locks_impl(write_batch, objects, false)
-            .unwrap()
-            .write()
+        let mut batch = self.perpetual_tables.owned_object_transaction_locks.batch();
+        self.initialize_locks_impl(&mut batch, objects, false)
             .unwrap();
+        batch.write().unwrap();
     }
 
     /// This function is called at the end of epoch for each transaction that's
@@ -1170,12 +1181,12 @@ impl AuthorityStore {
         assert!(effects.shared_objects().is_empty());
 
         let mut write_batch = self.perpetual_tables.transactions.batch();
-        write_batch = write_batch.delete_batch(
+        write_batch.delete_batch(
             &self.perpetual_tables.executed_effects,
             iter::once(tx_digest),
         )?;
         if let Some(events_digest) = effects.events_digest() {
-            write_batch = write_batch.delete_range(
+            write_batch.delete_range(
                 &self.perpetual_tables.events,
                 &(*events_digest, usize::MIN),
                 &(*events_digest, usize::MAX),
@@ -1187,7 +1198,7 @@ impl AuthorityStore {
             .iter()
             .chain(effects.wrapped().iter())
             .map(|obj_ref| ObjectKey(obj_ref.0, obj_ref.1));
-        write_batch = write_batch.delete_batch(&self.perpetual_tables.objects, tombstones)?;
+        write_batch.delete_batch(&self.perpetual_tables.objects, tombstones)?;
 
         let all_new_object_keys = effects
             .mutated()
@@ -1195,8 +1206,7 @@ impl AuthorityStore {
             .chain(effects.created().iter())
             .chain(effects.unwrapped().iter())
             .map(|((id, version, _), _)| ObjectKey(*id, *version));
-        write_batch = write_batch
-            .delete_batch(&self.perpetual_tables.objects, all_new_object_keys.clone())?;
+        write_batch.delete_batch(&self.perpetual_tables.objects, all_new_object_keys.clone())?;
 
         let modified_object_keys = effects
             .modified_at_versions()
@@ -1235,10 +1245,10 @@ impl AuthorityStore {
         let old_locks: Vec<_> = old_locks.flatten().collect();
 
         // Re-create old locks.
-        write_batch = self.initialize_locks_impl(write_batch, &old_locks, true)?;
+        self.initialize_locks_impl(&mut write_batch, &old_locks, true)?;
 
         // Delete new locks
-        write_batch = write_batch.delete_batch(
+        write_batch.delete_batch(
             &self.perpetual_tables.owned_object_transaction_locks,
             new_locks.flatten(),
         )?;
@@ -1283,7 +1293,7 @@ impl AuthorityStore {
         transaction_effects: &TransactionEffects,
     ) -> Result<(), TypedStoreError> {
         let mut write_batch = self.perpetual_tables.transactions.batch();
-        write_batch = write_batch
+        write_batch
             .insert_batch(
                 &self.perpetual_tables.transactions,
                 [(transaction.digest(), transaction.serializable_ref())],
@@ -1303,7 +1313,7 @@ impl AuthorityStore {
     ) -> Result<(), TypedStoreError> {
         let mut write_batch = self.perpetual_tables.transactions.batch();
         for tx in transactions {
-            write_batch = write_batch
+            write_batch
                 .insert_batch(
                     &self.perpetual_tables.transactions,
                     [(tx.transaction.digest(), tx.transaction.serializable_ref())],
@@ -1363,8 +1373,127 @@ impl AuthorityStore {
         get_sui_system_state(self.perpetual_tables.as_ref())
     }
 
-    pub fn iter_live_object_set(&self) -> impl Iterator<Item = ObjectRef> + '_ {
+    pub fn iter_live_object_set(&self) -> impl Iterator<Item = LiveObject> + '_ {
         self.perpetual_tables.iter_live_object_set()
+    }
+
+    pub fn expensive_check_sui_conservation(&self) -> SuiResult {
+        if !self.enable_epoch_sui_conservation_check {
+            return Ok(());
+        }
+        let protocol_version = ProtocolVersion::new(
+            self.get_sui_system_state_object()
+                .expect("Read sui system state object cannot fail")
+                .protocol_version(),
+        );
+        // Prior to gas model v2, SUI conservation is not guaranteed.
+        if ProtocolConfig::get_for_version(protocol_version).gas_model_version() <= 1 {
+            return Ok(());
+        }
+
+        let mut total_storage_rebate = 0;
+        let mut total_sui = 0;
+        for o in self.iter_live_object_set() {
+            match o {
+                LiveObject::Normal(object) => {
+                    total_storage_rebate += object.storage_rebate;
+                    // get_total_sui includes storage rebate, however all storage rebate is
+                    // also stored in the storage fund, so we need to subtract it here.
+                    total_sui += object.get_total_sui(self)? - object.storage_rebate;
+                }
+                LiveObject::Wrapped(_) => (),
+            }
+        }
+        let system_state = self
+            .get_sui_system_state_object()
+            .expect("Reading sui system state object cannot fail")
+            .into_sui_system_state_summary();
+        info!(
+            "Total SUI amount in the network: {}, total storage rebate: {} at beginning of epoch {}",
+            total_sui, total_storage_rebate, system_state.epoch
+        );
+
+        let storage_fund_balance = system_state.storage_fund_total_object_storage_rebates;
+        let imbalance = (storage_fund_balance as i64) - (total_storage_rebate as i64);
+        if let Some(expected_imbalance) = self
+            .perpetual_tables
+            .expected_storage_fund_imbalance
+            .get(&())
+            .expect("DB read cannot fail")
+        {
+            fp_ensure!(
+                imbalance == expected_imbalance,
+                SuiError::from(
+                    format!(
+                        "Inconsistent state detected at epoch {}: total storage rebate: {}, storage fund balance: {}, expected imbalance: {}",
+                        system_state.epoch, total_storage_rebate, storage_fund_balance, expected_imbalance
+                    ).as_str()
+                )
+            );
+        } else {
+            self.perpetual_tables
+                .expected_storage_fund_imbalance
+                .insert(&(), &imbalance)
+                .expect("DB write cannot fail");
+        }
+
+        if let Some(expected_sui) = self
+            .perpetual_tables
+            .expected_network_sui_amount
+            .get(&())
+            .expect("DB read cannot fail")
+        {
+            fp_ensure!(
+                total_sui == expected_sui,
+                SuiError::from(
+                    format!(
+                        "Inconsistent state detected at epoch {}: total sui: {}, expecting {}",
+                        system_state.epoch, total_sui, expected_sui
+                    )
+                    .as_str()
+                )
+            );
+        } else {
+            self.perpetual_tables
+                .expected_network_sui_amount
+                .insert(&(), &total_sui)
+                .expect("DB write cannot fail");
+        }
+
+        Ok(())
+    }
+
+    pub fn expensive_check_is_consistent_state(
+        &self,
+        checkpoint_executor: &CheckpointExecutor,
+        accumulator: Arc<StateAccumulator>,
+        epoch: EpochId,
+        panic: bool,
+    ) {
+        let live_object_set_hash = accumulator.digest_live_object_set();
+
+        let root_state_hash = self
+            .get_root_state_hash(epoch)
+            .expect("Retrieving root state hash cannot fail");
+
+        let is_inconsistent = root_state_hash != live_object_set_hash;
+        if is_inconsistent {
+            if panic {
+                panic!(
+                    "Inconsistent state detected: root state hash: {:?}, live object set hash: {:?}",
+                    root_state_hash, live_object_set_hash
+                );
+            } else {
+                error!(
+                    "Inconsistent state detected: root state hash: {:?}, live object set hash: {:?}",
+                    root_state_hash, live_object_set_hash
+                );
+            }
+        }
+
+        if !panic {
+            checkpoint_executor.set_inconsistent_state(is_inconsistent);
+        }
     }
 }
 

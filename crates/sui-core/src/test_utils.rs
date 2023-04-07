@@ -25,7 +25,6 @@ use sui_types::crypto::{AuthorityKeyPair, Signer};
 use sui_types::messages::{
     SignedTransaction, TransactionData, VerifiedTransaction, DUMMY_GAS_PRICE,
 };
-use sui_types::object::OBJECT_START_VERSION;
 use sui_types::utils::create_fake_transaction;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
@@ -41,7 +40,7 @@ use tracing::{info, warn};
 
 const WAIT_FOR_TX_TIMEOUT: Duration = Duration::from_secs(15);
 /// The maximum gas per transaction.
-pub const MAX_GAS: u64 = 2_000;
+pub const MAX_GAS: u64 = 2_000_000;
 
 // note: clippy is confused about this being dead - it appears to only be used in cfg(test), but
 // adding #[cfg(test)] causes other targets to fail
@@ -109,7 +108,7 @@ pub fn create_fake_cert_and_effect_digest<'a>(
                 AuthoritySignInfo::new(
                     committee.epoch,
                     transaction.data(),
-                    Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+                    Intent::sui_app(IntentScope::SenderSignedTransaction),
                     *name,
                     signer,
                 )
@@ -138,7 +137,7 @@ pub fn compile_nfts_package() -> CompiledPackage {
 }
 
 pub fn compile_example_package(relative_path: &str) -> CompiledPackage {
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks {}));
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push(relative_path);
 
@@ -155,14 +154,9 @@ async fn init_genesis(
     ObjectID,
 ) {
     // add object_basics package object to genesis
-    let modules = compile_basics_package()
-        .get_modules()
-        .into_iter()
-        .cloned()
-        .collect();
+    let modules: Vec<_> = compile_basics_package().get_modules().cloned().collect();
     let pkg = Object::new_package(
-        modules,
-        OBJECT_START_VERSION,
+        &modules,
         TransactionDigest::genesis(),
         ProtocolConfig::get_for_max_version().max_move_package_size(),
         &sui_framework::make_system_packages(),
@@ -285,6 +279,7 @@ pub fn make_pay_sui_transaction(
     sender: SuiAddress,
     keypair: &AccountKeyPair,
     gas_price: Option<u64>,
+    gas_budget: Option<u64>,
 ) -> VerifiedTransaction {
     let data = TransactionData::new_pay_sui(
         sender,
@@ -292,7 +287,7 @@ pub fn make_pay_sui_transaction(
         recipients,
         amounts,
         gas_object,
-        MAX_GAS,
+        gas_budget.unwrap_or(MAX_GAS),
         gas_price.unwrap_or(DUMMY_GAS_PRICE),
     )
     .unwrap();
@@ -330,9 +325,9 @@ pub fn make_dummy_tx(
             random_object_ref(),
             sender,
             random_object_ref(),
-            10000,
+            5_000_000_000,
         ),
-        Intent::default(),
+        Intent::sui_transaction(),
         vec![sender_sec],
     )
     .verify()

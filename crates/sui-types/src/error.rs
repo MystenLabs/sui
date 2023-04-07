@@ -12,7 +12,7 @@ use fastcrypto::error::FastCryptoError;
 use move_binary_format::{access::ModuleAccess, errors::VMError};
 use move_binary_format::{errors::Location, file_format::FunctionDefinitionIndex};
 use move_core_types::{
-    resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
+    resolver::MoveResolver,
     vm_status::{StatusCode, StatusType},
 };
 pub use move_vm_runtime::move_vm::MoveVM;
@@ -218,6 +218,8 @@ pub enum SuiObjectResponseError {
     },
     #[error("Unknown Error.")]
     Unknown,
+    #[error("Display Error: {:?}", error)]
+    DisplayError { error: String },
     // TODO: also integrate SuiPastObjectResponse (VersionNotFound,  VersionTooHigh)
 }
 
@@ -237,6 +239,9 @@ pub enum SuiError {
 
     #[error("There are already {queue_len} transactions pending, above threshold of {threshold}")]
     TooManyTransactionsPendingExecution { queue_len: usize, threshold: usize },
+
+    #[error("There are too many transactions pending in consensus")]
+    TooManyTransactionsPendingConsensus,
 
     #[error("Input {object_id} already has {queue_len} transactions pending, above threshold of {threshold}")]
     TooManyTransactionsPendingOnObject {
@@ -395,6 +400,8 @@ pub enum SuiError {
     TransactionOrchestratorLocalExecutionError { error: String },
 
     // Errors returned by authority and client read API's
+    #[error("Failure serializing transaction in the requested format: {:?}", error)]
+    TransactionSerializationError { error: String },
     #[error("Failure serializing object in the requested format: {:?}", error)]
     ObjectSerializationError { error: String },
     #[error("Failure deserializing object in the requested format: {:?}", error)]
@@ -432,6 +439,10 @@ pub enum SuiError {
     KeyConversionError(String),
     #[error("Invalid Private Key provided")]
     InvalidPrivateKey,
+
+    // Unsupported Operations on Fullnode
+    #[error("Fullnode does not support handle_certificate")]
+    FullNodeCantHandleCertificate,
 
     // Epoch related errors.
     #[error("Validator temporarily stopped processing transactions due to epoch change")]
@@ -629,6 +640,7 @@ impl SuiError {
             // Overload errors
             SuiError::TooManyTransactionsPendingExecution { .. } => (true, true),
             SuiError::TooManyTransactionsPendingOnObject { .. } => (true, true),
+            SuiError::TooManyTransactionsPendingConsensus => (true, true),
 
             // Non retryable error
             SuiError::ExecutionError(..) => (false, true),
@@ -636,6 +648,7 @@ impl SuiError {
             SuiError::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction { .. } => {
                 (false, true)
             }
+            SuiError::ObjectLockConflict { .. } => (false, true),
 
             _ => (false, false),
         }
@@ -659,6 +672,7 @@ impl SuiError {
             self,
             SuiError::TooManyTransactionsPendingExecution { .. }
                 | SuiError::TooManyTransactionsPendingOnObject { .. }
+                | SuiError::TooManyTransactionsPendingConsensus
         )
     }
 }
@@ -742,14 +756,10 @@ impl From<ExecutionErrorKind> for ExecutionError {
     }
 }
 
-pub fn convert_vm_error<
-    'r,
-    E: Debug,
-    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + LinkageResolver<Error = E>,
->(
+pub fn convert_vm_error<S: MoveResolver<Err = SuiError>>(
     error: VMError,
-    vm: &'r MoveVM,
-    state_view: &'r S,
+    vm: &MoveVM,
+    state_view: &S,
 ) -> ExecutionError {
     let kind = match (error.major_status(), error.sub_status(), error.location()) {
         (StatusCode::EXECUTED, _, _) => {

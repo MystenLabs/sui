@@ -20,18 +20,19 @@ module sui_system::sui_system_tests {
     use sui::table;
     use std::vector;
     use sui::balance;
-    use sui::test_utils::assert_eq;
+    use sui::test_utils::{assert_eq, destroy};
     use std::option::Self;
     use sui::url;
     use std::string;
     use std::ascii;
+    use sui::tx_context;
 
     #[test]
     fun test_report_validator() {
         let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
 
-        set_up_sui_system_state(vector[@0x1, @0x2, @0x3], scenario);
+        set_up_sui_system_state(vector[@0x1, @0x2, @0x3]);
 
         report_helper(@0x1, @0x2, false, scenario);
         assert!(get_reporters_of(@0x2, scenario) == vector[@0x1], 0);
@@ -75,7 +76,7 @@ module sui_system::sui_system_tests {
     fun test_validator_ops_by_stakee_ok() {
         let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
-        set_up_sui_system_state(vector[@0x1, @0x2], scenario);
+        set_up_sui_system_state(vector[@0x1, @0x2]);
 
         // @0x1 transfers the cap object to stakee.
         let stakee_address = @0xbeef;
@@ -108,7 +109,7 @@ module sui_system::sui_system_tests {
         test_scenario::next_tx(scenario, new_validator_addr);
         let pubkey = x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
         let pop = x"8b93fc1b33379e2796d361c4056f0f04ad5aea7f4a8c02eaac57340ff09b6dc158eb1945eece103319167f420daf0cb3";
-        add_validator_full_flow(new_validator_addr, 100, pubkey, pop, scenario);
+        add_validator_full_flow(new_validator_addr, b"name1", b"/ip4/127.0.0.1/udp/81", 100, pubkey, pop, scenario);
 
         test_scenario::next_tx(scenario, new_validator_addr);
         // Pending validator could set reference price as well
@@ -130,7 +131,7 @@ module sui_system::sui_system_tests {
     fun test_report_validator_by_stakee_revoked() {
         let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
-        set_up_sui_system_state(vector[@0x1, @0x2], scenario);
+        set_up_sui_system_state(vector[@0x1, @0x2]);
 
         // @0x1 transfers the cap object to stakee.
         let stakee_address = @0xbeef;
@@ -156,7 +157,7 @@ module sui_system::sui_system_tests {
     fun test_set_reference_gas_price_by_stakee_revoked() {
         let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
-        set_up_sui_system_state(vector[@0x1, @0x2], scenario);
+        set_up_sui_system_state(vector[@0x1, @0x2]);
 
         // @0x1 transfers the cap object to stakee.
         let stakee_address = @0xbeef;
@@ -189,7 +190,7 @@ module sui_system::sui_system_tests {
         let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
 
-        set_up_sui_system_state(vector[@0x1, @0x2, @0x3], scenario);
+        set_up_sui_system_state(vector[@0x1, @0x2, @0x3]);
         report_helper(@0x1, @0x42, false, scenario);
         test_scenario::end(scenario_val);
     }
@@ -200,7 +201,7 @@ module sui_system::sui_system_tests {
         let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
 
-        set_up_sui_system_state(vector[@0x1, @0x2, @0x3], scenario);
+        set_up_sui_system_state(vector[@0x1, @0x2, @0x3]);
         report_helper(@0x1, @0x1, false, scenario);
         test_scenario::end(scenario_val);
     }
@@ -211,7 +212,7 @@ module sui_system::sui_system_tests {
         let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
 
-        set_up_sui_system_state(vector[@0x1, @0x2, @0x3], scenario);
+        set_up_sui_system_state(vector[@0x1, @0x2, @0x3]);
         report_helper(@0x2, @0x1, true, scenario);
         test_scenario::end(scenario_val);
     }
@@ -221,17 +222,19 @@ module sui_system::sui_system_tests {
         let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
 
-        set_up_sui_system_state(vector[@0x1, @0x2, @0x3], scenario);
+        set_up_sui_system_state(vector[@0x1, @0x2, @0x3, @0x4]);
         test_scenario::next_tx(scenario, @0x1);
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
         let pool_id_1 = sui_system::validator_staking_pool_id(&mut system_state, @0x1);
         let pool_id_2 = sui_system::validator_staking_pool_id(&mut system_state, @0x2);
         let pool_id_3 = sui_system::validator_staking_pool_id(&mut system_state, @0x3);
+        let pool_id_4 = sui_system::validator_staking_pool_id(&mut system_state, @0x4);
         let pool_mappings = sui_system::validator_staking_pool_mappings(&mut system_state);
-        assert_eq(table::length(pool_mappings), 3);
+        assert_eq(table::length(pool_mappings), 4);
         assert_eq(*table::borrow(pool_mappings, pool_id_1), @0x1);
         assert_eq(*table::borrow(pool_mappings, pool_id_2), @0x2);
         assert_eq(*table::borrow(pool_mappings, pool_id_3), @0x3);
+        assert_eq(*table::borrow(pool_mappings, pool_id_4), @0x4);
         test_scenario::return_shared(system_state);
 
         let new_validator_addr = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
@@ -242,19 +245,20 @@ module sui_system::sui_system_tests {
         let pop = x"b01cc86f421beca7ab4cfca87c0799c4d038c199dd399fbec1924d4d4367866dba9e84d514710b91feb65316e4ceef43";
 
         // Add a validator
-        add_validator_full_flow(new_validator_addr, 100, pubkey, pop, scenario);
+        add_validator_full_flow(new_validator_addr, b"name2", b"/ip4/127.0.0.1/udp/82", 100, pubkey, pop, scenario);
         advance_epoch(scenario);
 
         test_scenario::next_tx(scenario, @0x1);
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
-        let pool_id_4 = sui_system::validator_staking_pool_id(&mut system_state, new_validator_addr);
+        let pool_id_5 = sui_system::validator_staking_pool_id(&mut system_state, new_validator_addr);
         pool_mappings = sui_system::validator_staking_pool_mappings(&mut system_state);
         // Check that the previous mappings didn't change as well.
-        assert_eq(table::length(pool_mappings), 4);
+        assert_eq(table::length(pool_mappings), 5);
         assert_eq(*table::borrow(pool_mappings, pool_id_1), @0x1);
         assert_eq(*table::borrow(pool_mappings, pool_id_2), @0x2);
         assert_eq(*table::borrow(pool_mappings, pool_id_3), @0x3);
-        assert_eq(*table::borrow(pool_mappings, pool_id_4), new_validator_addr);
+        assert_eq(*table::borrow(pool_mappings, pool_id_4), @0x4);
+        assert_eq(*table::borrow(pool_mappings, pool_id_5), new_validator_addr);
         test_scenario::return_shared(system_state);
 
         // Remove one of the original validators.
@@ -265,11 +269,12 @@ module sui_system::sui_system_tests {
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
         pool_mappings = sui_system::validator_staking_pool_mappings(&mut system_state);
         // Check that the previous mappings didn't change as well.
-        assert_eq(table::length(pool_mappings), 3);
+        assert_eq(table::length(pool_mappings), 4);
         assert_eq(table::contains(pool_mappings, pool_id_1), false);
         assert_eq(*table::borrow(pool_mappings, pool_id_2), @0x2);
         assert_eq(*table::borrow(pool_mappings, pool_id_3), @0x3);
-        assert_eq(*table::borrow(pool_mappings, pool_id_4), new_validator_addr);
+        assert_eq(*table::borrow(pool_mappings, pool_id_4), @0x4);
+        assert_eq(*table::borrow(pool_mappings, pool_id_5), new_validator_addr);
         test_scenario::return_shared(system_state);
 
         test_scenario::end(scenario_val);
@@ -572,7 +577,7 @@ module sui_system::sui_system_tests {
             b"/ip4/127.0.0.1/udp/80",
             b"/ip4/127.0.0.1/udp/80",
             b"/ip4/127.0.0.1/udp/80",
-            option::some(balance::create_for_testing<SUI>(100)),
+            option::some(balance::create_for_testing<SUI>(100_000_000_000)),
             1,
             0,
             true,
@@ -738,7 +743,7 @@ module sui_system::sui_system_tests {
         let scenario_val = test_scenario::begin(validator_addr);
         let scenario = &mut scenario_val;
 
-        set_up_sui_system_state(vector[@0x1, @0x2, @0x3], scenario);
+        set_up_sui_system_state(vector[@0x1, @0x2, @0x3]);
         test_scenario::next_tx(scenario, validator_addr);
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
         test_scenario::next_tx(scenario, validator_addr);
@@ -807,7 +812,7 @@ module sui_system::sui_system_tests {
         let pubkey = x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
         let pop = x"83809369ce6572be211512d85621a075ee6a8da57fbb2d867d05e6a395e71f10e4e957796944d68a051381eb91720fba";
 
-        set_up_sui_system_state(vector[@0x1, @0x2, @0x3], scenario);
+        set_up_sui_system_state(vector[@0x1, @0x2, @0x3]);
         test_scenario::next_tx(scenario, new_validator_addr);
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
         sui_system::request_add_validator_candidate(
@@ -841,7 +846,7 @@ module sui_system::sui_system_tests {
         let pubkey = x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
         let pop = x"83809369ce6572be211512d85621a075ee6a8da57fbb2d867d05e6a395e71f10e4e957796944d68a051381eb91720fba";
 
-        set_up_sui_system_state(vector[@0x1, @0x2, @0x3], scenario);
+        set_up_sui_system_state(vector[@0x1, @0x2, @0x3]);
         test_scenario::next_tx(scenario, new_validator_addr);
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
         sui_system::request_add_validator_candidate(
@@ -918,7 +923,7 @@ module sui_system::sui_system_tests {
             b"/ip4/127.0.0.1/udp/80",
             b"/ip4/127.0.0.1/udp/80",
             b"/ip4/127.0.0.1/udp/80",
-            option::some(balance::create_for_testing<SUI>(100)),
+            option::some(balance::create_for_testing<SUI>(100_000_000_000)),
             1,
             0,
             true,
@@ -952,5 +957,35 @@ module sui_system::sui_system_tests {
         );
         test_scenario::return_shared(system_state);
         test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_skip_stake_subsidy() {
+        let scenario_val = test_scenario::begin(@0x0);
+        let scenario = &mut scenario_val;
+        // Epoch duration is set to be 42 here.
+        set_up_sui_system_state(vector[@0x1, @0x2]);
+
+        // If the epoch length is less than 42 then the stake subsidy distribution counter should not be incremented. Otherwise it should.
+        advance_epoch_and_check_distribution_counter(scenario, 42, true);
+        advance_epoch_and_check_distribution_counter(scenario, 32, false);
+        advance_epoch_and_check_distribution_counter(scenario, 52, true);
+        test_scenario::end(scenario_val);
+    }
+
+    fun advance_epoch_and_check_distribution_counter(scenario: &mut Scenario, epoch_length: u64, should_increment_counter: bool) {
+        test_scenario::next_tx(scenario, @0x0);
+        let new_epoch = tx_context::epoch(test_scenario::ctx(scenario)) + 1;
+        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+        let prev_epoch_time = sui_system::epoch_start_timestamp_ms(&mut system_state);
+        let prev_counter = sui_system::get_stake_subsidy_distribution_counter(&mut system_state);
+
+        let rebate = sui_system::advance_epoch_for_testing(
+            &mut system_state, new_epoch, 1, 0, 0, 0, 0, 0, 0, prev_epoch_time + epoch_length, test_scenario::ctx(scenario)
+        );
+        destroy(rebate);
+        assert_eq(sui_system::get_stake_subsidy_distribution_counter(&mut system_state), prev_counter + (if (should_increment_counter) 1 else 0));
+        test_scenario::return_shared(system_state);
+        test_scenario::next_epoch(scenario, @0x0);
     }
 }

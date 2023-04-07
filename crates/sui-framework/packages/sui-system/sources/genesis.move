@@ -71,6 +71,12 @@ module sui_system::genesis {
         staked_with_validator: Option<address>,
     }
 
+    // Error codes
+    /// The `create` function was called at a non-genesis epoch.
+    const ENotCalledAtGenesis: u64 = 0;
+    /// The `create` function was called with duplicate validators.
+    const EDuplicateValidator: u64 = 1;
+
     /// This function will be explicitly called once at genesis.
     /// It will create a singleton SuiSystemState object, which contains
     /// all the information we need in the system.
@@ -83,7 +89,7 @@ module sui_system::genesis {
         ctx: &mut TxContext,
     ) {
         // Ensure this is only called at genesis
-        assert!(tx_context::epoch(ctx) == 0, 0);
+        assert!(tx_context::epoch(ctx) == 0, ENotCalledAtGenesis);
 
         let TokenDistributionSchedule {
             stake_subsidy_fund_mist,
@@ -141,7 +147,7 @@ module sui_system::genesis {
             // Ensure that each validator is unique
             assert!(
                 !validator_set::is_duplicate_validator(&validators, &validator),
-                2,
+                EDuplicateValidator,
             );
 
             vector::push_back(&mut validators, validator);

@@ -27,7 +27,7 @@ export interface Keypair {
   /**
    * Return the signature for the data
    */
-  signData(data: Uint8Array, useRecoverable: boolean): Uint8Array;
+  signData(data: Uint8Array): Uint8Array;
 
   /**
    * Get the key scheme of the keypair: Secp256k1 or ED25519

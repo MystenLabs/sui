@@ -16,5 +16,18 @@ export const DisclosureBoxDefault: StoryObj<DisclosureBoxProps> = {
 
 export const DisclosureBoxClosed: StoryObj<DisclosureBoxProps> = {
     ...DisclosureBoxDefault,
-    args: { title: 'Expanded disclosure box', defaultOpen: true },
+    args: {
+        title: 'Expanded disclosure box',
+        defaultOpen: true,
+        preview: 'Preview content',
+    },
+};
+
+export const DisclosureBoxOutline: StoryObj<DisclosureBoxProps> = {
+    ...DisclosureBoxDefault,
+    args: {
+        title: 'Outline disclosure box',
+        preview: 'Preview content',
+        variant: 'outline',
+    },
 };

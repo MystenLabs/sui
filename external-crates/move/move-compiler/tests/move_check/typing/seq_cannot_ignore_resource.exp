@@ -1,0 +1,57 @@
+error[E05001]: ability constraint not satisfied
+  ┌─ tests/move_check/typing/seq_cannot_ignore_resource.move:5:9
+  │
+2 │     struct R {}
+  │            - To satisfy the constraint, the 'drop' ability would need to be added here
+  ·
+5 │         R{};
+  │         ^^^
+  │         │
+  │         Cannot ignore values without the 'drop' ability. The value must be used
+  │         The type '0x8675309::M::R' does not have the ability 'drop'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/seq_cannot_ignore_resource.move:10:9
+   │
+ 2 │     struct R {}
+   │            - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+ 9 │         let r = R{};
+   │                 --- The type '0x8675309::M::R' does not have the ability 'drop'
+10 │         r;
+   │         ^ Cannot ignore values without the 'drop' ability. The value must be used
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/seq_cannot_ignore_resource.move:14:9
+   │
+14 │         (0, false, R{});
+   │         ^^^^^^^^^^^^^^^
+   │         │          │
+   │         │          The type '(u64, bool, 0x8675309::M::R)' can have the ability 'drop' but the type argument '0x8675309::M::R' does not have the required ability 'drop'
+   │         Cannot ignore values without the 'drop' ability. The value must be used
+   │         The type '(u64, bool, 0x8675309::M::R)' does not have the ability 'drop'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/seq_cannot_ignore_resource.move:19:9
+   │
+18 │         let r = R{};
+   │                 --- The type '(u64, bool, 0x8675309::M::R)' can have the ability 'drop' but the type argument '0x8675309::M::R' does not have the required ability 'drop'
+19 │         if (true) (0, false, R{}) else (0, false, r);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │         │                              │
+   │         │                              The type '(u64, bool, 0x8675309::M::R)' does not have the ability 'drop'
+   │         Cannot ignore values without the 'drop' ability. The value must be used
+
+error[E06001]: unused value without 'drop'
+   ┌─ tests/move_check/typing/seq_cannot_ignore_resource.move:19:53
+   │
+ 2 │     struct R {}
+   │            - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+18 │         let r = R{};
+   │             -   --- The type '0x8675309::M::R' does not have the ability 'drop'
+   │             │    
+   │             The local variable 'r' might still contain a value. The value does not have the 'drop' ability and must be consumed before the function returns
+19 │         if (true) (0, false, R{}) else (0, false, r);
+   │                                                     ^ Invalid return
+

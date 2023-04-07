@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 import { type ProgrammableTransaction } from '@mysten/sui.js';
 
-import { Commands } from './Commands';
 import { Inputs } from './Inputs';
+import { Transactions } from './Transactions';
 
 interface Props {
     transaction: ProgrammableTransaction;
@@ -12,18 +12,12 @@ interface Props {
 export function ProgrammableTransactionView({ transaction }: Props) {
     return (
         <>
-            <section
-                data-testid="programmable-transactions-inputs"
-                className="pt-12"
-            >
+            <section className="pt-12">
                 <Inputs inputs={transaction.inputs} />
             </section>
 
-            <section
-                data-testid="programmable-transactions-commands"
-                className="py-12"
-            >
-                <Commands transactions={transaction.transactions} />
+            <section className="py-12">
+                <Transactions transactions={transaction.transactions} />
             </section>
         </>
     );

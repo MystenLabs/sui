@@ -1,0 +1,1 @@
+Found non-unique dev address assignment 'B = 0x1' in root package 'Root'. Dev address assignments must not conflict with any other assignments in order to ensure that the package will compile with any possible address assignment. Assignment conflicts with previous assignments: A = 0x1

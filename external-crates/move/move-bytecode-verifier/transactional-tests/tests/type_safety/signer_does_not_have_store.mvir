@@ -1,0 +1,13 @@
+//# publish
+module 0x42.M {
+    struct S<T> {
+        f: T,
+    }
+
+    t(account: &signer, s: signer) {
+    label b0:
+        // error signer does not have store
+        move_to<S<signer>>(copy(account), S<signer> { f: move(s) });
+        return;
+    }
+}

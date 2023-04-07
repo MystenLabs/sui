@@ -17,8 +17,7 @@ use types::{
     Batch, BatchDigest, FetchCertificatesRequest, FetchCertificatesResponse,
     GetCertificatesRequest, GetCertificatesResponse, PrimaryToPrimaryClient, PrimaryToWorkerClient,
     RequestBatchRequest, RequestBatchesRequest, RequestBatchesResponse, WorkerBatchMessage,
-    WorkerDeleteBatchesMessage, WorkerOthersBatchMessage, WorkerOurBatchMessage,
-    WorkerSynchronizeMessage, WorkerToPrimaryClient, WorkerToWorkerClient,
+    WorkerDeleteBatchesMessage, WorkerSynchronizeMessage, WorkerToWorkerClient,
 };
 
 fn unreliable_send<F, R, Fut>(
@@ -149,52 +148,6 @@ impl UnreliableNetwork<WorkerSynchronizeMessage> for anemo::Network {
 }
 
 //
-// Worker-to-Primary
-//
-
-impl ReliableNetwork<WorkerOurBatchMessage> for anemo::Network {
-    type Response = ();
-    fn send(
-        &self,
-        peer: NetworkPublicKey,
-        message: &WorkerOurBatchMessage,
-    ) -> CancelOnDropHandler<Result<anemo::Response<()>>> {
-        let message = message.to_owned();
-        let f = move |peer| {
-            let message = message.clone();
-            async move {
-                WorkerToPrimaryClient::new(peer)
-                    .report_our_batch(message)
-                    .await
-            }
-        };
-
-        send(self.clone(), peer, f)
-    }
-}
-
-impl ReliableNetwork<WorkerOthersBatchMessage> for anemo::Network {
-    type Response = ();
-    fn send(
-        &self,
-        peer: NetworkPublicKey,
-        message: &WorkerOthersBatchMessage,
-    ) -> CancelOnDropHandler<Result<anemo::Response<()>>> {
-        let message = message.to_owned();
-        let f = move |peer| {
-            let message = message.clone();
-            async move {
-                WorkerToPrimaryClient::new(peer)
-                    .report_others_batch(message)
-                    .await
-            }
-        };
-
-        send(self.clone(), peer, f)
-    }
-}
-
-//
 // Worker-to-Worker
 //
 
@@ -262,12 +215,6 @@ impl WorkerRpc for anemo::Network {
         const BATCH_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
         let peer_id = PeerId(peer.0.to_bytes());
-
-        fail::fail_point!("request-batch", |_| {
-            Err(format_err!(
-                "Injected error in request batch from peer {peer_id}"
-            ))
-        });
 
         let peer = self
             .peer(peer_id)

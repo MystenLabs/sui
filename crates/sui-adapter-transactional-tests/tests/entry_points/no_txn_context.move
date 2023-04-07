@@ -25,4 +25,4 @@ module Test::M {
 
 //# run Test::M::mint --sender A
 
-//# run Test::M::incr --sender A --args object(107)
+//# run Test::M::incr --sender A --args object(2,0)

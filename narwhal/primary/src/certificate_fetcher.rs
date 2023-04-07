@@ -2,7 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{metrics::PrimaryMetrics, synchronizer::Synchronizer};
-use anemo::{Network, Request};
+use anemo::Request;
 use config::{AuthorityIdentifier, Committee};
 use consensus::consensus::ConsensusRound;
 use crypto::NetworkPublicKey;
@@ -182,9 +182,19 @@ impl CertificateFetcher {
                     }
                 },
                 Some(result) = self.fetch_certificates_task.join_next(), if !self.fetch_certificates_task.is_empty() => {
-                    // propagate any panics. We don't expect for cancellations to get propagated as
-                    // we gracefully shutdown the component by exiting the loop first
-                    result.unwrap();
+                    match result {
+                        Ok(()) => {},
+                        Err(e) => {
+                            if e.is_cancelled() {
+                                // avoid crashing on ungraceful shutdown
+                            } else if e.is_panic() {
+                                // propagate panics.
+                                std::panic::resume_unwind(e.into_panic());
+                            } else {
+                                panic!("fetch certificates task failed: {e}");
+                            }
+                        },
+                    };
 
                     // Kick start another fetch task after the previous one terminates.
                     // If all targets have been fetched, the new task will clean up the targets and exit.
@@ -302,7 +312,7 @@ async fn run_fetch_task(
 
     // Process and store fetched certificates.
     let num_certs_fetched = response.certificates.len();
-    process_certificates_helper(response, &state.synchronizer, &state.network).await?;
+    process_certificates_helper(response, &state.synchronizer).await?;
     state
         .metrics
         .certificate_fetcher_num_certificates_processed
@@ -397,7 +407,6 @@ async fn fetch_certificates_helper(
 async fn process_certificates_helper(
     response: FetchCertificatesResponse,
     synchronizer: &Synchronizer,
-    network: &Network,
 ) -> DagResult<()> {
     trace!("Start sending fetched certificates to processing");
     if response.certificates.len() > MAX_CERTIFICATES_TO_FETCH {
@@ -430,10 +439,7 @@ async fn process_certificates_helper(
     for task in verify_tasks {
         let certificates = task.await.map_err(|_| DagError::Canceled)??;
         for cert in certificates {
-            if let Err(e) = synchronizer
-                .try_accept_fetched_certificate(cert, network)
-                .await
-            {
+            if let Err(e) = synchronizer.try_accept_fetched_certificate(cert).await {
                 // It is possible that subsequent certificates are useful,
                 // so not stopping early.
                 warn!("Failed to accept fetched certificate: {e}");

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::natives::NativesCostTable;
-use fastcrypto::vrf::ecvrf::ECVRFProof;
+use fastcrypto::vrf::ecvrf::{ECVRFProof, ECVRFPublicKey};
 use fastcrypto::vrf::VRFProof;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
@@ -69,19 +69,16 @@ pub fn ecvrf_verify(
 
     let cost = context.gas_used();
 
-    let hash: [u8; 64] = match hash_bytes.as_bytes_ref().as_slice().try_into() {
-        Ok(h) => h,
-        Err(_) => return Ok(NativeResult::err(cost, INVALID_ECVRF_HASH_LENGTH)),
+    let Ok(hash) = hash_bytes.as_bytes_ref().as_slice().try_into() else {
+        return Ok(NativeResult::err(cost, INVALID_ECVRF_HASH_LENGTH));
     };
 
-    let public_key = match bcs::from_bytes(public_key_bytes.as_bytes_ref().as_slice()) {
-        Ok(pk) => pk,
-        Err(_) => return Ok(NativeResult::err(cost, INVALID_ECVRF_PUBLIC_KEY)),
+    let Ok(public_key) = bcs::from_bytes::<ECVRFPublicKey>(public_key_bytes.as_bytes_ref().as_slice())  else {
+        return Ok(NativeResult::err(cost, INVALID_ECVRF_PUBLIC_KEY));
     };
 
-    let proof: ECVRFProof = match bcs::from_bytes(proof_bytes.as_bytes_ref().as_slice()) {
-        Ok(p) => p,
-        Err(_) => return Ok(NativeResult::err(cost, INVALID_ECVRF_PROOF)),
+    let Ok(proof) = bcs::from_bytes::<ECVRFProof>(proof_bytes.as_bytes_ref().as_slice())  else {
+        return Ok(NativeResult::err(cost, INVALID_ECVRF_PROOF));
     };
 
     let result = proof.verify_output(alpha_string.as_bytes_ref().as_slice(), &public_key, &hash);

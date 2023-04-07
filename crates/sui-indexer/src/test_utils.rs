@@ -3,8 +3,9 @@
 
 use anyhow::anyhow;
 use prometheus::Registry;
-use sui_json_rpc_types::SuiTransactionBlockResponse;
 use tokio::task::JoinHandle;
+
+use sui_json_rpc_types::SuiTransactionBlockResponse;
 
 use crate::errors::IndexerError;
 use crate::store::PgIndexerStore;
@@ -15,17 +16,18 @@ use crate::{new_pg_connection_pool, Indexer, IndexerConfig};
 pub async fn start_test_indexer(
     config: IndexerConfig,
 ) -> Result<(PgIndexerStore, JoinHandle<Result<(), IndexerError>>), anyhow::Error> {
-    let pg_connection_pool = new_pg_connection_pool(&config.base_connection_url())
+    let (blocking_pool, async_pool) = new_pg_connection_pool(&config.base_connection_url())
+        .await
         .map_err(|e| anyhow!("unable to connect to Postgres, is it running? {e}"))?;
     if config.reset_db {
         reset_database(
-            &mut pg_connection_pool
+            &mut blocking_pool
                 .get()
                 .map_err(|e| anyhow!("Fail to get pg_connection_pool {e}"))?,
             true,
         )?;
     }
-    let store = PgIndexerStore::new(pg_connection_pool);
+    let store = PgIndexerStore::new(async_pool, blocking_pool).await;
 
     let registry = Registry::default();
     let store_clone = store.clone();

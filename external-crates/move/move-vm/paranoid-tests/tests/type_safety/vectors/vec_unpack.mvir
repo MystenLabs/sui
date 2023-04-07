@@ -1,0 +1,33 @@
+//# publish
+module 0x2.A {
+  struct C has drop { x: u64 }
+
+  public make(): Self.C {
+  label b0:
+    return C { x: 0};
+  }
+}
+
+//# run --signers 0x1 --check-runtime-types
+main(account: signer) {
+    let v: vector<u64>;
+
+label b0:
+    v = vec_pack_1<u64>(1);
+    _ = vec_unpack_1<u64>(move(v));
+
+    return;
+}
+
+//# run --signers 0x1 --check-runtime-types
+import 0x2.A;
+main(account: signer) {
+    let v: vector<u64>;
+    let c: A.C;
+
+label b0:
+    c = A.make();
+    _ = vec_unpack_1<u64>(move(c));
+
+    return;
+}

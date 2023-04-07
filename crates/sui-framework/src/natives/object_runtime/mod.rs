@@ -54,9 +54,9 @@ pub(crate) struct TestInventories {
 }
 
 pub struct RuntimeResults {
-    pub writes: LinkedHashMap<ObjectID, (WriteKind, Owner, Type, MoveObjectType, Value)>,
+    pub writes: LinkedHashMap<ObjectID, (WriteKind, Owner, Type, Value)>,
     pub deletions: LinkedHashMap<ObjectID, DeleteKind>,
-    pub user_events: Vec<(StructTag, Value)>,
+    pub user_events: Vec<(Type, StructTag, Value)>,
     // loaded child objects and their versions
     pub loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
 }
@@ -70,8 +70,8 @@ pub(crate) struct ObjectRuntimeState {
     deleted_ids: Set<ObjectID>,
     // transfers to a new owner (shared, immutable, object, or account address)
     // TODO these struct tags can be removed if type_to_type_tag was exposed in the session
-    transfers: LinkedHashMap<ObjectID, (Owner, Type, MoveObjectType, Value)>,
-    events: Vec<(StructTag, Value)>,
+    transfers: LinkedHashMap<ObjectID, (Owner, Type, Value)>,
+    events: Vec<(Type, StructTag, Value)>,
 }
 
 #[derive(Clone)]
@@ -125,6 +125,9 @@ pub struct ObjectRuntime<'a> {
     pub(crate) state: ObjectRuntimeState,
     // whether or not this TX is gas metered
     is_metered: bool,
+    // FIXED BEHAVIOR if true, correctly take the loaded object versions from the object store
+    // LEGACY if false, recalculate the loaded child object versions from child object changes
+    loaded_child_objects_fixed: bool,
 
     pub(crate) constants: LocalProtocolConfig,
 }
@@ -163,6 +166,7 @@ impl<'a> ObjectRuntime<'a> {
                 events: vec![],
             },
             is_metered,
+            loaded_child_objects_fixed: protocol_config.loaded_child_objects_fixed(),
             constants: LocalProtocolConfig::new(protocol_config),
         }
     }
@@ -232,7 +236,6 @@ impl<'a> ObjectRuntime<'a> {
         &mut self,
         owner: Owner,
         ty: Type,
-        tag: MoveObjectType,
         obj: Value,
     ) -> PartialVMResult<TransferResult> {
         let id: ObjectID = get_object_id(obj.copy_value()?)?
@@ -277,19 +280,19 @@ impl<'a> ObjectRuntime<'a> {
             }
         };
 
-        self.state.transfers.insert(id, (owner, ty, tag, obj));
+        self.state.transfers.insert(id, (owner, ty, obj));
         Ok(transfer_result)
     }
 
-    pub fn emit_event(&mut self, tag: StructTag, event: Value) -> PartialVMResult<()> {
+    pub fn emit_event(&mut self, ty: Type, tag: StructTag, event: Value) -> PartialVMResult<()> {
         if self.state.events.len() >= (self.constants.max_num_event_emit as usize) {
             return Err(max_event_error(self.constants.max_num_event_emit));
         }
-        self.state.events.push((tag, event));
+        self.state.events.push((ty, tag, event));
         Ok(())
     }
 
-    pub fn take_user_events(&mut self) -> Vec<(StructTag, Value)> {
+    pub fn take_user_events(&mut self) -> Vec<(Type, StructTag, Value)> {
         std::mem::take(&mut self.state.events)
     }
 
@@ -354,9 +357,14 @@ impl<'a> ObjectRuntime<'a> {
         by_value_inputs: BTreeSet<ObjectID>,
         external_transfers: BTreeSet<ObjectID>,
     ) -> Result<RuntimeResults, ExecutionError> {
-        let child_effects = self.object_store.take_effects();
-        self.state
-            .finish(by_value_inputs, external_transfers, child_effects)
+        let (loaded_child_objects, child_effects) = self.object_store.take_effects();
+        self.state.finish(
+            by_value_inputs,
+            external_transfers,
+            loaded_child_objects,
+            child_effects,
+            self.loaded_child_objects_fixed,
+        )
     }
 
     pub(crate) fn all_active_child_objects(
@@ -388,24 +396,32 @@ impl ObjectRuntimeState {
         mut self,
         by_value_inputs: BTreeSet<ObjectID>,
         external_transfers: BTreeSet<ObjectID>,
+        mut loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
         child_object_effects: BTreeMap<ObjectID, ChildObjectEffect>,
+        loaded_child_objects_fixed: bool,
     ) -> Result<RuntimeResults, ExecutionError> {
         let mut wrapped_children = BTreeSet::new();
-        let mut loaded_child_objects = BTreeMap::new();
+        if !loaded_child_objects_fixed {
+            loaded_child_objects = BTreeMap::new();
+            for (child, child_object_effect) in &child_object_effects {
+                if let Some(version) = child_object_effect.loaded_version {
+                    loaded_child_objects.insert(*child, version);
+                }
+            }
+        }
         for (child, child_object_effect) in child_object_effects {
             let ChildObjectEffect {
                 owner: parent,
                 loaded_version,
                 ty,
-                move_type,
                 effect,
             } = child_object_effect;
-            if let Some(v) = loaded_version {
+            if loaded_child_objects.contains_key(&child) {
                 // remove if from new_ids if it was loaded for case in dynamic fields where the
                 // Field object was removed and then re-added in a single transaction
                 self.new_ids.remove(&child);
-                loaded_child_objects.insert(child, v);
             }
+
             match effect {
                 // was modified, so mark it as mutated and transferred
                 Op::Modify(v) => {
@@ -413,13 +429,13 @@ impl ObjectRuntimeState {
                     debug_assert!(!self.new_ids.contains_key(&child));
                     debug_assert!(loaded_version.is_some());
                     self.transfers
-                        .insert(child, (Owner::ObjectOwner(parent.into()), ty, move_type, v));
+                        .insert(child, (Owner::ObjectOwner(parent.into()), ty, v));
                 }
 
                 Op::New(v) => {
                     debug_assert!(!self.transfers.contains_key(&child));
                     self.transfers
-                        .insert(child, (Owner::ObjectOwner(parent.into()), ty, move_type, v));
+                        .insert(child, (Owner::ObjectOwner(parent.into()), ty, v));
                 }
                 // was transferred so not actually deleted
                 Op::Delete if self.transfers.contains_key(&child) => {
@@ -459,12 +475,12 @@ impl ObjectRuntimeState {
         // TODO can we have cycles in the new system?
         update_owner_map(
             input_owner_map,
-            transfers.iter().map(|(id, (owner, _, _, _))| (*id, *owner)),
+            transfers.iter().map(|(id, (owner, _, _))| (*id, *owner)),
         )?;
         // determine write kinds
         let writes: LinkedHashMap<_, _> = transfers
             .into_iter()
-            .map(|(id, (owner, type_, tag, value))| {
+            .map(|(id, (owner, type_, value))| {
                 let write_kind =
                     if input_objects.contains_key(&id) || loaded_child_objects.contains_key(&id) {
                         debug_assert!(!new_ids.contains_key(&id));
@@ -476,7 +492,7 @@ impl ObjectRuntimeState {
                     } else {
                         WriteKind::Unwrap
                     };
-                (id, (write_kind, owner, type_, tag, value))
+                (id, (write_kind, owner, type_, value))
             })
             .collect();
         // determine delete kinds

@@ -1,0 +1,24 @@
+//# publish
+module 0x1.M {
+    struct Foo<T> { x: T }
+
+    foo() {
+        let x: Self.Foo<u64>;
+    label b0:
+        x = Foo<u64> { x : 42 }; // valid
+        abort 0;
+    }
+}
+
+//# publish
+module 0x1.N {
+    struct Foo<T1, T2: key> { x: T1, y: T2 }
+    struct Bar has key { f: bool }
+
+    foo() {
+        let x: Self.Foo<u64, Self.Bar>;
+    label b0:
+        x = Foo<u64, Self.Bar> { x : 42, y: Bar { f: false } }; // valid
+        abort 0;
+    }
+}

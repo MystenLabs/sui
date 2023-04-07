@@ -1,0 +1,9 @@
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/vector_space_after_less.move:4:29
+  │
+4 │         let a = vector < 100;
+  │                        - ---^ Unexpected ';'
+  │                        │ │   
+  │                        │ Expected '::' after an address in a module access chain
+  │                        Perhaps you need a blank space before this '<' operator?
+

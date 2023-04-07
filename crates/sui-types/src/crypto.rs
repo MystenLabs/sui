@@ -79,7 +79,7 @@ pub const DEFAULT_EPOCH_ID: EpochId = 0;
 /// Creates a proof of that the authority account address is owned by the
 /// holder of authority protocol key, and also ensures that the authority
 /// protocol public key exists. A proof of possession is an authority
-/// signature committed over the intent message `intent || message` (See
+/// signature committed over the intent message `intent || message || epoch` (See
 /// more at [struct IntentMessage] and [struct Intent]) where the message is
 /// constructed as `authority_pubkey_bytes || authority_account_address`.
 pub fn generate_proof_of_possession(
@@ -90,10 +90,7 @@ pub fn generate_proof_of_possession(
     msg.extend_from_slice(keypair.public().as_bytes());
     msg.extend_from_slice(address.as_ref());
     AuthoritySignature::new_secure(
-        &IntentMessage::new(
-            Intent::default().with_scope(IntentScope::ProofOfPossession),
-            msg,
-        ),
+        &IntentMessage::new(Intent::sui_app(IntentScope::ProofOfPossession), msg),
         &DEFAULT_EPOCH_ID,
         keypair,
     )
@@ -110,10 +107,7 @@ pub fn verify_proof_of_possession(
     let mut msg = protocol_pubkey.as_bytes().to_vec();
     msg.extend_from_slice(sui_address.as_ref());
     pop.verify_secure(
-        &IntentMessage::new(
-            Intent::default().with_scope(IntentScope::ProofOfPossession),
-            msg,
-        ),
+        &IntentMessage::new(Intent::sui_app(IntentScope::ProofOfPossession), msg),
         DEFAULT_EPOCH_ID,
         protocol_pubkey.into(),
     )
@@ -342,6 +336,7 @@ impl PublicKey {
             _ => Err(eyre!("Unsupported curve")),
         }
     }
+
     pub fn scheme(&self) -> SignatureScheme {
         match self {
             PublicKey::Ed25519(_) => Ed25519SuiSignature::SCHEME,
@@ -355,8 +350,19 @@ impl PublicKey {
 /// in Sui
 #[serde_as]
 #[derive(
-    Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, schemars::JsonSchema,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    schemars::JsonSchema,
+    AsRef,
 )]
+#[as_ref(forward)]
 pub struct AuthorityPublicKeyBytes(
     #[schemars(with = "Base64")]
     #[serde_as(as = "Readable<Base64, Bytes>")]
@@ -370,29 +376,49 @@ impl AuthorityPublicKeyBytes {
         Ok(())
     }
 
-    /// Get a ConciseAuthorityPublicKeyBytes. Usage:
+    /// Get a ConciseAuthorityPublicKeyBytesRef. Usage:
     ///
     ///   debug!(name = ?authority.concise());
     ///   format!("{:?}", authority.concise());
-    pub fn concise(&self) -> ConciseAuthorityPublicKeyBytes<'_> {
+    pub fn concise(&self) -> ConciseAuthorityPublicKeyBytesRef<'_> {
+        ConciseAuthorityPublicKeyBytesRef(self)
+    }
+
+    pub fn into_concise(self) -> ConciseAuthorityPublicKeyBytes {
         ConciseAuthorityPublicKeyBytes(self)
     }
 }
 
 /// A wrapper around AuthorityPublicKeyBytes that provides a concise Debug impl.
-pub struct ConciseAuthorityPublicKeyBytes<'a>(&'a AuthorityPublicKeyBytes);
+pub struct ConciseAuthorityPublicKeyBytesRef<'a>(&'a AuthorityPublicKeyBytes);
 
-impl Debug for ConciseAuthorityPublicKeyBytes<'_> {
+impl Debug for ConciseAuthorityPublicKeyBytesRef<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         let s = Hex::encode(self.0 .0.get(0..4).ok_or(std::fmt::Error)?);
         write!(f, "k#{}..", s)
     }
 }
 
-impl std::fmt::Display for ConciseAuthorityPublicKeyBytes<'_> {
+impl Display for ConciseAuthorityPublicKeyBytesRef<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        Debug::fmt(self, f)
+    }
+}
+
+/// A wrapper around AuthorityPublicKeyBytes but owns it.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct ConciseAuthorityPublicKeyBytes(AuthorityPublicKeyBytes);
+
+impl Debug for ConciseAuthorityPublicKeyBytes {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         let s = Hex::encode(self.0 .0.get(0..4).ok_or(std::fmt::Error)?);
         write!(f, "k#{}..", s)
+    }
+}
+
+impl Display for ConciseAuthorityPublicKeyBytes {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        Debug::fmt(self, f)
     }
 }
 
@@ -407,12 +433,6 @@ impl TryFrom<AuthorityPublicKeyBytes> for AuthorityPublicKey {
 impl From<&AuthorityPublicKey> for AuthorityPublicKeyBytes {
     fn from(pk: &AuthorityPublicKey) -> AuthorityPublicKeyBytes {
         AuthorityPublicKeyBytes::from_bytes(pk.as_ref()).unwrap()
-    }
-}
-
-impl AsRef<[u8]> for AuthorityPublicKeyBytes {
-    fn as_ref(&self) -> &[u8] {
-        &self.0[..]
     }
 }
 
@@ -513,24 +533,6 @@ impl SuiAuthoritySignature for AuthoritySignature {
                 error: "Invalid signature".to_string(),
             })
     }
-}
-
-pub fn random_key_pairs<KP: KeypairTraits>(num: usize) -> Vec<KP>
-where
-    <KP as KeypairTraits>::PubKey: SuiPublicKey,
-{
-    let mut items = num;
-    let mut rng = OsRng;
-
-    std::iter::from_fn(|| {
-        if items == 0 {
-            None
-        } else {
-            items -= 1;
-            Some(get_key_pair_from_rng(&mut rng).1)
-        }
-    })
-    .collect::<Vec<_>>()
 }
 
 // TODO: get_key_pair() and get_key_pair_from_bytes() should return KeyPair only.
@@ -1002,7 +1004,7 @@ impl<S: SuiSignatureInner + Sized> SuiSignature for S {
 
 /// AuthoritySignInfoTrait is a trait used specifically for a few structs in messages.rs
 /// to template on whether the struct is signed by an authority. We want to limit how
-/// those structs can be instanted on, hence the sealed trait.
+/// those structs can be instantiated on, hence the sealed trait.
 /// TODO: We could also add the aggregated signature as another impl of the trait.
 ///       This will make CertifiedTransaction also an instance of the same struct.
 pub trait AuthoritySignInfoTrait: private::SealedAuthoritySignInfoTrait {
@@ -1049,6 +1051,7 @@ pub struct AuthoritySignInfo {
     pub authority: AuthorityName,
     pub signature: AuthoritySignature,
 }
+
 impl AuthoritySignInfoTrait for AuthoritySignInfo {
     fn verify_secure<T: Serialize>(
         &self,
@@ -1400,12 +1403,14 @@ mod private {
 pub trait Signable<W> {
     fn write(&self, writer: &mut W);
 }
+
 pub trait SignableBytes
 where
     Self: Sized,
 {
     fn from_signable_bytes(bytes: &[u8]) -> Result<Self, Error>;
 }
+
 /// Activate the blanket implementation of `Signable` based on serde and BCS.
 /// * We use `serde_name` to extract a seed from the name of structs and enums.
 /// * We use `BCS` to generate canonical bytes suitable for hashing and signing.
@@ -1416,8 +1421,6 @@ where
 /// MUST be on types that comply with the `serde_name` machinery
 /// for the below implementations not to panic. One way to check they work is to write
 /// a unit test for serialization to / deserialization from signable bytes.
-///
-///
 mod bcs_signable {
 
     pub trait BcsSignable: serde::Serialize + serde::de::DeserializeOwned {}
@@ -1578,7 +1581,7 @@ pub mod bcs_signable_test {
         let idx = obligation.add_message(
             value,
             0,
-            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            Intent::sui_app(IntentScope::SenderSignedTransaction),
         );
         (obligation, idx)
     }

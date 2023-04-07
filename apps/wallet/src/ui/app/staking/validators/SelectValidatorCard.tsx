@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useGetRollingAverageApys } from '@mysten/core';
+import {
+    useGetRollingAverageApys,
+    formatPercentageDisplay,
+} from '@mysten/core';
 import { ArrowRight16 } from '@mysten/icons';
 import cl from 'classnames';
 import { useState, useMemo } from 'react';
@@ -27,7 +30,7 @@ export function SelectValidatorCard() {
     const [selectedValidator, setSelectedValidator] = useState<null | string>(
         null
     );
-    const [sortKey, setSortKey] = useState<SortKeys>('stakeShare');
+    const [sortKey, setSortKey] = useState<SortKeys | null>(null);
     const [sortAscending, setSortAscending] = useState(true);
     const { data, isLoading, isError } = useSystemState();
 
@@ -54,30 +57,43 @@ export function SelectValidatorCard() {
         );
     }, [data]);
 
+    const validatorsRandomOrder = useMemo(
+        () =>
+            [...(data?.activeValidators || [])].sort(() => 0.5 - Math.random()),
+        [data?.activeValidators]
+    );
     const validatorList = useMemo(() => {
-        if (!data) return [];
-
-        const sortedAsc = data.activeValidators
-            .map((validator) => ({
-                name: validator.name,
-                address: validator.suiAddress,
-                apy: rollingAverageApys?.[validator.suiAddress] || 0,
-                stakeShare: calculateStakeShare(
-                    BigInt(validator.stakingPoolSuiBalance),
-                    BigInt(totalStake)
-                ),
-            }))
-            .sort((a, b) => {
+        const sortedAsc = validatorsRandomOrder.map((validator) => ({
+            name: validator.name,
+            address: validator.suiAddress,
+            apy: rollingAverageApys?.[validator.suiAddress] ?? null,
+            stakeShare: calculateStakeShare(
+                BigInt(validator.stakingPoolSuiBalance),
+                BigInt(totalStake)
+            ),
+        }));
+        if (sortKey) {
+            sortedAsc.sort((a, b) => {
                 if (sortKey === 'name') {
                     return a[sortKey].localeCompare(b[sortKey], 'en', {
                         sensitivity: 'base',
                         numeric: true,
                     });
                 }
-                return a[sortKey] - b[sortKey];
+                // since apy can be null, fallback to 0
+                return (a[sortKey] || 0) - (b[sortKey] || 0);
             });
-        return sortAscending ? sortedAsc : sortedAsc.reverse();
-    }, [data, sortAscending, rollingAverageApys, totalStake, sortKey]);
+
+            return sortAscending ? sortedAsc : sortedAsc.reverse();
+        }
+        return sortedAsc;
+    }, [
+        validatorsRandomOrder,
+        sortAscending,
+        rollingAverageApys,
+        totalStake,
+        sortKey,
+    ]);
 
     if (isLoading) {
         return (
@@ -173,11 +189,12 @@ export function SelectValidatorCard() {
                                         selectedValidator === validator.address
                                     }
                                     validatorAddress={validator.address}
-                                    value={
-                                        sortKey === 'name'
-                                            ? '-'
-                                            : `${validator[sortKey]}%`
-                                    }
+                                    value={formatPercentageDisplay(
+                                        !sortKey || sortKey === 'name'
+                                            ? null
+                                            : validator[sortKey],
+                                        '-'
+                                    )}
                                 />
                             </div>
                         ))}

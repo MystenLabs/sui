@@ -1,13 +1,13 @@
 [package]
 name = "sui-proxy"
-version = "0.0.1"
+version = "0.0.2"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
 edition = "2021"
 
 [dependencies]
-axum = {version = "0.6.2", features = ["headers"]}
+axum.workspace = true
 axum-server = { version = "0.4.4", default-features = false, features = ["tls-rustls"] }
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 bytes = "1.4"
@@ -36,6 +36,8 @@ snap = "1.1.0"
 rustls = { version = "0.20.4", features = ["dangerous_configuration"] }
 rustls-pemfile = "1.0.2"
 prost = "0.11.8"
+once_cell = "1.17"
+http-body = "0.4.5"
 
 
 telemetry-subscribers.workspace = true

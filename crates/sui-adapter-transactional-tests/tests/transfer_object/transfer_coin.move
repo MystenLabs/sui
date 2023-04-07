@@ -3,10 +3,13 @@
 
 // tests TransferObject with a SUI coin
 
-//# init --accounts A B
+//# init --accounts A B C
 
-//# view-object 103
+//# programmable --sender C --inputs @A
+//> TransferObjects([Gas], Input(0))
 
-//# transfer-object 103 --sender A --recipient B
+//# view-object 0,2
 
-//# view-object 103
+//# transfer-object 0,2 --sender A --recipient B
+
+//# view-object 0,2

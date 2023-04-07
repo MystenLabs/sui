@@ -1,14 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::peers::SuiNodeProvider;
+use crate::{consumer::ProtobufDecoder, peers::SuiNodeProvider};
 use axum::{
-    extract::Extension,
+    async_trait,
+    body::Bytes,
+    extract::{Extension, FromRequest},
     headers::ContentType,
     http::{Request, StatusCode},
     middleware::Next,
     response::Response,
-    TypedHeader,
+    BoxError, TypedHeader,
 };
+use bytes::Buf;
+use prometheus::proto::MetricFamily;
 use std::sync::Arc;
 use sui_tls::TlsConnectionInfo;
 use tracing::error;
@@ -43,4 +47,37 @@ pub async fn expect_valid_public_key<B>(
 
     request.extensions_mut().insert(peer);
     Ok(next.run(request).await)
+}
+
+// extractor that shows how to consume the request body upfront
+#[derive(Debug)]
+pub struct LenDelimProtobuf(pub Vec<MetricFamily>);
+
+#[async_trait]
+impl<S, B> FromRequest<S, B> for LenDelimProtobuf
+where
+    S: Send + Sync,
+    B: http_body::Body + Send + 'static,
+    B::Data: Send,
+    B::Error: Into<BoxError>,
+{
+    type Rejection = (StatusCode, String);
+
+    async fn from_request(req: Request<B>, state: &S) -> Result<Self, Self::Rejection> {
+        let body = Bytes::from_request(req, state).await.map_err(|e| {
+            let msg = format!("error extracting bytes; {e}");
+            error!(msg);
+            (StatusCode::BAD_REQUEST, msg)
+        })?;
+
+        let mut decoder = ProtobufDecoder::new(body.reader());
+        let decoded = decoder.parse::<MetricFamily>().map_err(|e| {
+            let msg = format!("unable to decode len deliminated protobufs; {e}");
+            error!(msg);
+            (StatusCode::BAD_REQUEST, msg)
+        })?;
+
+        // req.extensions_mut().insert(decoded);
+        Ok(Self(decoded))
+    }
 }

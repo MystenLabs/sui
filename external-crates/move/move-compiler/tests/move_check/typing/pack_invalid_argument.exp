@@ -1,0 +1,60 @@
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/pack_invalid_argument.move:7:17
+  │
+2 │     struct S has drop { f: u64 }
+  │                            --- Expected: 'u64'
+  ·
+7 │         (S { f: false } : S);
+  │                 ^^^^^
+  │                 │
+  │                 Invalid argument for field 'f' for '0x8675309::M::S'
+  │                 Given: 'bool'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/typing/pack_invalid_argument.move:17:16
+   │
+ 4 │     struct R { s: S, f: u64, n1: Nat<u64>, n2: Nat<S> }
+   │                   - Expected: '0x8675309::M::S'
+   ·
+15 │          } : R);
+   │              - Given: '0x8675309::M::R'
+16 │         (R {
+17 │             s: r,
+   │                ^ Invalid argument for field 's' for '0x8675309::M::R'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/typing/pack_invalid_argument.move:18:16
+   │
+ 4 │     struct R { s: S, f: u64, n1: Nat<u64>, n2: Nat<S> }
+   │                         --- Expected: 'u64'
+   ·
+18 │             f: false,
+   │                ^^^^^
+   │                │
+   │                Invalid argument for field 'f' for '0x8675309::M::R'
+   │                Given: 'bool'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/typing/pack_invalid_argument.move:19:17
+   │
+ 4 │     struct R { s: S, f: u64, n1: Nat<u64>, n2: Nat<S> }
+   │                                      --- Expected: 'u64'
+   ·
+19 │             n1: Nat { f: false },
+   │                 ^^^^^^^^^^^^^^^^
+   │                 │        │
+   │                 │        Given: 'bool'
+   │                 Invalid argument for field 'n1' for '0x8675309::M::R'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/typing/pack_invalid_argument.move:20:17
+   │
+ 4 │     struct R { s: S, f: u64, n1: Nat<u64>, n2: Nat<S> }
+   │                                                    - Expected: '0x8675309::M::S'
+   ·
+15 │          } : R);
+   │              - Given: '0x8675309::M::R'
+   ·
+20 │             n2: Nat{ f: r }
+   │                 ^^^^^^^^^^^ Invalid argument for field 'n2' for '0x8675309::M::R'
+

@@ -22,10 +22,7 @@ pub enum IntentVersion {
 impl TryFrom<u8> for IntentVersion {
     type Error = eyre::Report;
     fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(Self::V0),
-            _ => Err(eyre!("Invalid IntentVersion")),
-        }
+        bcs::from_bytes(&[value]).map_err(|_| eyre!("Invalid IntentVersion"))
     }
 }
 
@@ -44,10 +41,7 @@ pub enum AppId {
 impl TryFrom<u8> for AppId {
     type Error = eyre::Report;
     fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(Self::Sui),
-            _ => Err(eyre!("Invalid AppId")),
-        }
+        bcs::from_bytes(&[value]).map_err(|_| eyre!("Invalid AppId"))
     }
 }
 
@@ -68,24 +62,17 @@ pub enum IntentScope {
     CheckpointSummary = 2,       // Used for an authority signature on a checkpoint summary.
     PersonalMessage = 3,         // Used for a user signature on a personal message.
     SenderSignedTransaction = 4, // Used for an authority signature on a user signed transaction.
-    ProofOfPossession = 5, // Used as a signature representing an authority's proof of possesion of its authority protocol key.
+    ProofOfPossession = 5, // Used as a signature representing an authority's proof of possession of its authority protocol key.
     HeaderDigest = 6,      // Used for narwhal authority signature on header digest.
 }
 
 impl TryFrom<u8> for IntentScope {
     type Error = eyre::Report;
     fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(Self::TransactionData),
-            1 => Ok(Self::TransactionEffects),
-            2 => Ok(Self::CheckpointSummary),
-            3 => Ok(Self::PersonalMessage),
-            4 => Ok(Self::SenderSignedTransaction),
-            5 => Ok(Self::ProofOfPossession),
-            _ => Err(eyre!("Invalid IntentScope")),
-        }
+        bcs::from_bytes(&[value]).map_err(|_| eyre!("Invalid IntentScope"))
     }
 }
+
 /// An intent is a compact struct serves as the domain separator for a message that a signature commits to.
 /// It consists of three parts: [enum IntentScope] (what the type of the message is), [enum IntentVersion], [enum AppId] (what application that the signature refers to).
 /// It is used to construct [struct IntentMessage] that what a signature commits to.
@@ -114,23 +101,27 @@ impl FromStr for Intent {
 }
 
 impl Intent {
-    pub fn with_app_id(mut self, app_id: AppId) -> Self {
-        self.app_id = app_id;
-        self
-    }
-
-    pub fn with_scope(mut self, scope: IntentScope) -> Self {
-        self.scope = scope;
-        self
-    }
-}
-
-impl Default for Intent {
-    fn default() -> Self {
+    pub fn sui_app(scope: IntentScope) -> Self {
         Self {
             version: IntentVersion::V0,
-            scope: IntentScope::TransactionData,
+            scope,
             app_id: AppId::Sui,
+        }
+    }
+
+    pub fn sui_transaction() -> Self {
+        Self {
+            scope: IntentScope::TransactionData,
+            version: IntentVersion::V0,
+            app_id: AppId::Sui,
+        }
+    }
+
+    pub fn narwhal_app(scope: IntentScope) -> Self {
+        Self {
+            scope,
+            version: IntentVersion::V0,
+            app_id: AppId::Narwhal,
         }
     }
 }

@@ -10,9 +10,9 @@ The Sui blockchain is reshaping the industry by achieving unprecedented speed an
 
 Unlike traditional blockchains which rely on fire-and-forget broadcasts, Sui's design enables requestors or proxies to proactively communicate with validators to finalize transactions, resulting in near-instant finality. With such low latency, Sui is a key enabler to incorporating transactions into games and other settings that require real-time completion.
 
-Sui also supports smart contracts written in Sui Move, a dialect of the Move programming language designed for blockchains with strong inherent security and a more understandable programming model.
+Sui also supports smart contracts written in Sui Move, a powerful asset-centric adaptation of [Move](https://golden.com/wiki/Move_(programming_language)-MNA4DZ6) for the Sui blockchain, to enable strong inherent security and a more understandable programming model.
 
-In a world where the cost of bandwidth is diminishing steadily, we are creating an ecosystem of services that will find it easy, fun, and perhaps profitable to ensure transaction voting on behalf of users.
+In a world where the cost of bandwidth is diminishing steadily, Sui is creating an ecosystem of services that will find it easy, fun, and perhaps profitable to ensure transaction voting on behalf of users.
 
 ## Components
 

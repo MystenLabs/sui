@@ -39,6 +39,8 @@ module sui_system::stake_subsidy {
 
     const BASIS_POINT_DENOMINATOR: u128 = 10000;
 
+    const ESubsidyDecreaseRateTooLarge: u64 = 0;
+
     public(friend) fun create(
         balance: Balance<SUI>,
         initial_distribution_amount: u64,
@@ -49,7 +51,7 @@ module sui_system::stake_subsidy {
         // Rate can't be higher than 100%.
         assert!(
             stake_subsidy_decrease_rate <= (BASIS_POINT_DENOMINATOR as u16),
-            0,
+            ESubsidyDecreaseRateTooLarge,
         );
 
         StakeSubsidy {
@@ -87,5 +89,11 @@ module sui_system::stake_subsidy {
     /// Returns the amount of stake subsidy to be added at the end of the current epoch.
     public fun current_epoch_subsidy_amount(self: &StakeSubsidy): u64 {
         math::min(self.current_distribution_amount, balance::value(&self.balance))
+    }
+
+    #[test_only]
+    /// Returns the number of distributions that have occurred.
+    public(friend) fun get_distribution_counter(self: &StakeSubsidy): u64 {
+        self.distribution_counter
     }
 }

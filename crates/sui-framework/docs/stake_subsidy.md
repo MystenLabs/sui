@@ -94,6 +94,15 @@
 
 
 
+<a name="0x3_stake_subsidy_ESubsidyDecreaseRateTooLarge"></a>
+
+
+
+<pre><code><b>const</b> <a href="stake_subsidy.md#0x3_stake_subsidy_ESubsidyDecreaseRateTooLarge">ESubsidyDecreaseRateTooLarge</a>: u64 = 0;
+</code></pre>
+
+
+
 <a name="0x3_stake_subsidy_create"></a>
 
 ## Function `create`
@@ -119,7 +128,7 @@
     // Rate can't be higher than 100%.
     <b>assert</b>!(
         stake_subsidy_decrease_rate &lt;= (<a href="stake_subsidy.md#0x3_stake_subsidy_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a> <b>as</b> u16),
-        0,
+        <a href="stake_subsidy.md#0x3_stake_subsidy_ESubsidyDecreaseRateTooLarge">ESubsidyDecreaseRateTooLarge</a>,
     );
 
     <a href="stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">StakeSubsidy</a> {

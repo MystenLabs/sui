@@ -1,0 +1,5 @@
+//# publish
+module 0x42.M {
+    // cannot be a friend with yourself
+    friend 0x42.M;
+}

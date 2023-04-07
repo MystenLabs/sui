@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::metrics::new_registry;
 use crate::{try_join_all, FuturesUnordered, NodeError};
+use anemo::PeerId;
 use config::{AuthorityIdentifier, Committee, Parameters, WorkerCache};
 use consensus::bullshark::Bullshark;
 use consensus::consensus::ConsensusRound;
@@ -12,12 +13,13 @@ use crypto::{KeyPair, NetworkKeyPair, PublicKey};
 use executor::{get_restored_consensus_output, ExecutionState, Executor, SubscriberResult};
 use fastcrypto::traits::{KeyPair as _, VerifyingKey};
 use mysten_metrics::{RegistryID, RegistryService};
+use network::client::NetworkClient;
 use primary::{NetworkModel, Primary, PrimaryChannelMetrics, NUM_SHUTDOWN_RECEIVERS};
 use prometheus::{IntGauge, Registry};
 use std::sync::Arc;
 use std::time::Instant;
 use storage::NodeStorage;
-use tokio::sync::{oneshot, watch, RwLock};
+use tokio::sync::{watch, RwLock};
 use tokio::task::JoinHandle;
 use tracing::{debug, info, instrument};
 use types::{
@@ -39,8 +41,12 @@ struct PrimaryNodeInner {
     registry: Option<(RegistryID, Registry)>,
     // The task handles created from primary
     handles: FuturesUnordered<JoinHandle<()>>,
+    // Keeping NetworkClient here for quicker shutdown.
+    client: Option<NetworkClient>,
     // The shutdown signal channel
     tx_shutdown: Option<PreSubscribedBroadcastSender>,
+    // Peer ID used for local connections.
+    own_peer_id: Option<PeerId>,
 }
 
 impl PrimaryNodeInner {
@@ -63,7 +69,10 @@ impl PrimaryNodeInner {
         committee: Committee,
         // The worker information cache.
         worker_cache: WorkerCache,
-        // The node's store //TODO: replace this by a path so the method can open and independent storage
+        // Client for communications.
+        client: NetworkClient,
+        // The node's store
+        // TODO: replace this by a path so the method can open and independent storage
         store: &NodeStorage,
         // The state used by the client to execute transactions.
         execution_state: Arc<State>,
@@ -74,6 +83,8 @@ impl PrimaryNodeInner {
         if self.is_running().await {
             return Err(NodeError::NodeAlreadyRunning);
         }
+
+        self.own_peer_id = Some(PeerId(network_keypair.public().0.to_bytes()));
 
         // create a new registry
         let registry = new_registry();
@@ -87,6 +98,7 @@ impl PrimaryNodeInner {
             network_keypair,
             committee,
             worker_cache,
+            client,
             store,
             self.parameters.clone(),
             self.internal_consensus,
@@ -119,6 +131,10 @@ impl PrimaryNodeInner {
         // send the shutdown signal to the node
         let now = Instant::now();
         info!("Sending shutdown message to primary node");
+
+        if let Some(c) = self.client.take() {
+            c.shutdown();
+        }
 
         if let Some(tx_shutdown) = self.tx_shutdown.as_ref() {
             tx_shutdown
@@ -175,6 +191,8 @@ impl PrimaryNodeInner {
         committee: Committee,
         // The worker information cache.
         worker_cache: WorkerCache,
+        // Client for communications.
+        client: NetworkClient,
         // The node's storage.
         store: &NodeStorage,
         // The configuration parameters.
@@ -222,7 +240,6 @@ impl PrimaryNodeInner {
             .unwrap_or_else(|| panic!("Our node with key {:?} should be in committee", name));
 
         let mut handles = Vec::new();
-        let (tx_executor_network, rx_executor_network) = oneshot::channel();
         let (tx_consensus_round_updates, rx_consensus_round_updates) =
             watch::channel(ConsensusRound::new(0, 0));
         let (dag, network_model) = if !internal_consensus {
@@ -241,9 +258,9 @@ impl PrimaryNodeInner {
         } else {
             let consensus_handles = Self::spawn_consensus(
                 authority.id(),
-                rx_executor_network,
                 worker_cache.clone(),
                 committee.clone(),
+                client.clone(),
                 store,
                 parameters.clone(),
                 execution_state,
@@ -260,6 +277,9 @@ impl PrimaryNodeInner {
             (None, NetworkModel::PartiallySynchronous)
         };
 
+        // TODO: the same set of variables are sent to primary, consensus and downstream
+        // components. Consider using a holder struct to pass them around.
+
         // Spawn the primary.
         let primary_handles = Primary::spawn(
             authority.clone(),
@@ -268,6 +288,7 @@ impl PrimaryNodeInner {
             committee.clone(),
             worker_cache.clone(),
             parameters.clone(),
+            client,
             store.header_store.clone(),
             store.certificate_store.clone(),
             store.proposer_store.clone(),
@@ -281,7 +302,6 @@ impl PrimaryNodeInner {
             tx_shutdown,
             tx_committed_certificates,
             registry,
-            Some(tx_executor_network),
         );
         handles.extend(primary_handles);
 
@@ -291,9 +311,9 @@ impl PrimaryNodeInner {
     /// Spawn the consensus core and the client executing transactions.
     async fn spawn_consensus<State>(
         authority_id: AuthorityIdentifier,
-        rx_executor_network: oneshot::Receiver<anemo::Network>,
         worker_cache: WorkerCache,
         committee: Committee,
+        client: NetworkClient,
         store: &NodeStorage,
         parameters: Parameters,
         execution_state: State,
@@ -356,9 +376,9 @@ impl PrimaryNodeInner {
         // subscriber handler if it missed some transactions.
         let executor_handles = Executor::spawn(
             authority_id,
-            rx_executor_network,
             worker_cache,
             committee.clone(),
+            client,
             execution_state,
             shutdown_receivers,
             rx_sequence,
@@ -390,7 +410,9 @@ impl PrimaryNode {
             registry_service,
             registry: None,
             handles: FuturesUnordered::new(),
+            client: None,
             tx_shutdown: None,
+            own_peer_id: None,
         };
 
         Self {
@@ -407,7 +429,10 @@ impl PrimaryNode {
         committee: Committee,
         // The worker information cache.
         worker_cache: WorkerCache,
-        // The node's store //TODO: replace this by a path so the method can open and independent storage
+        // Client for communications.
+        client: NetworkClient,
+        // The node's store
+        // TODO: replace this by a path so the method can open and independent storage
         store: &NodeStorage,
         // The state used by the client to execute transactions.
         execution_state: Arc<State>,
@@ -416,12 +441,14 @@ impl PrimaryNode {
         State: ExecutionState + Send + Sync + 'static,
     {
         let mut guard = self.internal.write().await;
+        guard.client = Some(client.clone());
         guard
             .start(
                 keypair,
                 network_keypair,
                 committee,
                 worker_cache,
+                client,
                 store,
                 execution_state,
             )

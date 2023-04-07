@@ -31,12 +31,12 @@ module test::m1 {
 //> 0: test::m1::r();
 //> test::m1::priv(Result(0));
 
-//# programmable --sender A --inputs object(107)
+//# programmable --sender A --inputs object(2,0)
 //> 0: test::m1::id(Input(0));
 //> test::m1::priv(Result(0));
 
 // cannot use an object once it has been used in a non-entry function
 
-//# programmable --sender A --inputs object(107)
+//# programmable --sender A --inputs object(2,0)
 //> 0: test::m1::dirty(Input(0));
 //> test::m1::priv(Input(0));

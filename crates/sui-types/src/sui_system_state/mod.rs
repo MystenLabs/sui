@@ -3,10 +3,14 @@
 
 use crate::base_types::ObjectID;
 use crate::committee::CommitteeWithNetworkMetadata;
-use crate::dynamic_field::get_dynamic_field_from_store;
+use crate::dynamic_field::{
+    get_dynamic_field_from_store, get_dynamic_field_object_from_store, Field,
+};
 use crate::error::SuiError;
+use crate::object::{MoveObject, Object};
 use crate::storage::ObjectStore;
 use crate::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
+use crate::sui_system_state::sui_system_state_inner_v2::SuiSystemStateInnerV2;
 use crate::versioned::Versioned;
 use crate::{id::UID, MoveTypeTagTrait, SUI_SYSTEM_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID};
 use anyhow::Result;
@@ -15,12 +19,14 @@ use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructT
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 
 use self::sui_system_state_inner_v1::{SuiSystemStateInnerV1, ValidatorV1};
 use self::sui_system_state_summary::{SuiSystemStateSummary, SuiValidatorSummary};
 
 pub mod epoch_start_sui_system_state;
 pub mod sui_system_state_inner_v1;
+pub mod sui_system_state_inner_v2;
 pub mod sui_system_state_summary;
 
 #[cfg(msim)]
@@ -66,6 +72,94 @@ impl SuiSystemStateWrapper {
             type_params: vec![],
         }
     }
+
+    pub fn advance_epoch_safe_mode<S>(
+        &self,
+        params: &AdvanceEpochParams,
+        object_store: &S,
+        protocol_config: &ProtocolConfig,
+    ) -> Object
+    where
+        S: ObjectStore,
+    {
+        let id = self.id.id.bytes;
+        let mut field_object = get_dynamic_field_object_from_store(object_store, id, &self.version)
+            .expect("Dynamic field object of wrapper should always be present in the object store");
+        let move_object = field_object
+            .data
+            .try_as_move_mut()
+            .expect("Dynamic field object must be a Move object");
+        match self.version {
+            1 => {
+                Self::advance_epoch_safe_mode_impl::<SuiSystemStateInnerV1>(
+                    move_object,
+                    params,
+                    protocol_config,
+                );
+            }
+            2 => {
+                Self::advance_epoch_safe_mode_impl::<SuiSystemStateInnerV2>(
+                    move_object,
+                    params,
+                    protocol_config,
+                );
+            }
+            #[cfg(msim)]
+            SUI_SYSTEM_STATE_SIM_TEST_V1 => {
+                Self::advance_epoch_safe_mode_impl::<SimTestSuiSystemStateInnerV1>(
+                    move_object,
+                    params,
+                    protocol_config,
+                );
+            }
+            #[cfg(msim)]
+            SUI_SYSTEM_STATE_SIM_TEST_SHALLOW_V2 => {
+                Self::advance_epoch_safe_mode_impl::<SimTestSuiSystemStateInnerShallowV2>(
+                    move_object,
+                    params,
+                    protocol_config,
+                );
+            }
+            #[cfg(msim)]
+            SUI_SYSTEM_STATE_SIM_TEST_DEEP_V2 => {
+                Self::advance_epoch_safe_mode_impl::<SimTestSuiSystemStateInnerDeepV2>(
+                    move_object,
+                    params,
+                    protocol_config,
+                );
+            }
+            _ => unreachable!(),
+        }
+        field_object
+    }
+
+    fn advance_epoch_safe_mode_impl<T>(
+        move_object: &mut MoveObject,
+        params: &AdvanceEpochParams,
+        protocol_config: &ProtocolConfig,
+    ) where
+        T: Serialize + DeserializeOwned + SuiSystemStateTrait,
+    {
+        let mut field: Field<u64, T> =
+            bcs::from_bytes(move_object.contents()).expect("bcs deserialization should never fail");
+        tracing::info!(
+            "Advance epoch safe mode: current epoch: {}, protocol_version: {}, system_state_version: {}",
+            field.value.epoch(),
+            field.value.protocol_version(),
+            field.value.system_state_version()
+        );
+        field.value.advance_epoch_safe_mode(params);
+        tracing::info!(
+            "Safe mode activated. New epoch: {}, protocol_version: {}, system_state_version: {}",
+            field.value.epoch(),
+            field.value.protocol_version(),
+            field.value.system_state_version()
+        );
+        let new_contents = bcs::to_bytes(&field).expect("bcs serialization should never fail");
+        move_object
+            .update_contents(new_contents, protocol_config)
+            .expect("Update sui system object content cannot fail since it should be small");
+    }
 }
 
 /// This is the standard API that all inner system state object type should implement.
@@ -78,6 +172,7 @@ pub trait SuiSystemStateTrait {
     fn epoch_start_timestamp_ms(&self) -> u64;
     fn epoch_duration_ms(&self) -> u64;
     fn safe_mode(&self) -> bool;
+    fn advance_epoch_safe_mode(&mut self, params: &AdvanceEpochParams);
     fn get_current_epoch_committee(&self) -> CommitteeWithNetworkMetadata;
     fn into_epoch_start_state(self) -> EpochStartSystemState;
     fn into_sui_system_state_summary(self) -> SuiSystemStateSummary;
@@ -91,6 +186,7 @@ pub trait SuiSystemStateTrait {
 #[enum_dispatch(SuiSystemStateTrait)]
 pub enum SuiSystemState {
     V1(SuiSystemStateInnerV1),
+    V2(SuiSystemStateInnerV2),
     #[cfg(msim)]
     SimTestV1(SimTestSuiSystemStateInnerV1),
     #[cfg(msim)]
@@ -111,7 +207,6 @@ impl SuiSystemState {
     pub fn into_genesis_version_for_tooling(self) -> SuiSystemStateInnerGenesis {
         match self {
             SuiSystemState::V1(inner) => inner,
-            #[cfg(msim)]
             _ => unreachable!(),
         }
     }
@@ -159,6 +254,18 @@ where
                     },
                 )?;
             Ok(SuiSystemState::V1(result))
+        }
+        2 => {
+            let result: SuiSystemStateInnerV2 =
+                get_dynamic_field_from_store(object_store, id, &wrapper.version).map_err(
+                    |err| {
+                        SuiError::DynamicFieldReadError(format!(
+                            "Failed to load sui system state inner object with ID {:?} and version {:?}: {:?}",
+                            id, wrapper.version, err
+                        ))
+                    },
+                )?;
+            Ok(SuiSystemState::V2(result))
         }
         #[cfg(msim)]
         SUI_SYSTEM_STATE_SIM_TEST_V1 => {
@@ -291,4 +398,17 @@ impl PoolTokenExchangeRate {
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct ValidatorWrapper {
     pub inner: Versioned,
+}
+
+#[derive(Debug)]
+pub struct AdvanceEpochParams {
+    pub epoch: u64,
+    pub next_protocol_version: ProtocolVersion,
+    pub storage_charge: u64,
+    pub computation_charge: u64,
+    pub storage_rebate: u64,
+    pub non_refundable_storage_fee: u64,
+    pub storage_fund_reinvest_rate: u64,
+    pub reward_slashing_rate: u64,
+    pub epoch_start_timestamp_ms: u64,
 }

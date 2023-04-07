@@ -67,6 +67,12 @@ module sui_system::validator {
     /// Intended validator is not a candidate one.
     const ENotValidatorCandidate: u64 = 10;
 
+    /// Stake amount is invalid or wrong.
+    const EInvalidStakeAmount: u64 = 11;
+
+    /// Function called during non-genesis times.
+    const ECalledDuringNonGenesis: u64 = 12;
+
     /// New Capability is not created by the validator itself
     const ENewCapNotCreatedByValidatorItself: u64 = 100;
 
@@ -290,7 +296,7 @@ module sui_system::validator {
         ctx: &mut TxContext,
     ) {
         let stake_amount = balance::value(&stake);
-        assert!(stake_amount > 0, 0);
+        assert!(stake_amount > 0, EInvalidStakeAmount);
         let stake_epoch = tx_context::epoch(ctx) + 1;
         staking_pool::request_add_stake(
             &mut self.staking_pool, stake, staker_address, stake_epoch, ctx
@@ -318,9 +324,9 @@ module sui_system::validator {
         staker_address: address,
         ctx: &mut TxContext,
     ) {
-        assert!(tx_context::epoch(ctx) == 0, 0);
+        assert!(tx_context::epoch(ctx) == 0, ECalledDuringNonGenesis);
         let stake_amount = balance::value(&stake);
-        assert!(stake_amount > 0, 0);
+        assert!(stake_amount > 0, EInvalidStakeAmount);
 
         staking_pool::request_add_stake(
             &mut self.staking_pool,
@@ -407,7 +413,7 @@ module sui_system::validator {
     /// Process pending stakes and withdraws, called at the end of the epoch.
     public(friend) fun process_pending_stakes_and_withdraws(self: &mut Validator, ctx: &mut TxContext) {
         staking_pool::process_pending_stakes_and_withdraws(&mut self.staking_pool, ctx);
-        assert!(stake_amount(self) == self.next_epoch_stake, 0);
+        assert!(stake_amount(self) == self.next_epoch_stake, EInvalidStakeAmount);
     }
 
     /// Returns true if the validator is preactive.
@@ -572,9 +578,8 @@ module sui_system::validator {
     public fun is_duplicate(self: &Validator, other: &Validator): bool {
          self.metadata.sui_address == other.metadata.sui_address
             || self.metadata.name == other.metadata.name
-            // MUSTFIX: tests break when this is uncommented
-            // || self.metadata.net_address == other.metadata.net_address
-            // || self.metadata.p2p_address == other.metadata.p2p_address
+            || self.metadata.net_address == other.metadata.net_address
+            || self.metadata.p2p_address == other.metadata.p2p_address
             || self.metadata.protocol_pubkey_bytes == other.metadata.protocol_pubkey_bytes
             || self.metadata.network_pubkey_bytes == other.metadata.network_pubkey_bytes
             || self.metadata.network_pubkey_bytes == other.metadata.worker_pubkey_bytes

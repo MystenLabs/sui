@@ -17,19 +17,18 @@ use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use tracing::{info, instrument, trace, warn};
 
 use crate::programmable_transactions;
-use sui_protocol_config::{
-    check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig, ProtocolVersion,
-};
+use sui_macros::checked_arithmetic;
+use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig};
 use sui_types::clock::{CLOCK_MODULE_NAME, CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME};
 use sui_types::epoch_data::EpochData;
 use sui_types::error::{ExecutionError, ExecutionErrorKind};
-use sui_types::gas::GasCostSummary;
+use sui_types::gas::{GasCostSummary, SuiGasStatusAPI};
 use sui_types::messages::{
     Argument, ConsensusCommitPrologue, GenesisTransaction, ObjectArg, ProgrammableTransaction,
     TransactionKind,
 };
 use sui_types::storage::{ChildObjectResolver, ObjectStore, ParentSync, WriteKind};
-use sui_types::sui_system_state::ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME;
+use sui_types::sui_system_state::{AdvanceEpochParams, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME};
 use sui_types::temporary_store::InnerTemporaryStore;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
@@ -47,17 +46,10 @@ use sui_types::{
 
 use sui_types::temporary_store::TemporaryStore;
 
-pub struct AdvanceEpochParams {
-    pub epoch: u64,
-    pub next_protocol_version: ProtocolVersion,
-    pub storage_charge: u64,
-    pub computation_charge: u64,
-    pub storage_rebate: u64,
-    pub non_refundable_storage_fee: u64,
-    pub storage_fund_reinvest_rate: u64,
-    pub reward_slashing_rate: u64,
-    pub epoch_start_timestamp_ms: u64,
-}
+#[cfg(msim)]
+use self::advance_epoch_result_injection::maybe_modify_result;
+
+checked_arithmetic! {
 
 #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
 pub fn execute_transaction_to_effects<
@@ -169,14 +161,16 @@ fn execute_transaction<
         Ok(obj_ref) => obj_ref,
         Err(_) => gas[0], // this cannot fail, but we use gas[0] anyway
     };
-    let is_system = transaction_kind.is_system_tx();
     // At this point no charge has been applied yet
     debug_assert!(
-        u64::from(gas_status.gas_used()) == 0
+        gas_status.gas_used() == 0
             && gas_status.storage_rebate() == 0
             && gas_status.storage_gas_units() == 0,
         "No gas charges must be applied yet"
     );
+    let is_genesis_tx = matches!(transaction_kind, TransactionKind::Genesis(_));
+    let advance_epoch_gas_summary = transaction_kind.get_advance_epoch_tx_gas_summary();
+
     // We must charge object read here during transaction execution, because if this fails
     // we must still ensure an effect is committed and all objects versions incremented
     let result = charge_gas_for_object_read(temporary_store, &mut gas_status);
@@ -221,24 +215,105 @@ fn execute_transaction<
                 ))
             }
         };
+        if execution_result.is_ok() {
+
+            // This limit is only present in Version 3 and up, so use this to gate it
+            if let (Some(normal_lim), Some(system_lim)) =
+                (protocol_config.max_size_written_objects(), protocol_config
+            .max_size_written_objects_system_tx()) {
+                let written_objects_size = temporary_store.written_objects_size();
+
+                match check_limit_by_meter!(
+                    !gas_status.is_unmetered(),
+                    written_objects_size,
+                    normal_lim,
+                    system_lim
+                ) {
+                    LimitThresholdCrossed::None => (),
+                    LimitThresholdCrossed::Soft(_, limit) => {
+                        /* TODO: add more alerting */
+                        warn!(
+                            written_objects_size = written_objects_size,
+                            soft_limit = limit,
+                            "Written objects size crossed soft limit",
+                        )
+                    }
+                    LimitThresholdCrossed::Hard(_, lim) => {
+                        execution_result = Err(ExecutionError::new_with_source(
+                            ExecutionErrorKind::WrittenObjectsTooLarge {
+                                current_size: written_objects_size as u64,
+                                max_size: lim as u64,
+                            },
+                            "Written objects size crossed hard limit",
+                        ))
+                    }
+                };
+
+            }
+
+        }
+
         execution_result
     });
-    if !gas_status.is_unmetered() {
-        temporary_store.charge_gas(gas_object_ref.0, &mut gas_status, &mut result, gas);
-    }
-    if !is_system {
-        #[cfg(debug_assertions)]
-        {
-            if !Mode::allow_arbitrary_values() {
-                // ensure that this transaction did not create or destroy SUI
-                temporary_store.check_sui_conserved().unwrap();
-            }
-            // else, we're in dev-inspect mode, which lets you turn bytes into arbitrary
-            // objects (including coins). this can violate conservation, but it's expected
+
+    if protocol_config.gas_model_version() > 1 {
+        // We always go through the gas charging process, but for system transaction, we don't pass
+        // the gas object ID since it's not a valid object.
+        // TODO: Ideally we should make gas object ref None in the first place.
+        let gas_object_id = if gas_status.is_unmetered() {
+            None
+        } else {
+            Some(gas_object_ref.0)
+        };
+        let cost_summary =
+            temporary_store.charge_gas(gas_object_id, &mut gas_status, &mut result, gas);
+         // === begin SUI conservation checks ===
+    // For advance epoch transaction, we need to provide epoch rewards and rebates as extra
+    // information provided to check_sui_conserved, because we mint rewards, and burn
+    // the rebates. We also need to pass in the unmetered_storage_rebate because storage
+    // rebate is not reflected in the storage_rebate of gas summary. This is a bit confusing.
+    // We could probably clean up the code a bit.
+        // Put all the storage rebate accumulated in the system transaction
+        // to the 0x5 object so that it's not lost.
+        temporary_store.conserve_unmetered_storage_rebate(gas_status.unmetered_storage_rebate());
+        if !is_genesis_tx {
+        // TODO: use node_config for this instead?
+          let do_expensive_checks  = cfg!(debug_assertions);
+          if cfg!(debug_assertions) {
+              // in debug mode--run all the conservation checks even if expensive, and don't bother
+              // with avoiding panics if they fail
+              if !Mode::allow_arbitrary_values() {
+                  // ensure that this transaction did not create or destroy SUI
+                  temporary_store
+                      .check_sui_conserved(advance_epoch_gas_summary, do_expensive_checks)
+                      .unwrap();
+              } // else, we're in dev-inspect mode, which lets you turn bytes into arbitrary objects (including coins).
+              //  this can violate conservation, but it's ok/expected because this mode does no writes
+          } else {
+              // in release mode--do the cheaper checks and try to recover if they fail
+              let conservation_result = temporary_store.check_sui_conserved(advance_epoch_gas_summary, do_expensive_checks);
+              if let Err(conservation_err) = conservation_result {
+                  // conservation violated. try to avoid panic by dumping all writes, charging for gas, re-checking
+                  // conservation, and surfacing an aborted transaction with an invariant violation if all of that works
+                  result = Err(conservation_err);
+                  temporary_store.charge_gas(gas_object_id, &mut gas_status, &mut result, gas);
+                  // check conservation once more more. if we still fail, it's a problem with gas
+                  // charging that happens even in the "aborted" case--no other option but panic.
+                  // we will create or destroy SUI otherwise
+                  temporary_store.check_sui_conserved(advance_epoch_gas_summary, do_expensive_checks).unwrap();
+              }
+          }
+      } // else, genesis transactions mint the SUI supply, and hence does not satisfy SUI conservation.
+      // === end SUI conservation checks ===
+        (cost_summary, result)
+    } else {
+        // legacy code before gas v2, leave it alone
+        if !gas_status.is_unmetered() {
+            temporary_store.charge_gas_legacy(gas_object_ref.0, &mut gas_status, &mut result, gas);
         }
+        let cost_summary = gas_status.summary();
+        (cost_summary, result)
     }
-    let cost_summary = gas_status.summary();
-    (cost_summary, result)
 }
 
 fn execution_loop<
@@ -293,11 +368,11 @@ fn execution_loop<
                 move_vm,
                 gas_status,
                 protocol_config,
-            )?;
+            ).expect("ConsensusCommitPrologue cannot fail");
             Ok(Mode::empty_results())
         }
         TransactionKind::ProgrammableTransaction(pt) => {
-            programmable_transactions::execution::execute::<_, _, Mode>(
+            programmable_transactions::execution::execute::<_, Mode>(
                 protocol_config,
                 move_vm,
                 temporary_store,
@@ -381,7 +456,7 @@ pub fn construct_advance_epoch_pt(
 
     info!(
         "Call arguments to advance_epoch transaction: {:?}",
-        arguments
+        params
     );
 
     let storage_rebates = builder.programmable_move_call(
@@ -405,6 +480,7 @@ pub fn construct_advance_epoch_pt(
 
 pub fn construct_advance_epoch_safe_mode_pt(
     params: &AdvanceEpochParams,
+    protocol_config: &ProtocolConfig,
 ) -> Result<ProgrammableTransaction, ExecutionError> {
     let mut builder = ProgrammableTransactionBuilder::new();
     // Step 1: Create storage and computation rewards.
@@ -417,16 +493,25 @@ pub fn construct_advance_epoch_safe_mode_pt(
         initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
         mutable: true,
     });
-    let call_arg_arguments = vec![
+
+    let mut args = vec![
         system_object_arg,
         CallArg::Pure(bcs::to_bytes(&params.epoch).unwrap()),
         CallArg::Pure(bcs::to_bytes(&params.next_protocol_version.as_u64()).unwrap()),
         CallArg::Pure(bcs::to_bytes(&params.storage_rebate).unwrap()),
         CallArg::Pure(bcs::to_bytes(&params.non_refundable_storage_fee).unwrap()),
-    ]
-    .into_iter()
-    .map(|a| builder.input(a))
-    .collect::<Result<_, _>>();
+    ];
+
+    if protocol_config.get_advance_epoch_start_time_in_safe_mode() {
+        args.push(CallArg::Pure(
+            bcs::to_bytes(&params.epoch_start_timestamp_ms).unwrap(),
+        ));
+    }
+
+    let call_arg_arguments = args
+        .into_iter()
+        .map(|a| builder.input(a))
+        .collect::<Result<_, _>>();
 
     assert_invariant!(
         call_arg_arguments.is_ok(),
@@ -437,7 +522,7 @@ pub fn construct_advance_epoch_safe_mode_pt(
 
     info!(
         "Call arguments to advance_epoch transaction: {:?}",
-        arguments
+        params
     );
 
     builder.programmable_move_call(
@@ -451,7 +536,7 @@ pub fn construct_advance_epoch_safe_mode_pt(
     Ok(builder.finish())
 }
 
-fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
+fn advance_epoch<S: ObjectStore + BackingPackageStore + ParentSync + ChildObjectResolver>(
     change_epoch: ChangeEpoch,
     temporary_store: &mut TemporaryStore<S>,
     tx_ctx: &mut TxContext,
@@ -471,7 +556,7 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
         epoch_start_timestamp_ms: change_epoch.epoch_start_timestamp_ms,
     };
     let advance_epoch_pt = construct_advance_epoch_pt(&params)?;
-    let result = programmable_transactions::execution::execute::<_, _, execution_mode::System>(
+    let result = programmable_transactions::execution::execute::<_, execution_mode::System>(
         protocol_config,
         move_vm,
         temporary_store,
@@ -481,6 +566,9 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
         advance_epoch_pt,
     );
 
+    #[cfg(msim)]
+    let result = maybe_modify_result(result);
+
     if result.is_err() {
         tracing::error!(
             "Failed to execute advance epoch transaction. Switching to safe mode. Error: {:?}. Input objects: {:?}. Tx data: {:?}",
@@ -489,17 +577,25 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
             change_epoch,
         );
         temporary_store.drop_writes();
-        let advance_epoch_safe_mode_pt = construct_advance_epoch_safe_mode_pt(&params)?;
-        programmable_transactions::execution::execute::<_, _, execution_mode::System>(
-            protocol_config,
-            move_vm,
-            temporary_store,
-            tx_ctx,
-            gas_status,
-            None,
-            advance_epoch_safe_mode_pt,
-        )
-        .expect("Advance epoch with safe mode must succeed");
+        // Must reset the storage rebate since we are re-executing.
+        gas_status.reset_storage_cost_and_rebate();
+
+        if protocol_config.get_advance_epoch_start_time_in_safe_mode() {
+            temporary_store.advance_epoch_safe_mode(&params, protocol_config);
+        } else {
+            let advance_epoch_safe_mode_pt =
+                construct_advance_epoch_safe_mode_pt(&params, protocol_config)?;
+            programmable_transactions::execution::execute::<_, execution_mode::System>(
+                protocol_config,
+                move_vm,
+                temporary_store,
+                tx_ctx,
+                gas_status,
+                None,
+                advance_epoch_safe_mode_pt,
+            )
+            .expect("Advance epoch with safe mode must succeed");
+        }
     }
 
     for (version, modules, dependencies) in change_epoch.system_packages.into_iter() {
@@ -515,7 +611,7 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
             .collect();
 
         let mut new_package =
-            Object::new_system_package(modules, version, dependencies, tx_ctx.digest());
+            Object::new_system_package(&modules, version, dependencies, tx_ctx.digest());
 
         info!(
             "upgraded system package {:?}",
@@ -569,7 +665,7 @@ fn setup_consensus_commit<S: BackingPackageStore + ParentSync + ChildObjectResol
         );
         builder.finish()
     };
-    programmable_transactions::execution::execute::<_, _, execution_mode::System>(
+    programmable_transactions::execution::execute::<_, execution_mode::System>(
         protocol_config,
         move_vm,
         temporary_store,
@@ -578,4 +674,33 @@ fn setup_consensus_commit<S: BackingPackageStore + ParentSync + ChildObjectResol
         None,
         pt,
     )
+}
+
+}
+
+#[cfg(msim)]
+pub mod advance_epoch_result_injection {
+    use std::cell::RefCell;
+    use sui_types::error::{ExecutionError, ExecutionErrorKind};
+
+    thread_local! {
+        static OVERRIDE: RefCell<bool>  = RefCell::new(false);
+    }
+
+    pub fn set_override(value: bool) {
+        OVERRIDE.with(|o| *o.borrow_mut() = value);
+    }
+
+    /// This function is used to modify the result of advance_epoch transaction for testing.
+    /// If the override is set, the result will be an execution error, otherwise the original result will be returned.
+    pub fn maybe_modify_result(result: Result<(), ExecutionError>) -> Result<(), ExecutionError> {
+        if OVERRIDE.with(|o| *o.borrow()) {
+            Err::<(), ExecutionError>(ExecutionError::new(
+                ExecutionErrorKind::FunctionNotFound,
+                None,
+            ))
+        } else {
+            result
+        }
+    }
 }

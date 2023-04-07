@@ -261,18 +261,21 @@ class LogParser:
         consensus_tps, consensus_bps, _ = self._consensus_throughput()
         end_to_end_tps, end_to_end_bps, duration = self._end_to_end_throughput()
         end_to_end_latency = self._end_to_end_latency() * 1_000
+
+        # TODO: support primary and worker on different processes, and fail on
+        # empty log entries.
         batch_creation_latency = mean(
-            self.batch_creation_latencies.values()) * 1000
+            self.batch_creation_latencies.values()) * 1000 if self.batch_creation_latencies else -1
         header_creation_latency = mean(
-            self.header_creation_latencies .values()) * 1000
+            self.header_creation_latencies.values()) * 1000 if self.header_creation_latencies else -1
         batch_to_header_latency = mean(
-            self.batch_to_header_latencies.values()) * 1000
+            self.batch_to_header_latencies.values()) * 1000 if self.batch_to_header_latencies else -1
         header_to_cert_latency = mean(
-            self.header_to_cert_latencies.values()) * 1000
+            self.header_to_cert_latencies.values()) * 1000 if self.header_to_cert_latencies else -1
         cert_commit_latency = mean(
-            self.cert_commit_latencies.values()) * 1000
+            self.cert_commit_latencies.values()) * 1000 if self.cert_commit_latencies else -1
         request_vote_outbound_latency = mean(
-            self.request_vote_outbound_latencies)
+            self.request_vote_outbound_latencies) if self.request_vote_outbound_latencies else -1
 
         return (
             '\n'

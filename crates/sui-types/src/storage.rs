@@ -30,6 +30,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::collections::{BTreeMap, HashMap};
 use std::convert::Infallible;
+use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 use tap::Pipe;
 
@@ -694,5 +695,15 @@ impl ObjectStore for BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)> {
 impl<T: ObjectStore> ObjectStore for Arc<T> {
     fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
         self.as_ref().get_object(object_id)
+    }
+}
+
+impl Display for DeleteKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DeleteKind::Wrap => write!(f, "Wrap"),
+            DeleteKind::Normal => write!(f, "Normal"),
+            DeleteKind::UnwrapThenDelete => write!(f, "UnwrapThenDelete"),
+        }
     }
 }

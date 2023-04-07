@@ -1,0 +1,42 @@
+//# publish
+
+// the VM will provide the values for mutable inputs after the function returns
+// modifications should be observable
+
+module 0x42.M {
+    struct S { f: u64 }
+
+    public set_f(s: &mut Self.S, f: u64) {
+        label l0:
+        *(&mut move(s).S::f) = move(f);
+        return;
+    }
+
+    public t(
+        u: &mut u64,
+        s: &mut Self.S,
+        v: &mut vector<u8>,
+    ) {
+        label l0:
+        *move(u) = 112;
+        *(&mut move(s).S::f) = 224;
+        *(vec_mut_borrow<u8>(move(v), 1)) = 0u8;
+        return;
+    }
+}
+
+//# run --args 0 1 b"xyz"
+import 0x42.M;
+main(
+    u: &mut u64,
+    s: &mut M.S,
+    v: &mut vector<u8>,
+) {
+    label l0:
+    *move(u) = 112;
+    M.set_f(move(s), 224);
+    *(vec_mut_borrow<u8>(move(v), 1)) = 0u8;
+    return;
+}
+
+//# run 0x42::M::t --args 0 1 b"xyz"

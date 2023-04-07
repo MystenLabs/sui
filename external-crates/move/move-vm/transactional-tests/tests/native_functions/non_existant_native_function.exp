@@ -1,0 +1,10 @@
+processed 1 task
+
+task 0 'publish'. lines 1-5:
+Error: Unable to publish module '00000000000000000000000000000042::No'. Got VMError: {
+    major_status: MISSING_DEPENDENCY,
+    sub_status: None,
+    location: 0x42::No,
+    indices: [(FunctionHandle, 0)],
+    offsets: [],
+}

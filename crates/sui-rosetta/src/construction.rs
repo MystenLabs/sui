@@ -65,7 +65,7 @@ pub async fn payloads(
         .operations
         .into_internal()?
         .try_into_data(metadata)?;
-    let intent_msg = IntentMessage::new(Intent::default(), data);
+    let intent_msg = IntentMessage::new(Intent::sui_transaction(), data);
     let intent_msg_bytes = bcs::to_bytes(&intent_msg)?;
 
     let mut hasher = DefaultHash::default();
@@ -107,7 +107,7 @@ pub async fn combine(
 
     let signed_tx = Transaction::from_generic_sig_data(
         intent_msg.value,
-        Intent::default(),
+        Intent::sui_transaction(),
         vec![GenericSignature::from_bytes(
             &[&*flag, &*sig_bytes, &*pub_key].concat(),
         )?],
@@ -220,9 +220,9 @@ pub async fn metadata(
     let (total_required_amount, objects, budget) = match &option.internal_operation {
         InternalOperation::PaySui { amounts, .. } => {
             let amount = amounts.iter().sum::<u64>();
-            (Some(amount), vec![], 2000)
+            (Some(amount), vec![], 5_000_000)
         }
-        InternalOperation::Stake { amount, .. } => (*amount, vec![], 2000),
+        InternalOperation::Stake { amount, .. } => (*amount, vec![], 100_000_000),
         InternalOperation::WithdrawStake { sender, stake_ids } => {
             let stake_ids = if stake_ids.is_empty() {
                 // unstake all
@@ -261,7 +261,7 @@ pub async fn metadata(
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(SuiError::from)?;
 
-            (Some(0), stake_refs, 10000)
+            (Some(0), stake_refs, 100_000_000)
         }
     };
 

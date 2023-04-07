@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useGetRollingAverageApys } from '@mysten/core';
+import {
+    formatPercentageDisplay,
+    useGetRollingAverageApys,
+} from '@mysten/core';
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
@@ -75,14 +78,14 @@ export function ValidatorFormDetail({
     }, [system]);
 
     const totalStakePercentage = useMemo(() => {
-        if (!system || !stakeData) return 0;
+        if (!system || !stakeData) return null;
         return calculateStakeShare(
             getTokenStakeSuiForValidator(stakeData, validatorAddress),
             BigInt(totalValidatorsStake)
         );
     }, [stakeData, system, totalValidatorsStake, validatorAddress]);
 
-    const apy = rollingAverageApys?.[validatorAddress] || 0;
+    const apy = rollingAverageApys?.[validatorAddress] ?? null;
 
     if (isLoading || loadingValidators) {
         return (
@@ -155,7 +158,7 @@ export function ValidatorFormDetail({
                                 weight="semibold"
                                 color="gray-90"
                             >
-                                {apy > 0 ? `${apy}%` : '--'}
+                                {apy === null ? '--' : `${apy}%`}
                             </Text>
                         </div>
                         <div className="flex gap-2 items-center justify-between">
@@ -175,9 +178,7 @@ export function ValidatorFormDetail({
                                 weight="semibold"
                                 color="gray-90"
                             >
-                                {totalStakePercentage > 0
-                                    ? `${totalStakePercentage}%`
-                                    : '--'}
+                                {formatPercentageDisplay(totalStakePercentage)}
                             </Text>
                         </div>
 

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use move_core_types::language_storage::StructTag;
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -15,7 +16,7 @@ pub use sui_core::test_utils::{
     compile_basics_package, compile_nfts_package, wait_for_all_txes, wait_for_tx,
 };
 use sui_json_rpc_types::{
-    SuiObjectDataOptions, SuiObjectResponseQuery, SuiTransactionBlockDataAPI,
+    ObjectChange, SuiObjectDataOptions, SuiObjectResponseQuery, SuiTransactionBlockDataAPI,
     SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
@@ -31,7 +32,9 @@ use sui_types::messages::{
     TransactionEffects, TransactionEffectsAPI, TransactionEvents, VerifiedTransaction,
 };
 use sui_types::messages::{ExecuteTransactionRequestType, HandleCertificateResponse};
+use sui_types::move_package::UpgradePolicy;
 use sui_types::object::{Object, Owner};
+use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 
 use crate::authority::get_client;
@@ -41,7 +44,7 @@ use crate::messages::{
     make_tx_certs_and_signed_effects_with_committee, MAX_GAS,
 };
 
-const GAS_BUDGET: u64 = 10000;
+const GAS_BUDGET_IN_UNIT: u64 = 200_000_000;
 
 pub fn make_publish_package(gas_object: Object, path: PathBuf) -> VerifiedTransaction {
     let (sender, keypair) = deterministic_random_account_key();
@@ -95,7 +98,7 @@ pub async fn publish_nfts_package(
         package.get_dependency_original_package_ids(),
     )
     .await;
-    (result.0 .0, result.1)
+    (result.0 .0, result.2)
 }
 /// Helper function to publish basic package.
 pub async fn publish_basics_package(context: &WalletContext, sender: SuiAddress) -> ObjectRef {
@@ -116,21 +119,28 @@ pub async fn publish_package_with_wallet(
     sender: SuiAddress,
     all_module_bytes: Vec<Vec<u8>>,
     dep_ids: Vec<ObjectID>,
-) -> (ObjectRef, TransactionDigest) {
+) -> (ObjectRef, ObjectRef, TransactionDigest) {
     let client = context.get_client().await.unwrap();
+    let gas_price = context.get_reference_gas_price().await.unwrap();
     let transaction = {
         let data = client
             .transaction_builder()
-            .publish(sender, all_module_bytes, dep_ids, None, GAS_BUDGET)
+            .publish(
+                sender,
+                all_module_bytes,
+                dep_ids,
+                None,
+                GAS_BUDGET_IN_UNIT * gas_price,
+            )
             .await
             .unwrap();
 
         let signature = context
             .config
             .keystore
-            .sign_secure(&sender, &data, Intent::default())
+            .sign_secure(&sender, &data, Intent::sui_transaction())
             .unwrap();
-        Transaction::from_data(data, Intent::default(), vec![signature])
+        Transaction::from_data(data, Intent::sui_transaction(), vec![signature])
             .verify()
             .unwrap()
     };
@@ -139,7 +149,83 @@ pub async fn publish_package_with_wallet(
         .quorum_driver()
         .execute_transaction_block(
             transaction,
-            SuiTransactionBlockResponseOptions::new().with_effects(),
+            SuiTransactionBlockResponseOptions::new().with_object_changes(),
+            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+        )
+        .await
+        .unwrap();
+
+    assert!(resp.confirmed_local_execution.unwrap());
+    let changes = resp.object_changes.unwrap();
+    (
+        changes
+            .iter()
+            .find(|change| matches!(change, ObjectChange::Published { .. }))
+            .unwrap()
+            .object_ref(),
+        changes
+            .iter()
+            .find(|change| {
+                matches!(change, ObjectChange::Created {
+                    owner: Owner::AddressOwner(_),
+                    object_type: StructTag {
+                        address: SUI_FRAMEWORK_ADDRESS,
+                        module,
+                        name,
+                        ..
+                    },
+                    ..
+                } if module.as_str() == "package" && name.as_str() == "UpgradeCap")
+            })
+            .unwrap()
+            .object_ref(),
+        resp.digest,
+    )
+}
+
+pub async fn upgrade_package_with_wallet(
+    context: &WalletContext,
+    sender: SuiAddress,
+    package_id: ObjectID,
+    upgrade_cap: ObjectID,
+    all_module_bytes: Vec<Vec<u8>>,
+    dep_ids: Vec<ObjectID>,
+    digest: Vec<u8>,
+) -> (ObjectRef, TransactionDigest) {
+    let client = context.get_client().await.unwrap();
+    let gas_price = context.get_reference_gas_price().await.unwrap();
+    let transaction = {
+        let data = client
+            .transaction_builder()
+            .upgrade(
+                sender,
+                package_id,
+                all_module_bytes,
+                dep_ids,
+                upgrade_cap,
+                UpgradePolicy::COMPATIBLE,
+                digest,
+                None,
+                GAS_BUDGET_IN_UNIT * gas_price,
+            )
+            .await
+            .unwrap();
+
+        let signature = context
+            .config
+            .keystore
+            .sign_secure(&sender, &data, Intent::sui_transaction())
+            .unwrap();
+        Transaction::from_data(data, Intent::sui_transaction(), vec![signature])
+            .verify()
+            .unwrap()
+    };
+
+    let resp = client
+        .quorum_driver()
+        .execute_transaction_block(
+            transaction,
+            SuiTransactionBlockResponseOptions::new().with_object_changes(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await
@@ -147,14 +233,12 @@ pub async fn publish_package_with_wallet(
 
     assert!(resp.confirmed_local_execution.unwrap());
     (
-        resp.effects
+        resp.object_changes
             .unwrap()
-            .created()
             .iter()
-            .find(|obj_ref| obj_ref.owner == Owner::Immutable)
+            .find(|change| matches!(change, ObjectChange::Published { .. }))
             .unwrap()
-            .reference
-            .to_object_ref(),
+            .object_ref(),
         resp.digest,
     )
 }
@@ -171,6 +255,7 @@ pub async fn submit_move_transaction(
 ) -> SuiTransactionBlockResponse {
     debug!(?package_id, ?arguments, "move_transaction");
     let client = context.get_client().await.unwrap();
+    let gas_price = context.get_reference_gas_price().await.unwrap();
     let data = client
         .transaction_builder()
         .move_call(
@@ -181,7 +266,7 @@ pub async fn submit_move_transaction(
             vec![], // type_args
             arguments,
             gas_object,
-            GAS_BUDGET,
+            GAS_BUDGET_IN_UNIT * gas_price,
         )
         .await
         .unwrap();
@@ -189,10 +274,10 @@ pub async fn submit_move_transaction(
     let signature = context
         .config
         .keystore
-        .sign_secure(&sender, &data, Intent::default())
+        .sign_secure(&sender, &data, Intent::sui_transaction())
         .unwrap();
 
-    let tx = Transaction::from_data(data, Intent::default(), vec![signature])
+    let tx = Transaction::from_data(data, Intent::sui_transaction(), vec![signature])
         .verify()
         .unwrap();
     let tx_digest = tx.digest();
@@ -270,6 +355,7 @@ pub async fn create_devnet_nft(
 ) -> Result<(SuiAddress, ObjectID, TransactionDigest), anyhow::Error> {
     let (sender, gas_objects) = get_account_and_gas_coins(context).await?.swap_remove(0);
     let gas_object = gas_objects.get(0).unwrap().id();
+    let gas_price = context.get_reference_gas_price().await?;
 
     let args_json = json!([
         "example_nft_name",
@@ -288,7 +374,7 @@ pub async fn create_devnet_nft(
         type_args: vec![],
         args,
         gas: Some(*gas_object),
-        gas_budget: GAS_BUDGET,
+        gas_budget: GAS_BUDGET_IN_UNIT * gas_price,
     }
     .execute(context)
     .await?;
@@ -318,6 +404,7 @@ pub async fn transfer_sui(
     sender: Option<SuiAddress>,
     receiver: Option<SuiAddress>,
 ) -> Result<(ObjectID, SuiAddress, SuiAddress, TransactionDigest), anyhow::Error> {
+    let gas_price = context.get_reference_gas_price().await?;
     let sender = match sender {
         None => context.config.keystore.addresses().get(0).cloned().unwrap(),
         Some(addr) => addr,
@@ -334,7 +421,7 @@ pub async fn transfer_sui(
         to: receiver,
         amount: None,
         sui_coin_object_id: gas_ref.0,
-        gas_budget: GAS_BUDGET,
+        gas_budget: GAS_BUDGET_IN_UNIT * gas_price,
     }
     .execute(context)
     .await?;
@@ -361,6 +448,7 @@ pub async fn transfer_coin(
     ),
     anyhow::Error,
 > {
+    let gas_price = context.get_reference_gas_price().await?;
     let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
     let receiver = context.config.keystore.addresses().get(1).cloned().unwrap();
     let client = context.get_client().await.unwrap();
@@ -393,7 +481,7 @@ pub async fn transfer_coin(
         to: receiver,
         object_id: object_to_send,
         gas: None,
-        gas_budget: GAS_BUDGET,
+        gas_budget: GAS_BUDGET_IN_UNIT * gas_price,
     }
     .execute(context)
     .await?;
@@ -427,12 +515,13 @@ pub async fn transfer_coin(
 }
 
 pub async fn split_coin_with_wallet_context(context: &mut WalletContext, coin_id: ObjectID) {
+    let gas_price = context.get_reference_gas_price().await.unwrap();
     SuiClientCommands::SplitCoin {
         coin_id,
         amounts: None,
         count: Some(2),
         gas: None,
-        gas_budget: MAX_GAS,
+        gas_budget: GAS_BUDGET_IN_UNIT * gas_price,
     }
     .execute(context)
     .await
@@ -463,10 +552,10 @@ pub async fn delete_devnet_nft(
     let signature = context
         .config
         .keystore
-        .sign_secure(sender, &data, Intent::default())
+        .sign_secure(sender, &data, Intent::sui_transaction())
         .unwrap();
 
-    let tx = Transaction::from_data(data, Intent::default(), vec![signature])
+    let tx = Transaction::from_data(data, Intent::sui_transaction(), vec![signature])
         .verify()
         .unwrap();
     let client = context.get_client().await.unwrap();

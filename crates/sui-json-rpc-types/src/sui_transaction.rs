@@ -3,6 +3,7 @@
 
 use std::fmt::{self, Display, Formatter, Write};
 
+use enum_dispatch::enum_dispatch;
 use fastcrypto::encoding::Base64;
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::binary_views::BinaryIndexedView;
@@ -11,11 +12,10 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::{ModuleId, TypeTag};
 use move_core_types::value::MoveTypeLayout;
-use serde_with::{serde_as, DisplayFromStr};
-
-use enum_dispatch::enum_dispatch;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use serde_with::{serde_as, DisplayFromStr};
+
 use sui_json::{primitive_type, SuiJsonValue};
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::digests::{ObjectDigest, TransactionEventsDigest};
@@ -34,6 +34,7 @@ use sui_types::parse_sui_type_tag;
 use sui_types::query::TransactionFilter;
 use sui_types::signature::GenericSignature;
 use sui_types::storage::{DeleteKind, WriteKind};
+use sui_types::sui_serde::SuiTypeTag as AsSuiTypeTag;
 
 use crate::balance_changes::BalanceChange;
 use crate::object_changes::ObjectChange;
@@ -659,6 +660,7 @@ pub struct DryRunTransactionBlockResponse {
     pub events: SuiTransactionBlockEvents,
     pub object_changes: Vec<ObjectChange>,
     pub balance_changes: Vec<BalanceChange>,
+    pub input: SuiTransactionBlockData,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
@@ -1089,20 +1091,26 @@ impl SuiProgrammableTransactionBlock {
                         return result_types;
                     };
                     for (arg, type_) in c.arguments.iter().zip(types) {
-                        if let &Argument::Input(i) = arg {
-                            result_types[i as usize] = type_;
+                        if let (&Argument::Input(i), Some(type_)) = (arg, type_) {
+                            if let Some(x) = result_types.get_mut(i as usize) {
+                                x.replace(type_);
+                            }
                         }
                     }
                 }
                 Command::SplitCoins(_, amounts) => {
                     for arg in amounts {
                         if let &Argument::Input(i) = arg {
-                            result_types[i as usize] = Some(MoveTypeLayout::U64);
+                            if let Some(x) = result_types.get_mut(i as usize) {
+                                x.replace(MoveTypeLayout::U64);
+                            }
                         }
                     }
                 }
                 Command::TransferObjects(_, Argument::Input(i)) => {
-                    result_types[(*i) as usize] = Some(MoveTypeLayout::Address);
+                    if let Some(x) = result_types.get_mut((*i) as usize) {
+                        x.replace(MoveTypeLayout::Address);
+                    }
                 }
                 _ => {}
             }
@@ -1544,7 +1552,7 @@ impl SuiCallArg {
 #[serde(rename_all = "camelCase")]
 pub struct SuiPureValue {
     #[schemars(with = "Option<String>")]
-    #[serde_as(as = "Option<DisplayFromStr>")]
+    #[serde_as(as = "Option<AsSuiTypeTag>")]
     value_type: Option<TypeTag>,
     value: SuiJsonValue,
 }

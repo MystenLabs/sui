@@ -1,0 +1,19 @@
+processed 4 tasks
+
+task 2 'run'. lines 79-86:
+Error: Script execution failed with VMError: {
+    major_status: VM_MAX_VALUE_DEPTH_REACHED,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(8), 3)],
+}
+
+task 3 'run'. lines 89-97:
+Error: Script execution failed with VMError: {
+    major_status: VM_MAX_VALUE_DEPTH_REACHED,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(9), 4)],
+}

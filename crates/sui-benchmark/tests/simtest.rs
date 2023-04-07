@@ -4,12 +4,13 @@
 #[cfg(msim)]
 mod test {
 
-    use rand::{thread_rng, Rng};
+    use rand::{distributions::uniform::SampleRange, thread_rng, Rng};
     use std::str::FromStr;
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
     use sui_benchmark::bank::BenchmarkBank;
     use sui_benchmark::system_state_observer::SystemStateObserver;
+    use sui_benchmark::workloads::adversarial::AdversarialPayloadCfg;
     use sui_benchmark::workloads::workload_configuration::WorkloadConfiguration;
     use sui_benchmark::{
         drivers::{bench_driver::BenchDriver, driver::Driver, Interval},
@@ -24,7 +25,7 @@ mod test {
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
     use test_utils::messages::get_sui_gas_object_with_wallet_context;
     use test_utils::network::{TestCluster, TestClusterBuilder};
-    use tracing::info;
+    use tracing::{error, info};
     use typed_store::traits::Map;
 
     struct DeadValidator {
@@ -84,6 +85,7 @@ mod test {
         test_simulated_load(test_cluster, 120).await;
     }
 
+    #[ignore = "MUSTFIX"]
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_reconfig_restarts() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
@@ -119,6 +121,7 @@ mod test {
         // otherwise, possibly fail the current node
         let mut rng = thread_rng();
         if rng.gen_range(0.0..1.0) < probability {
+            error!("Matched probability threshold for failpoint. Failing...");
             let restart_after = Duration::from_millis(rng.gen_range(10000..20000));
 
             *dead_validator = Some(DeadValidator {
@@ -134,8 +137,26 @@ mod test {
         }
     }
 
+    async fn delay_failpoint<R>(range_ms: R, probability: f64)
+    where
+        R: SampleRange<u64>,
+    {
+        let duration = {
+            let mut rng = thread_rng();
+            if rng.gen_range(0.0..1.0) < probability {
+                info!("Matched probability threshold for delay failpoint. Delaying...");
+                Some(Duration::from_millis(rng.gen_range(range_ms)))
+            } else {
+                None
+            }
+        };
+        if let Some(duration) = duration {
+            tokio::time::sleep(duration).await;
+        }
+    }
+
     #[sim_test(config = "test_config()")]
-    async fn test_simulated_load_reconfig_crashes() {
+    async fn test_simulated_load_reconfig_with_crashes_and_delays() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
         let test_cluster = build_test_cluster(4, 1000).await;
 
@@ -144,9 +165,18 @@ mod test {
         let dead_validator = dead_validator_orig.clone();
         let client_node = sui_simulator::current_simnode_id();
         register_fail_points(
-            &["batch-write", "transaction-commit", "put-cf"],
+            &[
+                "batch-write-before",
+                "batch-write-after",
+                "put-cf-before",
+                "put-cf-after",
+                "delete-cf-before",
+                "delete-cf-after",
+                "transaction-commit",
+                "highest-executed-checkpoint",
+            ],
             move || {
-                handle_failpoint(dead_validator.clone(), client_node, 0.01);
+                handle_failpoint(dead_validator.clone(), client_node, 0.02);
             },
         );
 
@@ -157,6 +187,21 @@ mod test {
                 handle_failpoint(dead_validator.clone(), client_node, 0.01);
             }
         });
+
+        // Narwhal fail points.
+        let dead_validator = dead_validator_orig.clone();
+        register_fail_points(
+            &[
+                "narwhal-rpc-response",
+                "narwhal-store-before-write",
+                "narwhal-store-after-write",
+            ],
+            move || {
+                handle_failpoint(dead_validator.clone(), client_node, 0.001);
+            },
+        );
+        register_fail_point_async("narwhal-delay", || delay_failpoint(10..20, 0.001));
+
         test_simulated_load(test_cluster, 120).await;
     }
 
@@ -243,7 +288,7 @@ mod test {
                 .await,
         );
 
-        let bank = BenchmarkBank::new(proxy.clone(), primary_gas, pay_coin);
+        let bank = BenchmarkBank::new(proxy.clone(), primary_gas, vec![pay_coin]);
         let system_state_observer = {
             let mut system_state_observer = SystemStateObserver::new(proxy.clone());
             if let Ok(_) = system_state_observer.state.changed().await {
@@ -264,6 +309,9 @@ mod test {
         let delegation_weight = 1;
         let batch_payment_weight = 1;
 
+        // Run random payloads at 100% load
+        let adversarial_cfg = AdversarialPayloadCfg::from_str("0-1.0").unwrap();
+
         // TODO: re-enable this when we figure out why it is causing connection errors and making
         // tests run for ever
         let adversarial_weight = 0;
@@ -278,6 +326,7 @@ mod test {
             delegation_weight,
             batch_payment_weight,
             adversarial_weight,
+            adversarial_cfg,
             batch_payment_size,
             shared_counter_hotness_factor,
             target_qps,

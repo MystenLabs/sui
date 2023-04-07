@@ -45,11 +45,31 @@ export const Inputs = {
       ),
     };
   },
-  ObjectRef(ref: SuiObjectRef): ObjectCallArg {
-    return { Object: { ImmOrOwned: ref } };
+  ObjectRef({ objectId, digest, version }: SuiObjectRef): ObjectCallArg {
+    return {
+      Object: {
+        ImmOrOwned: {
+          digest,
+          version,
+          objectId: normalizeSuiAddress(objectId),
+        },
+      },
+    };
   },
-  SharedObjectRef(ref: SharedObjectRef): ObjectCallArg {
-    return { Object: { Shared: ref } };
+  SharedObjectRef({
+    objectId,
+    mutable,
+    initialSharedVersion,
+  }: SharedObjectRef): ObjectCallArg {
+    return {
+      Object: {
+        Shared: {
+          mutable,
+          initialSharedVersion,
+          objectId: normalizeSuiAddress(objectId),
+        },
+      },
+    };
   },
 };
 
@@ -58,9 +78,9 @@ export function getIdFromCallArg(arg: ObjectId | ObjectCallArg) {
     return normalizeSuiAddress(arg);
   }
   if ('ImmOrOwned' in arg.Object) {
-    return arg.Object.ImmOrOwned.objectId;
+    return normalizeSuiAddress(arg.Object.ImmOrOwned.objectId);
   }
-  return arg.Object.Shared.objectId;
+  return normalizeSuiAddress(arg.Object.Shared.objectId);
 }
 
 export function getSharedObjectInput(

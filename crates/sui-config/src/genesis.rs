@@ -4,11 +4,10 @@
 use crate::ValidatorInfo;
 use anyhow::{bail, Context, Result};
 use camino::Utf8Path;
-use fastcrypto::encoding::{Base64, Encoding, Hex};
+use fastcrypto::encoding::{Base64, Encoding};
 use fastcrypto::hash::HashFunction;
 use fastcrypto::traits::KeyPair;
 use move_binary_format::CompiledModule;
-use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::serde_as;
@@ -638,6 +637,14 @@ impl Builder {
         self
     }
 
+    pub fn with_token_distribution_schedule(
+        mut self,
+        token_distribution_schedule: TokenDistributionSchedule,
+    ) -> Self {
+        self.token_distribution_schedule = Some(token_distribution_schedule);
+        self
+    }
+
     pub fn with_protocol_version(mut self, v: ProtocolVersion) -> Self {
         self.parameters.protocol_version = v;
         self
@@ -684,7 +691,7 @@ impl Builder {
         );
         let checkpoint_signature = {
             let intent_msg = IntentMessage::new(
-                Intent::default().with_scope(IntentScope::CheckpointSummary),
+                Intent::sui_app(IntentScope::CheckpointSummary),
                 checkpoint.clone(),
             );
             let signature = AuthoritySignature::new_secure(&intent_msg, &checkpoint.epoch, keypair);
@@ -841,13 +848,14 @@ impl Builder {
         } = self.parameters.to_genesis_chain_parameters();
 
         // In non-testing code, genesis type must always be V1.
-        #[cfg(not(msim))]
-        let SuiSystemState::V1(system_state) = unsigned_genesis.sui_system_object();
-
-        #[cfg(msim)]
-        let SuiSystemState::V1(system_state) = unsigned_genesis.sui_system_object() else {
-            // Types other than V1 used in simtests do not need to be validated.
-            return;
+        let system_state = match unsigned_genesis.sui_system_object() {
+            SuiSystemState::V1(inner) => inner,
+            SuiSystemState::V2(_) => unreachable!(),
+            #[cfg(msim)]
+            _ => {
+                // Types other than V1 used in simtests do not need to be validated.
+                return;
+            }
         };
 
         assert_eq!(
@@ -1011,11 +1019,12 @@ impl Builder {
                 let gas_object_id = gas_objects
                     .iter()
                     .find(|(_k, (o, g))| {
-                        let Owner::AddressOwner(owner) = &o.owner else {
-                        panic!("gas object owner must be address owner");
-                    };
-                        *owner == allocation.recipient_address
-                            && g.value() == allocation.amount_mist
+                        if let Owner::AddressOwner(owner) = &o.owner {
+                            *owner == allocation.recipient_address
+                                && g.value() == allocation.amount_mist
+                        } else {
+                            false
+                        }
                     })
                     .map(|(k, _)| *k)
                     .expect("all allocations should be present");
@@ -1043,7 +1052,7 @@ impl Builder {
             signature
                 .verify_secure(
                     unsigned_genesis.checkpoint(),
-                    Intent::default().with_scope(IntentScope::CheckpointSummary),
+                    Intent::sui_app(IntentScope::CheckpointSummary),
                     &committee,
                 )
                 .expect("signature should be valid");
@@ -1075,20 +1084,6 @@ impl Builder {
         } else {
             None
         };
-
-        // Load Objects
-        let mut objects = BTreeMap::new();
-        for entry in path.join(GENESIS_BUILDER_OBJECT_DIR).read_dir_utf8()? {
-            let entry = entry?;
-            if entry.file_name().starts_with('.') {
-                continue;
-            }
-
-            let path = entry.path();
-            let object_bytes = fs::read(path)?;
-            let object: Object = serde_yaml::from_slice(&object_bytes)?;
-            objects.insert(object.id(), object);
-        }
 
         // Load validator infos
         let mut committee = BTreeMap::new();
@@ -1124,7 +1119,7 @@ impl Builder {
         let mut builder = Self {
             parameters,
             token_distribution_schedule,
-            objects,
+            objects: Default::default(),
             validators: committee,
             signatures,
             built_genesis: None, // Leave this as none, will build and compare below
@@ -1171,16 +1166,6 @@ impl Builder {
             token_distribution_schedule.to_csv(fs::File::create(
                 path.join(GENESIS_BUILDER_TOKEN_DISTRIBUTION_SCHEDULE_FILE),
             )?)?;
-        }
-
-        // Write Objects
-        let object_dir = path.join(GENESIS_BUILDER_OBJECT_DIR);
-        fs::create_dir_all(&object_dir)?;
-
-        for (_id, object) in self.objects {
-            let object_bytes = serde_yaml::to_vec(&object)?;
-            let hex_digest = Hex::encode(object.id());
-            fs::write(object_dir.join(hex_digest), object_bytes)?;
         }
 
         // Write Signatures
@@ -1396,9 +1381,14 @@ fn create_genesis_transaction(
         );
 
         let native_functions = sui_framework::natives::all_natives();
+        let enable_move_vm_paranoid_checks = false;
         let move_vm = std::sync::Arc::new(
-            adapter::new_move_vm(native_functions, protocol_config)
-                .expect("We defined natives to not fail here"),
+            adapter::new_move_vm(
+                native_functions,
+                protocol_config,
+                enable_move_vm_paranoid_checks,
+            )
+            .expect("We defined natives to not fail here"),
         );
 
         let transaction_data = &genesis_transaction.data().intent_message().value;
@@ -1416,7 +1406,7 @@ fn create_genesis_transaction(
                 *genesis_transaction.digest(),
                 Default::default(),
                 &move_vm,
-                SuiGasStatus::new_unmetered(),
+                SuiGasStatus::new_unmetered(protocol_config),
                 epoch_data,
                 protocol_config,
             );
@@ -1440,7 +1430,7 @@ fn create_genesis_transaction(
 
 fn create_genesis_objects(
     genesis_ctx: &mut TxContext,
-    modules: &[(Vec<CompiledModule>, Vec<ObjectID>)],
+    modules: &[(&[CompiledModule], Vec<ObjectID>)],
     input_objects: &[Object],
     validators: &[GenesisValidatorMetadata],
     parameters: &GenesisChainParameters,
@@ -1451,15 +1441,21 @@ fn create_genesis_objects(
         ProtocolConfig::get_for_version(ProtocolVersion::new(parameters.protocol_version));
 
     let native_functions = sui_framework::natives::all_natives();
-    let move_vm = adapter::new_move_vm(native_functions.clone(), &protocol_config)
-        .expect("We defined natives to not fail here");
+    // paranoid checks are a last line of defense for malicious code, no need to run them in genesis
+    let enable_move_vm_paranoid_checks = false;
+    let move_vm = adapter::new_move_vm(
+        native_functions.clone(),
+        &protocol_config,
+        enable_move_vm_paranoid_checks,
+    )
+    .expect("We defined natives to not fail here");
 
     for (modules, dependencies) in modules {
         process_package(
             &mut store,
             &move_vm,
             genesis_ctx,
-            modules.to_owned(),
+            modules,
             dependencies.to_owned(),
             &protocol_config,
         )
@@ -1487,7 +1483,7 @@ fn process_package(
     store: &mut InMemoryStorage,
     vm: &MoveVM,
     ctx: &mut TxContext,
-    modules: Vec<CompiledModule>,
+    modules: &[CompiledModule],
     dependencies: Vec<ObjectID>,
     protocol_config: &ProtocolConfig,
 ) -> Result<()> {
@@ -1498,6 +1494,7 @@ fn process_package(
     // that don't exist on-chain because they are yet to be published.
     #[cfg(debug_assertions)]
     {
+        use move_core_types::account_address::AccountAddress;
         use std::collections::HashSet;
         let to_be_published_addresses: HashSet<_> = modules
             .iter()
@@ -1529,9 +1526,9 @@ fn process_package(
         ctx.digest(),
         protocol_config,
     );
-    let mut gas_status = SuiGasStatus::new_unmetered();
+    let mut gas_status = SuiGasStatus::new_unmetered(protocol_config);
     let module_bytes = modules
-        .into_iter()
+        .iter()
         .map(|m| {
             let mut buf = vec![];
             m.serialize(&mut buf).unwrap();
@@ -1544,7 +1541,7 @@ fn process_package(
         builder.command(Command::Publish(module_bytes, dependencies));
         builder.finish()
     };
-    programmable_transactions::execution::execute::<_, _, execution_mode::Genesis>(
+    programmable_transactions::execution::execute::<_, execution_mode::Genesis>(
         protocol_config,
         vm,
         &mut temporary_store,
@@ -1633,12 +1630,12 @@ pub fn generate_genesis_system_object(
         );
         builder.finish()
     };
-    programmable_transactions::execution::execute::<_, _, execution_mode::Genesis>(
+    programmable_transactions::execution::execute::<_, execution_mode::Genesis>(
         &protocol_config,
         move_vm,
         &mut temporary_store,
         genesis_ctx,
-        &mut SuiGasStatus::new_unmetered(),
+        &mut SuiGasStatus::new_unmetered(&protocol_config),
         None,
         pt,
     )?;
@@ -1652,7 +1649,6 @@ pub fn generate_genesis_system_object(
     Ok(())
 }
 
-const GENESIS_BUILDER_OBJECT_DIR: &str = "objects";
 const GENESIS_BUILDER_COMMITTEE_DIR: &str = "committee";
 const GENESIS_BUILDER_PARAMETERS_FILE: &str = "parameters";
 const GENESIS_BUILDER_TOKEN_DISTRIBUTION_SCHEDULE_FILE: &str = "token-distribution-schedule";
@@ -1801,6 +1797,52 @@ pub struct TokenAllocation {
     pub staked_with_validator: Option<SuiAddress>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TokenDistributionScheduleBuilder {
+    pool: u64,
+    allocations: Vec<TokenAllocation>,
+}
+
+impl TokenDistributionScheduleBuilder {
+    #[allow(clippy::new_without_default)]
+    pub fn new() -> Self {
+        Self {
+            pool: TOTAL_SUPPLY_MIST,
+            allocations: vec![],
+        }
+    }
+
+    pub fn default_allocation_for_validators<I: IntoIterator<Item = SuiAddress>>(
+        &mut self,
+        validators: I,
+    ) {
+        let default_allocation = sui_types::governance::VALIDATOR_LOW_STAKE_THRESHOLD_MIST;
+
+        for validator in validators {
+            self.add_allocation(TokenAllocation {
+                recipient_address: validator,
+                amount_mist: default_allocation,
+                staked_with_validator: Some(validator),
+            });
+        }
+    }
+
+    pub fn add_allocation(&mut self, allocation: TokenAllocation) {
+        self.pool = self.pool.checked_sub(allocation.amount_mist).unwrap();
+        self.allocations.push(allocation);
+    }
+
+    pub fn build(&self) -> TokenDistributionSchedule {
+        let schedule = TokenDistributionSchedule {
+            stake_subsidy_fund_mist: self.pool,
+            allocations: self.allocations.clone(),
+        };
+
+        schedule.validate();
+        schedule
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -1856,8 +1898,8 @@ mod test {
             worker_key: worker_key.public().clone(),
             account_address: SuiAddress::from(account_key.public()),
             network_key: network_key.public().clone(),
-            gas_price: 1,
-            commission_rate: 0,
+            gas_price: ValidatorInfo::DEFAULT_GAS_PRICE,
+            commission_rate: ValidatorInfo::DEFAULT_COMMISSION_RATE,
             network_address: utils::new_tcp_network_address(),
             p2p_address: utils::new_udp_network_address(),
             narwhal_primary_address: utils::new_udp_network_address(),
@@ -1896,10 +1938,15 @@ mod test {
             &protocol_config,
         );
 
+        let enable_move_vm_paranoid_checks = false;
         let native_functions = sui_framework::natives::all_natives();
         let move_vm = std::sync::Arc::new(
-            adapter::new_move_vm(native_functions, &protocol_config)
-                .expect("We defined natives to not fail here"),
+            adapter::new_move_vm(
+                native_functions,
+                &protocol_config,
+                enable_move_vm_paranoid_checks,
+            )
+            .expect("We defined natives to not fail here"),
         );
 
         let transaction_data = &genesis_transaction.data().intent_message().value;
@@ -1917,7 +1964,7 @@ mod test {
                 *genesis_transaction.digest(),
                 Default::default(),
                 &move_vm,
-                SuiGasStatus::new_unmetered(),
+                SuiGasStatus::new_unmetered(&protocol_config),
                 &EpochData::new_test(),
                 &protocol_config,
             );

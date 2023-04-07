@@ -53,13 +53,13 @@ use crate::{
         default_db_options, keys::Keys, values::Values, DBBatch, DBMap, DBOptions,
         RocksDBAccessType, TypedStoreError,
     },
-    test_db::{TestDB, TestDBIter, TestDBKeys, TestDBValues, TestDBWriteBatch},
+    test_db::{TestDB, TestDBKeys, TestDBValues, TestDBWriteBatch},
     traits::{AsyncMap, Map},
 };
 
-use crate::rocks::iter::{Iter as RocksDBIter, RevIter};
+use crate::rocks::safe_iter::{SafeIter as RocksDBIter, SafeRevIter};
 use crate::rocks::{DBMapTableConfigMap, MetricConf};
-use crate::test_db::TestDBRevIter;
+use crate::test_db::{TestDBIter, TestDBRevIter};
 use async_trait::async_trait;
 use collectable::TryExtend;
 use rocksdb::Options;
@@ -204,13 +204,13 @@ where
                 SallyConfig {
                     mode: SallyRunMode::FallbackToDB,
                 },
-            )) => SallyIter::RocksDB(db_map.iter()),
+            )) => SallyIter::RocksDB(db_map.safe_iter()),
             SallyColumn::TestDB((
                 test_db,
                 SallyConfig {
                     mode: SallyRunMode::FallbackToDB,
                 },
-            )) => SallyIter::TestDB(test_db.iter()),
+            )) => SallyIter::TestDB(test_db.safe_iter()),
         }
     }
     async fn keys(&'a self) -> Self::Keys {
@@ -356,7 +356,7 @@ impl SallyWriteBatch {
     ) -> Result<(), TypedStoreError> {
         match (self, db) {
             (SallyWriteBatch::RocksDB(db_batch), SallyColumn::RocksDB((db_map, _))) => {
-                db_batch.delete_batch_non_consuming(db_map, purged_vals)
+                db_batch.delete_batch(db_map, purged_vals)
             }
             (SallyWriteBatch::TestDB(write_batch), SallyColumn::TestDB((test_db, _))) => {
                 write_batch.delete_batch(test_db, purged_vals)
@@ -373,7 +373,7 @@ impl SallyWriteBatch {
     ) -> Result<(), TypedStoreError> {
         match (self, db) {
             (SallyWriteBatch::RocksDB(db_batch), SallyColumn::RocksDB((db_map, _))) => {
-                db_batch.delete_range_non_consuming(db_map, from, to)
+                db_batch.delete_range(db_map, from, to)
             }
             (SallyWriteBatch::TestDB(write_batch), SallyColumn::TestDB((test_db, _))) => {
                 write_batch.delete_range(test_db, from, to)
@@ -389,10 +389,12 @@ impl SallyWriteBatch {
     ) -> Result<(), TypedStoreError> {
         match (self, db) {
             (SallyWriteBatch::RocksDB(db_batch), SallyColumn::RocksDB((db_map, _))) => {
-                db_batch.insert_batch_non_consuming(db_map, new_vals)
+                db_batch.insert_batch(db_map, new_vals)?;
+                Ok(())
             }
             (SallyWriteBatch::TestDB(write_batch), SallyColumn::TestDB((test_db, _))) => {
-                write_batch.insert_batch(test_db, new_vals)
+                write_batch.insert_batch(test_db, new_vals)?;
+                Ok(())
             }
             _ => unimplemented!(),
         }
@@ -407,7 +409,7 @@ pub enum SallyIter<'a, K, V> {
 }
 
 impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iterator for SallyIter<'a, K, V> {
-    type Item = (K, V);
+    type Item = Result<(K, V), TypedStoreError>;
     fn next(&mut self) -> Option<Self::Item> {
         match self {
             SallyIter::RocksDB(iter) => iter.next(),
@@ -460,12 +462,12 @@ impl<'a, K: Serialize, V> SallyIter<'a, K, V> {
 
 pub enum SallyRevIter<'a, K, V> {
     // Iter for a rocksdb backed sally column when `fallback_to_db` is true
-    RocksDB(RevIter<'a, K, V>),
+    RocksDB(SafeRevIter<'a, K, V>),
     TestDB(TestDBRevIter<'a, K, V>),
 }
 
 impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iterator for SallyRevIter<'a, K, V> {
-    type Item = (K, V);
+    type Item = Result<(K, V), TypedStoreError>;
 
     /// Will give the next item backwards
     fn next(&mut self) -> Option<Self::Item> {
@@ -484,7 +486,7 @@ pub enum SallyKeys<'a, K> {
 }
 
 impl<'a, K: DeserializeOwned> Iterator for SallyKeys<'a, K> {
-    type Item = K;
+    type Item = Result<K, TypedStoreError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
@@ -502,7 +504,7 @@ pub enum SallyValues<'a, V> {
 }
 
 impl<'a, V: DeserializeOwned> Iterator for SallyValues<'a, V> {
-    type Item = V;
+    type Item = Result<V, TypedStoreError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {

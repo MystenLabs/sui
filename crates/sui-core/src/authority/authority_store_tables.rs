@@ -12,7 +12,8 @@ use sui_types::storage::ObjectStore;
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::util::{empty_compaction_filter, reference_count_merge_operator};
 use typed_store::rocks::{
-    point_lookup_db_options, DBBatch, DBMap, DBOptions, MetricConf, ReadWriteOptions,
+    optimized_for_high_throughput_options, read_size_from_env, DBBatch, DBMap, DBOptions,
+    MetricConf, ReadWriteOptions,
 };
 use typed_store::traits::{Map, TableSummary, TypedStoreDebug};
 
@@ -22,6 +23,13 @@ use crate::authority::authority_store_types::{
 };
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use typed_store_derive::DBMapUtils;
+
+const ENV_VAR_OBJECTS_BLOCK_CACHE_SIZE: &str = "OBJECTS_BLOCK_CACHE_MB";
+const ENV_VAR_LOCKS_BLOCK_CACHE_SIZE: &str = "LOCKS_BLOCK_CACHE_MB";
+const ENV_VAR_TRANSACTIONS_BLOCK_CACHE_SIZE: &str = "TRANSACTIONS_BLOCK_CACHE_MB";
+const ENV_VAR_EFFECTS_BLOCK_CACHE_SIZE: &str = "EFFECTS_BLOCK_CACHE_MB";
+const ENV_VAR_INDIRECT_OBJECTS_BLOCK_CACHE_SIZE: &str = "INDIRECT_OBJECTS_BLOCK_CACHE_MB";
+const ENV_VAR_EVENTS_BLOCK_CACHE_SIZE: &str = "EVENTS_BLOCK_CACHE_MB";
 
 /// AuthorityPerpetualTables contains data that must be preserved from one epoch to the next.
 #[derive(DBMapUtils)]
@@ -80,6 +88,7 @@ pub struct AuthorityPerpetualTables {
     // We could potentially remove this if we decided not to provide events in the execution path.
     // TODO: Figure out what to do with this table in the long run.
     // Also we need a pruning policy for this table. We can prune this table along with tx/effects.
+    #[default_options_override_fn = "events_table_default_config"]
     pub(crate) events: DBMap<(TransactionEventsDigest, usize), Event>,
 
     /// When transaction is executed via checkpoint executor, we store association here
@@ -97,6 +106,17 @@ pub struct AuthorityPerpetualTables {
 
     /// A singleton table that stores latest pruned checkpoint. Used to keep objects pruner progress
     pub(crate) pruned_checkpoint: DBMap<(), CheckpointSequenceNumber>,
+
+    /// Expected total amount of SUI in the network. This is expected to remain constant
+    /// throughout the lifetime of the network. We check it at the end of each epoch if
+    /// expensive checks are enabled. We cannot use 10B today because in tests we often
+    /// inject extra gas objects into genesis.
+    pub(crate) expected_network_sui_amount: DBMap<(), u64>,
+
+    /// Expected imbalance between storage fund balance and the sum of storage rebate of all live objects.
+    /// This could be non-zero due to bugs in earlier protocol versions.
+    /// This number is the result of storage_fund_balance - sum(storage_rebate).
+    pub(crate) expected_storage_fund_imbalance: DBMap<(), i64>,
 }
 
 impl AuthorityPerpetualTables {
@@ -206,7 +226,7 @@ impl AuthorityPerpetualTables {
         epoch_start_configuration: &EpochStartConfiguration,
     ) -> SuiResult {
         let mut wb = self.epoch_start_configuration.batch();
-        wb = wb.insert_batch(
+        wb.insert_batch(
             &self.epoch_start_configuration,
             std::iter::once(((), epoch_start_configuration)),
         )?;
@@ -220,10 +240,11 @@ impl AuthorityPerpetualTables {
 
     pub fn set_highest_pruned_checkpoint(
         &self,
-        wb: DBBatch,
+        wb: &mut DBBatch,
         checkpoint_number: CheckpointSequenceNumber,
-    ) -> SuiResult<DBBatch> {
-        Ok(wb.insert_batch(&self.pruned_checkpoint, [((), checkpoint_number)])?)
+    ) -> SuiResult {
+        wb.insert_batch(&self.pruned_checkpoint, [((), checkpoint_number)])?;
+        Ok(())
     }
 
     pub fn database_is_empty(&self) -> SuiResult<bool> {
@@ -248,6 +269,24 @@ impl AuthorityPerpetualTables {
         self.objects
             .checkpoint_db(path)
             .map_err(SuiError::StorageError)
+    }
+
+    pub fn reset_db_for_execution_since_genesis(&self) -> SuiResult {
+        // TODO: Add new tables that get added to the db automatically
+        self.objects.clear()?;
+        self.indirect_move_objects.clear()?;
+        self.owned_object_transaction_locks.clear()?;
+        self.executed_effects.clear()?;
+        self.events.clear()?;
+        self.executed_transactions_to_checkpoint.clear()?;
+        self.root_state_hash_by_epoch.clear()?;
+        self.epoch_start_configuration.clear()?;
+        self.pruned_checkpoint.clear()?;
+        self.objects
+            .rocksdb
+            .flush()
+            .map_err(SuiError::StorageError)?;
+        Ok(())
     }
 }
 
@@ -274,8 +313,46 @@ pub struct LiveSetIter<'a> {
     prev: Option<(ObjectKey, StoreObjectWrapper)>,
 }
 
+pub enum LiveObject {
+    Normal(Object),
+    Wrapped(ObjectKey),
+}
+
+impl LiveObject {
+    pub fn object_id(&self) -> ObjectID {
+        match self {
+            LiveObject::Normal(obj) => obj.id(),
+            LiveObject::Wrapped(key) => key.0,
+        }
+    }
+
+    pub fn version(&self) -> SequenceNumber {
+        match self {
+            LiveObject::Normal(obj) => obj.version(),
+            LiveObject::Wrapped(key) => key.1,
+        }
+    }
+}
+
+fn store_object_wrapper_to_live_object(
+    tables: &AuthorityPerpetualTables,
+    object_key: ObjectKey,
+    store_object: StoreObjectWrapper,
+) -> Option<LiveObject> {
+    match store_object.migrate().into_inner() {
+        StoreObject::Value(object) => {
+            let object = tables
+                .construct_object(object)
+                .expect("Constructing object from store cannot fail");
+            Some(LiveObject::Normal(object))
+        }
+        StoreObject::Wrapped => Some(LiveObject::Wrapped(object_key)),
+        StoreObject::Deleted => None,
+    }
+}
+
 impl Iterator for LiveSetIter<'_> {
-    type Item = ObjectRef;
+    type Item = LiveObject;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
@@ -285,23 +362,19 @@ impl Iterator for LiveSetIter<'_> {
 
                 if let Some((prev_key, prev_value)) = prev {
                     if prev_key.0 != next_key.0 {
-                        let obj_ref = self.tables.object_reference(&prev_key, prev_value).expect(
-                            "Couldn't construct an object reference in the live set iterator",
-                        );
-                        if !obj_ref.2.is_deleted() {
-                            return Some(obj_ref);
+                        let live_object =
+                            store_object_wrapper_to_live_object(self.tables, prev_key, prev_value);
+                        if live_object.is_some() {
+                            return live_object;
                         }
                     }
                 }
                 continue;
             }
             if let Some((key, value)) = self.prev.take() {
-                let obj_ref = self
-                    .tables
-                    .object_reference(&key, value)
-                    .expect("Couldn't construct an object reference in the live set iterator");
-                if !obj_ref.2.is_deleted() {
-                    return Some(obj_ref);
+                let live_object = store_object_wrapper_to_live_object(self.tables, key, value);
+                if live_object.is_some() {
+                    return live_object;
                 }
             }
             return None;
@@ -311,13 +384,19 @@ impl Iterator for LiveSetIter<'_> {
 
 // These functions are used to initialize the DB tables
 fn owned_object_transaction_locks_table_default_config() -> DBOptions {
-    point_lookup_db_options()
+    optimized_for_high_throughput_options(
+        read_size_from_env(ENV_VAR_LOCKS_BLOCK_CACHE_SIZE).unwrap_or(1024),
+        false,
+    )
 }
 
 fn objects_table_default_config() -> DBOptions {
-    let db_options = point_lookup_db_options();
     DBOptions {
-        options: db_options.options,
+        options: optimized_for_high_throughput_options(
+            read_size_from_env(ENV_VAR_OBJECTS_BLOCK_CACHE_SIZE).unwrap_or(5 * 1024),
+            false,
+        )
+        .options,
         rw_options: ReadWriteOptions {
             ignore_range_deletions: true,
         },
@@ -325,15 +404,31 @@ fn objects_table_default_config() -> DBOptions {
 }
 
 fn transactions_table_default_config() -> DBOptions {
-    point_lookup_db_options()
+    optimized_for_high_throughput_options(
+        read_size_from_env(ENV_VAR_TRANSACTIONS_BLOCK_CACHE_SIZE).unwrap_or(512),
+        true,
+    )
 }
 
 fn effects_table_default_config() -> DBOptions {
-    point_lookup_db_options()
+    optimized_for_high_throughput_options(
+        read_size_from_env(ENV_VAR_EFFECTS_BLOCK_CACHE_SIZE).unwrap_or(1024),
+        true,
+    )
+}
+
+fn events_table_default_config() -> DBOptions {
+    optimized_for_high_throughput_options(
+        read_size_from_env(ENV_VAR_EVENTS_BLOCK_CACHE_SIZE).unwrap_or(1024),
+        false,
+    )
 }
 
 fn indirect_move_objects_table_default_config() -> DBOptions {
-    let mut options = point_lookup_db_options();
+    let mut options = optimized_for_high_throughput_options(
+        read_size_from_env(ENV_VAR_INDIRECT_OBJECTS_BLOCK_CACHE_SIZE).unwrap_or(512),
+        true,
+    );
     options.options.set_merge_operator(
         "refcount operator",
         reference_count_merge_operator,

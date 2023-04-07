@@ -16,11 +16,14 @@ use sui_config::NetworkConfig;
 use sui_network::{
     default_mysten_network_config, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC,
 };
-use sui_types::crypto::{AuthorityPublicKeyBytes, AuthoritySignInfo};
+use sui_types::crypto::{
+    AuthorityPublicKeyBytes, AuthoritySignInfo, ConciseAuthorityPublicKeyBytesRef,
+};
 use sui_types::error::UserInputError;
 use sui_types::fp_ensure;
 use sui_types::message_envelope::Message;
 use sui_types::object::Object;
+use sui_types::quorum_driver_types::GroupedErrors;
 use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
 use sui_types::{
     base_types::*,
@@ -32,8 +35,8 @@ use thiserror::Error;
 use tracing::{debug, error, info, trace, warn, Instrument};
 
 use prometheus::{
-    register_histogram_with_registry, register_int_counter_vec_with_registry,
-    register_int_counter_with_registry, Histogram, IntCounter, IntCounterVec, Registry,
+    register_int_counter_vec_with_registry, register_int_counter_with_registry, IntCounter,
+    IntCounterVec, Registry,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::string::ToString;
@@ -93,21 +96,12 @@ impl Default for TimeoutConfig {
 #[derive(Clone)]
 pub struct AuthAggMetrics {
     pub total_tx_certificates_created: IntCounter,
-    pub num_signatures: Histogram,
-    pub invalid_sig_bad_stake: Histogram,
-    pub num_good_stake: Histogram,
-    pub non_retryable_stake: Histogram,
-    pub total_quorum_once_timeout: IntCounter,
     pub process_tx_errors: IntCounterVec,
     pub process_cert_errors: IntCounterVec,
     pub total_client_double_spend_attempts_detected: IntCounter,
     pub total_aggregated_err: IntCounterVec,
+    pub total_rpc_err: IntCounterVec,
 }
-
-// Override default Prom buckets for positive numbers in 0-50k range
-const POSITIVE_INT_BUCKETS: &[f64] = &[
-    1., 2., 5., 10., 20., 50., 100., 200., 500., 1000., 2000., 5000., 10000., 20000., 50000.,
-];
 
 impl AuthAggMetrics {
     pub fn new(registry: &prometheus::Registry) -> Self {
@@ -115,42 +109,6 @@ impl AuthAggMetrics {
             total_tx_certificates_created: register_int_counter_with_registry!(
                 "total_tx_certificates_created",
                 "Total number of certificates made in the authority_aggregator",
-                registry,
-            )
-            .unwrap(),
-            // It's really important to use the right histogram buckets for accurate histogram collection.
-            // Otherwise values get clipped
-            num_signatures: register_histogram_with_registry!(
-                "num_signatures_per_tx",
-                "Number of signatures collected per transaction",
-                POSITIVE_INT_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-            invalid_sig_bad_stake: register_histogram_with_registry!(
-                "invalid_sig_bad_stake",
-                "Bad stake due to invalid authority signatures collected per transaction",
-                POSITIVE_INT_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-            num_good_stake: register_histogram_with_registry!(
-                "num_good_stake_per_tx",
-                "Amount of good stake collected per transaction",
-                POSITIVE_INT_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-            non_retryable_stake: register_histogram_with_registry!(
-                "non_retryable_stake_per_tx",
-                "Amount of non-retryable stake collected per transaction",
-                POSITIVE_INT_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-            total_quorum_once_timeout: register_int_counter_with_registry!(
-                "total_quorum_once_timeout",
-                "Total number of timeout when calling quorum_once_with_timeout",
                 registry,
             )
             .unwrap(),
@@ -176,8 +134,15 @@ impl AuthAggMetrics {
             .unwrap(),
             total_aggregated_err: register_int_counter_vec_with_registry!(
                 "total_aggregated_err",
-                "Total number of errors returned from validators per transaction, grouped by error type",
+                "Total number of errors returned from validators, grouped by error type",
                 &["error", "tx_recoverable"],
+                registry,
+            )
+            .unwrap(),
+            total_rpc_err: register_int_counter_vec_with_registry!(
+                "total_rpc_err",
+                "Total number of rpc errors returned from validators, grouped by validator short name and RPC error message",
+                &["name", "error_message"],
                 registry,
             )
             .unwrap(),
@@ -196,17 +161,13 @@ pub enum AggregatorProcessTransactionError {
         "Failed to execute transaction on a quorum of validators due to non-retryable errors. Validator errors: {:?}",
         errors,
     )]
-    FatalTransaction {
-        errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
-    },
+    FatalTransaction { errors: GroupedErrors },
 
     #[error(
         "Failed to execute transaction on a quorum of validators but state is still retryable. Validator errors: {:?}",
         errors
     )]
-    RetryableTransaction {
-        errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
-    },
+    RetryableTransaction { errors: GroupedErrors },
 
     #[error(
         "Failed to execute transaction on a quorum of validators due to conflicting transactions. Locked objects: {:?}. Validator errors: {:?}",
@@ -214,7 +175,7 @@ pub enum AggregatorProcessTransactionError {
         errors,
     )]
     FatalConflictingTransaction {
-        errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
+        errors: GroupedErrors,
         conflicting_tx_digests:
             BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
     },
@@ -226,7 +187,7 @@ pub enum AggregatorProcessTransactionError {
     )]
     RetryableConflictingTransaction {
         conflicting_tx_digest_to_retry: Option<TransactionDigest>,
-        errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
+        errors: GroupedErrors,
         conflicting_tx_digests:
             BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
     },
@@ -238,7 +199,7 @@ pub enum AggregatorProcessTransactionError {
     )]
     SystemOverload {
         overloaded_stake: StakeUnit,
-        errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
+        errors: GroupedErrors,
     },
 }
 
@@ -248,17 +209,31 @@ pub enum AggregatorProcessCertificateError {
         "Failed to execute certificate on a quorum of validators. Non-retryable errors: {:?}",
         non_retryable_errors
     )]
-    FatalExecuteCertificate {
-        non_retryable_errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
-    },
+    FatalExecuteCertificate { non_retryable_errors: GroupedErrors },
 
     #[error(
         "Failed to execute certificate on a quorum of validators but state is still retryable. Retryable errors: {:?}",
         retryable_errors
     )]
-    RetryableExecuteCertificate {
-        retryable_errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
-    },
+    RetryableExecuteCertificate { retryable_errors: GroupedErrors },
+}
+
+pub fn group_errors(errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>) -> GroupedErrors {
+    let mut grouped_errors = HashMap::new();
+    for (error, names, stake) in errors {
+        let entry = grouped_errors.entry(error).or_insert((0, vec![]));
+        entry.0 += stake;
+        entry.1.extend(
+            names
+                .into_iter()
+                .map(|n| n.into_concise())
+                .collect::<Vec<_>>(),
+        );
+    }
+    grouped_errors
+        .into_iter()
+        .map(|(e, (s, n))| (e, s, n))
+        .collect()
 }
 
 struct ProcessTransactionState {
@@ -550,9 +525,6 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
         auth_agg_metrics: AuthAggMetrics,
     ) -> anyhow::Result<Self> {
         let net_config = default_mysten_network_config();
-        // TODO: the function returns on URL parsing errors. In this case we should
-        // tolerate it as long as we have 2f+1 good validators.
-        // GH issue: https://github.com/MystenLabs/sui/issues/7019
         let authority_clients =
             make_network_authority_clients_with_network_config(&committee, &net_config)?;
         Ok(Self::new_with_metrics(
@@ -856,7 +828,6 @@ where
         if let Some(t) = timeout_total {
             timeout(t, fut).await.map_err(|_timeout_error| {
                 if authority_errors.is_empty() {
-                    self.metrics.total_quorum_once_timeout.inc();
                     SuiError::TimeoutError
                 } else {
                     SuiError::TooManyIncorrectAuthorities {
@@ -1051,11 +1022,13 @@ where
                                 }
                             },
                             Err(err) => {
-                                debug!(?tx_digest, name=?name.concise(), weight, "Error processing transaction from validator: {:?}", err);
+                                let concise_name = name.concise();
+                                debug!(?tx_digest, name=?concise_name, weight, "Error processing transaction from validator: {:?}", err);
                                 self.metrics
                                     .process_tx_errors
-                                    .with_label_values(&[&name.concise().to_string(), err.as_ref()])
+                                    .with_label_values(&[&concise_name.to_string(), err.as_ref()])
                                     .inc();
+                                self.record_rpc_error_maybe(concise_name, &err);
                                 let (retryable, categorized) = err.is_retryable();
                                 if !categorized {
                                     // TODO: Should minimize possible uncategorized errors here
@@ -1110,6 +1083,15 @@ where
         }
     }
 
+    fn record_rpc_error_maybe(&self, name: ConciseAuthorityPublicKeyBytesRef, error: &SuiError) {
+        if let SuiError::RpcError(message, _code) = error {
+            self.metrics
+                .total_rpc_err
+                .with_label_values(&[&name.to_string(), message.as_str()])
+                .inc();
+        }
+    }
+
     fn handle_process_transaction_error(
         &self,
         original_tx_digest: &TransactionDigest,
@@ -1121,13 +1103,13 @@ where
         if state.overloaded_stake >= quorum_threshold {
             return AggregatorProcessTransactionError::SystemOverload {
                 overloaded_stake: state.overloaded_stake,
-                errors: state.errors,
+                errors: group_errors(state.errors),
             };
         }
 
         if !state.retryable {
             return AggregatorProcessTransactionError::FatalTransaction {
-                errors: state.errors,
+                errors: group_errors(state.errors),
             };
         }
 
@@ -1139,7 +1121,7 @@ where
 
             if good_stake + retryable_stake >= quorum_threshold {
                 return AggregatorProcessTransactionError::RetryableConflictingTransaction {
-                    errors: state.errors,
+                    errors: group_errors(state.errors),
                     conflicting_tx_digest_to_retry: None,
                     conflicting_tx_digests: state.conflicting_tx_digests,
                 };
@@ -1147,7 +1129,7 @@ where
 
             if most_staked_conflicting_tx_stake + retryable_stake >= quorum_threshold {
                 return AggregatorProcessTransactionError::RetryableConflictingTransaction {
-                    errors: state.errors,
+                    errors: group_errors(state.errors),
                     conflicting_tx_digest_to_retry: Some(most_staked_conflicting_tx),
                     conflicting_tx_digests: state.conflicting_tx_digests,
                 };
@@ -1167,13 +1149,13 @@ where
                 .inc();
 
             AggregatorProcessTransactionError::FatalConflictingTransaction {
-                errors: state.errors,
+                errors: group_errors(state.errors),
                 conflicting_tx_digests: state.conflicting_tx_digests,
             }
         } else {
             // No conflicting transaction, the system is not overloaded and transaction state is still retryable.
             AggregatorProcessTransactionError::RetryableTransaction {
-                errors: state.errors,
+                errors: group_errors(state.errors),
             }
         }
     }
@@ -1183,14 +1165,8 @@ where
         tx_digest: &TransactionDigest,
         state: &ProcessTransactionState,
     ) {
-        // TODO: Revisit whether we need these metrics.
         let num_signatures = state.tx_signatures.validator_sig_count();
-        self.metrics.num_signatures.observe(num_signatures as f64);
         let good_stake = state.tx_signatures.total_votes();
-        self.metrics.num_good_stake.observe(good_stake as f64);
-        self.metrics
-            .non_retryable_stake
-            .observe(state.non_retryable_stake as f64);
         debug!(
             ?tx_digest,
             num_errors = state.errors.iter().map(|e| e.1.len()).sum::<usize>(),
@@ -1263,7 +1239,6 @@ where
                 bad_votes,
                 bad_authorities,
             } => {
-                self.metrics.invalid_sig_bad_stake.observe(bad_votes as f64);
                 state.non_retryable_stake += bad_votes;
                 if bad_votes > 0 {
                     state.errors.push((
@@ -1311,7 +1286,6 @@ where
                         bad_votes,
                         bad_authorities,
                     } => {
-                        self.metrics.invalid_sig_bad_stake.observe(bad_votes as f64);
                         state.non_retryable_stake += bad_votes;
                         if bad_votes > 0 {
                             state.errors.push((
@@ -1464,11 +1438,12 @@ where
                                 .process_cert_errors
                                 .with_label_values(&[&concise_name.to_string(), err.as_ref()])
                                 .inc();
+                            self.record_rpc_error_maybe(concise_name, &err);
                             let (retryable, categorized) = err.is_retryable();
                             if !categorized {
                                 // TODO: Should minimize possible uncategorized errors here
                                 // use ERROR for now to make them easier to spot.
-                                error!(?tx_digest, "uncategorized tx error: {err}");
+                                error!(?tx_digest, "[WATCHOUT] uncategorized tx error: {err}");
                             }
                             if !retryable {
                                 state.non_retryable_stake += weight;
@@ -1515,11 +1490,11 @@ where
             }
             if state.retryable {
                 AggregatorProcessCertificateError::RetryableExecuteCertificate {
-                    retryable_errors: state.retryable_errors,
+                    retryable_errors: group_errors(state.retryable_errors),
                 }
             } else {
                 AggregatorProcessCertificateError::FatalExecuteCertificate {
-                    non_retryable_errors: state.non_retryable_errors,
+                    non_retryable_errors: group_errors(state.non_retryable_errors),
                 }
             }
         })
@@ -1551,7 +1526,6 @@ where
                         bad_votes,
                         bad_authorities,
                     } => {
-                        self.metrics.invalid_sig_bad_stake.observe(bad_votes as f64);
                         state.non_retryable_stake += bad_votes;
                         if bad_votes > 0 {
                             state.non_retryable_errors.push((

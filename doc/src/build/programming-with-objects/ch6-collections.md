@@ -6,7 +6,7 @@ The previous chapter, [Dynamic Fields](ch5-dynamic-fields.md), introduced a way 
 
 This chapter describes two such collections -- `Table` and `Bag` -- built using dynamic fields, but with additional support to count the number of entries they contain, and protect against accidental deletion when non-empty.
 
-The types and function discussed in this section are built into the Sui framework in modules [`table`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/table.move) and [`bag`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/bag.move). As with dynamic fields, there is also an `object_` variant of both: `ObjectTable` in [`object_table`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object_table.move) and `ObjectBag` in [`object_bag`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object_bag.move). The relationship between `Table` and `ObjectTable`, and `Bag` and `ObjectBag` are the same as between a field and an object field: The former can hold any `store` type as a value, but objects stored as values are hidden when viewed from external storage. The latter can only store objects as values, but keeps those objects visible at their ID in external storage.
+The types and function discussed in this section are built into the Sui framework in modules [`table`](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/table.move) and [`bag`](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/bag.move). As with dynamic fields, there is also an `object_` variant of both: `ObjectTable` in [`object_table`](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/object_table.move) and `ObjectBag` in [`object_bag`](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/object_bag.move). The relationship between `Table` and `ObjectTable`, and `Bag` and `ObjectBag` are the same as between a field and an object field: The former can hold any `store` type as a value, but objects stored as values are hidden when viewed from external storage. The latter can only store objects as values, but keeps those objects visible at their ID in external storage.
 
 ### Current Limitations
 
@@ -31,7 +31,7 @@ public fun new<K: copy + drop + store, V: store>(
 
 `Table<K, V>` is a *homogeneous* map, meaning that all its keys have the same type as each other (`K`), and all its values have the same type as each other as well (`V`). It is created with `sui::table::new`, which requires access to a `&mut TxContext` because `Table`s are objects themselves, which can be transferred, shared, wrapped, or unwrapped, just like any other object.
 
-See `sui::bag::ObjectTable` for the object-preserving version of `Table`.
+See `sui::object_table::ObjectTable` for the object-preserving version of `Table`.
 
 ### Bags
 

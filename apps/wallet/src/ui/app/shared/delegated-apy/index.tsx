@@ -23,7 +23,7 @@ export function DelegatedAPY({ stakedValidators }: DelegatedAPYProps) {
     );
 
     const averageNetworkAPY = useMemo(() => {
-        if (!data || !rollingAverageApys) return 0;
+        if (!data || !rollingAverageApys) return null;
 
         let stakedAPYs = 0;
 
@@ -45,7 +45,7 @@ export function DelegatedAPY({ stakedValidators }: DelegatedAPYProps) {
     }
     return (
         <div className="flex gap-0.5 items-center">
-            {averageNetworkAPY > 0 ? (
+            {averageNetworkAPY !== null ? (
                 <>
                     <Text variant="body" weight="semibold" color="steel-dark">
                         {averageNetworkAPY}

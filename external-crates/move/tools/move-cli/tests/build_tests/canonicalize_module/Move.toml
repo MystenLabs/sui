@@ -1,0 +1,9 @@
+[package]
+name = "Test"
+version = "0.0.0"
+
+[addresses]
+foo = "0x1"
+bar = "0x2"
+baz = "0x3"
+qux = "0x4"

@@ -1,0 +1,9 @@
+[package]
+name = "Loop"
+version = "0.0.0"
+
+[addresses]
+Loop = "0x42"
+
+[dependencies]
+MoveStdlib = { local = "../../../../move-stdlib/", addr_subst = { "std" = "0x1" } }

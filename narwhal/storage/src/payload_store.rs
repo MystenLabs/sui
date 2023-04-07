@@ -8,6 +8,7 @@ use std::sync::Arc;
 use store::reopen;
 use store::rocks::{open_cf, MetricConf, ReadWriteOptions};
 use store::{rocks::DBMap, Map, TypedStoreError};
+use sui_macros::fail_point;
 use types::BatchDigest;
 
 /// Store of the batch digests for the primary node for the own created batches.
@@ -41,8 +42,12 @@ impl PayloadStore {
     }
 
     pub fn write(&self, digest: &BatchDigest, worker_id: &WorkerId) -> Result<(), TypedStoreError> {
+        fail_point!("narwhal-store-before-write");
+
         self.store.insert(&(*digest, *worker_id), &0u8)?;
         self.notify_subscribers.notify(&(*digest, *worker_id), &());
+
+        fail_point!("narwhal-store-after-write");
         Ok(())
     }
 
@@ -52,12 +57,16 @@ impl PayloadStore {
         &self,
         keys: impl IntoIterator<Item = (BatchDigest, WorkerId)> + Clone,
     ) -> Result<(), TypedStoreError> {
+        fail_point!("narwhal-store-before-write");
+
         self.store
             .multi_insert(keys.clone().into_iter().map(|e| (e, 0u8)))?;
 
         keys.into_iter().for_each(|(digest, worker_id)| {
             self.notify_subscribers.notify(&(digest, worker_id), &());
         });
+
+        fail_point!("narwhal-store-after-write");
         Ok(())
     }
 
@@ -105,11 +114,17 @@ impl PayloadStore {
         self.store.multi_get(keys)
     }
 
+    #[allow(clippy::let_and_return)]
     pub fn remove_all(
         &self,
         keys: impl IntoIterator<Item = (BatchDigest, WorkerId)>,
     ) -> Result<(), TypedStoreError> {
-        self.store.multi_remove(keys)
+        fail_point!("narwhal-store-before-write");
+
+        let result = self.store.multi_remove(keys);
+
+        fail_point!("narwhal-store-after-write");
+        result
     }
 }
 

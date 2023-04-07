@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { getObjectDisplay, type SuiObjectData } from '@mysten/sui.js';
 import { Link } from 'react-router-dom';
 
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
@@ -11,8 +12,6 @@ import { NFTDisplayCard } from '_components/nft-display';
 import { useObjectsOwnedByAddress } from '_hooks';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 
-import type { SuiObjectData } from '@mysten/sui.js';
-
 function NftsPage() {
     const accountAddress = useActiveAddress();
     const { data, isLoading, error, isError } = useObjectsOwnedByAddress(
@@ -20,10 +19,7 @@ function NftsPage() {
         { options: { showType: true, showDisplay: true } }
     );
     const nfts = data?.data
-        ?.filter(
-            ({ data }) =>
-                typeof data === 'object' && 'display' in data && data.display
-        )
+        ?.filter((resp) => !!getObjectDisplay(resp).data)
         .map(({ data }) => data as SuiObjectData);
     return (
         <div className="flex flex-1 flex-col flex-nowrap items-center gap-4">

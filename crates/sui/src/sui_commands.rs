@@ -10,6 +10,7 @@ use anyhow::{anyhow, bail};
 use clap::*;
 use fastcrypto::traits::KeyPair;
 use move_package::BuildConfig;
+use sui_config::genesis_config::DEFAULT_NUMBER_OF_AUTHORITIES;
 use sui_framework_build::compiled_package::SuiPackageHooks;
 use tracing::info;
 
@@ -149,7 +150,7 @@ pub enum SuiCommand {
 
 impl SuiCommand {
     pub async fn execute(self) -> Result<(), anyhow::Error> {
-        move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks {}));
+        move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
         match self {
             SuiCommand::Start {
                 config,
@@ -221,7 +222,7 @@ impl SuiCommand {
                         println!(
                             "{} - {}",
                             validator.network_address(),
-                            validator.sui_address()
+                            validator.protocol_key_pair().public(),
                         );
                     }
                 }
@@ -411,13 +412,27 @@ async fn genesis(
         genesis_conf.parameters.epoch_duration_ms = epoch_duration_ms;
     }
     let mut network_config = if let Some(validators) = validator_info {
+        if genesis_conf.committee_size != 0 && genesis_conf.committee_size != validators.len() {
+            bail!(
+                "Committee size {} is different from the number of validators {}!",
+                genesis_conf.committee_size,
+                validators.len()
+            );
+        }
         builder
             .initial_accounts_config(genesis_conf)
             .with_validators(validators)
             .build()
     } else {
         builder
-            .committee_size(NonZeroUsize::new(genesis_conf.committee_size).unwrap())
+            .committee_size(
+                NonZeroUsize::new(if genesis_conf.committee_size != 0 {
+                    genesis_conf.committee_size
+                } else {
+                    DEFAULT_NUMBER_OF_AUTHORITIES
+                })
+                .unwrap(),
+            )
             .initial_accounts_config(genesis_conf)
             .build()
     };
@@ -553,7 +568,7 @@ async fn prompt_if_no_config(
                 }
             };
             let (new_address, phrase, scheme) =
-                keystore.generate_and_add_new_key(key_scheme, None)?;
+                keystore.generate_and_add_new_key(key_scheme, None, None)?;
             println!(
                 "Generated new keypair for address with scheme {:?} [{new_address}]",
                 scheme.to_string()

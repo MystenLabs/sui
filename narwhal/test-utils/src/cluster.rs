@@ -8,6 +8,7 @@ use fastcrypto::traits::KeyPair as _;
 use itertools::Itertools;
 use mysten_metrics::RegistryService;
 use mysten_network::multiaddr::Multiaddr;
+use network::client::NetworkClient;
 use node::primary_node::PrimaryNode;
 use node::worker_node::WorkerNode;
 use node::{execution_state::SimpleExecutionState, metrics::worker_metrics_registry};
@@ -334,7 +335,7 @@ impl PrimaryNodeDetails {
         metric.map(|m| m.get_metric().first().unwrap().clone())
     }
 
-    async fn start(&mut self, preserve_store: bool) {
+    async fn start(&mut self, client: NetworkClient, preserve_store: bool) {
         if self.is_running().await {
             panic!("Tried to start a node that is already running");
         }
@@ -364,6 +365,7 @@ impl PrimaryNodeDetails {
                 self.network_key_pair.copy(),
                 self.committee.clone(),
                 self.worker_cache.clone(),
+                client,
                 &primary_store,
                 Arc::new(SimpleExecutionState::new(tx_transaction_confirmation)),
             )
@@ -443,7 +445,12 @@ impl WorkerNodeDetails {
     }
 
     /// Starts the node. When preserve_store is true then the last used
-    async fn start(&mut self, keypair: NetworkKeyPair, preserve_store: bool) {
+    async fn start(
+        &mut self,
+        keypair: NetworkKeyPair,
+        client: NetworkClient,
+        preserve_store: bool,
+    ) {
         if self.is_running().await {
             panic!(
                 "Worker with id {} is already running, can't start again",
@@ -461,12 +468,14 @@ impl WorkerNodeDetails {
         };
 
         let worker_store = NodeStorage::reopen(store_path.clone(), None);
+
         self.node
             .start(
                 self.primary_key.clone(),
                 keypair,
                 self.committee.clone(),
                 self.worker_cache.clone(),
+                client,
                 &worker_store,
                 TrivialTransactionValidator::default(),
                 None,
@@ -505,6 +514,7 @@ pub struct AuthorityDetails {
     pub id: usize,
     pub name: AuthorityIdentifier,
     pub public_key: PublicKey,
+    client: NetworkClient,
     internal: Arc<RwLock<AuthorityDetailsInternal>>,
 }
 
@@ -526,6 +536,9 @@ impl AuthorityDetails {
         worker_cache: WorkerCache,
         internal_consensus_enabled: bool,
     ) -> Self {
+        // Create network client.
+        let client = NetworkClient::new_from_keypair(&network_key_pair);
+
         // Create all the nodes we have in the committee
         let public_key = key_pair.public().clone();
         let primary = PrimaryNodeDetails::new(
@@ -566,6 +579,7 @@ impl AuthorityDetails {
             id,
             public_key,
             name,
+            client,
             internal: Arc::new(RwLock::new(internal)),
         }
     }
@@ -596,7 +610,10 @@ impl AuthorityDetails {
     pub async fn start_primary(&self, preserve_store: bool) {
         let mut internal = self.internal.write().await;
 
-        internal.primary.start(preserve_store).await;
+        internal
+            .primary
+            .start(self.client.clone(), preserve_store)
+            .await;
     }
 
     pub async fn stop_primary(&self) {
@@ -615,7 +632,9 @@ impl AuthorityDetails {
 
         for (id, worker) in internal.workers.iter_mut() {
             let keypair = worker_keypairs.get(*id as usize).unwrap().copy();
-            worker.start(keypair, preserve_store).await;
+            worker
+                .start(keypair, self.client.clone(), preserve_store)
+                .await;
         }
     }
 
@@ -631,7 +650,9 @@ impl AuthorityDetails {
             .get_mut(&id)
             .unwrap_or_else(|| panic!("Worker with id {} not found ", id));
 
-        worker.start(keypair, preserve_store).await;
+        worker
+            .start(keypair, self.client.clone(), preserve_store)
+            .await;
     }
 
     pub async fn stop_worker(&self, id: WorkerId) {
@@ -647,10 +668,10 @@ impl AuthorityDetails {
 
     /// Stops all the nodes (primary & workers).
     pub async fn stop_all(&self) {
+        self.client.shutdown();
+
         let internal = self.internal.read().await;
-
         internal.primary.stop().await;
-
         for (_, worker) in internal.workers.iter() {
             worker.stop().await;
         }

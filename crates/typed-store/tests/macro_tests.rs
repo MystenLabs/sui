@@ -21,7 +21,6 @@ use typed_store::sally::SallyReadOnlyDBOptions;
 use typed_store::traits::Map;
 use typed_store::traits::TableSummary;
 use typed_store::traits::TypedStoreDebug;
-use typed_store::Store;
 use typed_store_derive::DBMapUtils;
 use typed_store_derive::SallyDB;
 
@@ -261,7 +260,7 @@ async fn macro_transactional_test() {
         .table1
         .transaction()
         .expect("failed to init transaction");
-    transaction = transaction
+    transaction
         .insert_batch(&tables.table1, vec![(key.to_string(), "1".to_string())])
         .unwrap();
     transaction
@@ -347,65 +346,6 @@ struct TablesMemUsage {
     table2: DBMap<i32, String>,
     table3: DBMap<i32, String>,
     table4: DBMap<i32, String>,
-}
-
-#[derive(DBMapUtils)]
-struct StoreTables {
-    table1: Store<Vec<u8>, Vec<u8>>,
-    table2: Store<i32, String>,
-}
-#[tokio::test]
-async fn store_iter_and_filter_successfully() {
-    // Use constom configurator
-    let mut config = StoreTables::configurator();
-    // Config table 1
-    config.table1 = typed_store::rocks::DBOptions::default();
-    config.table1.options.create_if_missing(true);
-    config.table1.options.set_write_buffer_size(123456);
-
-    // Config table 2
-    config.table2 = config.table1.clone();
-
-    config.table2.options.create_if_missing(false);
-    let path = temp_dir();
-    let str = StoreTables::open_tables_read_write(
-        path.clone(),
-        MetricConf::default(),
-        None,
-        Some(config.build()),
-    );
-
-    // AND key-values to store.
-    let key_values = vec![
-        (vec![0u8, 1u8], vec![4u8, 4u8]),
-        (vec![0u8, 2u8], vec![4u8, 5u8]),
-        (vec![0u8, 3u8], vec![4u8, 6u8]),
-        (vec![0u8, 4u8], vec![4u8, 7u8]),
-        (vec![0u8, 5u8], vec![4u8, 0u8]),
-        (vec![0u8, 6u8], vec![4u8, 1u8]),
-    ];
-
-    let result = str.table1.sync_write_all(key_values.clone()).await;
-    assert!(result.is_ok());
-
-    // Iter through the keys
-    let output = str
-        .table1
-        .iter(Some(Box::new(|(k, _v)| {
-            u16::from_le_bytes(k[..2].try_into().unwrap()) % 2 == 0
-        })))
-        .await;
-    for (k, v) in &key_values {
-        let int = u16::from_le_bytes(k[..2].try_into().unwrap());
-        if int % 2 == 0 {
-            let v1 = output.get(k).unwrap();
-            assert_eq!(v1.first(), v.first());
-            assert_eq!(v1.last(), v.last());
-        } else {
-            assert!(output.get(k).is_none());
-        }
-    }
-    assert_eq!(output.len(), key_values.len());
 }
 
 #[tokio::test]

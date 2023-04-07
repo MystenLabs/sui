@@ -4,15 +4,14 @@
 import {
   array,
   Infer,
-  literal,
   number,
   object,
   string,
-  union,
   tuple,
   boolean,
   optional,
   any,
+  nullable,
 } from 'superstruct';
 
 import { TransactionDigest, TransactionEffectsDigest } from './common';
@@ -39,6 +38,9 @@ export type ECMHLiveObjectSetDigest = Infer<typeof ECMHLiveObjectSetDigest>;
 export const CheckpointCommitment = any();
 export type CheckpointCommitment = Infer<typeof CheckpointCommitment>;
 
+export const ValidatorSignature = string();
+export type ValidatorSignature = Infer<typeof ValidatorSignature>;
+
 export const EndOfEpochData = object({
   nextEpochCommittee: array(tuple([string(), number()])),
   nextEpochProtocolVersion: number(),
@@ -60,6 +62,8 @@ export const Checkpoint = object({
   epochRollingGasCostSummary: GasCostSummary,
   timestampMs: number(),
   endOfEpochData: optional(EndOfEpochData),
+  // TODO(jian): remove optional after 0.30.0 is released
+  validatorSignature: optional(ValidatorSignature),
   transactions: array(TransactionDigest),
   checkpointCommitments: array(CheckpointCommitment),
 });
@@ -67,7 +71,7 @@ export type Checkpoint = Infer<typeof Checkpoint>;
 
 export const CheckpointPage = object({
   data: array(Checkpoint),
-  nextCursor: union([string(), literal(null)]),
+  nextCursor: nullable(string()),
   hasNextPage: boolean(),
 });
 export type CheckpointPage = Infer<typeof CheckpointPage>;

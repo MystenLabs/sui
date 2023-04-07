@@ -9,7 +9,6 @@ use fastcrypto::traits::EncodeDecodeBase64;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::language_storage::StructTag;
-use move_core_types::parser::parse_struct_tag;
 use move_core_types::resolver::ModuleResolver;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
@@ -34,7 +33,7 @@ use sui_types::base_types::{
     MoveObjectType, ObjectDigest, ObjectID, ObjectType, SequenceNumber, SuiAddress,
     TransactionDigest,
 };
-use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair};
+use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AggregateAuthoritySignature};
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::event::EventID;
 use sui_types::gas_coin::GasCoin;
@@ -44,11 +43,12 @@ use sui_types::messages::{
 };
 use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::object::Owner;
+use sui_types::object::MAX_GAS_BUDGET_FOR_TESTING;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::query::TransactionFilter;
 use sui_types::signature::GenericSignature;
 use sui_types::utils::to_sender_signed_transaction;
-use sui_types::SUI_FRAMEWORK_OBJECT_ID;
+use sui_types::{parse_sui_struct_tag, SUI_FRAMEWORK_OBJECT_ID};
 
 struct Examples {
     function_name: String,
@@ -225,7 +225,7 @@ impl RpcExampleProvider {
             object_id,
             version: SequenceNumber::from_u64(1),
             digest: ObjectDigest::new(self.rng.gen()),
-            type_: Some(ObjectType::Struct(MoveObjectType::GasCoin)),
+            type_: Some(ObjectType::Struct(MoveObjectType::gas_coin())),
             bcs: None,
             display: None,
         });
@@ -264,7 +264,7 @@ impl RpcExampleProvider {
             object_id,
             version: SequenceNumber::from_u64(4),
             digest: ObjectDigest::new(self.rng.gen()),
-            type_: Some(ObjectType::Struct(MoveObjectType::GasCoin)),
+            type_: Some(ObjectType::Struct(MoveObjectType::gas_coin())),
             bcs: None,
             display: None,
         });
@@ -295,6 +295,7 @@ impl RpcExampleProvider {
             end_of_epoch_data: None,
             transactions: vec![TransactionDigest::new(self.rng.gen())],
             checkpoint_commitments: vec![],
+            validator_signature: AggregateAuthoritySignature::default(),
         };
 
         Examples::new(
@@ -314,7 +315,7 @@ impl RpcExampleProvider {
                 object_id: ObjectID::new(self.rng.gen()),
                 version: Default::default(),
                 digest: ObjectDigest::new(self.rng.gen()),
-                type_: Some(ObjectType::Struct(MoveObjectType::GasCoin)),
+                type_: Some(ObjectType::Struct(MoveObjectType::gas_coin())),
                 owner: Some(Owner::AddressOwner(owner)),
                 previous_transaction: Some(TransactionDigest::new(self.rng.gen())),
                 storage_rebate: None,
@@ -454,7 +455,11 @@ impl RpcExampleProvider {
         );
 
         let data = TransactionData::new_transfer_with_dummy_gas_price(
-            recipient, object_ref, signer, gas_ref, 1000,
+            recipient,
+            object_ref,
+            signer,
+            gas_ref,
+            MAX_GAS_BUDGET_FOR_TESTING,
         );
         let data1 = data.clone();
         let data2 = data.clone();
@@ -468,7 +473,7 @@ impl RpcExampleProvider {
         let object_change = ObjectChange::Transferred {
             sender: signer,
             recipient: Owner::AddressOwner(recipient),
-            object_type: parse_struct_tag("0x2::example::Object").unwrap(),
+            object_type: parse_sui_struct_tag("0x2::example::Object").unwrap(),
             object_id: object_ref.0,
             version: object_ref.1,
             digest: ObjectDigest::new(self.rng.gen()),
@@ -547,7 +552,7 @@ impl RpcExampleProvider {
             package_id: ObjectID::new(self.rng.gen()),
             transaction_module: Identifier::from_str("test_module").unwrap(),
             sender: SuiAddress::from(ObjectID::new(self.rng.gen())),
-            type_: parse_struct_tag("0x9::test::TestEvent").unwrap(),
+            type_: parse_sui_struct_tag("0x9::test::TestEvent").unwrap(),
             parsed_json: json! ({"test": "example value"}),
             bcs: vec![],
             timestamp_ms: None,

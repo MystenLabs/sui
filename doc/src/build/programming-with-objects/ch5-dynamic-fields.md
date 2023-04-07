@@ -21,7 +21,7 @@ There are two flavors of dynamic field -- "fields" and "object fields" -- which 
 - **Fields** can store any value that has `store`, however an object stored in this kind of field will be considered wrapped and will not be accessible via its ID by external tools (explorers, wallets, etc) accessing storage.
 - **Object field** values *must* be objects (have the `key` ability, and `id: UID` as the first field), but will still be accessible at their ID to external tools.
 
-The modules for interacting with these fields can be found at [`dynamic_field`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/dynamic_field.move) and [`dynamic_object_field`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/dynamic_object_field.move) respectively.
+The modules for interacting with these fields can be found at [`dynamic_field`](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/dynamic_field.move) and [`dynamic_object_field`](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/dynamic_object_field.move) respectively.
 
 ### Field Names
 

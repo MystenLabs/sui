@@ -20,7 +20,7 @@ use sui_types::utils::create_fake_transaction;
 
 use sui_macros::sim_test;
 use sui_types::messages::*;
-use sui_types::object::{Object, GAS_VALUE_FOR_TESTING};
+use sui_types::object::{Object, MAX_GAS_BUDGET_FOR_TESTING};
 
 use super::*;
 use crate::authority_client::AuthorityAPI;
@@ -61,7 +61,7 @@ pub fn transfer_coin_transaction(
             object_ref,
             src,
             gas_object_ref,
-            GAS_VALUE_FOR_TESTING / 2,
+            MAX_GAS_BUDGET_FOR_TESTING,
         ),
         secret,
     )
@@ -89,7 +89,7 @@ pub fn transfer_object_move_transaction(
             Vec::new(),
             gas_object_ref,
             args,
-            GAS_VALUE_FOR_TESTING / 2,
+            MAX_GAS_BUDGET_FOR_TESTING,
         )
         .unwrap(),
         secret,
@@ -119,7 +119,7 @@ pub fn create_object_move_transaction(
             Vec::new(),
             gas_object_ref,
             arguments,
-            GAS_VALUE_FOR_TESTING / 2,
+            MAX_GAS_BUDGET_FOR_TESTING,
         )
         .unwrap(),
         secret,
@@ -142,7 +142,7 @@ pub fn delete_object_move_transaction(
             Vec::new(),
             gas_object_ref,
             vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref))],
-            GAS_VALUE_FOR_TESTING / 2,
+            MAX_GAS_BUDGET_FOR_TESTING,
         )
         .unwrap(),
         secret,
@@ -171,7 +171,7 @@ pub fn set_object_move_transaction(
             Vec::new(),
             gas_object_ref,
             args,
-            GAS_VALUE_FOR_TESTING / 2,
+            MAX_GAS_BUDGET_FOR_TESTING,
         )
         .unwrap(),
         secret,
@@ -324,14 +324,13 @@ async fn test_quorum_map_and_reduce_timeout() {
     let build_config = BuildConfig::new_for_testing();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/object_basics");
-    let modules = sui_framework::build_move_package(&path, build_config)
+    let modules: Vec<_> = sui_framework::build_move_package(&path, build_config)
         .unwrap()
         .get_modules()
-        .into_iter()
         .cloned()
         .collect();
     let pkg = Object::new_package_for_testing(
-        modules,
+        &modules,
         TransactionDigest::genesis(),
         &make_system_packages(),
     )
@@ -1935,7 +1934,7 @@ async fn run_aggregator(
             AuthoritySignInfo::new(
                 0,
                 tx.clone().data(),
-                Intent::default().with_scope(IntentScope::ProofOfPossession), // bad intent
+                Intent::sui_app(IntentScope::ProofOfPossession), // bad intent
                 *name,
                 secret,
             )
@@ -1944,7 +1943,7 @@ async fn run_aggregator(
             AuthoritySignInfo::new(
                 0,
                 tx.clone().data(),
-                Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+                Intent::sui_app(IntentScope::SenderSignedTransaction),
                 *name,
                 secret,
             )
@@ -2008,7 +2007,7 @@ async fn process_with_cert(
             AuthoritySignInfo::new(
                 0,
                 &effects.clone(),
-                Intent::default().with_scope(IntentScope::ProofOfPossession), // bad intent
+                Intent::sui_app(IntentScope::ProofOfPossession), // bad intent
                 *name,
                 secret,
             )
@@ -2017,7 +2016,7 @@ async fn process_with_cert(
             AuthoritySignInfo::new(
                 0,
                 &effects.clone(),
-                Intent::default().with_scope(IntentScope::TransactionEffects),
+                Intent::sui_app(IntentScope::TransactionEffects),
                 *name,
                 secret,
             )

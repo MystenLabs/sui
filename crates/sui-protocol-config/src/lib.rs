@@ -10,11 +10,17 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 1;
+const MAX_PROTOCOL_VERSION: u64 = 4;
 
 // Record history of protocol version allocations here:
 //
 // Version 1: Original version.
+// Version 2: Framework changes, including advancing epoch_start_time in safemode.
+// Version 3: gas model v2, including all sui conservation fixes. Fix for loaded child object
+//            changes, enable package upgrades, add limits on `max_size_written_objects`,
+//            `max_size_written_objects_system_tx`
+// Version 4: New reward slashing rate. Framework changes to skip stake susbidy when the epoch
+//            length is short.
 
 #[derive(
     Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, JsonSchema,
@@ -113,10 +119,23 @@ pub struct Error(pub String);
 struct FeatureFlags {
     // Add feature flags here, e.g.:
     // new_protocol_feature: bool,
+    #[serde(skip_serializing_if = "is_false")]
     package_upgrades: bool,
     // If true, validators will commit to the root state digest
     // in end of epoch checkpoint proposals
+    #[serde(skip_serializing_if = "is_false")]
     commit_root_state_digest: bool,
+    // Pass epoch start time to advance_epoch safe mode function.
+    #[serde(skip_serializing_if = "is_false")]
+    advance_epoch_start_time_in_safe_mode: bool,
+    // If true, apply the fix to correctly capturing loaded child object versions in execution's
+    // object runtime.
+    #[serde(skip_serializing_if = "is_false")]
+    loaded_child_objects_fixed: bool,
+}
+
+fn is_false(b: &bool) -> bool {
+    !b
 }
 
 /// Constants that change the behavior of the protocol.
@@ -151,6 +170,11 @@ pub struct ProtocolConfig {
 
     /// Maximum number of input objects to a transaction. Enforced by the transaction input checker
     max_input_objects: Option<u64>,
+
+    /// Max size of objects a transaction can write to disk after completion. Enforce by the Sui adapter.
+    max_size_written_objects: Option<u64>,
+    /// Max size of objects a system transaction can write to disk after completion. Enforce by the Sui adapter.
+    max_size_written_objects_system_tx: Option<u64>,
 
     /// Maximum size of serialized transaction effects.
     max_serialized_tx_effects_size_bytes: Option<u64>,
@@ -551,8 +575,20 @@ impl ProtocolConfig {
         }
     }
 
+    pub fn package_upgrades_supported(&self) -> bool {
+        self.feature_flags.package_upgrades
+    }
+
     pub fn check_commit_root_state_digest_supported(&self) -> bool {
         self.feature_flags.commit_root_state_digest
+    }
+
+    pub fn get_advance_epoch_start_time_in_safe_mode(&self) -> bool {
+        self.feature_flags.advance_epoch_start_time_in_safe_mode
+    }
+
+    pub fn loaded_child_objects_fixed(&self) -> bool {
+        self.feature_flags.loaded_child_objects_fixed
     }
 }
 
@@ -1139,6 +1175,15 @@ impl ProtocolConfig {
             .expect(CONSTANT_ERR_MSG)
     }
 
+    /// We dont unwrap here because we want to be able to selectively fetch this valuue
+    pub fn max_size_written_objects(&self) -> Option<u64> {
+        self.max_size_written_objects
+    }
+    /// We dont unwrap here because we want to be able to selectively fetch this valuue
+    pub fn max_size_written_objects_system_tx(&self) -> Option<u64> {
+        self.max_size_written_objects_system_tx
+    }
+
     // When adding a new constant, create a new getter for it as follows, so that the validator
     // will crash if the constant is accessed before the protocol in which it is defined.
     //
@@ -1323,7 +1368,7 @@ impl ProtocolConfig {
                 address_from_u256_cost_base: Some(52),
 
                 // `dynamic_field` module
-                // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`                
+                // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`
                 dynamic_field_hash_type_and_key_cost_base: Some(100),
                 dynamic_field_hash_type_and_key_type_cost_per_byte: Some(2),
                 dynamic_field_hash_type_and_key_value_cost_per_byte: Some(2),
@@ -1468,13 +1513,44 @@ impl ProtocolConfig {
                 hmac_hmac_sha3_256_input_cost_per_byte: Some(2),
                 hmac_hmac_sha3_256_input_cost_per_block: Some(2),
 
+
+                max_size_written_objects: None,
+                max_size_written_objects_system_tx: None,
+
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
             },
-
+            2 => {
+                let mut cfg = Self::get_for_version_impl(version - 1);
+                cfg.feature_flags.advance_epoch_start_time_in_safe_mode = true;
+                cfg
+            }
+            3 => {
+                let mut cfg = Self::get_for_version_impl(version - 1);
+                // changes for gas model
+                cfg.gas_model_version = Some(2);
+                // max gas budget is in MIST and an absolute value 50SUI
+                cfg.max_tx_gas = Some(50_000_000_000);
+                // min gas budget is in MIST and an absolute value 2000MIST or 0.000002SUI
+                cfg.base_tx_cost_fixed = Some(2_000);
+                // storage gas price multiplier
+                cfg.storage_gas_price = Some(76);
+                cfg.feature_flags.loaded_child_objects_fixed = true;
+                // max size of written objects during a TXn
+                cfg.max_size_written_objects = Some(5 * 1000 * 1000);
+                // max size of written objects during a system TXn to allow for larger writes
+                cfg.max_size_written_objects_system_tx = Some(50 * 1000 * 1000);
+                cfg.feature_flags.package_upgrades = true;
+                cfg
+            }
+            4 => {
+                let mut cfg = Self::get_for_version_impl(version - 1);
+                // Change reward slashing rate to 100%.
+                cfg.reward_slashing_rate = Some(10000);
+                cfg
+            }
             // Use this template when making changes:
             //
-            // NEW_VERSION => Self {
             //     // modify an existing constant.
             //     move_binary_format_version: Some(7),
             //

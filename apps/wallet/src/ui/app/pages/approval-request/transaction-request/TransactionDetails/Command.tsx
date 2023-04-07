@@ -7,17 +7,43 @@ import {
     formatAddress,
     type TransactionType,
     normalizeSuiAddress,
+    type MakeMoveVecTransaction,
+    type PublishTransaction,
+    toB64,
 } from '@mysten/sui.js';
 import { useState } from 'react';
 
 import { Text } from '_src/ui/app/shared/text';
 
 function convertCommandArgumentToString(
-    arg: string | string[] | TransactionArgument | TransactionArgument[]
-): string {
-    if (typeof arg === 'string') return arg;
+    arg:
+        | string
+        | number
+        | string[]
+        | number[]
+        | TransactionArgument
+        | TransactionArgument[]
+        | MakeMoveVecTransaction['type']
+        | PublishTransaction['modules']
+): string | null {
+    if (!arg) return null;
+
+    if (typeof arg === 'string' || typeof arg === 'number') return String(arg);
+
+    if (typeof arg === 'object' && 'None' in arg) {
+        return null;
+    }
+
+    if (typeof arg === 'object' && 'Some' in arg) {
+        return arg.Some;
+    }
 
     if (Array.isArray(arg)) {
+        // Publish transaction special casing:
+        if (typeof arg[0] === 'number') {
+            return toB64(new Uint8Array(arg as number[]));
+        }
+
         return `[${arg
             .map((argVal) => convertCommandArgumentToString(argVal))
             .join(', ')}]`;
@@ -33,7 +59,9 @@ function convertCommandArgumentToString(
         case 'NestedResult':
             return `NestedResult(${arg.index}, ${arg.resultIndex})`;
         default:
-            throw new Error('Unexpected argument kind');
+            // eslint-disable-next-line no-console
+            console.warn('Unexpected command argument type.', arg);
+            return null;
     }
 }
 
@@ -51,8 +79,13 @@ function convertCommandToString({ kind, ...command }: TransactionType) {
                 ].join(', ');
             }
 
-            return `${key}: ${convertCommandArgumentToString(value)}`;
+            const stringValue = convertCommandArgumentToString(value);
+
+            if (!stringValue) return null;
+
+            return `${key}: ${stringValue}`;
         })
+        .filter(Boolean)
         .join(', ');
 }
 

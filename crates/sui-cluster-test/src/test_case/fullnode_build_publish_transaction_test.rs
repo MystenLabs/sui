@@ -31,7 +31,8 @@ impl TestCaseImpl for FullNodeBuildPublishTransactionTest {
             all_module_bytes,
             dependencies,
             None::<ObjectID>,
-            10000
+            // Doesn't need to be scaled by RGP since most of the cost is storage
+            50_000_000
         ];
 
         let data = ctx

@@ -1,0 +1,9 @@
+error[E02001]: duplicate declaration, item, or annotation
+   ┌─ tests/move_check/flavors/evm/derive.move:11:7
+   │
+11 │     #[callable]
+   │       ^^^^^^^^ Duplicate module member or alias 'call_expect_duplicate'. Top level names in a namespace must be unique
+   ·
+14 │     fun call_expect_duplicate(_c: address) { }
+   │         --------------------- Alias previously defined here
+

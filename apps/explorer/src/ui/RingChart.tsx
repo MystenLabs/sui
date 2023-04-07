@@ -26,7 +26,7 @@ function Legend({ data, title }: Pick<RingChartProps, 'data' | 'title'>) {
                     <div className="flex items-center gap-1.5" key={label}>
                         <div
                             style={{ backgroundColor: color }}
-                            className="h-3 w-3 rounded-full"
+                            className="h-3 w-3 rounded-sm"
                         />
                         <Text variant="body/medium" color="steel-darker">
                             {label}

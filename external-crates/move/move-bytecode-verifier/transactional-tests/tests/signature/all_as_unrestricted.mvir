@@ -1,0 +1,11 @@
+//# publish
+module 0x1.M {
+    struct S<T: copy + drop> { b: bool }
+
+    foo<T>() {
+        // T does not have copy or drop
+        let x: Self.S<T>;
+    label b0:
+        return;
+    }
+}

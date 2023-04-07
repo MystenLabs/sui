@@ -112,7 +112,7 @@ pub mod pg_integration_test {
         gas: Option<ObjectID>,
     ) -> Result<SuiTransactionBlockResponse, anyhow::Error> {
         let transaction_bytes: TransactionBlockBytes = indexer_rpc_client
-            .transfer_object(*sender, object_id, gas, 2000, *recipient)
+            .transfer_object(*sender, object_id, gas, 2_000_000, *recipient)
             .await?;
         let tx_response = sign_and_execute_transaction_block(
             test_cluster,
@@ -139,7 +139,10 @@ pub mod pg_integration_test {
     > {
         let sender = test_cluster.accounts.first().unwrap();
         let recipient = test_cluster.accounts.last().unwrap();
-        let gas_objects: Vec<ObjectID> = indexer_rpc_client
+        // TODO(gegaowp): today indexer's get_owned_objects only supports filter
+        // by owner address, will revert this when the feature is complete.
+        let gas_objects: Vec<ObjectID> = test_cluster
+            .rpc_client()
             .get_owned_objects(
                 *sender,
                 Some(SuiObjectResponseQuery::new_with_filter(
@@ -180,10 +183,12 @@ pub mod pg_integration_test {
         // Allow indexer to sync
         wait_until_next_checkpoint(&store).await;
 
-        let checkpoint = store.get_checkpoint(0.into()).unwrap();
+        let checkpoint = store.get_checkpoint(0.into()).await.unwrap();
 
         for tx_digest in checkpoint.transactions {
-            let transaction = store.get_transaction_by_digest(&tx_digest.base58_encode());
+            let transaction = store
+                .get_transaction_by_digest(&tx_digest.base58_encode())
+                .await;
             assert!(transaction.is_ok());
             let _fullnode_rpc_tx = test_cluster
                 .rpc_client()
@@ -209,17 +214,18 @@ pub mod pg_integration_test {
         let (_test_cluster, _, store, _handle) = start_test_cluster(None).await;
         // Allow indexer to sync genesis
         wait_until_next_checkpoint(&store).await;
-        let total_address_count = store.get_network_metrics().unwrap().total_addresses;
+        let total_address_count = store.get_network_metrics().await.unwrap().total_addresses;
         assert_eq!(10, total_address_count);
         Ok(())
     }
 
+    #[ignore]
     #[tokio::test]
     async fn test_total_objects() -> Result<(), anyhow::Error> {
         let (_test_cluster, _, store, _handle) = start_test_cluster(None).await;
         // Allow indexer to sync genesis
         wait_until_next_checkpoint(&store).await;
-        let total_object_count = store.get_network_metrics().unwrap().total_objects;
+        let total_object_count = store.get_network_metrics().await.unwrap().total_objects;
         assert_eq!(48, total_object_count);
         Ok(())
     }
@@ -229,7 +235,7 @@ pub mod pg_integration_test {
         let (_test_cluster, _, store, _handle) = start_test_cluster(None).await;
         // Allow indexer to sync genesis
         wait_until_next_checkpoint(&store).await;
-        let total_package_count = store.get_network_metrics().unwrap().total_packages;
+        let total_package_count = store.get_network_metrics().await.unwrap().total_packages;
         assert_eq!(3, total_package_count);
         Ok(())
     }
@@ -241,9 +247,14 @@ pub mod pg_integration_test {
         wait_until_next_checkpoint(&store).await;
         let (tx_response, _, _, _) =
             execute_simple_transfer(&mut test_cluster, &indexer_rpc_client).await?;
-        wait_until_transaction_synced(&store, tx_response.digest.base58_encode().as_str()).await;
+        wait_until_transaction_synced_in_checkpoint(
+            &store,
+            tx_response.digest.base58_encode().as_str(),
+        )
+        .await;
         let tx_count = store
             .get_total_transaction_number_from_checkpoints()
+            .await
             .unwrap();
         // At least 1 transaction + 1 genesis, others are like Consensus Commit Prologue
         assert!(tx_count >= 2);
@@ -492,12 +503,26 @@ pub mod pg_integration_test {
 
         let filter_on_event_type = EventFilter::MoveEventType(target_struct_tag.clone());
         let query_response = indexer_rpc_client
-            .query_events(filter_on_event_type, None, None, None)
+            .query_events(filter_on_event_type.clone(), None, None, None)
             .await?;
         assert_eq!(query_response.data.len(), 2);
         assert_eq!(digest_one, query_response.data[0].id.tx_digest);
         assert_eq!(digest_two, query_response.data[1].id.tx_digest);
 
+        // check parsed event data with FN
+        let fn_query_response = test_cluster
+            .rpc_client()
+            .query_events(filter_on_event_type, None, None, None)
+            .await?;
+
+        assert_eq!(fn_query_response.data.len(), 2);
+        assert_eq!(digest_one, fn_query_response.data[0].id.tx_digest);
+        assert_eq!(digest_two, fn_query_response.data[1].id.tx_digest);
+
+        assert_eq!(
+            query_response.data[0].parsed_json,
+            fn_query_response.data[0].parsed_json
+        );
         Ok(())
     }
 
@@ -566,7 +591,6 @@ pub mod pg_integration_test {
     }
 
     #[tokio::test]
-    #[timeout(60000)]
     async fn test_get_object_with_options() -> Result<(), anyhow::Error> {
         let (test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster(None).await;
         wait_until_next_checkpoint(&store).await;
@@ -596,8 +620,11 @@ pub mod pg_integration_test {
             None,
         )
         .await?;
-        wait_until_transaction_synced(&store, tx_response.digest.base58_encode().as_str()).await;
-        wait_until_next_checkpoint(&store).await;
+        wait_until_transaction_synced_in_checkpoint(
+            &store,
+            tx_response.digest.base58_encode().as_str(),
+        )
+        .await;
         let response = indexer_rpc_client
             .get_object(source_object_id, Some(show_all_content.clone()))
             .await?;
@@ -713,7 +740,7 @@ pub mod pg_integration_test {
                 *primary_coin,                         // coin to merge into
                 post_transfer_full_obj_data.object_id, // coin to merge and delete
                 None,
-                2000,
+                2_000_000,
             )
             .await?;
         let tx_response = sign_and_execute_transaction_block(
@@ -723,7 +750,11 @@ pub mod pg_integration_test {
             &test_cluster.get_address_1(),
         )
         .await?;
-        wait_until_transaction_synced(&store, tx_response.digest.base58_encode().as_str()).await;
+        wait_until_transaction_synced_in_checkpoint(
+            &store,
+            tx_response.digest.base58_encode().as_str(),
+        )
+        .await;
         wait_until_next_checkpoint(&store).await;
 
         let resp = indexer_rpc_client
@@ -787,6 +818,7 @@ pub mod pg_integration_test {
 
         let coin_object = store
             .get_object(coins[0].coin_object_id, Some(coins[0].version))
+            .await
             .unwrap()
             .into_object()
             .unwrap();
@@ -817,15 +849,15 @@ pub mod pg_integration_test {
         // Allow indexer to sync
         wait_until_next_checkpoint(&store).await;
 
-        let current_epoch = store.get_current_epoch().unwrap();
-        let epoch_page = store.get_epochs(None, 100, None).unwrap();
+        let current_epoch = store.get_current_epoch().await.unwrap();
+        let epoch_page = store.get_epochs(None, 100, None).await.unwrap();
         assert_eq!(0, current_epoch.epoch);
         assert!(current_epoch.end_of_epoch_info.is_none());
         assert_eq!(1, epoch_page.len());
         wait_until_next_epoch(&store).await;
 
-        let current_epoch = store.get_current_epoch().unwrap();
-        let epoch_page = store.get_epochs(None, 100, None).unwrap();
+        let current_epoch = store.get_current_epoch().await.unwrap();
+        let epoch_page = store.get_epochs(None, 100, None).await.unwrap();
 
         assert_eq!(1, current_epoch.epoch);
         assert!(current_epoch.end_of_epoch_info.is_none());
@@ -845,13 +877,15 @@ pub mod pg_integration_test {
         // Allow indexer to sync geneis epoch
         wait_until_next_checkpoint(&store).await;
         wait_until_next_epoch(&store).await;
-        let current_epoch = store.get_current_epoch().unwrap();
+        let current_epoch = store.get_current_epoch().await.unwrap();
         let prev_epoch_last_checkpoint_id = current_epoch.first_checkpoint_id - 1;
+        wait_for_checkpoint(&store, current_epoch.first_checkpoint_id as i64).await;
 
         let checkpoint = store
             .get_checkpoint(CheckpointId::SequenceNumber(<BigInt>::from(
                 prev_epoch_last_checkpoint_id,
             )))
+            .await
             .unwrap();
         assert_eq!(checkpoint.epoch as u64, current_epoch.epoch - 1);
         assert_eq!(
@@ -938,7 +972,7 @@ pub mod pg_integration_test {
         let pg_port = env::var("POSTGRES_PORT").unwrap_or_else(|_| "32770".into());
         let pw = env::var("POSTGRES_PASSWORD").unwrap_or_else(|_| "postgrespw".into());
         let db_url = format!("postgres://postgres:{pw}@{pg_host}:{pg_port}");
-        let pg_connection_pool = new_pg_connection_pool(&db_url).unwrap();
+        let (pg_connection_pool, _) = new_pg_connection_pool(&db_url).await.unwrap();
         let mut pg_pool_conn = get_pg_pool_connection(&pg_connection_pool).unwrap();
 
         let lot_of_data = (1..10000)
@@ -1000,7 +1034,7 @@ pub mod pg_integration_test {
         let pg_port = env::var("POSTGRES_PORT").unwrap_or_else(|_| "32770".into());
         let pw = env::var("POSTGRES_PASSWORD").unwrap_or_else(|_| "postgrespw".into());
         let db_url = format!("postgres://postgres:{pw}@{pg_host}:{pg_port}");
-        let pg_connection_pool = new_pg_connection_pool(&db_url).unwrap();
+        let (pg_connection_pool, _) = new_pg_connection_pool(&db_url).await.unwrap();
         let mut pg_pool_conn = get_pg_pool_connection(&pg_connection_pool).unwrap();
 
         let bulk_data = (1..=10000)
@@ -1085,7 +1119,11 @@ pub mod pg_integration_test {
         wait_until_next_checkpoint(&store).await;
         let (tx_response, _, _, _) =
             execute_simple_transfer(&mut test_cluster, &indexer_rpc_client).await?;
-        wait_until_transaction_synced(&store, tx_response.digest.base58_encode().as_str()).await;
+        wait_until_transaction_synced_in_checkpoint(
+            &store,
+            tx_response.digest.base58_encode().as_str(),
+        )
+        .await;
         let full_transaction_response = indexer_rpc_client
             .get_transaction_block(
                 tx_response.digest,
@@ -1158,12 +1196,13 @@ pub mod pg_integration_test {
             start_test_cluster(Some(20000)).await;
         // Allow indexer to sync
         wait_until_next_checkpoint(&store).await;
-        let current_epoch = store.get_current_epoch().unwrap();
-        let cp = store.get_latest_checkpoint_sequence_number().unwrap() as u64;
+        let cp = store.get_latest_checkpoint_sequence_number().await.unwrap() as u64;
         let first_checkpoint = indexer_rpc_client
             .get_checkpoint(CheckpointId::SequenceNumber(cp.try_into().unwrap()))
             .await
             .unwrap();
+
+        let current_epoch = store.get_current_epoch().await.unwrap();
 
         assert_eq!(first_checkpoint.epoch, current_epoch.epoch);
         assert_eq!(u64::from(first_checkpoint.sequence_number), 0);
@@ -1171,23 +1210,39 @@ pub mod pg_integration_test {
         assert_eq!(first_checkpoint.previous_digest, None);
         assert_eq!(first_checkpoint.transactions.len(), 1);
 
+        // Check if checkpoint validator sig matches
+        let fullnode_checkpoint = test_cluster
+            .rpc_client()
+            .get_checkpoint(cp.into())
+            .await
+            .unwrap();
+
+        assert_eq!(
+            first_checkpoint.validator_signature,
+            fullnode_checkpoint.validator_signature
+        );
+
         let (tx_response, _, _, _) =
             execute_simple_transfer(&mut test_cluster, &indexer_rpc_client)
                 .await
                 .unwrap();
-        wait_until_transaction_synced(&store, tx_response.digest.base58_encode().as_str()).await;
+        wait_until_transaction_synced_in_checkpoint(
+            &store,
+            tx_response.digest.base58_encode().as_str(),
+        )
+        .await;
         // We do this as checkpoint field is only returned in the read api
         let tx_response = indexer_rpc_client
             .get_transaction_block(
                 tx_response.digest,
-                Some(SuiTransactionBlockResponseOptions::full_content()),
+                Some(SuiTransactionBlockResponseOptions::new()),
             )
             .await?;
         let next_cp = tx_response.checkpoint.unwrap();
         let next_checkpoint = indexer_rpc_client
             .get_checkpoint(CheckpointId::SequenceNumber(next_cp.try_into().unwrap()))
             .await?;
-        let current_epoch = store.get_current_epoch().unwrap();
+        let current_epoch = store.get_current_epoch().await.unwrap();
 
         assert_eq!(next_checkpoint.epoch, current_epoch.epoch);
         assert!(
@@ -1243,7 +1298,7 @@ pub mod pg_integration_test {
         let config = IndexerConfig {
             db_url,
             rpc_client_url: test_cluster.rpc_url().to_string(),
-            migrated_methods: IndexerConfig::all_migrated_methods(),
+            migrated_methods: IndexerConfig::all_implemented_methods(),
             reset_db: true,
             ..Default::default()
         };
@@ -1261,7 +1316,7 @@ pub mod pg_integration_test {
 
     async fn wait_until_next_checkpoint(store: &PgIndexerStore) {
         let since = std::time::Instant::now();
-        let mut cp = store.get_latest_checkpoint_sequence_number().unwrap();
+        let mut cp = store.get_latest_checkpoint_sequence_number().await.unwrap();
         let target = cp + 1;
         while cp < target {
             let now = std::time::Instant::now();
@@ -1269,13 +1324,26 @@ pub mod pg_integration_test {
                 panic!("wait_until_next_epoch timed out!");
             }
             tokio::task::yield_now().await;
-            cp = store.get_latest_checkpoint_sequence_number().unwrap();
+            cp = store.get_latest_checkpoint_sequence_number().await.unwrap();
+        }
+    }
+
+    async fn wait_for_checkpoint(store: &PgIndexerStore, target: i64) {
+        let since = std::time::Instant::now();
+        let mut cp = store.get_latest_checkpoint_sequence_number().await.unwrap();
+        while cp < target {
+            let now = std::time::Instant::now();
+            if now.duration_since(since).as_secs() > WAIT_UNTIL_TIME_LIMIT {
+                panic!("wait_until_next_epoch timed out!");
+            }
+            tokio::task::yield_now().await;
+            cp = store.get_latest_checkpoint_sequence_number().await.unwrap();
         }
     }
 
     async fn wait_until_next_epoch(store: &PgIndexerStore) {
         let since = std::time::Instant::now();
-        let mut cp = store.get_current_epoch().unwrap().epoch;
+        let mut cp = store.get_current_epoch().await.unwrap().epoch;
         let target = cp + 1;
         while cp < target {
             let now = std::time::Instant::now();
@@ -1283,20 +1351,37 @@ pub mod pg_integration_test {
                 panic!("wait_until_next_epoch timed out!");
             }
             tokio::task::yield_now().await;
-            cp = store.get_current_epoch().unwrap().epoch;
+            cp = store.get_current_epoch().await.unwrap().epoch;
         }
     }
 
     async fn wait_until_transaction_synced(store: &PgIndexerStore, tx_digest: &str) {
         let since = std::time::Instant::now();
-        let mut tx = store.get_transaction_by_digest(tx_digest);
+        let mut tx = store.get_transaction_by_digest(tx_digest).await;
         while tx.is_err() {
             let now = std::time::Instant::now();
             if now.duration_since(since).as_secs() > WAIT_UNTIL_TIME_LIMIT {
                 panic!("wait_until_transaction_synced timed out!");
             }
             tokio::task::yield_now().await;
-            tx = store.get_transaction_by_digest(tx_digest);
+            tx = store.get_transaction_by_digest(tx_digest).await;
+        }
+    }
+
+    async fn wait_until_transaction_synced_in_checkpoint(store: &PgIndexerStore, tx_digest: &str) {
+        let since = std::time::Instant::now();
+        loop {
+            let tx = store.get_transaction_by_digest(tx_digest).await;
+            if let Ok(t) = tx {
+                if t.checkpoint_sequence_number.is_some() {
+                    break;
+                }
+            }
+            let now = std::time::Instant::now();
+            if now.duration_since(since).as_secs() > WAIT_UNTIL_TIME_LIMIT {
+                panic!("wait_until_transaction_synced timed out!");
+            }
+            tokio::task::yield_now().await;
         }
     }
 

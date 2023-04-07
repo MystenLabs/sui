@@ -6,30 +6,46 @@ use fastcrypto::encoding::Base64;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::RpcModule;
+
 use sui_json_rpc::api::{WriteApiClient, WriteApiServer};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
-    BigInt, DevInspectResults, DryRunTransactionBlockResponse, SuiTransactionBlockResponse,
-    SuiTransactionBlockResponseOptions,
+    BigInt, DevInspectResults, DryRunTransactionBlockResponse, SuiTransactionBlockEffectsAPI,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{EpochId, SuiAddress};
 use sui_types::messages::ExecuteTransactionRequestType;
 
-pub(crate) struct WriteApi {
+use crate::handlers::checkpoint_handler::{
+    fetch_changed_objects, get_deleted_db_objects, get_object_changes, to_changed_db_objects,
+};
+use crate::models::transactions::Transaction;
+use crate::store::{IndexerStore, TransactionObjectChanges};
+use crate::types::{
+    FastPathTransactionBlockResponse, SuiTransactionBlockResponseWithOptions,
+    TemporaryTransactionBlockResponseStore,
+};
+
+pub(crate) struct WriteApi<S> {
     fullnode: HttpClient,
+    state: S,
 }
 
-impl WriteApi {
-    pub fn new(fullnode_client: HttpClient) -> Self {
+impl<S: IndexerStore> WriteApi<S> {
+    pub fn new(state: S, fullnode_client: HttpClient) -> Self {
         Self {
+            state,
             fullnode: fullnode_client,
         }
     }
 }
 
 #[async_trait]
-impl WriteApiServer for WriteApi {
+impl<S> WriteApiServer for WriteApi<S>
+where
+    S: IndexerStore + Sync + Send + 'static,
+{
     async fn execute_transaction_block(
         &self,
         tx_bytes: Base64,
@@ -37,9 +53,37 @@ impl WriteApiServer for WriteApi {
         options: Option<SuiTransactionBlockResponseOptions>,
         request_type: Option<ExecuteTransactionRequestType>,
     ) -> RpcResult<SuiTransactionBlockResponse> {
-        self.fullnode
-            .execute_transaction_block(tx_bytes, signatures, options, request_type)
-            .await
+        let fast_path_options = SuiTransactionBlockResponseOptions::full_content();
+        let sui_transaction_response = self
+            .fullnode
+            .execute_transaction_block(tx_bytes, signatures, Some(fast_path_options), request_type)
+            .await?;
+        let fast_path_resp: FastPathTransactionBlockResponse =
+            sui_transaction_response.clone().try_into()?;
+        let effects = &fast_path_resp.effects;
+        let epoch = <u64>::from(effects.executed_epoch());
+
+        let object_changes = get_object_changes(effects);
+        let changed_objects = fetch_changed_objects(self.fullnode.clone(), object_changes).await?;
+        let changed_db_objects =
+            to_changed_db_objects(changed_objects, epoch, /* checkpoint */ None);
+        let deleted_db_objects = get_deleted_db_objects(effects, epoch, /* checkpoint */ None);
+        let tx_object_changes = TransactionObjectChanges {
+            changed_objects: changed_db_objects,
+            deleted_objects: deleted_db_objects,
+        };
+
+        let transaction_store: TemporaryTransactionBlockResponseStore = fast_path_resp.into();
+        let transaction: Transaction = transaction_store.try_into()?;
+        self.state
+            .persist_fast_path(transaction, tx_object_changes)
+            .await?;
+
+        Ok(SuiTransactionBlockResponseWithOptions {
+            response: sui_transaction_response,
+            options: options.unwrap_or_default(),
+        }
+        .into())
     }
 
     async fn dev_inspect_transaction_block(
@@ -62,7 +106,10 @@ impl WriteApiServer for WriteApi {
     }
 }
 
-impl SuiRpcModule for WriteApi {
+impl<S> SuiRpcModule for WriteApi<S>
+where
+    S: IndexerStore + Sync + Send + 'static,
+{
     fn rpc(self) -> RpcModule<Self> {
         self.into_rpc()
     }

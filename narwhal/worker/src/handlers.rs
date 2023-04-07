@@ -1,28 +1,29 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use anemo::types::response::StatusCode;
+use anemo::{types::response::StatusCode, Network};
 use anyhow::Result;
 use async_trait::async_trait;
 use config::{AuthorityIdentifier, Committee, WorkerCache, WorkerId};
 use fastcrypto::hash::Hash;
 use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
+use network::{client::NetworkClient, WorkerToPrimaryClient};
 use rand::seq::SliceRandom;
 use std::{collections::HashSet, time::Duration};
 use store::{rocks::DBMap, Map};
 use tokio::time::sleep;
-use tracing::{debug, info, trace, warn};
+use tracing::{debug, trace, warn};
 use types::{
-    metered_channel::Sender, Batch, BatchDigest, PrimaryToWorker, RequestBatchRequest,
-    RequestBatchResponse, RequestBatchesRequest, RequestBatchesResponse, WorkerBatchMessage,
-    WorkerDeleteBatchesMessage, WorkerOthersBatchMessage, WorkerSynchronizeMessage, WorkerToWorker,
-    WorkerToWorkerClient,
+    Batch, BatchDigest, FetchBatchesRequest, FetchBatchesResponse, PrimaryToWorker,
+    RequestBatchRequest, RequestBatchResponse, RequestBatchesRequest, RequestBatchesResponse,
+    WorkerBatchMessage, WorkerDeleteBatchesMessage, WorkerOthersBatchMessage,
+    WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerClient,
 };
 
 use mysten_metrics::monitored_future;
 
-use crate::TransactionValidator;
+use crate::{batch_fetcher::BatchFetcher, TransactionValidator};
 
 #[cfg(test)]
 #[path = "tests/handlers_tests.rs"]
@@ -32,7 +33,7 @@ pub mod handlers_tests;
 #[derive(Clone)]
 pub struct WorkerReceiverHandler<V> {
     pub id: WorkerId,
-    pub tx_others_batch: Sender<WorkerOthersBatchMessage>,
+    pub client: NetworkClient,
     pub store: DBMap<BatchDigest, Batch>,
     pub validator: V,
 }
@@ -55,14 +56,14 @@ impl<V: TransactionValidator> WorkerToWorker for WorkerReceiverHandler<V> {
         self.store.insert(&digest, &message.batch).map_err(|e| {
             anemo::rpc::Status::internal(format!("failed to write to batch store: {e:?}"))
         })?;
-        self.tx_others_batch
-            .send(WorkerOthersBatchMessage {
+        self.client
+            .report_others_batch(WorkerOthersBatchMessage {
                 digest,
                 worker_id: self.id,
             })
             .await
-            .map(|_| anemo::Response::new(()))
-            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))
+            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
+        Ok(anemo::Response::new(()))
     }
 
     async fn request_batch(
@@ -134,6 +135,10 @@ pub struct PrimaryReceiverHandler<V> {
     pub request_batch_timeout: Duration,
     // Number of random nodes to query when retrying batch requests.
     pub request_batch_retry_nodes: usize,
+    // Synchronize header payloads from other workers.
+    pub network: Option<Network>,
+    // Fetch certificate payloads from other workers.
+    pub batch_fetcher: Option<BatchFetcher>,
     // Validate incoming batches
     pub validator: V,
 }
@@ -144,8 +149,13 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
         &self,
         request: anemo::Request<WorkerSynchronizeMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
+        let Some(network) = self.network.as_ref() else {
+            return Err(anemo::rpc::Status::new_with_message(
+                StatusCode::BadRequest,
+                "synchronize() is unsupported via RPC interface, please call via local worker handler instead",
+            ));
+        };
         let message = request.body();
-
         let mut missing = HashSet::new();
         for digest in message.digests.iter() {
             // Check if we already have the batch.
@@ -167,24 +177,23 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
 
         // Keep attempting to retrieve missing batches until we get them all or the client
         // abandons the RPC.
+        // TODO: synchronize() should only be used for header payloads, so remove the broadcast
+        // logic after first attempt.
+        // TODO: synchronize() should not be cancelled when the higher level RequestVote gets
+        // cancelled, if payload requests are already inflight. This avoids wasting work and
+        // potentially stuck when there are many batches to fetch.
         let mut first_attempt = true;
         loop {
             if missing.is_empty() {
                 return Ok(anemo::Response::new(()));
             }
 
+            // TODO: migrate to RequestBatches RPC, or use BatchFetcher.
             let batch_requests: Vec<_> = missing
                 .iter()
                 .cloned()
                 .map(|batch| RequestBatchRequest { batch })
                 .collect();
-            let network = request
-                .extensions()
-                .get::<anemo::NetworkRef>()
-                .and_then(anemo::NetworkRef::upgrade)
-                .ok_or_else(|| {
-                    anemo::rpc::Status::internal("Unable to access network to send child RPCs")
-                })?;
 
             let mut handles = FuturesUnordered::new();
             let request_batch_fn =
@@ -293,7 +302,7 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
                         }
                     }
                     Err(e) => {
-                        info!(
+                        debug!(
                             "RequestBatchRequest to worker {:?} failed: {e:?}",
                             e.peer_id()
                         )
@@ -305,6 +314,23 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
             // Add a delay before retrying.
             sleep(Duration::from_secs(1)).await;
         }
+    }
+
+    async fn fetch_batches(
+        &self,
+        request: anemo::Request<FetchBatchesRequest>,
+    ) -> Result<anemo::Response<FetchBatchesResponse>, anemo::rpc::Status> {
+        let Some(batch_fetcher) = self.batch_fetcher.as_ref() else {
+            return Err(anemo::rpc::Status::new_with_message(
+                StatusCode::BadRequest,
+                "fetch_batches() is unsupported via RPC interface, please call via local worker handler instead",
+            ));
+        };
+        let request = request.into_body();
+        let batches = batch_fetcher
+            .fetch(request.digests, request.known_workers)
+            .await;
+        Ok(anemo::Response::new(FetchBatchesResponse { batches }))
     }
 
     async fn delete_batches(

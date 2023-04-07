@@ -245,7 +245,7 @@ The total voting power in the Sui Network is always 10,000. The voting power of 
 
 ## Staking functions
 
-Sui supports the following API operations related to staking. You can find the source code in the [sui_system](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/governance/sui_system.move) module.
+Sui supports the following API operations related to staking. You can find the source code in the [sui_system](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-system/sources/sui_system.move) module.
 
  * `request_add_stake`
  Add user stake to a validator's staking pool.

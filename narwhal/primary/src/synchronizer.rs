@@ -12,7 +12,8 @@ use mysten_common::sync::notify_once::NotifyOnce;
 use mysten_metrics::spawn_monitored_task;
 use network::{
     anemo_ext::{NetworkExt, WaitingPeer},
-    RetryConfig,
+    client::NetworkClient,
+    PrimaryToWorkerClient, RetryConfig,
 };
 use parking_lot::Mutex;
 use std::{
@@ -37,8 +38,7 @@ use types::{
     error::{AcceptNotification, DagError, DagResult},
     metered_channel::Sender,
     Certificate, CertificateAPI, CertificateDigest, Header, HeaderAPI, PrimaryToPrimaryClient,
-    PrimaryToWorkerClient, Round, SendCertificateRequest, SendCertificateResponse,
-    WorkerSynchronizeMessage,
+    Round, SendCertificateRequest, SendCertificateResponse, WorkerSynchronizeMessage,
 };
 
 use crate::{aggregators::CertificatesAggregator, metrics::PrimaryMetrics, CHANNEL_CAPACITY};
@@ -66,6 +66,8 @@ struct Inner {
     highest_processed_round: AtomicU64,
     /// Highest round of verfied certificate that has been received.
     highest_received_round: AtomicU64,
+    /// Client for fetching payloads.
+    client: NetworkClient,
     /// The persistent storage tables.
     certificate_store: CertificateStore,
     /// The persistent store of the available batch digests produced either via our own workers
@@ -267,6 +269,7 @@ impl Synchronizer {
         committee: Committee,
         worker_cache: WorkerCache,
         gc_depth: Round,
+        client: NetworkClient,
         certificate_store: CertificateStore,
         payload_store: PayloadStore,
         tx_certificate_fetcher: Sender<Certificate>,
@@ -294,6 +297,7 @@ impl Synchronizer {
             gc_round: AtomicU64::new(gc_round),
             highest_processed_round: AtomicU64::new(highest_processed_round),
             highest_received_round: AtomicU64::new(0),
+            client,
             certificate_store,
             payload_store,
             tx_certificate_fetcher,
@@ -426,12 +430,8 @@ impl Synchronizer {
     /// and has all parents in the certificate store. Otherwise an error is returned.
     /// If the certificate has missing parents and cannot be accepted immediately, the error would
     /// contain a value that can be awaited on, for signaling when the certificate is accepted.
-    pub async fn try_accept_certificate(
-        &self,
-        certificate: Certificate,
-        network: &Network,
-    ) -> DagResult<()> {
-        self.process_certificate_internal(certificate, network, true, true)
+    pub async fn try_accept_certificate(&self, certificate: Certificate) -> DagResult<()> {
+        self.process_certificate_internal(certificate, true, true)
             .await
     }
 
@@ -441,12 +441,8 @@ impl Synchronizer {
     /// validate the suspended certificates state, instead of relying on suspended certificates to
     /// potentially return early. This helps to verify consistency, and has little extra cost
     /// because fetched certificates usually are not suspended.
-    pub async fn try_accept_fetched_certificate(
-        &self,
-        certificate: Certificate,
-        network: &Network,
-    ) -> DagResult<()> {
-        self.process_certificate_internal(certificate, network, false, false)
+    pub async fn try_accept_fetched_certificate(&self, certificate: Certificate) -> DagResult<()> {
+        self.process_certificate_internal(certificate, false, false)
             .await
     }
 
@@ -455,13 +451,9 @@ impl Synchronizer {
     /// If the certificate has missing parents, wait until all parents are available to accept the
     /// certificate.
     /// Otherwise returns an error.
-    pub async fn wait_to_accept_certificate(
-        &self,
-        certificate: Certificate,
-        network: &Network,
-    ) -> DagResult<()> {
+    pub async fn wait_to_accept_certificate(&self, certificate: Certificate) -> DagResult<()> {
         match self
-            .process_certificate_internal(certificate, network, true, true)
+            .process_certificate_internal(certificate, true, true)
             .await
         {
             Err(DagError::Suspended(notify)) => {
@@ -474,14 +466,10 @@ impl Synchronizer {
 
     /// Accepts a certificate produced by this primary. This is not expected to fail unless
     /// the primary is shutting down.
-    pub async fn accept_own_certificate(
-        &self,
-        certificate: Certificate,
-        network: &Network,
-    ) -> DagResult<()> {
+    pub async fn accept_own_certificate(&self, certificate: Certificate) -> DagResult<()> {
         // Process the new certificate.
         match self
-            .process_certificate_internal(certificate.clone(), network, false, false)
+            .process_certificate_internal(certificate.clone(), false, false)
             .await
         {
             Ok(()) => Ok(()),
@@ -560,7 +548,6 @@ impl Synchronizer {
     async fn process_certificate_internal(
         &self,
         certificate: Certificate,
-        network: &Network,
         sanitize: bool,
         early_suspend: bool,
     ) -> DagResult<()> {
@@ -628,10 +615,9 @@ impl Synchronizer {
         // We can thus continue the processing of the certificate without blocking on batch synchronization.
         let inner = self.inner.clone();
         let header = certificate.header().clone();
-        let sync_network = network.clone();
         let max_age = self.inner.gc_depth.saturating_sub(1);
         self.inner.batch_tasks.lock().spawn(async move {
-            Synchronizer::sync_batches_internal(inner, &header, sync_network, max_age, true).await
+            Synchronizer::sync_batches_internal(inner, &header, max_age, true).await
         });
 
         let highest_processed_round = self.inner.highest_processed_round.load(Ordering::Acquire);
@@ -822,14 +808,8 @@ impl Synchronizer {
     /// Blocks until either synchronization is complete, or the current consensus rounds advances
     /// past the max allowed age. (`max_age == 0` means the header's round must match current
     /// round.)
-    pub async fn sync_header_batches(
-        &self,
-        header: &Header,
-        network: anemo::Network,
-        max_age: Round,
-    ) -> DagResult<()> {
-        Synchronizer::sync_batches_internal(self.inner.clone(), header, network, max_age, false)
-            .await
+    pub async fn sync_header_batches(&self, header: &Header, max_age: Round) -> DagResult<()> {
+        Synchronizer::sync_batches_internal(self.inner.clone(), header, max_age, false).await
     }
 
     // TODO: Add batching support to synchronizer and use this call from executor.
@@ -839,14 +819,13 @@ impl Synchronizer {
     //     network: anemo::Network,
     //     max_age: Round,
     // ) -> DagResult<()> {
-    //     Synchronizer::sync_batches_internal(self.inner.clone(), header, network, max_age, true)
+    //     Synchronizer::sync_batches_internal(self.inner.clone(), header, max_age, true)
     //         .await
     // }
 
     async fn sync_batches_internal(
         inner: Arc<Inner>,
         header: &Header,
-        network: anemo::Network,
         max_age: Round,
         is_certified: bool,
     ) -> DagResult<()> {
@@ -905,24 +884,23 @@ impl Synchronizer {
                 )
                 .expect("Author of valid header is not in the worker cache")
                 .name;
-            let network = network.clone();
+            let client = inner.client.clone();
             let retry_config = RetryConfig {
                 retrying_max_elapsed_time: None, // Retry forever.
                 ..Default::default()
             };
             let handle = retry_config.retry(move || {
-                let network = network.clone();
                 let digests = digests.clone();
                 let message = WorkerSynchronizeMessage {
                     digests: digests.clone(),
                     target: header.author(),
                     is_certified,
                 };
-                let peer = network.waiting_peer(anemo::PeerId(worker_name.0.to_bytes()));
-                let mut client = PrimaryToWorkerClient::new(peer);
+                let client = client.clone();
+                let worker_name = worker_name.clone();
                 let inner = inner.clone();
                 async move {
-                    let result = client.synchronize(message).await.map_err(|e| {
+                    let result = client.synchronize(worker_name, message).await.map_err(|e| {
                         backoff::Error::transient(DagError::NetworkError(format!("{e:?}")))
                     });
                     if result.is_ok() {

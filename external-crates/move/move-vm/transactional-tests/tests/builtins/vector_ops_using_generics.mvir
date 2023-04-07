@@ -1,0 +1,24 @@
+//# publish
+
+module 0x42.Tests {
+
+    public test<T: copy + drop>(x: T) {
+        let v: vector<T>;
+        label l0:
+        v = vec_pack_0<T>();
+        assert(vec_len<T>(&v) == 0, 42);
+        vec_push_back<T>(&mut v, copy(x));
+        vec_push_back<T>(&mut v, copy(x));
+        vec_swap<T>(&mut v, 0, 1);
+        _ = vec_imm_borrow<T>(&v, 0);
+        _ = vec_mut_borrow<T>(&mut v, 0);
+        _ = vec_pop_back<T>(&mut v);
+        _ = vec_pop_back<T>(&mut v);
+        vec_unpack_0<T>(move(v));
+        return;
+    }
+}
+
+//# run 0x42::Tests::test --type-args u64 --args 0
+
+//# run 0x42::Tests::test --type-args vector<u8> --args b"hello"

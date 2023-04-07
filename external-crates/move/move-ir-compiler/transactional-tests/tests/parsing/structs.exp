@@ -1,0 +1,4 @@
+processed 1 task
+
+task 0 'print-bytecode'. lines 1-13:
+Error: ParserError: Invalid Token: expected Colon, not LParen

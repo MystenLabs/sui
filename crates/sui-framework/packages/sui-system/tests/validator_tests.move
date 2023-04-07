@@ -9,7 +9,6 @@ module sui_system::validator_tests {
     use std::string::Self;
     use sui_system::validator::{Self, Validator};
     use sui::tx_context::TxContext;
-    use sui::balance::Balance;
     use std::option;
     use std::ascii;
     use sui::coin::{Self, Coin};
@@ -37,7 +36,8 @@ module sui_system::validator_tests {
     const TOO_LONG_257_BYTES: vector<u8> = b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
     #[test_only]
-    fun get_test_validator(ctx: &mut TxContext, init_stake: Balance<SUI>): Validator {
+    fun get_test_validator(ctx: &mut TxContext): Validator {
+        let init_stake = coin::into_balance(coin::mint_for_testing(10_000_000_000, ctx));
         let validator = validator::new(
             VALID_ADDRESS,
             VALID_PUBKEY,
@@ -77,9 +77,8 @@ module sui_system::validator_tests {
         {
             let ctx = test_scenario::ctx(scenario);
 
-            let init_stake = coin::into_balance(coin::mint_for_testing(10, ctx));
-            let validator = get_test_validator(ctx, init_stake);
-            assert!(validator::total_stake_amount(&validator) == 10, 0);
+            let validator = get_test_validator(ctx);
+            assert!(validator::total_stake_amount(&validator) == 10_000_000_000, 0);
             assert!(validator::sui_address(&validator) == sender, 0);
 
             test_utils::destroy(validator);
@@ -89,7 +88,7 @@ module sui_system::validator_tests {
          test_scenario::next_tx(scenario, sender);
          {
              let stake = test_scenario::take_from_sender<StakedSui>(scenario);
-             assert!(staking_pool::staked_sui_amount(&stake) == 10, 0);
+             assert!(staking_pool::staked_sui_amount(&stake) == 10_000_000_000, 0);
              test_scenario::return_to_sender(scenario, stake);
          };
         test_scenario::end(scenario_val);
@@ -101,17 +100,16 @@ module sui_system::validator_tests {
         let scenario_val = test_scenario::begin(sender);
         let scenario = &mut scenario_val;
         let ctx = test_scenario::ctx(scenario);
-        let init_stake = coin::into_balance(coin::mint_for_testing(10, ctx));
 
-        let validator = get_test_validator(ctx, init_stake);
+        let validator = get_test_validator(ctx);
         test_scenario::next_tx(scenario, sender);
         {
             let ctx = test_scenario::ctx(scenario);
-            let new_stake = coin::into_balance(coin::mint_for_testing(30, ctx));
+            let new_stake = coin::into_balance(coin::mint_for_testing(30_000_000_000, ctx));
             validator::request_add_stake(&mut validator, new_stake, sender, ctx);
 
-            assert!(validator::total_stake(&validator) == 10, 0);
-            assert!(validator::pending_stake_amount(&validator) == 30, 0);
+            assert!(validator::total_stake(&validator) == 10_000_000_000, 0);
+            assert!(validator::pending_stake_amount(&validator) == 30_000_000_000, 0);
         };
 
         test_scenario::next_tx(scenario, sender);
@@ -121,16 +119,16 @@ module sui_system::validator_tests {
             let ctx = test_scenario::ctx(scenario);
             validator::request_withdraw_stake(&mut validator, stake, ctx);
 
-            assert!(validator::total_stake(&validator) == 10, 0);
-            assert!(validator::pending_stake_amount(&validator) == 30, 0);
-            assert!(validator::pending_stake_withdraw_amount(&validator) == 10, 0);
+            assert!(validator::total_stake(&validator) == 10_000_000_000, 0);
+            assert!(validator::pending_stake_amount(&validator) == 30_000_000_000, 0);
+            assert!(validator::pending_stake_withdraw_amount(&validator) == 10_000_000_000, 0);
 
             validator::deposit_stake_rewards(&mut validator, balance::zero());
 
             // Calling `process_pending_stakes_and_withdraws` will withdraw the coin and transfer to sender.
             validator::process_pending_stakes_and_withdraws(&mut validator, ctx);
 
-            assert!(validator::total_stake(&validator) == 30, 0);
+            assert!(validator::total_stake(&validator) == 30_000_000_000, 0);
             assert!(validator::pending_stake_amount(&validator) == 0, 0);
             assert!(validator::pending_stake_withdraw_amount(&validator) == 0, 0);
         };
@@ -139,7 +137,7 @@ module sui_system::validator_tests {
         {
             let coin_ids = test_scenario::ids_for_sender<Coin<SUI>>(scenario);
             let withdraw = test_scenario::take_from_sender_by_id<Coin<SUI>>(scenario, *vector::borrow(&coin_ids, 0));
-            assert!(coin::value(&withdraw) == 10, 0);
+            assert!(coin::value(&withdraw) == 10_000_000_000, 0);
             test_scenario::return_to_sender(scenario, withdraw);
         };
 
@@ -368,13 +366,12 @@ module sui_system::validator_tests {
         let scenario_val = test_scenario::begin(sender);
         let scenario = &mut scenario_val;
         let ctx = test_scenario::ctx(scenario);
-        let init_stake = coin::into_balance(coin::mint_for_testing(10, ctx));
         let new_protocol_pub_key = x"96d19c53f1bee2158c3fcfb5bb2f06d3a8237667529d2d8f0fbb22fe5c3b3e64748420b4103674490476d98530d063271222d2a59b0f7932909cc455a30f00c69380e6885375e94243f7468e9563aad29330aca7ab431927540e9508888f0e1c";
         let new_pop = x"a8a0bcaf04e13565914eb22fa9f27a76f297db04446860ee2b923d10224cedb130b30783fb60b12556e7fc50e5b57a86";
         let new_worker_pub_key = vector[115, 220, 238, 151, 134, 159, 173, 41, 80, 2, 66, 196, 61, 17, 191, 76, 103, 39, 246, 127, 171, 85, 19, 235, 210, 106, 97, 97, 116, 48, 244, 191];
         let new_network_pub_key = vector[149, 128, 161, 13, 11, 183, 96, 45, 89, 20, 188, 205, 26, 127, 147, 254, 184, 229, 184, 102, 64, 170, 104, 29, 191, 171, 91, 99, 58, 178, 41, 156];
 
-        let validator = get_test_validator(ctx, init_stake);
+        let validator = get_test_validator(ctx);
 
         test_scenario::next_tx(scenario, sender);
         {
@@ -694,8 +691,7 @@ module sui_system::validator_tests {
         let sender = VALID_ADDRESS;
         let scenario_val = test_scenario::begin(sender);
         let ctx = test_scenario::ctx(&mut scenario_val);
-        let init_stake = coin::into_balance(coin::mint_for_testing(10, ctx));
-        let validator = get_test_validator(ctx, init_stake);
+        let validator = get_test_validator(ctx);
         (sender, scenario_val, validator)
     }
 

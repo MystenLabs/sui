@@ -1,0 +1,11 @@
+//# publish
+module 0x1.M {
+    struct S { b: bool }
+
+    foo() {
+        // type arg mismatch
+        let x: Self.S<u64>;
+    label b0:
+        return;
+    }
+}

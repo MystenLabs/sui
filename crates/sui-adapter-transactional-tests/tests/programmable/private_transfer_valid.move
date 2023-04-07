@@ -18,16 +18,16 @@ module test::m1 {
 //> 0: test::m1::pub();
 //> sui::transfer::public_transfer<test::m1::Pub>(Result(0), Input(0));
 
-//# view-object 107
+//# view-object 2,0
 
 //# programmable
 //> 0: test::m1::pub();
 //> sui::transfer::public_share_object<test::m1::Pub>(Result(0));
 
-//# view-object 109
+//# view-object 4,0
 
 //# programmable
 //> 0: test::m1::pub();
 //> sui::transfer::public_freeze_object<test::m1::Pub>(Result(0));
 
-//# view-object 111
+//# view-object 6,0

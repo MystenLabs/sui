@@ -29,7 +29,7 @@ const cardStyles = cva(null, {
 });
 
 export interface CardProps extends VariantProps<typeof cardStyles> {
-    children: ReactNode;
+    children?: ReactNode;
 }
 
 export function Card({ spacing, rounded, bg, children }: CardProps) {

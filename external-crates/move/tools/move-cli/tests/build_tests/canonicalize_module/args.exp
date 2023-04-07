@@ -1,0 +1,286 @@
+Command `disassemble --Xdebug --package Test --name c`:
+// Move bytecode v6
+module 2.c {
+use 00000000000000000000000000000002::b;
+use 00000000000000000000000000000003::d;
+use 00000000000000000000000000000001::a;
+use 00000000000000000000000000000004::e;
+
+
+struct B {
+	x: u64
+}
+struct A {
+	b: vector<B>
+}
+
+public g(): u64 {
+B0:
+	0: Call a::f(): u64
+	1: Call b::f(): u64
+	2: Add
+	3: Call e::b(): B
+	4: Call e::g(B): u64
+	5: Add
+	6: Ret
+}
+public f(): u64 {
+B0:
+	0: Call d::f(): u64
+	1: Call e::a(): A
+	2: Call e::f(A): u64
+	3: Add
+	4: Ret
+}
+}
+
+CompiledModule {
+    version: 6,
+    self_module_handle_idx: ModuleHandleIndex(0),
+    module_handles: [
+        ModuleHandle {
+            address: AddressIdentifierIndex(0),
+            name: IdentifierIndex(4),
+        },
+        ModuleHandle {
+            address: AddressIdentifierIndex(0),
+            name: IdentifierIndex(3),
+        },
+        ModuleHandle {
+            address: AddressIdentifierIndex(2),
+            name: IdentifierIndex(5),
+        },
+        ModuleHandle {
+            address: AddressIdentifierIndex(1),
+            name: IdentifierIndex(2),
+        },
+        ModuleHandle {
+            address: AddressIdentifierIndex(3),
+            name: IdentifierIndex(6),
+        },
+    ],
+    struct_handles: [
+        StructHandle {
+            module: ModuleHandleIndex(0),
+            name: IdentifierIndex(1),
+            abilities: [],
+            type_parameters: [],
+        },
+        StructHandle {
+            module: ModuleHandleIndex(0),
+            name: IdentifierIndex(0),
+            abilities: [],
+            type_parameters: [],
+        },
+        StructHandle {
+            module: ModuleHandleIndex(4),
+            name: IdentifierIndex(0),
+            abilities: [Drop, ],
+            type_parameters: [],
+        },
+        StructHandle {
+            module: ModuleHandleIndex(4),
+            name: IdentifierIndex(1),
+            abilities: [Drop, ],
+            type_parameters: [],
+        },
+    ],
+    function_handles: [
+        FunctionHandle {
+            module: ModuleHandleIndex(0),
+            name: IdentifierIndex(8),
+            parameters: SignatureIndex(0),
+            return_: SignatureIndex(1),
+            type_parameters: [],
+        },
+        FunctionHandle {
+            module: ModuleHandleIndex(0),
+            name: IdentifierIndex(7),
+            parameters: SignatureIndex(0),
+            return_: SignatureIndex(1),
+            type_parameters: [],
+        },
+        FunctionHandle {
+            module: ModuleHandleIndex(1),
+            name: IdentifierIndex(7),
+            parameters: SignatureIndex(0),
+            return_: SignatureIndex(1),
+            type_parameters: [],
+        },
+        FunctionHandle {
+            module: ModuleHandleIndex(2),
+            name: IdentifierIndex(7),
+            parameters: SignatureIndex(0),
+            return_: SignatureIndex(1),
+            type_parameters: [],
+        },
+        FunctionHandle {
+            module: ModuleHandleIndex(3),
+            name: IdentifierIndex(7),
+            parameters: SignatureIndex(0),
+            return_: SignatureIndex(1),
+            type_parameters: [],
+        },
+        FunctionHandle {
+            module: ModuleHandleIndex(4),
+            name: IdentifierIndex(2),
+            parameters: SignatureIndex(0),
+            return_: SignatureIndex(3),
+            type_parameters: [],
+        },
+        FunctionHandle {
+            module: ModuleHandleIndex(4),
+            name: IdentifierIndex(3),
+            parameters: SignatureIndex(0),
+            return_: SignatureIndex(2),
+            type_parameters: [],
+        },
+        FunctionHandle {
+            module: ModuleHandleIndex(4),
+            name: IdentifierIndex(7),
+            parameters: SignatureIndex(3),
+            return_: SignatureIndex(1),
+            type_parameters: [],
+        },
+        FunctionHandle {
+            module: ModuleHandleIndex(4),
+            name: IdentifierIndex(8),
+            parameters: SignatureIndex(2),
+            return_: SignatureIndex(1),
+            type_parameters: [],
+        },
+    ],
+    field_handles: [],
+    friend_decls: [],
+    struct_def_instantiations: [],
+    function_instantiations: [],
+    field_instantiations: [],
+    signatures: [
+        Signature(
+            [],
+        ),
+        Signature(
+            [
+                U64,
+            ],
+        ),
+        Signature(
+            [
+                Struct(StructHandleIndex(3)),
+            ],
+        ),
+        Signature(
+            [
+                Struct(StructHandleIndex(2)),
+            ],
+        ),
+    ],
+    identifiers: [
+        Identifier(
+            "A",
+        ),
+        Identifier(
+            "B",
+        ),
+        Identifier(
+            "a",
+        ),
+        Identifier(
+            "b",
+        ),
+        Identifier(
+            "c",
+        ),
+        Identifier(
+            "d",
+        ),
+        Identifier(
+            "e",
+        ),
+        Identifier(
+            "f",
+        ),
+        Identifier(
+            "g",
+        ),
+        Identifier(
+            "x",
+        ),
+    ],
+    address_identifiers: [
+        00000000000000000000000000000002,
+        00000000000000000000000000000001,
+        00000000000000000000000000000003,
+        00000000000000000000000000000004,
+    ],
+    constant_pool: [],
+    metadata: [],
+    struct_defs: [
+        StructDefinition {
+            struct_handle: StructHandleIndex(0),
+            field_information: Declared(
+                [
+                    FieldDefinition {
+                        name: IdentifierIndex(9),
+                        signature: TypeSignature(
+                            U64,
+                        ),
+                    },
+                ],
+            ),
+        },
+        StructDefinition {
+            struct_handle: StructHandleIndex(1),
+            field_information: Declared(
+                [
+                    FieldDefinition {
+                        name: IdentifierIndex(3),
+                        signature: TypeSignature(
+                            Vector(Struct(StructHandleIndex(0))),
+                        ),
+                    },
+                ],
+            ),
+        },
+    ],
+    function_defs: [
+        FunctionDefinition {
+            function: FunctionHandleIndex(0),
+            visibility: Public,
+            is_entry: false,
+            acquires_global_resources: [],
+            code: Some(
+                CodeUnit {
+                    locals: SignatureIndex(0),
+                    code: [
+                        Call(4),
+                        Call(2),
+                        Add,
+                        Call(6),
+                        Call(8),
+                        Add,
+                        Ret,
+                    ],
+                },
+            ),
+        },
+        FunctionDefinition {
+            function: FunctionHandleIndex(1),
+            visibility: Public,
+            is_entry: false,
+            acquires_global_resources: [],
+            code: Some(
+                CodeUnit {
+                    locals: SignatureIndex(0),
+                    code: [
+                        Call(3),
+                        Call(5),
+                        Call(7),
+                        Add,
+                        Ret,
+                    ],
+                },
+            ),
+        },
+    ],
+}

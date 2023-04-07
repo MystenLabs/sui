@@ -1,0 +1,37 @@
+//# publish
+module 0x1.M {
+    struct S { f: u64, g: u64, h: u64 }
+
+    t1(root: &mut Self.S, cond: bool) {
+        let x: &mut u64;
+    label b0:
+        jump_if (move(cond)) b2;
+    label b1:
+        x = &mut copy(root).S::g;
+        jump b3;
+    label b2:
+        x = &mut copy(root).S::f;
+        jump b3;
+    label b3:
+        // can write even though f and g are borrowed
+        *(&mut copy(root).S::h) = 0;
+        return;
+    }
+
+    t2(root: &mut Self.S, cond: bool) {
+        let x: &mut u64;
+    label b0:
+        jump_if (move(cond)) b2;
+    label b1:
+        x = &mut copy(root).S::g;
+        jump b3;
+    label b2:
+        x = &mut copy(root).S::f;
+        jump b3;
+    label b3:
+        // can borrow even though f and g are borrowed
+        _ = &mut copy(root).S::f;
+        _ = &mut copy(root).S::g;
+        return;
+    }
+}

@@ -22,8 +22,8 @@ module test::m {
 
 //# run test::m::mint_s
 
-//# view-object 108
+//# view-object 2,0
 
-//# transfer-object 108 --sender A --recipient B
+//# transfer-object 2,0 --sender A --recipient B
 
-//# view-object 108
+//# view-object 2,0

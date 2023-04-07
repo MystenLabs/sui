@@ -36,7 +36,7 @@ module test::m1 {
 //> TransferObjects([Result(0)], Input(0))
 
 // unused inputs and unused objects and unused results of various kinds
-//# programmable --sender A --inputs object(107) 0 vector[@0,@0]
+//# programmable --sender A --inputs object(2,0) 0 vector[@0,@0]
 //> 0: test::m1::droppable();
 //> 1: test::m1::droppable();
 //> 2: test::m1::cup<test::m1::Droppable>(Result(0));

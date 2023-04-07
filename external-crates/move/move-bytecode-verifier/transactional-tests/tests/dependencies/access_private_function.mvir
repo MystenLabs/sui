@@ -1,0 +1,20 @@
+//# publish
+module 0x42.M {
+    universal_truth(): u64 {
+    label b0:
+        return 42;
+    }
+}
+
+//# run
+import 0x42.M;
+
+main() {
+    let x: u64;
+label b0:
+    // cannot call private/internal functions
+    x = M.universal_truth();
+    return;
+}
+
+// check: LOOKUP_FAILED

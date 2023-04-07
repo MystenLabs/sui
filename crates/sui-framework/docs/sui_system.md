@@ -3,9 +3,46 @@
 
 # Module `0x3::sui_system`
 
+Sui System State Type Upgrade Guide
+<code><a href="sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a></code> is a thin wrapper around <code>SuiSystemStateInner</code> that provides a versioned interface.
+The <code><a href="sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a></code> object has a fixed ID 0x5, and the <code>SuiSystemStateInner</code> object is stored as a dynamic field.
+There are a few different ways to upgrade the <code>SuiSystemStateInner</code> type:
+
+The simplest and one that doesn't involve a real upgrade is to just add dynamic fields to the <code>extra_fields</code> field
+of <code>SuiSystemStateInner</code> or any of its sub type. This is useful when we are in a rush, or making a small change,
+or still experimenting a new field.
+
+To properly upgrade the <code>SuiSystemStateInner</code> type, we need to ship a new framework that does the following:
+1. Define a new <code>SuiSystemStateInner</code>type (e.g. <code>SuiSystemStateInnerV2</code>).
+2. Define a data migration function that migrates the old <code>SuiSystemStateInner</code> to the new one (i.e. SuiSystemStateInnerV2).
+3. Replace all uses of <code>SuiSystemStateInner</code> with <code>SuiSystemStateInnerV2</code> in both sui_system.move and sui_system_state_inner.move,
+with the exception of the <code><a href="sui_system_state_inner.md#0x3_sui_system_state_inner_create">sui_system_state_inner::create</a></code> function, which should always return the genesis type.
+4. Inside <code>load_inner_maybe_upgrade</code> function, check the current version in the wrapper, and if it's not the latest version,
+call the data migration function to upgrade the inner object. Make sure to also update the version in the wrapper.
+A detailed example can be found in sui/tests/framework_upgrades/mock_sui_systems/shallow_upgrade.
+Along with the Move change, we also need to update the Rust code to support the new type. This includes:
+1. Define a new <code>SuiSystemStateInner</code> struct type that matches the new Move type, and implement the SuiSystemStateTrait.
+2. Update the <code><a href="sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a></code> struct to include the new version as a new enum variant.
+3. Update the <code>get_sui_system_state</code> function to handle the new version.
+To test that the upgrade will be successful, we need to modify <code>sui_system_state_production_upgrade_test</code> test in
+protocol_version_tests and trigger a real upgrade using the new framework. We will need to keep this directory as old version,
+put the new framework in a new directory, and run the test to exercise the upgrade.
+
+To upgrade Validator type, besides everything above, we also need to:
+1. Define a new Validator type (e.g. ValidatorV2).
+2. Define a data migration function that migrates the old Validator to the new one (i.e. ValidatorV2).
+3. Replace all uses of Validator with ValidatorV2 except the genesis creation function.
+4. In validator_wrapper::upgrade_to_latest, check the current version in the wrapper, and if it's not the latest version,
+call the data migration function to upgrade it.
+In Rust, we also need to add a new case in <code>get_validator_from_table</code>.
+Note that it is possible to upgrade SuiSystemStateInner without upgrading Validator, but not the other way around.
+And when we only upgrade SuiSystemStateInner, the version of Validator in the wrapper will not be updated, and hence may become
+inconsistent with the version of SuiSystemStateInner. This is fine as long as we don't use the Validator version to determine
+the SuiSystemStateInner version, or vice versa.
 
 
 -  [Resource `SuiSystemState`](#0x3_sui_system_SuiSystemState)
+-  [Constants](#@Constants_0)
 -  [Function `create`](#0x3_sui_system_create)
 -  [Function `request_add_validator_candidate`](#0x3_sui_system_request_add_validator_candidate)
 -  [Function `request_remove_validator_candidate`](#0x3_sui_system_request_remove_validator_candidate)
@@ -40,7 +77,6 @@
 -  [Function `update_validator_next_epoch_network_pubkey`](#0x3_sui_system_update_validator_next_epoch_network_pubkey)
 -  [Function `update_candidate_validator_network_pubkey`](#0x3_sui_system_update_candidate_validator_network_pubkey)
 -  [Function `advance_epoch`](#0x3_sui_system_advance_epoch)
--  [Function `advance_epoch_safe_mode`](#0x3_sui_system_advance_epoch_safe_mode)
 -  [Function `load_system_state`](#0x3_sui_system_load_system_state)
 -  [Function `load_system_state_mut`](#0x3_sui_system_load_system_state_mut)
 -  [Function `load_inner_maybe_upgrade`](#0x3_sui_system_load_inner_maybe_upgrade)
@@ -95,6 +131,29 @@
 
 
 </details>
+
+<a name="@Constants_0"></a>
+
+## Constants
+
+
+<a name="0x3_sui_system_ENotSystemAddress"></a>
+
+
+
+<pre><code><b>const</b> <a href="sui_system.md#0x3_sui_system_ENotSystemAddress">ENotSystemAddress</a>: u64 = 0;
+</code></pre>
+
+
+
+<a name="0x3_sui_system_EWrongInnerVersion"></a>
+
+
+
+<pre><code><b>const</b> <a href="sui_system.md#0x3_sui_system_EWrongInnerVersion">EWrongInnerVersion</a>: u64 = 1;
+</code></pre>
+
+
 
 <a name="0x3_sui_system_create"></a>
 
@@ -1206,7 +1265,7 @@ gas coins.
 ) : Balance&lt;SUI&gt; {
     <b>let</b> self = <a href="sui_system.md#0x3_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
     // Validator will make a special system call <b>with</b> sender set <b>as</b> 0x0.
-    <b>assert</b>!(<a href="_sender">tx_context::sender</a>(ctx) == @0x0, 0);
+    <b>assert</b>!(<a href="_sender">tx_context::sender</a>(ctx) == @0x0, <a href="sui_system.md#0x3_sui_system_ENotSystemAddress">ENotSystemAddress</a>);
     <b>let</b> storage_rebate = <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_advance_epoch">sui_system_state_inner::advance_epoch</a>(
         self,
         new_epoch,
@@ -1229,64 +1288,13 @@ gas coins.
 
 </details>
 
-<a name="0x3_sui_system_advance_epoch_safe_mode"></a>
-
-## Function `advance_epoch_safe_mode`
-
-An extremely simple version of advance_epoch.
-This is called in two situations:
-- When the call to advance_epoch failed due to a bug, and we want to be able to keep the
-system running and continue making epoch changes.
-- When advancing to a new protocol version, we want to be able to change the protocol
-version
-
-
-<pre><code><b>fun</b> <a href="sui_system.md#0x3_sui_system_advance_epoch_safe_mode">advance_epoch_safe_mode</a>(storage_reward: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, computation_reward: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, wrapper: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, new_epoch: u64, next_protocol_version: u64, storage_rebate: u64, non_refundable_storage_fee: u64, ctx: &<b>mut</b> <a href="_TxContext">tx_context::TxContext</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="sui_system.md#0x3_sui_system_advance_epoch_safe_mode">advance_epoch_safe_mode</a>(
-    storage_reward: Balance&lt;SUI&gt;,
-    computation_reward: Balance&lt;SUI&gt;,
-    wrapper: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a>,
-    new_epoch: u64,
-    next_protocol_version: u64,
-    storage_rebate: u64,
-    non_refundable_storage_fee: u64,
-    ctx: &<b>mut</b> TxContext,
-) {
-    <b>let</b> self = <a href="sui_system.md#0x3_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
-    // Validator will make a special system call <b>with</b> sender set <b>as</b> 0x0.
-    <b>assert</b>!(<a href="_sender">tx_context::sender</a>(ctx) == @0x0, 0);
-    <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_advance_epoch_safe_mode">sui_system_state_inner::advance_epoch_safe_mode</a>(
-        self,
-        new_epoch,
-        next_protocol_version,
-        storage_reward,
-        computation_reward,
-        storage_rebate,
-        non_refundable_storage_fee,
-        ctx
-    )
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="0x3_sui_system_load_system_state"></a>
 
 ## Function `load_system_state`
 
 
 
-<pre><code><b>fun</b> <a href="sui_system.md#0x3_sui_system_load_system_state">load_system_state</a>(self: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): &<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>
+<pre><code><b>fun</b> <a href="sui_system.md#0x3_sui_system_load_system_state">load_system_state</a>(self: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): &<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInnerV2">sui_system_state_inner::SuiSystemStateInnerV2</a>
 </code></pre>
 
 
@@ -1295,7 +1303,7 @@ version
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="sui_system.md#0x3_sui_system_load_system_state">load_system_state</a>(self: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a>): &SuiSystemStateInner {
+<pre><code><b>fun</b> <a href="sui_system.md#0x3_sui_system_load_system_state">load_system_state</a>(self: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a>): &SuiSystemStateInnerV2 {
     <a href="sui_system.md#0x3_sui_system_load_inner_maybe_upgrade">load_inner_maybe_upgrade</a>(self)
 }
 </code></pre>
@@ -1310,7 +1318,7 @@ version
 
 
 
-<pre><code><b>fun</b> <a href="sui_system.md#0x3_sui_system_load_system_state_mut">load_system_state_mut</a>(self: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): &<b>mut</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>
+<pre><code><b>fun</b> <a href="sui_system.md#0x3_sui_system_load_system_state_mut">load_system_state_mut</a>(self: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): &<b>mut</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInnerV2">sui_system_state_inner::SuiSystemStateInnerV2</a>
 </code></pre>
 
 
@@ -1319,7 +1327,7 @@ version
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="sui_system.md#0x3_sui_system_load_system_state_mut">load_system_state_mut</a>(self: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a>): &<b>mut</b> SuiSystemStateInner {
+<pre><code><b>fun</b> <a href="sui_system.md#0x3_sui_system_load_system_state_mut">load_system_state_mut</a>(self: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a>): &<b>mut</b> SuiSystemStateInnerV2 {
     <a href="sui_system.md#0x3_sui_system_load_inner_maybe_upgrade">load_inner_maybe_upgrade</a>(self)
 }
 </code></pre>
@@ -1334,7 +1342,7 @@ version
 
 
 
-<pre><code><b>fun</b> <a href="sui_system.md#0x3_sui_system_load_inner_maybe_upgrade">load_inner_maybe_upgrade</a>(self: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): &<b>mut</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>
+<pre><code><b>fun</b> <a href="sui_system.md#0x3_sui_system_load_inner_maybe_upgrade">load_inner_maybe_upgrade</a>(self: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): &<b>mut</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInnerV2">sui_system_state_inner::SuiSystemStateInnerV2</a>
 </code></pre>
 
 
@@ -1343,12 +1351,16 @@ version
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="sui_system.md#0x3_sui_system_load_inner_maybe_upgrade">load_inner_maybe_upgrade</a>(self: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a>): &<b>mut</b> SuiSystemStateInner {
-    <b>let</b> version = self.version;
-    // TODO: This is <b>where</b> we check the version and perform upgrade <b>if</b> necessary.
+<pre><code><b>fun</b> <a href="sui_system.md#0x3_sui_system_load_inner_maybe_upgrade">load_inner_maybe_upgrade</a>(self: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a>): &<b>mut</b> SuiSystemStateInnerV2 {
+    <b>if</b> (self.version == 1) {
+      <b>let</b> v1 = <a href="_remove">dynamic_field::remove</a>(&<b>mut</b> self.id, self.version);
+      <b>let</b> v2 = <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_v1_to_v2">sui_system_state_inner::v1_to_v2</a>(v1);
+      self.version = 2;
+      <a href="_add">dynamic_field::add</a>(&<b>mut</b> self.id, self.version, v2);
+    };
 
-    <b>let</b> inner: &<b>mut</b> SuiSystemStateInner = <a href="_borrow_mut">dynamic_field::borrow_mut</a>(&<b>mut</b> self.id, version);
-    <b>assert</b>!(<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_system_state_version">sui_system_state_inner::system_state_version</a>(inner) == version, 0);
+    <b>let</b> inner = <a href="_borrow_mut">dynamic_field::borrow_mut</a>(&<b>mut</b> self.id, self.version);
+    <b>assert</b>!(<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_system_state_version">sui_system_state_inner::system_state_version</a>(inner) == self.version, <a href="sui_system.md#0x3_sui_system_EWrongInnerVersion">EWrongInnerVersion</a>);
     inner
 }
 </code></pre>

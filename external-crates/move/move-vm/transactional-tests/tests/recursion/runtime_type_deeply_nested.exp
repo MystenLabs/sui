@@ -1,0 +1,19 @@
+processed 3 tasks
+
+task 1 'run'. lines 72-79:
+Error: Script execution failed with VMError: {
+    major_status: TOO_MANY_TYPE_NODES,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(48), 0)],
+}
+
+task 2 'run'. lines 81-89:
+Error: Script execution failed with VMError: {
+    major_status: TOO_MANY_TYPE_NODES,
+    sub_status: None,
+    location: 0x42::M,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(49), 0)],
+}

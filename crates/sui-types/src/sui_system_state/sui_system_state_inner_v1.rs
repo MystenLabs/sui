@@ -18,7 +18,7 @@ use std::collections::BTreeMap;
 
 use super::epoch_start_sui_system_state::EpochStartValidatorInfoV1;
 use super::sui_system_state_summary::{SuiSystemStateSummary, SuiValidatorSummary};
-use super::SuiSystemStateTrait;
+use super::{AdvanceEpochParams, SuiSystemStateTrait};
 
 const E_METADATA_INVALID_POP: u64 = 0;
 const E_METADATA_INVALID_PUBKEY: u64 = 1;
@@ -455,7 +455,6 @@ pub struct StorageFundV1 {
 }
 
 /// Rust version of the Move sui_system::sui_system::SuiSystemStateInner type
-/// We want to keep it named as SuiSystemState in Rust since this is the primary interface type.
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct SuiSystemStateInnerV1 {
     pub epoch: u64,
@@ -526,6 +525,19 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
 
     fn safe_mode(&self) -> bool {
         self.safe_mode
+    }
+
+    fn advance_epoch_safe_mode(&mut self, params: &AdvanceEpochParams) {
+        self.epoch = params.epoch;
+        self.safe_mode = true;
+        self.safe_mode_storage_rewards
+            .deposit_for_safe_mode(params.storage_charge);
+        self.safe_mode_storage_rebates += params.storage_rebate;
+        self.safe_mode_computation_rewards
+            .deposit_for_safe_mode(params.computation_charge);
+        self.safe_mode_non_refundable_storage_fee += params.non_refundable_storage_fee;
+        self.epoch_start_timestamp_ms = params.epoch_start_timestamp_ms;
+        self.protocol_version = params.next_protocol_version.as_u64();
     }
 
     fn get_current_epoch_committee(&self) -> CommitteeWithNetworkMetadata {

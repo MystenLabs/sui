@@ -10,9 +10,13 @@ use test_utils::authority::start_node;
 #[should_panic]
 async fn test_validator_panics_on_unsupported_protocol_version() {
     let dir = tempfile::TempDir::new().unwrap();
+    let latest_version = ProtocolVersion::MAX;
     let network_config = sui_config::builder::ConfigBuilder::new(&dir)
-        .with_protocol_version(ProtocolVersion::new(2))
-        .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(1, 1))
+        .with_protocol_version(ProtocolVersion::new(latest_version.as_u64() + 1))
+        .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
+            latest_version.as_u64(),
+            latest_version.as_u64(),
+        ))
         .build();
 
     let registry_service = RegistryService::new(Registry::new());
@@ -60,7 +64,7 @@ mod sim_only_tests {
     use move_core_types::ident_str;
     use std::path::PathBuf;
     use std::sync::Arc;
-    use sui_core::authority::sui_system_injection;
+    use sui_core::authority::framework_injection;
     use sui_framework::{MoveStdlib, SuiFramework, SuiSystem, SystemPackage};
     use sui_framework_build::compiled_package::BuildConfig;
     use sui_json_rpc::api::WriteApiClient;
@@ -69,15 +73,15 @@ mod sim_only_tests {
     use sui_types::base_types::ObjectID;
     use sui_types::id::ID;
     use sui_types::sui_system_state::{
-        get_validator_from_table, SuiSystemState, SuiSystemStateTrait,
-        SUI_SYSTEM_STATE_SIM_TEST_DEEP_V2, SUI_SYSTEM_STATE_SIM_TEST_SHALLOW_V2,
-        SUI_SYSTEM_STATE_SIM_TEST_V1,
+        epoch_start_sui_system_state::EpochStartSystemStateTrait, get_validator_from_table,
+        SuiSystemState, SuiSystemStateTrait, SUI_SYSTEM_STATE_SIM_TEST_DEEP_V2,
+        SUI_SYSTEM_STATE_SIM_TEST_SHALLOW_V2, SUI_SYSTEM_STATE_SIM_TEST_V1,
     };
     use sui_types::{
         base_types::SequenceNumber,
         digests::TransactionDigest,
         messages::{TransactionEffectsAPI, TransactionKind},
-        object::{Object, OBJECT_START_VERSION},
+        object::Object,
         programmable_transaction_builder::ProgrammableTransactionBuilder,
         storage::ObjectStore,
     };
@@ -362,7 +366,7 @@ mod sim_only_tests {
     async fn run_framework_upgrade(from: &str, to: &str) -> TestCluster {
         ProtocolConfig::poison_get_for_min_version();
 
-        sui_system_injection::set_override(sui_system_modules(to));
+        framework_injection::set_override::<SuiSystem>(sui_system_modules(to));
         TestClusterBuilder::new()
             .with_epoch_duration_ms(20000)
             .with_objects([sui_system_package_object(from)])
@@ -456,7 +460,7 @@ mod sim_only_tests {
         ProtocolConfig::poison_get_for_min_version();
 
         // Even though a new framework is available, the required new protocol version is not.
-        sui_system_injection::set_override(sui_system_modules("compatible"));
+        framework_injection::set_override::<SuiSystem>(sui_system_modules("compatible"));
         let test_cluster = TestClusterBuilder::new()
             .with_epoch_duration_ms(20000)
             .with_objects([sui_system_package_object("base")])
@@ -489,7 +493,7 @@ mod sim_only_tests {
 
         let first = test_cluster.swarm.validators().next().unwrap();
         let first_name = first.name();
-        sui_system_injection::set_override_cb(Box::new(move |name| {
+        framework_injection::set_override_cb::<SuiSystem>(Box::new(move |name| {
             if name == first_name {
                 info!("node {:?} using compatible packages", name.concise());
                 Some(sui_system_modules("base"))
@@ -538,7 +542,7 @@ mod sim_only_tests {
         let mut validators = test_cluster.swarm.validators();
         let first = validators.next().unwrap().name();
         let second = validators.next().unwrap().name();
-        sui_system_injection::set_override_cb(Box::new(move |name| {
+        framework_injection::set_override_cb::<SuiSystem>(Box::new(move |name| {
             if name == first || name == second {
                 Some(sui_system_modules("compatible"))
             } else {
@@ -547,6 +551,55 @@ mod sim_only_tests {
         }));
 
         expect_upgrade_failed(&test_cluster).await;
+    }
+
+    #[sim_test]
+    async fn test_safe_mode_recovery() {
+        framework_injection::set_override::<SuiSystem>(sui_system_modules("mock_sui_systems/base"));
+        let test_cluster = TestClusterBuilder::new()
+            .with_epoch_duration_ms(20000)
+            // Overrides with a sui system package that would abort during epoch change txn
+            .with_objects([sui_system_package_object("mock_sui_systems/safe_mode")])
+            .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
+                START, FINISH,
+            ))
+            .build()
+            .await
+            .unwrap();
+        let genesis_epoch_start_time = test_cluster
+            .swarm
+            .validators()
+            .next()
+            .unwrap()
+            .get_node_handle()
+            .unwrap()
+            .with(|node| {
+                node.state()
+                    .epoch_store_for_testing()
+                    .epoch_start_state()
+                    .epoch_start_timestamp_ms()
+            });
+
+        // We are going to enter safe mode so set the expectation right.
+        test_cluster.set_safe_mode_expected(true);
+
+        // Wait for epoch change to happen. This epoch we should also experience a framework
+        // upgrade that upgrades the framework to the base one (which doesn't abort), and thus
+        // a protocol version increment.
+        let system_state = test_cluster.wait_for_epoch(Some(1)).await;
+        assert_eq!(system_state.epoch(), 1);
+        assert_eq!(system_state.protocol_version(), FINISH); // protocol version increments
+        assert!(system_state.safe_mode()); // enters safe mode
+        assert!(system_state.epoch_start_timestamp_ms() >= genesis_epoch_start_time + 20000);
+
+        // We are getting out of safe mode soon.
+        test_cluster.set_safe_mode_expected(false);
+
+        // This epoch change should execute successfully without any upgrade and get us out of safe mode.
+        let system_state = test_cluster.wait_for_epoch(Some(2)).await;
+        assert_eq!(system_state.epoch(), 2);
+        assert_eq!(system_state.protocol_version(), FINISH); // protocol version stays the same
+        assert!(!system_state.safe_mode()); // out of safe mode
     }
 
     #[sim_test]
@@ -575,7 +628,9 @@ mod sim_only_tests {
             .build()
             .await
             .unwrap();
-        sui_system_injection::set_override(sui_system_modules("mock_sui_systems/shallow_upgrade"));
+        framework_injection::set_override::<SuiSystem>(sui_system_modules(
+            "mock_sui_systems/shallow_upgrade",
+        ));
         // Wait for the upgrade to finish. After the upgrade, the new framework will be installed,
         // but the system state object hasn't been upgraded yet.
         let system_state = test_cluster.wait_for_epoch(Some(1)).await;
@@ -607,7 +662,9 @@ mod sim_only_tests {
             .build()
             .await
             .unwrap();
-        sui_system_injection::set_override(sui_system_modules("mock_sui_systems/deep_upgrade"));
+        framework_injection::set_override::<SuiSystem>(sui_system_modules(
+            "mock_sui_systems/deep_upgrade",
+        ));
         // Wait for the upgrade to finish. After the upgrade, the new framework will be installed,
         // but the system state object hasn't been upgraded yet.
         let system_state = test_cluster.wait_for_epoch(Some(1)).await;
@@ -650,6 +707,39 @@ mod sim_only_tests {
         }
     }
 
+    #[sim_test]
+    async fn sui_system_state_production_upgrade_test() {
+        // Use this test to test a real sui system state upgrade. To make this test work,
+        // put the new sui system in a new path and point to it in the override.
+        // It's important to also handle the new protocol version in protocol-config/lib.rs.
+        // The MAX_PROTOCOL_VERSION must not be changed yet when testing this.
+        let test_cluster = TestClusterBuilder::new()
+            .with_epoch_duration_ms(20000)
+            .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
+                START, FINISH,
+            ))
+            .build()
+            .await
+            .unwrap();
+        // TODO: Replace the path with the new framework path when we test it for real.
+        framework_injection::set_override::<SuiSystem>(sui_system_modules(
+            "../../../sui-framework/packages/sui-system",
+        ));
+        // Wait for the upgrade to finish. After the upgrade, the new framework will be installed,
+        // but the system state object hasn't been upgraded yet.
+        let system_state = test_cluster.wait_for_epoch(Some(1)).await;
+        assert_eq!(system_state.protocol_version(), FINISH);
+
+        // The system state object will be upgraded next time we execute advance_epoch transaction
+        // at epoch boundary.
+        let system_state = test_cluster.wait_for_epoch(Some(2)).await;
+        if let SuiSystemState::V2(inner) = system_state {
+            assert_eq!(inner.parameters.min_validator_count, 4);
+        } else {
+            unreachable!("Unexpected sui system state version");
+        }
+    }
+
     async fn monitor_version_change(test_cluster: &TestCluster, final_version: u64) {
         let system_state = test_cluster.wait_for_epoch(Some(1)).await;
         assert_eq!(system_state.protocol_version(), final_version);
@@ -673,8 +763,7 @@ mod sim_only_tests {
     /// Like `sui_framework`, but package the modules in an `Object`.
     fn sui_system_package_object(fixture: &str) -> Object {
         Object::new_package(
-            sui_system_modules(fixture),
-            OBJECT_START_VERSION,
+            &sui_system_modules(fixture),
             TransactionDigest::genesis(),
             u64::MAX,
             &[MoveStdlib::as_package(), SuiFramework::as_package()],

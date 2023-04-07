@@ -14,7 +14,7 @@ use sui_framework::{SuiSystem, SystemPackage};
 
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
-    crypto::{AuthorityPublicKey, NetworkPublicKey},
+    crypto::{AuthorityPublicKey, NetworkPublicKey, Signable, DEFAULT_EPOCH_ID},
     multiaddr::Multiaddr,
     object::Owner,
     sui_system_state::{
@@ -28,10 +28,13 @@ use crate::client_commands::WalletContext;
 use crate::fire_drill::get_gas_obj_ref;
 use clap::*;
 use colored::Colorize;
-use fastcrypto::traits::KeyPair;
 use fastcrypto::traits::ToFromBytes;
+use fastcrypto::{
+    encoding::{Base64, Encoding},
+    traits::KeyPair,
+};
 use serde::Serialize;
-use shared_crypto::intent::Intent;
+use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
@@ -54,8 +57,7 @@ use sui_types::{
     SUI_SYSTEM_OBJ_CALL_ARG,
 };
 
-// TODO adjust this to a reasonable number after the gas fix is in
-const DEFAULT_GAS_BUDGET: u64 = 15_000_000;
+const DEFAULT_GAS_BUDGET: u64 = 200_000_000; // 0.2 SUI
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
@@ -135,6 +137,17 @@ pub enum SuiValidatorCommand {
         #[clap(name = "gas-budget", long)]
         gas_budget: Option<u64>,
     },
+    /// Serialize the payload that is used to generate Proof of Possession.
+    /// This is useful to take the payload offline for an Authority protocol keypair to sign.
+    #[clap(name = "serialize-payload-pop")]
+    SerializePayloadForPoP {
+        /// Authority account address encoded in hex with 0x prefix.
+        #[clap(name = "account-address", long)]
+        account_address: SuiAddress,
+        /// Authority protocol public key encoded in hex.
+        #[clap(name = "protocol-public-key", long)]
+        protocol_public_key: AuthorityPublicKeyBytes,
+    },
 }
 
 #[derive(Serialize)]
@@ -148,6 +161,7 @@ pub enum SuiValidatorCommandResponse {
     UpdateMetadata(SuiTransactionBlockResponse),
     UpdateGasPrice(SuiTransactionBlockResponse),
     ReportValidator(SuiTransactionBlockResponse),
+    SerializedPayload(String),
 }
 
 fn make_key_files(
@@ -172,7 +186,7 @@ fn make_key_files(
                 key
             }
             None => {
-                let (_, kp, _, _) = generate_new_key(SignatureScheme::ED25519, None)?;
+                let (_, kp, _, _) = generate_new_key(SignatureScheme::ED25519, None, None)?;
                 println!("Generated new key file: {:?}.", file_name);
                 kp
             }
@@ -231,7 +245,7 @@ impl SuiValidatorCommand {
                         account_address: SuiAddress::from(&account_keypair.public()),
                         network_key: network_keypair.public().clone(),
                         gas_price,
-                        commission_rate: 0,
+                        commission_rate: sui_config::ValidatorInfo::DEFAULT_COMMISSION_RATE,
                         network_address: Multiaddr::try_from(format!(
                             "/dns/{}/tcp/8080/http",
                             host_name
@@ -375,6 +389,22 @@ impl SuiValidatorCommand {
                 )
                 .await?;
                 SuiValidatorCommandResponse::ReportValidator(resp)
+            }
+
+            SuiValidatorCommand::SerializePayloadForPoP {
+                account_address,
+                protocol_public_key,
+            } => {
+                let mut msg: Vec<u8> = Vec::new();
+                msg.extend_from_slice(protocol_public_key.as_bytes());
+                msg.extend_from_slice(account_address.as_ref());
+                let mut intent_msg_bytes = bcs::to_bytes(&IntentMessage::new(
+                    Intent::sui_app(IntentScope::ProofOfPossession),
+                    msg,
+                ))
+                .expect("Message serialization should not fail");
+                DEFAULT_EPOCH_ID.write(&mut intent_msg_bytes);
+                SuiValidatorCommandResponse::SerializedPayload(Base64::encode(&intent_msg_bytes))
             }
         });
         ret
@@ -544,17 +574,20 @@ async fn call_0x5(
         rgp,
     )
     .unwrap();
-    let signature = context
-        .config
-        .keystore
-        .sign_secure(&sender, &tx_data, Intent::default())?;
+    let signature =
+        context
+            .config
+            .keystore
+            .sign_secure(&sender, &tx_data, Intent::sui_transaction())?;
     let transaction =
-        Transaction::from_data(tx_data, Intent::default(), vec![signature]).verify()?;
+        Transaction::from_data(tx_data, Intent::sui_transaction(), vec![signature]).verify()?;
     sui_client
         .quorum_driver()
         .execute_transaction_block(
             transaction,
-            SuiTransactionBlockResponseOptions::full_content(),
+            SuiTransactionBlockResponseOptions::new()
+                .with_input()
+                .with_effects(),
             Some(sui_types::messages::ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await
@@ -584,6 +617,9 @@ impl Display for SuiValidatorCommandResponse {
             }
             SuiValidatorCommandResponse::ReportValidator(response) => {
                 write!(writer, "{}", write_transaction_response(response)?)?;
+            }
+            SuiValidatorCommandResponse::SerializedPayload(response) => {
+                write!(writer, "Serialized payload: {}", response)?;
             }
         }
         write!(f, "{}", writer.trim_end_matches('\n'))

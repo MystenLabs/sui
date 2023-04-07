@@ -4,6 +4,8 @@
 use std::collections::HashMap;
 use std::fmt;
 use std::path::PathBuf;
+#[cfg(msim)]
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -57,7 +59,7 @@ use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
 use sui_core::module_cache_metrics::ResolverMetrics;
 use sui_core::narwhal_manager::{NarwhalConfiguration, NarwhalManager, NarwhalManagerMetrics};
-use sui_core::signature_verifier::VerifiedDigestCacheMetrics;
+use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::state_accumulator::StateAccumulator;
 use sui_core::storage::RocksDbStore;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
@@ -134,6 +136,9 @@ pub struct SuiNode {
 
     #[cfg(msim)]
     sim_node: sui_simulator::runtime::NodeHandle,
+
+    #[cfg(msim)]
+    sim_safe_mode_expected: AtomicBool,
 }
 
 impl fmt::Debug for SuiNode {
@@ -158,7 +163,6 @@ impl SuiNode {
             config.supported_protocol_versions = Some(SupportedProtocolVersions::SYSTEM_DEFAULT);
         }
 
-        // TODO: maybe have a config enum that takes care of this for us.
         let is_validator = config.consensus_config().is_some();
         let is_full_node = !is_validator;
         let prometheus_registry = registry_service.default_registry();
@@ -187,6 +191,9 @@ impl SuiNode {
                 genesis,
                 &committee_store,
                 config.indirect_objects_threshold,
+                config
+                    .expensive_safety_check_config
+                    .enable_epoch_sui_conservation_check(),
             )
             .await?,
         );
@@ -198,7 +205,7 @@ impl SuiNode {
             .get_epoch_start_configuration()?
             .expect("EpochStartConfiguration of the current epoch must exist");
         let cache_metrics = Arc::new(ResolverMetrics::new(&prometheus_registry));
-        let batch_verifier_metrics = VerifiedDigestCacheMetrics::new(&prometheus_registry);
+        let signature_verifier_metrics = SignatureVerifierMetrics::new(&prometheus_registry);
 
         let epoch_store = AuthorityPerEpochStore::new(
             config.protocol_public_key(),
@@ -209,7 +216,8 @@ impl SuiNode {
             epoch_start_configuration,
             store.clone(),
             cache_metrics,
-            batch_verifier_metrics,
+            signature_verifier_metrics,
+            &config.expensive_safety_check_config,
         );
 
         let effective_buffer_stake = epoch_store.get_effective_buffer_stake_bps();
@@ -295,6 +303,7 @@ impl SuiNode {
             config.authority_store_pruning_config,
             genesis.objects(),
             &db_checkpoint_config,
+            config.expensive_safety_check_config.clone(),
         )
         .await;
         // ensure genesis txn was executed
@@ -359,6 +368,7 @@ impl SuiNode {
                 p2p_network.downgrade(),
                 network_connection_metrics,
                 HashMap::new(),
+                None,
             );
 
         let connection_monitor_status = ConnectionMonitorStatus {
@@ -409,6 +419,8 @@ impl SuiNode {
             _db_checkpoint_handle: db_checkpoint_handle,
             #[cfg(msim)]
             sim_node: sui_simulator::runtime::NodeHandle::current(),
+            #[cfg(msim)]
+            sim_safe_mode_expected: AtomicBool::new(false),
         };
 
         info!("SuiNode started!");
@@ -421,6 +433,12 @@ impl SuiNode {
 
     pub fn subscribe_to_epoch_change(&self) -> broadcast::Receiver<SuiSystemState> {
         self.end_of_epoch_channel.subscribe()
+    }
+
+    #[cfg(msim)]
+    pub fn set_safe_mode_expected(&self, new_value: bool) {
+        self.sim_safe_mode_expected
+            .store(new_value, Ordering::Relaxed);
     }
 
     pub fn current_epoch_for_testing(&self) -> EpochId {
@@ -902,8 +920,12 @@ impl SuiNode {
             let next_epoch = next_epoch_committee.epoch();
             assert_eq!(cur_epoch_store.epoch() + 1, next_epoch);
 
-            // If we eventually add tests that exercise safe mode, we will need a configurable way of
-            // guarding against unexpected safe_mode.
+            #[cfg(msim)]
+            if !self.sim_safe_mode_expected.load(Ordering::Relaxed) {
+                debug_assert!(!new_epoch_start_state.safe_mode());
+            }
+
+            #[cfg(not(msim))]
             debug_assert!(!new_epoch_start_state.safe_mode());
 
             info!(
@@ -957,17 +979,9 @@ impl SuiNode {
                         &cur_epoch_store,
                         next_epoch_committee.clone(),
                         new_epoch_start_state,
+                        &checkpoint_executor,
                     )
                     .await;
-
-                #[cfg(msim)]
-                {
-                    self.check_is_consistent_state(
-                        self.accumulator.clone(),
-                        cur_epoch_store.epoch(),
-                        true,
-                    );
-                }
 
                 narwhal_epoch_data_remover
                     .remove_old_data(next_epoch - 1)
@@ -1003,6 +1017,7 @@ impl SuiNode {
                         &cur_epoch_store,
                         next_epoch_committee.clone(),
                         new_epoch_start_state,
+                        &checkpoint_executor,
                     )
                     .await;
 
@@ -1025,14 +1040,6 @@ impl SuiNode {
                         .await?,
                     )
                 } else {
-                    // was a fullnode, still a fullnode
-                    let is_inconsistent = self.check_is_consistent_state(
-                        self.accumulator.clone(),
-                        cur_epoch_store.epoch(),
-                        false,
-                    );
-                    checkpoint_executor.set_inconsistent_state(is_inconsistent);
-
                     None
                 }
             };
@@ -1041,36 +1048,12 @@ impl SuiNode {
         }
     }
 
-    fn check_is_consistent_state(
-        &self,
-        accumulator: Arc<StateAccumulator>,
-        epoch: EpochId,
-        panic: bool,
-    ) -> bool {
-        let live_object_set_hash = accumulator.digest_live_object_set();
-
-        let root_state_hash = self
-            .state
-            .database
-            .get_root_state_hash(epoch)
-            .expect("Retrieving root state hash cannot fail");
-
-        let is_inconsistent = root_state_hash != live_object_set_hash;
-        if is_inconsistent && panic {
-            panic!(
-                "Inconsistent state detected: root state hash: {:?}, live object set hash: {:?}",
-                root_state_hash, live_object_set_hash
-            );
-        }
-
-        is_inconsistent
-    }
-
     async fn reconfigure_state(
         &self,
         cur_epoch_store: &AuthorityPerEpochStore,
         next_epoch_committee: Committee,
         next_epoch_start_system_state: EpochStartSystemState,
+        checkpoint_executor: &CheckpointExecutor,
     ) -> Arc<AuthorityPerEpochStore> {
         let next_epoch = next_epoch_committee.epoch();
 
@@ -1091,10 +1074,13 @@ impl SuiNode {
                 self.config.supported_protocol_versions.unwrap(),
                 next_epoch_committee,
                 epoch_start_configuration,
+                checkpoint_executor,
+                self.accumulator.clone(),
+                &self.config.expensive_safety_check_config,
             )
             .await
             .expect("Reconfigure authority state cannot fail");
-        info!(next_epoch, "Validator State has been reconfigured");
+        info!(next_epoch, "Node State has been reconfigured");
         assert_eq!(next_epoch, new_epoch_store.epoch());
         new_epoch_store
     }

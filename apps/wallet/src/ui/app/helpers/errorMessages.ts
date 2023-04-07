@@ -32,7 +32,7 @@ export function getLedgerConnectionErrorMessage(error: unknown) {
     } else if (error instanceof LedgerNoTransportMechanismError) {
         return "Your browser unfortunately doesn't support USB or HID.";
     } else if (error instanceof LedgerDeviceNotFoundError) {
-        return 'Connect your Ledger device and open the Sui app.';
+        return 'Connect your Ledger device and try again.';
     } else if (error instanceof LockedDeviceError) {
         return 'Your device is locked. Unlock it and try again.';
     }

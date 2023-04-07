@@ -1,0 +1,10 @@
+//# publish
+module 0x42.Test {
+import 0x1.XUS;
+    struct Coin has store { value: u64 }
+    struct T has copy, drop {
+        // does not have copy or drop
+        fc: Self.Coin,
+        fint: u64,
+    }
+}

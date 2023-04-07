@@ -66,8 +66,8 @@ module test::m {
 
 //# run test::m::mint --sender A
 
-//# run test::m::add --sender A --args object(108) 0
+//# run test::m::add --sender A --args object(2,0) 0
 
-//# view-object 108
+//# view-object 2,0
 
-//# run test::m::remove_and_freeze --sender A --args object(108) 0
+//# run test::m::remove_and_freeze --sender A --args object(2,0) 0

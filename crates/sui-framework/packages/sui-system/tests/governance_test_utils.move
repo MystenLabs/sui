@@ -22,8 +22,10 @@ module sui_system::governance_test_utils {
     use sui::test_utils;
     use sui::balance::Balance;
 
+    const MIST_PER_SUI: u64 = 1_000_000_000;
+
     public fun create_validator_for_testing(
-        addr: address, init_stake_amount: u64, ctx: &mut TxContext
+        addr: address, init_stake_amount_in_sui: u64, ctx: &mut TxContext
     ): Validator {
         let validator = validator::new_for_testing(
             addr,
@@ -39,7 +41,7 @@ module sui_system::governance_test_utils {
             b"/ip4/127.0.0.1/udp/80",
             b"/ip4/127.0.0.1/udp/80",
             b"/ip4/127.0.0.1/udp/80",
-            option::some(balance::create_for_testing<SUI>(init_stake_amount)),
+            option::some(balance::create_for_testing<SUI>(init_stake_amount_in_sui * MIST_PER_SUI)),
             1,
             0,
             true,
@@ -76,7 +78,7 @@ module sui_system::governance_test_utils {
         );
 
         let stake_subsidy = stake_subsidy::create(
-            balance::create_for_testing<SUI>(sui_supply_amount), // sui_supply
+            balance::create_for_testing<SUI>(sui_supply_amount * MIST_PER_SUI), // sui_supply
             0,   // stake subsidy initial distribution amount
             10,  // stake_subsidy_period_length
             0,   // stake_subsidy_decrease_rate
@@ -86,7 +88,7 @@ module sui_system::governance_test_utils {
         sui_system::create(
             object::new(ctx), // it doesn't matter what ID sui system state has in tests
             validators,
-            balance::create_for_testing<SUI>(storage_fund_amount), // storage_fund
+            balance::create_for_testing<SUI>(storage_fund_amount * MIST_PER_SUI), // storage_fund
             1,   // protocol version
             0,   // chain_start_timestamp_ms
             system_parameters,
@@ -95,7 +97,9 @@ module sui_system::governance_test_utils {
         )
     }
 
-    public fun set_up_sui_system_state(addrs: vector<address>, scenario: &mut Scenario) {
+    public fun set_up_sui_system_state(addrs: vector<address>) {
+        let scenario_val = test_scenario::begin(@0x0);
+        let scenario = &mut scenario_val;
         let ctx = test_scenario::ctx(scenario);
         let validators = vector::empty();
 
@@ -107,6 +111,7 @@ module sui_system::governance_test_utils {
         };
 
         create_sui_system_state_for_testing(validators, 1000, 0, ctx);
+        test_scenario::end(scenario_val);
     }
 
     public fun advance_epoch(scenario: &mut Scenario) {
@@ -133,7 +138,7 @@ module sui_system::governance_test_utils {
     public fun advance_epoch_with_reward_amounts(
         storage_charge: u64, computation_charge: u64, scenario: &mut Scenario
     ) {
-        let storage_rebate = advance_epoch_with_reward_amounts_return_rebate(storage_charge, computation_charge, 0, 0, scenario);
+        let storage_rebate = advance_epoch_with_reward_amounts_return_rebate(storage_charge * MIST_PER_SUI, computation_charge * MIST_PER_SUI, 0, 0, scenario);
         test_utils::destroy(storage_rebate)
     }
 
@@ -150,27 +155,9 @@ module sui_system::governance_test_utils {
         let ctx = test_scenario::ctx(scenario);
 
         let storage_rebate = sui_system::advance_epoch_for_testing(
-            &mut system_state, new_epoch, 1, storage_charge, computation_charge, 0, 0, 0, reward_slashing_rate, 0, ctx
+            &mut system_state, new_epoch, 1, storage_charge * MIST_PER_SUI, computation_charge * MIST_PER_SUI, 0, 0, 0, reward_slashing_rate, 0, ctx
         );
         test_utils::destroy(storage_rebate);
-        test_scenario::return_shared(system_state);
-        test_scenario::next_epoch(scenario, @0x0);
-    }
-
-    public fun advance_epoch_safe_mode(scenario: &mut Scenario) {
-        advance_epoch_safe_mode_with_reward_amounts(0, 0, 0, 0, scenario)
-    }
-
-    public fun advance_epoch_safe_mode_with_reward_amounts(
-        storage_charge: u64, computation_charge: u64, storage_rebate: u64, non_refundable_storage_rebate: u64, scenario: &mut Scenario,
-    ) {
-        test_scenario::next_tx(scenario, @0x0);
-        let new_epoch = tx_context::epoch(test_scenario::ctx(scenario)) + 1;
-        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
-
-        let ctx = test_scenario::ctx(scenario);
-        sui_system::advance_epoch_safe_mode_for_testing(
-            &mut system_state, new_epoch, 1, storage_charge, computation_charge, storage_rebate, non_refundable_storage_rebate, ctx);
         test_scenario::return_shared(system_state);
         test_scenario::next_epoch(scenario, @0x0);
     }
@@ -183,7 +170,7 @@ module sui_system::governance_test_utils {
 
         let ctx = test_scenario::ctx(scenario);
 
-        sui_system::request_add_stake(&mut system_state, coin::mint_for_testing(amount, ctx), validator, ctx);
+        sui_system::request_add_stake(&mut system_state, coin::mint_for_testing(amount * MIST_PER_SUI, ctx), validator, ctx);
         test_scenario::return_shared(system_state);
     }
 
@@ -200,10 +187,9 @@ module sui_system::governance_test_utils {
         test_scenario::return_shared(system_state);
     }
 
-    public fun add_validator_full_flow(validator: address, init_stake_amount: u64, pubkey: vector<u8>, pop: vector<u8>, scenario: &mut Scenario) {
+    public fun add_validator_full_flow(validator: address, name: vector<u8>, net_addr: vector<u8>, init_stake_amount: u64, pubkey: vector<u8>, pop: vector<u8>, scenario: &mut Scenario) {
         test_scenario::next_tx(scenario, validator);
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
-        let addr = b"/ip4/127.0.0.1/udp/80";
         let ctx = test_scenario::ctx(scenario);
 
         sui_system::request_add_validator_candidate(
@@ -212,27 +198,26 @@ module sui_system::governance_test_utils {
             vector[171, 2, 39, 3, 139, 105, 166, 171, 153, 151, 102, 197, 151, 186, 140, 116, 114, 90, 213, 225, 20, 167, 60, 69, 203, 12, 180, 198, 9, 217, 117, 38],
             vector[171, 3, 39, 3, 139, 105, 166, 171, 153, 151, 102, 197, 151, 186, 140, 116, 114, 90, 213, 225, 20, 167, 60, 69, 203, 12, 180, 198, 9, 217, 117, 38],
             pop,
-            b"name",
+            name,
             b"description",
             b"image_url",
             b"project_url",
-            addr,
-            addr,
-            addr,
-            addr,
+            net_addr,
+            net_addr,
+            net_addr,
+            net_addr,
             1,
             0,
             ctx
         );
-        sui_system::request_add_stake(&mut system_state, coin::mint_for_testing<SUI>(init_stake_amount, ctx), validator, ctx);
+        sui_system::request_add_stake(&mut system_state, coin::mint_for_testing<SUI>(init_stake_amount * MIST_PER_SUI, ctx), validator, ctx);
         sui_system::request_add_validator_for_testing(&mut system_state, 0, ctx);
         test_scenario::return_shared(system_state);
     }
 
-    public fun add_validator_candidate(validator: address, pubkey: vector<u8>, pop: vector<u8>, scenario: &mut Scenario) {
+    public fun add_validator_candidate(validator: address, name: vector<u8>, net_addr: vector<u8>, pubkey: vector<u8>, pop: vector<u8>, scenario: &mut Scenario) {
         test_scenario::next_tx(scenario, validator);
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
-        let addr = b"/ip4/127.0.0.1/udp/80";
         let ctx = test_scenario::ctx(scenario);
 
         sui_system::request_add_validator_candidate(
@@ -241,14 +226,14 @@ module sui_system::governance_test_utils {
             vector[171, 2, 39, 3, 139, 105, 166, 171, 153, 151, 102, 197, 151, 186, 140, 116, 114, 90, 213, 225, 20, 167, 60, 69, 203, 12, 180, 198, 9, 217, 117, 38],
             vector[171, 3, 39, 3, 139, 105, 166, 171, 153, 151, 102, 197, 151, 186, 140, 116, 114, 90, 213, 225, 20, 167, 60, 69, 203, 12, 180, 198, 9, 217, 117, 38],
             pop,
-            b"name",
+            name,
             b"description",
             b"image_url",
             b"project_url",
-            addr,
-            addr,
-            addr,
-            addr,
+            net_addr,
+            net_addr,
+            net_addr,
+            net_addr,
             1,
             0,
             ctx
@@ -317,7 +302,8 @@ module sui_system::governance_test_utils {
 
             test_scenario::next_tx(scenario, validator_addr);
             let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
-            assert!(sui_system::validator_stake_amount(&mut system_state, validator_addr) == amount, 0);
+            let validator_amount = sui_system::validator_stake_amount(&mut system_state, validator_addr);
+            assert!(validator_amount == amount, validator_amount);
             test_scenario::return_shared(system_state);
             i = i + 1;
         };
@@ -331,7 +317,7 @@ module sui_system::governance_test_utils {
             test_scenario::next_tx(scenario, validator_addr);
             let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
             let non_self_stake_amount = sui_system::validator_stake_amount(&mut system_state, validator_addr) - stake_plus_current_rewards_for_validator(validator_addr, &mut system_state, scenario);
-            assert!(non_self_stake_amount == amount, 0);
+            assert_eq(non_self_stake_amount, amount);
             test_scenario::return_shared(system_state);
             i = i + 1;
         };

@@ -34,6 +34,9 @@ mod transaction_manager;
 pub mod transaction_orchestrator;
 
 #[cfg(test)]
+#[path = "unit_tests/move_package_publish_tests.rs"]
+mod move_package_publish_tests;
+#[cfg(test)]
 #[path = "unit_tests/move_package_tests.rs"]
 mod move_package_tests;
 #[cfg(test)]
@@ -43,6 +46,9 @@ mod move_package_upgrade_tests;
 #[path = "unit_tests/pay_sui_tests.rs"]
 mod pay_sui_tests;
 pub mod test_authority_clients;
+#[cfg(test)]
+#[path = "unit_tests/type_param_tests.rs"]
+mod type_param_tests;
 
 pub mod signature_verifier;
 

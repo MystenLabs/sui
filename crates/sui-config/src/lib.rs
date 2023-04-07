@@ -22,7 +22,7 @@ pub use swarm::FullnodeConfigBuilder;
 pub use swarm::NetworkConfig;
 
 const SUI_DIR: &str = ".sui";
-const SUI_CONFIG_DIR: &str = "sui_config";
+pub const SUI_CONFIG_DIR: &str = "sui_config";
 pub const SUI_NETWORK_CONFIG: &str = "network.yaml";
 pub const SUI_FULLNODE_CONFIG: &str = "fullnode.yaml";
 pub const SUI_CLIENT_CONFIG: &str = "client.yaml";
@@ -35,6 +35,7 @@ pub const AUTHORITIES_DB_NAME: &str = "authorities_db";
 pub const CONSENSUS_DB_NAME: &str = "consensus_db";
 pub const FULL_NODE_DB_PATH: &str = "full_node_db";
 
+// TODO: change this to a more realistic value like 1000.
 const DEFAULT_GAS_PRICE: u64 = 1;
 const DEFAULT_COMMISSION_RATE: u64 = 0;
 

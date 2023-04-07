@@ -1,0 +1,7 @@
+processed 3 tasks
+
+task 1 'run'. lines 28-40:
+mutable inputs after call: local#0: 112, local#1: { 224 }, local#2: [120, 0, 122]
+
+task 2 'run'. lines 42-42:
+mutable inputs after call: local#0: 112, local#1: { 224 }, local#2: [120, 0, 122]

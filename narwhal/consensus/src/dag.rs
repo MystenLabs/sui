@@ -32,8 +32,6 @@ pub mod dag_tests;
 /// consensus running on top of it. This is a [`fastcrypto::traits::VerifyingKey`], [`Certificate`] and [`Round`]-aware
 ///  variant of the Dag, with a secondary index to link a (pubkey, round) pair to the possible
 /// certified collection by that authority at that round.
-///
-#[derive(Debug)]
 struct InnerDag {
     /// Receives new certificates from the primary. The primary should send us new certificates only
     /// if it already sent us its whole history.

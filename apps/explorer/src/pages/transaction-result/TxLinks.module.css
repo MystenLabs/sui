@@ -3,7 +3,7 @@
 }
 
 .mutatedcreatedlist ul li {
-    @apply pt-1.5 pb-1.5 font-mono;
+    @apply pb-1.5 pt-1.5 font-mono;
 }
 
 .mutatedcreatedlist ul li a,

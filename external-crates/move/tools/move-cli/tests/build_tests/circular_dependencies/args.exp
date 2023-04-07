@@ -1,0 +1,2 @@
+Command `build -v`:
+Error: Found cycle between packages: Foo -> Bar -> Foo

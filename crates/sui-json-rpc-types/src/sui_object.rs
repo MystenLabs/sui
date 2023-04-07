@@ -1,11 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-use std::fmt;
-use std::fmt::Write;
-use std::fmt::{Display, Formatter};
-
 use anyhow::anyhow;
 use colored::Colorize;
 use fastcrypto::encoding::Base64;
@@ -19,11 +14,17 @@ use serde::Serialize;
 use serde_json::Value;
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
+use std::cmp::Ordering;
+use std::collections::BTreeMap;
+use std::fmt;
+use std::fmt::Write;
+use std::fmt::{Display, Formatter};
+use sui_types::sui_serde::SuiStructTag;
 
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{
-    MoveObjectType, ObjectDigest, ObjectID, ObjectInfo, ObjectRef, ObjectType, SequenceNumber,
-    SuiAddress, TransactionDigest,
+    ObjectDigest, ObjectID, ObjectInfo, ObjectRef, ObjectType, SequenceNumber, SuiAddress,
+    TransactionDigest,
 };
 use sui_types::error::{SuiObjectResponseError, UserInputError, UserInputResult};
 use sui_types::gas_coin::GasCoin;
@@ -58,6 +59,32 @@ impl SuiObjectResponse {
             data: None,
             error: Some(error),
         }
+    }
+}
+
+impl Ord for SuiObjectResponse {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (&self.data, &other.data) {
+            (Some(data), Some(data_2)) => {
+                if data.object_id.cmp(&data_2.object_id).eq(&Ordering::Greater) {
+                    return Ordering::Greater;
+                } else if data.object_id.cmp(&data_2.object_id).eq(&Ordering::Less) {
+                    return Ordering::Less;
+                }
+                Ordering::Equal
+            }
+            // In this ordering those with data will come before SuiObjectResponses that are errors.
+            (Some(_), None) => Ordering::Less,
+            (None, Some(_)) => Ordering::Greater,
+            // SuiObjectResponses that are errors are just considered equal.
+            _ => Ordering::Equal,
+        }
+    }
+}
+
+impl PartialOrd for SuiObjectResponse {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
@@ -128,6 +155,12 @@ impl TryFrom<SuiObjectResponse> for ObjectInfo {
     }
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq)]
+pub struct DisplayFieldsResponse {
+    pub data: Option<BTreeMap<String, String>>,
+    pub error: Option<SuiObjectResponseError>,
+}
+
 #[serde_as]
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq)]
 #[serde(rename_all = "camelCase", rename = "ObjectData")]
@@ -159,7 +192,7 @@ pub struct SuiObjectData {
     /// This can also be None if the struct type does not have Display defined
     /// See more details in <https://forums.sui.io/t/nft-object-display-proposal/4872>
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub display: Option<BTreeMap<String, String>>,
+    pub display: Option<DisplayFieldsResponse>,
     /// Move object content or package content, default to be None unless SuiObjectDataOptions.showContent is set to true
     #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<SuiParsedData>,
@@ -182,7 +215,7 @@ impl SuiObjectData {
 
     pub fn is_gas_coin(&self) -> bool {
         match self.type_.as_ref() {
-            Some(ObjectType::Struct(MoveObjectType::GasCoin)) => true,
+            Some(ObjectType::Struct(ty)) if ty.is_gas_coin() => true,
             Some(_) => false,
             None => false,
         }
@@ -515,7 +548,7 @@ impl
         Object,
         Option<MoveStructLayout>,
         SuiObjectDataOptions,
-        Option<BTreeMap<String, String>>,
+        Option<DisplayFieldsResponse>,
     )> for SuiObjectData
 {
     type Error = anyhow::Error;
@@ -526,7 +559,7 @@ impl
             Object,
             Option<MoveStructLayout>,
             SuiObjectDataOptions,
-            Option<BTreeMap<String, String>>,
+            Option<DisplayFieldsResponse>,
         ),
     ) -> Result<Self, Self::Error> {
         let show_display = options.show_display;
@@ -789,7 +822,7 @@ pub trait SuiMoveObject: Sized {
 #[serde(rename = "MoveObject", rename_all = "camelCase")]
 pub struct SuiParsedMoveObject {
     #[serde(rename = "type")]
-    #[serde_as(as = "DisplayFromStr")]
+    #[serde_as(as = "SuiStructTag")]
     #[schemars(with = "String")]
     pub type_: StructTag,
     pub has_public_transfer: bool,
@@ -841,7 +874,7 @@ pub fn type_and_fields_from_move_struct(
 pub struct SuiRawMoveObject {
     #[schemars(with = "String")]
     #[serde(rename = "type")]
-    #[serde_as(as = "DisplayFromStr")]
+    #[serde_as(as = "SuiStructTag")]
     pub type_: StructTag,
     pub has_public_transfer: bool,
     pub version: SequenceNumber,
@@ -991,7 +1024,8 @@ pub struct SuiMovePackage {
     pub disassembled: BTreeMap<String, Value>,
 }
 
-pub type ObjectsPage = Page<SuiObjectResponse, CheckpointedObjectID>;
+pub type QueryObjectsPage = Page<SuiObjectResponse, CheckpointedObjectID>;
+pub type ObjectsPage = Page<SuiObjectResponse, ObjectID>;
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Copy, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -1015,6 +1049,7 @@ pub struct SuiGetPastObjectRequest {
 pub enum SuiObjectDataFilter {
     MatchAll(Vec<SuiObjectDataFilter>),
     MatchAny(Vec<SuiObjectDataFilter>),
+    MatchNone(Vec<SuiObjectDataFilter>),
     /// Query by type a specified Package.
     Package(ObjectID),
     /// Query by type a specified Move module.
@@ -1029,7 +1064,7 @@ pub enum SuiObjectDataFilter {
     /// Query by type
     StructType(
         #[schemars(with = "String")]
-        #[serde_as(as = "DisplayFromStr")]
+        #[serde_as(as = "SuiStructTag")]
         StructTag,
     ),
     AddressOwner(SuiAddress),
@@ -1051,11 +1086,15 @@ impl SuiObjectDataFilter {
     pub fn or(self, other: Self) -> Self {
         Self::MatchAny(vec![self, other])
     }
+    pub fn not(self, other: Self) -> Self {
+        Self::MatchNone(vec![self, other])
+    }
 
     pub fn matches(&self, object: &ObjectInfo) -> bool {
         match self {
             SuiObjectDataFilter::MatchAll(filters) => !filters.iter().any(|f| !f.matches(object)),
             SuiObjectDataFilter::MatchAny(filters) => filters.iter().any(|f| f.matches(object)),
+            SuiObjectDataFilter::MatchNone(filters) => !filters.iter().any(|f| f.matches(object)),
             SuiObjectDataFilter::StructType(s) => {
                 let obj_tag: StructTag = match &object.type_ {
                     ObjectType::Package => return false,

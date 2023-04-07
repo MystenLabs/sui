@@ -57,11 +57,15 @@ CREATE TABLE objects_history
     has_public_transfer    BOOLEAN       NOT NULL,
     storage_rebate         BIGINT        NOT NULL,
     bcs                    bcs_bytes[]   NOT NULL,
-    CONSTRAINT objects_history_pk PRIMARY KEY (checkpoint, object_id, version)
+    CONSTRAINT objects_history_pk PRIMARY KEY (object_id, version, checkpoint)
 ) PARTITION BY RANGE (checkpoint);
+CREATE INDEX objects_history_checkpoint_index ON objects_history (checkpoint);
 CREATE INDEX objects_history_id_version_index ON objects_history (object_id, version);
 CREATE INDEX objects_history_owner_index ON objects_history (owner_type, owner_address);
 CREATE INDEX objects_history_old_owner_index ON objects_history (old_owner_type, old_owner_address);
+-- fast-path partition for the most recent objects before checkpoint, range is half-open.
+-- partition name need to match regex of '.*(_partition_)\d+'.
+CREATE TABLE objects_history_fast_path_partition_0 PARTITION OF objects_history FOR VALUES FROM (-1) TO (0);
 CREATE TABLE objects_history_partition_0 PARTITION OF objects_history FOR VALUES FROM (0) TO (MAXVALUE);
 
 CREATE OR REPLACE FUNCTION objects_modified_func() RETURNS TRIGGER AS
@@ -82,6 +86,8 @@ BEGIN
                 NEW.initial_shared_version,
                 NEW.previous_transaction, NEW.object_type, NEW.object_status, NEW.has_public_transfer,
                 NEW.storage_rebate, NEW.bcs);
+        -- MUSTFIX(gegaowp): we cannot update checkpoint in-place, b/c checkpoint is a partition key,
+        -- we need to prune old data in this partition periodically, like pruning old epochs upon new epoch.
         RETURN NEW;
     ELSIF (TG_OP = 'DELETE') THEN
         -- object deleted from the main table, archive the history for that object

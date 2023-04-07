@@ -1,13 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import * as secp from '@noble/secp256k1';
 import type { ExportedKeypair, Keypair } from './keypair';
 import { PublicKey } from './publickey';
-import { hmac } from '@noble/hashes/hmac';
 import { sha256 } from '@noble/hashes/sha256';
 import { Secp256k1PublicKey } from './secp256k1-publickey';
-import { Signature } from '@noble/secp256k1';
+import { secp256k1 } from '@noble/curves/secp256k1';
 import { isValidBIP32Path, mnemonicToSeed } from './mnemonics';
 import { HDKey } from '@scure/bip32';
 import { toB64 } from '@mysten/bcs';
@@ -16,12 +14,6 @@ import { bytesToHex } from '@noble/hashes/utils';
 import { blake2b } from '@noble/hashes/blake2b';
 
 export const DEFAULT_SECP256K1_DERIVATION_PATH = "m/54'/784'/0'/0/0";
-
-secp.utils.hmacSha256Sync = (key: Uint8Array, ...msgs: Uint8Array[]) => {
-  const h = hmac.create(sha256, key);
-  msgs.forEach((msg) => h.update(msg));
-  return h.digest();
-};
 
 /**
  * Secp256k1 Keypair data
@@ -47,8 +39,8 @@ export class Secp256k1Keypair implements Keypair {
     if (keypair) {
       this.keypair = keypair;
     } else {
-      const secretKey: Uint8Array = secp.utils.randomPrivateKey();
-      const publicKey: Uint8Array = secp.getPublicKey(secretKey, true);
+      const secretKey: Uint8Array = secp256k1.utils.randomPrivateKey();
+      const publicKey: Uint8Array = secp256k1.getPublicKey(secretKey, true);
 
       this.keypair = { publicKey, secretKey };
     }
@@ -65,10 +57,7 @@ export class Secp256k1Keypair implements Keypair {
    * Generate a new random keypair
    */
   static generate(): Secp256k1Keypair {
-    const secretKey = secp.utils.randomPrivateKey();
-    const publicKey = secp.getPublicKey(secretKey, true);
-
-    return new Secp256k1Keypair({ publicKey, secretKey });
+    return new Secp256k1Keypair();
   }
 
   /**
@@ -88,13 +77,13 @@ export class Secp256k1Keypair implements Keypair {
     secretKey: Uint8Array,
     options?: { skipValidation?: boolean },
   ): Secp256k1Keypair {
-    const publicKey: Uint8Array = secp.getPublicKey(secretKey, true);
+    const publicKey: Uint8Array = secp256k1.getPublicKey(secretKey, true);
     if (!options || !options.skipValidation) {
       const encoder = new TextEncoder();
       const signData = encoder.encode('sui validation');
       const msgHash = bytesToHex(blake2b(signData, { dkLen: 32 }));
-      const signature = secp.signSync(msgHash, secretKey);
-      if (!secp.verify(signature, msgHash, publicKey, { strict: true })) {
+      const signature = secp256k1.sign(msgHash, secretKey);
+      if (!secp256k1.verify(signature, msgHash, publicKey, { lowS: true })) {
         throw new Error('Provided secretKey is invalid');
       }
     }
@@ -107,7 +96,7 @@ export class Secp256k1Keypair implements Keypair {
    * @param seed seed byte array
    */
   static fromSeed(seed: Uint8Array): Secp256k1Keypair {
-    let publicKey = secp.getPublicKey(seed, true);
+    let publicKey = secp256k1.getPublicKey(seed, true);
     return new Secp256k1Keypair({ publicKey, secretKey: seed });
   }
 
@@ -121,26 +110,12 @@ export class Secp256k1Keypair implements Keypair {
   /**
    * Return the signature for the provided data.
    */
-  signData(data: Uint8Array, useRecoverable: boolean): Uint8Array {
+  signData(data: Uint8Array): Uint8Array {
     const msgHash = sha256(data);
-    // Starting from sui 0.25.0, sui accepts 64-byte nonrecoverable signature instead of 65-byte recoverable signature for Secp256k1.
-    // TODO(joyqvq): Remove recoverable signature support after 0.25.0 is released.
-    if (useRecoverable) {
-      const [sig, rec_id] = secp.signSync(msgHash, this.keypair.secretKey, {
-        canonical: true,
-        recovered: true,
-      });
-      var recoverable_sig = new Uint8Array(65);
-      recoverable_sig.set(Signature.fromDER(sig).toCompactRawBytes());
-      recoverable_sig.set([rec_id], 64);
-      return recoverable_sig;
-    } else {
-      const sig = secp.signSync(msgHash, this.keypair.secretKey, {
-        canonical: true,
-        recovered: false,
-      });
-      return Signature.fromDER(sig).toCompactRawBytes();
-    }
+    const sig = secp256k1.sign(msgHash, this.keypair.secretKey, {
+      lowS: true,
+    });
+    return sig.toCompactRawBytes();
   }
 
   /**
