@@ -42,9 +42,7 @@ impl TestCaseImpl for FullNodeExecuteTransactionTest {
         ctx.get_sui_from_faucet(Some(txn_count)).await;
         let gas_price = ctx.get_reference_gas_price().await;
 
-        let mut txns = ctx
-            .make_transactions(txn_count, 2_000_000 * gas_price)
-            .await;
+        let mut txns = ctx.make_transactions(txn_count, 2_000 * gas_price).await;
         assert!(
             txns.len() >= txn_count,
             "Expect at least {} txns, but only got {}. Do we generate enough gas objects during genesis?",

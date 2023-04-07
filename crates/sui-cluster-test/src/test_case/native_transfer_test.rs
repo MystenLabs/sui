@@ -42,7 +42,7 @@ impl TestCaseImpl for NativeTransferTest {
             signer,
             obj_to_transfer,
             Some(*gas_obj.id()),
-            (2_000_000 * gas_price).to_string(),
+            (2_000 * gas_price).to_string(),
             recipient_addr
         ];
         let data = ctx
@@ -57,7 +57,7 @@ impl TestCaseImpl for NativeTransferTest {
         let params = rpc_params![
             signer,
             obj_to_transfer,
-            (2_000_000 * gas_price).to_string(),
+            (2_000 * gas_price).to_string(),
             recipient_addr,
             None::<u64>
         ];
