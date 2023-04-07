@@ -13,7 +13,7 @@ interface Props {
 
 export function SyntaxHighlighter({ code, language }: Props) {
     return (
-        <section className="px-0 ">
+        <section className="px-0">
             <div className="overflow-auto whitespace-pre p-2 pl-0 pr-0 font-mono text-sm">
                 <Highlight
                     {...defaultProps}
