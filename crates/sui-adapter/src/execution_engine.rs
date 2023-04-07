@@ -108,7 +108,7 @@ pub fn execute_transaction_to_effects<
                 tracing::info!(
                     kind = ?error.kind(),
                     tx_digest = ?transaction_digest,
-                    "VERIFICATION ERROR! Source: {:?}",
+                    "Verification Error. Source: {:?}",
                     error.source(),
                 );
             }
@@ -119,7 +119,7 @@ pub fn execute_transaction_to_effects<
                 tracing::info!(
                     kind = ?error.kind(),
                     tx_digest = ?transaction_digest,
-                    "PUBLISH ERROR! Source: {:?}",
+                    "Publish/Upgrade Error. Source: {:?}",
                     error.source(),
                 )
             }
