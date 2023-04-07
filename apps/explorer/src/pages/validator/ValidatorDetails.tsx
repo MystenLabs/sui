@@ -4,7 +4,7 @@
 import {
     useGetRollingAverageApys,
     useGetValidatorsEvents,
-    useGetSystemObject,
+    useGetSystemState,
 } from '@mysten/core';
 import { type SuiSystemStateSummary } from '@mysten/sui.js';
 import React, { useMemo } from 'react';
@@ -31,7 +31,7 @@ const getAtRiskRemainingEpochs = (
 
 function ValidatorDetails() {
     const { id } = useParams();
-    const { data, isLoading } = useGetSystemObject();
+    const { data, isLoading } = useGetSystemState();
 
     const validatorData = useMemo(() => {
         if (!data) return null;

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
-import { useGetSystemObject } from '@mysten/core';
+import { useGetSystemState } from '@mysten/core';
 import { useContext } from 'react';
 
 import { NetworkContext } from '../../context';
@@ -13,7 +13,7 @@ import { NetworkSelect, type NetworkOption } from '~/ui/header/NetworkSelect';
 
 export default function WrappedNetworkSelect() {
     const [network, setNetwork] = useContext(NetworkContext);
-    const { data } = useGetSystemObject();
+    const { data } = useGetSystemState();
     const showTestNet = useFeature(
         GROWTHBOOK_FEATURES.USE_TEST_NET_ENDPOINT
     ).on;

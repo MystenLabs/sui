@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useGetSystemObject } from '@mysten/core';
+import { useGetSystemState } from '@mysten/core';
 import { type SuiValidatorSummary } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
@@ -88,7 +88,7 @@ type TopValidatorsCardProps = {
 };
 
 export function TopValidatorsCard({ limit, showIcon }: TopValidatorsCardProps) {
-    const { data, isLoading, isSuccess, isError } = useGetSystemObject();
+    const { data, isLoading, isSuccess, isError } = useGetSystemState();
 
     const tableData = useMemo(
         () =>
