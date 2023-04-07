@@ -21,7 +21,6 @@ use std::path::{Path, PathBuf};
 use sui_config::node::KeyPairWithPath;
 use sui_config::utils;
 use sui_config::{node::AuthorityKeyPairWithPath, Config, NodeConfig, PersistedConfig};
-use sui_framework::{SuiSystem, SystemPackage};
 use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionBlockResponseOptions};
 use sui_keys::keypair_file::read_keypair_from_file;
 use sui_sdk::{rpc_types::SuiTransactionBlockEffectsAPI, SuiClient, SuiClientBuilder};
@@ -29,7 +28,7 @@ use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::crypto::{generate_proof_of_possession, get_key_pair, SuiKeyPair};
 use sui_types::messages::{CallArg, ObjectArg, Transaction, TransactionData};
 use sui_types::multiaddr::{Multiaddr, Protocol};
-use sui_types::{committee::EpochId, crypto::get_authority_key_pair};
+use sui_types::{committee::EpochId, crypto::get_authority_key_pair, SUI_SYSTEM_PACKAGE_ID};
 use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION};
 use tracing::info;
 
@@ -316,7 +315,7 @@ async fn update_metadata_on_chain(
     args.extend(call_args);
     let tx_data = TransactionData::new_move_call(
         sui_address,
-        SuiSystem::ID,
+        SUI_SYSTEM_PACKAGE_ID,
         ident_str!("sui_system").to_owned(),
         ident_str!(function).to_owned(),
         vec![],

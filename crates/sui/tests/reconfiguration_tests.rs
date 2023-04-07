@@ -16,7 +16,6 @@ use sui_core::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
 use sui_core::consensus_adapter::position_submit_certificate;
 use sui_core::safe_client::SafeClientMetricsBase;
 use sui_core::test_utils::make_transfer_sui_transaction;
-use sui_framework::{SuiSystem, SystemPackage};
 use sui_macros::sim_test;
 use sui_node::SuiNodeHandle;
 use sui_types::base_types::{AuthorityName, ObjectRef, SuiAddress};
@@ -40,7 +39,9 @@ use sui_types::sui_system_state::{
     SuiSystemStateTrait,
 };
 use sui_types::utils::to_sender_signed_transaction;
-use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION};
+use sui_types::{
+    SUI_SYSTEM_PACKAGE_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+};
 use test_utils::authority::start_node;
 use test_utils::{
     authority::{
@@ -609,7 +610,7 @@ async fn test_inactive_validator_pool_read() {
 
     let tx_data = TransactionData::new_move_call_with_dummy_gas_price(
         address,
-        SuiSystem::ID,
+        SUI_SYSTEM_PACKAGE_ID,
         ident_str!("sui_system").to_owned(),
         ident_str!("request_remove_validator").to_owned(),
         vec![],
@@ -1155,7 +1156,7 @@ async fn execute_add_validator_candidate_tx(
 
     let candidate_tx_data = TransactionData::new_move_call_with_dummy_gas_price(
         sender,
-        SuiSystem::ID,
+        SUI_SYSTEM_PACKAGE_ID,
         ident_str!("sui_system").to_owned(),
         ident_str!("request_add_validator_candidate").to_owned(),
         vec![],
@@ -1219,7 +1220,7 @@ async fn execute_join_committee_txes(
     // Step 2: Give the candidate enough stake.
     let stake_tx_data = TransactionData::new_move_call_with_dummy_gas_price(
         sender,
-        SuiSystem::ID,
+        SUI_SYSTEM_PACKAGE_ID,
         ident_str!("sui_system").to_owned(),
         ident_str!("request_add_stake").to_owned(),
         vec![],
@@ -1247,7 +1248,7 @@ async fn execute_join_committee_txes(
     // Step 3: Convert the candidate to an active valdiator.
     let activation_tx_data = TransactionData::new_move_call_with_dummy_gas_price(
         sender,
-        SuiSystem::ID,
+        SUI_SYSTEM_PACKAGE_ID,
         ident_str!("sui_system").to_owned(),
         ident_str!("request_add_validator").to_owned(),
         vec![],
@@ -1278,7 +1279,7 @@ async fn execute_leave_committee_tx(
     let sui_address: SuiAddress = account_kp.public().into();
     let tx_data = TransactionData::new_move_call_with_dummy_gas_price(
         sui_address,
-        SuiSystem::ID,
+        SUI_SYSTEM_PACKAGE_ID,
         ident_str!("sui_system").to_owned(),
         ident_str!("request_remove_validator").to_owned(),
         vec![],

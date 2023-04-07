@@ -35,12 +35,9 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
             // be very important for being able to reproduce a failure that occurs in the Nth
             // iteration of a multi-iteration test run.
             std::thread::spawn(|| {
-                use sui_simulator::sui_framework::SystemPackage;
                 use sui_protocol_config::ProtocolConfig;
                 ::sui_simulator::telemetry_subscribers::init_for_testing();
-                ::sui_simulator::sui_framework::MoveStdlib::as_modules();
-                ::sui_simulator::sui_framework::SuiFramework::as_modules();
-                ::sui_simulator::sui_framework::SuiSystem::as_modules();
+                ::sui_simulator::sui_framework::BuiltInFramework::all_package_ids();
                 ::sui_simulator::sui_types::gas::SuiGasStatus::new_unmetered(
                     &ProtocolConfig::get_for_min_version(),
                 );

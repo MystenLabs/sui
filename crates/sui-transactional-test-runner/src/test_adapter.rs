@@ -38,9 +38,7 @@ use std::{
 use sui_adapter::execution_engine;
 use sui_adapter::{adapter::new_move_vm, execution_mode};
 use sui_core::transaction_input_checker::check_objects;
-use sui_framework::{
-    make_system_modules, make_system_objects, system_package_ids, DEFAULT_FRAMEWORK_PATH,
-};
+use sui_framework::{BuiltInFramework, DEFAULT_FRAMEWORK_PATH};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, SUI_ADDRESS_LENGTH},
@@ -147,8 +145,10 @@ pub fn clone_genesis_objects() -> Vec<Object> {
 fn create_genesis_module_objects() -> Genesis {
     Genesis {
         objects: vec![create_clock()],
-        packages: make_system_objects(),
-        modules: make_system_modules(),
+        packages: BuiltInFramework::genesis_objects().collect(),
+        modules: BuiltInFramework::iter_system_packages()
+            .map(|p| p.modules())
+            .collect(),
     }
 }
 
@@ -360,7 +360,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             .collect::<Result<_, _>>()?;
         // we are assuming that all packages depend on the system packages, so these don't have to
         // be provided explicitly as parameters
-        dependencies.extend(system_package_ids());
+        dependencies.extend(BuiltInFramework::iter_system_packages().map(|p| p.id()));
         let data = |sender, gas| {
             let mut builder = ProgrammableTransactionBuilder::new();
             if upgradeable {

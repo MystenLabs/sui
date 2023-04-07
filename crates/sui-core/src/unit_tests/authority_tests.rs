@@ -27,7 +27,6 @@ use rand::{
 };
 use serde_json::json;
 
-use sui_framework::{make_system_objects, make_system_packages, system_package_ids};
 use sui_json_rpc_types::{
     SuiArgument, SuiExecutionResult, SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTypeTag,
 };
@@ -49,7 +48,7 @@ use sui_types::{
     crypto::{AccountKeyPair, AuthorityKeyPair, KeypairTraits},
     messages::VerifiedTransaction,
     object::{Owner, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
-    SUI_SYSTEM_STATE_OBJECT_ID,
+    MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION};
 
@@ -1713,8 +1712,7 @@ async fn test_publish_dependent_module_ok() {
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_payment_object_ref = gas_payment_object.compute_object_reference();
     // create a genesis state that contains the gas object and genesis modules
-    let genesis_module_objects = make_system_objects();
-    let genesis_module = match &genesis_module_objects[0].data {
+    let genesis_module = match BuiltInFramework::genesis_objects().next().unwrap().data {
         Data::Package(m) => {
             CompiledModule::deserialize(m.serialized_module_map().values().next().unwrap()).unwrap()
         }
@@ -1798,8 +1796,7 @@ async fn test_publish_non_existing_dependent_module() {
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_payment_object_ref = gas_payment_object.compute_object_reference();
     // create a genesis state that contains the gas object and genesis modules
-    let genesis_module_objects = make_system_objects();
-    let genesis_module = match &genesis_module_objects[0].data {
+    let genesis_module = match BuiltInFramework::genesis_objects().next().unwrap().data {
         Data::Package(m) => {
             CompiledModule::deserialize(m.serialized_module_map().values().next().unwrap()).unwrap()
         }
@@ -4044,7 +4041,12 @@ async fn publish_object_basics(state: Arc<AuthorityState>) -> (Arc<AuthorityStat
         .cloned()
         .collect();
     let digest = TransactionDigest::genesis();
-    let pkg = Object::new_package_for_testing(&modules, digest, &make_system_packages()).unwrap();
+    let pkg = Object::new_package_for_testing(
+        &modules,
+        digest,
+        BuiltInFramework::genesis_move_packages(),
+    )
+    .unwrap();
     let pkg_ref = pkg.compute_object_reference();
     state.insert_genesis_object(pkg).await;
     (state, pkg_ref)
@@ -4075,7 +4077,12 @@ pub async fn init_state_with_ids_and_object_basics_with_fullnode<
         .cloned()
         .collect();
     let digest = TransactionDigest::genesis();
-    let pkg = Object::new_package_for_testing(&modules, digest, &make_system_packages()).unwrap();
+    let pkg = Object::new_package_for_testing(
+        &modules,
+        digest,
+        BuiltInFramework::genesis_move_packages(),
+    )
+    .unwrap();
     let pkg_ref = pkg.compute_object_reference();
     validator.insert_genesis_object(pkg.clone()).await;
     fullnode.insert_genesis_object(pkg).await;
@@ -4550,7 +4557,7 @@ async fn make_test_transaction(
 
     let data = TransactionData::new_move_call_with_dummy_gas_price(
         *sender,
-        SuiFramework::ID,
+        SUI_FRAMEWORK_OBJECT_ID,
         ident_str!(module).to_owned(),
         ident_str!(function).to_owned(),
         /* type_args */ vec![],
@@ -5086,7 +5093,10 @@ async fn test_for_inc_201_dev_inspect() {
         .get_package_bytes(false);
 
     let mut builder = ProgrammableTransactionBuilder::new();
-    builder.command(Command::Publish(modules, system_package_ids()));
+    builder.command(Command::Publish(
+        modules,
+        BuiltInFramework::all_package_ids(),
+    ));
     let kind = TransactionKind::programmable(builder.finish());
     let DevInspectResults { events, .. } = fullnode
         .dev_inspect_transaction_block(sender, kind, Some(1))
@@ -5119,7 +5129,7 @@ async fn test_for_inc_201_dry_run() {
         .get_package_bytes(false);
 
     let mut builder = ProgrammableTransactionBuilder::new();
-    builder.publish_immutable(modules, system_package_ids());
+    builder.publish_immutable(modules, BuiltInFramework::all_package_ids());
     let kind = TransactionKind::programmable(builder.finish());
 
     let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![], 50_000_000, 1);
@@ -5271,7 +5281,7 @@ async fn test_publish_transitive_dependencies_ok() {
         .get_package_bytes(/* with_unpublished_deps */ false);
 
     let mut builder = ProgrammableTransactionBuilder::new();
-    let mut deps = system_package_ids();
+    let mut deps = BuiltInFramework::all_package_ids();
     // Note: root depends on A, B, C.
     deps.extend([*package_a_id, *package_b_id, *package_c_id]);
     builder.publish_immutable(modules, deps);
@@ -5312,7 +5322,7 @@ async fn test_publish_missing_dependency() {
         .get_package_bytes(/* with_unpublished_deps */ false);
 
     let mut builder = ProgrammableTransactionBuilder::new();
-    builder.publish_immutable(modules, vec![SuiFramework::ID]);
+    builder.publish_immutable(modules, vec![SUI_FRAMEWORK_OBJECT_ID]);
     let kind = TransactionKind::programmable(builder.finish());
 
     let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![gas_ref], 10000, 1);
@@ -5354,7 +5364,7 @@ async fn test_publish_missing_transitive_dependency() {
         .get_package_bytes(/* with_unpublished_deps */ false);
 
     let mut builder = ProgrammableTransactionBuilder::new();
-    builder.publish_immutable(modules, vec![MoveStdlib::ID]);
+    builder.publish_immutable(modules, vec![MOVE_STDLIB_OBJECT_ID]);
     let kind = TransactionKind::programmable(builder.finish());
 
     let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![gas_ref], 10000, 1);
@@ -5396,7 +5406,7 @@ async fn test_publish_not_a_package_dependency() {
         .get_package_bytes(/* with_unpublished_deps */ false);
 
     let mut builder = ProgrammableTransactionBuilder::new();
-    let mut deps = system_package_ids();
+    let mut deps = BuiltInFramework::all_package_ids();
     // One of these things is not like the others
     deps.push(SUI_SYSTEM_STATE_OBJECT_ID);
     builder.publish_immutable(modules, deps);
