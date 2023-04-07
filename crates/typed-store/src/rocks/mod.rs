@@ -227,6 +227,14 @@ impl RocksDB {
         delegate_call!(self.property_int_value_cf(cf, name))
     }
 
+    pub fn property_value_cf(
+        &self,
+        cf: &impl AsColumnFamilyRef,
+        name: impl CStrLike,
+    ) -> Result<Option<String>, rocksdb::Error> {
+        delegate_call!(self.property_value_cf(cf, name))
+    }
+
     pub fn get_pinned_cf<K: AsRef<[u8]>>(
         &self,
         cf: &impl AsColumnFamilyRef,
@@ -720,8 +728,23 @@ impl<K, V> DBMap<K, V> {
         }
     }
 
+    fn get_property(
+        rocksdb: &RocksDB,
+        cf: &impl AsColumnFamilyRef,
+        property_name: &'static std::ffi::CStr,
+    ) -> Result<String, TypedStoreError> {
+        match rocksdb.property_value_cf(cf, property_name) {
+            Ok(Some(value)) => Ok(value),
+            Ok(None) => Ok("".to_string()),
+            Err(e) => Err(TypedStoreError::RocksDBError(e.into_string())),
+        }
+    }
+
     fn report_metrics(rocksdb: &Arc<RocksDB>, cf_name: &str, db_metrics: &Arc<DBMetrics>) {
         let cf = rocksdb.cf_handle(cf_name).expect("Failed to get cf");
+        let stats = Self::get_property(rocksdb, &cf, properties::OPTIONS_STATISTICS);
+        info!(Sampling::new(0.1), "OPTIONS_STATISTICS {:?}", stats);
+
         db_metrics
             .cf_metrics
             .rocksdb_total_sst_files_size
@@ -858,6 +881,7 @@ impl<K, V> DBMap<K, V> {
                 Self::get_int_property(rocksdb, &cf, properties::BACKGROUND_ERRORS)
                     .unwrap_or(METRICS_ERROR),
             );
+
         let db_name = rocksdb.db_name();
         if let RocksDB::DBWithThreadMode(ref rocksdb) = **rocksdb {
             let mem_usage_stats =
@@ -1795,6 +1819,12 @@ pub struct DBOptions {
 /// Base options to be used across all rocksdb instances.
 pub fn base_db_options() -> DBOptions {
     let mut opt = rocksdb::Options::default();
+
+    opt.enable_statistics();
+    opt.set_stats_dump_period_sec(60);
+
+    let row_cache = rocksdb::Cache::new_lru_cache(1 << 30).expect("Cache is ok");
+    opt.set_row_cache(&row_cache);
 
     // One common issue when running tests on Mac is that the default ulimit is too low,
     // leading to I/O errors such as "Too many open files". Raising fdlimit to bypass it.
