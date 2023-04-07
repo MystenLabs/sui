@@ -35,7 +35,9 @@ use sui_types::parse_sui_type_tag;
 use sui_types::query::TransactionFilter;
 use sui_types::signature::GenericSignature;
 use sui_types::storage::{DeleteKind, WriteKind};
-use sui_types::sui_serde::SuiTypeTag as AsSuiTypeTag;
+use sui_types::sui_serde::{
+    BigInt, SequenceNumber as AsSequenceNumber, SuiTypeTag as AsSuiTypeTag,
+};
 
 use crate::balance_changes::BalanceChange;
 use crate::object_changes::ObjectChange;
@@ -996,6 +998,7 @@ pub struct SuiConsensusCommitPrologue {
     pub commit_timestamp_ms: u64,
 }
 
+#[serde_as]
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename = "InputObjectKind")]
 pub enum SuiInputObjectKind {
@@ -1006,6 +1009,8 @@ pub enum SuiInputObjectKind {
     // A Move object that's shared and mutable.
     SharedMoveObject {
         id: ObjectID,
+        #[schemars(with = "AsSequenceNumber")]
+        #[serde_as(as = "AsSequenceNumber")]
         initial_shared_version: SequenceNumber,
         #[serde(default = "default_shared_object_mutability")]
         mutable: bool,
@@ -1533,6 +1538,7 @@ pub struct SuiPureValue {
     value: SuiJsonValue,
 }
 
+#[serde_as]
 #[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "objectType", rename_all = "camelCase")]
 pub enum SuiObjectArg {
@@ -1540,6 +1546,8 @@ pub enum SuiObjectArg {
     #[serde(rename_all = "camelCase")]
     ImmOrOwnedObject {
         object_id: ObjectID,
+        #[schemars(with = "AsSequenceNumber")]
+        #[serde_as(as = "AsSequenceNumber")]
         version: SequenceNumber,
         digest: ObjectDigest,
     },
@@ -1548,6 +1556,8 @@ pub enum SuiObjectArg {
     #[serde(rename_all = "camelCase")]
     SharedObject {
         object_id: ObjectID,
+        #[schemars(with = "AsSequenceNumber")]
+        #[serde_as(as = "AsSequenceNumber")]
         initial_shared_version: SequenceNumber,
         mutable: bool,
     },

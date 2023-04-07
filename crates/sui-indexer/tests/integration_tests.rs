@@ -298,7 +298,7 @@ pub mod pg_integration_test {
             .map(|tx| tx.digest)
             .collect::<Vec<_>>();
         let mut checkpoint_tx_digest_vec = indexer_rpc_client
-            .get_checkpoint(CheckpointId::SequenceNumber(2u64.into()))
+            .get_checkpoint(CheckpointId::SequenceNumber(2u64))
             .await
             .unwrap()
             .transactions;
@@ -885,24 +885,16 @@ pub mod pg_integration_test {
             .await
             .unwrap();
         assert_eq!(checkpoint.epoch as u64, current_epoch.epoch - 1);
-        assert_eq!(
-            <u64>::from(checkpoint.sequence_number),
-            prev_epoch_last_checkpoint_id
-        );
+        assert_eq!(checkpoint.sequence_number, prev_epoch_last_checkpoint_id);
         assert!(checkpoint.end_of_epoch_data.is_some());
 
         assert_eq!(checkpoint.epoch, current_epoch.epoch - 1);
-        assert_eq!(
-            <u64>::from(checkpoint.sequence_number),
-            prev_epoch_last_checkpoint_id
-        );
+        assert_eq!(checkpoint.sequence_number, prev_epoch_last_checkpoint_id);
 
         // cross check with FN
         let fn_cp = test_cluster
             .rpc_client()
-            .get_checkpoint(CheckpointId::SequenceNumber(
-                prev_epoch_last_checkpoint_id.into(),
-            ))
+            .get_checkpoint(CheckpointId::SequenceNumber(prev_epoch_last_checkpoint_id))
             .await
             .unwrap();
 
@@ -1195,14 +1187,14 @@ pub mod pg_integration_test {
         wait_until_next_checkpoint(&store).await;
         let cp = store.get_latest_checkpoint_sequence_number().await.unwrap() as u64;
         let first_checkpoint = indexer_rpc_client
-            .get_checkpoint(CheckpointId::SequenceNumber(cp.try_into().unwrap()))
+            .get_checkpoint(CheckpointId::SequenceNumber(cp))
             .await
             .unwrap();
 
         let current_epoch = store.get_current_epoch().await.unwrap();
 
         assert_eq!(first_checkpoint.epoch, current_epoch.epoch);
-        assert_eq!(u64::from(first_checkpoint.sequence_number), 0);
+        assert_eq!(first_checkpoint.sequence_number, 0);
         assert_eq!(first_checkpoint.network_total_transactions, 1);
         assert_eq!(first_checkpoint.previous_digest, None);
         assert_eq!(first_checkpoint.transactions.len(), 1);
@@ -1237,15 +1229,12 @@ pub mod pg_integration_test {
             .await?;
         let next_cp = tx_response.checkpoint.unwrap();
         let next_checkpoint = indexer_rpc_client
-            .get_checkpoint(CheckpointId::SequenceNumber(next_cp.try_into().unwrap()))
+            .get_checkpoint(CheckpointId::SequenceNumber(next_cp))
             .await?;
         let current_epoch = store.get_current_epoch().await.unwrap();
 
         assert_eq!(next_checkpoint.epoch, current_epoch.epoch);
-        assert!(
-            u64::from(next_checkpoint.sequence_number)
-                > u64::from(first_checkpoint.sequence_number)
-        );
+        assert!(next_checkpoint.sequence_number > first_checkpoint.sequence_number);
         assert!(
             next_checkpoint.network_total_transactions
                 > first_checkpoint.network_total_transactions
@@ -1253,12 +1242,9 @@ pub mod pg_integration_test {
         assert!(next_checkpoint.transactions.contains(&tx_response.digest));
 
         let mut curr_checkpoint = next_checkpoint;
-        for i in (u64::from(first_checkpoint.sequence_number)
-            ..u64::from(curr_checkpoint.sequence_number))
-            .rev()
-        {
+        for i in (first_checkpoint.sequence_number..curr_checkpoint.sequence_number).rev() {
             let prev_checkpoint = indexer_rpc_client
-                .get_checkpoint(CheckpointId::SequenceNumber(i.try_into().unwrap()))
+                .get_checkpoint(CheckpointId::SequenceNumber(i))
                 .await?;
             assert_eq!(
                 curr_checkpoint.previous_digest,

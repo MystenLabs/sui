@@ -26,7 +26,6 @@ use rand::{
     Rng, SeedableRng,
 };
 use serde_json::json;
-use tracing::info;
 
 use sui_framework::{make_system_objects, make_system_packages, system_package_ids};
 use sui_json_rpc_types::{

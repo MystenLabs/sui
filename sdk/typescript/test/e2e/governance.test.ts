@@ -43,7 +43,9 @@ describe('Governance API', () => {
   });
 
   it('test getCommitteeInfo', async () => {
-    const committeeInfo = await toolbox.provider.getCommitteeInfo({ epoch: 0 });
+    const committeeInfo = await toolbox.provider.getCommitteeInfo({
+      epoch: '0',
+    });
     expect(committeeInfo.validators?.length).greaterThan(0);
   });
 
