@@ -14,7 +14,7 @@ use sui_types::{
     base_types::{MoveObjectType, ObjectID, SequenceNumber},
     error::VMMemoryLimitExceededSubStatusCode,
     object::{Data, MoveObject, Owner},
-    storage::ChildObjectResolver,
+    storage::ChildObjectResolver, digests::ObjectDigest,
 };
 pub(super) struct ChildObject {
     pub(super) owner: ObjectID,
@@ -32,12 +32,12 @@ pub(crate) struct ChildObjectEffect {
     pub(super) effect: Op<Value>,
 }
 
-struct Inner<'a> {
+pub(super) struct Inner<'a> {
     // used for loading child objects
     resolver: Box<dyn ChildObjectResolver + 'a>,
     // cached objects from the resolver. An object might be in this map but not in the store
     // if it's existence was queried, but the value was not used.
-    cached_objects: BTreeMap<ObjectID, Option<MoveObject>>,
+    pub(super) cached_objects: BTreeMap<ObjectID, Option<(ObjectDigest, MoveObject)>>,
     // whether or not this TX is gas metered
     is_metered: bool,
     // Local protocol config used to enforce limits
@@ -50,7 +50,7 @@ pub(super) struct ObjectStore<'a> {
     // contains object resolver and object cache
     // kept as a separate struct to deal with lifetime issues where the `store` is accessed
     // at the same time as the `cached_objects` is populated
-    inner: Inner<'a>,
+    pub(super) inner: Inner<'a>,
     // Maps of populated GlobalValues, meaning the child object has been accessed in this
     // transaction
     store: BTreeMap<ObjectID, ChildObject>,
@@ -99,6 +99,7 @@ impl<'a> Inner<'a> {
                         ))
                     }
                 };
+                let digest = object.digest();
                 match object.data {
                     Data::Package(_) => {
                         return Err(PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(
@@ -108,7 +109,7 @@ impl<'a> Inner<'a> {
                             ),
                         ))
                     }
-                    Data::Move(mo @ MoveObject { .. }) => Some(mo),
+                    Data::Move(mo @ MoveObject { .. }) => Some((digest, mo)),
                 }
             } else {
                 None
@@ -138,7 +139,7 @@ impl<'a> Inner<'a> {
 
             e.insert(obj_opt);
         }
-        Ok(self.cached_objects.get(&child).unwrap().as_ref())
+        Ok(self.cached_objects.get(&child).unwrap().as_ref().map(|(_, o)| o))
     }
 
     fn fetch_object_impl(
@@ -366,7 +367,10 @@ impl<'a> ObjectStore<'a> {
             .inner
             .cached_objects
             .iter()
-            .filter_map(|(id, obj_opt)| Some((*id, obj_opt.as_ref()?.version())))
+            .filter_map(|(id, obj_opt)| {
+                let (_, obj) = obj_opt.as_ref()?;
+                Some((*id, obj.version()))
+            })
             .collect();
         let child_object_effects = std::mem::take(&mut self.store)
             .into_iter()

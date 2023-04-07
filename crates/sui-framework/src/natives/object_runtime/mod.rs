@@ -19,7 +19,7 @@ use sui_types::{
     error::{ExecutionError, ExecutionErrorKind, VMMemoryLimitExceededSubStatusCode},
     object::{MoveObject, Owner},
     storage::{ChildObjectResolver, DeleteKind, WriteKind},
-    SUI_CLOCK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
+    SUI_CLOCK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID, digests::ObjectDigest,
 };
 
 pub(crate) mod object_store;
@@ -169,6 +169,19 @@ impl<'a> ObjectRuntime<'a> {
             loaded_child_objects_fixed: protocol_config.loaded_child_objects_fixed(),
             constants: LocalProtocolConfig::new(protocol_config),
         }
+    }
+
+    pub fn loaded_objects(&self) -> Vec<(ObjectID, Option<(SequenceNumber, ObjectDigest)>)> {
+        self.object_store
+            .inner
+            .cached_objects
+            .iter()
+            .map(|(id, obj_opt)| {
+                let Some((digest, obj)) = obj_opt else { return (*id, None); };
+                let version = obj.version();
+                (*id, Some((version, *digest)))
+            })
+            .collect()
     }
 
     pub fn new_id(&mut self, id: ObjectID) -> PartialVMResult<()> {

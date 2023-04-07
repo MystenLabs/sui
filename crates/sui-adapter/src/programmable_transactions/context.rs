@@ -615,6 +615,11 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
         // Sui Move no longer uses Move's internal event system
         assert_invariant!(events.is_empty(), "Events must be empty");
         let object_runtime: ObjectRuntime = native_context_extensions.remove();
+
+        if tx_digest.base58_encode() == "HJc3mH685wTN6pbfoui6MF2MwWpYmF2Af8PMqXMgh4sR" {
+            tracing::info!("Loaded objects: {:#?}", object_runtime.loaded_objects());
+        }
+
         let new_ids = object_runtime.new_ids().clone();
         // tell the object runtime what input objects were taken and which were transferred
         let external_transfers = additional_writes.keys().copied().collect();

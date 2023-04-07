@@ -171,6 +171,10 @@ impl CheckpointExecutor {
                 // be processed (added to FuturesOrdered) in seq_number order, using FuturesOrdered
                 // guarantees that we will also ratchet the watermarks in order.
                 Some(Ok(checkpoint)) = pending.next() => {
+                    if checkpoint.inner().data().sequence_number == 488547 {
+                        panic!("SUCCESS!!! You made it past the problem TX");
+                    }
+
                     self.process_executed_checkpoint(&checkpoint);
                     highest_executed = Some(checkpoint);
 
