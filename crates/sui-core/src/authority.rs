@@ -1104,12 +1104,6 @@ impl AuthorityState {
         // Returning empty vector here because we recalculate changes in the rpc layer.
         let balance_changes = Vec::new();
 
-        // Update the storage gas price
-        let reference_gas_price = epoch_store.reference_gas_price();
-        let TransactionEffects::V1(mut inner_effects) = effects;
-        inner_effects.gas_used.storage_cost *= reference_gas_price;
-        let effects = TransactionEffects::V1(inner_effects);
-
         Ok((
             DryRunTransactionBlockResponse {
                 input: SuiTransactionBlockData::try_from(transaction.clone(), &module_cache)?,
