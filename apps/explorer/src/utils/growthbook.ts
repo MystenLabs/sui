@@ -4,35 +4,21 @@
 import { GrowthBook } from '@growthbook/growthbook';
 
 const GROWTHBOOK_API_KEY = import.meta.env.PROD
-    ? 'key_prod_ac59fe325855eb5f'
-    : 'key_dev_dc2872e15e0c5f95';
+    ? 'sdk-fHnfPId19IG3Lhj'
+    : 'sdk-qEEo0utCXJO2Oid3';
 
-export const growthbook = new GrowthBook();
-
-let resolveFeaturesPromise: () => void;
-export const featuresPromise: Promise<void> = new Promise((resolve) => {
-    resolveFeaturesPromise = resolve;
+export const growthbook = new GrowthBook({
+    apiHost: 'https://cdn.growthbook.io',
+    clientKey: GROWTHBOOK_API_KEY,
+    enableDevMode: true,
+    // trackingCallback: (experiment, result) => {
+    //     // TODO: Use your real analytics tracking system
+    //     console.log('Viewed Experiment', {
+    //         experimentId: experiment.key,
+    //         variationId: result.key,
+    //     });
+    // },
 });
-
-export async function loadFeatures() {
-    try {
-        const res = await fetch(
-            `https://cdn.growthbook.io/api/features/${GROWTHBOOK_API_KEY}`
-        );
-
-        if (!res.ok) {
-            throw new Error(res.statusText);
-        }
-
-        const data = await res.json();
-
-        growthbook.setFeatures(data.features);
-    } catch (e) {
-        console.warn('Failed to fetch feature definitions from Growthbook', e);
-    } finally {
-        resolveFeaturesPromise();
-    }
-}
 
 export enum GROWTHBOOK_FEATURES {
     USE_TEST_NET_ENDPOINT = 'testnet-selection',
