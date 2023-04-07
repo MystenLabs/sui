@@ -411,12 +411,15 @@ impl AuthorityStore {
         &self,
         object_keys: &[ObjectKey],
     ) -> Result<Vec<Option<Object>>, SuiError> {
-        let wrappers = self.perpetual_tables.objects.multi_get(object_keys)?;
+        let wrappers = self
+            .perpetual_tables
+            .objects
+            .multi_get(object_keys.to_vec())?;
         let mut ret = vec![];
 
-        for w in wrappers {
+        for (idx, w) in wrappers.into_iter().enumerate() {
             ret.push(
-                w.map(|object| self.perpetual_tables.object(object))
+                w.map(|object| self.perpetual_tables.object(&object_keys[idx], object))
                     .transpose()?
                     .flatten(),
             );
@@ -1216,6 +1219,7 @@ impl AuthorityStore {
                         let obj = self
                             .perpetual_tables
                             .object(
+                                &key,
                                 obj_opt
                                     .expect(&format!("Older object version not found: {:?}", key)),
                             )

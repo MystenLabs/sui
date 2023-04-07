@@ -538,7 +538,7 @@ mod tests {
     async fn test_db_size_after_compaction() -> Result<(), anyhow::Error> {
         let primary_path = tempfile::tempdir()?.into_path();
         let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&primary_path, None));
-        let total_unique_object_ids = 100_000;
+        let total_unique_object_ids = 200_000;
         let num_versions_per_object = 10;
         let ids = ObjectID::in_range(ObjectID::ZERO, total_unique_object_ids)?;
         let mut to_delete = vec![];
