@@ -611,16 +611,17 @@ impl Object {
         ))
     }
 
-    pub fn new_package_for_testing<'p>(
+    pub fn new_package_for_testing(
         modules: &[CompiledModule],
         previous_transaction: TransactionDigest,
-        dependencies: impl IntoIterator<Item = &'p MovePackage>,
+        dependencies: impl IntoIterator<Item = MovePackage>,
     ) -> Result<Self, ExecutionError> {
+        let dependencies: Vec<_> = dependencies.into_iter().collect();
         Self::new_package(
             modules,
             previous_transaction,
             ProtocolConfig::get_for_max_version().max_move_package_size(),
-            dependencies,
+            &dependencies,
         )
     }
 

@@ -17,7 +17,7 @@ use std::convert::TryInto;
 use std::{fs, path::Path};
 use sui_adapter::adapter::MoveVM;
 use sui_adapter::{adapter, execution_mode, programmable_transactions};
-use sui_framework::{MoveStdlib, SuiFramework, SuiSystem, SystemPackage};
+use sui_framework::BuiltInFramework;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ExecutionDigests, TransactionDigest};
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
@@ -1209,18 +1209,15 @@ fn create_genesis_context(
     genesis_chain_parameters: &GenesisChainParameters,
     genesis_validators: &[GenesisValidatorMetadata],
     token_distribution_schedule: &TokenDistributionSchedule,
-    move_framework: Vec<Vec<u8>>,
-    sui_framework: Vec<Vec<u8>>,
-    sui_system_package: Vec<Vec<u8>>,
 ) -> TxContext {
     let mut hasher = DefaultHash::default();
     hasher.update(b"sui-genesis");
     hasher.update(&bcs::to_bytes(genesis_chain_parameters).unwrap());
     hasher.update(&bcs::to_bytes(genesis_validators).unwrap());
     hasher.update(&bcs::to_bytes(token_distribution_schedule).unwrap());
-    hasher.update(&bcs::to_bytes(&move_framework).unwrap());
-    hasher.update(&bcs::to_bytes(&sui_framework).unwrap());
-    hasher.update(&bcs::to_bytes(&sui_system_package).unwrap());
+    for system_package in BuiltInFramework::iter_system_packages() {
+        hasher.update(&bcs::to_bytes(system_package.bytes()).unwrap());
+    }
 
     let hash = hasher.finalize();
     let genesis_transaction_digest = TransactionDigest::new(hash.into());
@@ -1261,30 +1258,10 @@ fn build_unsigned_genesis_data(
         &genesis_chain_parameters,
         &genesis_validators,
         token_distribution_schedule,
-        MoveStdlib::as_bytes(),
-        SuiFramework::as_bytes(),
-        SuiSystem::as_bytes(),
     );
-
-    // Get Move and Sui Framework
-    let modules = [
-        (
-            MoveStdlib::as_modules(),
-            MoveStdlib::transitive_dependencies(),
-        ),
-        (
-            SuiFramework::as_modules(),
-            SuiFramework::transitive_dependencies(),
-        ),
-        (
-            SuiSystem::as_modules(),
-            SuiSystem::transitive_dependencies(),
-        ),
-    ];
 
     let objects = create_genesis_objects(
         &mut genesis_ctx,
-        &modules,
         objects,
         &genesis_validators,
         &genesis_chain_parameters,
@@ -1430,7 +1407,6 @@ fn create_genesis_transaction(
 
 fn create_genesis_objects(
     genesis_ctx: &mut TxContext,
-    modules: &[(&[CompiledModule], Vec<ObjectID>)],
     input_objects: &[Object],
     validators: &[GenesisValidatorMetadata],
     parameters: &GenesisChainParameters,
@@ -1450,13 +1426,13 @@ fn create_genesis_objects(
     )
     .expect("We defined natives to not fail here");
 
-    for (modules, dependencies) in modules {
+    for system_package in BuiltInFramework::iter_system_packages() {
         process_package(
             &mut store,
             &move_vm,
             genesis_ctx,
-            modules,
-            dependencies.to_owned(),
+            &system_package.modules(),
+            system_package.dependencies().to_vec(),
             &protocol_config,
         )
         .unwrap();

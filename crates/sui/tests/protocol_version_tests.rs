@@ -65,7 +65,7 @@ mod sim_only_tests {
     use std::path::PathBuf;
     use std::sync::Arc;
     use sui_core::authority::framework_injection;
-    use sui_framework::{MoveStdlib, SuiFramework, SuiSystem, SystemPackage};
+    use sui_framework::BuiltInFramework;
     use sui_framework_build::compiled_package::BuildConfig;
     use sui_json_rpc::api::WriteApiClient;
     use sui_macros::*;
@@ -84,6 +84,7 @@ mod sim_only_tests {
         object::Object,
         programmable_transaction_builder::ProgrammableTransactionBuilder,
         storage::ObjectStore,
+        MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_PACKAGE_ID,
     };
     use test_utils::network::{TestCluster, TestClusterBuilder};
     use tokio::time::{sleep, Duration};
@@ -366,7 +367,7 @@ mod sim_only_tests {
     async fn run_framework_upgrade(from: &str, to: &str) -> TestCluster {
         ProtocolConfig::poison_get_for_min_version();
 
-        framework_injection::set_override::<SuiSystem>(sui_system_modules(to));
+        override_sui_system_modules(to);
         TestClusterBuilder::new()
             .with_epoch_duration_ms(20000)
             .with_objects([sui_system_package_object(from)])
@@ -386,7 +387,7 @@ mod sim_only_tests {
             let mut builder = ProgrammableTransactionBuilder::new();
             builder
                 .move_call(
-                    SuiSystem::ID,
+                    SUI_SYSTEM_PACKAGE_ID,
                     ident_str!("msim_extra_1").to_owned(),
                     ident_str!("canary").to_owned(),
                     vec![],
@@ -435,7 +436,7 @@ mod sim_only_tests {
         let effects = node_handle
             .with_async(|node| async {
                 let db = node.state().db();
-                let framework = db.get_object(&SuiSystem::ID);
+                let framework = db.get_object(&SUI_SYSTEM_PACKAGE_ID);
                 let digest = framework.unwrap().unwrap().previous_transaction;
                 let effects = db.get_executed_effects(&digest);
                 effects.unwrap().unwrap()
@@ -445,12 +446,12 @@ mod sim_only_tests {
         let modified_at = effects
             .modified_at_versions()
             .iter()
-            .find_map(|(id, v)| (id == &SuiSystem::ID).then_some(*v));
+            .find_map(|(id, v)| (id == &SUI_SYSTEM_PACKAGE_ID).then_some(*v));
 
         let mutated_to = effects
             .mutated()
             .iter()
-            .find_map(|((id, v, _), _)| (id == &SuiSystem::ID).then_some(*v));
+            .find_map(|((id, v, _), _)| (id == &SUI_SYSTEM_PACKAGE_ID).then_some(*v));
 
         (modified_at, mutated_to)
     }
@@ -460,7 +461,7 @@ mod sim_only_tests {
         ProtocolConfig::poison_get_for_min_version();
 
         // Even though a new framework is available, the required new protocol version is not.
-        framework_injection::set_override::<SuiSystem>(sui_system_modules("compatible"));
+        override_sui_system_modules("compatible");
         let test_cluster = TestClusterBuilder::new()
             .with_epoch_duration_ms(20000)
             .with_objects([sui_system_package_object("base")])
@@ -493,7 +494,7 @@ mod sim_only_tests {
 
         let first = test_cluster.swarm.validators().next().unwrap();
         let first_name = first.name();
-        framework_injection::set_override_cb::<SuiSystem>(Box::new(move |name| {
+        override_sui_system_modules_cb(Box::new(move |name| {
             if name == first_name {
                 info!("node {:?} using compatible packages", name.concise());
                 Some(sui_system_modules("base"))
@@ -542,7 +543,7 @@ mod sim_only_tests {
         let mut validators = test_cluster.swarm.validators();
         let first = validators.next().unwrap().name();
         let second = validators.next().unwrap().name();
-        framework_injection::set_override_cb::<SuiSystem>(Box::new(move |name| {
+        override_sui_system_modules_cb(Box::new(move |name| {
             if name == first || name == second {
                 Some(sui_system_modules("compatible"))
             } else {
@@ -555,7 +556,7 @@ mod sim_only_tests {
 
     #[sim_test]
     async fn test_safe_mode_recovery() {
-        framework_injection::set_override::<SuiSystem>(sui_system_modules("mock_sui_systems/base"));
+        override_sui_system_modules("mock_sui_systems/base");
         let test_cluster = TestClusterBuilder::new()
             .with_epoch_duration_ms(20000)
             // Overrides with a sui system package that would abort during epoch change txn
@@ -628,9 +629,7 @@ mod sim_only_tests {
             .build()
             .await
             .unwrap();
-        framework_injection::set_override::<SuiSystem>(sui_system_modules(
-            "mock_sui_systems/shallow_upgrade",
-        ));
+        override_sui_system_modules("mock_sui_systems/shallow_upgrade");
         // Wait for the upgrade to finish. After the upgrade, the new framework will be installed,
         // but the system state object hasn't been upgraded yet.
         let system_state = test_cluster.wait_for_epoch(Some(1)).await;
@@ -662,9 +661,7 @@ mod sim_only_tests {
             .build()
             .await
             .unwrap();
-        framework_injection::set_override::<SuiSystem>(sui_system_modules(
-            "mock_sui_systems/deep_upgrade",
-        ));
+        override_sui_system_modules("mock_sui_systems/deep_upgrade");
         // Wait for the upgrade to finish. After the upgrade, the new framework will be installed,
         // but the system state object hasn't been upgraded yet.
         let system_state = test_cluster.wait_for_epoch(Some(1)).await;
@@ -722,9 +719,7 @@ mod sim_only_tests {
             .await
             .unwrap();
         // TODO: Replace the path with the new framework path when we test it for real.
-        framework_injection::set_override::<SuiSystem>(sui_system_modules(
-            "../../../sui-framework/packages/sui-system",
-        ));
+        override_sui_system_modules("../../../sui-framework/packages/sui-system");
         // Wait for the upgrade to finish. After the upgrade, the new framework will be installed,
         // but the system state object hasn't been upgraded yet.
         let system_state = test_cluster.wait_for_epoch(Some(1)).await;
@@ -747,6 +742,14 @@ mod sim_only_tests {
         test_cluster.wait_for_epoch(Some(2)).await;
     }
 
+    fn override_sui_system_modules(path: &str) {
+        framework_injection::set_override(SUI_SYSTEM_PACKAGE_ID, sui_system_modules(path));
+    }
+
+    fn override_sui_system_modules_cb(f: framework_injection::PackageUpgradeCallback) {
+        framework_injection::set_override_cb(SUI_SYSTEM_PACKAGE_ID, f)
+    }
+
     /// Get compiled modules for Sui Framework, built from fixture `fixture` in the
     /// `framework_upgrades` directory.
     fn sui_system_modules(fixture: &str) -> Vec<CompiledModule> {
@@ -760,13 +763,17 @@ mod sim_only_tests {
         pkg.get_sui_system_modules().cloned().collect()
     }
 
-    /// Like `sui_framework`, but package the modules in an `Object`.
+    /// Like `sui_system_modules`, but package the modules in an `Object`.
     fn sui_system_package_object(fixture: &str) -> Object {
         Object::new_package(
             &sui_system_modules(fixture),
             TransactionDigest::genesis(),
             u64::MAX,
-            &[MoveStdlib::as_package(), SuiFramework::as_package()],
+            &[
+                BuiltInFramework::get_package_by_id(&MOVE_STDLIB_OBJECT_ID).genesis_move_package(),
+                BuiltInFramework::get_package_by_id(&SUI_FRAMEWORK_OBJECT_ID)
+                    .genesis_move_package(),
+            ],
         )
         .unwrap()
     }

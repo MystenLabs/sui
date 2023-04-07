@@ -12,135 +12,118 @@ use sui_types::{
     error::SuiResult,
     move_package::MovePackage,
     object::{Object, OBJECT_START_VERSION},
-    MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS,
+    MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_PACKAGE_ID,
 };
 
 pub mod natives;
 
-/// Defines a new system package at `$address` (an ObjectID), and a type with name `$Package` that
-/// implements the `SystemPackage` trait to give access to the package's contents.
-///
-/// The package's modules are expected to be found at sub-directory `$path` of the the cargo output
-/// directory.  The process of getting them there is usually managed by this crate's `build.rs`
-/// script.
-///
-/// The remaining `$Dep` arguments reference the types for other system packages that are transitive
-/// dependencies of this package.
-macro_rules! define_system_package {
-    ($address:expr, $Package:ident, $path:literal, [$($Dep:ident),* $(,)?]) => {
-        pub struct $Package;
+/// Represents a system package in the framework, that's built from the source code inside
+/// sui-framework.
+pub struct SystemPackage {
+    id: ObjectID,
+    bytes: Vec<Vec<u8>>,
+    dependencies: Vec<ObjectID>,
+}
 
-        impl SystemPackage for $Package {
-            const ID: ObjectID = ObjectID::from_address($address);
-
-            const BCS_BYTES: &'static [u8] = include_bytes!(concat!(env!("OUT_DIR"), "/", $path));
-
-            fn transitive_dependencies() -> Vec<ObjectID> {
-                vec![$($Dep::ID,)*]
-            }
-
-            fn as_bytes() -> Vec<Vec<u8>> {
-                bcs::from_bytes($Package::BCS_BYTES).unwrap()
-            }
-
-            fn as_modules() -> &'static [CompiledModule] {
-                static MODULES: Lazy<Vec<CompiledModule>> = Lazy::new(|| {
-                    // deserialization here uses overall max version of supported Move bytecode
-                    // rather than the max supported by the framework but it's OK
-                    $Package::as_bytes().into_iter().map(|m| CompiledModule::deserialize(&m).unwrap()).collect()
-                });
-                &Lazy::force(&MODULES)
-            }
-
-            fn as_package() -> MovePackage {
-                MovePackage::new_system(
-                    OBJECT_START_VERSION,
-                    &$Package::as_modules(),
-                    $Package::transitive_dependencies(),
-                )
-            }
-
-            fn as_object() -> Object {
-                Object::new_system_package(
-                    $Package::as_modules(),
-                    OBJECT_START_VERSION,
-                    $Package::transitive_dependencies(),
-                    TransactionDigest::genesis(),
-                )
-            }
+impl SystemPackage {
+    pub fn new(id: ObjectID, raw_bytes: &'static [u8], dependencies: &[ObjectID]) -> Self {
+        let bytes: Vec<Vec<u8>> = bcs::from_bytes(raw_bytes).unwrap();
+        Self {
+            id,
+            bytes,
+            dependencies: dependencies.to_vec(),
         }
-    };
+    }
+
+    pub fn id(&self) -> &ObjectID {
+        &self.id
+    }
+
+    pub fn bytes(&self) -> &[Vec<u8>] {
+        &self.bytes
+    }
+
+    pub fn dependencies(&self) -> &[ObjectID] {
+        &self.dependencies
+    }
+
+    pub fn modules(&self) -> Vec<CompiledModule> {
+        self.bytes
+            .iter()
+            .map(|b| CompiledModule::deserialize(b).unwrap())
+            .collect()
+    }
+
+    pub fn genesis_move_package(&self) -> MovePackage {
+        MovePackage::new_system(
+            OBJECT_START_VERSION,
+            &self.modules(),
+            self.dependencies.iter().copied(),
+        )
+    }
+
+    pub fn genesis_object(&self) -> Object {
+        Object::new_system_package(
+            &self.modules(),
+            OBJECT_START_VERSION,
+            self.dependencies.to_vec(),
+            TransactionDigest::genesis(),
+        )
+    }
 }
 
-define_system_package!(MOVE_STDLIB_ADDRESS, MoveStdlib, "move-stdlib", []);
-define_system_package!(MOVE_STDLIB_ADDRESS, MoveStdlibTest, "move-stdlib-test", []);
-
-define_system_package!(
-    SUI_FRAMEWORK_ADDRESS,
-    SuiFramework,
-    "sui-framework",
-    [MoveStdlib]
-);
-
-define_system_package!(
-    SUI_FRAMEWORK_ADDRESS,
-    SuiFrameworkTest,
-    "sui-framework-test",
-    [MoveStdlib]
-);
-
-define_system_package!(
-    SUI_SYSTEM_ADDRESS,
-    SuiSystem,
-    "sui-system",
-    [MoveStdlib, SuiFramework]
-);
-
-define_system_package!(
-    SUI_SYSTEM_ADDRESS,
-    SuiSystemTest,
-    "sui-system-test",
-    [MoveStdlib, SuiFramework]
-);
-
-/// Trait exposing all the various properties of a system package in a variety of different forms,
-/// of increasing levels of abstraction
-pub trait SystemPackage {
-    const ID: ObjectID;
-    const BCS_BYTES: &'static [u8];
-    fn transitive_dependencies() -> Vec<ObjectID>;
-    fn as_bytes() -> Vec<Vec<u8>>;
-    fn as_modules() -> &'static [CompiledModule];
-    fn as_package() -> MovePackage;
-    fn as_object() -> Object;
+macro_rules! define_system_packages {
+    ([$(($id:expr, $path:expr, $deps:expr)),* $(,)?]) => {{
+        static PACKAGES: Lazy<Vec<SystemPackage>> = Lazy::new(|| {
+            vec![
+                $(SystemPackage::new(
+                    $id,
+                    include_bytes!(concat!(env!("OUT_DIR"), "/", $path)),
+                    &$deps,
+                )),*
+            ]
+        });
+        &Lazy::force(&PACKAGES)
+    }}
 }
 
-pub fn system_package_ids() -> Vec<ObjectID> {
-    vec![MoveStdlib::ID, SuiFramework::ID, SuiSystem::ID]
-}
+pub struct BuiltInFramework;
+impl BuiltInFramework {
+    pub fn iter_system_packages() -> impl Iterator<Item = &'static SystemPackage> {
+        // All system packages in the current build should be registered here, and this is the only
+        // place we need to worry about if any of them changes.
+        // TODO: Is it possible to derive dependencies from the bytecode instead of manually specifying them?
+        define_system_packages!([
+            (MOVE_STDLIB_OBJECT_ID, "move-stdlib", []),
+            (
+                SUI_FRAMEWORK_OBJECT_ID,
+                "sui-framework",
+                [MOVE_STDLIB_OBJECT_ID]
+            ),
+            (
+                SUI_SYSTEM_PACKAGE_ID,
+                "sui-system",
+                [MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID]
+            )
+        ])
+        .iter()
+    }
 
-pub fn make_system_modules() -> Vec<Vec<CompiledModule>> {
-    vec![
-        MoveStdlib::as_modules().to_owned(),
-        SuiFramework::as_modules().to_owned(),
-        SuiSystem::as_modules().to_owned(),
-    ]
-}
+    pub fn all_package_ids() -> Vec<ObjectID> {
+        Self::iter_system_packages().map(|p| p.id).collect()
+    }
 
-pub fn make_system_packages() -> Vec<MovePackage> {
-    vec![
-        MoveStdlib::as_package(),
-        SuiFramework::as_package(),
-        SuiSystem::as_package(),
-    ]
-}
+    pub fn get_package_by_id(id: &ObjectID) -> &'static SystemPackage {
+        Self::iter_system_packages().find(|s| &s.id == id).unwrap()
+    }
 
-pub fn make_system_objects() -> Vec<Object> {
-    vec![
-        MoveStdlib::as_object(),
-        SuiFramework::as_object(),
-        SuiSystem::as_object(),
-    ]
+    pub fn genesis_move_packages() -> impl Iterator<Item = MovePackage> {
+        Self::iter_system_packages().map(|package| package.genesis_move_package())
+    }
+
+    pub fn genesis_objects() -> impl Iterator<Item = Object> {
+        Self::iter_system_packages().map(|package| package.genesis_object())
+    }
 }
 
 pub const DEFAULT_FRAMEWORK_PATH: &str = env!("CARGO_MANIFEST_DIR");

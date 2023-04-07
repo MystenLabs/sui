@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::access::ModuleAccess;
-use sui_framework::{MoveStdlib, SuiFramework, SuiSystem, SystemPackage};
+use sui_framework::BuiltInFramework;
 use sui_json_rpc::api::ReadApiClient;
 use sui_json_rpc_types::SuiObjectResponse;
 use sui_types::{
-    base_types::ObjectID, digests::TransactionDigest, object::Object, SUI_SYSTEM_ADDRESS,
+    base_types::ObjectID, digests::TransactionDigest, object::Object, MOVE_STDLIB_OBJECT_ID,
+    SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_ADDRESS, SUI_SYSTEM_PACKAGE_ID,
 };
 use test_utils::network::TestClusterBuilder;
 
@@ -33,7 +34,10 @@ async fn test_package_override() {
     let framework_ref = {
         let default_cluster = TestClusterBuilder::new().build().await.unwrap();
         let client = default_cluster.rpc_client();
-        let obj = client.get_object(SuiSystem::ID, None).await.unwrap();
+        let obj = client
+            .get_object(SUI_SYSTEM_PACKAGE_ID, None)
+            .await
+            .unwrap();
 
         if let Some(obj) = obj.data {
             obj.object_ref()
@@ -43,7 +47,9 @@ async fn test_package_override() {
     };
 
     let modified_ref = {
-        let mut framework_modules = SuiSystem::as_modules().to_owned();
+        let mut framework_modules = BuiltInFramework::get_package_by_id(&SUI_SYSTEM_PACKAGE_ID)
+            .modules()
+            .to_vec();
 
         // Create an empty module that is pretending to be part of the sui framework.
         let mut test_module = move_binary_format::file_format::empty_module();
@@ -57,7 +63,11 @@ async fn test_package_override() {
         let package_override = Object::new_package_for_testing(
             &framework_modules,
             TransactionDigest::genesis(),
-            &[MoveStdlib::as_package(), SuiFramework::as_package()],
+            [
+                BuiltInFramework::get_package_by_id(&MOVE_STDLIB_OBJECT_ID).genesis_move_package(),
+                BuiltInFramework::get_package_by_id(&SUI_FRAMEWORK_OBJECT_ID)
+                    .genesis_move_package(),
+            ],
         )
         .unwrap();
 
@@ -68,7 +78,10 @@ async fn test_package_override() {
             .unwrap();
 
         let client = modified_cluster.rpc_client();
-        let obj = client.get_object(SuiSystem::ID, None).await.unwrap();
+        let obj = client
+            .get_object(SUI_SYSTEM_PACKAGE_ID, None)
+            .await
+            .unwrap();
 
         if let Some(obj) = obj.data {
             obj.object_ref()

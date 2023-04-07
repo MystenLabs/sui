@@ -6,7 +6,6 @@ use crate::authority::{
     move_integration_tests::{build_and_publish_test_package, build_test_package},
 };
 
-use sui_framework::system_package_ids;
 use sui_types::{
     base_types::ObjectID,
     error::UserInputError,
@@ -30,6 +29,7 @@ use std::env;
 use std::fs::File;
 use std::io::Read;
 use std::{collections::HashSet, path::PathBuf};
+use sui_framework::BuiltInFramework;
 
 const MAX_GAS: u64 = 10000;
 
@@ -164,7 +164,7 @@ async fn test_publish_duplicate_modules() {
         sender,
         gas_object_ref,
         modules,
-        system_package_ids(),
+        BuiltInFramework::all_package_ids(),
         MAX_GAS,
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);

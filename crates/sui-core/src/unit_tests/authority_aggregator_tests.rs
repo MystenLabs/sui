@@ -10,7 +10,6 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use sui_framework::make_system_packages;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_types::crypto::get_key_pair_from_rng;
 use sui_types::crypto::{get_key_pair, AccountKeyPair, AuthorityKeyPair};
@@ -29,6 +28,7 @@ use crate::test_authority_clients::{
     MockAuthorityApi,
 };
 use crate::test_utils::init_local_authorities;
+use sui_framework::BuiltInFramework;
 use sui_types::utils::to_sender_signed_transaction;
 use tokio::time::Instant;
 
@@ -332,7 +332,7 @@ async fn test_quorum_map_and_reduce_timeout() {
     let pkg = Object::new_package_for_testing(
         &modules,
         TransactionDigest::genesis(),
-        &make_system_packages(),
+        BuiltInFramework::genesis_move_packages(),
     )
     .unwrap();
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
