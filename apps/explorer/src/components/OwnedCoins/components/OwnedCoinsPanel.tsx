@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type PaginatedCoins, type CoinStruct } from '@mysten/sui.js';
+import { type CoinStruct } from '@mysten/sui.js';
 import { useState, useEffect, useRef } from 'react';
 
 import CoinItem from './CoinItem';
@@ -17,46 +17,26 @@ type CoinsPanelProps = {
 
 function CoinsPanel({ coinType, id }: CoinsPanelProps): JSX.Element {
     const [coinObjects, setCoinObjects] = useState<CoinStruct[]>([]);
-    const [hasNextPage, setHasNextPage] = useState<boolean>(false);
-    const [nextCursor, setNextCursor] = useState<string | null>();
     const containerRef = useRef(null);
     const { isIntersecting } = useOnScreen(containerRef);
-    const { data, refetch, isLoading, isFetching } = useGetCoins(
-        coinType,
-        id,
-        nextCursor
-    );
-
-    const update = (resp: PaginatedCoins) => {
-        setCoinObjects((coinObjects) => [...coinObjects, ...resp.data]);
-        setHasNextPage(resp.hasNextPage);
-        setNextCursor(resp.nextCursor);
-    };
+    const { data, isLoading, isFetching, fetchNextPage, hasNextPage } =
+        useGetCoins(coinType, id);
 
     useEffect(() => {
         if (data) {
-            update(data);
+            let coinObjs: CoinStruct[] = [];
+            data.pages.forEach((page) => {
+                coinObjs = [...coinObjs, ...page.data];
+            });
+            setCoinObjects(coinObjs);
         }
     }, [data]);
 
     useEffect(() => {
-        if (
-            isIntersecting &&
-            hasNextPage &&
-            nextCursor &&
-            !isLoading &&
-            !isFetching
-        ) {
-            refetch();
+        if (isIntersecting && hasNextPage && !isFetching) {
+            fetchNextPage();
         }
-    }, [
-        isIntersecting,
-        hasNextPage,
-        nextCursor,
-        isLoading,
-        isFetching,
-        refetch,
-    ]);
+    }, [isIntersecting, hasNextPage, isFetching, fetchNextPage]);
 
     return (
         <div>
