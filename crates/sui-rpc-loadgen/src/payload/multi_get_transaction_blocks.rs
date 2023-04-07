@@ -23,7 +23,8 @@ impl<'a> ProcessPayload<'a, &'a MultiGetTransactionBlocks> for RpcCommandProcess
             panic!("No digests provided, skipping query");
         }
 
-        let chunks = chunk_entities(digests, None);
+        // TODO: make this controllable
+        let chunks = chunk_entities(digests, Some(50));
         let chunk_futures = chunks.into_iter().map(|chunk| {
             let clients = clients.clone();
             async move {
