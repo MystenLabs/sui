@@ -1796,6 +1796,9 @@ pub struct DBOptions {
 pub fn base_db_options() -> DBOptions {
     let mut opt = rocksdb::Options::default();
 
+    opt.enable_statistics();
+    opt.set_stats_dump_period_sec(60);
+
     // One common issue when running tests on Mac is that the default ulimit is too low,
     // leading to I/O errors such as "Too many open files". Raising fdlimit to bypass it.
     if let Some(limit) = fdlimit::raise_fd_limit() {
