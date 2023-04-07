@@ -9,4 +9,4 @@ module Test::M1 {
     fun init(_ctx: &mut TxContext) { }
 }
 
-//# view-object 105
+//# view-object 1,1

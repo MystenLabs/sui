@@ -105,18 +105,18 @@ entry fun t8(obj: Obj) {
 
 //# run a::m::t0 --sender A
 
-//# run a::m::t1 --sender A --args object(107)
+//# run a::m::t1 --sender A --args object(2,0)
 
-//# run a::m::t2 --sender A --args object(107)
+//# run a::m::t2 --sender A --args object(2,0)
 
-//# run a::m::t3 --sender A --args object(107)
+//# run a::m::t3 --sender A --args object(2,0)
 
-//# run a::m::t4 --sender A --args object(107)
+//# run a::m::t4 --sender A --args object(2,0)
 
-//# run a::m::t5 --sender A --args object(107)
+//# run a::m::t5 --sender A --args object(2,0)
 
-//# run a::m::t6 --sender A --args object(107)
+//# run a::m::t6 --sender A --args object(2,0)
 
-//# run a::m::t7 --sender A --args object(107)
+//# run a::m::t7 --sender A --args object(2,0)
 
-//# run a::m::t8 --sender A --args object(107)
+//# run a::m::t8 --sender A --args object(2,0)

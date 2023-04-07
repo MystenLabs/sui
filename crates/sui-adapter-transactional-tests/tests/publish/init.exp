@@ -1,13 +1,13 @@
 processed 4 tasks
 
 task 1 'publish'. lines 6-23:
-created: object(104), object(105)
-mutated: object(103)
+created: object(1,0), object(1,1)
+mutated: object(0,0)
 
 task 2 'view-object'. lines 25-25:
 Owner: Account Address ( _ )
 Version: 2
-Contents: Test::M1::Object {id: sui::object::UID {id: sui::object::ID {bytes: fake(105)}}, value: 42u64}
+Contents: Test::M1::Object {id: sui::object::UID {id: sui::object::ID {bytes: fake(1,1)}}, value: 42u64}
 
 task 3 'view-object'. lines 27-27:
-104::M1
+1,0::M1

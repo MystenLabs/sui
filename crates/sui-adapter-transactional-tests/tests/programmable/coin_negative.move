@@ -22,11 +22,11 @@ module test::fake {
 
 }
 
-//# programmable --sender A --inputs object(107) 1 @A
+//# programmable --sender A --inputs object(1,2) 1 @A
 //> 0: sui::coin::mint<test::fake::FAKE>(Input(0), Input(1));
 //> TransferObjects([Result(0)], Input(2))
 
-//# programmable --sender A --inputs object(109) 2
+//# programmable --sender A --inputs object(2,0) 2
 //> SplitCoins(Input(0), [Input(1)]);
 
 //# programmable --sender A --inputs 18446744073709551615  --gas-budget 100000000000000

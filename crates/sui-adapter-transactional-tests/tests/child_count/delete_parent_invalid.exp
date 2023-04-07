@@ -1,25 +1,25 @@
 processed 6 tasks
 
 init:
-A: object(103), B: object(104)
+A: object(0,0), B: object(0,1)
 
 task 1 'publish'. lines 9-33:
-created: object(106)
-mutated: object(105)
+created: object(1,0)
+mutated: object(0,2)
 
 task 2 'run'. lines 35-35:
-created: object(108)
-mutated: object(107)
+created: object(2,0)
+mutated: object(0,0)
 
 task 3 'run'. lines 37-37:
-created: object(110), object(111)
-mutated: object(108), object(109)
+created: object(3,0), object(3,1)
+mutated: object(0,0), object(2,0)
 
 task 4 'view-object'. lines 39-39:
 Owner: Account Address ( A )
 Version: 3
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(108)}}}
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}}
 
 task 5 'run'. lines 41-41:
-mutated: object(112)
-deleted: object(108)
+mutated: object(0,0)
+deleted: object(2,0)

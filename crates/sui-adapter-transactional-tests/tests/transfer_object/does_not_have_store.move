@@ -30,19 +30,19 @@ module test::m {
 
 //# run test::m::mint_s --sender A
 
-//# view-object 108
+//# view-object 2,0
 
-//# transfer-object 108 --sender A --recipient B
+//# transfer-object 2,0 --sender A --recipient B
 
-//# view-object 108
+//# view-object 2,0
 
 
 // Mint Cup<S> to A. Fail to transfer Cup<S> from A to B
 
 //# run test::m::mint_cup --type-args test::m::S --sender A
 
-//# view-object 111
+//# view-object 6,0
 
-//# transfer-object 111 --sender A --recipient B
+//# transfer-object 6,0 --sender A --recipient B
 
-//# view-object 111
+//# view-object 6,0

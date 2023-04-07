@@ -1,70 +1,70 @@
 processed 18 tasks
 
 init:
-A: object(103)
+A: object(0,0)
 
 task 1 'publish'. lines 8-115:
-created: object(105)
-mutated: object(104)
+created: object(1,0)
+mutated: object(0,1)
 
 task 2 'run'. lines 117-117:
-created: object(107)
-mutated: object(106)
+created: object(2,0)
+mutated: object(0,0)
 
 task 3 'run'. lines 119-123:
-mutated: object(108)
-deleted: object(107)
+mutated: object(0,0)
+deleted: object(2,0)
 
 task 4 'run'. lines 125-125:
-created: object(110)
-mutated: object(109)
+created: object(4,0)
+mutated: object(0,0)
 
 task 5 'run'. lines 127-127:
-created: object(112), object(113)
-mutated: object(110), object(111)
+created: object(5,0), object(5,1)
+mutated: object(0,0), object(4,0)
 
 task 6 'run'. lines 129-133:
-Error: Object 0xa9e7aa5a9a578df37ca690c9bd33bda7fdebeecce88fc495620dd3da3dd5448d is owned by object 0xeb5dd40748926a4c1e950a6c595de48d456a70f09ba8ef4e931a63e9464e1c49. Objects owned by other objects cannot be used as input arguments.
+Error: Object 0x56e028b7e51ce99acd6648be76b1d542f2e143bdbc9efc0f40a090c7d4a4825c is owned by object 0x67f73cc9f78eec11a5f083f400d92fe89b575d21520bcfc6c15403ce29585970. Objects owned by other objects cannot be used as input arguments.
 
 task 7 'run'. lines 135-135:
-created: object(116)
-mutated: object(115)
+created: object(7,0)
+mutated: object(0,0)
 
 task 8 'run'. lines 137-140:
 Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(1) } }
 
 task 9 'run'. lines 142-142:
-created: object(119)
-mutated: object(118)
+created: object(9,0)
+mutated: object(0,0)
 
 task 10 'run'. lines 144-144:
-created: object(121)
-mutated: object(120)
+created: object(10,0)
+mutated: object(0,0)
 
 task 11 'run'. lines 146-149:
 Error: Transaction Effects Status: Invalid command argument at 1. The type of the value does not match the expected type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: TypeMismatch }, source: None, command: Some(0) } }
 
 task 12 'run'. lines 151-151:
-created: object(124)
-mutated: object(123)
+created: object(12,0)
+mutated: object(0,0)
 
 task 13 'run'. lines 153-156:
 Error: Transaction Effects Status: Invalid command argument at 0. Immutable and shared objects cannot be passed by-value.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidObjectByValue }, source: None, command: Some(0) } }
 
 task 14 'run'. lines 158-158:
-created: object(127)
-mutated: object(126)
+created: object(14,0)
+mutated: object(0,0)
 
 task 15 'run'. lines 160-163:
 Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidValueUsage }, source: None, command: Some(1) } }
 
 task 16 'run'. lines 165-165:
-created: object(130)
-mutated: object(129)
+created: object(16,0)
+mutated: object(0,0)
 
 task 17 'run'. lines 167-167:
 Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.

@@ -39,4 +39,4 @@ module test::m {
 
 //# run test::m::create --sender A
 
-//# run test::m::unwrap_and_transfer --args object(108) --sender A
+//# run test::m::unwrap_and_transfer --args object(2,0) --sender A

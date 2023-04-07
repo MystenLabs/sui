@@ -1,49 +1,49 @@
 processed 12 tasks
 
 init:
-A: object(103)
+A: object(0,0)
 
 task 1 'publish'. lines 8-41:
-created: object(105)
-mutated: object(104)
+created: object(1,0)
+mutated: object(0,1)
 
 task 2 'run'. lines 43-43:
-created: object(107), object(108), object(109)
-mutated: object(106)
+created: object(2,0), object(2,1), object(2,2)
+mutated: object(0,0)
 
 task 3 'view-object'. lines 45-45:
 Owner: Account Address ( A )
 Version: 2
-Contents: a::m::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(108)}}}
+Contents: a::m::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}}
 
 task 4 'run'. lines 47-47:
-Error: Object 0xa3520bbf03b9236b44e2b6a098cba4be28ffa57169ce6da445dd879ce497858e is owned by object 0x4eeb215c80c209f03da8950d2505b4254774d1dedd8888f73462ef17de06de8d. Objects owned by other objects cannot be used as input arguments.
+Error: Object 0x519c6f4caae4a1a72604cbab9fd1847061b4011003634cb4cae02ae56d8e9f83 is owned by object 0xeaa96af86250771b379418b685c426f34cea4758d7c3db4534f323faa343eb36. Objects owned by other objects cannot be used as input arguments.
 
 task 5 'run'. lines 50-50:
-created: object(112), object(113), object(114)
-mutated: object(111)
+created: object(5,0), object(5,1), object(5,2)
+mutated: object(0,0)
 
 task 6 'view-object'. lines 52-52:
-Owner: Object ID: ( fake(113) )
-Version: 2
-Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(114)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(112)}}
+Owner: Object ID: ( fake(5,0) )
+Version: 3
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(5,2)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(5,1)}}
 
 task 7 'run'. lines 54-54:
-mutated: object(113), object(115)
-deleted: object(112), object(114)
+mutated: object(0,0), object(5,0)
+deleted: object(5,1), object(5,2)
 
 task 8 'run'. lines 57-57:
-created: object(117), object(118), object(119)
-mutated: object(116)
+created: object(8,0), object(8,1), object(8,2)
+mutated: object(0,0)
 
 task 9 'view-object'. lines 59-59:
-Owner: Object ID: ( fake(117) )
-Version: 2
-Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(119)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(118)}}
+Owner: Object ID: ( fake(8,1) )
+Version: 5
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(8,2)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(8,0)}}
 
 task 10 'run'. lines 61-61:
-mutated: object(117), object(118), object(120)
-deleted: object(119)
+mutated: object(0,0), object(8,0), object(8,1)
+deleted: object(8,2)
 
 task 11 'view-object'. lines 63-63:
-No object at id 119
+No object at id 8,2

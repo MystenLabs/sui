@@ -1,8 +1,8 @@
 processed 3 tasks
 
 task 1 'publish'. lines 8-12:
-created: object(104)
-mutated: object(103)
+created: object(1,0)
+mutated: object(0,0)
 
 task 2 'publish'. lines 14-19:
 Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.

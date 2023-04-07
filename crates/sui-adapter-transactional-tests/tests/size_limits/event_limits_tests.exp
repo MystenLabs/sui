@@ -1,14 +1,14 @@
 processed 10 tasks
 
 task 1 'publish'. lines 8-57:
-created: object(104)
-mutated: object(103)
+created: object(1,0)
+mutated: object(0,0)
 
 task 2 'run'. lines 58-60:
-mutated: object(105)
+mutated: object(0,0)
 
 task 3 'run'. lines 61-63:
-mutated: object(106)
+mutated: object(0,0)
 
 task 4 'run'. lines 64-66:
 Error: Transaction Effects Status: Move Primitive Runtime Error. Location: sui::event::emit (function index 0) at offset 0. Arithmetic error, stack overflow, max value depth, etc.
@@ -19,10 +19,10 @@ Error: Transaction Effects Status: Move Primitive Runtime Error. Location: sui::
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(MoveLocationOpt(Some(MoveLocation { module: ModuleId { address: sui, name: Identifier("event") }, function: 0, instruction: 0, function_name: Some("emit") }))), source: Some(VMError { major_status: MEMORY_LIMIT_EXCEEDED, sub_status: Some(0), message: Some("Emitting more than 256 events is not allowed"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("event") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 0)] }), command: Some(0) } }
 
 task 6 'run'. lines 70-72:
-mutated: object(109)
+mutated: object(0,0)
 
 task 7 'run'. lines 73-75:
-mutated: object(110)
+mutated: object(0,0)
 
 task 8 'run'. lines 76-78:
 Error: Transaction Effects Status: Move Primitive Runtime Error. Location: sui::event::emit (function index 0) at offset 0. Arithmetic error, stack overflow, max value depth, etc.

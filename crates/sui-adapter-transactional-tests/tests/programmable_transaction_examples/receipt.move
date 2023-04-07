@@ -32,4 +32,4 @@ module test::m1 {
 //> test::m1::execute(Result(0));
 //> test::m1::epilogue(Result(0));
 
-//# view-object 106
+//# view-object 2,0

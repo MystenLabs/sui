@@ -1,88 +1,92 @@
-processed 19 tasks
+processed 20 tasks
 
 init:
-A: object(103), B: object(104)
+A: object(0,0), B: object(0,1)
 
-task 1 'publish'. lines 9-29:
-created: object(106)
-mutated: object(105)
+task 1 'publish'. lines 9-26:
+created: object(1,0)
+mutated: object(0,2)
 
-task 2 'run'. lines 30-30:
-created: object(108)
-mutated: object(103), object(107)
+task 2 'programmable'. lines 28-32:
+created: object(2,0)
+mutated: object(0,0)
 
-task 3 'view-object'. lines 32-34:
-Owner: Account Address ( A )
-Version: 2
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(108)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 1000u64}}
+task 3 'run'. lines 33-33:
+created: object(3,0)
+mutated: object(0,0), object(2,0)
 
-task 4 'programmable'. lines 35-37:
-created: object(110)
-mutated: object(108), object(109)
-
-task 5 'view-object'. lines 39-39:
+task 4 'view-object'. lines 35-37:
 Owner: Account Address ( A )
 Version: 3
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(108)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 900u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 1000u64}}
 
-task 6 'view-object'. lines 41-44:
-Owner: Account Address ( B )
-Version: 3
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(110)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 100u64}}
+task 5 'programmable'. lines 38-40:
+created: object(5,0)
+mutated: object(0,0), object(3,0)
 
-task 7 'programmable'. lines 45-47:
-created: object(112), object(113)
-mutated: object(108), object(111)
-
-task 8 'view-object'. lines 49-49:
+task 6 'view-object'. lines 42-42:
 Owner: Account Address ( A )
 Version: 4
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(108)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 700u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 900u64}}
 
-task 9 'view-object'. lines 51-51:
+task 7 'view-object'. lines 44-47:
 Owner: Account Address ( B )
 Version: 4
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(112)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 100u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(5,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 100u64}}
 
-task 10 'view-object'. lines 53-55:
-Owner: Account Address ( B )
-Version: 4
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(113)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 100u64}}
+task 8 'programmable'. lines 48-50:
+created: object(8,0), object(8,1)
+mutated: object(0,0), object(3,0)
 
-task 11 'programmable'. lines 56-59:
-created: object(115), object(116)
-mutated: object(108), object(114)
-
-task 12 'view-object'. lines 61-61:
+task 9 'view-object'. lines 52-52:
 Owner: Account Address ( A )
 Version: 5
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(108)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 500u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 700u64}}
 
-task 13 'view-object'. lines 63-63:
+task 10 'view-object'. lines 54-54:
 Owner: Account Address ( B )
 Version: 5
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(115)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 100u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(8,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 100u64}}
 
-task 14 'view-object'. lines 65-68:
+task 11 'view-object'. lines 56-58:
 Owner: Account Address ( B )
 Version: 5
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(116)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 100u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(8,1)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 100u64}}
 
-task 15 'programmable'. lines 69-73:
-created: object(118), object(119)
-mutated: object(108), object(117)
+task 12 'programmable'. lines 59-62:
+created: object(12,0), object(12,1)
+mutated: object(0,0), object(3,0)
 
-task 16 'view-object'. lines 75-75:
+task 13 'view-object'. lines 64-64:
 Owner: Account Address ( A )
 Version: 6
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(108)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 300u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 500u64}}
 
-task 17 'view-object'. lines 77-77:
+task 14 'view-object'. lines 66-66:
 Owner: Account Address ( B )
 Version: 6
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(118)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 100u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(12,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 100u64}}
 
-task 18 'view-object'. lines 79-79:
+task 15 'view-object'. lines 68-71:
 Owner: Account Address ( B )
 Version: 6
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(119)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 100u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(12,1)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 100u64}}
+
+task 16 'programmable'. lines 72-76:
+created: object(16,0), object(16,1)
+mutated: object(0,0), object(3,0)
+
+task 17 'view-object'. lines 78-78:
+Owner: Account Address ( A )
+Version: 7
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 300u64}}
+
+task 18 'view-object'. lines 80-80:
+Owner: Account Address ( B )
+Version: 7
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(16,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 100u64}}
+
+task 19 'view-object'. lines 82-82:
+Owner: Account Address ( B )
+Version: 7
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(16,1)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 100u64}}

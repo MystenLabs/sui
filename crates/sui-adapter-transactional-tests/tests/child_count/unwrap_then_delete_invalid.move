@@ -46,6 +46,6 @@ module test::m {
 
 //# run test::m::mint --sender A
 
-//# run test::m::add --sender A --args object(108) 0
+//# run test::m::add --sender A --args object(2,0) 0
 
-//# run test::m::wrap --sender A --args object(108)
+//# run test::m::wrap --sender A --args object(2,0)

@@ -1,39 +1,39 @@
 processed 11 tasks
 
 init:
-A: object(103)
+A: object(0,0)
 
 task 1 'publish'. lines 9-79:
-created: object(105)
-mutated: object(104)
+created: object(1,0)
+mutated: object(0,1)
 
 task 2 'run'. lines 81-81:
-created: object(107)
-mutated: object(106)
+created: object(2,0)
+mutated: object(0,0)
 
 task 3 'run'. lines 83-83:
-created: object(109), object(110), object(111)
-mutated: object(107), object(108)
+created: object(3,0), object(3,1), object(3,2)
+mutated: object(0,0), object(2,0)
 
 task 4 'run'. lines 85-85:
-mutated: object(107), object(112)
+mutated: object(0,0), object(2,0)
 
 task 5 'run'. lines 87-87:
-mutated: object(107), object(113)
+mutated: object(0,0), object(2,0)
 
 task 6 'run'. lines 89-89:
-mutated: object(107), object(109), object(110), object(111), object(114)
+mutated: object(0,0), object(2,0), object(3,0), object(3,1), object(3,2)
 
 task 7 'run'. lines 91-91:
-mutated: object(107), object(115)
+mutated: object(0,0), object(2,0)
 
 task 8 'run'. lines 93-93:
-mutated: object(107), object(116)
-deleted: object(110), object(111)
+mutated: object(0,0), object(2,0)
+deleted: object(3,1), object(3,2)
 
 task 9 'run'. lines 95-95:
-mutated: object(107), object(117)
+mutated: object(0,0), object(2,0)
 
 task 10 'run'. lines 97-97:
-mutated: object(118)
-deleted: object(107)
+mutated: object(0,0)
+deleted: object(2,0)

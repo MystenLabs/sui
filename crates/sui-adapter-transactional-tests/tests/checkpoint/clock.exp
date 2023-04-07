@@ -1,17 +1,17 @@
 processed 5 tasks
 
 task 1 'consensus-commit-prologue'. lines 6-6:
-mutated: 0x6
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000006
 
 task 2 'view-object'. lines 8-8:
 Owner: Shared
 Version: 2
-Contents: sui::clock::Clock {id: sui::object::UID {id: sui::object::ID {bytes: 0x6}}, timestamp_ms: 43u64}
+Contents: sui::clock::Clock {id: sui::object::UID {id: sui::object::ID {bytes: 0x0000000000000000000000000000000000000000000000000000000000000006}}, timestamp_ms: 43u64}
 
 task 3 'consensus-commit-prologue'. lines 10-10:
-mutated: 0x6
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000006
 
 task 4 'view-object'. lines 12-12:
 Owner: Shared
 Version: 3
-Contents: sui::clock::Clock {id: sui::object::UID {id: sui::object::ID {bytes: 0x6}}, timestamp_ms: 45u64}
+Contents: sui::clock::Clock {id: sui::object::UID {id: sui::object::ID {bytes: 0x0000000000000000000000000000000000000000000000000000000000000006}}, timestamp_ms: 45u64}

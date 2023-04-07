@@ -1,19 +1,19 @@
 processed 5 tasks
 
 init:
-A: object(103)
+A: object(0,0)
 
 task 1 'publish'. lines 9-29:
-created: object(105)
-mutated: object(104)
+created: object(1,0)
+mutated: object(0,1)
 
 task 2 'programmable'. lines 31-35:
-created: object(107), object(108), object(109)
-mutated: object(106)
+created: object(2,0), object(2,1), object(2,2)
+mutated: object(0,0)
 
 task 3 'programmable'. lines 37-41:
-mutated: object(110)
-deleted: object(107), object(108), object(109)
+mutated: object(0,0)
+deleted: object(2,0), object(2,1), object(2,2)
 
 task 4 'programmable'. lines 43-46:
-mutated: object(111)
+mutated: object(0,0)

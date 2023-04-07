@@ -34,17 +34,17 @@ module test::m1 {
 //# programmable
 //> test::m1::share_r();
 
-//# programmable --inputs object(107)
+//# programmable --inputs object(2,0)
 //> test::m1::imm(Input(0), Input(0));
 
-//# programmable --inputs object(107)
+//# programmable --inputs object(2,0)
 //> test::m1::mut(Input(0), Input(0));
 
 //# programmable
 //> test::m1::freeze_r();
 
-//# programmable --inputs object(111)
+//# programmable --inputs object(5,0)
 //> test::m1::imm(Input(0), Input(0));
 
-//# programmable --inputs object(111)
+//# programmable --inputs object(5,0)
 //> test::m1::mut(Input(0), Input(0));

@@ -86,11 +86,11 @@ module Test::M1 {
 //# run Test::M1::transfer_object_with_size --args 256000 --sender A --gas-budget 100000000000000
 
 // adding 1 byte to an object at the size limit should fail
-//# run Test::M1::add_byte --args object(110) --sender A --gas-budget 100000000000000
+//# run Test::M1::add_byte --args object(4,0) --sender A --gas-budget 100000000000000
 
 // create at size limit, wrap, increase to over size limit while wrapped, then unwrap. should fail
 //# run Test::M1::transfer_object_with_size --args 255968 --sender A --gas-budget 100000000000000
 
-//# run Test::M1::wrap --args object(113) --sender A --gas-budget 100000000000000
+//# run Test::M1::wrap --args object(6,0) --sender A --gas-budget 100000000000000
 
-//# run Test::M1::add_bytes_then_unwrap --args object(115) 33 --sender A --gas-budget 100000000000000
+//# run Test::M1::add_bytes_then_unwrap --args object(7,0) 33 --sender A --gas-budget 100000000000000

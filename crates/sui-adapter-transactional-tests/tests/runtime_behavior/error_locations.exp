@@ -1,8 +1,8 @@
 processed 6 tasks
 
 task 1 'publish'. lines 8-30:
-created: object(104)
-mutated: object(103)
+created: object(1,0)
+mutated: object(0,0)
 
 task 2 'run'. lines 32-32:
 Error: Transaction Effects Status: Move Runtime Abort. Location: test::m::abort_ (function index 0) at offset 1, Abort Code: 0

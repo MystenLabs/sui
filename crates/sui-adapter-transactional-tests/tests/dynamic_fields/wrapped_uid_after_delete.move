@@ -85,16 +85,16 @@ entry fun t5(wrapper: Wrapper) {
 
 //# run a::m::t0 --sender A
 
-//# run a::m::t1 --sender A --args object(107)
+//# run a::m::t1 --sender A --args object(2,0)
 
-//# run a::m::t2 --sender A --args object(107)
+//# run a::m::t2 --sender A --args object(2,0)
 
-//# run a::m::t3 --sender A --args object(107)
+//# run a::m::t3 --sender A --args object(2,0)
 
-//# view-object 109
+//# view-object 3,0
 
-//# run a::m::t4 --sender A --args object(112)
+//# run a::m::t4 --sender A --args object(5,0)
 
-//# run a::m::t5 --sender A --args object(112)
+//# run a::m::t5 --sender A --args object(5,0)
 
-//# view-object 109
+//# view-object 3,0

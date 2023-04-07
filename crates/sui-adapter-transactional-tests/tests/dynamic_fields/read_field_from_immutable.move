@@ -31,4 +31,4 @@ entry fun read_from_frozen(obj: &Obj) {
 
 //# run a::m::add_then_freeze --sender A
 
-//# run a::m::read_from_frozen --sender A --args object(107)
+//# run a::m::read_from_frozen --sender A --args object(2,0)

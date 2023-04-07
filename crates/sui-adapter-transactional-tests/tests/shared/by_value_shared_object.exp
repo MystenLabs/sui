@@ -1,21 +1,21 @@
 processed 7 tasks
 
 task 1 'publish'. lines 8-28:
-created: object(104)
-mutated: object(103)
+created: object(1,0)
+mutated: object(0,0)
 
 task 2 'publish'. lines 30-38:
-created: object(106)
-mutated: object(105)
+created: object(2,0)
+mutated: object(0,0)
 
 task 3 'run'. lines 41-41:
-created: object(108)
-mutated: object(107)
+created: object(3,0)
+mutated: object(0,0)
 
 task 4 'view-object'. lines 43-43:
 Owner: Shared
-Version: 2
-Contents: t2::o2::Obj2 {id: sui::object::UID {id: sui::object::ID {bytes: fake(108)}}}
+Version: 4
+Contents: t2::o2::Obj2 {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}}
 
 task 5 'run'. lines 45-45:
 Error: Transaction Effects Status: Invalid command argument at 0. Immutable and shared objects cannot be passed by-value.

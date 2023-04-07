@@ -22,24 +22,26 @@ module test::fake {
 
 }
 
-//# programmable --sender A --inputs object(107) 100 @A
+//# programmable --sender A --inputs object(1,2) 100 @A
 //> 0: sui::coin::mint<test::fake::FAKE>(Input(0), Input(1));
 //> TransferObjects([Result(0)], Input(2))
 
-//# view-object 109
+//# view-object 2,0
 
-//# programmable --sender A --inputs object(107) 100
+//# programmable --sender A --inputs object(1,2) 100
 //> 0: sui::coin::mint<test::fake::FAKE>(Input(0), Input(1));
 //> MergeCoins(Gas, [Result(0)])
 
-//# programmable --sender A --inputs object(109)
+//# programmable --sender A --inputs object(2,0)
 //> MergeCoins(Gas, [Input(0)])
 
-//# programmable --sender A --inputs object(107) 100 object(109) object(103)
-//> 0: sui::coin::mint<test::fake::FAKE>(Input(0), Input(1));
-//> MergeCoins(Result(0), [Input(2), Input(3)])
 
-//# programmable --sender A --inputs object(107) 100
+//# programmable --sender A --inputs object(1,2) 100 object(2,0)
+//> 0: sui::coin::mint<test::fake::FAKE>(Input(0), Input(1));
+//> 1: SplitCoins(Gas, [Input(1)]);
+//> MergeCoins(Result(0), [Input(2), Result(1)])
+
+//# programmable --sender A --inputs object(1,2) 100
 //> 0: sui::coin::mint<test::fake::FAKE>(Input(0), Input(1));
 //> 1: SplitCoins(Result(0), [Input(1)]);
 //> MergeCoins(Gas, [Result(1)])

@@ -1,30 +1,37 @@
-processed 8 tasks
+processed 9 tasks
 
 init:
-A: object(103)
+A: object(0,0)
 
 task 1 'publish'. lines 6-21:
-created: object(105)
-mutated: object(104)
+created: object(1,0)
+mutated: object(0,1)
 
 task 2 'publish'. lines 23-52:
-created: object(107)
-mutated: object(106)
+created: object(2,0)
+mutated: object(0,1)
 
 task 3 'publish'. lines 55-82:
-created: object(109)
-mutated: object(108)
+created: object(3,0)
+mutated: object(0,1)
 
 task 4 'run'. lines 84-84:
-created: object(111)
-mutated: object(110)
+created: object(4,0)
+mutated: object(0,0)
 
-task 5 'run'. lines 86-88:
-created: object(113), object(114)
-mutated: object(111), object(112)
+task 5 'run'. lines 86-86:
+created: object(5,0), object(5,1)
+mutated: object(0,0), object(4,0)
 
-task 6 'run'. lines 89-89:
-Error: Object 0x7e05c2d3a6f3852a7399ce0b3b5178921de664dff4de45b7c06781a2da697cc6 is owned by object 0xec8ded94b3c4e7a3c887f314759a23448b172fd07f3b5418ba6a29123f67c318. Objects owned by other objects cannot be used as input arguments.
+task 6 'view-object'. lines 88-88:
+Owner: Object ID: ( fake(5,0) )
+Version: 3
+Contents: t3::o3::Obj3 {id: sui::object::UID {id: sui::object::ID {bytes: fake(4,0)}}}
 
-task 7 'run'. lines 91-91:
-Error: Object 0x7e05c2d3a6f3852a7399ce0b3b5178921de664dff4de45b7c06781a2da697cc6 is owned by object 0xec8ded94b3c4e7a3c887f314759a23448b172fd07f3b5418ba6a29123f67c318. Objects owned by other objects cannot be used as input arguments.
+task 7 'view-object'. lines 90-92:
+Owner: Shared
+Version: 3
+Contents: t2::o2::Obj2 {id: sui::object::UID {id: sui::object::ID {bytes: fake(5,1)}}}
+
+task 8 'run'. lines 93-93:
+Error: Object 0x0fc121b055f0e54036dd11dbaa8f321fa539e5d843e0730f58cafe4ff4b14c52 is owned by object 0xfe8f6c41ad1373a67799336ec9c7a65dcfb9a2d076f8c3d7f9b0a5d2e1a8c92f. Objects owned by other objects cannot be used as input arguments.

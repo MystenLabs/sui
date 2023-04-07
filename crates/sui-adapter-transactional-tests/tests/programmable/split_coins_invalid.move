@@ -25,39 +25,43 @@ module test::m1 {
     }
 }
 
-// let's get ourselves a coin worth 1000
-//# run sui::pay::split_and_transfer --type-args sui::sui::SUI --args object(103) 1000 @A --sender A
+//# programmable --sender A --inputs 100000 @A
+//> SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
 
-//# view-object 109
+// let's get ourselves a coin worth 1000
+//# run sui::pay::split_and_transfer --type-args sui::sui::SUI --args object(2,0) 1000 @A --sender A
+
+//# view-object 3,0
 
 // split off more than it's available
-//# programmable --sender A --inputs object(109) 10001 @B
+//# programmable --sender A --inputs object(3,0) 10001 @B
 //> 0: SplitCoins(Input(0), [Input(1)]);
 
 // split off more than it's available using vector of amounts
-//# programmable --sender A --inputs object(109) 333 333 335
+//# programmable --sender A --inputs object(3,0) 333 333 335
 //> 0: SplitCoins(Input(0), [Input(1), Input(2), Input(3)]);
 
 // use incorrect amount type for split
-//# programmable --sender A --inputs object(109) @C
+//# programmable --sender A --inputs object(3,0) @C
 //> 0: SplitCoins(Input(0), [Input(1)]);
 
 // use incorrect amount type for split with the first one being correct
-//# programmable --sender A --inputs object(109) 100 @C
+//# programmable --sender A --inputs object(3,0) 100 @C
 //> 0: SplitCoins(Input(0), [Input(1), Input(2)]);
 
 // use incorrect arg type for split coming from a Move function
-//# programmable --sender A --inputs object(109)
+//# programmable --sender A --inputs object(3,0)
 //> 0: test::m1::ret_one_amount();
 //> 1: SplitCoins(Input(0), [Result(0)]);
 
 // use incorrect arg type for split by creating a vector of u64s
-//# programmable --sender A --inputs object(109) 100
+//# programmable --sender A --inputs object(3,0) 100
 //> 0: MakeMoveVec<u64>([Input(1), Input(1), Input(1)]);
 //> 1: SplitCoins(Input(0), [Result(0)]);
 
 // pass result of SplitCoins directly as another function argument without creating and intermediate
 // vector first
-//# programmable --sender A --inputs object(109) 100 100 @B
+//# programmable --sender A --inputs object(3,0) 100 100 @B
 //> 0: SplitCoins(Input(0), [Input(1), Input(2)]);
 //> test::m1::transfer(Result(0), Input(3));

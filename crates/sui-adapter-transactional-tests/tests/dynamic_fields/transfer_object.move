@@ -70,16 +70,16 @@ entry fun transfer(o1: &mut Obj, o2: &mut Obj) {
 
 //# run a::m::create --sender A
 
-//# run a::m::add_counter --sender A --args object(107)
+//# run a::m::add_counter --sender A --args object(2,0)
 
-//# run a::m::obj_bump --sender A --args object(107)
+//# run a::m::obj_bump --sender A --args object(2,0)
 
-//# run a::m::assert_count --sender A --args object(107) 1
+//# run a::m::assert_count --sender A --args object(2,0) 1
 
-//# run a::m::transfer --sender A --args object(107) object(109)
+//# run a::m::transfer --sender A --args object(2,0) object(3,0)
 
-//# run a::m::obj_bump --sender A --args object(109)
+//# run a::m::obj_bump --sender A --args object(3,0)
 
-//# run a::m::assert_count --sender A --args object(109) 2
+//# run a::m::assert_count --sender A --args object(3,0) 2
 
-//# run a::m::obj_bump --sender A --args object(107)
+//# run a::m::obj_bump --sender A --args object(2,0)
