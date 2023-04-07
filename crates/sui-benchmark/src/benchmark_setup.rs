@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
 use sui_config::utils;
+use tracing::debug;
 
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
@@ -255,7 +256,7 @@ impl Env {
             .choose(&mut rand::thread_rng())
             .context("Failed to choose a random primary gas id")?;
 
-        eprintln!(
+        debug!(
             "Using primary gas id: {} with balance of {balance}",
             primary_gas_obj.id()
         );
@@ -293,7 +294,7 @@ impl Env {
             })
             .collect::<Vec<_>>();
 
-        eprintln!(
+        debug!(
             "Using {} pay coin(s) with balance of {pay_coins_total_balance}",
             pay_coins.len()
         );

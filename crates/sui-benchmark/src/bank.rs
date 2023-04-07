@@ -3,7 +3,7 @@
 
 use crate::util::{make_pay_tx, UpdatedAndNewlyMintedGasCoins};
 use crate::workloads::payload::Payload;
-use crate::workloads::workload::{Workload, WorkloadBuilder, MAX_BUDGET_FOR_TESTING};
+use crate::workloads::workload::{Workload, WorkloadBuilder, MAX_BUDGET};
 use crate::workloads::{Gas, GasCoinConfig};
 use crate::ValidatorProxy;
 use anyhow::{Error, Result};
@@ -29,7 +29,9 @@ pub struct BenchmarkBank {
     pub proxy: Arc<dyn ValidatorProxy + Send + Sync>,
     // Gas to use for execution of gas generation transaction
     pub primary_gas: Gas,
-    // Coin to use for splitting and generating small gas coins
+    // Coin to use for splitting and generating small gas coins. Can accept
+    // multiple coins in case we no longer have one large coin that will support
+    // generating all coins for the workloads.
     pub pay_coins: Vec<Gas>,
 }
 
@@ -65,7 +67,7 @@ impl BenchmarkBank {
 
         let mut new_gas_coins: Vec<Gas> = vec![];
         let chunked_coin_configs = all_coin_configs.chunks(chunk_size as usize);
-        eprintln!("Number of gas requests = {}", chunked_coin_configs.len());
+        debug!("Number of gas requests = {}", chunked_coin_configs.len());
         for chunk in chunked_coin_configs {
             let gas_coins = self.split_coin_and_pay(chunk, gas_price).await?;
             new_gas_coins.extend(gas_coins);
@@ -117,7 +119,7 @@ impl BenchmarkBank {
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(pay_coin.0)),
                 CallArg::Pure(bcs::to_bytes(&split_amounts).unwrap()),
             ],
-            MAX_BUDGET_FOR_TESTING,
+            MAX_BUDGET,
             gas_price,
         )?;
         let verified_tx = to_sender_signed_transaction(split_coin, keypair);
@@ -135,7 +137,7 @@ impl BenchmarkBank {
         // transferring it to recipients
         let mut updated_pay_coins = Vec::new();
         let mut transferred_coins: Result<Vec<Gas>> = Err(Error::msg("Failed to split coin"));
-        eprintln!(
+        debug!(
             "Splitting {} coin(s) into {} coin(s) of balance {}",
             self.pay_coins.len(),
             split_amounts.len(),

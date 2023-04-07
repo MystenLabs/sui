@@ -158,6 +158,17 @@ impl ExecutionEffects {
         }
     }
 
+    pub fn status(&self) -> String {
+        match self {
+            ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
+                format!("{:#?}", certified_effects.data().status())
+            }
+            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => {
+                format!("{:#?}", sui_tx_effects.status())
+            }
+        }
+    }
+
     pub fn gas_cost_summary(&self) -> GasCostSummary {
         match self {
             crate::ExecutionEffects::CertifiedTransactionEffects(a, _) => {
@@ -175,6 +186,25 @@ impl ExecutionEffects {
 
     pub fn net_gas_used(&self) -> i64 {
         self.gas_cost_summary().net_gas_usage()
+    }
+
+    pub fn print_gas_summary(&self) {
+        let gas_object = self.gas_object();
+        let sender = self.sender();
+        let status = self.status();
+        let gas_cost_summary = self.gas_cost_summary();
+        let gas_used = self.gas_used();
+        let net_gas_used = self.net_gas_used();
+
+        info!(
+            "Summary:\n\
+             Gas Object: {gas_object:?}\n\
+             Sender: {sender:?}\n\
+             status: {status}\n\
+             Gas Cost Summary: {gas_cost_summary:#?}\n\
+             Gas Used: {gas_used}\n\
+             Net Gas Used: {net_gas_used}"
+        );
     }
 }
 

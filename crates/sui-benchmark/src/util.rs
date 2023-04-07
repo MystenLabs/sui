@@ -5,7 +5,7 @@ use anyhow::Result;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore};
 use sui_types::{base_types::SuiAddress, crypto::SuiKeyPair};
 
-use crate::workloads::workload::MAX_BUDGET_FOR_TESTING;
+use crate::workloads::workload::MAX_BUDGET;
 use crate::ValidatorProxy;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -49,7 +49,7 @@ pub fn make_pay_tx(
         addresses,
         split_amounts,
         gas,
-        MAX_BUDGET_FOR_TESTING,
+        MAX_BUDGET,
         gas_price.unwrap_or(DUMMY_GAS_PRICE),
     )?;
     Ok(to_sender_signed_transaction(pay, keypair))
