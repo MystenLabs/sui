@@ -321,12 +321,12 @@ impl ObjectStore for AuthorityPerpetualTables {
         object_id: &ObjectID,
         version: VersionNumber,
     ) -> Result<Option<Object>, SuiError> {
-        let key = ObjectKey(*object_id, version);
-        let obj_entry = self.objects.get(&key);
-        match obj_entry {
-            Ok(Some(wrapper)) => self.object(wrapper),
-            _ => Ok(None),
-        }
+        Ok(self
+            .objects
+            .get(&ObjectKey(*object_id, version))?
+            .map(|object| self.object(&ObjectKey(*object_id, version), object))
+            .transpose()?
+            .flatten())
     }
 }
 

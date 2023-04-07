@@ -217,7 +217,7 @@ pub(crate) fn get_store_object_pair(
                 let digest = move_object.digest();
                 indirect_object = Some(move_object);
                 StoreData::IndirectObject(IndirectObjectMetadata { version, digest })
-            } else if move_obj.type_() == &MoveObjectType::gas_coin() {
+            } else if move_obj.type_().is_gas_coin() {
                 StoreData::Coin(
                     Coin::from_bcs_bytes(move_obj.contents())
                         .expect("failed to deserialize coin")

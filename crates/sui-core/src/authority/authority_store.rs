@@ -1519,13 +1519,7 @@ impl ObjectStore for AuthorityStore {
         object_id: &ObjectID,
         version: VersionNumber,
     ) -> Result<Option<Object>, SuiError> {
-        Ok(self
-            .perpetual_tables
-            .objects
-            .get(&ObjectKey(*object_id, version))?
-            .map(|object| self.perpetual_tables.object(object))
-            .transpose()?
-            .flatten())
+        self.perpetual_tables.get_object_by_key(object_id, version)
     }
 }
 
