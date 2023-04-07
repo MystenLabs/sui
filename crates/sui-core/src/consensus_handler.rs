@@ -130,7 +130,7 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
 
         /* (serialized, transaction, output_cert) */
         let mut transactions = vec![];
-        let timestamp = consensus_output.sub_dag.commit_timestamp;
+        let timestamp = consensus_output.sub_dag.commit_timestamp();
         let leader_author = consensus_output.sub_dag.leader.header().author();
 
         let epoch_start = self

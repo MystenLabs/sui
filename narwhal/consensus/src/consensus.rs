@@ -14,13 +14,12 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     sync::Arc,
 };
-use storage::CertificateStore;
+use storage::{CertificateStore, ConsensusStore};
 use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, info, instrument};
 use types::{
     metered_channel, Certificate, CertificateAPI, CertificateDigest, CommittedSubDag,
-    CommittedSubDagShell, ConditionalBroadcastReceiver, ConsensusStore, HeaderAPI, Round,
-    Timestamp,
+    ConditionalBroadcastReceiver, ConsensusCommit, HeaderAPI, Round, Timestamp,
 };
 
 #[cfg(test)]
@@ -65,7 +64,7 @@ impl ConsensusState {
         last_committed_round: Round,
         gc_depth: Round,
         recovered_last_committed: HashMap<AuthorityIdentifier, Round>,
-        latest_sub_dag: Option<CommittedSubDagShell>,
+        latest_sub_dag: Option<ConsensusCommit>,
         cert_store: CertificateStore,
     ) -> Self {
         let last_round = ConsensusRound::new_with_gc_depth(last_committed_round, gc_depth);
@@ -80,7 +79,7 @@ impl ConsensusState {
 
         let last_committed_sub_dag = if let Some(latest_sub_dag) = latest_sub_dag.as_ref() {
             let certificates = latest_sub_dag
-                .certificates
+                .certificates()
                 .iter()
                 .map(|s| {
                     cert_store
@@ -91,17 +90,15 @@ impl ConsensusState {
                 .collect();
 
             let leader = cert_store
-                .read(latest_sub_dag.leader)
+                .read(latest_sub_dag.leader())
                 .unwrap()
                 .expect("Certificate should be found in database");
 
-            Some(CommittedSubDag {
+            Some(CommittedSubDag::from_commit(
+                latest_sub_dag.clone(),
                 certificates,
                 leader,
-                sub_dag_index: latest_sub_dag.sub_dag_index,
-                reputation_score: latest_sub_dag.reputation_score.clone(),
-                commit_timestamp: latest_sub_dag.commit_timestamp,
-            })
+            ))
         } else {
             None
         };
@@ -358,9 +355,11 @@ where
         let latest_sub_dag = store.get_latest_sub_dag();
         if let Some(sub_dag) = &latest_sub_dag {
             assert_eq!(
-                sub_dag.leader_round, last_committed_round,
+                sub_dag.leader_round(),
+                last_committed_round,
                 "Last subdag leader round {} is not equal to the last committed round {}!",
-                sub_dag.leader_round, last_committed_round,
+                sub_dag.leader_round(),
+                last_committed_round,
             );
         }
 
