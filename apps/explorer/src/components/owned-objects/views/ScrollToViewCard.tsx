@@ -3,12 +3,15 @@
 
 import { useEffect, useRef, type ReactNode } from 'react';
 
-interface ScrollViewCardProps {
+interface ScrollToViewCardProps {
     children: ReactNode;
     strollTo: boolean;
 }
 
-export function ScrollViewCard({ children, strollTo }: ScrollViewCardProps) {
+export function ScrollToViewCard({
+    children,
+    strollTo,
+}: ScrollToViewCardProps) {
     const scrollViewRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {

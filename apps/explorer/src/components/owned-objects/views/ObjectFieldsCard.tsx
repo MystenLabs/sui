@@ -10,6 +10,7 @@ import { useState, useEffect } from 'react';
 import { ReactComponent as SearchIcon } from '~/assets/SVGIcons/24px/Search.svg';
 import { getFieldTypeValue } from '~/components/owned-objects/utils';
 import { FieldItem } from '~/components/owned-objects/views/FieldItem';
+import { ScrollToViewCard } from '~/components/owned-objects/views/ScrollToViewCard';
 import { Banner } from '~/ui/Banner';
 import { DisclosureBox } from '~/ui/DisclosureBox';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
@@ -207,7 +208,7 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
                                 <div className="flex max-h-[600px] flex-col gap-5 overflow-x-scroll pb-5">
                                     {normalizedStruct?.fields.map(
                                         ({ name, type }) => (
-                                            <ScrollViewCard
+                                            <ScrollToViewCard
                                                 key={name}
                                                 strollTo={
                                                     name === activeFieldName
@@ -251,7 +252,7 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
                                                         type={type}
                                                     />
                                                 </DisclosureBox>
-                                            </ScrollViewCard>
+                                            </ScrollToViewCard>
                                         )
                                     )}
                                 </div>
