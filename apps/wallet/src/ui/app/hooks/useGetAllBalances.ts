@@ -3,7 +3,7 @@
 
 import { useFeatureValue } from '@growthbook/growthbook-react';
 import { useRpcClient } from '@mysten/core';
-import { type SuiAddress } from '@mysten/sui.js';
+import { Coin, type SuiAddress } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 
 import { FEATURES } from '_src/shared/experimentation/features';
@@ -17,7 +17,11 @@ export function useGetAllBalances(address?: SuiAddress | null) {
 
     return useQuery(
         ['get-all-balance', address],
-        () => rpc.getAllBalances({ owner: address! }),
+        async () =>
+            (await rpc.getAllBalances({ owner: address! })).sort(
+                ({ coinType: a }, { coinType: b }) =>
+                    Coin.getCoinSymbol(a).localeCompare(Coin.getCoinSymbol(b))
+            ),
         { enabled: !!address, refetchInterval }
     );
 }
