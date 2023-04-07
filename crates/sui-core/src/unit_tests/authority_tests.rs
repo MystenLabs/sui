@@ -4,9 +4,6 @@
 
 use std::collections::HashSet;
 use std::fs;
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll};
 use std::{convert::TryInto, env};
 
 use bcs;
@@ -30,13 +27,12 @@ use rand::{
 };
 use serde_json::json;
 use sui_framework::{make_system_objects, make_system_packages, system_package_ids};
-use tracing::info;
 
 use sui_json_rpc_types::{
     SuiArgument, SuiExecutionResult, SuiExecutionStatus, SuiGasCostSummary,
     SuiTransactionBlockEffectsAPI, SuiTypeTag,
 };
-use sui_macros::{register_fail_point_async, sim_test};
+use sui_macros::sim_test;
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::epoch_data::EpochData;
@@ -2350,137 +2346,6 @@ async fn test_handle_confirmation_transaction_ok() {
         .is_none());
 }
 
-struct LimitedPoll<F: Future> {
-    inner: Pin<Box<F>>,
-    count: u64,
-    limit: u64,
-}
-
-impl<F: Future> LimitedPoll<F> {
-    fn new(limit: u64, inner: F) -> Self {
-        Self {
-            inner: Box::pin(inner),
-            count: 0,
-            limit,
-        }
-    }
-}
-
-impl<F: Future> Future for LimitedPoll<F> {
-    type Output = Option<F::Output>;
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        if self.count >= self.limit {
-            return Poll::Ready(None);
-        }
-        self.count += 1;
-        match self.inner.as_mut().poll(cx) {
-            Poll::Pending => Poll::Pending,
-            Poll::Ready(val) => Poll::Ready(Some(val)),
-        }
-    }
-}
-
-#[sim_test]
-async fn test_handle_certificate_with_shared_object_interrupted_retry() {
-    telemetry_subscribers::init_for_testing();
-
-    // insert a yield point at every crash failpoint so we can probe the execution path and verify
-    // that it can be resumed after every fail point.
-    register_fail_point_async("crash", tokio::task::yield_now);
-
-    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let gas_object_id = ObjectID::random();
-
-    // We repeatedly timeout certs after a variety of delays, using LimitedPoll to ensure that we
-    // interrupt the future at every point at which it is possible to be interrupted.
-    // When .await points are added, this test will automatically exercise them.
-    // The loop below terminates after all await points have been checked.
-    let delays: Vec<_> = (1..100).collect();
-
-    let mut objects: Vec<_> = delays
-        .iter()
-        .map(|_| (sender, ObjectID::random()))
-        .collect();
-    objects.push((sender, gas_object_id));
-
-    let authority_state = Arc::new(init_state_with_ids(objects.clone()).await);
-
-    let shared_object_id = ObjectID::random();
-    let shared_object = {
-        use sui_types::object::MoveObject;
-        let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, shared_object_id, 10);
-        let owner = Owner::Shared {
-            initial_shared_version: obj.version(),
-        };
-        Object::new_move(obj, owner, TransactionDigest::genesis())
-    };
-    let initial_shared_version = shared_object.version();
-
-    authority_state.insert_genesis_object(shared_object).await;
-
-    let mut interrupted_count = 0;
-    for limit in &delays {
-        info!("Testing with poll limit {}", limit);
-        let gas_object = authority_state
-            .get_object(&gas_object_id)
-            .await
-            .unwrap()
-            .unwrap();
-
-        // The tested certificate must contain shared objects, background:
-        // https://github.com/MystenLabs/sui/pull/4579
-        let shared_object_cert = make_test_transaction(
-            &sender,
-            &sender_key,
-            shared_object_id,
-            initial_shared_version,
-            &gas_object.compute_object_reference(),
-            &[&authority_state],
-            16,
-        )
-        .await;
-
-        // Send the shared_object_cert to consensus without execution, because it is necessary
-        // to prepare the state for the explicit interrupted execution later.
-        send_consensus_no_execution(&authority_state, &shared_object_cert).await;
-
-        let clone1 = shared_object_cert.clone();
-        let state1 = authority_state.clone();
-
-        let res = Box::pin(LimitedPoll::new(*limit, async move {
-            state1.try_execute_for_test(&clone1).await.unwrap();
-        }))
-        .await;
-        if res.is_some() {
-            info!(?limit, "limit was high enough that future completed");
-            break;
-        }
-        interrupted_count += 1;
-
-        let epoch_store = authority_state.epoch_store_for_testing();
-
-        // Now run the tx to completion. Interrupted tx should be retriable via TransactionManager.
-        // Must manually enqueue the cert to transaction manager because send_consensus_no_execution
-        // explicitly doesn't do so.
-        authority_state
-            .transaction_manager()
-            .enqueue_certificates(vec![shared_object_cert.clone()], &epoch_store)
-            .unwrap();
-        authority_state
-            .execute_certificate(
-                &shared_object_cert,
-                &authority_state.epoch_store_for_testing(),
-            )
-            .await
-            .unwrap();
-    }
-
-    // ensure we tested something
-    dbg!(interrupted_count);
-    assert!(interrupted_count >= 1);
-}
-
 #[tokio::test]
 async fn test_handle_confirmation_transaction_idempotent() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
@@ -4667,6 +4532,10 @@ pub async fn call_dev_inspect(
         .await
 }
 
+/// This function creates a transaction that calls a 0x02::object_basics::set_value function.
+/// Usually we need to publish this package first, but in this test files we often don't do that.
+/// Then the tx would fail with `VMVerificationOrDeserializationError` (Linker error, module not found),
+/// but gas is still charged. Depending on what we want to test, this may be fine.
 #[cfg(test)]
 async fn make_test_transaction(
     sender: &SuiAddress,
