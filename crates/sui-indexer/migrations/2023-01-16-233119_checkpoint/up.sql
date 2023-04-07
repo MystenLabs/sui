@@ -6,8 +6,6 @@ CREATE TABLE checkpoints
     transactions               TEXT[]       NOT NULL,
     previous_checkpoint_digest VARCHAR(255),
     end_of_epoch               BOOLEAN      NOT NULL,
-    -- TODO (Jian): Change validator signature to bytes
-    validator_signature        TEXT         NOT NULL,
     -- derived from GasCostSummary
     total_gas_cost             BIGINT       NOT NULL,
     total_computation_cost     BIGINT       NOT NULL,
