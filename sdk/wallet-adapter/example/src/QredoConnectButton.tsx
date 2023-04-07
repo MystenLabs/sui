@@ -1,6 +1,6 @@
 import { useWalletKit, type WalletWithFeatures } from "@mysten/wallet-kit";
 
-type QredoConnectInput = {};
+type QredoConnectInput = { service: string; apiUrl: string; token: string };
 type QredoConnectFeature = {
   "qredo:connect": {
     version: "0.0.1";
@@ -29,7 +29,11 @@ export function QredoConnectButton() {
     <button
       onClick={async () => {
         try {
-          qredoConnectWallet.features["qredo:connect"]?.qredoConnect({});
+          qredoConnectWallet.features["qredo:connect"]?.qredoConnect({
+            service: "qredo-testing",
+            apiUrl: "apiUrl",
+            token: "aToken",
+          });
         } catch (e) {
           console.log(e);
         }

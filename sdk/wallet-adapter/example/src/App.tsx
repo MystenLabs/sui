@@ -73,7 +73,7 @@ function App() {
       </div>
       <hr />
       <div>
-        <h3>Custodial Connect</h3>
+        <h3>Qredo Connect</h3>
         {/* features here will filter out any other installed wallets that don't support custodial connect */}
         <WalletKitProvider features={["qredo:connect"]}>
           <QredoConnectButton />
