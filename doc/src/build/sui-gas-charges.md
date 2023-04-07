@@ -55,7 +55,7 @@ pub struct GasCostSummary {
 ```
 
 The final gas charge, and so the amount subtracted from the gas coin (the first one after “gas smashing”) is:
-`gas charge = computation_cost + storage_cost - storage_rebate - non_refundable_storage_fee`
+`gas charge = computation_cost + storage_cost - storage_rebate`
 
 The `computation_cost` is the execution charge, defined as computation and memory cost.
 
