@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { CoinFormat, useFormatCoin } from '@mysten/core';
+import { CoinFormat, useFormatCoin, useGetTransferAmount } from '@mysten/core';
 import {
     getExecutionStatusError,
     getExecutionStatusType,
@@ -16,14 +16,13 @@ import {
     type SuiTransactionBlockResponse,
 } from '@mysten/sui.js';
 import clsx from 'clsx';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 
 // import {
 //     eventToDisplay,
 //     getAddressesLinks,
 // } from '../../components/events/eventDisplay';
-import Pagination from '../../components/pagination/Pagination';
-import { getAmount } from '../../utils/getAmount';
+
 import { Signatures } from './Signatures';
 import TxLinks from './TxLinks';
 
@@ -46,8 +45,6 @@ import {
     SponsorTransactionAddress,
 } from '~/ui/TransactionAddressSection';
 import { ReactComponent as ChevronDownIcon } from '~/ui/icons/chevron_down.svg';
-
-const MAX_RECIPIENTS_PER_PAGE = 10;
 
 function generateMutatedCreated(tx: SuiTransactionBlockResponse) {
     return [
@@ -124,33 +121,10 @@ export function TransactionView({
 
     const [gasFeesExpanded, setGasFeesExpanded] = useState(false);
 
-    const [recipientsPageNumber, setRecipientsPageNumber] = useState(1);
+    const { amount, coinType, balanceChanges } =
+        useGetTransferAmount(transaction);
 
-    const coinTransfer = useMemo(
-        () =>
-            getAmount({
-                txnData: transaction,
-            }),
-        [transaction]
-    );
-
-    const recipients = useMemo(() => {
-        const startAt = (recipientsPageNumber - 1) * MAX_RECIPIENTS_PER_PAGE;
-        const endAt = recipientsPageNumber * MAX_RECIPIENTS_PER_PAGE;
-        return coinTransfer.slice(startAt, endAt);
-    }, [coinTransfer, recipientsPageNumber]);
-
-    // select the first element in the array, if there are more than one element we don't show the total amount sent but display the individual amounts
-    // use absolute value
-    const totalRecipientsCount = coinTransfer.length;
-    const transferAmount = coinTransfer?.[0]?.amount
-        ? Math.abs(coinTransfer[0].amount)
-        : null;
-
-    const [formattedAmount, symbol] = useFormatCoin(
-        transferAmount,
-        coinTransfer?.[0]?.coinType
-    );
+    const [formattedAmount, symbol] = useFormatCoin(amount, coinType);
 
     // const txKindData = formatByTransactionKind(txKindName, txnDetails, sender);
     // const txEventData = transaction.events?.map(eventToDisplay);
@@ -236,9 +210,7 @@ export function TransactionView({
                                 ])}
                                 data-testid="transaction-timestamp"
                             >
-                                {coinTransfer.length === 1 &&
-                                coinTransfer?.[0]?.coinType &&
-                                formattedAmount ? (
+                                {coinType && formattedAmount ? (
                                     <section className="mb-10">
                                         <StatAmount
                                             amount={formattedAmount}
@@ -263,28 +235,13 @@ export function TransactionView({
                                 <div className="mt-10">
                                     <SenderTransactionAddress sender={sender} />
                                 </div>
-                                {recipients.length > 0 && (
+                                {balanceChanges.length > 0 && (
                                     <div className="mt-10">
                                         <RecipientTransactionAddresses
-                                            recipients={recipients}
+                                            recipients={balanceChanges}
                                         />
                                     </div>
                                 )}
-                                <div className="mt-5 flex w-full max-w-lg">
-                                    {totalRecipientsCount >
-                                        MAX_RECIPIENTS_PER_PAGE && (
-                                        <Pagination
-                                            totalItems={totalRecipientsCount}
-                                            itemsPerPage={
-                                                MAX_RECIPIENTS_PER_PAGE
-                                            }
-                                            currentPage={recipientsPageNumber}
-                                            onPagiChangeFn={
-                                                setRecipientsPageNumber
-                                            }
-                                        />
-                                    )}
-                                </div>
                             </section>
 
                             <section

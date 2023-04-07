@@ -17,10 +17,10 @@ type Addresslist = {
     links: SuiObjectRef[];
 };
 function TxLinks({ data }: { data: Addresslist }) {
-    const [viewMore, setVeiwMore] = useState(false);
+    const [viewMore, setViewMore] = useState(false);
     const numberOfListItemsToShow = 3;
     const viewAll = useCallback(() => {
-        setVeiwMore(!viewMore);
+        setViewMore(!viewMore);
     }, [viewMore]);
     return (
         <div className={styles.mutatedcreatedlist}>
