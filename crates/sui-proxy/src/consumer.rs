@@ -12,12 +12,20 @@ use fastcrypto::ed25519::Ed25519PublicKey;
 use multiaddr::Multiaddr;
 use once_cell::sync::Lazy;
 use prometheus::proto;
-use prometheus::{register_counter_vec, register_histogram_vec};
-use prometheus::{CounterVec, HistogramVec};
+use prometheus::{register_counter, register_counter_vec, register_histogram_vec};
+use prometheus::{Counter, CounterVec, HistogramVec};
 use prost::Message;
 use protobuf::CodedInputStream;
 use std::io::Read;
 use tracing::{debug, error};
+
+static CONSUMER_OPS_SUBMITTED: Lazy<Counter> = Lazy::new(|| {
+    register_counter!(
+        "consumer_operations_submitted",
+        "Operations counter for the number of metric family types we submit, excluding histograms, and not the discrete timeseries counts.",
+    )
+    .unwrap()
+});
 
 static CONSUMER_OPS: Lazy<CounterVec> = Lazy::new(|| {
     register_counter_vec!(
@@ -238,7 +246,10 @@ pub async fn convert_to_remote_write(
     let timer = CONSUMER_OPERATION_DURATION
         .with_label_values(&["convert_to_remote_write"])
         .start_timer();
+    // a counter so we don't iterate the node data 2x
+    let mut mf_cnt = 0;
     for request in Mimir::from(node_metric.data) {
+        mf_cnt += 1;
         let compressed = match encode_compress(&request) {
             Ok(compressed) => compressed,
             Err(error) => return error,
@@ -278,6 +289,7 @@ pub async fn convert_to_remote_write(
             }
         }
     }
+    CONSUMER_OPS_SUBMITTED.inc_by(mf_cnt as f64);
     timer.observe_duration();
     (StatusCode::CREATED, "created")
 }
