@@ -7,7 +7,7 @@ import { useMemo } from 'react';
 import Decimal from 'decimal.js';
 
 import { useGetValidatorsEvents } from './useGetValidatorsEvents';
-import { useGetSystemObject } from './useGetSystemObject';
+import { useGetSystemState } from './useGetSystemState';
 import { roundFloat } from '../utils/roundFloat';
 
 // recentEpochRewards is list of the last 30 epoch rewards for a specific validator
@@ -61,7 +61,7 @@ export function useGetRollingAverageApys(numberOfValidators: number | null) {
         order: 'descending',
     });
 
-    const { data, isLoading } = useGetSystemObject();
+    const { data, isLoading } = useGetSystemState();
 
     const apyByValidator =
         useMemo<ApyByValidator | null>(() => {
@@ -79,9 +79,10 @@ export function useGetRollingAverageApys(numberOfValidators: number | null) {
             }
 
             // The rolling average epoch is the current epoch - the stake subsidy start epoch
-            const avgEpochNumberAfterSubsidy =
-                ROLLING_AVERAGE - stakeSubsidyStartEpoch;
-
+            const avgEpochNumberAfterSubsidy = Math.max(
+                0,
+                Math.min(ROLLING_AVERAGE, epoch - stakeSubsidyStartEpoch)
+            );
             const apyGroups: ApyGroups = {};
 
             validatorEpochEvents.data.forEach(({ parsedJson }) => {
@@ -104,12 +105,7 @@ export function useGetRollingAverageApys(numberOfValidators: number | null) {
             ).reduce((acc, [validatorAddr, apyArr]) => {
                 // prevent negative rolling average epoch by setting it to 0
                 const apys = apyArr
-                    .slice(
-                        0,
-                        avgEpochNumberAfterSubsidy < 0
-                            ? 0
-                            : avgEpochNumberAfterSubsidy
-                    )
+                    .slice(0, avgEpochNumberAfterSubsidy)
                     .map((entry) => entry);
 
                 const avgApy =
