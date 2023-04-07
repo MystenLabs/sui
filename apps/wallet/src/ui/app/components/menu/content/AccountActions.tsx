@@ -1,43 +1,49 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiAddress } from '@mysten/sui.js';
-
 import { useNextMenuUrl } from '../hooks';
-import { AccountType } from '_src/background/keyring/Account';
+import { VerifyLedgerConnectionStatus } from './VerifyLedgerConnectionStatus';
+import {
+    AccountType,
+    type SerializedAccount,
+} from '_src/background/keyring/Account';
 import { Link } from '_src/ui/app/shared/Link';
-import { Text } from '_src/ui/app/shared/text';
 
 export type AccountActionsProps = {
-    accountAddress: SuiAddress;
-    accountType: AccountType;
+    account: SerializedAccount;
 };
 
-export function AccountActions({
-    accountAddress,
-    accountType,
-}: AccountActionsProps) {
-    const exportAccountUrl = useNextMenuUrl(true, `/export/${accountAddress}`);
-    const canExportPrivateKey =
-        accountType === AccountType.DERIVED ||
-        accountType === AccountType.IMPORTED;
+export function AccountActions({ account }: AccountActionsProps) {
+    const exportAccountUrl = useNextMenuUrl(true, `/export/${account.address}`);
+
+    let actionContent: JSX.Element | null = null;
+    switch (account.type) {
+        case AccountType.LEDGER:
+            actionContent = (
+                <VerifyLedgerConnectionStatus
+                    accountAddress={account.address}
+                    derivationPath={account.derivationPath}
+                />
+            );
+            break;
+        case AccountType.IMPORTED:
+        case AccountType.DERIVED:
+            actionContent = (
+                <Link
+                    text="Export Private Key"
+                    to={exportAccountUrl}
+                    color="heroDark"
+                    weight="medium"
+                />
+            );
+            break;
+        default:
+            throw new Error(`Encountered unknown account type`);
+    }
 
     return (
         <div className="flex flex-row flex-nowrap items-center flex-1">
-            {canExportPrivateKey ? (
-                <div>
-                    <Link
-                        text="Export Private Key"
-                        to={exportAccountUrl}
-                        color="heroDark"
-                        weight="medium"
-                    />
-                </div>
-            ) : (
-                <Text variant="bodySmall" weight="medium" color="steel">
-                    No actions available
-                </Text>
-            )}
+            <div>{actionContent}</div>
         </div>
     );
 }

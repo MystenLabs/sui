@@ -8,16 +8,16 @@ import { cx } from 'class-variance-authority';
 
 import { AccountBadge } from '../../AccountBadge';
 import { AccountActions } from './AccountActions';
-import { type AccountType } from '_src/background/keyring/Account';
+import { type SerializedAccount } from '_src/background/keyring/Account';
 import { useCopyToClipboard } from '_src/ui/app/hooks/useCopyToClipboard';
 import { Heading } from '_src/ui/app/shared/heading';
 
 export type AccountProps = {
-    address: string;
-    accountType: AccountType;
+    account: SerializedAccount;
 };
 
-export function Account({ address, accountType }: AccountProps) {
+export function Account({ account }: AccountProps) {
+    const { address, type } = account;
     const copyCallback = useCopyToClipboard(address, {
         copySuccessMessage: 'Address copied',
     });
@@ -46,7 +46,7 @@ export function Account({ address, accountType }: AccountProps) {
                             >
                                 {formatAddress(address)}
                             </Heading>
-                            <AccountBadge accountType={accountType} />
+                            <AccountBadge accountType={type} />
                         </div>
                         <Copy16
                             onClick={copyCallback}
@@ -63,10 +63,7 @@ export function Account({ address, accountType }: AccountProps) {
                         leaveTo="transform opacity-0"
                     >
                         <Disclosure.Panel className="px-5 pb-4">
-                            <AccountActions
-                                accountAddress={address}
-                                accountType={accountType}
-                            />
+                            <AccountActions account={account} />
                         </Disclosure.Panel>
                     </Transition>
                 </div>
