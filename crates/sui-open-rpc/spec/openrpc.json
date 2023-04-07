@@ -62,7 +62,39 @@
         "schema": {
           "$ref": "#/components/schemas/DevInspectResults"
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Run the transaction in dev-inspect mode",
+          "params": [
+            {
+              "name": "sender_address",
+              "value": "Address"
+            },
+            {
+              "name": "tx_bytes",
+              "value": "Base64"
+            },
+            {
+              "name": "gas_price",
+              "value": "BigInt"
+            },
+            {
+              "name": "epoch",
+              "value": 0
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": {
+              "effects": "",
+              "error": "",
+              "events": "",
+              "results": ""
+            }
+          }
+        }
+      ]
     },
     {
       "name": "sui_dryRunTransactionBlock",
@@ -87,7 +119,30 @@
         "schema": {
           "$ref": "#/components/schemas/DryRunTransactionBlockResponse"
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Dry run a transaction",
+          "params": [
+            {
+              "name": "tx_bytes",
+              "value": "Base64"
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": {
+              "data": {
+                "balanceChanges": "",
+                "effects": "",
+                "events": "",
+                "input": "",
+                "objectChanges": ""
+              }
+            }
+          }
+        }
+      ]
     },
     {
       "name": "sui_executeTransactionBlock",
