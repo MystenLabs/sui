@@ -61,7 +61,6 @@ export function useGetRollingAverageApys(numberOfValidators: number | null) {
         order: 'descending',
     });
 
-    // Get Stake subsidy start epoch
     const { data, isLoading } = useGetSystemObject();
 
     const apyByValidator =
@@ -71,7 +70,7 @@ export function useGetRollingAverageApys(numberOfValidators: number | null) {
             }
             const { stakeSubsidyStartEpoch, epoch, activeValidators } =
                 data || {};
-            // return 0 for all validators if the epoch is less than the stake subsidy start epoch
+            // return 0 for all validators if current epoch is less than the stake subsidy start epoch
             if (epoch < stakeSubsidyStartEpoch) {
                 return activeValidators.reduce((acc, validator) => {
                     acc[validator.suiAddress] = 0;
