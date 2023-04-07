@@ -64,10 +64,8 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
     }
 
     // Set the active field name to the first field in the struct on load
-    if (isSuccess) {
-        if (normalizedStruct?.fields && activeFieldName === '') {
-            setActiveFieldName(normalizedStruct.fields[0].name);
-        }
+    if (isSuccess && normalizedStruct?.fields && activeFieldName === '') {
+        setActiveFieldName(normalizedStruct.fields[0].name);
     }
 
     const fieldsData = getObjectFields(data!);
