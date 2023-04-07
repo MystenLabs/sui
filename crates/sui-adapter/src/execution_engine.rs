@@ -87,14 +87,55 @@ pub fn execute_transaction_to_effects<
         protocol_config,
     );
 
-    let (status, execution_result) = match execution_result {
-        Ok(results) => (ExecutionStatus::Success, Ok(results)),
-        Err(error) => {
-            let (status, command) = error.to_execution_status();
-            (ExecutionStatus::new_failure(status, command), Err(error))
-        }
+    let status = if let Err(error) = &execution_result {
+        // Elaborate errors in logs if they are unexpected or their status is terse.
+        use ExecutionErrorKind as K;
+        match error.kind() {
+            K::InvariantViolation |
+            K::VMInvariantViolation => {
+                #[skip_checked_arithmetic]
+                tracing::error!(
+                    kind = ?error.kind(),
+                    tx_digest = ?transaction_digest,
+                    "INVARIANT VIOLATION! Source: {:?}",
+                    error.source(),
+                );
+            },
+
+            K::SuiMoveVerificationError |
+            K::VMVerificationOrDeserializationError => {
+                #[skip_checked_arithmetic]
+                tracing::info!(
+                    kind = ?error.kind(),
+                    tx_digest = ?transaction_digest,
+                    "Verification Error. Source: {:?}",
+                    error.source(),
+                );
+            }
+
+            K::PublishUpgradeMissingDependency |
+            K::PublishUpgradeDependencyDowngrade => {
+                #[skip_checked_arithmetic]
+                tracing::info!(
+                    kind = ?error.kind(),
+                    tx_digest = ?transaction_digest,
+                    "Publish/Upgrade Error. Source: {:?}",
+                    error.source(),
+                )
+            }
+
+            _ => (),
+        };
+
+        let (status, command) = error.to_execution_status();
+        ExecutionStatus::new_failure(status, command)
+    } else {
+        ExecutionStatus::Success
     };
+
+    #[skip_checked_arithmetic]
     trace!(
+        tx_digest = ?transaction_digest,
         computation_gas_cost = gas_cost_summary.computation_cost,
         storage_gas_cost = gas_cost_summary.storage_cost,
         storage_gas_rebate = gas_cost_summary.storage_rebate,
