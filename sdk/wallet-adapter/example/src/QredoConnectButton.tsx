@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import { useWalletKit, type WalletWithFeatures } from "@mysten/wallet-kit";
 
 type QredoConnectInput = { service: string; apiUrl: string; token: string };
