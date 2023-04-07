@@ -166,7 +166,8 @@ impl CheckpointExecutor {
                 // This makes sure we don't re-schedule the same checkpoint multiple times.
                 &mut next_to_schedule,
                 epoch_store.clone(),
-            );
+            )
+            .await;
             tokio::select! {
                 // Check for completed workers and ratchet the highest_checkpoint_executed
                 // watermark accordingly. Note that given that checkpoints are guaranteed to
@@ -250,7 +251,7 @@ impl CheckpointExecutor {
         self.metrics.last_executed_checkpoint.set(seq as i64);
     }
 
-    fn schedule_synced_checkpoints(
+    async fn schedule_synced_checkpoints(
         &self,
         pending: &mut CheckpointExecutionBuffer,
         next_to_schedule: &mut CheckpointSequenceNumber,
@@ -283,12 +284,85 @@ impl CheckpointExecutor {
                 return;
             }
 
-            self.schedule_checkpoint(checkpoint, pending, epoch_store.clone());
+            self.schedule_checkpoint(checkpoint, pending, epoch_store.clone())
+                .await;
             *next_to_schedule += 1;
         }
     }
 
-    fn schedule_checkpoint(
+    async fn enqueue_transactions(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        execution_digests: &[ExecutionDigests],
+        executable_txns: Vec<VerifiedExecutableTransaction>,
+    ) -> SuiResult {
+        let effects_digests = execution_digests.iter().map(|digest| digest.effects);
+        let digest_to_effects: HashMap<TransactionDigest, TransactionEffects> = self
+            .authority_store
+            .perpetual_tables
+            .effects
+            .multi_get(effects_digests)?
+            .into_iter()
+            .map(|fx| {
+                if fx.is_none() {
+                    panic!("Transaction effects do not exist in effects table");
+                }
+                let fx = fx.unwrap();
+                (*fx.transaction_digest(), fx)
+            })
+            .collect();
+
+        for tx in &executable_txns {
+            if tx.contains_shared_object() {
+                epoch_store
+                    .acquire_shared_locks_from_effects(
+                        tx,
+                        digest_to_effects.get(tx.digest()).unwrap(),
+                        &self.authority_store,
+                    )
+                    .await?;
+            }
+        }
+
+        self.tx_manager.enqueue(executable_txns, epoch_store)
+    }
+
+    async fn enqueue_checkpoint(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        checkpoint: &VerifiedCheckpoint,
+    ) -> SuiResult<(Vec<ExecutionDigests>, Vec<TransactionDigest>)> {
+        let checkpoint_sequence = *checkpoint.sequence_number();
+        debug!(
+            "Scheduling checkpoint {:?} for execution",
+            checkpoint_sequence,
+        );
+
+        let (execution_digests, all_tx_digests, executable_txns) = get_unexecuted_transactions(
+            checkpoint.clone(),
+            self.authority_store.clone(),
+            self.checkpoint_store.clone(),
+            epoch_store.clone(),
+        );
+
+        let tx_count = execution_digests.len();
+        debug!(
+            epoch=?epoch_store.epoch(),
+            checkpoint_sequence=?checkpoint.sequence_number(),
+            "Number of transactions in the checkpoint: {:?}",
+            tx_count
+        );
+        self.metrics
+            .checkpoint_transaction_count
+            .report(tx_count as u64);
+
+        self.enqueue_transactions(epoch_store, &execution_digests, executable_txns)
+            .await?;
+
+        Ok((execution_digests, all_tx_digests))
+    }
+
+    async fn schedule_checkpoint(
         &self,
         checkpoint: VerifiedCheckpoint,
         pending: &mut CheckpointExecutionBuffer,
@@ -310,21 +384,25 @@ impl CheckpointExecutor {
         let metrics = self.metrics.clone();
         let local_execution_timeout_sec = self.config.local_execution_timeout_sec;
         let authority_store = self.authority_store.clone();
-        let checkpoint_store = self.checkpoint_store.clone();
         let tx_manager = self.tx_manager.clone();
         let accumulator = self.accumulator.clone();
+
+        let (execution_digests, all_tx_digests) = self
+            .enqueue_checkpoint(&epoch_store, &checkpoint)
+            .await
+            .expect("enqueue_checkpoint can not fail");
 
         pending.push_back(spawn_monitored_task!(async move {
             let epoch_store = epoch_store.clone();
             while let Err(err) = execute_checkpoint(
+                execution_digests.clone(),
+                all_tx_digests.clone(),
                 checkpoint.clone(),
                 authority_store.clone(),
-                checkpoint_store.clone(),
                 epoch_store.clone(),
                 tx_manager.clone(),
                 accumulator.clone(),
                 local_execution_timeout_sec,
-                &metrics,
             )
             .await
             {
@@ -366,13 +444,17 @@ impl CheckpointExecutor {
                         last_checkpoint = checkpoint.sequence_number(),
                         "Reached end of epoch, executing change_epoch transaction",
                     );
-
-                    let change_epoch_effects = execute_transactions(
+                    self.enqueue_transactions(
+                        &epoch_store,
+                        &[change_epoch_execution_digests],
+                        vec![change_epoch_tx],
+                    )
+                    .await
+                    .expect("enqueue_checkpoint should not fail");
+                    let change_epoch_effects = wait_transactions_executed(
                         vec![change_epoch_execution_digests],
                         vec![change_epoch_tx_digest],
-                        vec![change_epoch_tx],
                         self.authority_store.clone(),
-                        epoch_store.clone(),
                         self.tx_manager.clone(),
                         self.config.local_execution_timeout_sec,
                         checkpoint.clone(),
@@ -438,51 +520,23 @@ impl CheckpointExecutor {
 
 #[instrument(level = "error", skip_all, fields(seq = ?checkpoint.sequence_number(), epoch = ?epoch_store.epoch()))]
 async fn execute_checkpoint(
+    execution_digests: Vec<ExecutionDigests>,
+    all_tx_digests: Vec<TransactionDigest>,
     checkpoint: VerifiedCheckpoint,
     authority_store: Arc<AuthorityStore>,
-    checkpoint_store: Arc<CheckpointStore>,
     epoch_store: Arc<AuthorityPerEpochStore>,
     transaction_manager: Arc<TransactionManager>,
     accumulator: Arc<StateAccumulator>,
     local_execution_timeout_sec: u64,
-    metrics: &Arc<CheckpointExecutorMetrics>,
 ) -> SuiResult {
     let checkpoint_sequence = *checkpoint.sequence_number();
-    debug!(
-        "Scheduling checkpoint {:?} for execution",
-        checkpoint_sequence,
-    );
-
-    // this function must guarantee that all transactions in the checkpoint are executed before it
-    // returns. This invariant is enforced in two phases:
-    // - First, we filter out any already executed transactions from the checkpoint in
-    //   get_unexecuted_transactions()
-    // - Second, we execute all remaining transactions.
-
-    let (execution_digests, all_tx_digests, executable_txns) = get_unexecuted_transactions(
-        checkpoint.clone(),
-        authority_store.clone(),
-        checkpoint_store.clone(),
-        epoch_store.clone(),
-    );
-
-    let tx_count = execution_digests.len();
-    debug!(
-        epoch=?epoch_store.epoch(),
-        checkpoint_sequence=?checkpoint.sequence_number(),
-        "Number of transactions in the checkpoint: {:?}",
-        tx_count
-    );
-    metrics.checkpoint_transaction_count.report(tx_count as u64);
 
     let end_of_epoch = checkpoint.end_of_epoch_data.is_some();
 
-    let effects = execute_transactions(
+    let effects = wait_transactions_executed(
         execution_digests,
         all_tx_digests.clone(),
-        executable_txns,
         authority_store.clone(),
-        epoch_store.clone(),
         transaction_manager,
         local_execution_timeout_sec,
         checkpoint,
@@ -673,45 +727,19 @@ fn get_unexecuted_transactions(
     (execution_digests, all_tx_digests, executable_txns)
 }
 
-async fn execute_transactions(
+async fn wait_transactions_executed(
     execution_digests: Vec<ExecutionDigests>,
     all_tx_digests: Vec<TransactionDigest>,
-    executable_txns: Vec<VerifiedExecutableTransaction>,
     authority_store: Arc<AuthorityStore>,
-    epoch_store: Arc<AuthorityPerEpochStore>,
     transaction_manager: Arc<TransactionManager>,
     log_timeout_sec: u64,
     checkpoint: VerifiedCheckpoint,
 ) -> SuiResult<Vec<TransactionEffects>> {
-    let effects_digests = execution_digests.iter().map(|digest| digest.effects);
-
-    let digest_to_effects: HashMap<TransactionDigest, TransactionEffects> = authority_store
-        .perpetual_tables
-        .effects
-        .multi_get(effects_digests)?
-        .into_iter()
-        .map(|fx| {
-            if fx.is_none() {
-                panic!("Transaction effects do not exist in effects table");
-            }
-            let fx = fx.unwrap();
-            (*fx.transaction_digest(), fx)
-        })
-        .collect();
-
-    for tx in &executable_txns {
-        if tx.contains_shared_object() {
-            epoch_store
-                .acquire_shared_locks_from_effects(
-                    tx,
-                    digest_to_effects.get(tx.digest()).unwrap(),
-                    &authority_store,
-                )
-                .await?;
-        }
-    }
-
-    transaction_manager.enqueue(executable_txns, &epoch_store)?;
+    // this function must guarantee that all transactions in the checkpoint are executed before it
+    // returns. This invariant is enforced in two phases:
+    // - First, we filter out any already executed transactions from the checkpoint in
+    //   get_unexecuted_transactions()
+    // - Second, we execute all remaining transactions.
 
     // Once synced_txns have been awaited, all txns should have effects committed.
     let mut periods = 1;
