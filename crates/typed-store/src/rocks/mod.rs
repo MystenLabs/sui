@@ -1852,10 +1852,11 @@ pub fn default_db_options() -> DBOptions {
     // without causing any regression for scanning, with slightly more memory usages.
     // https://github.com/facebook/rocksdb/blob/11cb6af6e5009c51794641905ca40ce5beec7fee/options/options.cc#L611-L621
     let mut block_options = BlockBasedOptions::default();
-    // Configure a 64MiB block cache.
-    block_options.set_block_cache(&Cache::new_lru_cache(64 << 20).unwrap());
-    // Set a bloomfilter with 1% false positive rate.
-    block_options.set_bloom_filter(10.0, false);
+    // Configure a 1GB block cache.
+    // Chris: increase this because hit rate is only 30%
+    block_options.set_block_cache(&Cache::new_lru_cache(1 << 30).unwrap());
+    // Chris's notes: tuning this because we saw `rocksdb.bloom.filter.useful` is only 1, indicating that the Bloom filter has helped avoid file reads only once.
+    block_options.set_bloom_filter(20.0, false);
 
     // From https://github.com/EighteenZi/rocksdb_wiki/blob/master/Block-Cache.md#caching-index-and-filter-blocks
     block_options.set_pin_l0_filter_and_index_blocks_in_cache(true);
