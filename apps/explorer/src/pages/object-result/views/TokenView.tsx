@@ -18,8 +18,8 @@ import { parseImageURL, extractName } from '../../../utils/objectUtils';
 import { trimStdLibPrefix, genFileTypeMsg } from '../../../utils/stringUtils';
 import { LinkOrTextDescriptionItem } from '../LinkOrTextDescriptionItem';
 
-import { DynamicFieldsCard } from '~/components/ownedobjects/views/DynamicFieldsCard';
-import { ObjectFieldsCard } from '~/components/ownedobjects/views/ObjectFieldsCard';
+import { DynamicFieldsCard } from '~/components/owned-objects/views/DynamicFieldsCard';
+import { ObjectFieldsCard } from '~/components/owned-objects/views/ObjectFieldsCard';
 import { TransactionsForAddress } from '~/components/transactions/TransactionsForAddress';
 import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
 import { Heading } from '~/ui/Heading';

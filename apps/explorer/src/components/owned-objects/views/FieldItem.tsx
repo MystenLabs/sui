@@ -4,7 +4,7 @@
 import { type SuiMoveNormalizedType } from '@mysten/sui.js';
 
 import { SyntaxHighlighter } from '~/components/SyntaxHighlighter';
-import { getFieldTypeValue } from '~/components/ownedobjects/utils';
+import { getFieldTypeValue } from '~/components/owned-objects/utils';
 import { AddressLink, ObjectLink } from '~/ui/InternalLink';
 import { Link } from '~/ui/Link';
 import { Text } from '~/ui/Text';
