@@ -14,10 +14,11 @@ use move_core_types::language_storage::{ModuleId, TypeTag};
 use move_core_types::value::MoveTypeLayout;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, DisplayFromStr};
-
+use serde_with::serde_as;
 use sui_json::{primitive_type, SuiJsonValue};
-use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest};
+use sui_types::base_types::{
+    EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
+};
 use sui_types::digests::{ObjectDigest, TransactionEventsDigest};
 use sui_types::error::{ExecutionError, SuiError};
 use sui_types::gas::GasCostSummary;
@@ -34,41 +35,16 @@ use sui_types::parse_sui_type_tag;
 use sui_types::query::TransactionFilter;
 use sui_types::signature::GenericSignature;
 use sui_types::storage::{DeleteKind, WriteKind};
-use sui_types::sui_serde::SuiTypeTag as AsSuiTypeTag;
+use sui_types::sui_serde::{
+    BigInt, SequenceNumber as AsSequenceNumber, SuiTypeTag as AsSuiTypeTag,
+};
 
 use crate::balance_changes::BalanceChange;
 use crate::object_changes::ObjectChange;
 use crate::{Page, SuiEvent, SuiMovePackage, SuiObjectRef};
 
-#[serde_as]
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, PartialEq, Eq, Copy)]
-/// Type for de/serializing number to string
-pub struct BigInt(
-    #[serde_as(as = "DisplayFromStr")]
-    #[schemars(with = "String")]
-    u64,
-);
-
-impl From<BigInt> for u64 {
-    fn from(x: BigInt) -> u64 {
-        x.0
-    }
-}
-
-impl From<u64> for BigInt {
-    fn from(v: u64) -> BigInt {
-        BigInt(v)
-    }
-}
-
-impl Display for BigInt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
 // similar to EpochId of sui-types but BigInt
-pub type SuiEpochId = BigInt;
+pub type SuiEpochId = BigInt<u64>;
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Default)]
 #[serde(
@@ -222,11 +198,15 @@ pub struct SuiTransactionBlockResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub balance_changes: Option<Vec<BalanceChange>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "Option<BigInt<u64>>")]
+    #[serde_as(as = "Option<BigInt<u64>>")]
     pub timestamp_ms: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub confirmed_local_execution: Option<bool>,
     /// The checkpoint number when this transaction was included and hence finalized.
     /// This is only returned in the read api, not in the transaction execution api.
+    #[schemars(with = "Option<BigInt<u64>>")]
+    #[serde_as(as = "Option<BigInt<u64>>")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub checkpoint: Option<CheckpointSequenceNumber>,
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
@@ -309,7 +289,7 @@ impl SuiTransactionBlockKind {
     fn try_from(tx: TransactionKind, module_cache: &impl GetModule) -> Result<Self, anyhow::Error> {
         Ok(match tx {
             TransactionKind::ChangeEpoch(e) => Self::ChangeEpoch(SuiChangeEpoch {
-                epoch: e.epoch.into(),
+                epoch: e.epoch,
                 storage_charge: e.storage_charge,
                 computation_charge: e.computation_charge,
                 storage_rebate: e.storage_rebate,
@@ -348,12 +328,23 @@ impl SuiTransactionBlockKind {
     }
 }
 
+#[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 pub struct SuiChangeEpoch {
-    pub epoch: SuiEpochId,
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
+    pub epoch: EpochId,
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
     pub storage_charge: u64,
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
     pub computation_charge: u64,
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
     pub storage_rebate: u64,
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
     pub epoch_start_timestamp_ms: u64,
 }
 
@@ -382,9 +373,9 @@ pub trait SuiTransactionBlockEffectsAPI {
     fn gas_object(&self) -> &OwnedObjectRef;
     fn events_digest(&self) -> Option<&TransactionEventsDigest>;
     fn dependencies(&self) -> &[TransactionDigest];
-    fn executed_epoch(&self) -> SuiEpochId;
+    fn executed_epoch(&self) -> EpochId;
     fn transaction_digest(&self) -> &TransactionDigest;
-    fn gas_cost_summary(&self) -> &SuiGasCostSummary;
+    fn gas_cost_summary(&self) -> &GasCostSummary;
 
     /// Return an iterator of mutated objects, but excluding the gas object.
     fn mutated_excluding_gas(&self) -> Vec<OwnedObjectRef>;
@@ -393,6 +384,7 @@ pub trait SuiTransactionBlockEffectsAPI {
     fn all_deleted_objects(&self) -> Vec<(&SuiObjectRef, DeleteKind)>;
 }
 
+#[serde_as]
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(
     rename = "TransactionBlockEffectsModifiedAtVersions",
@@ -400,18 +392,23 @@ pub trait SuiTransactionBlockEffectsAPI {
 )]
 pub struct SuiTransactionBlockEffectsModifiedAtVersions {
     object_id: ObjectID,
+    #[schemars(with = "AsSequenceNumber")]
+    #[serde_as(as = "AsSequenceNumber")]
     sequence_number: SequenceNumber,
 }
 
 /// The response from processing a transaction or a certified transaction
+#[serde_as]
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename = "TransactionBlockEffectsV1", rename_all = "camelCase")]
 pub struct SuiTransactionBlockEffectsV1 {
     /// The status of the execution
     pub status: SuiExecutionStatus,
     /// The epoch when this transaction was executed.
-    pub executed_epoch: SuiEpochId,
-    pub gas_used: SuiGasCostSummary,
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
+    pub executed_epoch: EpochId,
+    pub gas_used: GasCostSummary,
     /// The version that every modified (mutated or deleted) object had before it was modified by
     /// this transaction.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -491,7 +488,7 @@ impl SuiTransactionBlockEffectsAPI for SuiTransactionBlockEffectsV1 {
         &self.dependencies
     }
 
-    fn executed_epoch(&self) -> SuiEpochId {
+    fn executed_epoch(&self) -> EpochId {
         self.executed_epoch
     }
 
@@ -499,7 +496,7 @@ impl SuiTransactionBlockEffectsAPI for SuiTransactionBlockEffectsV1 {
         &self.transaction_digest
     }
 
-    fn gas_cost_summary(&self) -> &SuiGasCostSummary {
+    fn gas_cost_summary(&self) -> &GasCostSummary {
         &self.gas_used
     }
 
@@ -563,7 +560,7 @@ impl TryFrom<TransactionEffects> for SuiTransactionBlockEffects {
             1 => Ok(SuiTransactionBlockEffects::V1(
                 SuiTransactionBlockEffectsV1 {
                     status: effect.status().clone().into(),
-                    executed_epoch: effect.executed_epoch().into(),
+                    executed_epoch: effect.executed_epoch(),
                     modified_at_versions: effect
                         .modified_at_versions()
                         .iter()
@@ -575,7 +572,7 @@ impl TryFrom<TransactionEffects> for SuiTransactionBlockEffects {
                             }
                         })
                         .collect(),
-                    gas_used: effect.gas_cost_summary().clone().into(),
+                    gas_used: effect.gas_cost_summary().clone(),
                     shared_objects: to_sui_object_ref(effect.shared_objects().to_vec()),
                     transaction_digest: *effect.transaction_digest(),
                     created: to_owned_ref(effect.created().to_vec()),
@@ -828,43 +825,17 @@ fn to_owned_ref(owned_refs: Vec<(ObjectRef, Owner)>) -> Vec<OwnedObjectRef> {
         .collect()
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(rename = "GasCostSummary", rename_all = "camelCase")]
-pub struct SuiGasCostSummary {
-    pub computation_cost: BigInt,
-    pub storage_cost: BigInt,
-    pub storage_rebate: BigInt,
-    pub non_refundable_storage_fee: BigInt,
-}
-
-impl From<GasCostSummary> for SuiGasCostSummary {
-    fn from(s: GasCostSummary) -> Self {
-        Self {
-            computation_cost: s.computation_cost.into(),
-            storage_cost: s.storage_cost.into(),
-            storage_rebate: s.storage_rebate.into(),
-            non_refundable_storage_fee: s.non_refundable_storage_fee.into(),
-        }
-    }
-}
-
-impl From<SuiGasCostSummary> for GasCostSummary {
-    fn from(s: SuiGasCostSummary) -> Self {
-        Self {
-            computation_cost: s.computation_cost.into(),
-            storage_cost: s.storage_cost.into(),
-            storage_rebate: s.storage_rebate.into(),
-            non_refundable_storage_fee: s.non_refundable_storage_fee.into(),
-        }
-    }
-}
-
+#[serde_as]
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, PartialEq, Eq)]
 #[serde(rename = "GasData", rename_all = "camelCase")]
 pub struct SuiGasData {
     pub payment: Vec<SuiObjectRef>,
     pub owner: SuiAddress,
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
     pub price: u64,
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
     pub budget: u64,
 }
 
@@ -1013,13 +984,21 @@ pub struct SuiGenesisTransaction {
     pub objects: Vec<ObjectID>,
 }
 
+#[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 pub struct SuiConsensusCommitPrologue {
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
     pub epoch: u64,
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
     pub round: u64,
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
     pub commit_timestamp_ms: u64,
 }
 
+#[serde_as]
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename = "InputObjectKind")]
 pub enum SuiInputObjectKind {
@@ -1030,6 +1009,8 @@ pub enum SuiInputObjectKind {
     // A Move object that's shared and mutable.
     SharedMoveObject {
         id: ObjectID,
+        #[schemars(with = "AsSequenceNumber")]
+        #[serde_as(as = "AsSequenceNumber")]
         initial_shared_version: SequenceNumber,
         #[serde(default = "default_shared_object_mutability")]
         mutable: bool,
@@ -1557,6 +1538,7 @@ pub struct SuiPureValue {
     value: SuiJsonValue,
 }
 
+#[serde_as]
 #[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "objectType", rename_all = "camelCase")]
 pub enum SuiObjectArg {
@@ -1564,6 +1546,8 @@ pub enum SuiObjectArg {
     #[serde(rename_all = "camelCase")]
     ImmOrOwnedObject {
         object_id: ObjectID,
+        #[schemars(with = "AsSequenceNumber")]
+        #[serde_as(as = "AsSequenceNumber")]
         version: SequenceNumber,
         digest: ObjectDigest,
     },
@@ -1572,6 +1556,8 @@ pub enum SuiObjectArg {
     #[serde(rename_all = "camelCase")]
     SharedObject {
         object_id: ObjectID,
+        #[schemars(with = "AsSequenceNumber")]
+        #[serde_as(as = "AsSequenceNumber")]
         initial_shared_version: SequenceNumber,
         mutable: bool,
     },

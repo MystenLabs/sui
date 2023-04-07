@@ -11,7 +11,7 @@ use itertools::Itertools;
 use std::sync::Arc;
 
 use crate::payload::checkpoint_utils::get_latest_checkpoint_stats;
-use sui_json_rpc_types::{BigInt, CheckpointId};
+use sui_json_rpc_types::CheckpointId;
 use sui_types::base_types::TransactionDigest;
 use tokio::sync::Mutex;
 use tracing::log::warn;
@@ -52,10 +52,10 @@ impl<'a> ProcessPayload<'a, &'a GetCheckpoints> for RpcCommandProcessor {
 
                     match client
                         .read_api()
-                        .get_checkpoint(CheckpointId::SequenceNumber(<BigInt>::from(seq)))
+                        .get_checkpoint(CheckpointId::SequenceNumber(seq))
                         .await {
                         Ok(t) => {
-                            if t.sequence_number != <BigInt>::from(seq) {
+                            if t.sequence_number != seq {
                                 error!("The RPC server corresponding to the {i}th url has unexpected checkpoint sequence number {}, expected {seq}", t.sequence_number,);
                             }
                             for digest in t.transactions.iter() {

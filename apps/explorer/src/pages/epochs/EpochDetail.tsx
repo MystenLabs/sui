@@ -26,8 +26,8 @@ export default function EpochDetail() {
     const { data, isLoading, isError } = useQuery(['epoch', id], async () =>
         enhancedRpc.getEpochs({
             // todo: endpoint returns no data for epoch 0
-            cursor: id === '0' ? undefined : +id! - 1,
-            limit: 1,
+            cursor: id === '0' ? undefined : (+id! - 1).toString(),
+            limit: '1',
         })
     );
 
@@ -61,8 +61,8 @@ export default function EpochDetail() {
                 <EpochProgress
                     epoch={epochData?.epoch}
                     inProgress={isCurrentEpoch}
-                    start={epochData?.epochStartTimestamp}
-                    end={epochData?.endOfEpochInfo?.epochEndTimestamp}
+                    start={+epochData?.epochStartTimestamp}
+                    end={+(epochData?.endOfEpochInfo?.epochEndTimestamp ?? 0)}
                 />
 
                 <EpochStats label="Activity">

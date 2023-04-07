@@ -49,10 +49,10 @@ export function CheckpointsTable({
         ['checkpoints', { limit, cursor }],
         () =>
             rpc.getCheckpoints({
-                limit:
-                    cursor && maxCursor && +cursor - +limit < +maxCursor
-                        ? +cursor - +maxCursor
-                        : limit,
+                limit: (cursor && maxCursor && +cursor - +limit < +maxCursor
+                    ? +cursor - +maxCursor
+                    : limit
+                ).toString(),
                 descendingOrder: true,
                 cursor,
             }),
@@ -82,7 +82,7 @@ export function CheckpointsTable({
                           time: (
                               <TxTableCol>
                                   <TxTimeType
-                                      timestamp={checkpoint.timestampMs}
+                                      timestamp={+checkpoint.timestampMs}
                                   />
                               </TxTableCol>
                           ),
@@ -139,7 +139,7 @@ export function CheckpointsTable({
                 />
             ) : (
                 <PlaceholderTable
-                    rowCount={limit}
+                    rowCount={+limit}
                     rowHeight="16px"
                     colHeadings={[
                         'Digest',
@@ -155,7 +155,7 @@ export function CheckpointsTable({
                     label="Checkpoints"
                     data={checkpointsData}
                     count={count}
-                    limit={limit}
+                    limit={+limit}
                     onLimitChange={setLimit}
                     pagination={pagination}
                     disablePagination={disablePagination}

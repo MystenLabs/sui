@@ -654,7 +654,7 @@ export class JsonRpcProvider {
   }
 
   /**
-   * Runs the transaction block in dev-inpsect mode. Which allows for nearly any
+   * Runs the transaction block in dev-inspect mode. Which allows for nearly any
    * transaction (or Move call) with any arguments. Detailed results are
    * provided, including both the transaction effects and any return values.
    */
@@ -664,7 +664,7 @@ export class JsonRpcProvider {
     /** Default to use the network reference gas price stored in the Sui System State object */
     gasPrice?: bigint | number | null;
     /** optional. Default to use the current epoch number stored in the Sui System State object */
-    epoch?: number | null;
+    epoch?: string | null;
   }): Promise<DevInspectResults> {
     let devInspectTxBytes;
     if (TransactionBlock.is(input.transactionBlock)) {
@@ -787,7 +787,7 @@ export class JsonRpcProvider {
      */
     cursor?: string;
     /** Maximum item returned per page, default to 100 if not specified. */
-    limit?: number;
+    limit?: string;
     /** query result ordering, default to false (ascending order), oldest record first */
     descendingOrder: boolean;
   }): Promise<CheckpointPage> {
@@ -805,7 +805,7 @@ export class JsonRpcProvider {
    */
   async getCommitteeInfo(input?: {
     /** The epoch of interest. If null, default to the latest epoch */
-    epoch?: number;
+    epoch?: string | null;
   }): Promise<CommitteeInfo> {
     return await this.client.requestWithType(
       'suix_getCommitteeInfo',
@@ -825,8 +825,8 @@ export class JsonRpcProvider {
    * Return the committee information for the asked epoch
    */
   async getEpochs(input?: {
-    cursor?: number;
-    limit?: number;
+    cursor?: string;
+    limit?: string;
     descendingOrder?: boolean;
   }): Promise<EpochPage> {
     return await this.client.requestWithType(

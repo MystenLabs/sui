@@ -28,7 +28,7 @@ export type ObjectId = Infer<typeof ObjectId>;
 export const SuiAddress = string();
 export type SuiAddress = Infer<typeof SuiAddress>;
 
-export const SequenceNumber = number();
+export const SequenceNumber = string();
 export type SequenceNumber = Infer<typeof SequenceNumber>;
 
 export const ObjectOwner = union([

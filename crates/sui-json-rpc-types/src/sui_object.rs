@@ -1,6 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::cmp::Ordering;
+use std::collections::BTreeMap;
+use std::fmt;
+use std::fmt::Write;
+use std::fmt::{Display, Formatter};
+
 use anyhow::anyhow;
 use colored::Colorize;
 use fastcrypto::encoding::Base64;
@@ -14,12 +20,6 @@ use serde::Serialize;
 use serde_json::Value;
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
-use std::cmp::Ordering;
-use std::collections::BTreeMap;
-use std::fmt;
-use std::fmt::Write;
-use std::fmt::{Display, Formatter};
-use sui_types::sui_serde::SuiStructTag;
 
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{
@@ -31,6 +31,9 @@ use sui_types::gas_coin::GasCoin;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::move_package::{MovePackage, TypeOrigin, UpgradeInfo};
 use sui_types::object::{Data, MoveObject, Object, ObjectFormatOptions, ObjectRead, Owner};
+use sui_types::sui_serde::BigInt;
+use sui_types::sui_serde::SequenceNumber as AsSequenceNumber;
+use sui_types::sui_serde::SuiStructTag;
 
 use crate::{Page, SuiMoveStruct, SuiMoveValue};
 
@@ -167,6 +170,8 @@ pub struct DisplayFieldsResponse {
 pub struct SuiObjectData {
     pub object_id: ObjectID,
     /// Object version.
+    #[schemars(with = "AsSequenceNumber")]
+    #[serde_as(as = "AsSequenceNumber")]
     pub version: SequenceNumber,
     /// Base64 string representing the object digest
     pub digest: ObjectDigest,
@@ -186,6 +191,8 @@ pub struct SuiObjectData {
     /// The amount of SUI we would rebate if this object gets deleted.
     /// This number is re-calculated each time the object is mutated based on
     /// the present storage gas price.
+    #[schemars(with = "Option<BigInt<u64>>")]
+    #[serde_as(as = "Option<BigInt<u64>>")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub storage_rebate: Option<u64>,
     /// The Display metadata for frontend UI rendering, default to be None unless SuiObjectDataOptions.showContent is set to true
@@ -299,12 +306,20 @@ impl TryFrom<&SuiMoveStruct> for GasCoin {
     fn try_from(move_struct: &SuiMoveStruct) -> Result<Self, Self::Error> {
         match move_struct {
             SuiMoveStruct::WithFields(fields) | SuiMoveStruct::WithTypes { type_: _, fields } => {
-                if let Some(SuiMoveValue::String(balance)) = fields.get("balance") {
-                    if let Ok(balance) = balance.parse::<u64>() {
+                match fields.get("balance") {
+                    Some(SuiMoveValue::Number(balance)) => {
                         if let Some(SuiMoveValue::UID { id }) = fields.get("id") {
-                            return Ok(GasCoin::new(*id, balance));
+                            return Ok(GasCoin::new(*id, *balance));
                         }
                     }
+                    Some(SuiMoveValue::String(balance)) => {
+                        if let Ok(balance) = balance.parse::<u64>() {
+                            if let Some(SuiMoveValue::UID { id }) = fields.get("id") {
+                                return Ok(GasCoin::new(*id, balance));
+                            }
+                        }
+                    }
+                    _ => {}
                 }
             }
             _ => {}
@@ -1027,20 +1042,26 @@ pub struct SuiMovePackage {
 pub type QueryObjectsPage = Page<SuiObjectResponse, CheckpointedObjectID>;
 pub type ObjectsPage = Page<SuiObjectResponse, ObjectID>;
 
+#[serde_as]
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Copy, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct CheckpointedObjectID {
     pub object_id: ObjectID,
+    #[schemars(with = "Option<BigInt<u64>>")]
+    #[serde_as(as = "Option<BigInt<u64>>")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub at_checkpoint: Option<CheckpointSequenceNumber>,
 }
 
+#[serde_as]
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
 #[serde(rename = "GetPastObjectRequest", rename_all = "camelCase")]
 pub struct SuiGetPastObjectRequest {
     /// the ID of the queried object
     pub object_id: ObjectID,
     /// the version of the queried object.
+    #[schemars(with = "AsSequenceNumber")]
+    #[serde_as(as = "AsSequenceNumber")]
     pub version: SequenceNumber,
 }
 
@@ -1072,7 +1093,11 @@ pub enum SuiObjectDataFilter {
     ObjectId(ObjectID),
     // allow querying for multiple object ids
     ObjectIds(Vec<ObjectID>),
-    Version(u64),
+    Version(
+        #[schemars(with = "BigInt<u64>")]
+        #[serde_as(as = "BigInt<u64>")]
+        u64,
+    ),
 }
 
 impl SuiObjectDataFilter {

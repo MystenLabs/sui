@@ -1,12 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::hash::{Digest, MultisetHash};
-use once_cell::sync::OnceCell;
-use std::fmt::{Debug, Display, Formatter};
-use std::slice::Iter;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
 use crate::accumulator::Accumulator;
 use crate::base_types::{ExecutionData, ExecutionDigests, VerifiedExecutionData};
 use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
@@ -19,11 +13,19 @@ use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelo
 use crate::messages::TransactionEffectsAPI;
 use crate::signature::GenericSignature;
 use crate::storage::ReadStore;
+use crate::sui_serde::AsProtocolVersion;
+use crate::sui_serde::BigInt;
 use crate::{base_types::AuthorityName, committee::Committee, error::SuiError};
 use anyhow::Result;
+use fastcrypto::hash::{Digest, MultisetHash};
+use once_cell::sync::OnceCell;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use shared_crypto::intent::IntentScope;
+use std::fmt::{Debug, Display, Formatter};
+use std::slice::Iter;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub use crate::digests::CheckpointContentsDigest;
 pub use crate::digests::CheckpointDigest;
@@ -83,6 +85,7 @@ impl From<ECMHLiveObjectSetDigest> for CheckpointCommitment {
     }
 }
 
+#[serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct EndOfEpochData {
@@ -93,17 +96,21 @@ pub struct EndOfEpochData {
     /// or the total number of transactions from genesis to the end of an epoch.
     /// The committee is stored as a vector of validator pub key and stake pairs. The vector
     /// should be sorted based on the Committee data structure.
+    #[schemars(with = "Vec<(AuthorityName, BigInt<u64>)>")]
+    #[serde_as(as = "Vec<(_, BigInt<u64>)>")]
     pub next_epoch_committee: Vec<(AuthorityName, StakeUnit)>,
 
     /// The protocol version that is in effect during the epoch that starts immediately after this
     /// checkpoint.
+    #[schemars(with = "AsProtocolVersion")]
+    #[serde_as(as = "AsProtocolVersion")]
     pub next_epoch_protocol_version: ProtocolVersion,
 
     /// Commitments to epoch specific state (e.g. live object set)
     pub epoch_commitments: Vec<CheckpointCommitment>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CheckpointSummary {
     pub epoch: EpochId,
     pub sequence_number: CheckpointSequenceNumber,

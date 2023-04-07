@@ -1,10 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-use std::fmt;
-use std::fmt::{Display, Formatter, Write};
-
 use colored::Colorize;
 use itertools::Itertools;
 use move_binary_format::file_format::{Ability, AbilitySet, StructTypeParameter, Visibility};
@@ -19,6 +15,10 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use serde_with::serde_as;
+use std::collections::BTreeMap;
+use std::fmt;
+use std::fmt::{Display, Formatter, Write};
+use sui_types::sui_serde::BigInt;
 use tracing::warn;
 
 use sui_types::base_types::{ObjectID, SuiAddress};
@@ -284,15 +284,22 @@ pub enum MoveFunctionArgType {
     Object(ObjectValueKind),
 }
 
+#[serde_as]
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
 #[serde(untagged, rename = "MoveValue")]
 pub enum SuiMoveValue {
-    Number(u64),
+    Number(
+        #[schemars(with = "BigInt<u64>")]
+        #[serde_as(as = "BigInt<u64>")]
+        u64,
+    ),
     Bool(bool),
     Address(SuiAddress),
     Vector(Vec<SuiMoveValue>),
     String(String),
-    UID { id: ObjectID },
+    UID {
+        id: ObjectID,
+    },
     Struct(SuiMoveStruct),
     Option(Box<Option<SuiMoveValue>>),
 }

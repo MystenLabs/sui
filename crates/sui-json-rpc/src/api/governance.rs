@@ -4,10 +4,10 @@
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 
-use sui_json_rpc_types::{BigInt, DelegatedStake, SuiCommittee};
+use sui_json_rpc_types::{DelegatedStake, SuiCommittee};
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SuiAddress};
-use sui_types::committee::EpochId;
+use sui_types::sui_serde::BigInt;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 
 #[open_rpc(namespace = "suix", tag = "Governance Read API")]
@@ -29,7 +29,7 @@ pub trait GovernanceReadApi {
     async fn get_committee_info(
         &self,
         /// The epoch of interest. If None, default to the latest epoch
-        epoch: Option<EpochId>,
+        epoch: Option<BigInt<u64>>,
     ) -> RpcResult<SuiCommittee>;
 
     /// Return the latest SUI system state object on-chain.
@@ -38,5 +38,5 @@ pub trait GovernanceReadApi {
 
     /// Return the reference gas price for the network
     #[method(name = "getReferenceGasPrice")]
-    async fn get_reference_gas_price(&self) -> RpcResult<BigInt>;
+    async fn get_reference_gas_price(&self) -> RpcResult<BigInt<u64>>;
 }

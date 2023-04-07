@@ -9,7 +9,7 @@ use sui_json_rpc_types::{
     SuiObjectResponseQuery,
 };
 use sui_open_rpc_macros::open_rpc;
-use sui_types::base_types::EpochId;
+use sui_types::sui_serde::BigInt;
 
 #[open_rpc(namespace = "suix", tag = "Extended API")]
 #[rpc(server, client, namespace = "suix")]
@@ -19,9 +19,9 @@ pub trait ExtendedApi {
     async fn get_epochs(
         &self,
         /// optional paging cursor
-        cursor: Option<EpochId>,
+        cursor: Option<BigInt<u64>>,
         /// maximum number of items per page
-        limit: Option<usize>,
+        limit: Option<BigInt<u64>>,
         /// flag to return results in descending order
         descending_order: Option<bool>,
     ) -> RpcResult<EpochPage>;
@@ -39,7 +39,7 @@ pub trait ExtendedApi {
         /// An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.
         cursor: Option<CheckpointedObjectID>,
         /// Max number of items returned per page, default to [QUERY_MAX_RESULT_LIMIT_OBJECTS] if not specified.
-        limit: Option<usize>,
+        limit: Option<BigInt<u64>>,
     ) -> RpcResult<QueryObjectsPage>;
 
     /// Return Network metrics

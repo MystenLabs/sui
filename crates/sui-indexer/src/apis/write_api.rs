@@ -10,12 +10,13 @@ use jsonrpsee::RpcModule;
 use sui_json_rpc::api::{WriteApiClient, WriteApiServer};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
-    BigInt, DevInspectResults, DryRunTransactionBlockResponse, SuiTransactionBlockEffectsAPI,
+    DevInspectResults, DryRunTransactionBlockResponse, SuiTransactionBlockEffectsAPI,
     SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc::Module;
-use sui_types::base_types::{EpochId, SuiAddress};
+use sui_types::base_types::SuiAddress;
 use sui_types::messages::ExecuteTransactionRequestType;
+use sui_types::sui_serde::BigInt;
 
 use crate::handlers::checkpoint_handler::{
     fetch_changed_objects, get_deleted_db_objects, get_object_changes, to_changed_db_objects,
@@ -61,7 +62,7 @@ where
         let fast_path_resp: FastPathTransactionBlockResponse =
             sui_transaction_response.clone().try_into()?;
         let effects = &fast_path_resp.effects;
-        let epoch = <u64>::from(effects.executed_epoch());
+        let epoch = effects.executed_epoch();
 
         let object_changes = get_object_changes(effects);
         let changed_objects = fetch_changed_objects(self.fullnode.clone(), object_changes).await?;
@@ -90,8 +91,8 @@ where
         &self,
         sender_address: SuiAddress,
         tx_bytes: Base64,
-        gas_price: Option<BigInt>,
-        epoch: Option<EpochId>,
+        gas_price: Option<BigInt<u64>>,
+        epoch: Option<BigInt<u64>>,
     ) -> RpcResult<DevInspectResults> {
         self.fullnode
             .dev_inspect_transaction_block(sender_address, tx_bytes, gas_price, epoch)

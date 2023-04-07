@@ -10,7 +10,7 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 
 use sui_core::authority::AuthorityState;
-use sui_json_rpc_types::{BigInt, SuiCommittee};
+use sui_json_rpc_types::SuiCommittee;
 use sui_json_rpc_types::{DelegatedStake, Stake, StakeStatus};
 use sui_open_rpc::Module;
 use sui_types::base_types::{MoveObjectType, ObjectID, SuiAddress};
@@ -20,6 +20,7 @@ use sui_types::error::{SuiError, UserInputError};
 use sui_types::governance::StakedSui;
 use sui_types::id::ID;
 use sui_types::object::ObjectRead;
+use sui_types::sui_serde::BigInt;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_types::sui_system_state::PoolTokenExchangeRate;
 use sui_types::sui_system_state::SuiSystemStateTrait;
@@ -158,8 +159,8 @@ impl GovernanceReadApi {
                 delegations.push(Stake {
                     staked_sui_id: stake.id(),
                     // TODO: this might change when we implement warm up period.
-                    stake_request_epoch: (stake.activation_epoch() - 1).into(),
-                    stake_active_epoch: stake.activation_epoch().into(),
+                    stake_request_epoch: stake.activation_epoch() - 1,
+                    stake_active_epoch: stake.activation_epoch(),
                     principal: stake.principal(),
                     status,
                 })
@@ -236,11 +237,11 @@ impl GovernanceReadApiServer for GovernanceReadApi {
         Ok(self.get_stakes(owner).await?)
     }
 
-    async fn get_committee_info(&self, epoch: Option<EpochId>) -> RpcResult<SuiCommittee> {
+    async fn get_committee_info(&self, epoch: Option<BigInt<u64>>) -> RpcResult<SuiCommittee> {
         Ok(self
             .state
             .committee_store()
-            .get_or_latest_committee(epoch)
+            .get_or_latest_committee(epoch.map(|e| *e))
             .map(|committee| committee.into())
             .map_err(Error::from)?)
     }
@@ -254,7 +255,7 @@ impl GovernanceReadApiServer for GovernanceReadApi {
             .into_sui_system_state_summary())
     }
 
-    async fn get_reference_gas_price(&self) -> RpcResult<BigInt> {
+    async fn get_reference_gas_price(&self) -> RpcResult<BigInt<u64>> {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         Ok(epoch_store.reference_gas_price().into())
     }

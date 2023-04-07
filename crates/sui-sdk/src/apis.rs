@@ -31,6 +31,7 @@ use sui_types::error::TRANSACTION_NOT_FOUND_MSG_PREFIX;
 use sui_types::event::EventID;
 use sui_types::messages::{ExecuteTransactionRequestType, TransactionData, VerifiedTransaction};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::sui_serde::BigInt;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 
 use crate::error::{Error, SuiRpcResult};
@@ -119,7 +120,7 @@ impl ReadApi {
     }
 
     pub async fn get_total_transaction_blocks(&self) -> SuiRpcResult<u64> {
-        Ok(self.api.http.get_total_transaction_blocks().await?.into())
+        Ok(*self.api.http.get_total_transaction_blocks().await?)
     }
 
     pub async fn get_transaction_with_options(
@@ -146,7 +147,10 @@ impl ReadApi {
             .await?)
     }
 
-    pub async fn get_committee_info(&self, epoch: Option<EpochId>) -> SuiRpcResult<SuiCommittee> {
+    pub async fn get_committee_info(
+        &self,
+        epoch: Option<BigInt<u64>>,
+    ) -> SuiRpcResult<SuiCommittee> {
         Ok(self.api.http.get_committee_info(epoch).await?)
     }
 
@@ -173,12 +177,11 @@ impl ReadApi {
     pub async fn get_latest_checkpoint_sequence_number(
         &self,
     ) -> SuiRpcResult<CheckpointSequenceNumber> {
-        Ok(self
+        Ok(*self
             .api
             .http
             .get_latest_checkpoint_sequence_number()
-            .await?
-            .into())
+            .await?)
     }
 
     pub fn get_transactions_stream(
@@ -226,7 +229,7 @@ impl ReadApi {
 
     // TODO(devx): we can probably cache this given an epoch
     pub async fn get_reference_gas_price(&self) -> SuiRpcResult<u64> {
-        Ok(self.api.http.get_reference_gas_price().await?.into())
+        Ok(*self.api.http.get_reference_gas_price().await?)
     }
 
     pub async fn dry_run_transaction_block(
@@ -532,7 +535,10 @@ impl GovernanceApi {
 
     /// Return the committee information for the asked `epoch`.
     /// `epoch`: The epoch of interest. If None, default to the latest epoch
-    pub async fn get_committee_info(&self, epoch: Option<EpochId>) -> SuiRpcResult<SuiCommittee> {
+    pub async fn get_committee_info(
+        &self,
+        epoch: Option<BigInt<u64>>,
+    ) -> SuiRpcResult<SuiCommittee> {
         Ok(self.api.http.get_committee_info(epoch).await?)
     }
 
@@ -543,6 +549,6 @@ impl GovernanceApi {
 
     /// Return the reference gas price for the network
     pub async fn get_reference_gas_price(&self) -> SuiRpcResult<u64> {
-        Ok(self.api.http.get_reference_gas_price().await?.into())
+        Ok(*self.api.http.get_reference_gas_price().await?)
     }
 }

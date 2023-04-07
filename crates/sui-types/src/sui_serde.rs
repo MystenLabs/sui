@@ -1,17 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt::Debug;
+use std::fmt;
+use std::fmt::{Debug, Display, Formatter};
 use std::marker::PhantomData;
+use std::ops::Deref;
+use std::str::FromStr;
 
 use fastcrypto::encoding::Hex;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::language_storage::{StructTag, TypeTag};
+use schemars::JsonSchema;
 use serde;
 use serde::de::{Deserializer, Error};
 use serde::ser::{Error as SerError, Serializer};
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
+use serde_with::DisplayFromStr;
 use serde_with::{Bytes, DeserializeAs, SerializeAs};
+
+use sui_protocol_config::ProtocolVersion;
 
 use crate::{parse_sui_struct_tag, parse_sui_type_tag};
 
@@ -217,5 +225,126 @@ impl<'de> DeserializeAs<'de, TypeTag> for SuiTypeTag {
     {
         let s = String::deserialize(deserializer)?;
         parse_sui_type_tag(&s).map_err(D::Error::custom)
+    }
+}
+
+#[serde_as]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Copy, JsonSchema)]
+pub struct BigInt<T>(
+    #[schemars(with = "String")]
+    #[serde_as(as = "DisplayFromStr")]
+    T,
+)
+where
+    T: Display + FromStr,
+    <T as FromStr>::Err: Display;
+
+impl<T> SerializeAs<T> for BigInt<T>
+where
+    T: Display + FromStr + Copy,
+    <T as FromStr>::Err: Display,
+{
+    fn serialize_as<S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        BigInt(*value).serialize(serializer)
+    }
+}
+
+impl<'de, T> DeserializeAs<'de, T> for BigInt<T>
+where
+    T: Display + FromStr + Copy,
+    <T as FromStr>::Err: Display,
+{
+    fn deserialize_as<D>(deserializer: D) -> Result<T, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(*BigInt::deserialize(deserializer)?)
+    }
+}
+
+impl<T> From<T> for BigInt<T>
+where
+    T: Display + FromStr,
+    <T as FromStr>::Err: Display,
+{
+    fn from(v: T) -> BigInt<T> {
+        BigInt(v)
+    }
+}
+
+impl<T> Deref for BigInt<T>
+where
+    T: Display + FromStr,
+    <T as FromStr>::Err: Display,
+{
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> Display for BigInt<T>
+where
+    T: Display + FromStr,
+    <T as FromStr>::Err: Display,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+#[serde_as]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Copy, JsonSchema)]
+pub struct SequenceNumber(#[schemars(with = "BigInt<u64>")] u64);
+
+impl SerializeAs<crate::base_types::SequenceNumber> for SequenceNumber {
+    fn serialize_as<S>(
+        value: &crate::base_types::SequenceNumber,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let s = value.value().to_string();
+        s.serialize(serializer)
+    }
+}
+
+impl<'de> DeserializeAs<'de, crate::base_types::SequenceNumber> for SequenceNumber {
+    fn deserialize_as<D>(deserializer: D) -> Result<crate::base_types::SequenceNumber, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let b = BigInt::deserialize(deserializer)?;
+        Ok(crate::base_types::SequenceNumber::from_u64(*b))
+    }
+}
+
+#[serde_as]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Copy, JsonSchema)]
+#[serde(rename = "ProtocolVersion")]
+pub struct AsProtocolVersion(#[schemars(with = "BigInt<u64>")] u64);
+
+impl SerializeAs<ProtocolVersion> for AsProtocolVersion {
+    fn serialize_as<S>(value: &ProtocolVersion, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let s = value.as_u64().to_string();
+        s.serialize(serializer)
+    }
+}
+
+impl<'de> DeserializeAs<'de, ProtocolVersion> for AsProtocolVersion {
+    fn deserialize_as<D>(deserializer: D) -> Result<ProtocolVersion, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let b = BigInt::<u64>::deserialize(deserializer)?;
+        Ok(ProtocolVersion::from(*b))
     }
 }

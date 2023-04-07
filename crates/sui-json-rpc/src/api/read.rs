@@ -5,12 +5,13 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 
 use sui_json_rpc_types::{
-    BigInt, Checkpoint, CheckpointId, CheckpointPage, SuiCheckpointSequenceNumber, SuiEvent,
-    SuiGetPastObjectRequest, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
-    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    Checkpoint, CheckpointId, CheckpointPage, SuiEvent, SuiGetPastObjectRequest,
+    SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse, SuiTransactionBlockResponse,
+    SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest};
+use sui_types::sui_serde::BigInt;
 
 #[open_rpc(namespace = "sui", tag = "Read API")]
 #[rpc(server, client, namespace = "sui")]
@@ -98,9 +99,9 @@ pub trait ReadApi {
     fn get_checkpoints(
         &self,
         /// An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.
-        cursor: Option<SuiCheckpointSequenceNumber>,
+        cursor: Option<BigInt<u64>>,
         /// Maximum item returned per page, default to [QUERY_MAX_RESULT_LIMIT_CHECKPOINTS] if not specified.
-        limit: Option<usize>,
+        limit: Option<BigInt<u64>>,
         /// query result ordering, default to false (ascending order), oldest record first.
         descending_order: bool,
     ) -> RpcResult<CheckpointPage>;
@@ -115,10 +116,9 @@ pub trait ReadApi {
 
     /// Return the total number of transactions known to the server.
     #[method(name = "getTotalTransactionBlocks")]
-    async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt>;
+    async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt<u64>>;
 
     /// Return the sequence number of the latest checkpoint that has been executed
     #[method(name = "getLatestCheckpointSequenceNumber")]
-    async fn get_latest_checkpoint_sequence_number(&self)
-        -> RpcResult<SuiCheckpointSequenceNumber>;
+    async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<BigInt<u64>>;
 }

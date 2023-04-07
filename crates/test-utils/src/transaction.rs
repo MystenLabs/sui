@@ -497,8 +497,7 @@ pub async fn transfer_coin(
                 .gas_data()
                 .payment
                 .clone(),
-            <u64>::from(gas_used.computation_cost) + <u64>::from(gas_used.storage_cost)
-                - <u64>::from(gas_used.storage_rebate),
+            gas_used.computation_cost + gas_used.storage_cost - gas_used.storage_rebate,
         )
     } else {
         panic!("transfer command did not return WalletCommandResult::Transfer");

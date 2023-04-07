@@ -51,10 +51,8 @@ impl Checkpoint {
             .map(|t| Some(t.base58_encode()))
             .collect();
 
-        let sequence_number: u64 = rpc_checkpoint.sequence_number.into();
-
         Ok(Checkpoint {
-            sequence_number: sequence_number as i64,
+            sequence_number: rpc_checkpoint.sequence_number as i64,
             checkpoint_digest: rpc_checkpoint.digest.base58_encode(),
             epoch: rpc_checkpoint.epoch as i64,
             transactions: checkpoint_transactions,
@@ -124,7 +122,7 @@ impl Checkpoint {
 
         Ok(RpcCheckpoint {
             epoch: self.epoch as u64,
-            sequence_number: (self.sequence_number as u64).into(),
+            sequence_number: self.sequence_number as u64,
             digest: parsed_digest,
             previous_digest: parsed_previous_digest,
             end_of_epoch_data,

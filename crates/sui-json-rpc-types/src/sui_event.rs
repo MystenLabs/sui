@@ -10,10 +10,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
-
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::error::SuiResult;
 use sui_types::event::{Event, EventEnvelope, EventID};
+use sui_types::sui_serde::BigInt;
 
 use crate::{type_and_fields_from_move_struct, Page};
 use sui_types::sui_serde::SuiStructTag;
@@ -49,6 +49,8 @@ pub struct SuiEvent {
     pub bcs: Vec<u8>,
     /// UTC timestamp in milliseconds since epoch (1/1/1970)
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "Option<BigInt<u64>>")]
+    #[serde_as(as = "Option<BigInt<u64>>")]
     pub timestamp_ms: Option<u64>,
 }
 
@@ -142,8 +144,12 @@ pub enum EventFilter {
     #[serde(rename_all = "camelCase")]
     TimeRange {
         /// left endpoint of time interval, milliseconds since epoch, inclusive
+        #[schemars(with = "BigInt<u64>")]
+        #[serde_as(as = "BigInt<u64>")]
         start_time: u64,
         /// right endpoint of time interval, milliseconds since epoch, exclusive
+        #[schemars(with = "BigInt<u64>")]
+        #[serde_as(as = "BigInt<u64>")]
         end_time: u64,
     },
 

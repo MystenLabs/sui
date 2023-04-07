@@ -2,6 +2,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::sui_serde::BigInt;
+use crate::sui_serde::Readable;
 use crate::{
     error::{ExecutionError, UserInputError, UserInputResult},
     gas_coin::GasCoin,
@@ -14,6 +16,7 @@ use enum_dispatch::enum_dispatch;
 use itertools::MultiUnzip;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use sui_cost_tables::bytecode_tables::GasStatus;
 use sui_protocol_config::ProtocolConfig;
 
@@ -188,17 +191,27 @@ impl SuiCostTable {
 /// by the "nonrefundable rate" such that:
 /// `potential_rebate(storage cost of deleted/mutated objects) =
 /// storage_rebate + non_refundable_storage_fee`
+
+#[serde_as]
 #[derive(Eq, PartialEq, Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GasCostSummary {
     /// Cost of computation/execution
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "Readable<BigInt<u64>, _>")]
     pub computation_cost: u64,
     /// Storage cost, it's the sum of all storage cost for all objects created or mutated.
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "Readable<BigInt<u64>, _>")]
     pub storage_cost: u64,
     /// The amount of storage cost refunded to the user for all objects deleted or mutated in the
     /// transaction.
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "Readable<BigInt<u64>, _>")]
     pub storage_rebate: u64,
     /// The fee for the rebate. The portion of the storage rebate kept by the system.
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "Readable<BigInt<u64>, _>")]
     pub non_refundable_storage_fee: u64,
 }
 
