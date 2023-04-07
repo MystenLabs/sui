@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::cmp::Ordering;
-use std::collections::BTreeSet;
 use std::iter;
 use std::ops::Not;
 use std::path::Path;
@@ -479,22 +478,22 @@ impl AuthorityStore {
         Ok(result)
     }
 
-    /// Gets the input object keys from input object kinds, by determining the versions of owned,
-    /// shared and package objects.
+    /// Gets the input object keys and lock modes from input object kinds, by determining the
+    /// versions and types of owned, shared and package objects.
     /// When making changes, please see if check_sequenced_input_objects() below needs
     /// similar changes as well.
-    pub fn get_input_object_keys(
+    pub fn get_input_object_locks(
         &self,
         digest: &TransactionDigest,
         objects: &[InputObjectKind],
         epoch_store: &AuthorityPerEpochStore,
-    ) -> BTreeSet<InputKey> {
+    ) -> BTreeMap<InputKey, LockMode> {
         let mut shared_locks = HashMap::<ObjectID, SequenceNumber>::new();
         objects
             .iter()
             .map(|kind| {
                 match kind {
-                    InputObjectKind::SharedMoveObject { id, .. } => {
+                    InputObjectKind::SharedMoveObject { id, initial_shared_version: _, mutable } => {
                         if shared_locks.is_empty() {
                             shared_locks = epoch_store
                                 .get_shared_locks(digest)
@@ -511,10 +510,17 @@ impl AuthorityStore {
                                 id: {id:?}",
                             )
                         };
-                        InputKey(*id, Some(*version))
+                        let lock_mode = if *mutable {
+                            LockMode::Default
+                        } else {
+                            LockMode::ReadOnly
+                        };
+                        (InputKey(*id, Some(*version)), lock_mode)
                     }
-                    InputObjectKind::MovePackage(id) => InputKey(*id, None),
-                    InputObjectKind::ImmOrOwnedMoveObject(objref) => InputKey(objref.0, Some(objref.1))
+                    // TODO: use ReadOnly lock?
+                    InputObjectKind::MovePackage(id) => (InputKey(*id, None), LockMode::Default),
+                    // Cannot use ReadOnly lock because we do not know if the object is immutable.
+                    InputObjectKind::ImmOrOwnedMoveObject(objref) => (InputKey(objref.0, Some(objref.1)), LockMode::Default),
                 }
             })
             .collect()
@@ -1665,5 +1671,16 @@ impl From<LockDetails> for LockDetailsWrapper {
 }
 
 /// A potential input to a transaction.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct InputKey(pub ObjectID, pub Option<SequenceNumber>);
+
+/// How a transaction should lock a given input object.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub enum LockMode {
+    /// In the default mode, the transaction can acquire the lock whenever the object is available
+    /// and there is no pending or executing transaction with ReadOnly locks.
+    Default,
+    /// In the ReadOnly mode, the transaction can acquire the lock whenever the object is available.
+    /// The invariant is that no transaction should have locks on the object in default mode.
+    ReadOnly,
+}
