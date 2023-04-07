@@ -1544,6 +1544,8 @@ impl ProtocolConfig {
                 let mut cfg = Self::get_for_version_impl(version - 1);
                 // Change reward slashing rate to 100%.
                 cfg.reward_slashing_rate = Some(10000);
+                // protect old and new lookup for object version
+                cfg.gas_model_version = Some(3);
                 cfg
             }
             // Use this template when making changes:
