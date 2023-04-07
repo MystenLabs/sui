@@ -79,12 +79,9 @@ export function useGetRollingAverageApys(numberOfValidators: number | null) {
             }
 
             // The rolling average epoch is the current epoch - the stake subsidy start epoch
-            const rollingAverageFromSubsidy =
+            const avgEpochNumberAfterSubsidy =
                 ROLLING_AVERAGE - stakeSubsidyStartEpoch;
 
-            // prevent negative rolling average epoch by setting it to 0
-            const avgRollingAvgAfterSubsidy =
-                rollingAverageFromSubsidy < 0 ? 0 : rollingAverageFromSubsidy;
             const apyGroups: ApyGroups = {};
 
             validatorEpochEvents.data.forEach(({ parsedJson }) => {
@@ -105,8 +102,14 @@ export function useGetRollingAverageApys(numberOfValidators: number | null) {
             const apyByValidator: ApyByValidator = Object.entries(
                 apyGroups
             ).reduce((acc, [validatorAddr, apyArr]) => {
+                // prevent negative rolling average epoch by setting it to 0
                 const apys = apyArr
-                    .slice(0, avgRollingAvgAfterSubsidy)
+                    .slice(
+                        0,
+                        avgEpochNumberAfterSubsidy < 0
+                            ? 0
+                            : avgEpochNumberAfterSubsidy
+                    )
                     .map((entry) => entry);
 
                 const avgApy =
