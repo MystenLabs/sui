@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
-import {useGetSystemObject} from '@mysten/core';
+import { useGetSystemObject } from '@mysten/core';
 import { useContext } from 'react';
 
 import { NetworkContext } from '../../context';
