@@ -23,10 +23,10 @@ use tracing::{debug, error, warn};
 use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
-    BalanceChange, Checkpoint, CheckpointId, CheckpointPage, EventFilter, ObjectChange, SuiEvent,
-    SuiGetPastObjectRequest, SuiMoveStruct, SuiMoveValue, SuiObjectDataOptions, SuiObjectResponse,
-    SuiPastObjectResponse, SuiTransactionBlock, SuiTransactionBlockEvents,
-    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    BalanceChange, Checkpoint, CheckpointId, CheckpointPage, DisplayFieldsResponse, EventFilter,
+    ObjectChange, SuiEvent, SuiGetPastObjectRequest, SuiMoveStruct, SuiMoveValue,
+    SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse, SuiTransactionBlock,
+    SuiTransactionBlockEvents, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest};
@@ -188,7 +188,7 @@ impl ReadApi {
             .iter_mut()
             .zip(checkpoint_seq_list.into_iter())
         {
-            cache_entry.checkpoint_seq = seq.map(|(_, seq)| seq.into());
+            cache_entry.checkpoint_seq = seq.map(|(_, seq)| seq);
         }
 
         let unique_checkpoint_numbers = temp_response

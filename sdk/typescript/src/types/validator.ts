@@ -33,7 +33,7 @@ export const StakeObject = object({
   stakedSuiId: ObjectId,
   stakeRequestEpoch: EpochId,
   stakeActiveEpoch: EpochId,
-  principal: number(),
+  principal: string(),
   status: union([literal('Active'), literal('Pending'), literal('Unstaked')]),
   estimatedReward: optional(number()),
 });
@@ -99,7 +99,7 @@ export const DelegationStakingPool = object({
   fields: DelegationStakingPoolFields,
 });
 
-export const Validators = array(tuple([AuthorityName, number()]));
+export const Validators = array(tuple([AuthorityName, string()]));
 
 export const CommitteeInfo = object({
   epoch: EpochId,
