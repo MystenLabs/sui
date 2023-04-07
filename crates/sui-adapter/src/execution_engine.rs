@@ -275,7 +275,7 @@ fn execute_transaction<
         temporary_store.conserve_unmetered_storage_rebate(gas_status.unmetered_storage_rebate());
         if !is_genesis_tx {
         // TODO: use node_config for this instead?
-          let do_expensive_checks  = cfg!(debug_assertions);
+          let do_expensive_checks  = true;
           if cfg!(debug_assertions) {
               // in debug mode--run all the conservation checks even if expensive, and don't bother
               // with avoiding panics if they fail
