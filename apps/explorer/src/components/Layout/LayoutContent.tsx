@@ -8,7 +8,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { Fragment, useMemo } from 'react';
 import { Toaster } from 'react-hot-toast';
-import { Outlet } from 'react-router-dom';
+import { Outlet, ScrollRestoration } from 'react-router-dom';
 
 import { usePageView } from '../../hooks/usePageView';
 import Footer from '../footer/Footer';
@@ -29,6 +29,7 @@ export function LayoutContent() {
     return (
         // NOTE: We set a top-level key here to force the entire react tree to be re-created when the network changes:
         <Fragment key={network}>
+            <ScrollRestoration />
             <WalletKitProvider
                 /*autoConnect={false}*/
                 enableUnsafeBurner={import.meta.env.DEV}
