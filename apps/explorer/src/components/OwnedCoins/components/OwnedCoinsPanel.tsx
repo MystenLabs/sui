@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import CoinItem from './CoinItem';
 
 import { useGetCoins } from '~/hooks/useGetCoins';
-import { useOnScreen } from '~/hooks/useOnScreen';
+import { useIntersectionObserver } from '~/hooks/useIntersectionObserver';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 
 type CoinsPanelProps = {
@@ -37,7 +37,8 @@ function CoinsPanel({ coinType, id }: CoinsPanelProps): JSX.Element {
         }
     }, [data]);
 
-    const { containerRef, isIntersecting, observer } = useOnScreen();
+    const { containerRef, isIntersecting, observer } =
+        useIntersectionObserver();
 
     useEffect(() => {
         if (

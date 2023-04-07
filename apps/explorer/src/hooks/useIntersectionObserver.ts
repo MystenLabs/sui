@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { useState, useCallback } from 'react';
 
-export const useOnScreen = ({
+export const useIntersectionObserver = ({
     root = null,
     rootMargin = '0px',
     threshold = 1,
