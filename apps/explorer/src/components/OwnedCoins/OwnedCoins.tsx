@@ -17,8 +17,6 @@ export const COINS_PER_PAGE: number = 6;
 
 function OwnedCoins({ id }: { id: string }): JSX.Element {
     const [uniqueCoins, setUniqueCoins] = useState<CoinBalance[]>([]);
-    // const [isLoading, setIsLoading] = useState(false);
-    // const [isFail, setIsFail] = useState(false);
     const [currentSlice, setCurrentSlice] = useState(1);
     const { isLoading, data, isError } = useGetAllBalances(id);
 
