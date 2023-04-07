@@ -5,7 +5,7 @@ import { Combobox } from '@headlessui/react';
 import { useGetObject, useGetNormalizedMoveStruct } from '@mysten/core';
 import { getObjectFields, getObjectType } from '@mysten/sui.js';
 import clsx from 'clsx';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 import { ReactComponent as SearchIcon } from '~/assets/SVGIcons/24px/Search.svg';
 import { getFieldTypeValue } from '~/components/owned-objects/utils';
@@ -48,13 +48,6 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
         isError: errorNormalizedMoveStruct,
     } = useGetNormalizedMoveStruct(packageId, moduleName, functionName);
 
-    // Set the active field name to the first field in the struct on load
-    useEffect(() => {
-        if (normalizedStruct?.fields && activeFieldName === '') {
-            setActiveFieldName(normalizedStruct.fields[0].name);
-        }
-    }, [activeFieldName, normalizedStruct?.fields]);
-
     if (isLoading || loadingNormalizedStruct) {
         return (
             <div className="flex w-full justify-center">
@@ -68,6 +61,13 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
                 Failed to get field data for :{id}
             </Banner>
         );
+    }
+
+    // Set the active field name to the first field in the struct on load
+    if (isSuccess) {
+        if (normalizedStruct?.fields && activeFieldName === '') {
+            setActiveFieldName(normalizedStruct.fields[0].name);
+        }
     }
 
     const fieldsData = getObjectFields(data!);
