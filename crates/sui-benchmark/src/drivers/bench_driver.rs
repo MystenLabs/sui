@@ -50,6 +50,7 @@ pub struct BenchMetrics {
     pub validators_in_tx_cert: IntCounterVec,
     pub validators_in_effects_cert: IntCounterVec,
     pub cpu_usage: GaugeVec,
+    pub num_success_cmds: IntCounterVec,
 }
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -68,6 +69,13 @@ impl BenchMetrics {
             num_success: register_int_counter_vec_with_registry!(
                 "num_success",
                 "Total number of transaction success",
+                &["workload"],
+                registry,
+            )
+            .unwrap(),
+            num_success_cmds: register_int_counter_vec_with_registry!(
+                "num_success_cmds",
+                "Total number of commands success",
                 &["workload"],
                 registry,
             )
@@ -394,12 +402,16 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
 
                                                 metrics_cloned.num_success.with_label_values(&[&b.1.to_string()]).inc();
                                                 metrics_cloned.num_in_flight.with_label_values(&[&b.1.to_string()]).dec();
+
+                                                let num_commands = b.0.data().transaction_data().kind().num_commands() as u16;
+                                                metrics_cloned.num_success_cmds.with_label_values(&[&b.1.to_string()]).inc_by(num_commands as u64);
+
                                                 // let auth_sign_info = AuthorityStrongQuorumSignInfo::try_from(&cert.auth_sign_info).unwrap();
                                                 // auth_sign_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_tx_cert.with_label_values(&[&name.unwrap().to_string()]).inc());
                                                 if let Some(sig_info) = effects.quorum_sig() {
                                                     sig_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_effects_cert.with_label_values(&[&name.unwrap().to_string()]).inc())
                                                 }
-                                                let num_commands = b.0.data().transaction_data().kind().num_commands() as u16;
+
                                                 b.1.make_new_payload(&effects);
                                                 NextOp::Response {latency,num_commands,payload:b.1, gas_used: effects.gas_used() }
                                             }
@@ -446,11 +458,15 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
 
                                             metrics_cloned.num_success.with_label_values(&[&payload.to_string()]).inc();
                                             metrics_cloned.num_in_flight.with_label_values(&[&payload.to_string()]).dec();
+
+                                             let num_commands = tx.data().transaction_data().kind().num_commands() as u16;
+                                            metrics_cloned.num_success_cmds.with_label_values(&[&payload.to_string()]).inc_by(num_commands as u64);
+
                                             // let auth_sign_info = AuthorityStrongQuorumSignInfo::try_from(&cert.auth_sign_info).unwrap();
                                             // auth_sign_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_tx_cert.with_label_values(&[&name.unwrap().to_string()]).inc());
                                             if let Some(sig_info) = effects.quorum_sig() { sig_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_effects_cert.with_label_values(&[&name.unwrap().to_string()]).inc()) }
                                             payload.make_new_payload(&effects);
-                                            let num_commands = tx.data().transaction_data().kind().num_commands() as u16;
+
                                             NextOp::Response {latency,num_commands,payload, gas_used: effects.gas_used() }
                                         }
                                         Err(err) => {
