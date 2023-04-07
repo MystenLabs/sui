@@ -37,11 +37,9 @@ pub struct Opts {
     /// [Required for remote benchmark]
     /// Object id of the primary gas coin used for benchmark
     /// NOTE: THe remote network should have this coin in its genesis config
-    /// with large enough gas i.e. u64::MAX
+    /// with large enough gas.
     #[clap(long, default_value = "", global = true)]
-    pub primary_gas_id: String,
-    #[clap(long, default_value = "5000", global = true)]
-    pub primary_gas_objects: u64,
+    pub primary_gas_owner_id: String,
     #[clap(long, default_value = "500", global = true)]
     pub gas_request_chunk_size: u64,
     /// Whether to run local or remote benchmark

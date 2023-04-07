@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
 use sui_config::utils;
+use tracing::debug;
 
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
@@ -17,6 +18,7 @@ use tokio::time::sleep;
 use crate::bank::BenchmarkBank;
 use crate::options::Opts;
 use crate::util::get_ed25519_keypair_from_keystore;
+use crate::workloads::workload::MAX_GAS_FOR_TESTING;
 use crate::{FullNodeProxy, LocalValidatorAggregatorProxy, ValidatorProxy};
 use sui_types::object::generate_max_test_gas_objects_with_owner;
 use test_utils::authority::test_and_configure_authority_configs_with_objects;
@@ -61,13 +63,13 @@ impl Env {
                 self.setup_remote_env(
                     barrier,
                     registry,
-                    opts.primary_gas_id.as_str(),
-                    opts.primary_gas_objects,
+                    opts.primary_gas_owner_id.as_str(),
                     opts.keystore_path.as_str(),
                     opts.genesis_blob_path.as_str(),
                     opts.use_fullnode_for_reconfig,
                     opts.use_fullnode_for_execution,
                     opts.fullnode_rpc_addresses.clone(),
+                    opts.gas_request_chunk_size,
                 )
                 .await
             }
@@ -160,7 +162,7 @@ impl Env {
         Ok(BenchmarkSetup {
             server_handle: join_handle,
             shutdown_notifier: sender,
-            bank: BenchmarkBank::new(proxy.clone(), primary_gas, pay_coin),
+            bank: BenchmarkBank::new(proxy.clone(), primary_gas, vec![pay_coin]),
             proxies: vec![proxy],
         })
     }
@@ -169,13 +171,13 @@ impl Env {
         &self,
         barrier: Arc<Barrier>,
         registry: &Registry,
-        primary_gas_id: &str,
-        primary_gas_objects: u64,
+        primary_gas_owner_id: &str,
         keystore_path: &str,
         genesis_blob_path: &str,
         use_fullnode_for_reconfig: bool,
         use_fullnode_for_execution: bool,
         fullnode_rpc_address: Vec<String>,
+        chunk_size: u64,
     ) -> Result<BenchmarkSetup> {
         info!("Running benchmark setup in remote mode ..");
         let (sender, recv) = tokio::sync::oneshot::channel::<()>();
@@ -188,6 +190,10 @@ impl Env {
                     recv.await.expect("Unable to wait for terminate signal");
                 });
         });
+
+        let genesis = sui_config::node::Genesis::new_from_file(genesis_blob_path);
+        let genesis = genesis.genesis()?;
+
         let fullnode_rpc_urls = fullnode_rpc_address.clone();
         info!("List of fullnode rpc urls: {:?}", fullnode_rpc_urls);
         let proxies: Vec<Arc<dyn ValidatorProxy + Send + Sync>> = if use_fullnode_for_execution {
@@ -195,9 +201,9 @@ impl Env {
                 bail!("fullnode-rpc-url is required when use-fullnode-for-execution is true");
             }
             let mut fullnodes: Vec<Arc<dyn ValidatorProxy + Send + Sync>> = vec![];
-            for fullnode_rpc_url in fullnode_rpc_urls {
+            for fullnode_rpc_url in fullnode_rpc_urls.iter() {
                 info!("Using FullNodeProxy: {:?}", fullnode_rpc_url);
-                fullnodes.push(Arc::new(FullNodeProxy::from_url(&fullnode_rpc_url).await?));
+                fullnodes.push(Arc::new(FullNodeProxy::from_url(fullnode_rpc_url).await?));
             }
             fullnodes
         } else {
@@ -210,8 +216,6 @@ impl Env {
             } else {
                 None
             };
-            let genesis = sui_config::node::Genesis::new_from_file(genesis_blob_path);
-            let genesis = genesis.genesis()?;
             vec![Arc::new(
                 LocalValidatorAggregatorProxy::from_genesis(
                     genesis,
@@ -229,30 +233,35 @@ impl Env {
             proxy.get_current_epoch(),
         );
 
-        let mut used_ids = vec![];
-        let offset = ObjectID::from_hex_literal(primary_gas_id)?;
-        let ids = ObjectID::in_range(offset, primary_gas_objects)?;
-        let mut primary_gas_id = ids
+        let primary_gas_owner_addr = ObjectID::from_hex_literal(primary_gas_owner_id)?;
+
+        // TODO: Add a way to query local proxy for gas objects.
+        // i.e. get from genesis blob and then query for the latest object version.
+
+        // Require the use of fullnode to query for gas object for now.
+        if fullnode_rpc_urls.is_empty() {
+            bail!("fullnode-rpc-url is required for remote run to get gas objects");
+        }
+        let fn_proxy = Arc::new(FullNodeProxy::from_url(&fullnode_rpc_urls[0]).await?);
+
+        let mut gas_objects = fn_proxy
+            .get_owned_objects(primary_gas_owner_addr.into())
+            .await?;
+        gas_objects.sort_by_key(|&(gas, _)| std::cmp::Reverse(gas));
+
+        let (balance, primary_gas_obj) = gas_objects
+            .iter()
+            .filter(|(balance, _)| balance > &MAX_GAS_FOR_TESTING)
+            .collect::<Vec<_>>()
             .choose(&mut rand::thread_rng())
             .context("Failed to choose a random primary gas id")?;
-        while used_ids.contains(primary_gas_id) {
-            primary_gas_id = ids
-                .choose(&mut rand::thread_rng())
-                .context("Failed to choose a random primary gas id")?;
-        }
-        used_ids.push(*primary_gas_id);
-        let primary_gas = proxy.get_object(*primary_gas_id).await?;
-        let mut pay_coin_id = ids
-            .choose(&mut rand::thread_rng())
-            .context("Failed to choose a random pay coin")?;
-        while used_ids.contains(pay_coin_id) {
-            pay_coin_id = ids
-                .choose(&mut rand::thread_rng())
-                .context("Failed to choose a random primary gas id")?;
-        }
-        used_ids.push(*pay_coin_id);
-        let pay_coin = proxy.get_object(*pay_coin_id).await?;
-        let primary_gas_account = primary_gas.owner.get_owner_address()?;
+
+        debug!(
+            "Using primary gas id: {} with balance of {balance}",
+            primary_gas_obj.id()
+        );
+
+        let primary_gas_account = primary_gas_obj.owner.get_owner_address()?;
         let keystore_path = Some(&keystore_path)
             .filter(|s| !s.is_empty())
             .map(PathBuf::from)
@@ -266,20 +275,40 @@ impl Env {
             keystore_path,
             &primary_gas_account,
         )?);
-        let primary_gas = (
-            primary_gas.compute_object_reference(),
-            primary_gas_account,
-            keypair.clone(),
+
+        let pay_coin_objs = gas_objects.iter().filter(|(balance, gas_object)| {
+            gas_object != primary_gas_obj && balance > &(MAX_GAS_FOR_TESTING * chunk_size)
+        });
+        let mut pay_coins_total_balance = 0;
+        let pay_coins = pay_coin_objs
+            .map(|(balance, pay_coin)| {
+                pay_coins_total_balance += balance;
+                (
+                    pay_coin.compute_object_reference(),
+                    pay_coin
+                        .owner
+                        .get_owner_address()
+                        .expect("Failed to get owner address"),
+                    keypair.clone(),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        debug!(
+            "Using {} pay coin(s) with balance of {pay_coins_total_balance}",
+            pay_coins.len()
         );
-        let pay_coin = (
-            pay_coin.compute_object_reference(),
-            pay_coin.owner.get_owner_address()?,
+
+        let primary_gas = (
+            primary_gas_obj.compute_object_reference(),
+            primary_gas_account,
             keypair,
         );
+
         Ok(BenchmarkSetup {
             server_handle: join_handle,
             shutdown_notifier: sender,
-            bank: BenchmarkBank::new(proxy.clone(), primary_gas, pay_coin),
+            bank: BenchmarkBank::new(proxy.clone(), primary_gas, pay_coins),
             proxies,
         })
     }

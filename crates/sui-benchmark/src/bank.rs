@@ -3,7 +3,7 @@
 
 use crate::util::{make_pay_tx, UpdatedAndNewlyMintedGasCoins};
 use crate::workloads::payload::Payload;
-use crate::workloads::workload::{Workload, WorkloadBuilder};
+use crate::workloads::workload::{Workload, WorkloadBuilder, MAX_BUDGET};
 use crate::workloads::{Gas, GasCoinConfig};
 use crate::ValidatorProxy;
 use anyhow::{Error, Result};
@@ -19,6 +19,7 @@ use sui_types::messages::{
 };
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{coin, SUI_FRAMEWORK_OBJECT_ID};
+use tracing::{debug, error};
 
 /// Bank is used for generating gas for running the benchmark. It is initialized with two gas coins i.e.
 /// `pay_coin` which is split into smaller gas coins and `primary_gas` which is the gas coin used
@@ -28,20 +29,22 @@ pub struct BenchmarkBank {
     pub proxy: Arc<dyn ValidatorProxy + Send + Sync>,
     // Gas to use for execution of gas generation transaction
     pub primary_gas: Gas,
-    // Coin to use for splitting and generating small gas coins
-    pub pay_coin: Gas,
+    // Coin to use for splitting and generating small gas coins. Can accept
+    // multiple coins in case we no longer have one large coin that will support
+    // generating all coins for the workloads.
+    pub pay_coins: Vec<Gas>,
 }
 
 impl BenchmarkBank {
     pub fn new(
         proxy: Arc<dyn ValidatorProxy + Send + Sync>,
         primary_gas: Gas,
-        pay_coin: Gas,
+        pay_coins: Vec<Gas>,
     ) -> Self {
         BenchmarkBank {
             proxy,
             primary_gas,
-            pay_coin,
+            pay_coins,
         }
     }
     pub async fn generate(
@@ -64,12 +67,9 @@ impl BenchmarkBank {
 
         let mut new_gas_coins: Vec<Gas> = vec![];
         let chunked_coin_configs = all_coin_configs.chunks(chunk_size as usize);
-        eprintln!("Number of gas requests = {}", chunked_coin_configs.len());
+        debug!("Number of gas requests = {}", chunked_coin_configs.len());
         for chunk in chunked_coin_configs {
-            let (updated_primary_gas, updated_coin, gas_coins) =
-                self.split_coin_and_pay(chunk, gas_price).await?;
-            self.primary_gas = updated_primary_gas;
-            self.pay_coin = updated_coin;
+            let gas_coins = self.split_coin_and_pay(chunk, gas_price).await?;
             new_gas_coins.extend(gas_coins);
         }
         let mut workloads = vec![];
@@ -105,6 +105,7 @@ impl BenchmarkBank {
         split_amounts: Vec<u64>,
         gas_price: Option<u64>,
         keypair: &AccountKeyPair,
+        pay_coin: &Gas,
     ) -> Result<VerifiedTransaction> {
         let gas_price = gas_price.unwrap_or(DUMMY_GAS_PRICE);
         let split_coin = TransactionData::new_move_call(
@@ -115,10 +116,10 @@ impl BenchmarkBank {
             vec![TypeTag::Struct(Box::new(GAS::type_()))],
             self.primary_gas.0,
             vec![
-                CallArg::Object(ObjectArg::ImmOrOwnedObject(self.pay_coin.0)),
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(pay_coin.0)),
                 CallArg::Pure(bcs::to_bytes(&split_amounts).unwrap()),
             ],
-            500_000_000 * gas_price,
+            MAX_BUDGET,
             gas_price,
         )?;
         let verified_tx = to_sender_signed_transaction(split_coin, keypair);
@@ -134,74 +135,157 @@ impl BenchmarkBank {
         // TODO: Instead of splitting the coin and then using pay tx to transfer it to recipients,
         // we can do both in one tx with pay_sui which will split the coin out for us before
         // transferring it to recipients
-        let verified_tx =
-            self.make_split_coin_tx(split_amounts.clone(), Some(gas_price), &self.primary_gas.2)?;
-        let effects = self
-            .proxy
-            .execute_transaction_block(verified_tx.into())
-            .await?;
-        let updated_gas = effects
-            .mutated()
-            .into_iter()
-            .find(|(k, _)| k.0 == self.primary_gas.0 .0)
-            .ok_or("Input gas missing in the effects")
-            .map_err(Error::msg)?;
-        let created_coins: Vec<ObjectRef> = effects.created().into_iter().map(|c| c.0).collect();
-        assert_eq!(created_coins.len(), split_amounts.len());
-        let updated_coin = effects
-            .mutated()
-            .into_iter()
-            .find(|(k, _)| k.0 == self.pay_coin.0 .0)
-            .ok_or("Input gas missing in the effects")
-            .map_err(Error::msg)?;
-        let recipient_addresses: Vec<SuiAddress> = coin_configs.iter().map(|g| g.address).collect();
-        let verified_tx = make_pay_tx(
-            created_coins,
-            self.primary_gas.1,
-            recipient_addresses,
-            split_amounts,
-            updated_gas.0,
-            &self.primary_gas.2,
-            Some(gas_price),
-        )?;
-        let effects = self
-            .proxy
-            .execute_transaction_block(verified_tx.into())
-            .await?;
-        let address_map: HashMap<SuiAddress, Arc<AccountKeyPair>> = coin_configs
-            .iter()
-            .map(|c| (c.address, c.keypair.clone()))
-            .collect();
-        let transferred_coins: Result<Vec<Gas>> = effects
-            .created()
-            .into_iter()
-            .map(|c| {
-                let address = c.1.get_owner_address()?;
-                let keypair = address_map
-                    .get(&address)
-                    .ok_or("Owner address missing in the address map")
-                    .map_err(Error::msg)?;
-                Ok((c.0, address, keypair.clone()))
-            })
-            .collect();
-        let updated_gas = effects
-            .mutated()
-            .into_iter()
-            .find(|(k, _)| k.0 == self.primary_gas.0 .0)
-            .ok_or("Input gas missing in the effects")
-            .map_err(Error::msg)?;
-        Ok((
-            (
-                updated_gas.0,
-                updated_gas.1.get_owner_address()?,
-                self.primary_gas.2.clone(),
-            ),
-            (
+        let mut updated_pay_coins = Vec::new();
+        let mut transferred_coins: Result<Vec<Gas>> = Err(Error::msg("Failed to split coin"));
+        debug!(
+            "Splitting {} coin(s) into {} coin(s) of balance {}",
+            self.pay_coins.len(),
+            split_amounts.len(),
+            split_amounts[0],
+        );
+        for (idx, pay_coin) in self.pay_coins.iter().enumerate() {
+            debug!("Attempting split of coin#{idx}");
+            let verified_tx = self.make_split_coin_tx(
+                split_amounts.clone(),
+                Some(gas_price),
+                &self.primary_gas.2,
+                pay_coin,
+            )?;
+            let effects = self
+                .proxy
+                .execute_transaction_block(verified_tx.into())
+                .await;
+
+            let effects = match effects {
+                Ok(effects) => {
+                    if !effects.is_ok() {
+                        error!("Failed to split coin: {:?}", effects);
+                        // TODO: check effects and make decision on what coin to use
+                        // next based on errors.
+                        let updated_gas = effects
+                            .mutated()
+                            .into_iter()
+                            .find(|(k, _)| k.0 == self.primary_gas.0 .0)
+                            .ok_or("Input gas missing in the effects")
+                            .map_err(Error::msg);
+
+                        match updated_gas {
+                            Ok(updated_gas) => {
+                                self.primary_gas = (
+                                    updated_gas.0,
+                                    updated_gas.1.get_owner_address()?,
+                                    self.primary_gas.2.clone(),
+                                );
+                            }
+                            Err(e) => {
+                                error!("Failed to get mutated gas: {:?}", e);
+                                continue;
+                            }
+                        };
+
+                        let updated_coin = effects
+                            .mutated()
+                            .into_iter()
+                            .find(|(k, _)| k.0 == pay_coin.0 .0)
+                            .ok_or("Pay coin missing in the effects")
+                            .map_err(Error::msg);
+
+                        match updated_coin {
+                            Ok(updated_coin) => {
+                                updated_pay_coins.push((
+                                    updated_coin.0,
+                                    updated_coin.1.get_owner_address()?,
+                                    self.primary_gas.2.clone(),
+                                ));
+                                continue;
+                            }
+                            Err(e) => {
+                                error!("Failed to mutated pay coi: {:?}", e);
+                                continue;
+                            }
+                        };
+                    }
+                    effects
+                }
+                Err(e) => {
+                    error!("Failed to split coin: {:?}", e);
+                    continue;
+                }
+            };
+
+            let updated_gas = effects
+                .mutated()
+                .into_iter()
+                .find(|(k, _)| k.0 == self.primary_gas.0 .0)
+                .ok_or("Input gas missing in the effects")
+                .map_err(Error::msg)?;
+            let created_coins: Vec<ObjectRef> =
+                effects.created().into_iter().map(|c| c.0).collect();
+            assert_eq!(created_coins.len(), split_amounts.len());
+            let updated_coin = effects
+                .mutated()
+                .into_iter()
+                .find(|(k, _)| k.0 == pay_coin.0 .0)
+                .ok_or("Input gas missing in the effects")
+                .map_err(Error::msg)?;
+
+            updated_pay_coins.push((
                 updated_coin.0,
                 updated_coin.1.get_owner_address()?,
                 self.primary_gas.2.clone(),
-            ),
-            transferred_coins?,
-        ))
+            ));
+
+            let recipient_addresses: Vec<SuiAddress> =
+                coin_configs.iter().map(|g| g.address).collect();
+            let verified_tx = make_pay_tx(
+                created_coins,
+                self.primary_gas.1,
+                recipient_addresses,
+                split_amounts,
+                updated_gas.0,
+                &self.primary_gas.2,
+                Some(gas_price),
+            )?;
+            let effects = self
+                .proxy
+                .execute_transaction_block(verified_tx.into())
+                .await?;
+            let address_map: HashMap<SuiAddress, Arc<AccountKeyPair>> = coin_configs
+                .iter()
+                .map(|c| (c.address, c.keypair.clone()))
+                .collect();
+            transferred_coins = effects
+                .created()
+                .into_iter()
+                .map(|c| {
+                    let address = c.1.get_owner_address()?;
+                    let keypair = address_map
+                        .get(&address)
+                        .ok_or("Owner address missing in the address map")
+                        .map_err(Error::msg)?;
+                    Ok((c.0, address, keypair.clone()))
+                })
+                .collect();
+            let updated_gas = effects
+                .mutated()
+                .into_iter()
+                .find(|(k, _)| k.0 == self.primary_gas.0 .0)
+                .ok_or("Input gas missing in the effects")
+                .map_err(Error::msg)?;
+
+            self.primary_gas = (
+                updated_gas.0,
+                updated_gas.1.get_owner_address()?,
+                self.primary_gas.2.clone(),
+            );
+
+            let (_, right) = self.pay_coins.split_at_mut(idx + 1);
+            let remaining_pay_coins = right.to_vec();
+            self.pay_coins = updated_pay_coins;
+            self.pay_coins.extend(remaining_pay_coins);
+            break;
+        }
+
+        transferred_coins
     }
 }

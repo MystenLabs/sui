@@ -32,9 +32,12 @@ use sui_types::{base_types::ObjectID, object::Owner};
 use sui_types::{base_types::SuiAddress, crypto::get_key_pair, messages::VerifiedTransaction};
 use sui_types::{messages::TransactionData, utils::to_sender_signed_transaction};
 use test_utils::messages::create_publish_move_package_transaction_with_budget;
+use tracing::debug;
+
 /// Number of vectors to create in LargeTransientRuntimeVectors workload
 const NUM_VECTORS: u64 = 1_000;
 
+// TODO: Need to fix Large* workloads, which are currently failing due to InsufficientGas
 #[derive(Debug, EnumCountMacro, EnumIter, Clone)]
 pub enum AdversarialPayloadType {
     Random = 0,
@@ -379,7 +382,7 @@ impl WorkloadBuilder<dyn Payload> for AdversarialWorkloadBuilder {
         mut init_gas: Vec<Gas>,
         payload_gas: Vec<Gas>,
     ) -> Box<dyn Workload<dyn Payload>> {
-        eprintln!(
+        debug!(
             "Using `{:?}` adversarial workloads at {}% load factor",
             self.adversarial_payload_cfg.payload_type,
             self.adversarial_payload_cfg.load_factor * 100.0

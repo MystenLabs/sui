@@ -288,7 +288,7 @@ mod test {
                 .await,
         );
 
-        let bank = BenchmarkBank::new(proxy.clone(), primary_gas, pay_coin);
+        let bank = BenchmarkBank::new(proxy.clone(), primary_gas, vec![pay_coin]);
         let system_state_observer = {
             let mut system_state_observer = SystemStateObserver::new(proxy.clone());
             if let Ok(_) = system_state_observer.state.changed().await {

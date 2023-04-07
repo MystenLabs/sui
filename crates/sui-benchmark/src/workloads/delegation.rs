@@ -3,7 +3,10 @@
 
 use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::payload::Payload;
-use crate::workloads::workload::{Workload, WorkloadBuilder, MAX_GAS_FOR_TESTING};
+use crate::workloads::workload::{Workload, WorkloadBuilder};
+use crate::workloads::workload::{
+    ESTIMATED_COMPUTATION_COST, MAX_GAS_FOR_TESTING, STORAGE_COST_PER_COIN,
+};
 use crate::workloads::{Gas, GasCoinConfig, WorkloadBuilderInfo, WorkloadParams};
 use crate::{ExecutionEffects, ValidatorProxy};
 use async_trait::async_trait;
@@ -14,6 +17,7 @@ use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
 use sui_types::messages::VerifiedTransaction;
 use test_utils::messages::make_staking_transaction;
+use tracing::error;
 
 #[derive(Debug)]
 pub struct DelegationTestPayload {
@@ -33,6 +37,11 @@ impl std::fmt::Display for DelegationTestPayload {
 
 impl Payload for DelegationTestPayload {
     fn make_new_payload(&mut self, effects: &ExecutionEffects) {
+        if !effects.is_ok() {
+            effects.print_gas_summary();
+            error!("Delegation tx failed...");
+        }
+
         let coin = match self.coin {
             None => Some(effects.created().get(0).unwrap().0),
             Some(_) => None,
@@ -117,11 +126,12 @@ impl WorkloadBuilder<dyn Payload> for DelegationWorkloadBuilder {
         vec![]
     }
     async fn generate_coin_config_for_payloads(&self) -> Vec<GasCoinConfig> {
+        let amount = MAX_GAS_FOR_TESTING + ESTIMATED_COMPUTATION_COST + STORAGE_COST_PER_COIN;
         (0..self.count)
             .map(|_| {
                 let (address, keypair) = get_key_pair();
                 GasCoinConfig {
-                    amount: MAX_GAS_FOR_TESTING,
+                    amount,
                     address,
                     keypair: Arc::new(keypair),
                 }

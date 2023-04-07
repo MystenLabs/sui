@@ -5,6 +5,7 @@ use anyhow::Result;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore};
 use sui_types::{base_types::SuiAddress, crypto::SuiKeyPair};
 
+use crate::workloads::workload::MAX_BUDGET;
 use crate::ValidatorProxy;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -19,9 +20,8 @@ use test_utils::transaction::parse_package_ref;
 
 // This is the maximum gas we will transfer from primary coin into any gas coin
 // for running the benchmark
-pub const MAX_GAS_FOR_TESTING: u64 = 1_000_000_000;
 
-pub type UpdatedAndNewlyMintedGasCoins = (Gas, Gas, Vec<Gas>);
+pub type UpdatedAndNewlyMintedGasCoins = Vec<Gas>;
 
 pub fn get_ed25519_keypair_from_keystore(
     keystore_path: PathBuf,
@@ -49,7 +49,7 @@ pub fn make_pay_tx(
         addresses,
         split_amounts,
         gas,
-        100_000_000,
+        MAX_BUDGET,
         gas_price.unwrap_or(DUMMY_GAS_PRICE),
     )?;
     Ok(to_sender_signed_transaction(pay, keypair))
