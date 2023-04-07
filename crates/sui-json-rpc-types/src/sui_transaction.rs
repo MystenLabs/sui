@@ -35,7 +35,7 @@ use sui_types::parse_sui_type_tag;
 use sui_types::query::TransactionFilter;
 use sui_types::signature::GenericSignature;
 use sui_types::storage::{DeleteKind, WriteKind};
-use sui_types::sui_serde::SuiTypeTag as AsSuiTypeTag;
+use sui_types::sui_serde::{BigInt, SuiTypeTag as AsSuiTypeTag};
 
 use crate::balance_changes::BalanceChange;
 use crate::object_changes::ObjectChange;
