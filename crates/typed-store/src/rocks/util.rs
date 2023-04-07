@@ -15,15 +15,12 @@ pub fn reference_count_merge_operator(
     let (mut value, mut ref_count) = stored_value.map_or((None, 0), deserialize_ref_count_value);
 
     for operand in operands {
-        if !operand.is_empty() {
-            let (new_value, delta) = deserialize_ref_count_value(operand);
-            // assure original value is immutable
-            assert!(value.is_none() || new_value.is_none() || value == new_value);
-            if value.is_none() && new_value.is_some() {
-                value = new_value;
-            }
-            ref_count += delta;
+        let (new_value, delta) = deserialize_ref_count_value(operand);
+        assert!(value.is_none() || new_value.is_none() || value == new_value);
+        if value.is_none() && new_value.is_some() {
+            value = new_value;
         }
+        ref_count += delta;
     }
     match ref_count.cmp(&0) {
         Ordering::Greater => Some([value.unwrap_or(b""), &ref_count.to_le_bytes()].concat()),
@@ -45,8 +42,37 @@ pub fn is_ref_count_value(value: &[u8]) -> bool {
 }
 
 fn deserialize_ref_count_value(bytes: &[u8]) -> (Option<&[u8]>, i64) {
+    if bytes.is_empty() {
+        return (None, 0);
+    }
     assert!(bytes.len() >= 8);
     let (value, rc_bytes) = bytes.split_at(bytes.len() - 8);
     let ref_count = i64::from_le_bytes(rc_bytes.try_into().unwrap());
     (if value.is_empty() { None } else { Some(value) }, ref_count)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::deserialize_ref_count_value;
+
+    #[test]
+    fn deserialize_ref_count_value_test() {
+        assert_eq!(deserialize_ref_count_value(&[]), (None, 0));
+        assert_eq!(
+            deserialize_ref_count_value(b"\x01\0\0\0\0\0\0\0"),
+            (None, 1)
+        );
+        assert_eq!(
+            deserialize_ref_count_value(b"\xff\xff\xff\xff\xff\xff\xff\xff"),
+            (None, -1)
+        );
+        assert_eq!(
+            deserialize_ref_count_value(b"\xfe\xff\xff\xff\xff\xff\xff\xff"),
+            (None, -2)
+        );
+        assert_eq!(
+            deserialize_ref_count_value(b"test\x04\0\0\0\0\0\0\0"),
+            (Some(b"test".as_ref()), 4)
+        );
+    }
 }
