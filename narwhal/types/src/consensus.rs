@@ -69,17 +69,17 @@ impl CommittedSubDag {
         }
     }
 
-    pub fn from_compressed_sub_dag(
-        compressed: CompressedCommittedSubDag,
+    pub fn from_commit(
+        commit: ConsensusCommit,
         certificates: Vec<Certificate>,
         leader: Certificate,
     ) -> Self {
         Self {
             certificates,
             leader,
-            sub_dag_index: compressed.sub_dag_index(),
-            reputation_score: compressed.reputation_score(),
-            commit_timestamp: compressed.commit_timestamp(),
+            sub_dag_index: commit.sub_dag_index(),
+            reputation_score: commit.reputation_score(),
+            commit_timestamp: commit.commit_timestamp(),
         }
     }
 
@@ -160,8 +160,8 @@ impl ReputationScores {
     }
 }
 
-#[enum_dispatch(CompressedCommittedSubDagAPI)]
-trait CompressedCommittedSubDagAPI {
+#[enum_dispatch(ConsensusCommitAPI)]
+trait ConsensusCommitAPI {
     fn certificates(&self) -> Vec<CertificateDigest>;
     fn leader(&self) -> CertificateDigest;
     fn leader_round(&self) -> Round;
@@ -186,7 +186,7 @@ pub struct CommittedSubDagShell {
     pub reputation_score: ReputationScores,
 }
 
-impl CompressedCommittedSubDagAPI for CommittedSubDagShell {
+impl ConsensusCommitAPI for CommittedSubDagShell {
     fn certificates(&self) -> Vec<CertificateDigest> {
         self.certificates.clone()
     }
@@ -215,7 +215,7 @@ impl CompressedCommittedSubDagAPI for CommittedSubDagShell {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct CompressedCommittedSubDagV2 {
+pub struct ConsensusCommitV2 {
     /// The sequence of committed certificates' digests.
     pub certificates: Vec<CertificateDigest>,
     /// The leader certificate's digest responsible of committing this sub-dag.
@@ -231,7 +231,7 @@ pub struct CompressedCommittedSubDagV2 {
     pub commit_timestamp: TimestampMs,
 }
 
-impl CompressedCommittedSubDagV2 {
+impl ConsensusCommitV2 {
     pub fn from_sub_dag(sub_dag: &CommittedSubDag) -> Self {
         Self {
             certificates: sub_dag.certificates.iter().map(|x| x.digest()).collect(),
@@ -244,7 +244,7 @@ impl CompressedCommittedSubDagV2 {
     }
 }
 
-impl CompressedCommittedSubDagAPI for CompressedCommittedSubDagV2 {
+impl ConsensusCommitAPI for ConsensusCommitV2 {
     fn certificates(&self) -> Vec<CertificateDigest> {
         self.certificates.clone()
     }
@@ -271,52 +271,52 @@ impl CompressedCommittedSubDagAPI for CompressedCommittedSubDagV2 {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[enum_dispatch(CompressedCommittedSubDagAPI)]
-pub enum CompressedCommittedSubDag {
+#[enum_dispatch(ConsensusCommitAPI)]
+pub enum ConsensusCommit {
     V1(CommittedSubDagShell),
-    V2(CompressedCommittedSubDagV2),
+    V2(ConsensusCommitV2),
 }
 
-impl CompressedCommittedSubDag {
+impl ConsensusCommit {
     pub fn certificates(&self) -> Vec<CertificateDigest> {
         match self {
-            CompressedCommittedSubDag::V1(sub_dag) => sub_dag.certificates(),
-            CompressedCommittedSubDag::V2(sub_dag) => sub_dag.certificates(),
+            ConsensusCommit::V1(sub_dag) => sub_dag.certificates(),
+            ConsensusCommit::V2(sub_dag) => sub_dag.certificates(),
         }
     }
 
     pub fn leader(&self) -> CertificateDigest {
         match self {
-            CompressedCommittedSubDag::V1(sub_dag) => sub_dag.leader(),
-            CompressedCommittedSubDag::V2(sub_dag) => sub_dag.leader(),
+            ConsensusCommit::V1(sub_dag) => sub_dag.leader(),
+            ConsensusCommit::V2(sub_dag) => sub_dag.leader(),
         }
     }
 
     pub fn leader_round(&self) -> Round {
         match self {
-            CompressedCommittedSubDag::V1(sub_dag) => sub_dag.leader_round(),
-            CompressedCommittedSubDag::V2(sub_dag) => sub_dag.leader_round(),
+            ConsensusCommit::V1(sub_dag) => sub_dag.leader_round(),
+            ConsensusCommit::V2(sub_dag) => sub_dag.leader_round(),
         }
     }
 
     pub fn sub_dag_index(&self) -> SequenceNumber {
         match self {
-            CompressedCommittedSubDag::V1(sub_dag) => sub_dag.sub_dag_index(),
-            CompressedCommittedSubDag::V2(sub_dag) => sub_dag.sub_dag_index(),
+            ConsensusCommit::V1(sub_dag) => sub_dag.sub_dag_index(),
+            ConsensusCommit::V2(sub_dag) => sub_dag.sub_dag_index(),
         }
     }
 
     pub fn reputation_score(&self) -> ReputationScores {
         match self {
-            CompressedCommittedSubDag::V1(sub_dag) => sub_dag.reputation_score(),
-            CompressedCommittedSubDag::V2(sub_dag) => sub_dag.reputation_score(),
+            ConsensusCommit::V1(sub_dag) => sub_dag.reputation_score(),
+            ConsensusCommit::V2(sub_dag) => sub_dag.reputation_score(),
         }
     }
 
     pub fn commit_timestamp(&self) -> TimestampMs {
         match self {
-            CompressedCommittedSubDag::V1(sub_dag) => sub_dag.commit_timestamp(),
-            CompressedCommittedSubDag::V2(sub_dag) => sub_dag.commit_timestamp(),
+            ConsensusCommit::V1(sub_dag) => sub_dag.commit_timestamp(),
+            ConsensusCommit::V2(sub_dag) => sub_dag.commit_timestamp(),
         }
     }
 }

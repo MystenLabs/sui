@@ -7,8 +7,7 @@ use storage::{CertificateStore, CertificateStoreCache, ConsensusStore};
 use store::rocks::MetricConf;
 use store::{reopen, rocks, rocks::DBMap, rocks::ReadWriteOptions};
 use types::{
-    Certificate, CertificateDigest, CommittedSubDagShell, CompressedCommittedSubDag, Round,
-    SequenceNumber,
+    Certificate, CertificateDigest, CommittedSubDagShell, ConsensusCommit, Round, SequenceNumber,
 };
 
 pub(crate) const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
@@ -29,7 +28,7 @@ pub fn make_consensus_store(store_path: &std::path::Path) -> Arc<ConsensusStore>
     let (last_committed_map, sequence_map, committed_sub_dag_map) = reopen!(&rocksdb,
         LAST_COMMITTED_CF;<AuthorityIdentifier, Round>,
         SEQUENCE_CF;<SequenceNumber, CommittedSubDagShell>,
-        COMMITTED_SUB_DAG_CF;<SequenceNumber, CompressedCommittedSubDag>
+        COMMITTED_SUB_DAG_CF;<SequenceNumber, ConsensusCommit>
     );
 
     Arc::new(ConsensusStore::new(

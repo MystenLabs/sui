@@ -19,7 +19,7 @@ use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, info, instrument};
 use types::{
     metered_channel, Certificate, CertificateAPI, CertificateDigest, CommittedSubDag,
-    CompressedCommittedSubDag, ConditionalBroadcastReceiver, HeaderAPI, Round, Timestamp,
+    ConditionalBroadcastReceiver, ConsensusCommit, HeaderAPI, Round, Timestamp,
 };
 
 #[cfg(test)]
@@ -64,7 +64,7 @@ impl ConsensusState {
         last_committed_round: Round,
         gc_depth: Round,
         recovered_last_committed: HashMap<AuthorityIdentifier, Round>,
-        latest_sub_dag: Option<CompressedCommittedSubDag>,
+        latest_sub_dag: Option<ConsensusCommit>,
         cert_store: CertificateStore,
     ) -> Self {
         let last_round = ConsensusRound::new_with_gc_depth(last_committed_round, gc_depth);
@@ -94,7 +94,7 @@ impl ConsensusState {
                 .unwrap()
                 .expect("Certificate should be found in database");
 
-            Some(CommittedSubDag::from_compressed_sub_dag(
+            Some(CommittedSubDag::from_commit(
                 latest_sub_dag.clone(),
                 certificates,
                 leader,

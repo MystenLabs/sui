@@ -7,8 +7,8 @@ use std::collections::HashMap;
 use store::rocks::{open_cf, DBMap, MetricConf, ReadWriteOptions};
 use store::{reopen, Map, TypedStoreError};
 use types::{
-    CommittedSubDag, CommittedSubDagShell, CompressedCommittedSubDag, CompressedCommittedSubDagV2,
-    Round, SequenceNumber,
+    CommittedSubDag, CommittedSubDagShell, ConsensusCommit, ConsensusCommitV2, Round,
+    SequenceNumber,
 };
 
 /// The persistent storage of the sequencer.
@@ -19,7 +19,7 @@ pub struct ConsensusStore {
     /// The global consensus sequence.
     committed_sub_dags_by_index: DBMap<SequenceNumber, CommittedSubDagShell>,
     /// The global consensus sequence
-    committed_sub_dags_by_index_v2: DBMap<SequenceNumber, CompressedCommittedSubDag>,
+    committed_sub_dags_by_index_v2: DBMap<SequenceNumber, ConsensusCommit>,
 }
 
 impl ConsensusStore {
@@ -27,7 +27,7 @@ impl ConsensusStore {
     pub fn new(
         last_committed: DBMap<AuthorityIdentifier, Round>,
         sequence: DBMap<SequenceNumber, CommittedSubDagShell>,
-        committed_sub_dags_map: DBMap<SequenceNumber, CompressedCommittedSubDag>,
+        committed_sub_dags_map: DBMap<SequenceNumber, ConsensusCommit>,
     ) -> Self {
         Self {
             last_committed,
@@ -48,7 +48,7 @@ impl ConsensusStore {
             ],
         )
         .expect("Cannot open database");
-        let (last_committed_map, sub_dag_index_map, committed_sub_dag_map) = reopen!(&rocksdb, NodeStorage::LAST_COMMITTED_CF;<AuthorityIdentifier, Round>, NodeStorage::SUB_DAG_INDEX_CF;<SequenceNumber, CommittedSubDagShell>, NodeStorage::COMMITTED_SUB_DAG_INDEX_CF;<SequenceNumber, CompressedCommittedSubDag>);
+        let (last_committed_map, sub_dag_index_map, committed_sub_dag_map) = reopen!(&rocksdb, NodeStorage::LAST_COMMITTED_CF;<AuthorityIdentifier, Round>, NodeStorage::SUB_DAG_INDEX_CF;<SequenceNumber, CommittedSubDagShell>, NodeStorage::COMMITTED_SUB_DAG_INDEX_CF;<SequenceNumber, ConsensusCommit>);
         Self::new(last_committed_map, sub_dag_index_map, committed_sub_dag_map)
     }
 
@@ -66,14 +66,13 @@ impl ConsensusStore {
         last_committed: &HashMap<AuthorityIdentifier, Round>,
         sub_dag: &CommittedSubDag,
     ) -> Result<(), TypedStoreError> {
-        let compressed =
-            CompressedCommittedSubDag::V2(CompressedCommittedSubDagV2::from_sub_dag(sub_dag));
+        let commit = ConsensusCommit::V2(ConsensusCommitV2::from_sub_dag(sub_dag));
 
         let mut write_batch = self.last_committed.batch();
         write_batch.insert_batch(&self.last_committed, last_committed.iter())?;
         write_batch.insert_batch(
             &self.committed_sub_dags_by_index_v2,
-            std::iter::once((sub_dag.sub_dag_index, compressed)),
+            std::iter::once((sub_dag.sub_dag_index, commit)),
         )?;
         write_batch.write()
     }
@@ -107,7 +106,7 @@ impl ConsensusStore {
 
     /// Returns thet latest subdag committed. If none is committed yet, then
     /// None is returned instead.
-    pub fn get_latest_sub_dag(&self) -> Option<CompressedCommittedSubDag> {
+    pub fn get_latest_sub_dag(&self) -> Option<ConsensusCommit> {
         if let Some(sub_dag) = self
             .committed_sub_dags_by_index_v2
             .iter()
@@ -126,29 +125,29 @@ impl ConsensusStore {
             .iter()
             .skip_to_last()
             .next()
-            .map(|(_, sub_dag)| CompressedCommittedSubDag::V1(sub_dag))
+            .map(|(_, sub_dag)| ConsensusCommit::V1(sub_dag))
     }
 
     /// Load all the sub dags committed with sequence number of at least `from`.
     pub fn read_committed_sub_dags_from(
         &self,
         from: &SequenceNumber,
-    ) -> StoreResult<Vec<CompressedCommittedSubDag>> {
+    ) -> StoreResult<Vec<ConsensusCommit>> {
         // TODO: remove once this has been released to the validators
         // start from the previous table first to ensure we haven't missed anything.
         let mut sub_dags = self
             .committed_sub_dags_by_index
             .iter()
             .skip_to(from)?
-            .map(|(_, sub_dag)| CompressedCommittedSubDag::V1(sub_dag))
-            .collect::<Vec<CompressedCommittedSubDag>>();
+            .map(|(_, sub_dag)| ConsensusCommit::V1(sub_dag))
+            .collect::<Vec<ConsensusCommit>>();
 
         sub_dags.extend(
             self.committed_sub_dags_by_index_v2
                 .iter()
                 .skip_to(from)?
                 .map(|(_, sub_dag)| sub_dag)
-                .collect::<Vec<CompressedCommittedSubDag>>(),
+                .collect::<Vec<ConsensusCommit>>(),
         );
 
         Ok(sub_dags)
@@ -159,9 +158,7 @@ impl ConsensusStore {
 mod test {
     use crate::ConsensusStore;
     use store::Map;
-    use types::{
-        CommittedSubDagShell, CompressedCommittedSubDag, CompressedCommittedSubDagV2, TimestampMs,
-    };
+    use types::{CommittedSubDagShell, ConsensusCommit, ConsensusCommitV2, TimestampMs};
 
     #[tokio::test]
     async fn test_v1_v2_backwards_compatibility() {
@@ -185,7 +182,7 @@ mod test {
 
         // Create few sub dags of V2 and write in the committed_sub_dags_by_index_v2 storage
         for i in 3..6 {
-            let s = CompressedCommittedSubDagV2 {
+            let s = ConsensusCommitV2 {
                 certificates: vec![],
                 leader: Default::default(),
                 leader_round: 2,
@@ -196,7 +193,7 @@ mod test {
 
             store
                 .committed_sub_dags_by_index_v2
-                .insert(&s.sub_dag_index.clone(), &CompressedCommittedSubDag::V2(s))
+                .insert(&s.sub_dag_index.clone(), &ConsensusCommit::V2(s))
                 .unwrap();
         }
 

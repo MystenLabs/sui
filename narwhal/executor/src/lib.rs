@@ -115,7 +115,7 @@ pub async fn get_restored_consensus_output<State: ExecutionState>(
             .read(compressed_sub_dag.leader())?
             .unwrap();
 
-        sub_dags.push(CommittedSubDag::from_compressed_sub_dag(
+        sub_dags.push(CommittedSubDag::from_commit(
             compressed_sub_dag,
             certificates,
             leader,

@@ -16,8 +16,8 @@ use store::reopen;
 use store::rocks::DBMap;
 use store::rocks::{open_cf, MetricConf, ReadWriteOptions};
 use types::{
-    Batch, BatchDigest, Certificate, CertificateDigest, CommittedSubDagShell,
-    CompressedCommittedSubDag, Header, HeaderDigest, Round, SequenceNumber, VoteInfo,
+    Batch, BatchDigest, Certificate, CertificateDigest, CommittedSubDagShell, ConsensusCommit,
+    Header, HeaderDigest, Round, SequenceNumber, VoteInfo,
 };
 
 // A type alias marking the "payload" tokens sent by workers to their primary as batch acknowledgements
@@ -104,7 +104,7 @@ impl NodeStorage {
             Self::BATCHES_CF;<BatchDigest, Batch>,
             Self::LAST_COMMITTED_CF;<AuthorityIdentifier, Round>,
             Self::SUB_DAG_INDEX_CF;<SequenceNumber, CommittedSubDagShell>,
-            Self::COMMITTED_SUB_DAG_INDEX_CF;<SequenceNumber, CompressedCommittedSubDag>
+            Self::COMMITTED_SUB_DAG_INDEX_CF;<SequenceNumber, ConsensusCommit>
         );
 
         let proposer_store = ProposerStore::new(last_proposed_map);
