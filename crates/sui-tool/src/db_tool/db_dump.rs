@@ -11,11 +11,12 @@ use std::str;
 use strum_macros::EnumString;
 use sui_core::authority::authority_per_epoch_store::AuthorityEpochTables;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
-use sui_core::authority::authority_store_types::{StoreData, StoreObject};
+use sui_core::authority::authority_store_types::{StoreData, StoreObject, StoreObjectWrapper};
 use sui_core::epoch::committee_store::CommitteeStoreTables;
 use sui_storage::IndexStoreTables;
-use sui_types::base_types::{EpochId, ObjectID};
-use typed_store::rocks::{default_db_options, MetricConf};
+use sui_types::base_types::{EpochId, ObjectID, VersionNumber};
+use sui_types::storage::ObjectKey;
+use typed_store::rocks::{default_db_options, DBMap, MetricConf, ReadWriteOptions};
 use typed_store::traits::{Map, TableSummary};
 
 #[derive(EnumString, Clone, Parser, Debug, ValueEnum)]
@@ -74,6 +75,46 @@ pub fn table_summary(
         }
     }
     .map_err(|err| anyhow!(err.to_string()))
+}
+
+pub fn print_objects(
+    object_id: String,
+    print_only_keys: bool,
+    db_path: PathBuf,
+) -> anyhow::Result<()> {
+    let perpetual_db_path = db_path.join("perpetual");
+    let cf_names = AuthorityPerpetualTables::describe_tables();
+    let cfs: Vec<&str> = cf_names.keys().map(|x| x.as_str()).collect();
+    let db_options = rocksdb::Options::default();
+    let perpetual_db = typed_store::rocks::open_cf(
+        perpetual_db_path,
+        Some(db_options),
+        MetricConf::default(),
+        &cfs,
+    );
+
+    let objects = DBMap::<ObjectKey, StoreObjectWrapper>::reopen(
+        &perpetual_db?,
+        Some("objects"),
+        // open the db to bypass default db options which ignores range tombstones
+        // so we can read the accurate number of retained versions
+        &ReadWriteOptions::default(),
+    )?;
+
+    let object_id = ObjectID::from_hex_literal(&object_id)?;
+    let start = ObjectKey(object_id, VersionNumber::MIN);
+    let iter = objects.iter().skip_to(&start)?;
+    for (k, v) in iter {
+        if k.0 != object_id {
+            break;
+        }
+        eprintln!("key = {:?}", &k);
+        if print_only_keys {
+            continue;
+        }
+        eprintln!("value = {:?}", &v);
+    }
+    Ok(())
 }
 
 pub fn print_table_metadata(
