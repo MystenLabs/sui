@@ -1517,6 +1517,14 @@ impl ObjectStore for AuthorityStore {
     fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
         self.perpetual_tables.as_ref().get_object(object_id)
     }
+
+    fn get_object_by_key(
+        &self,
+        object_id: &ObjectID,
+        version: VersionNumber,
+    ) -> Result<Option<Object>, SuiError> {
+        self.perpetual_tables.get_object_by_key(object_id, version)
+    }
 }
 
 impl ChildObjectResolver for AuthorityStore {
