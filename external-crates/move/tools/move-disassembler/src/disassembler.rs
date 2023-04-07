@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashMap;
+use std::env;
 
 use anyhow::{bail, format_err, Error, Result};
 use clap::Parser;
@@ -285,10 +286,23 @@ impl<'a> Disassembler<'a> {
         }
         let coverage = function_coverage_map.and_then(|map| map.get(&(pc as u64)));
         match coverage {
-            Some(coverage) => format!("[{}]\t{}: {}", coverage, pc, instruction).green(),
-            None => format!("\t{}: {}", pc, instruction).red(),
+            Some(coverage) => {
+                if cov() {
+                    format!("{}", coverage)
+                } else {
+                    format!("[{}]\t{}: {}", coverage, pc, instruction)
+                        .green()
+                        .to_string()
+                }
+            }
+            None => {
+                if cov() {
+                    "0".to_owned()
+                } else {
+                    format!("\t{}: {}", pc, instruction).red().to_string()
+                }
+            }
         }
-        .to_string()
     }
 
     //***************************************************************************
@@ -453,10 +467,28 @@ impl<'a> Disassembler<'a> {
             let body_iter: Vec<String> = locals
                 .into_iter()
                 .enumerate()
-                .map(|(local_idx, local)| format!("L{}:\t{}", local_idx, local))
+                .map(|(local_idx, local)| {
+                    if cov() {
+                        if debug_cov() {
+                            format!("null (fn body)")
+                        } else {
+                            format!("null")
+                        }
+                    } else {
+                        format!("L{}:\t{}", local_idx, local)
+                    }
+                })
                 .chain(bytecode.into_iter())
                 .collect();
-            format!(" {{\n{}\n}}", body_iter.join("\n"))
+            if cov() {
+                if debug_cov() {
+                    format!("{},null (close_brace)", body_iter.join(","))
+                } else {
+                    format!("{},null", body_iter.join(","))
+                }
+            } else {
+                format!(" {{\n{}\n}}", body_iter.join("\n"))
+            }
         }
     }
 
@@ -973,10 +1005,18 @@ impl<'a> Disassembler<'a> {
         if self.options.print_basic_blocks {
             let cfg = VMControlFlowGraph::new(&code.code);
             for (block_number, block_id) in cfg.blocks().iter().enumerate() {
-                instrs.insert(
-                    *block_id as usize + block_number,
-                    format!("B{}:", block_number),
-                );
+                if cov() {
+                    if debug_cov() {
+                        instrs.insert(*block_id as usize + block_number, format!("null (B:)"));
+                    } else {
+                        instrs.insert(*block_id as usize + block_number, format!("null"));
+                    }
+                } else {
+                    instrs.insert(
+                        *block_id as usize + block_number,
+                        format!("B{}:", block_number),
+                    );
+                }
             }
         }
 
@@ -1054,6 +1094,13 @@ impl<'a> Disassembler<'a> {
                 Ok(format!("{}: {}", name, ty))
             })
             .collect::<Result<Vec<String>>>()?;
+
+        let locals_names_tys = if cov() {
+            let s = if debug_cov() { "null (local)" } else { "null" };
+            locals_names_tys.iter().map(|_| s.to_owned()).collect()
+        } else {
+            locals_names_tys
+        };
         Ok(locals_names_tys)
     }
 
@@ -1151,7 +1198,22 @@ impl<'a> Disassembler<'a> {
             }
             None => "".to_string(),
         };
-        Ok(self.format_function_coverage(
+
+        if cov() {
+            let function_coverage = if self.is_function_called(name) {
+                "1".to_owned()
+            } else if native_modifier.len() > 0 {
+                "null".to_owned()
+            } else {
+                "0".to_owned()
+            };
+            if body.len() == 0 {
+                Ok(format!("{function_coverage}"))
+            } else {
+                Ok(format!("{function_coverage},{body}"))
+            }
+        } else {
+            Ok(self.format_function_coverage(
             name,
             format!(
                 "{entry_modifier}{native_modifier}{visibility_modifier}{name}{ty_params}({params}){ret_type}{body}",
@@ -1159,6 +1221,7 @@ impl<'a> Disassembler<'a> {
                 ret_type = Self::format_ret_type(&ret_type),
             ),
         ))
+        }
     }
 
     // The struct defs will filter out the structs that we print to only be the ones that are
@@ -1215,7 +1278,7 @@ impl<'a> Disassembler<'a> {
             &struct_source_map.type_parameters,
             &struct_handle.type_parameters,
         );
-        let mut fields = match field_info {
+        let fields = match field_info {
             None => vec![],
             Some(field_info) => field_info
                 .iter()
@@ -1227,22 +1290,55 @@ impl<'a> Disassembler<'a> {
                 .collect::<Result<Vec<String>>>()?,
         };
 
+        let mut fields = if cov() {
+            if debug_cov() {
+                fields.iter().map(|_| "null (field)".to_owned()).collect()
+            } else {
+                fields.iter().map(|_| "null".to_owned()).collect()
+            }
+        } else {
+            fields
+        };
+
         if let Some(first_elem) = fields.first_mut() {
-            first_elem.insert_str(0, "{\n\t");
+            if cov() {
+                // first_elem.insert_str(0, "");
+            } else {
+                first_elem.insert_str(0, "{\n\t");
+            }
         }
 
         if let Some(last_elem) = fields.last_mut() {
-            last_elem.push_str("\n}");
+            if cov() {
+                if debug_cov() {
+                    last_elem.push_str(",null (close_brace_last_elem)");
+                } else {
+                    last_elem.push_str(",null");
+                }
+            } else {
+                last_elem.push_str("\n}");
+            }
         }
 
-        Ok(format!(
-            "{native}struct {name}{ty_params}{abilities} {fields}",
-            native = native,
-            name = name,
-            ty_params = ty_params,
-            abilities = abilities,
-            fields = &fields.join(",\n\t"),
-        ))
+        if cov() {
+            if debug_cov() {
+                Ok(format!(
+                    "null (struct_def),{fields}",
+                    fields = &fields.join(",")
+                ))
+            } else {
+                Ok(format!("null,{fields}", fields = &fields.join(",")))
+            }
+        } else {
+            Ok(format!(
+                "{native}struct {name}{ty_params}{abilities} {fields}",
+                native = native,
+                name = name,
+                ty_params = ty_params,
+                abilities = abilities,
+                fields = &fields.join(",\n\t"),
+            ))
+        }
     }
 
     pub fn disassemble(&self) -> Result<String> {
@@ -1261,6 +1357,16 @@ impl<'a> Disassembler<'a> {
             .iter()
             .filter_map(|h| self.get_import_string(h))
             .collect::<Vec<String>>();
+        let imports = if cov() {
+            let s = if debug_cov() { "null (import)" } else { "null" };
+            imports
+                .iter()
+                .map(|_| s.to_owned())
+                .collect::<Vec<String>>()
+        } else {
+            imports
+        };
+
         let struct_defs: Vec<String> = (0..self
             .source_mapper
             .bytecode
@@ -1308,9 +1414,76 @@ impl<'a> Disassembler<'a> {
         let imports_str = if imports.is_empty() {
             "".to_string()
         } else {
-            format!("\n{}\n\n", imports.join("\n"))
+            if cov() {
+                if debug_cov() {
+                    format!(
+                        "{},null (import newline),null (import/struct sep),",
+                        imports.join(",")
+                    )
+                } else {
+                    format!("{},null,null,", imports.join(","))
+                }
+            } else {
+                format!("\n{}\n\n", imports.join("\n"))
+            }
         };
-        Ok(format!(
+        if cov() {
+            let version = if debug_cov() {
+                "null (version)".to_owned()
+            } else {
+                "null".to_owned()
+            };
+            let header = if debug_cov() {
+                "null (module header)".to_owned()
+            } else {
+                "null".to_owned()
+            };
+
+            if debug_cov() {
+                let struct_defs = if struct_defs.len() == 0 {
+                    "null (no struct)".to_owned()
+                } else {
+                    struct_defs.join(",")
+                };
+
+                let function_defs = if function_defs.len() == 0 {
+                    "null".to_owned()
+                } else {
+                    function_defs.join(",")
+                };
+
+                Ok(format!(
+                    "{version},{header},{imports}{struct_defs},null (struct/fun sep),{function_defs} (fn defs),null (final_brace)",
+                    version = version,
+                    header = header,
+                    imports = &imports_str,
+                    struct_defs = struct_defs,
+                    function_defs = function_defs,
+                ))
+            } else {
+                let struct_defs = if struct_defs.len() == 0 {
+                    "null".to_owned()
+                } else {
+                    struct_defs.join(",")
+                };
+
+                let function_defs = if function_defs.len() == 0 {
+                    "null".to_owned()
+                } else {
+                    function_defs.join(",")
+                };
+
+                Ok(format!(
+                    "{version},{header},{imports}{struct_defs},null,{function_defs},null",
+                    version = version,
+                    header = header,
+                    imports = &imports_str,
+                    struct_defs = struct_defs,
+                    function_defs = function_defs,
+                ))
+            }
+        } else {
+            Ok(format!(
             "// Move bytecode v{version}\n{header} {{{imports}\n{struct_defs}\n\n{function_defs}\n}}",
             version = version,
             header = header,
@@ -1318,5 +1491,20 @@ impl<'a> Disassembler<'a> {
             struct_defs = &struct_defs.join("\n"),
             function_defs = &function_defs.join("\n")
         ))
+        }
     }
+}
+
+fn cov() -> bool {
+    return match env::var("COV") {
+        Ok(_) => true,
+        _ => false,
+    };
+}
+
+fn debug_cov() -> bool {
+    return match env::var("DEBUG_COV") {
+        Ok(_) => true,
+        _ => false,
+    };
 }

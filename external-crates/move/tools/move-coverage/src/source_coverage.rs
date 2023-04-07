@@ -226,15 +226,39 @@ impl<'a> SourceCoverageBuilder<'a> {
 }
 
 impl SourceCoverage {
-    pub fn output_source_coverage<W: Write>(&self, output_writer: &mut W) -> io::Result<()> {
-        for line in self.annotated_lines.iter() {
-            for string_segment in line.iter() {
-                match string_segment {
-                    StringSegment::Covered(s) => write!(output_writer, "{}", s.green())?,
-                    StringSegment::Uncovered(s) => write!(output_writer, "{}", s.bold().red())?,
+    pub fn output_source_coverage<W: Write>(
+        &self,
+        output_writer: &mut W,
+        output_json: bool,
+    ) -> io::Result<()> {
+        if output_json {
+            let result: Vec<String> = self
+                .annotated_lines
+                .iter()
+                .map(|line| {
+                    let line_not_covered = line.iter().any(|s| match s {
+                        StringSegment::Uncovered(_) => true,
+                        StringSegment::Covered(_) => false,
+                    });
+                    if line_not_covered {
+                        "null".to_owned()
+                    } else {
+                        "1".to_owned()
+                    }
+                })
+                .collect();
+            let array = result.join(",");
+            writeln!(output_writer, "[{}]", array)?
+        } else {
+            for line in self.annotated_lines.iter() {
+                for string_segment in line.iter() {
+                    match string_segment {
+                        StringSegment::Covered(s) => write!(output_writer, "{}", s.green())?,
+                        StringSegment::Uncovered(s) => write!(output_writer, "{}", s.bold().red())?,
+                    }
                 }
+                writeln!(output_writer)?;
             }
-            writeln!(output_writer)?;
         }
         Ok(())
     }

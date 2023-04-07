@@ -116,6 +116,11 @@ impl ModuleSummary {
         )?;
         Ok((all_total, all_covered))
     }
+
+    /// Summarizes line coverage in JSON format.
+    pub fn summarize_json<W: Write>(&self, summary_writer: &mut W) -> io::Result<()> {
+        Ok(())
+    }
 }
 
 impl FunctionSummary {

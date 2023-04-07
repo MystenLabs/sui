@@ -5,7 +5,7 @@ use super::reroot_path;
 use clap::*;
 use move_compiler::compiled_unit::{CompiledUnit, NamedCompiledModule};
 use move_coverage::{
-    coverage_map::CoverageMap, format_csv_summary, format_human_summary,
+    coverage_map::CoverageMap, format_csv_summary, format_human_summary, format_json_summary,
     source_coverage::SourceCoverageBuilder, summary::summarize_inst_cov,
 };
 use move_disassembler::disassembler::Disassembler;
@@ -23,12 +23,18 @@ pub enum CoverageSummaryOptions {
         /// Output CSV data of coverage
         #[clap(long = "csv")]
         output_csv: bool,
+        /// Output JSON data of coverage
+        #[clap(long = "json")]
+        output_json: bool,
     },
     /// Display coverage information about the module against source code
     #[clap(name = "source")]
     Source {
         #[clap(long = "module")]
         module_name: String,
+        /// Output JSON data of coverage
+        #[clap(long = "json")]
+        output_json: bool,
     },
     /// Display coverage information about the module against disassembled bytecode
     #[clap(name = "bytecode")]
@@ -60,7 +66,10 @@ impl Coverage {
             })
             .collect();
         match self.options {
-            CoverageSummaryOptions::Source { module_name } => {
+            CoverageSummaryOptions::Source {
+                module_name,
+                output_json,
+            } => {
                 let unit = package.get_module_by_name_from_root(&module_name)?;
                 let source_path = &unit.source_path;
                 let (module, source_map) = match &unit.unit {
@@ -72,17 +81,25 @@ impl Coverage {
                 let source_coverage = SourceCoverageBuilder::new(module, &coverage_map, source_map);
                 source_coverage
                     .compute_source_coverage(source_path)
-                    .output_source_coverage(&mut std::io::stdout())
+                    .output_source_coverage(&mut std::io::stdout(), output_json)
                     .unwrap();
             }
             CoverageSummaryOptions::Summary {
                 functions,
                 output_csv,
+                output_json,
                 ..
             } => {
                 let coverage_map = coverage_map.to_unified_exec_map();
                 if output_csv {
                     format_csv_summary(
+                        modules.as_slice(),
+                        &coverage_map,
+                        summarize_inst_cov,
+                        &mut std::io::stdout(),
+                    )
+                } else if output_json {
+                    format_json_summary(
                         modules.as_slice(),
                         &coverage_map,
                         summarize_inst_cov,
