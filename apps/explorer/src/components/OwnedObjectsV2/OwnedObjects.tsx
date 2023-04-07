@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useRpcClient } from '@mysten/core';
-import { type SuiObjectResponse, Coin } from '@mysten/sui.js';
+import { type SuiObjectResponse } from '@mysten/sui.js';
 import { useEffect, useState } from 'react';
 
 import OwnedObject from './components/OwnedObject';
 
+import { useGetOwnedObjects } from '~/hooks/useGetOwnedObjects';
 import { Heading } from '~/ui/Heading';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Pagination } from '~/ui/Pagination';
@@ -15,32 +15,16 @@ export const OBJECTS_PER_PAGE: number = 6;
 
 function OwnerCoins({ id }: { id: string }): JSX.Element {
     const [results, setResults] = useState<SuiObjectResponse[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
-    const [isFail, setIsFail] = useState(false);
     const [currentSlice, setCurrentSlice] = useState(1);
-    const rpc = useRpcClient();
+    const { data, isLoading, isError } = useGetOwnedObjects(id);
 
     useEffect(() => {
-        setIsLoading(true);
-        rpc.getOwnedObjects({
-            owner: id,
-            options: {
-                showType: true,
-                showContent: true,
-                showDisplay: true,
-            },
-        })
-            .then((objects) => {
-                const res = objects.data.filter((resp) => !Coin.isCoin(resp));
-                setResults(res);
-                setIsLoading(false);
-            })
-            .catch((err) => {
-                setIsFail(true);
-            });
-    }, [id, rpc]);
+        if (data) {
+            setResults(data?.data);
+        }
+    }, [data]);
 
-    if (isFail) {
+    if (isError) {
         return (
             <div className="pt-2 font-sans font-semibold text-issue-dark">
                 Failed to load NFTs

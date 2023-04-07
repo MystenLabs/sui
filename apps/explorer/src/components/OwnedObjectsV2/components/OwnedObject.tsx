@@ -31,9 +31,9 @@ function OwnedObject({ obj }: OwnedObjectTypes): JSX.Element {
                     <DisplayBox display={display} />
                 </div>
                 <div className="overflow-hidden sm:pr-[20px]">
-                    <div className="truncate text-[13px] font-medium leading-[130%] text-gray-90">
+                    <Text variant="body/medium" color="gray-90" truncate>
                         {extractName(displayMeta)}
-                    </div>
+                    </Text>
                     <div>
                         <ObjectLink objectId={getObjectId(obj)} />
                     </div>

@@ -65,10 +65,7 @@ function CoinsPanel({ coinType, id }: CoinsPanelProps): JSX.Element {
             {coinObjects.map((obj, index) => {
                 if (index === coinObjects.length - 1) {
                     return (
-                        <div
-                            key={`${obj.coinObjectId}-${index}`}
-                            ref={containerRef}
-                        >
+                        <div key={obj.coinObjectId} ref={containerRef}>
                             <CoinItem coin={obj} />
                         </div>
                     );

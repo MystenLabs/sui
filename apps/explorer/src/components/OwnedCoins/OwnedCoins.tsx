@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useRpcClient } from '@mysten/core';
 import { useEffect, useState } from 'react';
 
 import OwnedCoinView from './components/OwnedCoinView';
 
 import type { CoinBalance } from '@mysten/sui.js';
 
+import { useGetAllBalances } from '~/hooks/useGetAllBalances';
 import { Heading } from '~/ui/Heading';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Pagination } from '~/ui/Pagination';
@@ -17,25 +17,18 @@ export const COINS_PER_PAGE: number = 6;
 
 function OwnedCoins({ id }: { id: string }): JSX.Element {
     const [uniqueCoins, setUniqueCoins] = useState<CoinBalance[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
-    const [isFail, setIsFail] = useState(false);
+    // const [isLoading, setIsLoading] = useState(false);
+    // const [isFail, setIsFail] = useState(false);
     const [currentSlice, setCurrentSlice] = useState(1);
-    const rpc = useRpcClient();
+    const { isLoading, data, isError } = useGetAllBalances(id);
 
     useEffect(() => {
-        setIsFail(false);
-        setIsLoading(true);
-        rpc.getAllBalances({ owner: id })
-            .then((resp) => {
-                setUniqueCoins(resp);
-                setIsLoading(false);
-            })
-            .catch((err) => {
-                setIsFail(true);
-            });
-    }, [id, rpc]);
+        if (data) {
+            setUniqueCoins(data);
+        }
+    }, [data]);
 
-    if (isFail) {
+    if (isError) {
         return (
             <div className="pt-2 font-sans font-semibold text-issue-dark">
                 Failed to load Coins
