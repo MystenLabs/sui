@@ -1,15 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-
-use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
 use std::path::PathBuf;
 use sui_framework::{BuiltInFramework, SystemPackage};
+use sui_framework_snapshot::update_bytecode_snapshot_manifest;
 use sui_protocol_config::ProtocolVersion;
-use sui_types::base_types::ObjectID;
 
 fn main() {
     let (network, git_version) = parse_args();
@@ -20,7 +17,7 @@ fn main() {
         write_package_to_file(&network, version, package);
         files.push(*package.id());
     }
-    update_manifest(&network, git_version, version, files);
+    update_bytecode_snapshot_manifest(&network, git_version, version, files);
 }
 
 /// Parse args and return network name and git revision.
@@ -55,48 +52,4 @@ fn write_package_to_file(network: &str, version: u64, package: &SystemPackage) {
         .expect("Unable to create snapshot directory");
     let bytes = bcs::to_bytes(package).expect("Deserialization cannot fail");
     fs::write(path.join(package.id().to_string()), bytes).expect("Unable to write data to file");
-}
-
-type SnapshotManifest = BTreeMap<String, BTreeMap<u64, SingleSnapshot>>;
-
-#[derive(Serialize, Deserialize)]
-struct SingleSnapshot {
-    /// Git revision that this snapshot is taken on.
-    git_revision: String,
-    /// List of file names (also identical to object ID) of the bytecode package files.
-    package_ids: Vec<ObjectID>,
-}
-
-fn update_manifest(network: &str, git_revision: String, version: u64, files: Vec<ObjectID>) {
-    let filename = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("bytecode_snapshot")
-        .join("manifest.json");
-    let mut snapshot = deserialize_manifest(&filename);
-
-    let entry = snapshot
-        .entry(network.to_owned())
-        .or_insert_with(BTreeMap::new);
-    entry.insert(
-        version,
-        SingleSnapshot {
-            git_revision,
-            package_ids: files,
-        },
-    );
-
-    serialize_manifest(&filename, &snapshot);
-}
-
-fn deserialize_manifest(filename: &PathBuf) -> SnapshotManifest {
-    let Ok(bytes) = fs::read(filename) else {
-        return SnapshotManifest::default();
-    };
-    serde_json::from_slice::<SnapshotManifest>(&bytes)
-        .expect("Could not deserialize SnapshotManifest")
-}
-
-fn serialize_manifest(filename: &PathBuf, snapshot: &SnapshotManifest) {
-    let json =
-        serde_json::to_string_pretty(snapshot).expect("Could not serialize SnapshotManifest");
-    fs::write(filename, json).expect("");
 }
