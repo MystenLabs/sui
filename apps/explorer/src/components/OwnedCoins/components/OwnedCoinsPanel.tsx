@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type CoinStruct } from '@mysten/sui.js';
+import { type PaginatedCoins, type CoinStruct } from '@mysten/sui.js';
 import { useState, useEffect, useRef } from 'react';
 
 import CoinItem from './CoinItem';
@@ -19,24 +19,35 @@ function CoinsPanel({ coinType, id }: CoinsPanelProps): JSX.Element {
     const [coinObjects, setCoinObjects] = useState<CoinStruct[]>([]);
     const containerRef = useRef(null);
     const { isIntersecting } = useOnScreen(containerRef);
-    const { data, isLoading, isFetching, fetchNextPage, hasNextPage } =
-        useGetCoins(coinType, id);
+    const { data, isLoading, isFetching, fetchNextPage, hasNextPage } = useGetCoins(
+        coinType,
+        id,
+    );
 
     useEffect(() => {
         if (data) {
-            let coinObjs: CoinStruct[] = [];
-            data.pages.forEach((page) => {
-                coinObjs = [...coinObjs, ...page.data];
+            let coins: CoinStruct[] = [];
+            data.pages.forEach(page => {
+                coins = [...coins, ...page.data];
             });
-            setCoinObjects(coinObjs);
+            setCoinObjects(coins);
         }
     }, [data]);
 
     useEffect(() => {
-        if (isIntersecting && hasNextPage && !isFetching) {
+        if (
+            isIntersecting &&
+            hasNextPage &&
+            !isFetching
+        ) {
             fetchNextPage();
         }
-    }, [isIntersecting, hasNextPage, isFetching, fetchNextPage]);
+    }, [
+        isIntersecting,
+        hasNextPage,
+        isFetching,
+        fetchNextPage,
+    ]);
 
     return (
         <div>
