@@ -12,6 +12,11 @@ export const queryClient = new QueryClient({
             staleTime: 5 * 60 * 1000,
             refetchInterval: false,
             refetchIntervalInBackground: false,
+            // TODO: re-enable/remove when api is healthy ===>
+            retry: false,
+            refetchOnWindowFocus: false,
+            refetchOnMount: false,
+            //<======
         },
     },
 });
