@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::ops::Neg;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use move_core_types::language_storage::TypeTag;
+use sui_types::digests::ObjectDigest;
 use tokio::sync::RwLock;
 
 use sui_core::authority::AuthorityState;
@@ -15,14 +16,15 @@ use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
 use sui_types::coin::Coin;
 use sui_types::error::SuiError;
 use sui_types::gas_coin::GAS;
-use sui_types::messages::TransactionEffectsAPI;
 use sui_types::messages::{ExecutionStatus, TransactionEffects};
+use sui_types::messages::{InputObjectKind, TransactionEffectsAPI};
 use sui_types::object::{Object, Owner};
 use sui_types::storage::WriteKind;
 
 pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
     object_provider: &P,
     effects: &TransactionEffects,
+    input_objs: Vec<InputObjectKind>,
 ) -> Result<Vec<BalanceChange>, E> {
     let (_, gas_owner) = effects.gas_object();
 
@@ -38,12 +40,23 @@ pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
     let all_mutated: Vec<(&ObjectRef, &Owner, WriteKind)> = effects.all_changed_objects();
     let all_mutated = all_mutated
         .iter()
-        .map(|((id, version, _), _, _)| (*id, *version))
+        .map(|((id, version, digest), _, _)| (*id, *version, Some(*digest)))
         .collect::<Vec<_>>();
 
+    let input_objs_to_digest = input_objs
+        .iter()
+        .filter_map(|k| match k {
+            InputObjectKind::ImmOrOwnedMoveObject(o) => Some((o.0, o.2)),
+            InputObjectKind::MovePackage(_) | InputObjectKind::SharedMoveObject { .. } => None,
+        })
+        .collect::<HashMap<ObjectID, ObjectDigest>>();
     get_balance_changes(
         object_provider,
-        effects.modified_at_versions(),
+        &effects
+            .modified_at_versions()
+            .iter()
+            .map(|(id, version)| (*id, *version, input_objs_to_digest.get(id).cloned()))
+            .collect::<Vec<_>>(),
         &all_mutated,
     )
     .await
@@ -51,8 +64,8 @@ pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
 
 pub async fn get_balance_changes<P: ObjectProvider<Error = E>, E>(
     object_provider: &P,
-    modified_at_version: &[(ObjectID, SequenceNumber)],
-    all_mutated: &[(ObjectID, SequenceNumber)],
+    modified_at_version: &[(ObjectID, SequenceNumber, Option<ObjectDigest>)],
+    all_mutated: &[(ObjectID, SequenceNumber, Option<ObjectDigest>)],
 ) -> Result<Vec<BalanceChange>, E> {
     // 1. subtract all input coins
     let balances = fetch_coins(object_provider, modified_at_version)
@@ -91,14 +104,22 @@ pub async fn get_balance_changes<P: ObjectProvider<Error = E>, E>(
 
 async fn fetch_coins<P: ObjectProvider<Error = E>, E>(
     object_provider: &P,
-    objects: &[(ObjectID, SequenceNumber)],
+    objects: &[(ObjectID, SequenceNumber, Option<ObjectDigest>)],
 ) -> Result<Vec<(Owner, TypeTag, u64)>, E> {
     let mut all_mutated_coins = vec![];
-    for (id, version) in objects {
+    for (id, version, digest_opt) in objects {
         // TODO: use multi get object
         if let Ok(o) = object_provider.get_object(id, version).await {
             if let Some(type_) = o.type_() {
                 if type_.is_coin() {
+                    if let Some(digest) = digest_opt {
+                        // TODO: can we return Err here instead?
+                        assert_eq!(
+                            *digest,
+                            o.digest(),
+                            "Object digest mismatch--got bad data from object_provider?"
+                        )
+                    }
                     let [coin_type]: [TypeTag; 1] =
                         type_.clone().into_type_params().try_into().unwrap();
                     all_mutated_coins.push((
