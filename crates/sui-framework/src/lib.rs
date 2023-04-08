@@ -1,12 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use move_binary_format::compatibility::Compatibility;
 use move_binary_format::CompiledModule;
 use move_core_types::gas_algebra::InternalGas;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
+use std::fmt::Formatter;
 use std::path::Path;
 use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage};
+use sui_types::base_types::ObjectRef;
+use sui_types::storage::ObjectStore;
 use sui_types::{
     base_types::ObjectID,
     digests::TransactionDigest,
@@ -15,12 +19,13 @@ use sui_types::{
     object::{Object, OBJECT_START_VERSION},
     MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_PACKAGE_ID,
 };
+use tracing::error;
 
 pub mod natives;
 
 /// Represents a system package in the framework, that's built from the source code inside
 /// sui-framework.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, PartialEq, Eq, Deserialize)]
 pub struct SystemPackage {
     id: ObjectID,
     bytes: Vec<Vec<u8>>,
@@ -71,6 +76,15 @@ impl SystemPackage {
             self.dependencies.to_vec(),
             TransactionDigest::genesis(),
         )
+    }
+}
+
+impl std::fmt::Debug for SystemPackage {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Object ID: {:?}", self.id)?;
+        writeln!(f, "Size: {}", self.bytes.len())?;
+        writeln!(f, "Dependencies: {:?}", self.dependencies)?;
+        Ok(())
     }
 }
 
@@ -145,4 +159,91 @@ pub fn build_move_package(path: &Path, config: BuildConfig) -> SuiResult<Compile
         pkg.verify_framework_version(get_sui_framework(), get_move_stdlib())?;
     }*/
     Ok(pkg)
+}
+
+/// Check whether the framework defined by `modules` is compatible with the framework that is
+/// already on-chain (i.e. stored in `object_store`) at `id`.
+///
+/// - Returns `None` if the current package at `id` cannot be loaded, or the compatibility check
+///   fails (This is grounds not to upgrade).
+/// - Panics if the object at `id` can be loaded but is not a package -- this is an invariant
+///   violation.
+/// - Returns the digest of the current framework (and version) if it is equivalent to the new
+///   framework (indicates support for a protocol upgrade without a framework upgrade).
+/// - Returns the digest of the new framework (and version) if it is compatible (indicates
+///   support for a protocol upgrade with a framework upgrade).
+pub async fn compare_system_package<S: ObjectStore>(
+    object_store: &S,
+    id: &ObjectID,
+    modules: &[CompiledModule],
+    dependencies: Vec<ObjectID>,
+    max_binary_format_version: u32,
+) -> Option<ObjectRef> {
+    let cur_object = match object_store.get_object(id) {
+        Ok(Some(cur_object)) => cur_object,
+
+        Ok(None) => {
+            error!("No framework package at {id}");
+            return None;
+        }
+
+        Err(e) => {
+            error!("Error loading framework object at {id}: {e:?}");
+            return None;
+        }
+    };
+
+    let cur_ref = cur_object.compute_object_reference();
+    let cur_pkg = cur_object
+        .data
+        .try_as_package()
+        .expect("Framework not package");
+
+    let mut new_object = Object::new_system_package(
+        modules,
+        // Start at the same version as the current package, and increment if compatibility is
+        // successful
+        cur_object.version(),
+        dependencies,
+        cur_object.previous_transaction,
+    );
+
+    if cur_ref == new_object.compute_object_reference() {
+        return Some(cur_ref);
+    }
+
+    let compatibility = Compatibility {
+        check_struct_and_pub_function_linking: true,
+        check_struct_layout: true,
+        check_friend_linking: false,
+        check_private_entry_linking: true,
+    };
+
+    let new_pkg = new_object
+        .data
+        .try_as_package_mut()
+        .expect("Created as package");
+
+    let cur_normalized = match cur_pkg.normalize(max_binary_format_version) {
+        Ok(v) => v,
+        Err(e) => {
+            error!("Could not normalize existing package: {e:?}");
+            return None;
+        }
+    };
+    let mut new_normalized = new_pkg.normalize(max_binary_format_version).ok()?;
+
+    for (name, cur_module) in cur_normalized {
+        let Some(new_module) = new_normalized.remove(&name) else {
+            return None;
+        };
+
+        if let Err(e) = compatibility.check(&cur_module, &new_module) {
+            error!("Compatibility check failed, for new version of {id}: {e:?}");
+            return None;
+        }
+    }
+
+    new_pkg.increment_version();
+    Some(new_object.compute_object_reference())
 }

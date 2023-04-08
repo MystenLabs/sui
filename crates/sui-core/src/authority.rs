@@ -14,7 +14,6 @@ use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::traits::KeyPair;
 use itertools::Itertools;
-use move_binary_format::compatibility::Compatibility;
 use move_binary_format::CompiledModule;
 use move_core_types::language_storage::ModuleId;
 use parking_lot::Mutex;
@@ -3022,7 +3021,8 @@ impl AuthorityState {
             let modules = framework_injection::get_override_modules(system_package.id(), self.name)
                 .unwrap_or(modules);
 
-            let Some(obj_ref) = self.compare_system_package(
+            let Some(obj_ref) = sui_framework::compare_system_package(
+                self.database.as_ref(),
                 system_package.id(),
                 &modules,
                 system_package.dependencies().to_vec(),
@@ -3033,93 +3033,6 @@ impl AuthorityState {
             results.push(obj_ref);
         }
         results
-    }
-
-    /// Check whether the framework defined by `modules` is compatible with the framework that is
-    /// already on-chain at `id`.
-    ///
-    /// - Returns `None` if the current package at `id` cannot be loaded, or the compatibility check
-    ///   fails (This is grounds not to upgrade).
-    /// - Panics if the object at `id` can be loaded but is not a package -- this is an invariant
-    ///   violation.
-    /// - Returns the digest of the current framework (and version) if it is equivalent to the new
-    ///   framework (indicates support for a protocol upgrade without a framework upgrade).
-    /// - Returns the digest of the new framework (and version) if it is compatible (indicates
-    ///   support for a protocol upgrade with a framework upgrade).
-    async fn compare_system_package(
-        &self,
-        id: &ObjectID,
-        modules: &[CompiledModule],
-        dependencies: Vec<ObjectID>,
-        max_binary_format_version: u32,
-    ) -> Option<ObjectRef> {
-        let cur_object = match self.get_object(id).await {
-            Ok(Some(cur_object)) => cur_object,
-
-            Ok(None) => {
-                error!("No framework package at {id}");
-                return None;
-            }
-
-            Err(e) => {
-                error!("Error loading framework object at {id}: {e:?}");
-                return None;
-            }
-        };
-
-        let cur_ref = cur_object.compute_object_reference();
-        let cur_pkg = cur_object
-            .data
-            .try_as_package()
-            .expect("Framework not package");
-
-        let mut new_object = Object::new_system_package(
-            modules,
-            // Start at the same version as the current package, and increment if compatibility is
-            // successful
-            cur_object.version(),
-            dependencies,
-            cur_object.previous_transaction,
-        );
-
-        if cur_ref == new_object.compute_object_reference() {
-            return Some(cur_ref);
-        }
-
-        let compatibility = Compatibility {
-            check_struct_and_pub_function_linking: true,
-            check_struct_layout: true,
-            check_friend_linking: false,
-            check_private_entry_linking: true,
-        };
-
-        let new_pkg = new_object
-            .data
-            .try_as_package_mut()
-            .expect("Created as package");
-
-        let cur_normalized = match cur_pkg.normalize(max_binary_format_version) {
-            Ok(v) => v,
-            Err(e) => {
-                error!("Could not normalize existing package: {e:?}");
-                return None;
-            }
-        };
-        let mut new_normalized = new_pkg.normalize(max_binary_format_version).ok()?;
-
-        for (name, cur_module) in cur_normalized {
-            let Some(new_module) = new_normalized.remove(&name) else {
-                return None;
-            };
-
-            if let Err(e) = compatibility.check(&cur_module, &new_module) {
-                error!("Compatibility check failed, for new version of {id}: {e:?}");
-                return None;
-            }
-        }
-
-        new_pkg.increment_version();
-        Some(new_object.compute_object_reference())
     }
 
     /// Return the new versions, module bytes, and dependencies for the packages that have been

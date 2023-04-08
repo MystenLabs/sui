@@ -1,8 +1,53 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{io::Read, path::PathBuf};
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use std::{fs, io::Read, path::PathBuf};
 use sui_framework::SystemPackage;
+use sui_types::base_types::ObjectID;
+
+pub type SnapshotManifest = BTreeMap<String, BTreeMap<u64, SingleSnapshot>>;
+
+#[derive(Serialize, Deserialize)]
+pub struct SingleSnapshot {
+    /// Git revision that this snapshot is taken on.
+    git_revision: String,
+    /// List of file names (also identical to object ID) of the bytecode package files.
+    package_ids: Vec<ObjectID>,
+}
+
+pub fn load_bytecode_snapshot_manifest() -> SnapshotManifest {
+    let Ok(bytes) = fs::read(manifest_path()) else {
+        return SnapshotManifest::default();
+    };
+    serde_json::from_slice::<SnapshotManifest>(&bytes)
+        .expect("Could not deserialize SnapshotManifest")
+}
+
+pub fn update_bytecode_snapshot_manifest(
+    network: &str,
+    git_revision: String,
+    version: u64,
+    files: Vec<ObjectID>,
+) {
+    let mut snapshot = load_bytecode_snapshot_manifest();
+
+    let entry = snapshot
+        .entry(network.to_owned())
+        .or_insert_with(BTreeMap::new);
+    entry.insert(
+        version,
+        SingleSnapshot {
+            git_revision,
+            package_ids: files,
+        },
+    );
+
+    let json =
+        serde_json::to_string_pretty(&snapshot).expect("Could not serialize SnapshotManifest");
+    fs::write(manifest_path(), json).expect("Could not update manifest file");
+}
 
 pub fn load_bytecode_snapshot(
     network: &str,
@@ -26,4 +71,10 @@ pub fn load_bytecode_snapshot(
         })
         .collect();
     snapshot_objects
+}
+
+fn manifest_path() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("bytecode_snapshot")
+        .join("manifest.json")
 }
