@@ -60,7 +60,7 @@ impl<'a> SuiGasStatus<'a> {
                 gas_price,
                 config,
             )),
-            2 => Self::V2(SuiGasStatusV2::new_with_budget(
+            2 | 3 => Self::V2(SuiGasStatusV2::new_with_budget(
                 gas_budget,
                 gas_price,
                 config,
@@ -72,7 +72,7 @@ impl<'a> SuiGasStatus<'a> {
     pub fn new_unmetered(config: &ProtocolConfig) -> Self {
         match config.gas_model_version() {
             1 => Self::V1(SuiGasStatusV1::new_unmetered()),
-            2 => Self::V2(SuiGasStatusV2::new_unmetered()),
+            2 | 3 => Self::V2(SuiGasStatusV2::new_unmetered()),
             _ => panic!("unknown gas model version"),
         }
     }
@@ -87,7 +87,7 @@ impl SuiCostTable {
     pub fn new(config: &ProtocolConfig) -> Self {
         match config.gas_model_version() {
             1 => Self::V1(SuiCostTableV1::new(config)),
-            2 => Self::V2(SuiCostTableV2::new(config)),
+            2 | 3 => Self::V2(SuiCostTableV2::new(config)),
             _ => panic!("unknown gas model version"),
         }
     }
@@ -99,7 +99,7 @@ impl SuiCostTable {
     pub fn unmetered(config: &ProtocolConfig) -> Self {
         match config.gas_model_version() {
             1 => Self::V1(SuiCostTableV1::unmetered()),
-            2 => Self::V2(SuiCostTableV2::unmetered()),
+            2 | 3 => Self::V2(SuiCostTableV2::unmetered()),
             _ => panic!("unknown gas model version"),
         }
     }
