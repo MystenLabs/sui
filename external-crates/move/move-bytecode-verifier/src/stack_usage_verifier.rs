@@ -59,6 +59,11 @@ impl<'a> StackUsageVerifier<'a> {
             let (num_pops, num_pushes) = self.instruction_effect(&code[i as usize])?;
             if let Some(new_pushes) = u64::checked_add(overall_push, num_pushes) {
                 overall_push = new_pushes
+            } else {
+                if config.max_push_size.is_some() {
+                    return Err(PartialVMError::new(StatusCode::VALUE_STACK_PUSH_OVERFLOW)
+                        .at_code_offset(self.current_function(), block_start));
+                }
             };
 
             // Check that the accumulated pushes does not exceed a pre-defined max size
