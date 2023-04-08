@@ -260,8 +260,8 @@ fn execute_transaction<
 
             // This limit is only present in Version 3 and up, so use this to gate it
             if let (Some(normal_lim), Some(system_lim)) =
-                (protocol_config.max_size_written_objects(), protocol_config
-            .max_size_written_objects_system_tx()) {
+                (protocol_config.max_size_written_objects_as_option(), protocol_config
+            .max_size_written_objects_system_tx_as_option()) {
                 let written_objects_size = temporary_store.written_objects_size();
 
                 match check_limit_by_meter!(

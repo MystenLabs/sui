@@ -91,6 +91,7 @@ members = [
     "crates/sui-open-rpc-macros",
     "crates/sui-proc-macros",
     "crates/sui-protocol-config",
+    "crates/sui-protocol-config-macros",
     "crates/sui-proxy",
     "crates/sui-rosetta",
     "crates/sui-rpc-loadgen",
