@@ -55,13 +55,15 @@ async function deriveAccountsFromLedger(
         );
         const publicKey = new Ed25519PublicKey(publicKeyResult.publicKey);
         const suiAddress = publicKey.toSuiAddress();
+        const publicKeyB64 = publicKey.toBase64();
         ledgerAccounts.push({
             type: AccountType.LEDGER,
             address: suiAddress,
             derivationPath,
+            publickey: publicKeyB64,
         });
     }
-
+    console.log(ledgerAccounts);
     return ledgerAccounts;
 }
 

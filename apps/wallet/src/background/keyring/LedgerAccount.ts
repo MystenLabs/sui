@@ -9,23 +9,28 @@ export type SerializedLedgerAccount = {
     type: AccountType.LEDGER;
     address: SuiAddress;
     derivationPath: string;
+    publickey: string;
 };
 
 export class LedgerAccount implements Account {
     readonly type: AccountType;
     readonly address: SuiAddress;
     readonly derivationPath: string;
+    readonly publickey: string;
 
     constructor({
         address,
         derivationPath,
+        publickey,
     }: {
         address: SuiAddress;
         derivationPath: string;
+        publickey: string;
     }) {
         this.type = AccountType.LEDGER;
         this.address = normalizeSuiAddress(address);
         this.derivationPath = derivationPath;
+        this.publickey = publickey;
     }
 
     toJSON(): SerializedLedgerAccount {
@@ -33,6 +38,7 @@ export class LedgerAccount implements Account {
             type: AccountType.LEDGER,
             address: this.address,
             derivationPath: this.derivationPath,
+            publickey: this.publickey,
         };
     }
 }
