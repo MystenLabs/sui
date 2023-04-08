@@ -27,6 +27,17 @@ pub struct PrintGasParameters {
 }
 
 #[inline]
+fn native_print_nop(
+    gas_params: &PrintGasParameters,
+    ty_args: Vec<Type>,
+    args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.len() == 1);
+    debug_assert!(args.len() == 1);
+    Ok(NativeResult::ok(gas_params.base_cost, smallvec![]))
+}
+
+#[inline]
 fn native_print(
     gas_params: &PrintGasParameters,
     _context: &mut NativeContext,
@@ -68,14 +79,23 @@ fn native_print(
 }
 
 pub fn make_native_print(
+    silent: bool,
     gas_params: PrintGasParameters,
     move_std_addr: AccountAddress,
 ) -> NativeFunction {
-    Arc::new(
-        move |context, ty_args, args| -> PartialVMResult<NativeResult> {
-            native_print(&gas_params, context, ty_args, args, move_std_addr)
-        },
-    )
+    if silent {
+        Arc::new(
+            move |_context, ty_args, args| -> PartialVMResult<NativeResult> {
+                native_print_nop(&gas_params, ty_args, args)
+            },
+        )
+    } else {
+        Arc::new(
+            move |context, ty_args, args| -> PartialVMResult<NativeResult> {
+                native_print(&gas_params, context, ty_args, args, move_std_addr)
+            },
+        )
+    }
 }
 
 /***************************************************************************************************
@@ -86,6 +106,17 @@ pub fn make_native_print(
 #[derive(Debug, Clone)]
 pub struct PrintStackTraceGasParameters {
     pub base_cost: InternalGas,
+}
+
+#[inline]
+fn native_print_stack_trace_nop(
+    gas_params: &PrintStackTraceGasParameters,
+    ty_args: Vec<Type>,
+    args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.is_empty());
+    debug_assert!(args.is_empty());
+    Ok(NativeResult::ok(gas_params.base_cost, smallvec![]))
 }
 
 #[allow(unused_variables)]
@@ -109,12 +140,23 @@ fn native_print_stack_trace(
     Ok(NativeResult::ok(gas_params.base_cost, smallvec![]))
 }
 
-pub fn make_native_print_stack_trace(gas_params: PrintStackTraceGasParameters) -> NativeFunction {
-    Arc::new(
-        move |context, ty_args, args| -> PartialVMResult<NativeResult> {
-            native_print_stack_trace(&gas_params, context, ty_args, args)
-        },
-    )
+pub fn make_native_print_stack_trace(
+    silent: bool,
+    gas_params: PrintStackTraceGasParameters,
+) -> NativeFunction {
+    if silent {
+        Arc::new(
+            move |_context, ty_args, args| -> PartialVMResult<NativeResult> {
+                native_print_stack_trace_nop(&gas_params, ty_args, args)
+            },
+        )
+    } else {
+        Arc::new(
+            move |context, ty_args, args| -> PartialVMResult<NativeResult> {
+                native_print_stack_trace(&gas_params, context, ty_args, args)
+            },
+        )
+    }
 }
 
 /***************************************************************************************************
@@ -127,14 +169,18 @@ pub struct GasParameters {
 }
 
 pub fn make_all(
+    silent: bool,
     gas_params: GasParameters,
     move_std_addr: AccountAddress,
 ) -> impl Iterator<Item = (String, NativeFunction)> {
     let natives = [
-        ("print", make_native_print(gas_params.print, move_std_addr)),
+        (
+            "print",
+            make_native_print(silent, gas_params.print, move_std_addr),
+        ),
         (
             "print_stack_trace",
-            make_native_print_stack_trace(gas_params.print_stack_trace),
+            make_native_print_stack_trace(silent, gas_params.print_stack_trace),
         ),
     ];
 

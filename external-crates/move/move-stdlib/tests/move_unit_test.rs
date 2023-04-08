@@ -20,6 +20,7 @@ fn run_tests_for_pkg(path_to_pkg: impl Into<String>, include_nursery_natives: bo
     );
     if include_nursery_natives {
         natives.extend(nursery_natives(
+            /* silent */ false,
             AccountAddress::from_hex_literal("0x1").unwrap(),
             NurseryGasParameters::zeros(),
         ))

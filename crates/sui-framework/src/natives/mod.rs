@@ -471,7 +471,7 @@ impl NativesCostTable {
     }
 }
 
-pub fn all_natives() -> NativeFunctionTable {
+pub fn all_natives(silent: bool) -> NativeFunctionTable {
     let sui_framework_natives: &[(&str, &str, NativeFunction)] = &[
         ("address", "from_bytes", make_native!(address::from_bytes)),
         ("address", "to_u256", make_native!(address::to_u256)),
@@ -695,6 +695,7 @@ pub fn all_natives() -> NativeFunctionTable {
             GasParameters::zeros(),
         ))
         .chain(move_stdlib::natives::nursery_natives(
+            silent,
             MOVE_STDLIB_ADDRESS,
             // TODO: tune gas params
             NurseryGasParameters::zeros(),
