@@ -47,11 +47,15 @@ pub enum KeyToolCommand {
     /// This reads the content at the provided file path. The accepted format can be
     /// [enum SuiKeyPair] (Base64 encoded of 33-byte `flag || privkey`) or `type AuthorityKeyPair`
     /// (Base64 encoded `privkey`). It prints its Base64 encoded public key and the key scheme flag.
-    Show { file: PathBuf },
+    Show {
+        file: PathBuf,
+    },
     /// This takes [enum SuiKeyPair] of Base64 encoded of 33-byte `flag || privkey`). It
     /// outputs the keypair into a file at the current directory, and prints out its Sui
     /// address, Base64 encoded public key, and the key scheme flag.
-    Unpack { keypair: SuiKeyPair },
+    Unpack {
+        keypair: SuiKeyPair,
+    },
     /// List all keys by its Sui address, Base64 encoded public key, key scheme name in
     /// sui.keystore.
     List,
@@ -81,7 +85,13 @@ pub enum KeyToolCommand {
     /// [enum SuiKeyPair] (Base64 encoded of 33-byte `flag || privkey`) or `type AuthorityKeyPair`
     /// (Base64 encoded `privkey`). This prints out the account keypair as Base64 encoded `flag || privkey`,
     /// the network keypair, worker keypair, protocol keypair as Base64 encoded `privkey`.
-    LoadKeypair { file: PathBuf },
+    LoadKeypair {
+        file: PathBuf,
+    },
+
+    Base64PubKeyToAddress {
+        base64_key: String,
+    },
 
     /// To MultiSig Sui Address. Pass in a list of all public keys `flag || pk` in Base64.
     /// See `keytool list` for example public keys.
@@ -207,6 +217,7 @@ impl KeyToolCommand {
                     sui_signature.encode_base64()
                 );
             }
+
             KeyToolCommand::Import {
                 mnemonic_phrase,
                 key_scheme,
@@ -215,6 +226,13 @@ impl KeyToolCommand {
                 let address =
                     keystore.import_from_mnemonic(&mnemonic_phrase, key_scheme, derivation_path)?;
                 info!("Key imported for address [{address}]");
+            }
+
+            KeyToolCommand::Base64PubKeyToAddress { base64_key } => {
+                let pk = PublicKey::decode_base64(&base64_key)
+                    .map_err(|e| anyhow!("Invalid base64 key: {:?}", e))?;
+                let address = SuiAddress::from(&pk);
+                println!("Address {:?}", address);
             }
 
             KeyToolCommand::LoadKeypair { file } => {
