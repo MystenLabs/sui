@@ -228,18 +228,20 @@ impl SimpleFaucet {
     /// Clear the WAL list in the faucet
     pub async fn retry_wal_coins(&self) -> Result<(), FaucetError> {
         let mut wal = self.wal.lock().await;
-        let log = wal.log.clone();
-
         let mut pending = vec![];
 
-        for item in log.safe_iter() {
+        for item in wal.log.safe_iter() {
             // Safe unwrap as we are the only ones that ever add to the WAL.
             let (coin_id, entry) = item.unwrap();
-            wal.increment_retry_count(coin_id)
-                .map_err(FaucetError::internal)?;
             let uuid = Uuid::from_bytes(entry.uuid);
             pending.push((uuid, entry.recipient, coin_id, entry.tx));
         }
+
+        for (_, _, coin_id, _) in &pending {
+            wal.increment_retry_count(*coin_id)
+                .map_err(FaucetError::internal)?;
+        }
+
         // Drops the lock early because sign_and_execute_txn requires the lock.
         drop(wal);
 
