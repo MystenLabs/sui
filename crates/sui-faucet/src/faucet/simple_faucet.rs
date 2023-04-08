@@ -11,6 +11,7 @@ use shared_crypto::intent::Intent;
 #[cfg(test)]
 use std::collections::HashSet;
 use std::path::Path;
+use typed_store::Map;
 
 use sui::client_commands::WalletContext;
 use sui_json_rpc_types::{
@@ -90,6 +91,7 @@ impl SimpleFaucet {
                 uuid,
                 recipient,
                 tx,
+                retry_count: _,
             }) = wal.reclaim(coin_id).map_err(FaucetError::internal)?
             {
                 let uuid = Uuid::from_bytes(uuid);
@@ -223,6 +225,32 @@ impl SimpleFaucet {
         }))
     }
 
+    /// Clear the WAL list in the faucet
+    pub async fn retry_wal_coins(&self) -> Result<(), FaucetError> {
+        let mut wal = self.wal.lock().await;
+        let log = wal.log.clone();
+
+        let mut pending = vec![];
+
+        for item in log.safe_iter() {
+            // Safe unwrap as we are the only ones that ever add to the WAL.
+            let (coin_id, entry) = item.unwrap();
+            wal.increment_retry_count(coin_id)
+                .map_err(FaucetError::internal)?;
+            let uuid = Uuid::from_bytes(entry.uuid);
+            pending.push((uuid, entry.recipient, coin_id, entry.tx));
+        }
+        // Drops the lock early because sign_and_execute_txn requires the lock.
+        drop(wal);
+
+        futures::future::join_all(pending.into_iter().map(|(uuid, recipient, coin_id, tx)| {
+            self.sign_and_execute_txn(uuid, recipient, coin_id, tx)
+        }))
+        .await;
+
+        Ok(())
+    }
+
     /// Sign an already created transaction (in `tx_data`) and keep trying to execute it until
     /// fullnode returns a definite response or a timeout is hit.
     async fn sign_and_execute_txn(
@@ -282,9 +310,7 @@ impl SimpleFaucet {
                 if self.wal.lock().await.commit(coin_id).is_err() {
                     error!(?coin_id, "Failed to remove coin from WAL");
                 }
-
                 self.recycle_gas_coin(coin_id, uuid).await;
-
                 Ok(result)
             }
         }
@@ -742,7 +768,57 @@ mod tests {
         );
     }
 
-    // TODO (jian): fix this test later
+    #[tokio::test]
+    async fn test_clear_wal() {
+        telemetry_subscribers::init_for_testing();
+        let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+        let context = test_cluster.wallet;
+        let tmp = tempfile::tempdir().unwrap();
+        let prom_registry = Registry::new();
+        let config = FaucetConfig::default();
+        let mut faucet = SimpleFaucet::new(
+            context,
+            &prom_registry,
+            &tmp.path().join("faucet.wal"),
+            config,
+        )
+        .await
+        .unwrap();
+
+        let recipient = SuiAddress::random_for_testing_only();
+        let faucet_address = faucet.wallet_mut().active_address().unwrap();
+        let uuid = Uuid::new_v4();
+        let coin_response = faucet.prepare_gas_coin(100, uuid).await;
+
+        match coin_response {
+            GasCoinResponse::ValidGasCoin(gas) => {
+                let tx_data = faucet
+                    .build_pay_sui_txn(gas, faucet_address, recipient, &[100], 200_000_000)
+                    .await
+                    .map_err(FaucetError::internal)
+                    .unwrap();
+
+                let mut wal = faucet.wal.lock().await;
+                // Check no wal
+                assert!(wal.log.is_empty());
+                wal.reserve(Uuid::new_v4(), gas, recipient, tx_data)
+                    .map_err(FaucetError::internal)
+                    .ok();
+                // Check the wal has one entry
+                assert!(!wal.log.is_empty());
+                drop(wal);
+            }
+            _ => {
+                panic!("prepare_gas_coin_did not give a valid function.");
+            }
+        }
+
+        faucet.retry_wal_coins().await.ok();
+
+        let wal_2 = faucet.wal.lock().await;
+        assert!(wal_2.log.is_empty());
+    }
+
     // #[tokio::test]
     // async fn test_discard_smaller_amount_gas() {
     //     telemetry_subscribers::init_for_testing();
@@ -756,20 +832,15 @@ mod tests {
     //     let tiny_value = 1;
     //     let res = SuiClientCommands::SplitCoin {
     //         coin_id: *gases[0].id(),
-    //         amounts: Some(vec![tiny_value + DEFAULT_GAS_COMPUTATION_BUCKET]),
-    //         gas_budget: 50000,
+    //         amounts: Some(vec![tiny_value]),
+    //         gas_budget: 50000000,
     //         gas: None,
     //         count: None,
     //     }
     //     .execute(&mut context)
-    //     .await
-    //     .unwrap();
+    //     .await;
 
-    //     let tiny_coin_id = if let SuiClientCommandResult::SplitCoin(resp) = res {
-    //         assert!(matches!(
-    //             resp.effects.as_ref().unwrap().status(),
-    //             SuiExecutionStatus::Success
-    //         ));
+    //     let tiny_coin_id = if let SuiClientCommandResult::SplitCoin(resp) = res.unwrap() {
     //         resp.effects.as_ref().unwrap().created()[0]
     //             .reference
     //             .object_id
@@ -784,8 +855,7 @@ mod tests {
     //         .find(|gas| gas.id() == &tiny_coin_id)
     //         .unwrap()
     //         .value();
-    //     assert_eq!(tiny_amount, tiny_value + DEFAULT_GAS_COMPUTATION_BUCKET);
-    //     info!("tiny coin id: {:?}, amount: {}", tiny_coin_id, tiny_amount);
+    //     assert_eq!(tiny_amount, tiny_value);
 
     //     let gases: HashSet<ObjectID> = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
 
