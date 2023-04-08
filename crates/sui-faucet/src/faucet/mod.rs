@@ -66,6 +66,9 @@ pub struct FaucetConfig {
 
     #[clap(long)]
     pub write_ahead_log: PathBuf,
+
+    #[clap(long, default_value_t = 300)]
+    pub wal_retry_interval: u64,
 }
 
 impl Default for FaucetConfig {
@@ -79,6 +82,7 @@ impl Default for FaucetConfig {
             max_request_per_second: 10,
             wallet_client_timeout_secs: 60,
             write_ahead_log: Default::default(),
+            wal_retry_interval: 300,
         }
     }
 }
