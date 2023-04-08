@@ -697,16 +697,17 @@ pub async fn fetch_changed_objects(
     })
 }
 
-pub fn to_changed_db_objects(
-    changed_objects: Vec<(ObjectStatus, SuiObjectData)>,
-    epoch: u64,
-    checkpoint: Option<CheckpointSequenceNumber>,
-) -> Vec<Object> {
-    changed_objects
-        .into_iter()
-        .map(|(status, o)| Object::from(epoch, checkpoint.map(<u64>::from), &status, &o))
-        .collect::<Vec<_>>()
-}
+// TODO(gegaowp): temp. disable fast-path
+// pub fn to_changed_db_objects(
+//     changed_objects: Vec<(ObjectStatus, SuiObjectData)>,
+//     epoch: u64,
+//     checkpoint: Option<CheckpointSequenceNumber>,
+// ) -> Vec<Object> {
+//     changed_objects
+//         .into_iter()
+//         .map(|(status, o)| Object::from(epoch, checkpoint.map(<u64>::from), &status, &o))
+//         .collect::<Vec<_>>()
+// }
 
 pub fn get_deleted_db_objects(
     effects: &SuiTransactionBlockEffects,
