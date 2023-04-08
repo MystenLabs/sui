@@ -27,11 +27,7 @@ function AddressResult() {
                     </Heading>
                 </div>
                 <ErrorBoundary>
-                    <div
-                        className={`grid w-full grid-cols-1 md:grid-cols-2 
-                        [&>div:first-child]:border-r-[1px] [&>div:first-child]:border-solid 
-                        [&>div:first-child]:border-gray-45 [&>div:last-child]:ml-[40px]`}
-                    >
+                    <div className="grid w-full grid-cols-1 divide-x-0 divide-gray-45 md:grid-cols-2 md:divide-x">
                         <OwnedCoins id={addressID!} />
                         <OwnedObjects id={addressID!} />
                     </div>

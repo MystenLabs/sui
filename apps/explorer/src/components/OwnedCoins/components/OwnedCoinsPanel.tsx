@@ -19,15 +19,13 @@ function CoinsPanel({ coinType, id }: CoinsPanelProps): JSX.Element {
     const [coinObjects, setCoinObjects] = useState<CoinStruct[]>([]);
     const containerRef = useRef(null);
     const { isIntersecting } = useOnScreen(containerRef);
-    const { data, isLoading, isFetching, fetchNextPage, hasNextPage } = useGetCoins(
-        coinType,
-        id,
-    );
+    const { data, isLoading, isFetching, fetchNextPage, hasNextPage } =
+        useGetCoins(coinType, id);
 
     useEffect(() => {
         if (data) {
             let coins: CoinStruct[] = [];
-            data.pages.forEach(page => {
+            data.pages.forEach((page) => {
                 coins = [...coins, ...page.data];
             });
             setCoinObjects(coins);
@@ -35,19 +33,10 @@ function CoinsPanel({ coinType, id }: CoinsPanelProps): JSX.Element {
     }, [data]);
 
     useEffect(() => {
-        if (
-            isIntersecting &&
-            hasNextPage &&
-            !isFetching
-        ) {
+        if (isIntersecting && hasNextPage && !isFetching) {
             fetchNextPage();
         }
-    }, [
-        isIntersecting,
-        hasNextPage,
-        isFetching,
-        fetchNextPage,
-    ]);
+    }, [isIntersecting, hasNextPage, isFetching, fetchNextPage]);
 
     return (
         <div>

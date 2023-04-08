@@ -32,7 +32,7 @@ function OwnerCoins({ id }: { id: string }): JSX.Element {
         );
     }
     return (
-        <>
+        <div className="pl-7.5">
             {isLoading ? (
                 <LoadingSpinner />
             ) : (
@@ -70,7 +70,7 @@ function OwnerCoins({ id }: { id: string }): JSX.Element {
                     )}
                 </div>
             )}
-        </>
+        </div>
     );
 }
 

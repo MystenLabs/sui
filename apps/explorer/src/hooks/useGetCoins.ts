@@ -17,17 +17,20 @@ export function useGetCoins(
     const rpc = useRpcClient();
     return useInfiniteQuery(
         ['get-coins', address, coinType],
-        async ({ pageParam }) => await rpc.getCoins({
+        async ({ pageParam }) =>
+            await rpc.getCoins({
                 owner: address!,
                 coinType,
                 cursor: pageParam ? pageParam.cursor : null,
                 limit: MAX_COINS_PER_REQUEST,
             }),
         {
-            getNextPageParam: (lastPage) => lastPage?.hasNextPage ?
-                    {
-                        cursor: lastPage.nextCursor,
-                    } : false,
+            getNextPageParam: (lastPage) =>
+                lastPage?.hasNextPage
+                    ? {
+                          cursor: lastPage.nextCursor,
+                      }
+                    : false,
             enabled: !!address,
             cacheTime,
         }
