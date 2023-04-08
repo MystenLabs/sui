@@ -157,16 +157,41 @@ impl Indexer {
             env!("CARGO_PKG_VERSION")
         );
         let event_handler = Arc::new(EventHandler::default());
-        if config.rpc_server_worker {
+        if config.rpc_server_worker && config.fullnode_sync_worker {
+            info!("Starting indexer with both fullnode sync and RPC server");
             let handle =
                 build_json_rpc_server(registry, store.clone(), event_handler.clone(), config)
                     .await
                     .expect("Json rpc server should not run into errors upon start.");
             // let JSON RPC server run forever.
             spawn_monitored_task!(handle.stopped());
-        }
 
-        if config.fullnode_sync_worker {
+            backoff::future::retry(ExponentialBackoff::default(), || async {
+                let event_handler_clone = event_handler.clone();
+                let http_client = get_http_client(config.rpc_client_url.as_str())?;
+                let cp = CheckpointHandler::new(
+                    store.clone(),
+                    http_client,
+                    event_handler_clone,
+                    registry,
+                    config,
+                );
+                cp.spawn()
+                    .await
+                    .expect("Indexer main should not run into errors.");
+                Ok(())
+            })
+            .await
+        } else if config.rpc_server_worker {
+            info!("Starting indexer with only RPC server");
+            let handle =
+                build_json_rpc_server(registry, store.clone(), event_handler.clone(), config)
+                    .await
+                    .expect("Json rpc server should not run into errors upon start.");
+            handle.stopped().await;
+            Ok(())
+        } else if config.fullnode_sync_worker {
+            info!("Starting indexer with only fullnode sync");
             backoff::future::retry(ExponentialBackoff::default(), || async {
                 let event_handler_clone = event_handler.clone();
                 let http_client = get_http_client(config.rpc_client_url.as_str())?;
