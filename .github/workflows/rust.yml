@@ -86,6 +86,12 @@ jobs:
         run: |
           pip install pyopenssl --upgrade
           if [ -f narwhal/benchmark/requirements.txt ]; then pip install -r narwhal/benchmark/requirements.txt; fi
+      - name: cargo Move tests
+        run: |
+          echo "Running Move tests in external-crates"
+          cd external-crates/move
+          echo "Excluding prover and evm Move tests"
+          cargo nextest run -E '!package(move-to-yul) and !package(move-prover) and !test(prove)'
       - name: cargo test
         run: |
           cargo nextest run --profile ci
