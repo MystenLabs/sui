@@ -1524,7 +1524,9 @@ impl PartitionManager {
                         "ALTER TABLE {table} DETACH PARTITION {table}_partition_{last_epoch_id};"
                     );
                     let attach_partition_with_new_range = format!("ALTER TABLE {table} ATTACH PARTITION {table}_partition_{last_epoch_id} FOR VALUES FROM ('{last_epoch_start_cp}') TO ('{next_epoch_start_cp}');");
+                    info! {"Changed last epoch partition {last_epoch_id} for {table}, with new range {last_epoch_start_cp} to {next_epoch_start_cp}"};
                     let new_partition = format!("CREATE TABLE {table}_partition_{next_epoch_id} PARTITION OF {table} FOR VALUES FROM ({next_epoch_start_cp}) TO (MAXVALUE);");
+                    info! {"Created epoch partition {next_epoch_id} for {table}, with new range {next_epoch_start_cp} to MAXVALUE"};
                     diesel::RunQueryDsl::execute(diesel::sql_query(detach_partition), conn)?;
                     diesel::RunQueryDsl::execute(
                         diesel::sql_query(attach_partition_with_new_range),
