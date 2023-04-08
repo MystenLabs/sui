@@ -18,12 +18,12 @@ use mockall::automock;
 use network::client::NetworkClient;
 use prometheus::Registry;
 use std::sync::Arc;
-use storage::CertificateStore;
+use storage::{CertificateStore, ConsensusStore};
 use tokio::task::JoinHandle;
 use tracing::info;
 use types::{
     metered_channel, CertificateDigest, CommittedSubDag, ConditionalBroadcastReceiver,
-    ConsensusOutput, ConsensusStore,
+    ConsensusOutput,
 };
 
 /// Convenience type representing a serialized transaction.
@@ -103,8 +103,7 @@ pub async fn get_restored_consensus_output<State: ExecutionState>(
 
     let mut sub_dags = Vec::new();
     for compressed_sub_dag in compressed_sub_dags {
-        let sub_dag_index = compressed_sub_dag.sub_dag_index;
-        let certificate_digests: Vec<CertificateDigest> = compressed_sub_dag.certificates;
+        let certificate_digests: Vec<CertificateDigest> = compressed_sub_dag.certificates();
 
         let certificates = certificate_store
             .read_all(certificate_digests)?
@@ -112,14 +111,15 @@ pub async fn get_restored_consensus_output<State: ExecutionState>(
             .flatten()
             .collect();
 
-        let leader = certificate_store.read(compressed_sub_dag.leader)?.unwrap();
+        let leader = certificate_store
+            .read(compressed_sub_dag.leader())?
+            .unwrap();
 
-        sub_dags.push(CommittedSubDag {
+        sub_dags.push(CommittedSubDag::from_commit(
+            compressed_sub_dag,
             certificates,
             leader,
-            sub_dag_index,
-            reputation_score: compressed_sub_dag.reputation_score,
-        });
+        ));
     }
 
     Ok(sub_dags)
