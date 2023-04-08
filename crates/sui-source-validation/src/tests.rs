@@ -591,7 +591,7 @@ async fn publish_package(
     let package = compile_package(package);
     let package_bytes = package.get_package_bytes(/* with_unpublished_deps */ false);
     let package_deps = package.dependency_ids.published.into_values().collect();
-    let (package, cap, _) =
+    let (package, _, cap, _) =
         publish_package_with_wallet(context, sender, package_bytes, package_deps).await;
     (package, cap)
 }

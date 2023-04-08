@@ -40,11 +40,8 @@ impl TestCaseImpl for FullNodeExecuteTransactionTest {
     async fn run(&self, ctx: &mut TestContext) -> Result<(), anyhow::Error> {
         let txn_count = 4;
         ctx.get_sui_from_faucet(Some(txn_count)).await;
-        let gas_price = ctx.get_reference_gas_price().await;
 
-        let mut txns = ctx
-            .make_transactions(txn_count, 2_000_000 * gas_price)
-            .await;
+        let mut txns = ctx.make_transactions(txn_count).await;
         assert!(
             txns.len() >= txn_count,
             "Expect at least {} txns, but only got {}. Do we generate enough gas objects during genesis?",

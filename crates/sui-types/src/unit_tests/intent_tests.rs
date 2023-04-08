@@ -9,7 +9,7 @@ use crate::{
         AccountKeyPair, AuthorityKeyPair, AuthoritySignature, Signature, SuiAuthoritySignature,
         SuiSignature,
     },
-    messages::{Transaction, TransactionData},
+    messages::{Transaction, TransactionData, TEST_ONLY_GAS_UNIT_FOR_TRANSFER},
     object::Object,
 };
 
@@ -61,12 +61,14 @@ fn test_authority_signature_intent() {
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let object = Object::immutable_with_id_for_testing(object_id);
-    let data = TransactionData::new_transfer_sui_with_dummy_gas_price(
+    let gas_price = 1000;
+    let data = TransactionData::new_transfer_sui(
         recipient,
         sender,
         None,
         object.compute_object_reference(),
-        10000,
+        gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        gas_price,
     );
     let signature = Signature::new_secure(
         &IntentMessage::new(Intent::sui_transaction(), data.clone()),

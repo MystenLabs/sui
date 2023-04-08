@@ -9,7 +9,6 @@ use fastcrypto::traits::AggregateAuthenticator;
 use fastcrypto::traits::KeyPair;
 use move_core_types::language_storage::StructTag;
 use roaring::RoaringBitmap;
-use test_utils::messages::MAX_GAS;
 
 use super::*;
 use crate::base_types::random_object_ref;
@@ -24,7 +23,6 @@ use crate::crypto::{
     AuthoritySignInfoTrait, SuiAuthoritySignature,
 };
 use crate::object::Owner;
-use crate::object::MAX_GAS_BUDGET_FOR_TESTING;
 
 #[test]
 fn test_signed_values() {
@@ -45,14 +43,15 @@ fn test_signed_values() {
         /* voting right */ 0,
     );
     let committee = Committee::new_for_testing_with_normalized_voting_power(0, authorities);
-
+    let gas_price = 10;
     let transaction = Transaction::from_data_and_signer(
-        TransactionData::new_transfer_with_dummy_gas_price(
+        TransactionData::new_transfer(
             _a2,
             random_object_ref(),
             a_sender,
             random_object_ref(),
-            MAX_GAS_BUDGET_FOR_TESTING,
+            TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
+            gas_price,
         ),
         Intent::sui_transaction(),
         vec![&sender_sec],
@@ -61,12 +60,13 @@ fn test_signed_values() {
     .unwrap();
 
     let bad_transaction = VerifiedTransaction::new_unchecked(Transaction::from_data_and_signer(
-        TransactionData::new_transfer_with_dummy_gas_price(
+        TransactionData::new_transfer(
             _a2,
             random_object_ref(),
             a_sender,
             random_object_ref(),
-            MAX_GAS_BUDGET_FOR_TESTING,
+            TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
+            gas_price,
         ),
         Intent::sui_transaction(),
         vec![&sender_sec2],
@@ -122,14 +122,15 @@ fn test_certificates() {
         /* voting right */ 1,
     );
     let committee = Committee::new_for_testing_with_normalized_voting_power(0, authorities);
-
+    let gas_price = 10;
     let transaction = Transaction::from_data_and_signer(
-        TransactionData::new_transfer_with_dummy_gas_price(
+        TransactionData::new_transfer(
             a2,
             random_object_ref(),
             a_sender,
             random_object_ref(),
-            MAX_GAS_BUDGET_FOR_TESTING,
+            TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
+            gas_price,
         ),
         Intent::sui_transaction(),
         vec![&sender_sec],
@@ -456,13 +457,15 @@ fn test_digest_caching() {
 
     let committee = Committee::new_for_testing_with_normalized_voting_power(0, authorities);
 
+    let gas_price = 10;
     let transaction = Transaction::from_data_and_signer(
-        TransactionData::new_transfer_with_dummy_gas_price(
+        TransactionData::new_transfer(
             sa1,
             random_object_ref(),
             sa2,
             random_object_ref(),
-            MAX_GAS_BUDGET_FOR_TESTING,
+            TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
+            gas_price,
         ),
         Intent::sui_transaction(),
         vec![&ssec2],
@@ -533,12 +536,14 @@ fn test_user_signature_committed_in_transactions() {
     let (a_sender, sender_sec): (_, AccountKeyPair) = get_key_pair();
     let (a_sender2, sender_sec2): (_, AccountKeyPair) = get_key_pair();
 
-    let tx_data = TransactionData::new_transfer_with_dummy_gas_price(
+    let gas_price = 10;
+    let tx_data = TransactionData::new_transfer(
         a_sender2,
         random_object_ref(),
         a_sender,
         random_object_ref(),
-        MAX_GAS_BUDGET_FOR_TESTING,
+        TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
+        gas_price,
     );
 
     let mut tx_data_2 = tx_data.clone();
@@ -585,12 +590,14 @@ fn test_user_signature_committed_in_signed_transactions() {
     let (a_sender, sender_sec): (_, AccountKeyPair) = get_key_pair();
     let (a_sender2, sender_sec2): (_, AccountKeyPair) = get_key_pair();
 
-    let tx_data = TransactionData::new_transfer_with_dummy_gas_price(
+    let gas_price = 10;
+    let tx_data = TransactionData::new_transfer(
         a_sender2,
         random_object_ref(),
         a_sender,
         random_object_ref(),
-        MAX_GAS_BUDGET_FOR_TESTING,
+        TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
+        gas_price,
     );
     let transaction_a = Transaction::from_data_and_signer(
         tx_data.clone(),
@@ -680,13 +687,14 @@ fn test_sponsored_transaction_message() {
             .unwrap();
         builder.finish()
     };
+    let gas_price = 10;
     let kind = TransactionKind::programmable(pt);
     let gas_obj_ref = random_object_ref();
     let gas_data = GasData {
         payment: vec![gas_obj_ref],
         owner: sponsor,
-        price: DUMMY_GAS_PRICE,
-        budget: 10000,
+        price: gas_price,
+        budget: gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
     };
     let tx_data = TransactionData::new_with_gas_data(kind, sender, gas_data.clone());
     let intent = Intent::sui_transaction();
@@ -781,12 +789,13 @@ fn test_sponsored_transaction_validity_check() {
     let sponsor = (&sponsor_kp.public()).into();
 
     // This is a sponsored transaction
+    let gas_price = 10;
     assert_ne!(sender, sponsor);
     let gas_data = GasData {
         payment: vec![random_object_ref()],
         owner: sponsor,
-        price: DUMMY_GAS_PRICE,
-        budget: 10000,
+        price: gas_price,
+        budget: gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
     };
 
     let pt = {
@@ -899,12 +908,14 @@ fn verify_sender_signature_correctly_with_flag() {
     // create a sender keypair with Secp256k1
     let sender_kp = SuiKeyPair::Secp256k1(get_key_pair().1);
     // and creates a corresponding transaction
-    let tx_data = TransactionData::new_transfer_with_dummy_gas_price(
+    let gas_price = 10;
+    let tx_data = TransactionData::new_transfer(
         receiver_address,
         random_object_ref(),
         (&sender_kp.public()).into(),
         random_object_ref(),
-        MAX_GAS_BUDGET_FOR_TESTING,
+        TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
+        gas_price,
     );
 
     // create a sender keypair with Ed25519
@@ -1113,11 +1124,12 @@ fn test_move_input_objects() {
         type_args,
         args,
     ));
-    let data = TransactionData::new_programmable_with_dummy_gas_price(
+    let data = TransactionData::new_programmable(
         SuiAddress::random_for_testing_only(),
         vec![gas_object_ref],
         builder.finish(),
-        MAX_GAS,
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        1,
     );
     let mut input_objects = data.input_objects().unwrap();
     macro_rules! rem {
@@ -1197,13 +1209,13 @@ fn test_unique_input_objects() {
 
     let sender_kp = SuiKeyPair::Ed25519(get_key_pair().1);
     let sender = (&sender_kp.public()).into();
-
+    let gas_price = 10;
     let gas_object_ref = random_object_ref();
     let gas_data = GasData {
         payment: vec![gas_object_ref],
         owner: sender,
-        price: DUMMY_GAS_PRICE,
-        budget: 10000,
+        price: gas_price,
+        budget: gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
     };
 
     builder.command(Command::move_call(
@@ -1242,14 +1254,16 @@ fn test_certificate_digest() {
     let (sender1, sender1_sec): (_, AccountKeyPair) = get_key_pair();
     let (sender2, sender2_sec): (_, AccountKeyPair) = get_key_pair();
 
+    let gas_price = 10;
     let make_tx = |sender, sender_sec| {
         Transaction::from_data_and_signer(
-            TransactionData::new_transfer_with_dummy_gas_price(
+            TransactionData::new_transfer(
                 receiver,
                 random_object_ref(),
                 sender,
                 random_object_ref(),
-                MAX_GAS_BUDGET_FOR_TESTING,
+                TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
+                gas_price,
             ),
             Intent::sui_transaction(),
             vec![&sender_sec],

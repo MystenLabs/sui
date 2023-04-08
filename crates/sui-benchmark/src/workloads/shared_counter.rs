@@ -54,12 +54,10 @@ impl Payload for SharedCounterTestPayload {
             self.counter_initial_shared_version,
             self.gas.1,
             &self.gas.2,
-            Some(
-                self.system_state_observer
-                    .state
-                    .borrow()
-                    .reference_gas_price,
-            ),
+            self.system_state_observer
+                .state
+                .borrow()
+                .reference_gas_price,
         )
     }
 }
@@ -203,7 +201,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
                 self.basics_package_id.unwrap(),
                 *sender,
                 keypair,
-                Some(gas_price),
+                gas_price,
             );
             let proxy_ref = proxy.clone();
             futures.push(async move {

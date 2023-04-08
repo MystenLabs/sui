@@ -6,6 +6,8 @@ use crate::authority_aggregator::{AuthorityAggregator, TimeoutConfig};
 use crate::epoch::committee_store::CommitteeStore;
 use crate::test_authority_clients::LocalAuthorityClient;
 use fastcrypto::traits::KeyPair;
+use move_core_types::account_address::AccountAddress;
+use move_core_types::ident_str;
 use prometheus::Registry;
 use shared_crypto::intent::{Intent, IntentScope};
 use std::collections::BTreeMap;
@@ -22,8 +24,11 @@ use sui_types::crypto::{
     NetworkKeyPair, SuiKeyPair,
 };
 use sui_types::crypto::{AuthorityKeyPair, Signer};
+use sui_types::messages::ObjectArg;
+use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS;
 use sui_types::messages::{
-    SignedTransaction, TransactionData, VerifiedTransaction, DUMMY_GAS_PRICE,
+    CallArg, SignedTransaction, TransactionData, VerifiedTransaction,
+    TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
 use sui_types::utils::create_fake_transaction;
 use sui_types::utils::to_sender_signed_transaction;
@@ -39,8 +44,6 @@ use tokio::time::timeout;
 use tracing::{info, warn};
 
 const WAIT_FOR_TX_TIMEOUT: Duration = Duration::from_secs(15);
-/// The maximum gas per transaction.
-pub const MAX_GAS: u64 = 2_000_000;
 
 // note: clippy is confused about this being dead - it appears to only be used in cfg(test), but
 // adding #[cfg(test)] causes other targets to fail
@@ -258,15 +261,15 @@ pub fn make_transfer_sui_transaction(
     amount: Option<u64>,
     sender: SuiAddress,
     keypair: &AccountKeyPair,
-    gas_price: Option<u64>,
+    gas_price: u64,
 ) -> VerifiedTransaction {
     let data = TransactionData::new_transfer_sui(
         recipient,
         sender,
         amount,
         gas_object,
-        MAX_GAS,
-        gas_price.unwrap_or(DUMMY_GAS_PRICE),
+        gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        gas_price,
     );
     to_sender_signed_transaction(data, keypair)
 }
@@ -278,17 +281,11 @@ pub fn make_pay_sui_transaction(
     amounts: Vec<u64>,
     sender: SuiAddress,
     keypair: &AccountKeyPair,
-    gas_price: Option<u64>,
-    gas_budget: Option<u64>,
+    gas_price: u64,
+    gas_budget: u64,
 ) -> VerifiedTransaction {
     let data = TransactionData::new_pay_sui(
-        sender,
-        coins,
-        recipients,
-        amounts,
-        gas_object,
-        gas_budget.unwrap_or(MAX_GAS),
-        gas_price.unwrap_or(DUMMY_GAS_PRICE),
+        sender, coins, recipients, amounts, gas_object, gas_budget, gas_price,
     )
     .unwrap();
     to_sender_signed_transaction(data, keypair)
@@ -300,32 +297,64 @@ pub fn make_transfer_object_transaction(
     sender: SuiAddress,
     keypair: &AccountKeyPair,
     recipient: SuiAddress,
-    gas_price: Option<u64>,
+    gas_price: u64,
 ) -> VerifiedTransaction {
     let data = TransactionData::new_transfer(
         recipient,
         object_ref,
         sender,
         gas_object,
-        MAX_GAS,
-        gas_price.unwrap_or(DUMMY_GAS_PRICE),
+        gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        gas_price,
     );
     to_sender_signed_transaction(data, keypair)
 }
 
-/// Make a tx that refers to a non-existent object
+pub fn make_transfer_object_move_transaction(
+    src: SuiAddress,
+    keypair: &AccountKeyPair,
+    dest: SuiAddress,
+    object_ref: ObjectRef,
+    framework_obj_id: ObjectID,
+    gas_object_ref: ObjectRef,
+    gas_price: u64,
+) -> VerifiedTransaction {
+    let args = vec![
+        CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref)),
+        CallArg::Pure(bcs::to_bytes(&AccountAddress::from(dest)).unwrap()),
+    ];
+
+    to_sender_signed_transaction(
+        TransactionData::new_move_call(
+            src,
+            framework_obj_id,
+            ident_str!("object_basics").to_owned(),
+            ident_str!("transfer").to_owned(),
+            Vec::new(),
+            gas_object_ref,
+            args,
+            TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * gas_price,
+            gas_price,
+        )
+        .unwrap(),
+        keypair,
+    )
+}
+
+/// Make a dummy tx that uses random object refs.
 pub fn make_dummy_tx(
     receiver: SuiAddress,
     sender: SuiAddress,
     sender_sec: &AccountKeyPair,
 ) -> VerifiedTransaction {
     Transaction::from_data_and_signer(
-        TransactionData::new_transfer_with_dummy_gas_price(
+        TransactionData::new_transfer(
             receiver,
             random_object_ref(),
             sender,
             random_object_ref(),
-            5_000_000_000,
+            TEST_ONLY_GAS_UNIT_FOR_TRANSFER * 10,
+            10,
         ),
         Intent::sui_transaction(),
         vec![sender_sec],

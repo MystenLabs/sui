@@ -138,6 +138,14 @@ impl TestCluster {
         RandomNodeRestarter::new(self.clone())
     }
 
+    pub async fn get_reference_gas_price(&self) -> u64 {
+        self.sui_client()
+            .governance_api()
+            .get_reference_gas_price()
+            .await
+            .expect("failed to get reference gas price")
+    }
+
     /// Wait for thet network to transition to the next or a specific epoch.
     /// To detect whether the network has reached such state, we use the fullnode as the
     /// source of truth, since a fullnode only does epoch transition when the network has

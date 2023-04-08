@@ -12,6 +12,7 @@ use sui_types::{
     messages::{
         Argument, CommandArgumentError, ExecutionFailureStatus, ObjectArg, PackageUpgradeError,
         ProgrammableTransaction, TransactionEffects, TransactionEffectsV1,
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
     },
     move_package::UpgradePolicy,
     object::{Object, Owner},
@@ -43,7 +44,7 @@ macro_rules! move_call {
     }
 }
 
-pub fn build_upgrade_test_modules(test_dir: &str) -> (Vec<u8>, Vec<Vec<u8>>) {
+fn build_upgrade_test_modules(test_dir: &str) -> (Vec<u8>, Vec<Vec<u8>>) {
     let build_config = BuildConfig::new_for_testing();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["src", "unit_tests", "data", "move_upgrade", test_dir]);
@@ -101,7 +102,7 @@ pub fn build_upgrade_test_modules_with_dep_addr(
     )
 }
 
-pub struct UpgradeStateRunner {
+struct UpgradeStateRunner {
     pub sender: SuiAddress,
     pub sender_key: AccountKeyPair,
     pub gas_object_id: ObjectID,
@@ -217,6 +218,7 @@ impl UpgradeStateRunner {
             &self.sender,
             &self.sender_key,
             pt,
+            TEST_ONLY_GAS_UNIT_FOR_GENERIC,
         )
         .await
         .unwrap();

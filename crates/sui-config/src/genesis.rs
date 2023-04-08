@@ -149,6 +149,10 @@ impl Genesis {
         self.sui_system_object().get_current_epoch_committee()
     }
 
+    pub fn reference_gas_price(&self) -> u64 {
+        self.sui_system_object().reference_gas_price()
+    }
+
     // TODO: No need to return SuiResult.
     pub fn committee(&self) -> SuiResult<Committee> {
         Ok(self.committee_with_network().committee)
@@ -1846,7 +1850,10 @@ impl TokenDistributionScheduleBuilder {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{utils, ValidatorInfo};
+    use crate::{
+        node::{DEFAULT_COMMISSION_RATE, DEFAULT_VALIDATOR_GAS_PRICE},
+        utils, ValidatorInfo,
+    };
     use fastcrypto::traits::KeyPair;
     use sui_types::crypto::{
         generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
@@ -1898,8 +1905,8 @@ mod test {
             worker_key: worker_key.public().clone(),
             account_address: SuiAddress::from(account_key.public()),
             network_key: network_key.public().clone(),
-            gas_price: ValidatorInfo::DEFAULT_GAS_PRICE,
-            commission_rate: ValidatorInfo::DEFAULT_COMMISSION_RATE,
+            gas_price: DEFAULT_VALIDATOR_GAS_PRICE,
+            commission_rate: DEFAULT_COMMISSION_RATE,
             network_address: utils::new_tcp_network_address(),
             p2p_address: utils::new_udp_network_address(),
             narwhal_primary_address: utils::new_udp_network_address(),

@@ -5,12 +5,11 @@ use crate::authority::authority_tests::{send_consensus, send_consensus_no_execut
 use crate::authority::{AuthorityState, EffectsNotifyRead};
 use crate::authority_aggregator::authority_aggregator_tests::{
     create_object_move_transaction, do_cert, do_transaction, extract_cert, get_latest_ref,
-    transfer_object_move_transaction,
 };
 use crate::authority_server::{ValidatorService, MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH};
 use crate::safe_client::SafeClient;
 use crate::test_authority_clients::LocalAuthorityClient;
-use crate::test_utils::init_local_authorities;
+use crate::test_utils::{init_local_authorities, make_transfer_object_move_transaction};
 
 use std::collections::BTreeSet;
 use std::time::Duration;
@@ -304,6 +303,11 @@ async fn test_transaction_manager() {
         .iter()
         .map(|a| &aggregator.authority_clients[&a.name])
         .collect();
+    let rgp = authorities
+        .get(0)
+        .unwrap()
+        .reference_gas_price_for_testing()
+        .unwrap();
 
     // ---- Create an owned object and a shared counter.
 
@@ -313,7 +317,7 @@ async fn test_transaction_manager() {
     // Initialize an object owned by 1st account.
     let (addr1, key1): &(_, AccountKeyPair) = &accounts[0];
     let gas_ref = get_latest_ref(authority_clients[0], gas_objects[0][0].id()).await;
-    let tx1 = create_object_move_transaction(*addr1, key1, *addr1, 100, package, gas_ref);
+    let tx1 = create_object_move_transaction(*addr1, key1, *addr1, 100, package, gas_ref, rgp);
     let (cert, effects1) =
         execute_owned_on_first_three_authorities(&authority_clients, &aggregator.committee, &tx1)
             .await;
@@ -322,7 +326,7 @@ async fn test_transaction_manager() {
 
     // Initialize a shared counter, re-using gas_ref_0 so it has to execute after tx1.
     let gas_ref = get_latest_ref(authority_clients[0], gas_objects[0][0].id()).await;
-    let tx2 = make_counter_create_transaction(gas_ref, package, *addr1, key1, None);
+    let tx2 = make_counter_create_transaction(gas_ref, package, *addr1, key1, rgp);
     let (cert, effects2) =
         execute_owned_on_first_three_authorities(&authority_clients, &aggregator.committee, &tx2)
             .await;
@@ -354,13 +358,14 @@ async fn test_transaction_manager() {
         )
         .await;
         let (dest_addr, _) = &accounts[(i + 1) % NUM_ACCOUNTS];
-        let owned_tx = transfer_object_move_transaction(
+        let owned_tx = make_transfer_object_move_transaction(
             *source_addr,
             source_key,
             *dest_addr,
             owned_object_ref,
             package,
             gas_ref,
+            rgp,
         );
         let (cert, effects) = execute_owned_on_first_three_authorities(
             &authority_clients,
@@ -383,7 +388,7 @@ async fn test_transaction_manager() {
             shared_counter_initial_version,
             *source_addr,
             source_key,
-            None,
+            rgp,
         );
         let (cert, effects) = execute_shared_on_first_three_authorities(
             &authority_clients,
@@ -459,6 +464,11 @@ async fn test_per_object_overload() {
         .collect_vec();
     let (aggregator, authorities, _genesis, package) =
         init_local_authorities(4, gas_objects.clone()).await;
+    let rgp = authorities
+        .get(0)
+        .unwrap()
+        .reference_gas_price_for_testing()
+        .unwrap();
     let authority_clients: Vec<_> = authorities
         .iter()
         .map(|a| &aggregator.authority_clients[&a.name])
@@ -466,7 +476,7 @@ async fn test_per_object_overload() {
 
     // Create a shared counter.
     let gas_ref = get_latest_ref(authority_clients[0], gas_objects[0].id()).await;
-    let create_counter_txn = make_counter_create_transaction(gas_ref, package, addr, &key, None);
+    let create_counter_txn = make_counter_create_transaction(gas_ref, package, addr, &key, rgp);
     let create_counter_cert = try_sign_on_first_three_authorities(
         &authority_clients,
         &aggregator.committee,
@@ -525,7 +535,7 @@ async fn test_per_object_overload() {
             shared_counter_initial_version,
             addr,
             &key,
-            None,
+            rgp,
         );
         let shared_cert = try_sign_on_first_three_authorities(
             &authority_clients,
@@ -549,7 +559,7 @@ async fn test_per_object_overload() {
         shared_counter_initial_version,
         addr,
         &key,
-        None,
+        rgp,
     );
 
     let res = ValidatorService::check_execution_overload(authorities[3].clone(), shared_txn.data());
