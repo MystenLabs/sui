@@ -33,7 +33,7 @@ function FormattedStatsAmount({
     );
 }
 
-const HOME_REFETCH_INTERVAL = 5 * 1000;
+// const HOME_REFETCH_INTERVAL = 5 * 1000;
 
 export function HomeMetrics() {
     const rpc = useRpcClient();
@@ -48,13 +48,13 @@ export function HomeMetrics() {
     const { data: transactionCount } = useQuery(
         ['home', 'transaction-count'],
         () => rpc.getTotalTransactionBlocks(),
-        { refetchInterval: HOME_REFETCH_INTERVAL }
+        { cacheTime: 24 * 60 * 60 * 1000, staleTime: Infinity, retry: false }
     );
 
     const { data: networkMetrics } = useQuery(
         ['home', 'metrics'],
         () => enhancedRpc.getNetworkMetrics(),
-        { refetchInterval: HOME_REFETCH_INTERVAL }
+        { cacheTime: 24 * 60 * 60 * 1000, staleTime: Infinity, retry: false }
     );
 
     return (

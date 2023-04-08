@@ -28,8 +28,10 @@ export function Transactions({
 
     const rpc = useRpcClient();
 
-    const countQuery = useQuery(['transactions', 'count'], () =>
-        rpc.getTotalTransactionBlocks()
+    const countQuery = useQuery(
+        ['transactions', 'count'],
+        () => rpc.getTotalTransactionBlocks(),
+        { cacheTime: 24 * 60 * 60 * 1000, staleTime: Infinity, retry: false }
     );
 
     const pagination = usePaginationStack();
@@ -50,7 +52,10 @@ export function Transactions({
         {
             keepPreviousData: true,
             // Disable refetching if not on the first page:
-            refetchInterval: pagination.cursor ? undefined : refetchInterval,
+            // refetchInterval: pagination.cursor ? undefined : refetchInterval,
+            retry: false,
+            staleTime: Infinity,
+            cacheTime: 24 * 60 * 60 * 1000,
         }
     );
 
