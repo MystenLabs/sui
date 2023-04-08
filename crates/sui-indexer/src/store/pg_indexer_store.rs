@@ -95,6 +95,8 @@ struct TempDigestTable {
 #[derive(Clone)]
 pub struct PgIndexerStore {
     cp: AsyncPgConnectionPool,
+    // MUSTFIX(gegaowp): temporarily disable partition management.
+    #[allow(dead_code)]
     partition_manager: PartitionManager,
     module_cache: Arc<SyncModuleCache<IndexerModuleResolver>>,
 }
@@ -1281,15 +1283,15 @@ WHERE e1.epoch = e2.epoch
     }
 
     async fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError> {
-        let last_epoch_cp_id = if data.last_epoch.is_none() {
-            0
-        } else {
-            self.get_current_epoch().await?.first_checkpoint_id as i64
-        };
-
-        self.partition_manager
-            .advance_epoch(&data.new_epoch, last_epoch_cp_id)
-            .await?;
+        // MUSTFIX(gegaowp): temporarily disable the epoch advance logic.
+        // let last_epoch_cp_id = if data.last_epoch.is_none() {
+        //     0
+        // } else {
+        //     self.get_current_epoch().await?.first_checkpoint_id as i64
+        // };
+        // self.partition_manager
+        //     .advance_epoch(&data.new_epoch, last_epoch_cp_id)
+        //     .await?;
 
         transactional!(&self.cp, |conn| async {
             if let Some(last_epoch) = &data.last_epoch {
@@ -1505,6 +1507,8 @@ impl PartitionManager {
         Ok(manager)
     }
 
+    // MUSTFIX(gegaowp): temporarily disable partition management.
+    #[allow(dead_code)]
     async fn advance_epoch(
         &self,
         new_epoch: &DBEpochInfo,
