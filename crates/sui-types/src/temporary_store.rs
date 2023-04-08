@@ -963,8 +963,13 @@ impl<S: ObjectStore> TemporaryStore<S> {
     ) -> GasCostSummary {
         // at this point, we have done *all* charging for computation,
         // but have not yet set the storage rebate or storage gas units
-        assert!(gas_status.storage_rebate() == 0);
-        assert!(gas_status.storage_gas_units() == 0);
+        if self.protocol_config.gas_model_version() < 2 {
+            assert!(gas_status.storage_rebate() == 0);
+            assert!(gas_status.storage_gas_units() == 0);
+        } else {
+            debug_assert!(gas_status.storage_rebate() == 0);
+            debug_assert!(gas_status.storage_gas_units() == 0);
+        }
 
         if gas_object_id.is_some() {
             // bucketize computation cost
@@ -1013,18 +1018,29 @@ impl<S: ObjectStore> TemporaryStore<S> {
             old_obj.storage_rebate
         } else {
             // else, this is a dynamic field, not an input object
-            if let Ok(Some(old_obj)) = self.store.get_object(id) {
-                if old_obj.version() != expected_version {
+            if self.protocol_config.gas_model_version() < 2 {
+                if let Ok(Some(old_obj)) = self.store.get_object(id) {
+                    if old_obj.version() != expected_version {
+                        // not a lot we can do safely and under this condition everything is broken
+                        panic!(
+                            "Expected to find old object with version {expected_version}, found {}",
+                            old_obj.version(),
+                        );
+                    }
+                    old_obj.storage_rebate
+                } else {
                     // not a lot we can do safely and under this condition everything is broken
-                    panic!(
-                        "Expected to find old object with version {expected_version}, found {}",
-                        old_obj.version(),
-                    );
+                    panic!("Looking up storage rebate of mutated object should not fail")
                 }
-                old_obj.storage_rebate
             } else {
-                // not a lot we can do safely and under this condition everything is broken
-                panic!("Looking up storage rebate of mutated object should not fail")
+                // let's keep the if/else on gas version well separated
+                #[allow(clippy::collapsible-else-if)]
+                if let Ok(Some(old_obj)) = self.store.get_object_by_key(id, expected_version) {
+                    old_obj.storage_rebate
+                } else {
+                    // not a lot we can do safely and under this condition everything is broken
+                    panic!("Looking up storage rebate of mutated object should not fail")
+                }
             }
         }
     }
@@ -1059,19 +1075,35 @@ impl<S: ObjectStore> TemporaryStore<S> {
                         old_obj.storage_rebate
                     } else {
                         // else, this is a dynamic field, not an input object
-                        if let Ok(Some(old_obj)) = self.store.get_object(object_id) {
-                            let expected_version = object.version();
-                            if old_obj.version() != expected_version {
+                        if self.protocol_config.gas_model_version() < 2 {
+                            if let Ok(Some(old_obj)) = self.store.get_object(object_id) {
+                                let expected_version = object.version();
+                                if old_obj.version() != expected_version {
+                                    // not a lot we can do safely and under this condition everything is broken
+                                    panic!(
+                                        "Expected to find old object with version {expected_version}, found {}",
+                                        old_obj.version(),
+                                    );
+                                }
+                                old_obj.storage_rebate
+                            } else {
                                 // not a lot we can do safely and under this condition everything is broken
                                 panic!(
-                                    "Expected to find old object with version {expected_version}, found {}",
-                                    old_obj.version(),
+                                    "Looking up storage rebate of mutated object should not fail"
                                 );
                             }
-                            old_obj.storage_rebate
                         } else {
-                            // not a lot we can do safely and under this condition everything is broken
-                            panic!("Looking up storage rebate of mutated object should not fail");
+                            let expected_version = object.version();
+                            if let Ok(Some(old_obj)) =
+                                self.store.get_object_by_key(object_id, expected_version)
+                            {
+                                old_obj.storage_rebate
+                            } else {
+                                // not a lot we can do safely and under this condition everything is broken
+                                panic!(
+                                    "Looking up storage rebate of mutated object should not fail"
+                                );
+                            }
                         }
                     }
                 }
@@ -1136,6 +1168,7 @@ impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
         do_expensive_checks: bool,
     ) -> Result<(u64, u64), ExecutionError> {
         if let Some(obj) = self.input_objects.get(id) {
+            // the assumption here is that if it is in the input objects must be the right one
             if obj.version() != expected_version {
                 return Err(ExecutionError::invariant_violation(format!("Version mismatching when resolving input object to check conservation--expected {}, got {}", expected_version, obj.version())));
             }
@@ -1151,32 +1184,58 @@ impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
             Ok((input_sui, obj.storage_rebate))
         } else {
             // not in input objects, must be a dynamic field
-            let obj = self
-                .store
-                .get_object(id)
-                .map_err(|_e| {
-                    ExecutionError::invariant_violation(
-                        "Failed looking up input object in SUI conservation checking",
-                    )
-                })?
-                .ok_or_else(|| {
-                    ExecutionError::invariant_violation(
-                        "Failed looking up input object in SUI conservation checking",
-                    )
-                })?;
-            if obj.version() != expected_version {
-                return Err(ExecutionError::invariant_violation(format!("Version mismatching when resolving dynamic field to check conservation--expected {}, got {}", expected_version, obj.version())));
-            }
-            let input_sui = if do_expensive_checks {
-                obj.get_total_sui(&self).map_err(|_e| {
-                    ExecutionError::invariant_violation(
-                        "Failed looking up output SUI in SUI conservation checking",
-                    )
-                })?
+            if self.protocol_config.gas_model_version() < 2 {
+                let obj = self
+                    .store
+                    .get_object(id)
+                    .map_err(|_e| {
+                        ExecutionError::invariant_violation(
+                            "Failed looking up input object in SUI conservation checking",
+                        )
+                    })?
+                    .ok_or_else(|| {
+                        ExecutionError::invariant_violation(
+                            "Failed looking up input object in SUI conservation checking",
+                        )
+                    })?;
+                if obj.version() != expected_version {
+                    return Err(ExecutionError::invariant_violation(format!("Version mismatching when resolving dynamic field to check conservation--expected {}, got {}", expected_version, obj.version())));
+                }
+                let input_sui = if do_expensive_checks {
+                    obj.get_total_sui(&self).map_err(|_e| {
+                        ExecutionError::invariant_violation(
+                            "Failed looking up output SUI in SUI conservation checking",
+                        )
+                    })?
+                } else {
+                    0
+                };
+                Ok((input_sui, obj.storage_rebate))
             } else {
-                0
-            };
-            Ok((input_sui, obj.storage_rebate))
+                let obj = self
+                    .store
+                    .get_object_by_key(id, expected_version)
+                    .map_err(|_e| {
+                        ExecutionError::invariant_violation(
+                            "Failed looking up input object in SUI conservation checking",
+                        )
+                    })?
+                    .ok_or_else(|| {
+                        ExecutionError::invariant_violation(
+                            "Failed looking up input object in SUI conservation checking",
+                        )
+                    })?;
+                let input_sui = if do_expensive_checks {
+                    obj.get_total_sui(&self).map_err(|_e| {
+                        ExecutionError::invariant_violation(
+                            "Failed looking up output SUI in SUI conservation checking",
+                        )
+                    })?
+                } else {
+                    0
+                };
+                Ok((input_sui, obj.storage_rebate))
+            }
         }
     }
 
