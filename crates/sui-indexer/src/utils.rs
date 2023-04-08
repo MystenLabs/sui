@@ -8,6 +8,7 @@ use diesel::migration::MigrationSource;
 use diesel::{PgConnection, RunQueryDsl};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use jsonrpsee::http_client::HttpClient;
+use sui_types::digests::ObjectDigest;
 use tracing::info;
 
 use sui_json_rpc::api::ReadApiClient;
@@ -131,23 +132,24 @@ pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
         }]);
     }
 
-    let all_mutated: Vec<(ObjectID, SequenceNumber)> = effects
+    let all_mutated: Vec<(ObjectID, SequenceNumber, Option<ObjectDigest>)> = effects
         .all_changed_objects()
         .into_iter()
         .map(|(owner_obj_ref, _)| {
             (
                 owner_obj_ref.reference.object_id,
                 owner_obj_ref.reference.version,
+                Some(owner_obj_ref.reference.digest),
             )
         })
         .collect();
-
-    get_balance_changes(
-        object_provider,
-        &effects.modified_at_versions(),
-        &all_mutated,
-    )
-    .await
+    // TODO: thread through input object digests here instead of passing None
+    let modified_at_versions: Vec<(ObjectID, SequenceNumber, Option<ObjectDigest>)> = effects
+        .modified_at_versions()
+        .into_iter()
+        .map(|(id, version)| (id, version, None))
+        .collect();
+    get_balance_changes(object_provider, &modified_at_versions, &all_mutated).await
 }
 
 pub async fn get_object_changes<P: ObjectProvider<Error = E>, E>(

@@ -84,6 +84,10 @@ impl IntermediateTransactionResponse {
             ..Default::default()
         }
     }
+
+    pub fn transaction(&self) -> &Option<VerifiedTransaction> {
+        &self.transaction
+    }
 }
 
 impl ReadApi {
@@ -295,11 +299,23 @@ impl ReadApi {
         if opts.show_balance_changes {
             let mut futures = vec![];
             for resp in temp_response.values() {
+                let input_objects = if let Some(tx) = resp.transaction() {
+                    tx.data()
+                        .inner()
+                        .intent_message
+                        .value
+                        .input_objects()
+                        .unwrap_or_default()
+                } else {
+                    // don't have the input tx, so not much we can do. perhaps this is an Err?
+                    Vec::new()
+                };
                 futures.push(get_balance_changes_from_effect(
                     &object_cache,
                     resp.effects.as_ref().ok_or_else(|| {
                         anyhow!("unable to derive balance changes because effect is empty")
                     })?,
+                    input_objects,
                 ));
             }
             let results = join_all(futures).await;
@@ -536,14 +552,22 @@ impl ReadApiServer for ReadApi {
         let mut temp_response = IntermediateTransactionResponse::new(digest);
 
         // Fetch transaction to determine existence
-        let transaction =
-            Some(self.state.get_executed_transaction(digest).await.tap_err(
-                |err| debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err),
-            )?);
+        let transaction = self
+            .state
+            .get_executed_transaction(digest)
+            .await
+            .tap_err(|err| debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err))?;
+        let input_objects = transaction
+            .data()
+            .inner()
+            .intent_message
+            .value
+            .input_objects()
+            .unwrap_or_default();
 
         // the input is needed for object_changes to retrieve the sender address.
         if opts.require_input() {
-            temp_response.transaction = transaction;
+            temp_response.transaction = Some(transaction);
         }
 
         // Fetch effects when `show_events` is true because events relies on effects
@@ -603,9 +627,10 @@ impl ReadApiServer for ReadApi {
         let object_cache = ObjectProviderCache::new(self.state.clone());
         if opts.show_balance_changes {
             if let Some(effects) = &temp_response.effects {
-                let balance_changes = get_balance_changes_from_effect(&object_cache, effects)
-                    .await
-                    .map_err(Error::SuiError)?;
+                let balance_changes =
+                    get_balance_changes_from_effect(&object_cache, effects, input_objects)
+                        .await
+                        .map_err(Error::SuiError)?;
                 temp_response.balance_changes = Some(balance_changes);
             }
         }
