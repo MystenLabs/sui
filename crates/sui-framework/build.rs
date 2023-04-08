@@ -63,6 +63,7 @@ fn main() {
 fn build_packages(sui_system_path: PathBuf, sui_framework_path: PathBuf, out_dir: PathBuf) {
     let config = MoveBuildConfig {
         generate_docs: true,
+        install_dir: Some(PathBuf::from(".")),
         ..Default::default()
     };
     debug_assert!(!config.test_mode);
@@ -78,6 +79,7 @@ fn build_packages(sui_system_path: PathBuf, sui_framework_path: PathBuf, out_dir
     let config = MoveBuildConfig {
         generate_docs: true,
         test_mode: true,
+        install_dir: Some(PathBuf::from(".")),
         ..Default::default()
     };
     build_packages_with_move_config(
@@ -100,19 +102,19 @@ fn build_packages_with_move_config(
     stdlib_dir: &str,
     config: MoveBuildConfig,
 ) {
-    let system_pkg = BuildConfig {
+    let framework_pkg = BuildConfig {
         config: config.clone(),
         run_bytecode_verifier: true,
         print_diags_to_stderr: false,
     }
-    .build(sui_system_path)
+    .build(sui_framework_path)
     .unwrap();
-    let framework_pkg = BuildConfig {
+    let system_pkg = BuildConfig {
         config,
         run_bytecode_verifier: true,
         print_diags_to_stderr: false,
     }
-    .build(sui_framework_path)
+    .build(sui_system_path)
     .unwrap();
 
     let sui_system = system_pkg.get_sui_system_modules();
