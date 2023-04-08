@@ -558,8 +558,6 @@ pub struct ProtocolConfig {
 
 // feature flags
 impl ProtocolConfig {
-    const CONSTANT_ERR_MSG: &str = "protocol constant not present in current protocol version";
-
     // Add checks for feature flag support here, e.g.:
     // pub fn check_new_protocol_feature_supported(&self) -> Result<(), Error> {
     //     if self.feature_flags.new_protocol_feature_supported {

@@ -70,6 +70,7 @@ pub fn getters_macro(input: TokenStream) -> TokenStream {
     let output = quote! {
         // For each getter, expand it out into a function in the impl block
         impl #struct_name {
+            const CONSTANT_ERR_MSG: &str = "protocol constant not present in current protocol version";
             #(#getters)*
         }
     };
