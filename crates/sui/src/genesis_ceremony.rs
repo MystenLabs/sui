@@ -79,6 +79,13 @@ pub enum CeremonyCommand {
 
     ListValidators,
 
+    ProofOfPossession {
+        #[clap(long)]
+        account_address: SuiAddress,
+        #[clap(long)]
+        validator_key_file: PathBuf,
+    },
+
     BuildUnsignedCheckpoint,
 
     ExamineGenesisCheckpoint,
@@ -180,6 +187,15 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             for (name, address) in validators {
                 writer.write_record([&name, &address])?;
             }
+        }
+
+        CeremonyCommand::ProofOfPossession {
+            account_address,
+            validator_key_file,
+        } => {
+            let keypair: AuthorityKeyPair = read_authority_keypair_from_file(validator_key_file)?;
+            let pop = generate_proof_of_possession(&keypair, account_address);
+            println!("{}", pop);
         }
 
         CeremonyCommand::BuildUnsignedCheckpoint => {
