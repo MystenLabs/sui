@@ -304,6 +304,19 @@ impl ObjectStore for AuthorityPerpetualTables {
             _ => Ok(None),
         }
     }
+
+    fn get_object_by_key(
+        &self,
+        object_id: &ObjectID,
+        version: VersionNumber,
+    ) -> Result<Option<Object>, SuiError> {
+        let key = ObjectKey(*object_id, version);
+        let obj_entry = self.objects.get(&key);
+        match obj_entry {
+            Ok(Some(wrapper)) => self.object(wrapper),
+            _ => Ok(None),
+        }
+    }
 }
 
 pub struct LiveSetIter<'a> {
