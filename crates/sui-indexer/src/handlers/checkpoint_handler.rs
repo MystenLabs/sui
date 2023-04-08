@@ -301,7 +301,7 @@ where
                     }
                     epoch_db_guard.stop_and_record();
                     self.metrics.total_epoch_committed.inc();
-                    info!("Epoch {} committed.", indexed_epoch.new_epoch.epoch,);
+                    info!("Epoch {} committed.", indexed_epoch.new_epoch.epoch);
                 }
             } else {
                 // sleep for 1 sec to avoid occupying the mutex, as this happens once per epoch / day
