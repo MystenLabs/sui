@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type PaginatedCoins, type CoinStruct } from '@mysten/sui.js';
+import { type CoinStruct } from '@mysten/sui.js';
 import { useState, useEffect, useRef } from 'react';
 
 import CoinItem from './CoinItem';
