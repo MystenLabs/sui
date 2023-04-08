@@ -1281,15 +1281,15 @@ WHERE e1.epoch = e2.epoch
     }
 
     async fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError> {
-        let last_epoch_cp_id = if data.last_epoch.is_none() {
-            0
-        } else {
-            self.get_current_epoch().await?.first_checkpoint_id as i64
-        };
-
-        self.partition_manager
-            .advance_epoch(&data.new_epoch, last_epoch_cp_id)
-            .await?;
+        // MUSTFIX(gegaowp): temporarily disable the epoch advance logic.
+        // let last_epoch_cp_id = if data.last_epoch.is_none() {
+        //     0
+        // } else {
+        //     self.get_current_epoch().await?.first_checkpoint_id as i64
+        // };
+        // self.partition_manager
+        //     .advance_epoch(&data.new_epoch, last_epoch_cp_id)
+        //     .await?;
 
         transactional!(&self.cp, |conn| async {
             if let Some(last_epoch) = &data.last_epoch {
