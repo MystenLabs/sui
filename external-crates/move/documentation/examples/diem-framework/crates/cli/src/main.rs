@@ -36,6 +36,7 @@ fn main() -> Result<()> {
     )
     .into_iter()
     .chain(move_stdlib::natives::nursery_natives(
+        /* silent */ false,
         CORE_CODE_ADDRESS,
         // We may want to switch to a different gas schedule in the future, but for now,
         // the all-zero one should be enough.

@@ -1380,7 +1380,7 @@ fn create_genesis_transaction(
             protocol_config,
         );
 
-        let native_functions = sui_framework::natives::all_natives();
+        let native_functions = sui_framework::natives::all_natives(/* silent */ true);
         let enable_move_vm_paranoid_checks = false;
         let move_vm = std::sync::Arc::new(
             adapter::new_move_vm(
@@ -1440,7 +1440,7 @@ fn create_genesis_objects(
     let protocol_config =
         ProtocolConfig::get_for_version(ProtocolVersion::new(parameters.protocol_version));
 
-    let native_functions = sui_framework::natives::all_natives();
+    let native_functions = sui_framework::natives::all_natives(/* silent */ true);
     // paranoid checks are a last line of defense for malicious code, no need to run them in genesis
     let enable_move_vm_paranoid_checks = false;
     let move_vm = adapter::new_move_vm(
@@ -1939,7 +1939,7 @@ mod test {
         );
 
         let enable_move_vm_paranoid_checks = false;
-        let native_functions = sui_framework::natives::all_natives();
+        let native_functions = sui_framework::natives::all_natives(/* silent */ true);
         let move_vm = std::sync::Arc::new(
             adapter::new_move_vm(
                 native_functions,

@@ -22,7 +22,7 @@ sui-types = { path = "../sui-types" }
 
 move-binary-format.workspace = true
 move-core-types.workspace = true
-move-stdlib = { workspace = true, default-features = false }
+move-stdlib.workspace = true
 move-vm-runtime.workspace = true
 move-vm-types.workspace = true
 sui-protocol-config = { path = "../sui-protocol-config" }

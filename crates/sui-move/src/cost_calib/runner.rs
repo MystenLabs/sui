@@ -62,7 +62,7 @@ pub fn run_calib_tests(
                 num_threads: 1,
                 ..config
             },
-            natives::all_natives(),
+            natives::all_natives(/* silent */ true),
             Some(initial_cost_schedule_for_unit_tests()),
             false,
             &mut test_output_buf,
