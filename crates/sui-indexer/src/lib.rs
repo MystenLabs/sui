@@ -188,7 +188,7 @@ impl Indexer {
                 build_json_rpc_server(registry, store.clone(), event_handler.clone(), config)
                     .await
                     .expect("Json rpc server should not run into errors upon start.");
-            let _rpc_res = handle.stopped().await;
+            handle.stopped().await;
             Ok(())
         } else if config.fullnode_sync_worker {
             info!("Starting indexer with only fullnode sync");
