@@ -12,8 +12,8 @@ use sui_types::storage::ObjectStore;
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::util::{empty_compaction_filter, reference_count_merge_operator};
 use typed_store::rocks::{
-    optimized_for_high_throughput_options, read_size_from_env, DBBatch, DBMap, DBOptions,
-    MetricConf, ReadWriteOptions,
+    optimized_for_high_throughput_options, read_size_from_env, with_disabled_block_cache, DBBatch,
+    DBMap, DBOptions, MetricConf, ReadWriteOptions,
 };
 use typed_store::traits::{Map, TableSummary, TypedStoreDebug};
 
@@ -405,11 +405,7 @@ fn owned_object_transaction_locks_table_default_config() -> DBOptions {
 
 fn objects_table_default_config() -> DBOptions {
     DBOptions {
-        options: optimized_for_high_throughput_options(
-            read_size_from_env(ENV_VAR_OBJECTS_BLOCK_CACHE_SIZE).unwrap_or(10 * 1024),
-            true,
-        )
-        .options,
+        options: with_disabled_block_cache().options,
         rw_options: ReadWriteOptions {
             ignore_range_deletions: true,
         },

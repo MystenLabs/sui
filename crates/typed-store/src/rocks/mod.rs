@@ -1879,6 +1879,32 @@ pub fn point_lookup_db_options() -> DBOptions {
 }
 
 /// Use it only for tables which observe high write rate and grow quickly in size
+pub fn with_disabled_block_cache() -> DBOptions {
+    let mut db_options = default_db_options();
+    db_options.options.set_write_buffer_size(128 * 1024 * 1024);
+    db_options.options.set_min_write_buffer_number_to_merge(2);
+    db_options.options.set_max_write_buffer_number(6);
+    db_options
+        .options
+        .set_level_zero_file_num_compaction_trigger(2);
+    db_options
+        .options
+        .set_target_file_size_base(64 * 1024 * 1024);
+    db_options
+        .options
+        .set_max_bytes_for_level_base(512 * 1024 * 1024);
+
+    db_options.options.set_max_background_jobs(4);
+
+    let mut block_options = BlockBasedOptions::default();
+    block_options.disable_cache();
+    db_options
+        .options
+        .set_block_based_table_factory(&block_options);
+    db_options
+}
+
+/// Use it only for tables which observe high write rate and grow quickly in size
 pub fn optimized_for_high_throughput_options(
     block_cache_size_mb: usize,
     optimize_for_point_lookup: bool,
