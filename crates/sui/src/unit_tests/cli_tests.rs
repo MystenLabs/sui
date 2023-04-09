@@ -7,6 +7,11 @@ use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
 
 use expect_test::expect;
 use serde_json::json;
+use sui_types::messages::{
+    TEST_ONLY_GAS_UNIT_FOR_GENERIC, TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
+    TEST_ONLY_GAS_UNIT_FOR_PUBLISH, TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN,
+    TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+};
 use sui_types::object::Owner;
 use tokio::time::sleep;
 
@@ -341,6 +346,7 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
 #[sim_test]
 async fn test_gas_command() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
@@ -380,7 +386,7 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
         to: SuiAddress::random_for_testing_only(),
         object_id: object_to_send,
         gas: Some(object_id),
-        gas_budget: 50000000,
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
     }
     .execute(context)
     .await?;
@@ -399,6 +405,7 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
 #[sim_test]
 async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let rgp = test_cluster.get_reference_gas_price().await;
     let address1 = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
@@ -426,7 +433,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         package_path,
         build_config,
         gas: Some(gas_obj_id),
-        gas_budget: 1_000_000_000,
+        gas_budget: TEST_ONLY_GAS_UNIT_FOR_PUBLISH * rgp,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
         serialize_output: false,
@@ -435,6 +442,11 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     .await?;
 
     let package = if let SuiClientCommandResult::Publish(response) = resp {
+        assert!(
+            response.status_ok().unwrap(),
+            "Command failed: {:?}",
+            response
+        );
         response
             .effects
             .unwrap()
@@ -503,7 +515,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         type_args: vec![],
         args,
         gas: None,
-        gas_budget: 1_000_000_000,
+        gas_budget: TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
     }
     .execute(context)
     .await?;
@@ -540,7 +552,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         type_args: vec![],
         args: args.to_vec(),
         gas: Some(gas),
-        gas_budget: 1_000_000_000,
+        gas_budget: TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
     }
     .execute(context)
     .await;
@@ -564,7 +576,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         type_args: vec![],
         args: args.to_vec(),
         gas: Some(gas),
-        gas_budget: 1_000_000_000,
+        gas_budget: TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
     }
     .execute(context)
     .await;
@@ -590,7 +602,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         type_args: vec![],
         args: args.to_vec(),
         gas: Some(gas),
-        gas_budget: 1_000_000,
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
     }
     .execute(context)
     .await?;
@@ -601,6 +613,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 #[sim_test]
 async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
@@ -632,7 +645,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
         package_path,
         build_config,
         gas: Some(gas_obj_id),
-        gas_budget: 20_000,
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
         serialize_output: false,
@@ -670,6 +683,7 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds(
     let with_unpublished_dependencies = true; // Value under test, results in successful response.
 
     let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
@@ -699,7 +713,7 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds(
         package_path,
         build_config,
         gas: Some(gas_obj_id),
-        gas_budget: 20_000,
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,
         with_unpublished_dependencies,
         serialize_output: false,
@@ -737,9 +751,9 @@ async fn test_package_publish_command_with_unpublished_dependency_fails(
     let with_unpublished_dependencies = false; // Value under test, results in error response.
 
     let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
-
     let client = context.get_client().await?;
     let object_refs = client
         .read_api()
@@ -766,7 +780,7 @@ async fn test_package_publish_command_with_unpublished_dependency_fails(
         package_path,
         build_config,
         gas: Some(gas_obj_id),
-        gas_budget: 20_000,
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,
         with_unpublished_dependencies,
         serialize_output: false,
@@ -791,6 +805,7 @@ async fn test_package_publish_command_non_zero_unpublished_dep_fails() -> Result
     let with_unpublished_dependencies = true; // Value under test, incompatible with dependencies that specify non-zero address.
 
     let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
@@ -810,7 +825,7 @@ async fn test_package_publish_command_non_zero_unpublished_dep_fails() -> Result
         package_path,
         build_config,
         gas: Some(gas_obj_id),
-        gas_budget: 20_000,
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,
         with_unpublished_dependencies,
         serialize_output: false,
@@ -834,6 +849,7 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
     let with_unpublished_dependencies = true; // Invalid packages should fail to pubilsh, even if we allow unpublished dependencies.
 
     let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
@@ -863,7 +879,7 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
         package_path,
         build_config,
         gas: Some(gas_obj_id),
-        gas_budget: 20_000,
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,
         with_unpublished_dependencies,
         serialize_output: false,
@@ -885,9 +901,9 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
 #[sim_test]
 async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
-
     let client = context.get_client().await?;
     let object_refs = client
         .read_api()
@@ -904,7 +920,7 @@ async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Err
         package_path,
         build_config,
         gas: Some(gas_obj_id),
-        gas_budget: 20_000,
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
         serialize_output: false,
@@ -928,9 +944,9 @@ async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Err
 async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
-
     let client = context.get_client().await?;
     let object_refs = client
         .read_api()
@@ -959,7 +975,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
         package_path: package_path.clone(),
         build_config,
         gas: Some(gas_obj_id),
-        gas_budget: 20_000_000,
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
         serialize_output: false,
@@ -1030,7 +1046,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
         upgrade_capability: cap.reference.object_id,
         build_config,
         gas: Some(gas_obj_id),
-        gas_budget: 20_000_000,
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
     }
@@ -1063,9 +1079,9 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
 #[sim_test]
 async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
-
     let recipient = SuiAddress::random_for_testing_only();
     let client = context.get_client().await?;
     let object_refs = client
@@ -1092,7 +1108,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
         gas: Some(gas_obj_id),
         to: recipient,
         object_id: obj_id,
-        gas_budget: 50000000,
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
     }
     .execute(context)
     .await?;
@@ -1102,6 +1118,11 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
 
     // Get the mutated objects
     let (mut_obj1, mut_obj2) = if let SuiClientCommandResult::Transfer(_, response) = resp {
+        assert!(
+            response.status_ok().unwrap(),
+            "Command failed: {:?}",
+            response
+        );
         (
             response
                 .effects
@@ -1190,7 +1211,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
         gas: None,
         to: recipient,
         object_id: obj_id,
-        gas_budget: 50000000,
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
     }
     .execute(context)
     .await?;
@@ -1443,8 +1464,10 @@ async fn get_parsed_object_assert_existence(
 #[sim_test]
 async fn test_merge_coin() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
+
     let client = context.get_client().await?;
     let object_refs = client
         .read_api()
@@ -1475,11 +1498,12 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
         primary_coin,
         coin_to_merge,
         gas: Some(gas),
-        gas_budget: 200_000_000,
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
     }
     .execute(context)
     .await?;
     let g = if let SuiClientCommandResult::MergeCoin(r) = resp {
+        assert!(r.status_ok().unwrap(), "Command failed: {:?}", r);
         let object_id = r
             .effects
             .as_ref()
@@ -1527,7 +1551,7 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
         primary_coin,
         coin_to_merge,
         gas: None,
-        gas_budget: 10_000_000,
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
     }
     .execute(context)
     .await?;
@@ -1560,6 +1584,7 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
 #[sim_test]
 async fn test_split_coin() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
     let client = context.get_client().await?;
@@ -1587,7 +1612,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     // Test with gas specified
     let resp = SuiClientCommands::SplitCoin {
         gas: Some(gas),
-        gas_budget: 200_000_000,
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN,
         coin_id: coin,
         amounts: Some(vec![1000, 10]),
         count: None,
@@ -1596,6 +1621,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     .await?;
 
     let (updated_coin, new_coins) = if let SuiClientCommandResult::SplitCoin(r) = resp {
+        assert!(r.status_ok().unwrap(), "Command failed: {:?}", r);
         let updated_object_id = r
             .effects
             .as_ref()
@@ -1652,7 +1678,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     // Test split coin into equal parts
     let resp = SuiClientCommands::SplitCoin {
         gas: None,
-        gas_budget: 200_000_000,
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN,
         coin_id: coin,
         amounts: None,
         count: Some(3),
@@ -1661,6 +1687,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     .await?;
 
     let (updated_coin, new_coins) = if let SuiClientCommandResult::SplitCoin(r) = resp {
+        assert!(r.status_ok().unwrap(), "Command failed: {:?}", r);
         let updated_object_id = r
             .effects
             .as_ref()
@@ -1720,7 +1747,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     // Test with no gas specified
     let resp = SuiClientCommands::SplitCoin {
         gas: None,
-        gas_budget: 200_000_000,
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN,
         coin_id: coin,
         amounts: Some(vec![1000, 10]),
         count: None,
@@ -1729,6 +1756,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     .await?;
 
     let (updated_coin, new_coins) = if let SuiClientCommandResult::SplitCoin(r) = resp {
+        assert!(r.status_ok().unwrap(), "Command failed: {:?}", r);
         let updated_object_id = r
             .effects
             .as_ref()
@@ -1798,6 +1826,7 @@ async fn test_execute_signed_tx() -> Result<(), anyhow::Error> {
 #[sim_test]
 async fn test_serialize_tx() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
     let address1 = test_cluster.get_address_1();
     let context = &mut test_cluster.wallet;
@@ -1822,7 +1851,7 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
     SuiClientCommands::SerializeTransferSui {
         to: address1,
         sui_coin_object_id: coin,
-        gas_budget: 1000,
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
         amount: Some(1),
     }
     .execute(context)

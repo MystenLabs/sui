@@ -73,12 +73,10 @@ impl Payload for TransferObjectTestPayload {
             self.transfer_from,
             keypair,
             self.transfer_to,
-            Some(
-                self.system_state_observer
-                    .state
-                    .borrow()
-                    .reference_gas_price,
-            ),
+            self.system_state_observer
+                .state
+                .borrow()
+                .reference_gas_price,
         )
     }
 }

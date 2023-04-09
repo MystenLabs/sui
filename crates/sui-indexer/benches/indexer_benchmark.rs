@@ -25,7 +25,7 @@ use sui_types::base_types::{ObjectDigest, ObjectID, SequenceNumber, SuiAddress};
 use sui_types::crypto::AggregateAuthoritySignature;
 use sui_types::digests::TransactionDigest;
 use sui_types::gas_coin::GasCoin;
-use sui_types::messages::TransactionData;
+use sui_types::messages::{TransactionData, TEST_ONLY_GAS_UNIT_FOR_TRANSFER};
 use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::object::Object;
 
@@ -92,6 +92,7 @@ fn create_checkpoint(sequence_number: i64) -> TemporaryCheckpointStore {
 }
 
 fn create_transaction(sequence_number: i64) -> Transaction {
+    let gas_price = 1000;
     let tx = TransactionData::new_pay_sui(
         SuiAddress::random_for_testing_only(),
         vec![],
@@ -102,8 +103,8 @@ fn create_transaction(sequence_number: i64) -> Transaction {
             SequenceNumber::new(),
             ObjectDigest::random(),
         ),
-        100000,
-        10000,
+        gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        gas_price,
     )
     .unwrap();
 

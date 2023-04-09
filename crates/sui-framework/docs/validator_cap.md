@@ -13,9 +13,9 @@
 -  [Function `new_from_unverified`](#0x3_validator_cap_new_from_unverified)
 
 
-<pre><code><b>use</b> <a href="">0x2::object</a>;
-<b>use</b> <a href="">0x2::transfer</a>;
-<b>use</b> <a href="">0x2::tx_context</a>;
+<pre><code><b>use</b> <a href="../../../build/Sui/docs/object.md#0x2_object">0x2::object</a>;
+<b>use</b> <a href="../../../build/Sui/docs/transfer.md#0x2_transfer">0x2::transfer</a>;
+<b>use</b> <a href="../../../build/Sui/docs/tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 </code></pre>
 
 
@@ -47,7 +47,7 @@ the cap object is still valid.
 
 <dl>
 <dt>
-<code>id: <a href="_UID">object::UID</a></code>
+<code>id: <a href="../../../build/Sui/docs/object.md#0x2_object_UID">object::UID</a></code>
 </dt>
 <dd>
 
@@ -148,7 +148,7 @@ Should be only called by the friend modules when adding a <code>Validator</code>
 or rotating an existing validaotr's <code>operation_cap_id</code>.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_cap.md#0x3_validator_cap_new_unverified_validator_operation_cap_and_transfer">new_unverified_validator_operation_cap_and_transfer</a>(validator_address: <b>address</b>, ctx: &<b>mut</b> <a href="_TxContext">tx_context::TxContext</a>): <a href="_ID">object::ID</a>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_cap.md#0x3_validator_cap_new_unverified_validator_operation_cap_and_transfer">new_unverified_validator_operation_cap_and_transfer</a>(validator_address: <b>address</b>, ctx: &<b>mut</b> <a href="../../../build/Sui/docs/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../../../build/Sui/docs/object.md#0x2_object_ID">object::ID</a>
 </code></pre>
 
 
@@ -164,15 +164,15 @@ or rotating an existing validaotr's <code>operation_cap_id</code>.
     // This function needs <b>to</b> be called only by the <a href="validator.md#0x3_validator">validator</a> itself, <b>except</b>
     // 1. in <a href="genesis.md#0x3_genesis">genesis</a> <b>where</b> all valdiators are created by @0x0
     // 2. in tests <b>where</b> @0x0 could be used <b>to</b> simplify the setup
-    <b>let</b> sender_address = <a href="_sender">tx_context::sender</a>(ctx);
+    <b>let</b> sender_address = <a href="../../../build/Sui/docs/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
     <b>assert</b>!(sender_address == @0x0 || sender_address == validator_address, 0);
 
     <b>let</b> operation_cap = <a href="validator_cap.md#0x3_validator_cap_UnverifiedValidatorOperationCap">UnverifiedValidatorOperationCap</a> {
-        id: <a href="_new">object::new</a>(ctx),
+        id: <a href="../../../build/Sui/docs/object.md#0x2_object_new">object::new</a>(ctx),
         authorizer_validator_address: validator_address,
     };
-    <b>let</b> operation_cap_id = <a href="_id">object::id</a>(&operation_cap);
-    <a href="_public_transfer">transfer::public_transfer</a>(operation_cap, validator_address);
+    <b>let</b> operation_cap_id = <a href="../../../build/Sui/docs/object.md#0x2_object_id">object::id</a>(&operation_cap);
+    <a href="../../../build/Sui/docs/transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(operation_cap, validator_address);
     operation_cap_id
 }
 </code></pre>

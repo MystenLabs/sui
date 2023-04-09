@@ -86,7 +86,10 @@ impl WriteAheadLog {
 
 #[cfg(test)]
 mod tests {
-    use sui_types::base_types::{random_object_ref, ObjectRef};
+    use sui_types::{
+        base_types::{random_object_ref, ObjectRef},
+        messages::TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+    };
 
     use super::*;
 
@@ -188,17 +191,19 @@ mod tests {
     }
 
     fn random_request(coin: ObjectRef) -> (SuiAddress, TransactionData) {
+        let gas_price = 1;
         let send = SuiAddress::random_for_testing_only();
         let recv = SuiAddress::random_for_testing_only();
         (
             recv,
-            TransactionData::new_pay_sui_with_dummy_gas_price(
+            TransactionData::new_pay_sui(
                 send,
                 vec![coin],
                 vec![recv],
                 vec![1000],
                 coin,
-                1000,
+                gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+                gas_price,
             )
             .unwrap(),
         )

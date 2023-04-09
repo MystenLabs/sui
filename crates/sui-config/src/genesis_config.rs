@@ -16,9 +16,11 @@ use sui_types::crypto::{
 };
 
 use crate::genesis::{GenesisCeremonyParameters, TokenAllocation};
-use crate::node::DEFAULT_GRPC_CONCURRENCY_LIMIT;
+use crate::node::{
+    DEFAULT_COMMISSION_RATE, DEFAULT_GRPC_CONCURRENCY_LIMIT, DEFAULT_VALIDATOR_GAS_PRICE,
+};
+use crate::utils;
 use crate::Config;
-use crate::{utils, DEFAULT_COMMISSION_RATE, DEFAULT_GAS_PRICE};
 
 // All information needed to build a NodeConfig for a validator.
 #[derive(Serialize, Deserialize)]
@@ -137,7 +139,7 @@ impl ValidatorGenesisInfo {
             p2p_listen_address: None,
             metrics_address: utils::available_local_socket_address(),
             narwhal_metrics_address: utils::new_tcp_network_address(),
-            gas_price: DEFAULT_GAS_PRICE,
+            gas_price: DEFAULT_VALIDATOR_GAS_PRICE,
             commission_rate: DEFAULT_COMMISSION_RATE,
             narwhal_primary_address: utils::new_udp_network_address(),
             narwhal_worker_address: utils::new_udp_network_address(),
@@ -180,7 +182,7 @@ impl ValidatorGenesisInfo {
             narwhal_metrics_address: make_tcp_zero_addr(
                 Self::DEFAULT_NARWHAL_METRICS_PORT + port_offset,
             ),
-            gas_price: DEFAULT_GAS_PRICE,
+            gas_price: DEFAULT_VALIDATOR_GAS_PRICE,
             commission_rate: DEFAULT_COMMISSION_RATE,
             narwhal_primary_address: make_udp_addr(
                 Self::DEFAULT_NARWHAL_PRIMARY_PORT + port_offset,

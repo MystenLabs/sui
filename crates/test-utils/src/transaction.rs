@@ -3,18 +3,17 @@
 
 use move_core_types::language_storage::StructTag;
 use serde_json::json;
+use shared_crypto::intent::Intent;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use sui_types::multiaddr::Multiaddr;
-use tracing::{debug, info};
-
-use shared_crypto::intent::Intent;
 use sui::client_commands::WalletContext;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_core::authority_client::AuthorityAPI;
 pub use sui_core::test_utils::{
     compile_basics_package, compile_nfts_package, wait_for_all_txes, wait_for_tx,
 };
+use sui_json_rpc_types::SuiData;
+use sui_json_rpc_types::SuiObjectResponse;
 use sui_json_rpc_types::{
     ObjectChange, SuiObjectDataOptions, SuiObjectResponseQuery, SuiTransactionBlockDataAPI,
     SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
@@ -27,33 +26,43 @@ use sui_types::committee::Committee;
 use sui_types::crypto::{deterministic_random_account_key, AuthorityKeyPair};
 use sui_types::error::SuiResult;
 use sui_types::message_envelope::Message;
+use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_GENERIC;
+use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_PUBLISH;
+use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN;
+use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_TRANSFER;
+
 use sui_types::messages::{
     CallArg, ObjectArg, ObjectInfoRequest, ObjectInfoResponse, Transaction, TransactionData,
     TransactionEffects, TransactionEffectsAPI, TransactionEvents, VerifiedTransaction,
 };
 use sui_types::messages::{ExecuteTransactionRequestType, HandleCertificateResponse};
 use sui_types::move_package::UpgradePolicy;
+use sui_types::multiaddr::Multiaddr;
 use sui_types::object::{Object, Owner};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::SUI_FRAMEWORK_OBJECT_ID;
+use tracing::{debug, info};
 
 use crate::authority::get_client;
 use crate::messages::{
     create_publish_move_package_transaction, get_account_and_gas_coins,
     get_gas_object_with_wallet_context, make_tx_certs_and_signed_effects,
-    make_tx_certs_and_signed_effects_with_committee, MAX_GAS,
+    make_tx_certs_and_signed_effects_with_committee,
 };
 
-const GAS_BUDGET_IN_UNIT: u64 = 200_000_000;
-
-pub fn make_publish_package(gas_object: Object, path: PathBuf) -> VerifiedTransaction {
+pub fn make_publish_package(
+    gas_object: Object,
+    path: PathBuf,
+    gas_price: u64,
+) -> VerifiedTransaction {
     let (sender, keypair) = deterministic_random_account_key();
     create_publish_move_package_transaction(
         gas_object.compute_object_reference(),
         path,
         sender,
         &keypair,
-        None,
+        gas_price * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        gas_price,
     )
 }
 
@@ -61,8 +70,10 @@ pub async fn publish_package(
     gas_object: Object,
     path: PathBuf,
     net_addresses: &[Multiaddr],
+    gas_price: u64,
 ) -> ObjectRef {
-    let (effects, _) = publish_package_for_effects(gas_object, path, net_addresses).await;
+    let (effects, _) =
+        publish_package_for_effects(gas_object, path, net_addresses, gas_price).await;
     parse_package_ref(effects.created()).unwrap()
 }
 
@@ -70,15 +81,24 @@ pub async fn publish_package_for_effects(
     gas_object: Object,
     path: PathBuf,
     net_addresses: &[Multiaddr],
+    gas_price: u64,
 ) -> (TransactionEffects, TransactionEvents) {
-    submit_single_owner_transaction(make_publish_package(gas_object, path), net_addresses).await
+    submit_single_owner_transaction(
+        make_publish_package(gas_object, path, gas_price),
+        net_addresses,
+    )
+    .await
 }
 
 /// Helper function to publish the move package of a simple shared counter.
-pub async fn publish_counter_package(gas_object: Object, net_addresses: &[Multiaddr]) -> ObjectRef {
+pub async fn publish_counter_package(
+    gas_object: Object,
+    net_addresses: &[Multiaddr],
+    gas_price: u64,
+) -> ObjectRef {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("../../sui_programmability/examples/basics");
-    publish_package(gas_object, path, net_addresses).await
+    publish_package(gas_object, path, net_addresses, gas_price).await
 }
 
 /// Helper function to publish example package.
@@ -87,10 +107,9 @@ pub async fn publish_counter_package(gas_object: Object, net_addresses: &[Multia
 /// * `sender` - If not provided, the active address from the wallet context will be used.
 pub async fn publish_nfts_package(
     context: &mut WalletContext,
-    sender: Option<SuiAddress>,
-) -> (ObjectID, TransactionDigest) {
+) -> (ObjectID, ObjectID, ObjectID, TransactionDigest) {
     let package = compile_nfts_package();
-    let sender = sender.unwrap_or_else(|| context.active_address().unwrap());
+    let sender = context.active_address().unwrap();
     let result = publish_package_with_wallet(
         context,
         sender,
@@ -98,8 +117,9 @@ pub async fn publish_nfts_package(
         package.get_dependency_original_package_ids(),
     )
     .await;
-    (result.0 .0, result.2)
+    (result.0 .0, result.1 .0, result.2 .0, result.3)
 }
+
 /// Helper function to publish basic package.
 pub async fn publish_basics_package(context: &WalletContext, sender: SuiAddress) -> ObjectRef {
     let package = compile_basics_package();
@@ -119,12 +139,19 @@ pub async fn publish_package_with_wallet(
     sender: SuiAddress,
     all_module_bytes: Vec<Vec<u8>>,
     dep_ids: Vec<ObjectID>,
-) -> (ObjectRef, ObjectRef, TransactionDigest) {
+) -> (ObjectRef, ObjectRef, ObjectRef, TransactionDigest) {
     let client = context.get_client().await.unwrap();
+    let gas_price = context.get_reference_gas_price().await.unwrap();
     let transaction = {
         let data = client
             .transaction_builder()
-            .publish(sender, all_module_bytes, dep_ids, None, GAS_BUDGET_IN_UNIT)
+            .publish(
+                sender,
+                all_module_bytes,
+                dep_ids,
+                None,
+                TEST_ONLY_GAS_UNIT_FOR_GENERIC * gas_price,
+            )
             .await
             .unwrap();
 
@@ -147,13 +174,29 @@ pub async fn publish_package_with_wallet(
         )
         .await
         .unwrap();
-
     assert!(resp.confirmed_local_execution.unwrap());
     let changes = resp.object_changes.unwrap();
     (
         changes
             .iter()
             .find(|change| matches!(change, ObjectChange::Published { .. }))
+            .unwrap()
+            .object_ref(),
+        // this is the gas
+        changes
+            .iter()
+            .find(|change| {
+                matches!(change, ObjectChange::Mutated {
+                    owner: Owner::AddressOwner(_),
+                    object_type: StructTag {
+                        address: SUI_FRAMEWORK_ADDRESS,
+                        module,
+                        name,
+                        ..
+                    },
+                    ..
+                } if module.as_str() == "coin" && name.as_str() == "Coin")
+            })
             .unwrap()
             .object_ref(),
         changes
@@ -199,7 +242,7 @@ pub async fn upgrade_package_with_wallet(
                 UpgradePolicy::COMPATIBLE,
                 digest,
                 None,
-                GAS_BUDGET_IN_UNIT * gas_price,
+                TEST_ONLY_GAS_UNIT_FOR_PUBLISH * 2 * gas_price,
             )
             .await
             .unwrap();
@@ -248,6 +291,7 @@ pub async fn submit_move_transaction(
 ) -> SuiTransactionBlockResponse {
     debug!(?package_id, ?arguments, "move_transaction");
     let client = context.get_client().await.unwrap();
+    let gas_price = context.get_reference_gas_price().await.unwrap();
     let data = client
         .transaction_builder()
         .move_call(
@@ -258,7 +302,7 @@ pub async fn submit_move_transaction(
             vec![], // type_args
             arguments,
             gas_object,
-            GAS_BUDGET_IN_UNIT,
+            TEST_ONLY_GAS_UNIT_FOR_GENERIC * gas_price,
         )
         .await
         .unwrap();
@@ -366,7 +410,7 @@ pub async fn create_devnet_nft(
         type_args: vec![],
         args,
         gas: Some(*gas_object),
-        gas_budget: GAS_BUDGET_IN_UNIT * gas_price,
+        gas_budget: TEST_ONLY_GAS_UNIT_FOR_GENERIC * gas_price,
     }
     .execute(context)
     .await?;
@@ -413,7 +457,7 @@ pub async fn transfer_sui(
         to: receiver,
         amount: None,
         sui_coin_object_id: gas_ref.0,
-        gas_budget: GAS_BUDGET_IN_UNIT * gas_price,
+        gas_budget: TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
     }
     .execute(context)
     .await?;
@@ -444,23 +488,34 @@ pub async fn transfer_coin(
     let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
     let receiver = context.config.keystore.addresses().get(1).cloned().unwrap();
     let client = context.get_client().await.unwrap();
-    let object_refs = client
+    let object_refs: Vec<SuiObjectResponse> = client
         .read_api()
         .get_owned_objects(
             sender,
             Some(SuiObjectResponseQuery::new_with_options(
-                SuiObjectDataOptions::full_content(),
+                SuiObjectDataOptions::full_content().with_bcs(),
             )),
             None,
             None,
         )
-        .await?;
-    let object_to_send = object_refs
+        .await?
+        .data;
+    let object_to_send: ObjectID = object_refs
+        .iter()
+        .find(|resp| {
+            resp.data
+                .as_ref()
+                .unwrap()
+                .bcs
+                .as_ref()
+                .unwrap()
+                .try_as_move()
+                .map(|m| m.has_public_transfer)
+                .unwrap_or(false)
+        })
+        .unwrap()
         .data
-        .get(1)
-        .expect("REASON")
-        .clone()
-        .into_object()
+        .as_ref()
         .unwrap()
         .object_id;
 
@@ -473,13 +528,15 @@ pub async fn transfer_coin(
         to: receiver,
         object_id: object_to_send,
         gas: None,
-        gas_budget: GAS_BUDGET_IN_UNIT * gas_price,
+        gas_budget: TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
     }
     .execute(context)
     .await?;
 
     let (digest, gas, gas_used) = if let SuiClientCommandResult::Transfer(_, response) = res {
-        let gas_used = response.effects.as_ref().unwrap().gas_cost_summary();
+        let effects = response.effects.unwrap();
+        assert!(effects.status().is_ok());
+        let gas_used = effects.gas_cost_summary();
         (
             response.digest,
             response
@@ -512,7 +569,7 @@ pub async fn split_coin_with_wallet_context(context: &mut WalletContext, coin_id
         amounts: None,
         count: Some(2),
         gas: None,
-        gas_budget: GAS_BUDGET_IN_UNIT * gas_price,
+        gas_budget: TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN * gas_price,
     }
     .execute(context)
     .await
@@ -528,7 +585,8 @@ pub async fn delete_devnet_nft(
     let gas = get_gas_object_with_wallet_context(context, sender)
         .await
         .unwrap_or_else(|| panic!("Expect {sender} to have at least one gas object"));
-    let data = TransactionData::new_move_call_with_dummy_gas_price(
+    let rgp = context.get_reference_gas_price().await.unwrap();
+    let data = TransactionData::new_move_call(
         *sender,
         nfts_package,
         "devnet_nft".parse().unwrap(),
@@ -536,7 +594,8 @@ pub async fn delete_devnet_nft(
         Vec::new(),
         gas,
         vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(nft_to_delete))],
-        MAX_GAS,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp,
     )
     .unwrap();
 

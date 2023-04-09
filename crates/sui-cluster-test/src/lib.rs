@@ -19,7 +19,7 @@ use sui_json_rpc_types::{
 use sui_types::base_types::TransactionDigest;
 use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::object::Owner;
-use test_utils::messages::make_transactions_with_wallet_context_and_budget;
+use test_utils::messages::make_transactions_with_wallet_context;
 
 use shared_crypto::intent::Intent;
 use sui_sdk::SuiClient;
@@ -109,17 +109,8 @@ impl TestContext {
 
     /// See `make_transactions_with_wallet_context` for potential caveats
     /// of this helper function.
-    pub async fn make_transactions(
-        &mut self,
-        max_txn_num: usize,
-        gas_budget: u64,
-    ) -> Vec<VerifiedTransaction> {
-        make_transactions_with_wallet_context_and_budget(
-            self.get_wallet_mut(),
-            max_txn_num,
-            gas_budget,
-        )
-        .await
+    pub async fn make_transactions(&mut self, max_txn_num: usize) -> Vec<VerifiedTransaction> {
+        make_transactions_with_wallet_context(self.get_wallet_mut(), max_txn_num).await
     }
 
     pub async fn build_transaction_remotely(

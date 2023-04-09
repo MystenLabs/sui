@@ -25,6 +25,12 @@ async fn basic_checkpoints_integration_test() {
     let authorities = spawn_test_authorities(&configs).await;
     let registry = Registry::new();
 
+    let rgp = authorities
+        .get(0)
+        .unwrap()
+        .with(|sui_node| sui_node.state().reference_gas_price_for_testing())
+        .unwrap();
+
     // gas1 transaction is committed
     let tx = make_transfer_sui_transaction(
         gas1.compute_object_reference(),
@@ -32,7 +38,7 @@ async fn basic_checkpoints_integration_test() {
         None,
         sender,
         &keypair,
-        None,
+        rgp,
     );
     let net = AuthorityAggregator::new_from_local_system_state(
         &authorities[0].with(|node| node.state().db()),

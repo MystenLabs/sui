@@ -39,12 +39,10 @@ use sui_types::event::EventID;
 use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::ObjectArg;
-use sui_types::messages::{
-    CallArg, ExecuteTransactionRequestType, TransactionData, TransactionKind,
-};
+use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_TRANSFER;
+use sui_types::messages::{CallArg, ExecuteTransactionRequestType, TransactionData};
 use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::object::Owner;
-use sui_types::object::MAX_GAS_BUDGET_FOR_TESTING;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::query::TransactionFilter;
 use sui_types::signature::GenericSignature;
@@ -145,15 +143,17 @@ impl RpcExampleProvider {
                 .unwrap();
             builder.finish()
         };
-        let data = TransactionData::new_with_dummy_gas_price(
-            TransactionKind::programmable(pt),
+        let gas_price = 10;
+        let data = TransactionData::new_programmable(
             signer,
-            (
+            vec![(
                 gas_id,
                 SequenceNumber::from_u64(1),
                 ObjectDigest::new(self.rng.gen()),
-            ),
-            1000,
+            )],
+            pt,
+            TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
+            gas_price,
         );
 
         let result = TransactionBlockBytes::from_data(data).unwrap();
@@ -455,12 +455,13 @@ impl RpcExampleProvider {
             ObjectDigest::new(self.rng.gen()),
         );
 
-        let data = TransactionData::new_transfer_with_dummy_gas_price(
+        let data = TransactionData::new_transfer(
             recipient,
             object_ref,
             signer,
             gas_ref,
-            MAX_GAS_BUDGET_FOR_TESTING,
+            TEST_ONLY_GAS_UNIT_FOR_TRANSFER * 10,
+            10,
         );
         let data1 = data.clone();
         let data2 = data.clone();
