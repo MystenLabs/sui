@@ -86,6 +86,9 @@ jobs:
         run: |
           pip install pyopenssl --upgrade
           if [ -f narwhal/benchmark/requirements.txt ]; then pip install -r narwhal/benchmark/requirements.txt; fi
+      - name: External crates tests
+        run: |
+          cargo xtest
       - name: cargo test
         run: |
           cargo nextest run --profile ci
