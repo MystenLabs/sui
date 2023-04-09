@@ -47,9 +47,10 @@ use crate::types::{CheckpointTransactionBlockResponse, TemporaryTransactionBlock
 use crate::utils::multi_get_full_transactions;
 use crate::IndexerConfig;
 
+const MAX_PARALLEL_DOWNLOADS: usize = 10;
 const DOWNLOAD_RETRY_INTERVAL_IN_SECS: u64 = 10;
 const DB_COMMIT_RETRY_INTERVAL_IN_MILLIS: u64 = 100;
-const MULTI_GET_CHUNK_SIZE: usize = 500;
+const MULTI_GET_CHUNK_SIZE: usize = 200;
 const CHECKPOINT_QUEUE_LIMIT: usize = 10;
 const EPOCH_QUEUE_LIMIT: usize = 2;
 
@@ -153,70 +154,105 @@ where
             info!("Resuming from checkpoint {last_seq_from_db}");
         }
         let mut next_cursor_sequence_number = last_seq_from_db + 1;
-
+        // NOTE: we will download checkpoints in parallel, but we will commit them sequentially.
+        // We will start with MAX_PARALLEL_DOWNLOADS, and adjust if no more checkpoints are available.
+        let mut current_parallel_downloads = MAX_PARALLEL_DOWNLOADS;
         loop {
-            // Download checkpoint data
-            self.metrics.total_checkpoint_requested.inc();
-            let checkpoint = self
-                .download_checkpoint_data(next_cursor_sequence_number as u64)
-                .await.map_err(|e| {
-                    error!(
-                        "Failed to download checkpoint data with checkpoint sequence number {} and error {:?}, retrying...",
-                        next_cursor_sequence_number, e
-                    );
-                    e
-                })?;
-            self.metrics.total_checkpoint_received.inc();
+            let download_futures = (next_cursor_sequence_number
+                ..next_cursor_sequence_number + current_parallel_downloads as i64)
+                .into_iter()
+                .map(|seq_num| {
+                    self.download_checkpoint_data(seq_num as u64)
+                });
+            let download_results = join_all(download_futures).await;
+            let mut downloaded_checkpoints = vec![];
+            // NOTE: Push sequentially and if one of the downloads failed,
+            // we will discard all following checkpoints and retry, to avoid messing up the DB commit order.
+            for download_result in download_results {
+                if let Ok(checkpoint) = download_result {
+                    downloaded_checkpoints.push(checkpoint);
+                } else {
+                    break;
+                }
+            }
+
+            next_cursor_sequence_number += downloaded_checkpoints.len() as i64;
+            // NOTE: with this line, we can make sure that:
+            // - when indexer is way behind and catching up, we download MAX_PARALLEL_DOWNLOADS checkpoints in parallel;
+            // - when indexer is up to date, we download at least one checkpoint at a time.
+            current_parallel_downloads =
+                std::cmp::min(downloaded_checkpoints.len() + 1, MAX_PARALLEL_DOWNLOADS);
+            if downloaded_checkpoints.is_empty() {
+                continue;
+            }
 
             // Index checkpoint data
             let index_guard = self.metrics.checkpoint_index_latency.start_timer();
-            let (indexed_checkpoint, indexed_epoch) = self.index_checkpoint(&checkpoint)?;
+            let indexed_checkpoint_epoch_vec = downloaded_checkpoints
+                .iter()
+                .map(|downloaded_checkpoint| self.index_checkpoint(&downloaded_checkpoint))
+                .collect::<Result<Vec<_>, IndexerError>>()
+                .map_err(|e| {
+                    error!(
+                        "Failed to index checkpoints {:?} with error: {}",
+                        downloaded_checkpoints,
+                        e.to_string()
+                    );
+                    e
+                })?;
+            let (indexed_checkpoints, indexed_epochs): (Vec<_>, Vec<_>) =
+                indexed_checkpoint_epoch_vec.into_iter().unzip();
             index_guard.stop_and_record();
 
             let checkpoint_sender_guard = self.checkpoint_sender.lock().await;
             // NOTE: when the channel is full, checkpoint_sender_guard will wait until the channel has space.
-            checkpoint_sender_guard
+            // Also add new checkpoint sequentially to stick to checkpoint order.
+            for indexed_checkpoint in indexed_checkpoints {
+                checkpoint_sender_guard
                 .send(indexed_checkpoint)
                 .await
                 .map_err(|e| {
                     error!("Failed to send indexed checkpoint to checkpoint commit handler with error: {}", e.to_string());
                     IndexerError::MpscChannelError(e.to_string())
                 })?;
+            }
             drop(checkpoint_sender_guard);
 
-            if let Some(epoch) = indexed_epoch {
-                // for the first epoch, we need to store the epoch data first,
-                // otherwise send it to channel to be committed later.
-                if epoch.last_epoch.is_none() {
-                    let epoch_db_guard = self.metrics.epoch_db_commit_latency.start_timer();
-                    self.state.persist_epoch(&epoch).await?;
-                    epoch_db_guard.stop_and_record();
-                    self.metrics.total_epoch_committed.inc();
-                } else {
-                    let epoch_sender_guard = self.epoch_sender.lock().await;
-                    // NOTE: when the channel is full, epoch_sender_guard will wait until the channel has space.
-                    epoch_sender_guard.send(epoch).await.map_err(|e| {
-                        error!(
-                            "Failed to send indexed epoch to epoch commit handler with error {}",
-                            e.to_string()
-                        );
-                        IndexerError::MpscChannelError(e.to_string())
-                    })?;
-                    drop(epoch_sender_guard);
+            for indexed_epoch in indexed_epochs {
+                if let Some(epoch) = indexed_epoch {
+                    // for the first epoch, we need to store the epoch data first,
+                    // otherwise send it to channel to be committed later.
+                    if epoch.last_epoch.is_none() {
+                        let epoch_db_guard = self.metrics.epoch_db_commit_latency.start_timer();
+                        self.state.persist_epoch(&epoch).await?;
+                        epoch_db_guard.stop_and_record();
+                        self.metrics.total_epoch_committed.inc();
+                    } else {
+                        let epoch_sender_guard = self.epoch_sender.lock().await;
+                        // NOTE: when the channel is full, epoch_sender_guard will wait until the channel has space.
+                        epoch_sender_guard.send(epoch).await.map_err(|e| {
+                            error!(
+                                "Failed to send indexed epoch to epoch commit handler with error {}",
+                                e.to_string()
+                            );
+                            IndexerError::MpscChannelError(e.to_string())
+                        })?;
+                        drop(epoch_sender_guard);
+                    }
                 }
             }
 
             // NOTE(gegaowp): today ws processing actually will block next checkpoint download,
             // we can pipeline this as well in the future if needed
-            let ws_guard = self.metrics.subscription_process_latency.start_timer();
-            for tx in &checkpoint.transactions {
-                self.event_handler
-                    .process_events(&tx.effects, &tx.events)
-                    .await?;
+            for checkpoint in &downloaded_checkpoints {
+                let ws_guard = self.metrics.subscription_process_latency.start_timer();
+                for tx in &checkpoint.transactions {
+                    self.event_handler
+                        .process_events(&tx.effects, &tx.events)
+                        .await?;
+                }
+                ws_guard.stop_and_record();
             }
-            ws_guard.stop_and_record();
-
-            next_cursor_sequence_number += 1;
         }
     }
 

@@ -16,7 +16,6 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
 
 #[derive(Clone)]
 pub struct IndexerCheckpointHandlerMetrics {
-    pub total_checkpoint_requested: IntCounter,
     pub total_checkpoint_received: IntCounter,
     pub total_checkpoint_committed: IntCounter,
     pub total_transaction_committed: IntCounter,
@@ -38,12 +37,6 @@ pub struct IndexerCheckpointHandlerMetrics {
 impl IndexerCheckpointHandlerMetrics {
     pub fn new(registry: &Registry) -> Self {
         Self {
-            total_checkpoint_requested: register_int_counter_with_registry!(
-                "total_checkpoint_requested",
-                "Total number of checkpoint requested",
-                registry,
-            )
-            .unwrap(),
             total_checkpoint_received: register_int_counter_with_registry!(
                 "total_checkpoint_received",
                 "Total number of checkpoint received",
