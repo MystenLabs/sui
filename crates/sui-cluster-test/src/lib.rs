@@ -107,14 +107,6 @@ impl TestContext {
         self.client.get_wallet_address()
     }
 
-    async fn get_reference_gas_price(&self) -> u64 {
-        self.get_fullnode_client()
-            .governance_api()
-            .get_reference_gas_price()
-            .await
-            .expect("failed to get reference gas price")
-    }
-
     /// See `make_transactions_with_wallet_context` for potential caveats
     /// of this helper function.
     pub async fn make_transactions(

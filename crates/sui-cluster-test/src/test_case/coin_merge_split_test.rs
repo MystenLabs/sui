@@ -119,13 +119,12 @@ impl CoinMergeSplitTest {
         coin_to_merge: ObjectID,
         gas_obj_id: ObjectID,
     ) -> SuiTransactionBlockResponse {
-        let gas_price = ctx.get_reference_gas_price().await;
         let params = rpc_params![
             signer,
             primary_coin,
             coin_to_merge,
             Some(gas_obj_id),
-            (2_000_000 * gas_price).to_string()
+            (20_000_000).to_string()
         ];
 
         let data = ctx
@@ -143,13 +142,12 @@ impl CoinMergeSplitTest {
         amounts: Vec<BigInt<u64>>,
         gas_obj_id: ObjectID,
     ) -> SuiTransactionBlockResponse {
-        let gas_price = ctx.get_reference_gas_price().await;
         let params = rpc_params![
             signer,
             primary_coin,
             amounts,
             Some(gas_obj_id),
-            (2_000_000 * gas_price).to_string()
+            (20_000_000).to_string()
         ];
 
         let data = ctx
