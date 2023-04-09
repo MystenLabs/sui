@@ -1685,7 +1685,7 @@ fn convert_number_to_string(value: Value) -> Value {
     }
 }
 
-// TODOD(chris): only print out the full response when `--verbose` is provided
+// TODO(chris): only print out the full response when `--verbose` is provided
 pub fn write_transaction_response(
     response: &SuiTransactionBlockResponse,
 ) -> Result<String, fmt::Error> {

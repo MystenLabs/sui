@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::crypto::Signer;
+use crate::messages::TEST_ONLY_GAS_UNIT_FOR_TRANSFER;
 use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use crate::{
     base_types::{dbg_addr, ExecutionDigests, ObjectID},
@@ -60,11 +61,12 @@ pub fn create_fake_transaction() -> VerifiedTransaction {
         builder.transfer_sui(recipient, None);
         builder.finish()
     };
-    let data = TransactionData::new_programmable_with_dummy_gas_price(
+    let data = TransactionData::new_programmable(
         sender,
         vec![object.compute_object_reference()],
         pt,
-        10000,
+        TEST_ONLY_GAS_UNIT_FOR_TRANSFER, // gas price is 1
+        1,
     );
     to_sender_signed_transaction(data, &sender_key)
 }

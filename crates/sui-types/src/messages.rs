@@ -50,8 +50,15 @@ use tap::Pipe;
 use thiserror::Error;
 use tracing::trace;
 
-// TODO: use RGP instead.
-pub const DUMMY_GAS_PRICE: u64 = 1;
+pub const TEST_ONLY_GAS_UNIT_FOR_TRANSFER: u64 = 2_000_000;
+pub const TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS: u64 = 10_000_000;
+pub const TEST_ONLY_GAS_UNIT_FOR_PUBLISH: u64 = 25_000_000;
+pub const TEST_ONLY_GAS_UNIT_FOR_STAKING: u64 = 10_000_000;
+pub const TEST_ONLY_GAS_UNIT_FOR_GENERIC: u64 = 5_000_000;
+pub const TEST_ONLY_GAS_UNIT_FOR_VALIDATOR: u64 = 25_000_000;
+pub const TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN: u64 = 1_000_000;
+
+pub const GAS_PRICE_FOR_SYSTEM_TX: u64 = 1;
 
 const BLOCKED_MOVE_FUNCTIONS: [(ObjectID, &str, &str); 0] = [];
 
@@ -1024,34 +1031,15 @@ pub struct TransactionDataV1 {
 }
 
 impl TransactionData {
-    pub fn new_with_dummy_gas_price(
-        kind: TransactionKind,
-        sender: SuiAddress,
-        gas_payment: ObjectRef,
-        gas_budget: u64,
-    ) -> Self {
-        TransactionData::V1(TransactionDataV1 {
-            kind,
-            sender,
-            gas_data: GasData {
-                price: DUMMY_GAS_PRICE,
-                owner: sender,
-                payment: vec![gas_payment],
-                budget: gas_budget,
-            },
-            expiration: TransactionExpiration::None,
-        })
-    }
-
     pub fn new_system_transaction(kind: TransactionKind) -> Self {
-        // assert transaction kind if a system transaction?
-        // assert!(kind.is_system_tx());
+        // assert transaction kind if a system transaction
+        assert!(kind.is_system_tx());
         let sender = SuiAddress::default();
         TransactionData::V1(TransactionDataV1 {
             kind,
             sender,
             gas_data: GasData {
-                price: DUMMY_GAS_PRICE,
+                price: GAS_PRICE_FOR_SYSTEM_TX,
                 owner: sender,
                 payment: vec![(ObjectID::ZERO, SequenceNumber::default(), ObjectDigest::MIN)],
                 budget: 0,
@@ -1109,29 +1097,6 @@ impl TransactionData {
         })
     }
 
-    pub fn new_move_call_with_dummy_gas_price(
-        sender: SuiAddress,
-        package: ObjectID,
-        module: Identifier,
-        function: Identifier,
-        type_arguments: Vec<TypeTag>,
-        gas_payment: ObjectRef,
-        arguments: Vec<CallArg>,
-        gas_budget: u64,
-    ) -> anyhow::Result<Self> {
-        Self::new_move_call(
-            sender,
-            package,
-            module,
-            function,
-            type_arguments,
-            gas_payment,
-            arguments,
-            gas_budget,
-            DUMMY_GAS_PRICE,
-        )
-    }
-
     pub fn new_move_call(
         sender: SuiAddress,
         package: ObjectID,
@@ -1143,18 +1108,17 @@ impl TransactionData {
         gas_budget: u64,
         gas_price: u64,
     ) -> anyhow::Result<Self> {
-        let pt = {
-            let mut builder = ProgrammableTransactionBuilder::new();
-            builder.move_call(package, module, function, type_arguments, arguments)?;
-            builder.finish()
-        };
-        Ok(Self::new_programmable(
+        Self::new_move_call_with_gas_coins(
             sender,
+            package,
+            module,
+            function,
+            type_arguments,
             vec![gas_payment],
-            pt,
+            arguments,
             gas_budget,
             gas_price,
-        ))
+        )
     }
 
     pub fn new_move_call_with_gas_coins(
@@ -1182,23 +1146,6 @@ impl TransactionData {
         ))
     }
 
-    pub fn new_transfer_with_dummy_gas_price(
-        recipient: SuiAddress,
-        object_ref: ObjectRef,
-        sender: SuiAddress,
-        gas_payment: ObjectRef,
-        gas_budget: u64,
-    ) -> Self {
-        Self::new_transfer(
-            recipient,
-            object_ref,
-            sender,
-            gas_payment,
-            gas_budget,
-            DUMMY_GAS_PRICE,
-        )
-    }
-
     pub fn new_transfer(
         recipient: SuiAddress,
         object_ref: ObjectRef,
@@ -1215,23 +1162,6 @@ impl TransactionData {
         Self::new_programmable(sender, vec![gas_payment], pt, gas_budget, gas_price)
     }
 
-    pub fn new_transfer_sui_with_dummy_gas_price(
-        recipient: SuiAddress,
-        sender: SuiAddress,
-        amount: Option<u64>,
-        gas_payment: ObjectRef,
-        gas_budget: u64,
-    ) -> Self {
-        Self::new_transfer_sui(
-            recipient,
-            sender,
-            amount,
-            gas_payment,
-            gas_budget,
-            DUMMY_GAS_PRICE,
-        )
-    }
-
     pub fn new_transfer_sui(
         recipient: SuiAddress,
         sender: SuiAddress,
@@ -1246,25 +1176,6 @@ impl TransactionData {
             builder.finish()
         };
         Self::new_programmable(sender, vec![gas_payment], pt, gas_budget, gas_price)
-    }
-
-    pub fn new_pay_with_dummy_gas_price(
-        sender: SuiAddress,
-        coins: Vec<ObjectRef>,
-        recipients: Vec<SuiAddress>,
-        amounts: Vec<u64>,
-        gas_payment: ObjectRef,
-        gas_budget: u64,
-    ) -> anyhow::Result<Self> {
-        Self::new_pay(
-            sender,
-            coins,
-            recipients,
-            amounts,
-            gas_payment,
-            gas_budget,
-            DUMMY_GAS_PRICE,
-        )
     }
 
     pub fn new_pay(
@@ -1288,25 +1199,6 @@ impl TransactionData {
             gas_budget,
             gas_price,
         ))
-    }
-
-    pub fn new_pay_sui_with_dummy_gas_price(
-        sender: SuiAddress,
-        coins: Vec<ObjectRef>,
-        recipients: Vec<SuiAddress>,
-        amounts: Vec<u64>,
-        gas_payment: ObjectRef,
-        gas_budget: u64,
-    ) -> anyhow::Result<Self> {
-        Self::new_pay_sui(
-            sender,
-            coins,
-            recipients,
-            amounts,
-            gas_payment,
-            gas_budget,
-            DUMMY_GAS_PRICE,
-        )
     }
 
     pub fn new_pay_sui(
@@ -1344,23 +1236,6 @@ impl TransactionData {
             builder.finish()
         };
         Self::new_programmable(sender, coins, pt, gas_budget, gas_price)
-    }
-
-    pub fn new_module_with_dummy_gas_price(
-        sender: SuiAddress,
-        gas_payment: ObjectRef,
-        modules: Vec<Vec<u8>>,
-        dep_ids: Vec<ObjectID>,
-        gas_budget: u64,
-    ) -> Self {
-        Self::new_module(
-            sender,
-            gas_payment,
-            modules,
-            dep_ids,
-            gas_budget,
-            DUMMY_GAS_PRICE,
-        )
     }
 
     pub fn new_module(
@@ -1443,15 +1318,6 @@ impl TransactionData {
             gas_budget,
             gas_price,
         ))
-    }
-
-    pub fn new_programmable_with_dummy_gas_price(
-        sender: SuiAddress,
-        gas_payment: Vec<ObjectRef>,
-        pt: ProgrammableTransaction,
-        gas_budget: u64,
-    ) -> Self {
-        Self::new_programmable(sender, gas_payment, pt, gas_budget, DUMMY_GAS_PRICE)
     }
 
     pub fn new_programmable(

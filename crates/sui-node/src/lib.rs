@@ -826,6 +826,11 @@ impl SuiNode {
         self.state.clone()
     }
 
+    // Only used for testing because of how epoch store is loaded.
+    pub fn reference_gas_price_for_testing(&self) -> Result<u64, anyhow::Error> {
+        self.state.reference_gas_price_for_testing()
+    }
+
     pub fn clone_committee_store(&self) -> Arc<CommitteeStore> {
         self.state.committee_store().clone()
     }
