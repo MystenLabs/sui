@@ -941,7 +941,7 @@ impl IndexerStore for PgIndexerStore {
 
     async fn get_transaction_page_by_input_object(
         &self,
-        object_id: String,
+        object_id: ObjectID,
         version: Option<i64>,
         start_sequence: Option<i64>,
         limit: usize,
@@ -949,10 +949,10 @@ impl IndexerStore for PgIndexerStore {
     ) -> Result<Vec<Transaction>, IndexerError> {
         let sql_query = format!(
             "SELECT transaction_digest as digest_name FROM (
-                SELECT transaction_digest, max(id) AS max_id 
+                SELECT transaction_digest, max(id) AS max_id
                 FROM input_objects
-                WHERE object_id = '{}' {} {} 
-                GROUP BY transaction_digest 
+                WHERE object_id = '{}' {} {}
+                GROUP BY transaction_digest
                 ORDER BY max_id {} LIMIT {}
             ) AS t",
             object_id,
@@ -983,19 +983,22 @@ impl IndexerStore for PgIndexerStore {
 
     async fn get_transaction_page_by_move_call(
         &self,
-        package_name: String,
-        module_name: Option<String>,
-        function_name: Option<String>,
+        package_name: ObjectID,
+        module_name: Option<Identifier>,
+        function_name: Option<Identifier>,
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
     ) -> Result<Vec<Transaction>, IndexerError> {
+        // note: module_name and function_name are user-controlled, which is scary.
+        // however, but valid Move identifiers can only contain 0-9, a-z, A-Z, and _,
+        // so it is safe to use them as-is in the query below
         let sql_query = format!(
             "SELECT transaction_digest as digest_name FROM (
-                SELECT transaction_digest, max(id) AS max_id 
+                SELECT transaction_digest, max(id) AS max_id
                 FROM move_calls
                 WHERE move_package = '{}' {} {} {}
-                GROUP BY transaction_digest 
+                GROUP BY transaction_digest
                 ORDER BY max_id {} LIMIT {}
             ) AS t",
             package_name,
@@ -1033,8 +1036,8 @@ impl IndexerStore for PgIndexerStore {
 
     async fn get_transaction_page_by_sender_recipient_address(
         &self,
-        from: Option<String>,
-        to: String,
+        from: Option<SuiAddress>,
+        to: SuiAddress,
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,

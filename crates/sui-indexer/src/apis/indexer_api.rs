@@ -12,6 +12,7 @@ use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::types::SubscriptionResult;
 use jsonrpsee::{RpcModule, SubscriptionSink};
 
+use move_core_types::identifier::Identifier;
 use sui_core::event_handler::EventHandler;
 use sui_json_rpc::api::{
     validate_limit, IndexerApiClient, IndexerApiServer, QUERY_MAX_RESULT_LIMIT,
@@ -107,13 +108,29 @@ impl<S: IndexerStore> IndexerApi<S> {
                 module,
                 function,
             }) => {
+                let module = if let Some(m) = module {
+                    Some(
+                        Identifier::new(m)
+                            .map_err(|e| IndexerError::InvalidArgumentError(e.to_string()))?,
+                    )
+                } else {
+                    None
+                };
+                let function = if let Some(f) = function {
+                    Some(
+                        Identifier::new(f)
+                            .map_err(|e| IndexerError::InvalidArgumentError(e.to_string()))?,
+                    )
+                } else {
+                    None
+                };
                 let move_call_seq_number = self
                     .state
                     .get_move_call_sequence_by_digest(cursor_str, is_descending)
                     .await?;
                 self.state
                     .get_transaction_page_by_move_call(
-                        package.to_string(),
+                        package,
                         module,
                         function,
                         move_call_seq_number,
@@ -129,7 +146,7 @@ impl<S: IndexerStore> IndexerApi<S> {
                     .await?;
                 self.state
                     .get_transaction_page_by_input_object(
-                        input_obj_id.to_string(),
+                        input_obj_id,
                         /* version */ None,
                         input_obj_seq,
                         limit + 1,
@@ -174,7 +191,7 @@ impl<S: IndexerStore> IndexerApi<S> {
                 self.state
                     .get_transaction_page_by_sender_recipient_address(
                         /* from */ None,
-                        recipient_address.to_string(),
+                        recipient_address,
                         recipient_seq_number,
                         limit + 1,
                         is_descending,
@@ -188,8 +205,8 @@ impl<S: IndexerStore> IndexerApi<S> {
                     .await?;
                 self.state
                     .get_transaction_page_by_sender_recipient_address(
-                        Some(from.to_string()),
-                        to.to_string(),
+                        Some(from),
+                        to,
                         recipient_seq_number,
                         limit + 1,
                         is_descending,
