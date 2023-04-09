@@ -36,6 +36,9 @@ impl EventHandler {
         effects: &SuiTransactionBlockEffects,
         events: &SuiTransactionBlockEvents,
     ) -> SuiResult {
+        /// Disable to understand if mem utilization proves
+        return Ok(());
+
         trace!(
             num_events = events.data.len(),
             tx_digest =? effects.transaction_digest(),
