@@ -23,7 +23,7 @@ use sui_types::{
     messages::VerifiedTransaction,
 };
 
-/// TODO: This should be the amount that is being transfered instead of MAX_GAS.
+/// TODO: This should be the amount that is being transferred instead of MAX_GAS.
 /// Number of mist sent to each address on each batch transfer
 const _TRANSFER_AMOUNT: u64 = 1;
 

@@ -107,7 +107,7 @@ pub fn bls12381_min_pk_verify(
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 3);
 
-    // Load the cost paramaters from the protocol config
+    // Load the cost parameters from the protocol config
     let bls12381_bls12381_min_pk_verify_cost_params = &context
         .extensions()
         .get::<NativesCostTable>()

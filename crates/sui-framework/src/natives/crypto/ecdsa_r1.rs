@@ -58,7 +58,7 @@ pub fn ecrecover(
 
     let hash = pop_arg!(args, u8);
 
-    // Load the cost paramaters from the protocol config
+    // Load the cost parameters from the protocol config
     let (ecdsa_r1_ecrecover_cost_params, crypto_invalid_arguments_cost) = {
         let cost_table = &context.extensions().get::<NativesCostTable>();
         (
@@ -151,7 +151,7 @@ pub fn secp256r1_verify(
 ) -> PartialVMResult<NativeResult> {
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 4);
-    // Load the cost paramaters from the protocol config
+    // Load the cost parameters from the protocol config
     let (ecdsa_r1_secp256_r1_verify_cost_params, crypto_invalid_arguments_cost) = {
         let cost_table = &context.extensions().get::<NativesCostTable>();
         (

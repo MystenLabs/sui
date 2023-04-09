@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Test limts on number of created IDs
+// Test limits on number of created IDs
 
 //# init --addresses Test=0x0
 

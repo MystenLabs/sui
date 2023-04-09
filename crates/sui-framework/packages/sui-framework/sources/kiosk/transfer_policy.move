@@ -246,10 +246,10 @@ module sui::transfer_policy {
 
     // === Fields access ===
 
-    /// Allows reading custom attachements to the `TransferPolicy` if there are any.
+    /// Allows reading custom attachments to the `TransferPolicy` if there are any.
     public fun uid<T>(self: &TransferPolicy<T>): &UID { &self.id }
 
-    /// Get a mutable reference to the `self.id` to enable custom attachements
+    /// Get a mutable reference to the `self.id` to enable custom attachments
     /// to the `TransferPolicy`.
     public fun uid_mut_as_owner<T>(
         self: &mut TransferPolicy<T>, cap: &TransferPolicyCap<T>,

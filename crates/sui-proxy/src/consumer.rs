@@ -209,7 +209,7 @@ async fn check_response(
                 error!("({}) ERROR: {:?}", reqwest::StatusCode::BAD_REQUEST, body);
                 return Err((
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    "IGNORNING METRICS due to err-mimir-sample-out-of-order",
+                    "IGNORING METRICS due to err-mimir-sample-out-of-order",
                 ));
             }
             CONSUMER_OPS

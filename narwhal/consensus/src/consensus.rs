@@ -427,7 +427,7 @@ where
                     // We extract a list of headers from this specific validator that
                     // have been agreed upon, and signal this back to the narwhal sub-system
                     // to be used to re-send batches that have not made it to a commit.
-                    let mut commited_certificates = Vec::new();
+                    let mut committed_certificates = Vec::new();
 
                     // Output the sequence in the right order.
                     let mut i = 0;
@@ -448,7 +448,7 @@ where
                                 tracing::info!("Committed {} -> {:?}", certificate.header(), digest);
                             }
 
-                            commited_certificates.push(certificate.clone());
+                            committed_certificates.push(certificate.clone());
                         }
 
                         // NOTE: The size of the sub-dag can be arbitrarily large (depending on the network condition
@@ -456,13 +456,13 @@ where
                         self.tx_sequence.send(committed_sub_dag).await.map_err(|_|ConsensusError::ShuttingDown)?;
                     }
 
-                    if !commited_certificates.is_empty(){
+                    if !committed_certificates.is_empty(){
                         // Highest committed certificate round is the leader round / commit round
                         // expected by primary.
-                        let leader_commit_round = commited_certificates.iter().map(|c| c.round()).max().unwrap();
+                        let leader_commit_round = committed_certificates.iter().map(|c| c.round()).max().unwrap();
 
                         self.tx_committed_certificates
-                        .send((leader_commit_round, commited_certificates))
+                        .send((leader_commit_round, committed_certificates))
                         .await
                         .map_err(|_|ConsensusError::ShuttingDown)?;
 

@@ -103,7 +103,7 @@ macro_rules! reopen {
     };
 }
 
-/// Repeatedly attempt an OptimisiticTransaction until it succeeds.
+/// Repeatedly attempt an Optimistic Transaction until it succeeds.
 /// Since many callsites (e.g. the consensus handler) cannot proceed in the case of failed writes,
 /// this will loop forever until the transaction succeeds.
 #[macro_export]

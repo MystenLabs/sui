@@ -943,7 +943,7 @@ where
         debug!(
             current_epoch = current_epoch,
             checkpoint_epoch = checkpoint.epoch(),
-            "cannont verify checkpoint with too high of an epoch",
+            "cannot verify checkpoint with too high of an epoch",
         );
         return Err(checkpoint);
     }

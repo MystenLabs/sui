@@ -43,7 +43,7 @@ pub fn ed25519_verify(
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 3);
 
-    // Load the cost paramaters from the protocol config
+    // Load the cost parameters from the protocol config
     let ed25519_verify_cost_params = &context
         .extensions()
         .get::<NativesCostTable>()

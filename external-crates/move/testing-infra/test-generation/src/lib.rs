@@ -363,7 +363,7 @@ pub fn run_generation(args: Args) {
     );
 
     let (sender, receiver) = bounded(num_threads);
-    let (stats_sender, stats_reciever) = unbounded();
+    let (stats_sender, stats_receiver) = unbounded();
     let seed = seed(args.seed);
 
     let mut threads = Vec::new();
@@ -384,7 +384,7 @@ pub fn run_generation(args: Args) {
 
     let num_iters = args.num_iterations;
     threads.push(thread::spawn(move || {
-        module_frame_generation(num_iters, seed, sender, stats_reciever)
+        module_frame_generation(num_iters, seed, sender, stats_receiver)
     }));
 
     for thread in threads {
