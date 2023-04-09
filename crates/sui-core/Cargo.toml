@@ -25,6 +25,7 @@ async-trait = "0.1.61"
 tempfile = "3.3.0"
 itertools = "0.10.4"
 tracing = "0.1.36"
+moka = { version = "0.10.2", features = ["future"]}
 signature = "1.6.0"
 prometheus = "0.13.3"
 arc-swap = "1.5.1"

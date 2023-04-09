@@ -139,6 +139,7 @@ pub mod epoch_start_configuration;
 
 pub(crate) mod authority_notify_read;
 pub(crate) mod authority_store;
+mod authority_store_caches;
 
 pub type ReconfigConsensusMessage = (
     AuthorityKeyPair,
