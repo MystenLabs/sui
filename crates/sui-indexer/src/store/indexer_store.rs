@@ -3,12 +3,13 @@
 
 use async_trait::async_trait;
 
+use move_core_types::identifier::Identifier;
 use sui_json_rpc_types::{
     Checkpoint as RpcCheckpoint, CheckpointId, EpochInfo, EventFilter, EventPage, MoveCallMetrics,
     NetworkMetrics, SuiObjectData, SuiObjectDataFilter, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions,
 };
-use sui_types::base_types::{EpochId, ObjectID, SequenceNumber, VersionNumber};
+use sui_types::base_types::{EpochId, ObjectID, SequenceNumber, SuiAddress, VersionNumber};
 use sui_types::digests::CheckpointDigest;
 use sui_types::error::SuiError;
 use sui_types::event::EventID;
@@ -126,8 +127,8 @@ pub trait IndexerStore {
 
     async fn get_transaction_page_by_sender_recipient_address(
         &self,
-        sender_address: Option<String>,
-        recipient_address: String,
+        sender_address: Option<SuiAddress>,
+        recipient_address: SuiAddress,
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
@@ -135,7 +136,7 @@ pub trait IndexerStore {
 
     async fn get_transaction_page_by_input_object(
         &self,
-        object_id: String,
+        object_id: ObjectID,
         version: Option<i64>,
         start_sequence: Option<i64>,
         limit: usize,
@@ -144,9 +145,9 @@ pub trait IndexerStore {
 
     async fn get_transaction_page_by_move_call(
         &self,
-        package: String,
-        module: Option<String>,
-        function: Option<String>,
+        package: ObjectID,
+        module: Option<Identifier>,
+        function: Option<Identifier>,
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
