@@ -4,15 +4,23 @@
 use anyhow::anyhow;
 use clap::{Parser, ValueEnum};
 use comfy_table::{Cell, ContentArrangement, Row, Table};
+use prometheus::Registry;
 use rocksdb::MultiThreaded;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::str;
+use std::sync::Arc;
 use strum_macros::EnumString;
+use sui_config::node::AuthorityStorePruningConfig;
 use sui_core::authority::authority_per_epoch_store::AuthorityEpochTables;
+use sui_core::authority::authority_store_pruner::{
+    AuthorityStorePruner, AuthorityStorePruningMetrics,
+};
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::authority::authority_store_types::{StoreData, StoreObject};
+use sui_core::checkpoints::CheckpointStore;
 use sui_core::epoch::committee_store::CommitteeStoreTables;
+use sui_storage::mutex_table::RwLockTable;
 use sui_storage::IndexStoreTables;
 use sui_types::base_types::{EpochId, ObjectID};
 use typed_store::rocks::{default_db_options, MetricConf};
@@ -76,6 +84,35 @@ pub fn table_summary(
     .map_err(|err| anyhow!(err.to_string()))
 }
 
+pub async fn prune_objects(db_path: PathBuf) -> anyhow::Result<()> {
+    let perpetual = Arc::new(AuthorityPerpetualTables::open(&db_path.join("store"), None));
+    let checkpoint = Arc::new(CheckpointStore::open_tables_read_write(
+        db_path.join("checkpoints"),
+        MetricConf::default(),
+        None,
+        None,
+    ));
+    let lock_table = Arc::new(RwLockTable::new(1));
+    let metrics = AuthorityStorePruningMetrics::new(&Registry::default());
+    AuthorityStorePruner::prune_objects_for_eligible_epochs(
+        &perpetual,
+        &checkpoint,
+        &lock_table,
+        AuthorityStorePruningConfig {
+            num_latest_epoch_dbs_to_retain: 2,
+            epoch_db_pruning_period_secs: 3600,
+            num_epochs_to_retain: 2,
+            pruning_run_delay_seconds: None,
+            max_checkpoints_in_batch: 200,
+            max_transactions_in_batch: 1000,
+            use_range_deletion: true,
+        },
+        metrics,
+    )
+    .await?;
+    AuthorityStorePruner::compact(&perpetual).await?;
+    Ok(())
+}
 pub fn print_table_metadata(
     store_name: StoreName,
     epoch: Option<EpochId>,

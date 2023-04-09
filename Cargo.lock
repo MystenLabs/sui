@@ -8015,9 +8015,9 @@ dependencies = [
 
 [[package]]
 name = "scheduled-thread-pool"
-version = "0.2.6"
+version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "977a7519bff143a44f842fd07e80ad1329295bd71686457f18e496736f4bf9bf"
+checksum = "3cbc66816425a074528352f5789333ecff06ca41b36b0b0efdfbb29edc391a19"
 dependencies = [
  "parking_lot 0.12.1",
 ]
@@ -9933,6 +9933,7 @@ dependencies = [
  "hex",
  "itertools",
  "narwhal-types",
+ "prometheus",
  "rocksdb",
  "ron",
  "strum",

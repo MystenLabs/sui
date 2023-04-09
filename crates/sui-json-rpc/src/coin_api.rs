@@ -220,15 +220,17 @@ impl CoinReadApiServer for CoinReadApi {
         let mut locked_balance = HashMap::new();
         let mut coin_object_count = 0;
         let coins = coins.map(ObjectKey::from).collect::<Vec<_>>();
-
-        for coin in self.multi_get_coin(&coins)? {
-            let coin = coin?;
-            if let Some(lock) = coin.locked_until_epoch {
-                *locked_balance.entry(lock).or_default() += coin.balance as u128
-            } else {
-                total_balance += coin.balance as u128;
+        let chunked_coins = coins.chunks(100 as usize);
+        for chunk in chunked_coins {
+            for coin in self.multi_get_coin(chunk)? {
+                let coin = coin?;
+                if let Some(lock) = coin.locked_until_epoch {
+                    *locked_balance.entry(lock).or_default() += coin.balance as u128
+                } else {
+                    total_balance += coin.balance as u128;
+                }
+                coin_object_count += 1;
             }
-            coin_object_count += 1;
         }
 
         Ok(Balance {
@@ -245,21 +247,23 @@ impl CoinReadApiServer for CoinReadApi {
             .map(ObjectKey::from)
             .collect::<Vec<_>>();
         let mut balances: HashMap<String, Balance> = HashMap::new();
-
-        for coin in self.multi_get_coin(&coins)? {
-            let coin = coin?;
-            let balance = balances.entry(coin.coin_type.clone()).or_insert(Balance {
-                coin_type: coin.coin_type,
-                coin_object_count: 0,
-                total_balance: 0,
-                locked_balance: Default::default(),
-            });
-            if let Some(lock) = coin.locked_until_epoch {
-                *balance.locked_balance.entry(lock).or_default() += coin.balance as u128
-            } else {
-                balance.total_balance += coin.balance as u128;
+        let chunked_coins = coins.chunks(100 as usize);
+        for chunk in chunked_coins {
+            for coin in self.multi_get_coin(chunk)? {
+                let coin = coin?;
+                let balance = balances.entry(coin.coin_type.clone()).or_insert(Balance {
+                    coin_type: coin.coin_type,
+                    coin_object_count: 0,
+                    total_balance: 0,
+                    locked_balance: Default::default(),
+                });
+                if let Some(lock) = coin.locked_until_epoch {
+                    *balance.locked_balance.entry(lock).or_default() += coin.balance as u128
+                } else {
+                    balance.total_balance += coin.balance as u128;
+                }
+                balance.coin_object_count += 1;
             }
-            balance.coin_object_count += 1;
         }
         Ok(balances.into_values().collect())
     }
