@@ -288,42 +288,6 @@ where
                 let checkpoint_seq = checkpoint.sequence_number;
 
                 // NOTE: retrials are necessary here, otherwise results can be popped and discarded.
-                let object_changes_handler = self.clone();
-                spawn_monitored_task!(async move {
-                    let object_db_guard = object_changes_handler
-                        .metrics
-                        .object_db_commit_latency
-                        .start_timer();
-                    let mut object_changes_commit_res = object_changes_handler
-                        .state
-                        .persist_object_changes(&tx_object_changes)
-                        .await;
-                    while let Err(e) = object_changes_commit_res {
-                        warn!(
-                            "Indexer object changes commit failed with error: {:?}, retrying after {:?} milli-secs...",
-                            e, DB_COMMIT_RETRY_INTERVAL_IN_MILLIS
-                        );
-                        tokio::time::sleep(std::time::Duration::from_millis(
-                            DB_COMMIT_RETRY_INTERVAL_IN_MILLIS,
-                        ))
-                        .await;
-                        object_changes_commit_res = object_changes_handler
-                            .state
-                            .persist_object_changes(&tx_object_changes)
-                            .await;
-                    }
-                    object_db_guard.stop_and_record();
-                    info!(
-                        "Checkpoint {} committed with {} transactions.",
-                        checkpoint_seq,
-                        tx_object_changes.len(),
-                    );
-                    object_changes_handler
-                        .metrics
-                        .total_object_change_committed
-                        .inc_by(tx_object_changes.len() as u64);
-                });
-
                 let events_handler = self.clone();
                 spawn_monitored_task!(async move {
                     let mut event_commit_res = events_handler.state.persist_events(&events).await;
@@ -402,40 +366,76 @@ where
                     }
                 });
 
-                let checkpoint_tx_db_guard =
-                    self.metrics.checkpoint_db_commit_latency.start_timer();
-                let mut checkpoint_tx_commit_res = self
-                    .state
-                    .persist_checkpoint_transactions(&checkpoint, &transactions)
-                    .await;
-                while let Err(e) = checkpoint_tx_commit_res {
+                let checkpoint_tx_handler = self.clone();
+                spawn_monitored_task!(async move {
+                    let checkpoint_tx_db_guard = checkpoint_tx_handler
+                        .metrics
+                        .checkpoint_db_commit_latency
+                        .start_timer();
+                    let mut checkpoint_tx_commit_res = checkpoint_tx_handler
+                        .state
+                        .persist_checkpoint_transactions(&checkpoint, &transactions)
+                        .await;
+                    while let Err(e) = checkpoint_tx_commit_res {
+                        warn!(
+                            "Indexer checkpoint & transaction commit failed with error: {:?}, retrying after {:?} milli-secs...",
+                            e, DB_COMMIT_RETRY_INTERVAL_IN_MILLIS
+                        );
+                        tokio::time::sleep(std::time::Duration::from_millis(
+                            DB_COMMIT_RETRY_INTERVAL_IN_MILLIS,
+                        ))
+                        .await;
+                        checkpoint_tx_commit_res = checkpoint_tx_handler
+                            .state
+                            .persist_checkpoint_transactions(&checkpoint, &transactions)
+                            .await;
+                    }
+                    checkpoint_tx_db_guard.stop_and_record();
+
+                    checkpoint_tx_handler
+                        .metrics
+                        .total_checkpoint_committed
+                        .inc();
+                    let tx_count = transactions.len();
+                    checkpoint_tx_handler
+                        .metrics
+                        .total_transaction_committed
+                        .inc_by(tx_count as u64);
+                    info!(
+                        "Checkpoint {} committed with {} transactions.",
+                        checkpoint_seq, tx_count,
+                    );
+                    checkpoint_tx_handler
+                        .metrics
+                        .transaction_per_checkpoint
+                        .observe(tx_count as f64);
+                });
+
+                // NOTE: commit object changes in the curren task to stick to the original order.
+                let object_db_guard = self.metrics.object_db_commit_latency.start_timer();
+                let mut object_changes_commit_res =
+                    self.state.persist_object_changes(&tx_object_changes).await;
+                while let Err(e) = object_changes_commit_res {
                     warn!(
-                        "Indexer checkpoint & transaction commit failed with error: {:?}, retrying after {:?} milli-secs...",
+                        "Indexer object changes commit failed with error: {:?}, retrying after {:?} milli-secs...",
                         e, DB_COMMIT_RETRY_INTERVAL_IN_MILLIS
                     );
                     tokio::time::sleep(std::time::Duration::from_millis(
                         DB_COMMIT_RETRY_INTERVAL_IN_MILLIS,
                     ))
                     .await;
-                    checkpoint_tx_commit_res = self
-                        .state
-                        .persist_checkpoint_transactions(&checkpoint, &transactions)
-                        .await;
+                    object_changes_commit_res =
+                        self.state.persist_object_changes(&tx_object_changes).await;
                 }
-                checkpoint_tx_db_guard.stop_and_record();
-
-                self.metrics.total_checkpoint_committed.inc();
-                let tx_count = transactions.len();
-                self.metrics
-                    .total_transaction_committed
-                    .inc_by(tx_count as u64);
+                object_db_guard.stop_and_record();
                 info!(
-                    "Checkpoint {} committed with {} transactions.",
-                    checkpoint_seq, tx_count,
+                    "Checkpoint {} committed with {} transaction object changes.",
+                    checkpoint_seq,
+                    tx_object_changes.len(),
                 );
                 self.metrics
-                    .transaction_per_checkpoint
-                    .observe(tx_count as f64);
+                    .total_object_change_committed
+                    .inc_by(tx_object_changes.len() as u64);
             } else {
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             }
