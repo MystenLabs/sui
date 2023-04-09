@@ -17,7 +17,7 @@ use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_json_rpc_types::{
     BigInt, DevInspectResults, DryRunTransactionBlockResponse, SuiTransactionBlock,
-    SuiTransactionBlockData, SuiTransactionBlockEvents, SuiTransactionBlockResponse,
+    SuiTransactionBlockEvents, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc::Module;
