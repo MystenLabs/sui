@@ -238,8 +238,6 @@ where
                 }
 
                 // Write checkpoint to DB
-                let checkpoint_db_guard = self.metrics.checkpoint_db_commit_latency.start_timer();
-
                 let TemporaryCheckpointStore {
                     checkpoint,
                     transactions,
@@ -251,10 +249,15 @@ where
                     move_calls,
                     recipients,
                 } = indexed_checkpoint;
+                let checkpoint_seq = checkpoint.sequence_number;
 
                 // NOTE: retrials are necessary here, otherwise results can be popped and discarded.
                 let object_changes_handler = self.clone();
                 spawn_monitored_task!(async move {
+                    let object_db_guard = object_changes_handler
+                        .metrics
+                        .object_db_commit_latency
+                        .start_timer();
                     let mut object_changes_commit_res = object_changes_handler
                         .state
                         .persist_object_changes(&tx_object_changes)
@@ -273,6 +276,16 @@ where
                             .persist_object_changes(&tx_object_changes)
                             .await;
                     }
+                    object_db_guard.stop_and_record();
+                    info!(
+                        "Checkpoint {} committed with {} transactions.",
+                        checkpoint_seq,
+                        tx_object_changes.len(),
+                    );
+                    object_changes_handler
+                        .metrics
+                        .total_object_change_committed
+                        .inc_by(tx_object_changes.len() as u64);
                 });
 
                 let events_handler = self.clone();
@@ -353,6 +366,8 @@ where
                     }
                 });
 
+                let checkpoint_tx_db_guard =
+                    self.metrics.checkpoint_db_commit_latency.start_timer();
                 let mut checkpoint_tx_commit_res = self
                     .state
                     .persist_checkpoint_transactions(&checkpoint, &transactions)
@@ -371,7 +386,7 @@ where
                         .persist_checkpoint_transactions(&checkpoint, &transactions)
                         .await;
                 }
-                checkpoint_db_guard.stop_and_record();
+                checkpoint_tx_db_guard.stop_and_record();
 
                 self.metrics.total_checkpoint_committed.inc();
                 let tx_count = transactions.len();
@@ -379,8 +394,8 @@ where
                     .total_transaction_committed
                     .inc_by(tx_count as u64);
                 info!(
-                    "Checkpoint {} committed with {} transactions",
-                    checkpoint.sequence_number, tx_count,
+                    "Checkpoint {} committed with {} transactions.",
+                    checkpoint_seq, tx_count,
                 );
                 self.metrics
                     .transaction_per_checkpoint
