@@ -17,7 +17,7 @@ use sui_json_rpc_types::{CoinPage, SuiCoinMetadata};
 use sui_open_rpc::Module;
 use sui_types::balance::Supply;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
-use sui_types::coin::{Coin, CoinMetadata, TreasuryCap};
+use sui_types::coin::{CoinMetadata, TreasuryCap};
 use sui_types::error::{SuiError, UserInputError};
 use sui_types::gas_coin::GAS;
 use sui_types::messages::TransactionEffectsAPI;
@@ -88,11 +88,7 @@ impl CoinReadApi {
                             .unwrap()
                             .to_string()
                     });
-                    let balance = {
-                        let coin: Coin = bcs::from_bytes(move_object.contents())?;
-                        coin.balance.value()
-                    };
-
+                    let balance = move_object.get_coin_value_unsafe();
                     Ok(SuiCoin {
                         coin_type,
                         coin_object_id: *id,
@@ -257,9 +253,7 @@ impl CoinReadApiServer for CoinReadApi {
 
         for coin_obj in coins {
             // unwraps safe because get_owner_coin_iterator can only return coin objects
-            let coin: Coin =
-                bcs::from_bytes(coin_obj.data.try_as_move().unwrap().contents()).unwrap();
-            total_balance += coin.balance.value() as u128;
+            total_balance += coin_obj.data.try_as_move().unwrap().get_coin_value_unsafe() as u128;
             coin_object_count += 1;
         }
 
@@ -285,8 +279,6 @@ impl CoinReadApiServer for CoinReadApi {
             let move_obj = coin_obj.data.try_as_move().unwrap();
             // unwrap safe because each coin object has one type param
             let coin_type = move_obj.type_().type_params().first().unwrap().clone();
-            let coin: Coin = bcs::from_bytes(move_obj.contents()).unwrap();
-
             let balance = balances.entry(coin_type.clone()).or_insert(Balance {
                 coin_type: coin_type.to_string(),
                 coin_object_count: 0,
@@ -294,7 +286,7 @@ impl CoinReadApiServer for CoinReadApi {
                 // note: LockedCoin is deprecated
                 locked_balance: Default::default(),
             });
-            balance.total_balance += coin.balance.value() as u128;
+            balance.total_balance += move_obj.get_coin_value_unsafe() as u128;
             balance.coin_object_count += 1;
         }
         Ok(balances.into_values().collect())

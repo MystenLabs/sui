@@ -6,7 +6,6 @@ use crate::sui_serde::BigInt;
 use crate::sui_serde::Readable;
 use crate::{
     error::{ExecutionError, UserInputError, UserInputResult},
-    gas_coin::GasCoin,
     gas_model::gas_v1::{self, SuiCostTable as SuiCostTableV1, SuiGasStatus as SuiGasStatusV1},
     gas_model::gas_v2::{self, SuiCostTable as SuiCostTableV2, SuiGasStatus as SuiGasStatusV2},
     messages::{TransactionEffects, TransactionEffectsAPI},
@@ -289,53 +288,45 @@ impl std::fmt::Display for GasCostSummary {
 
 pub fn deduct_gas_legacy(gas_object: &mut Object, deduct_amount: u64, rebate_amount: u64) {
     // The object must be a gas coin as we have checked in transaction handle phase.
-    let gas_coin = GasCoin::try_from(&*gas_object).unwrap();
-    let balance = gas_coin.value();
+    let gas_coin = gas_object.data.try_as_move_mut().unwrap();
+    let balance = gas_coin.get_coin_value_unsafe();
     assert!(balance >= deduct_amount);
-    let new_gas_coin = GasCoin::new(*gas_coin.id(), balance + rebate_amount - deduct_amount);
-    let move_object = gas_object.data.try_as_move_mut().unwrap();
-    // unwrap safe because GasCoin is guaranteed to serialize
-    let new_contents = bcs::to_bytes(&new_gas_coin).unwrap();
-    assert_eq!(move_object.contents().len(), new_contents.len());
-    move_object.update_coin_contents(new_contents);
+    gas_coin.set_coin_value_unsafe(balance + rebate_amount - deduct_amount)
 }
 
 pub fn deduct_gas(gas_object: &mut Object, charge_or_rebate: i64) {
     // The object must be a gas coin as we have checked in transaction handle phase.
-    let gas_coin = GasCoin::try_from(&*gas_object).unwrap();
-    let balance = gas_coin.value();
+    let gas_coin = gas_object.data.try_as_move_mut().unwrap();
+    let balance = gas_coin.get_coin_value_unsafe();
     let new_balance = if charge_or_rebate < 0 {
         balance + (-charge_or_rebate as u64)
     } else {
         assert!(balance >= charge_or_rebate as u64);
         balance - charge_or_rebate as u64
     };
-    let new_gas_coin = GasCoin::new(*gas_coin.id(), new_balance);
-    let move_object = gas_object.data.try_as_move_mut().unwrap();
-    // unwrap safe because GasCoin is guaranteed to serialize
-    let new_contents = bcs::to_bytes(&new_gas_coin).unwrap();
-    assert_eq!(move_object.contents().len(), new_contents.len());
-    move_object.update_coin_contents(new_contents);
+    gas_coin.set_coin_value_unsafe(new_balance)
 }
 
 pub fn refund_gas(gas_object: &mut Object, amount: u64) {
     // The object must be a gas coin as we have checked in transaction handle phase.
-    let gas_coin = GasCoin::try_from(&*gas_object).unwrap();
-    let balance = gas_coin.value();
-    let new_gas_coin = GasCoin::new(*gas_coin.id(), balance + amount);
-    let move_object = gas_object.data.try_as_move_mut().unwrap();
-    // unwrap safe because GasCoin is guaranteed to serialize
-    let new_contents = bcs::to_bytes(&new_gas_coin).unwrap();
-    // unwrap because safe gas object cannot exceed max object size
-    move_object.update_coin_contents(new_contents);
+    let gas_coin = gas_object.data.try_as_move_mut().unwrap();
+    let balance = gas_coin.get_coin_value_unsafe();
+    gas_coin.set_coin_value_unsafe(balance + amount)
 }
 
 pub fn get_gas_balance(gas_object: &Object) -> UserInputResult<u64> {
-    Ok(GasCoin::try_from(gas_object)
-        .map_err(|_e| UserInputError::InvalidGasObject {
+    if let Some(move_obj) = gas_object.data.try_as_move() {
+        if !move_obj.type_().is_gas_coin() {
+            return Err(UserInputError::InvalidGasObject {
+                object_id: gas_object.id(),
+            })
+        }
+        Ok(move_obj.get_coin_value_unsafe())
+    } else {
+        Err(UserInputError::InvalidGasObject {
             object_id: gas_object.id(),
-        })?
-        .value())
+        })
+    }
 }
 
 }
