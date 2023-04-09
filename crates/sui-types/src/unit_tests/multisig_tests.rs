@@ -3,7 +3,7 @@
 
 use std::str::FromStr;
 
-use fastcrypto::traits::ToFromBytes;
+use fastcrypto::{traits::{ToFromBytes, EncodeDecodeBase64}, encoding::{Base64, Encoding}, ed25519::Ed25519Signature};
 use once_cell::sync::OnceCell;
 use rand::{rngs::StdRng, SeedableRng};
 use roaring::RoaringBitmap;
@@ -13,10 +13,10 @@ use crate::{
     base_types::SuiAddress,
     crypto::{
         get_key_pair, get_key_pair_from_rng, Ed25519SuiSignature, Signature, SuiKeyPair,
-        SuiSignatureInner,
+        SuiSignatureInner, PublicKey, SuiSignature,
     },
     multisig::{MultiSig, MAX_SIGNER_IN_MULTISIG},
-    signature::{AuthenticatorTrait, GenericSignature},
+    signature::{AuthenticatorTrait, GenericSignature}, messages::TransactionData,
 };
 use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
 
@@ -363,4 +363,66 @@ fn test_max_sig() {
     let sig = Signature::new_secure(&msg, &keys[0]);
     let multisig = MultiSig::combine(vec![sig; 1], low_threshold_pk).unwrap();
     assert!(multisig.verify_secure_generic(&msg, address).is_ok());
+}
+
+#[test]
+fn te() {
+    let s1 = Signature::from_bytes(&Base64::decode("AFtiPovFXDRVnX7PLEjZzlzcIyN4lSszamrBq/u4l2mS6x6a3uW9C6Fj9gBRA9OxPAH5M5Qt1+sHGHX3rmzsrgVMoxeoEQG32SXVoammIG4k0ULXlFGvrrIY/RnZHq93kQ==").unwrap()).unwrap();
+    let s2 = Signature::from_bytes(&Base64::decode("AFQxTiu9Dei908iP5K7dL0ILX3YzRUoY4gLfaZV2Agkd7nc5c/ZfcLwJxXZhlSfme/PnpXsZcTm2jpcieQNBBwCxc5ih4C4eomkKJp7hhnK4OXoh6F0OoQ8KLM2J4fEeCQ==").unwrap()).unwrap();
+    let s3 = Signature::from_bytes(&Base64::decode("APQiqdE+Ta+PGKT3GasosAlTqrmOT7WvSnQ1nfSkRBlhknS9eXwOxirswr0rJoKntNl/C+mPgQUrqFQxYu+bJQVDk2wWqyyE40E+u5oUFCZm2iTsGuXt56nGt5YH54bSQg==").unwrap()).unwrap();
+    println!("comp1: {:?}", s1.to_compressed().unwrap());
+    println!("comp2: {:?}", s2.to_compressed().unwrap());
+    println!("comp3: {:?}", s3.to_compressed().unwrap());
+
+    match s3.clone() {
+        Signature::Ed25519SuiSignature(c) => {
+            let s = Ed25519Signature::from_bytes(c.signature_bytes()).unwrap();
+            println!("ss: {:?}", s);
+
+        },
+        _ => {},
+    };
+    let a1: SuiAddress = (&s1.to_public_key().unwrap()).into();
+    let a2: SuiAddress = (&s2.to_public_key().unwrap()).into();
+    let a3: SuiAddress = (&s3.to_public_key().unwrap()).into();
+    println!("a1: {:?}", a1);
+    println!("a2: {:?}", a2);
+    println!("a3: {:?}", a3);
+
+    let pk1 = s1.to_public_key().unwrap();
+    let pk2 = s2.to_public_key().unwrap();
+    let pk3 = s3.to_public_key().unwrap();
+    println!("pk1: {:?}", pk1);
+    println!("pk2: {:?}", pk2);
+    println!("pk3: {:?}", pk3);
+
+    
+    let value: IntentMessage<TransactionData> = IntentMessage::new(
+        Intent::sui_transaction(),
+        bcs::from_bytes(&Base64::decode("AAABACBP/9AAVSK+S8Apckx/D27XCTpr86CbkOYvYdwVGB4aPgEBAQABAABP/9AAVSK+S8Apckx/D27XCTpr86CbkOYvYdwVGB4aPgEICob+LuQD2JMpE5yRYAS2nkvDNttTFey+iEbz9QQLZ9YwAAAAAAAAICb4vXjGp/Ix2wQuBIlk1TBJk9nCOleTvq/fV4HQOnMvT//QAFUivkvAKXJMfw9u1wk6a/Ogm5DmL2HcFRgeGj4BAAAAAAAAAIDDyQEAAAAAAA==").unwrap()).unwrap(),
+    );
+    let r1 = s1.verify_secure_generic(&value, a1);
+    println!("r1: {:?}", r1);
+    let r2 = s2.verify_secure_generic(&value, a2);
+    println!("r2: {:?}", r2);
+    let r3 = s3.verify_secure_generic(&value, a3);
+    println!("r3: {:?}", r3);
+
+    let multisig_pk = MultiSigPublicKey::new(vec![
+        PublicKey::decode_base64("AEOTbBarLITjQT67mhQUJmbaJOwa5e3nqca3lgfnhtJC").unwrap(),
+        PublicKey::decode_base64("AEyjF6gRAbfZJdWhqaYgbiTRQteUUa+ushj9Gdker3eR").unwrap(),
+        PublicKey::decode_base64("AMdynPV1TMQ1FfSEkOFaxXuKwYfgmoSTmqobzDFG/xHY").unwrap(),
+        PublicKey::decode_base64("ALFzmKHgLh6iaQomnuGGcrg5eiHoXQ6hDwoszYnh8R4J").unwrap(),
+        PublicKey::decode_base64("ANYn9Xm0UCX+YttTK5uB9CR+nRTruLpTEnCHEej2f4C0").unwrap(),
+        PublicKey::decode_base64("ANIeZLtOzH0fwcImIOwvb7f6MR9EcO63vZmHYn5uuoV0").unwrap(),
+        ], vec![1, 1, 1, 1, 1, 1], 3).unwrap();
+    let add = SuiAddress::from(multisig_pk.clone());
+    println!("add: {:?}", add);
+    let multisig = MultiSig::combine(vec![s3, s1, s2], multisig_pk).unwrap();
+    println!("multisig: {:?}", multisig);
+    let binding = GenericSignature::MultiSig(multisig.clone());
+    let ser_multisig = binding.as_bytes();
+    println!("ser: {:?}", Base64::encode(ser_multisig));
+    let res = multisig.verify_secure_generic(&value, add);
+    println!("res: {:?}", res);
 }

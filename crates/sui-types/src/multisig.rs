@@ -8,7 +8,7 @@ use crate::{
 };
 pub use enum_dispatch::enum_dispatch;
 use fastcrypto::{
-    ed25519::Ed25519PublicKey,
+    ed25519::{Ed25519PublicKey, Ed25519Signature},
     encoding::Base64,
     error::FastCryptoError,
     hash::HashFunction,
@@ -116,10 +116,12 @@ impl AuthenticatorTrait for MultiSig {
         let mut hasher = DefaultHash::default();
         hasher.update(message);
         let digest = hasher.finalize().digest;
-
+        println!("!xxx={:?}", &self);
         // Verify each signature against its corresponding signature scheme and public key.
         // TODO: further optimization can be done because multiple Ed25519 signatures can be batch verified.
         for (sig, i) in self.sigs.iter().zip(&self.bitmap) {
+            println!("!compressedsig={:?}", sig);
+            
             let (pk, weight) =
                 self.multisig_pk
                     .pk_map
@@ -129,11 +131,16 @@ impl AuthenticatorTrait for MultiSig {
                     })?;
             let res = match sig {
                 CompressedSignature::Ed25519(s) => {
+                    let sig: Ed25519Signature = s.try_into()?;
+                    println!("!sigggg={:?}", sig);
+
                     let pk = Ed25519PublicKey::from_bytes(pk.as_ref()).map_err(|_| {
                         SuiError::InvalidSignature {
                             error: "Invalid public key".to_string(),
                         }
                     })?;
+                    
+                    println!("!pk={:?}", pk);
                     pk.verify(&digest, &s.try_into()?)
                 }
                 CompressedSignature::Secp256k1(s) => {
