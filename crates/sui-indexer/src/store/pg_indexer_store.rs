@@ -1173,102 +1173,102 @@ impl IndexerStore for PgIndexerStore {
                     .context("Failed writing transactions to PostgresDB")?;
             }
 
-            // Commit indexed events
-            for event_chunk in events.chunks(PG_COMMIT_CHUNK_SIZE) {
-                diesel::insert_into(events::table)
-                    .values(event_chunk)
-                    .on_conflict_do_nothing()
-                    .execute(conn)
-                    .await
-                    .map_err(IndexerError::from)
-                    .context("Failed writing events to PostgresDB")?;
-            }
+            // // Commit indexed events
+            // for event_chunk in events.chunks(PG_COMMIT_CHUNK_SIZE) {
+            //     diesel::insert_into(events::table)
+            //         .values(event_chunk)
+            //         .on_conflict_do_nothing()
+            //         .execute(conn)
+            //         .await
+            //         .map_err(IndexerError::from)
+            //         .context("Failed writing events to PostgresDB")?;
+            // }
 
             // Commit indexed objects
-            let mutated_objects: Vec<Object> = tx_object_changes
-                .iter()
-                .flat_map(|changes| changes.changed_objects.iter().cloned())
-                .collect();
-            // TODO(gegaowp): monitor the deletion batch size to see
-            // if bulk update via unnest is necessary.
-            let deleted_changes = tx_object_changes
-                .iter()
-                .flat_map(|changes| changes.deleted_objects.iter().cloned())
-                .collect::<Vec<_>>();
-            let deleted_objects: Vec<Object> = deleted_changes
-                .iter()
-                .map(|deleted_object| deleted_object.clone().into())
-                .collect();
-            persist_transaction_object_changes(conn, mutated_objects, deleted_objects).await?;
+            //             let mutated_objects: Vec<Object> = tx_object_changes
+            //                 .iter()
+            //                 .flat_map(|changes| changes.changed_objects.iter().cloned())
+            //                 .collect();
+            //             // TODO(gegaowp): monitor the deletion batch size to see
+            //             // if bulk update via unnest is necessary.
+            //             let deleted_changes = tx_object_changes
+            //                 .iter()
+            //                 .flat_map(|changes| changes.deleted_objects.iter().cloned())
+            //                 .collect::<Vec<_>>();
+            //             let deleted_objects: Vec<Object> = deleted_changes
+            //                 .iter()
+            //                 .map(|deleted_object| deleted_object.clone().into())
+            //                 .collect();
+            //             persist_transaction_object_changes(conn, mutated_objects, deleted_objects).await?;
 
-            // Commit indexed addresses
-            for addresses_chunk in addresses.chunks(PG_COMMIT_CHUNK_SIZE) {
-                diesel::insert_into(addresses::table)
-                    .values(addresses_chunk)
-                    .on_conflict(addresses::account_address)
-                    .do_nothing()
-                    .execute(conn)
-                    .await
-                    .map_err(IndexerError::from)
-                    .context("Failed writing addresses to PostgresDB")?;
-            }
+            //             // Commit indexed addresses
+            //             for addresses_chunk in addresses.chunks(PG_COMMIT_CHUNK_SIZE) {
+            //                 diesel::insert_into(addresses::table)
+            //                     .values(addresses_chunk)
+            //                     .on_conflict(addresses::account_address)
+            //                     .do_nothing()
+            //                     .execute(conn)
+            //                     .await
+            //                     .map_err(IndexerError::from)
+            //                     .context("Failed writing addresses to PostgresDB")?;
+            //             }
 
-            // Commit indexed packages
-            for packages_chunk in packages.chunks(PG_COMMIT_CHUNK_SIZE) {
-                diesel::insert_into(packages::table)
-                    .values(packages_chunk)
-                    .on_conflict_do_nothing()
-                    .execute(conn)
-                    .await
-                    .map_err(IndexerError::from)
-                    .context("Failed writing packages to PostgresDB")?;
-            }
+            //             // Commit indexed packages
+            //             for packages_chunk in packages.chunks(PG_COMMIT_CHUNK_SIZE) {
+            //                 diesel::insert_into(packages::table)
+            //                     .values(packages_chunk)
+            //                     .on_conflict_do_nothing()
+            //                     .execute(conn)
+            //                     .await
+            //                     .map_err(IndexerError::from)
+            //                     .context("Failed writing packages to PostgresDB")?;
+            //             }
 
-            // Commit indexed move calls
-            for move_calls_chunk in move_calls.chunks(PG_COMMIT_CHUNK_SIZE) {
-                diesel::insert_into(move_calls::table)
-                    .values(move_calls_chunk)
-                    .on_conflict_do_nothing()
-                    .execute(conn)
-                    .await
-                    .map_err(IndexerError::from)
-                    .context("Failed writing move_calls to PostgresDB")?;
-            }
+            //             // Commit indexed move calls
+            //             for move_calls_chunk in move_calls.chunks(PG_COMMIT_CHUNK_SIZE) {
+            //                 diesel::insert_into(move_calls::table)
+            //                     .values(move_calls_chunk)
+            //                     .on_conflict_do_nothing()
+            //                     .execute(conn)
+            //                     .await
+            //                     .map_err(IndexerError::from)
+            //                     .context("Failed writing move_calls to PostgresDB")?;
+            //             }
 
-            // Commit indexed input objects
-            for input_objects_chunk in input_objects.chunks(PG_COMMIT_CHUNK_SIZE) {
-                diesel::insert_into(input_objects::table)
-                    .values(input_objects_chunk)
-                    .on_conflict_do_nothing()
-                    .execute(conn)
-                    .await
-                    .map_err(IndexerError::from)
-                    .context("Failed writing input_objects to PostgresDB")?;
-            }
+            //             // Commit indexed input objects
+            //             for input_objects_chunk in input_objects.chunks(PG_COMMIT_CHUNK_SIZE) {
+            //                 diesel::insert_into(input_objects::table)
+            //                     .values(input_objects_chunk)
+            //                     .on_conflict_do_nothing()
+            //                     .execute(conn)
+            //                     .await
+            //                     .map_err(IndexerError::from)
+            //                     .context("Failed writing input_objects to PostgresDB")?;
+            //             }
 
-            // Commit indexed recipients
-            for recipients_chunk in recipients.chunks(PG_COMMIT_CHUNK_SIZE) {
-                diesel::insert_into(recipients::table)
-                    .values(recipients_chunk)
-                    .on_conflict_do_nothing()
-                    .execute(conn)
-                    .await
-                    .map_err(IndexerError::from)
-                    .context("Failed writing recipients to PostgresDB")?;
-            }
+            //             // Commit indexed recipients
+            //             for recipients_chunk in recipients.chunks(PG_COMMIT_CHUNK_SIZE) {
+            //                 diesel::insert_into(recipients::table)
+            //                     .values(recipients_chunk)
+            //                     .on_conflict_do_nothing()
+            //                     .execute(conn)
+            //                     .await
+            //                     .map_err(IndexerError::from)
+            //                     .context("Failed writing recipients to PostgresDB")?;
+            //             }
 
-            // update epoch transaction count
-            let sql = "UPDATE epochs e1
-SET epoch_total_transactions = e2.epoch_total_transactions + $1
-FROM epochs e2
-WHERE e1.epoch = e2.epoch
-  AND e1.epoch = $2;";
-            diesel::sql_query(sql)
-                .bind::<BigInt, _>(checkpoint.transactions.len() as i64)
-                .bind::<BigInt, _>(checkpoint.epoch)
-                .as_query()
-                .execute(conn)
-                .await?;
+            //             // update epoch transaction count
+            //             let sql = "UPDATE epochs e1
+            // SET epoch_total_transactions = e2.epoch_total_transactions + $1
+            // FROM epochs e2
+            // WHERE e1.epoch = e2.epoch
+            //   AND e1.epoch = $2;";
+            //             diesel::sql_query(sql)
+            //                 .bind::<BigInt, _>(checkpoint.transactions.len() as i64)
+            //                 .bind::<BigInt, _>(checkpoint.epoch)
+            //                 .as_query()
+            //                 .execute(conn)
+            //                 .await?;
             // Commit indexed checkpoint last, so that if the checkpoint is committed,
             // all related data have been committed as well.
             diesel::insert_into(checkpoints::table)
