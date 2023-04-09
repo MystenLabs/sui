@@ -23,7 +23,7 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::TransactionEvents;
 use sui_types::object::Owner;
 use sui_types::query::TransactionFilter;
-use typed_store::rocks::DBOptions;
+use typed_store::rocks::{DBOptions, optimized_for_high_throughput_options};
 use typed_store::rocks::{default_db_options, point_lookup_db_options, DBMap, MetricConf};
 use typed_store::traits::Map;
 use typed_store::traits::{TableSummary, TypedStoreDebug};
@@ -140,8 +140,9 @@ fn timestamps_table_default_config() -> DBOptions {
     point_lookup_db_options()
 }
 fn owner_index_table_default_config() -> DBOptions {
-    default_db_options()
+    optimized_for_high_throughput_options(5 * 1024, false)
 }
+
 fn dynamic_field_index_table_default_config() -> DBOptions {
     default_db_options()
 }
