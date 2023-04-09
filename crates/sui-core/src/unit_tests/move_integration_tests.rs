@@ -15,8 +15,7 @@ use move_core_types::{
 };
 
 use sui_types::{
-    error::ExecutionErrorKind, object::MAX_GAS_BUDGET_FOR_TESTING,
-    programmable_transaction_builder::ProgrammableTransactionBuilder,
+    error::ExecutionErrorKind, programmable_transaction_builder::ProgrammableTransactionBuilder,
     utils::to_sender_signed_transaction,
 };
 
@@ -34,8 +33,6 @@ use std::{env, str::FromStr};
 use sui_verifier::entry_points_verifier::{
     RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR,
 };
-
-const MAX_GAS: u64 = MAX_GAS_BUDGET_FOR_TESTING;
 
 #[tokio::test]
 #[cfg_attr(msim, ignore)]
@@ -802,9 +799,16 @@ async fn test_entry_point_vector_empty() {
         );
         builder.finish()
     };
-    let effects = execute_programmable_transaction(&authority, &gas, &sender, &sender_key, pt)
-        .await
-        .unwrap();
+    let effects = execute_programmable_transaction(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        pt,
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    )
+    .await
+    .unwrap();
     assert!(
         matches!(effects.status(), ExecutionStatus::Success { .. }),
         "{:?}",
@@ -824,9 +828,16 @@ async fn test_entry_point_vector_empty() {
         );
         builder.finish()
     };
-    let effects = execute_programmable_transaction(&authority, &gas, &sender, &sender_key, pt)
-        .await
-        .unwrap();
+    let effects = execute_programmable_transaction(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        pt,
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    )
+    .await
+    .unwrap();
     assert!(
         matches!(effects.status(), ExecutionStatus::Success { .. }),
         "{:?}",
@@ -847,9 +858,16 @@ async fn test_entry_point_vector_empty() {
         );
         builder.finish()
     };
-    let err = execute_programmable_transaction(&authority, &gas, &sender, &sender_key, pt)
-        .await
-        .unwrap_err();
+    let err = execute_programmable_transaction(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        pt,
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    )
+    .await
+    .unwrap_err();
     assert_eq!(
         err,
         SuiError::UserInputError {
@@ -870,9 +888,16 @@ async fn test_entry_point_vector_empty() {
         );
         builder.finish()
     };
-    let err = execute_programmable_transaction(&authority, &gas, &sender, &sender_key, pt)
-        .await
-        .unwrap_err();
+    let err = execute_programmable_transaction(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        pt,
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    )
+    .await
+    .unwrap_err();
     assert_eq!(
         err,
         SuiError::UserInputError {
@@ -2263,9 +2288,16 @@ async fn test_make_move_vec_for_type<T: Clone + Serialize>(
     let mut builder = ProgrammableTransactionBuilder::new();
     make_and_drop(&mut builder, package_id, &t, vec![]);
     let pt = builder.finish();
-    let effects = execute_programmable_transaction(authority, gas, sender, sender_key, pt)
-        .await
-        .unwrap();
+    let effects = execute_programmable_transaction(
+        authority,
+        gas,
+        sender,
+        sender_key,
+        pt,
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    )
+    .await
+    .unwrap();
     assert_eq!(effects.status(), &ExecutionStatus::Success);
     assert!(effects.created().is_empty());
     assert_eq!(effects.mutated().len(), 1);
@@ -2278,9 +2310,16 @@ async fn test_make_move_vec_for_type<T: Clone + Serialize>(
     let args = vec![builder.pure(value.clone()).unwrap()];
     make_and_drop(&mut builder, package_id, &t, args);
     let pt = builder.finish();
-    let effects = execute_programmable_transaction(authority, gas, sender, sender_key, pt)
-        .await
-        .unwrap();
+    let effects = execute_programmable_transaction(
+        authority,
+        gas,
+        sender,
+        sender_key,
+        pt,
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    )
+    .await
+    .unwrap();
     assert_eq!(effects.status(), &ExecutionStatus::Success);
     assert!(effects.created().is_empty());
     assert_eq!(effects.mutated().len(), 1);
@@ -2296,9 +2335,16 @@ async fn test_make_move_vec_for_type<T: Clone + Serialize>(
     ];
     make_and_drop(&mut builder, package_id, &t, args);
     let pt = builder.finish();
-    let effects = execute_programmable_transaction(authority, gas, sender, sender_key, pt)
-        .await
-        .unwrap();
+    let effects = execute_programmable_transaction(
+        authority,
+        gas,
+        sender,
+        sender_key,
+        pt,
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    )
+    .await
+    .unwrap();
     assert_eq!(effects.status(), &ExecutionStatus::Success);
     assert!(effects.created().is_empty());
     assert_eq!(effects.mutated().len(), 1);
@@ -2319,9 +2365,16 @@ async fn test_make_move_vec_for_type<T: Clone + Serialize>(
     let args = vec![arg, id_result, arg];
     make_and_drop(&mut builder, package_id, &t, args);
     let pt = builder.finish();
-    let effects = execute_programmable_transaction(authority, gas, sender, sender_key, pt)
-        .await
-        .unwrap();
+    let effects = execute_programmable_transaction(
+        authority,
+        gas,
+        sender,
+        sender_key,
+        pt,
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    )
+    .await
+    .unwrap();
     assert_eq!(effects.status(), &ExecutionStatus::Success);
     assert!(effects.created().is_empty());
     assert_eq!(effects.mutated().len(), 1);
@@ -2349,9 +2402,16 @@ async fn test_make_move_vec_for_type<T: Clone + Serialize>(
         args,
     );
     let pt = builder.finish();
-    let effects = execute_programmable_transaction(authority, gas, sender, sender_key, pt)
-        .await
-        .unwrap();
+    let effects = execute_programmable_transaction(
+        authority,
+        gas,
+        sender,
+        sender_key,
+        pt,
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    )
+    .await
+    .unwrap();
     assert_eq!(effects.status(), &ExecutionStatus::Success);
     assert!(effects.created().is_empty());
     assert_eq!(effects.mutated().len(), 1);
@@ -2482,9 +2542,16 @@ async fn error_test_make_move_vec_for_type<T: Clone + Serialize>(
     let arg = builder.pure(value.clone()).unwrap();
     builder.command(Command::MakeMoveVec(None, vec![arg]));
     let pt = builder.finish();
-    let effects = execute_programmable_transaction(authority, gas, sender, sender_key, pt)
-        .await
-        .unwrap();
+    let effects = execute_programmable_transaction(
+        authority,
+        gas,
+        sender,
+        sender_key,
+        pt,
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    )
+    .await
+    .unwrap();
     assert_eq!(
         effects.status(),
         &ExecutionStatus::Failure {
@@ -2504,9 +2571,16 @@ async fn error_test_make_move_vec_for_type<T: Clone + Serialize>(
     let args = vec![builder.pure_bytes(ALWAYS_INVALID_BYTES.to_vec(), false)];
     builder.command(Command::MakeMoveVec(Some(t.clone()), args));
     let pt = builder.finish();
-    let effects = execute_programmable_transaction(authority, gas, sender, sender_key, pt)
-        .await
-        .unwrap();
+    let effects = execute_programmable_transaction(
+        authority,
+        gas,
+        sender,
+        sender_key,
+        pt,
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    )
+    .await
+    .unwrap();
     assert_eq!(
         effects.status(),
         &ExecutionStatus::Failure {
@@ -2528,9 +2602,16 @@ async fn error_test_make_move_vec_for_type<T: Clone + Serialize>(
     ];
     builder.command(Command::MakeMoveVec(Some(t.clone()), args));
     let pt = builder.finish();
-    let effects = execute_programmable_transaction(authority, gas, sender, sender_key, pt)
-        .await
-        .unwrap();
+    let effects = execute_programmable_transaction(
+        authority,
+        gas,
+        sender,
+        sender_key,
+        pt,
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    )
+    .await
+    .unwrap();
     assert_eq!(
         effects.status(),
         &ExecutionStatus::Failure {
@@ -2643,9 +2724,16 @@ async fn test_make_move_vec_empty() {
     let mut builder = ProgrammableTransactionBuilder::new();
     builder.command(Command::MakeMoveVec(None, vec![]));
     let pt = builder.finish();
-    let result = execute_programmable_transaction(&authority, &gas, &sender, &sender_key, pt)
-        .await
-        .unwrap_err();
+    let result = execute_programmable_transaction(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        pt,
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    )
+    .await
+    .unwrap_err();
     assert_eq!(
         result,
         SuiError::UserInputError {
@@ -2713,6 +2801,7 @@ pub async fn build_and_try_publish_test_package(
     gas_object_id: &ObjectID,
     test_dir: &str,
     gas_budget: u64,
+    gas_price: u64,
     with_unpublished_deps: bool,
 ) -> (Transaction, SignedTransactionEffects) {
     let build_config = BuildConfig::new_for_testing();
@@ -2726,12 +2815,13 @@ pub async fn build_and_try_publish_test_package(
     let gas_object = authority.get_object(gas_object_id).await.unwrap();
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
 
-    let data = TransactionData::new_module_with_dummy_gas_price(
+    let data = TransactionData::new_module(
         *sender,
         gas_object_ref,
         all_module_bytes,
         dependencies,
         gas_budget,
+        gas_price,
     );
     let transaction = to_sender_signed_transaction(data, sender_key);
 
@@ -2772,13 +2862,16 @@ pub async fn build_and_publish_test_package_with_upgrade_cap(
     test_dir: &str,
     with_unpublished_deps: bool,
 ) -> (ObjectRef, ObjectRef) {
+    let gas_price = authority.reference_gas_price_for_testing().unwrap();
+    let gas_budget = TEST_ONLY_GAS_UNIT_FOR_PUBLISH * gas_price;
     let effects = build_and_try_publish_test_package(
         authority,
         sender,
         sender_key,
         gas_object_id,
         test_dir,
-        MAX_GAS,
+        gas_budget,
+        gas_price,
         with_unpublished_deps,
     )
     .await

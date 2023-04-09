@@ -10,7 +10,7 @@ use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
 use sui_types::error::SuiResult;
 use sui_types::messages::{
     CallArg, ExecutionFailureStatus, ExecutionStatus, ObjectArg, TransactionEffects,
-    TransactionEffectsAPI, TransactionEvents,
+    TransactionEffectsAPI, TransactionEvents, TEST_ONLY_GAS_UNIT_FOR_GENERIC,
 };
 use sui_types::multiaddr::Multiaddr;
 use sui_types::object::{generate_test_gas_objects, Object, Owner, OBJECT_START_VERSION};
@@ -129,10 +129,11 @@ impl TestEnvironment {
     async fn new() -> Self {
         let gas_objects = generate_test_gas_objects();
         let (configs, mut gas_objects) = test_authority_configs_with_objects(gas_objects);
+        let rgp = configs.genesis.reference_gas_price();
         let node_handles = spawn_test_authorities(&configs).await;
 
         let move_package =
-            publish_move_package(gas_objects.pop().unwrap(), &configs.net_addresses())
+            publish_move_package(gas_objects.pop().unwrap(), &configs.net_addresses(), rgp)
                 .await
                 .0;
 
@@ -149,6 +150,7 @@ impl TestEnvironment {
         function: &'static str,
         arguments: Vec<CallArg>,
     ) -> (TransactionEffects, TransactionEvents) {
+        let rgp = self.configs.genesis.reference_gas_price();
         submit_single_owner_transaction(
             move_transaction(
                 self.gas_objects.pop().unwrap(),
@@ -156,6 +158,8 @@ impl TestEnvironment {
                 function,
                 self.move_package,
                 arguments,
+                rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+                rgp,
             ),
             &self.configs.net_addresses(),
         )
@@ -167,6 +171,7 @@ impl TestEnvironment {
         function: &'static str,
         arguments: Vec<CallArg>,
     ) -> SuiResult<(TransactionEffects, TransactionEvents)> {
+        let rgp = self.configs.genesis.reference_gas_price();
         submit_shared_object_transaction(
             move_transaction(
                 self.gas_objects.pop().unwrap(),
@@ -174,6 +179,8 @@ impl TestEnvironment {
                 function,
                 self.move_package,
                 arguments,
+                rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+                rgp,
             ),
             &self.configs.net_addresses(),
         )
@@ -264,8 +271,12 @@ impl TestEnvironment {
     }
 }
 
-async fn publish_move_package(gas: Object, net_addresses: &[Multiaddr]) -> ObjectRef {
+async fn publish_move_package(
+    gas: Object,
+    net_addresses: &[Multiaddr],
+    gas_price: u64,
+) -> ObjectRef {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("tests/move_test_code");
-    publish_package(gas, path, net_addresses).await
+    publish_package(gas, path, net_addresses, gas_price).await
 }

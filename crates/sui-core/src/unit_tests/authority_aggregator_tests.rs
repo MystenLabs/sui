@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::test_utils::make_transfer_object_transaction;
 use crate::test_utils::make_transfer_sui_transaction;
 use move_core_types::{account_address::AccountAddress, ident_str};
 use rand::rngs::StdRng;
@@ -19,7 +20,7 @@ use sui_types::utils::create_fake_transaction;
 
 use sui_macros::sim_test;
 use sui_types::messages::*;
-use sui_types::object::{Object, MAX_GAS_BUDGET_FOR_TESTING};
+use sui_types::object::Object;
 
 use super::*;
 use crate::authority_client::AuthorityAPI;
@@ -48,54 +49,6 @@ pub fn get_local_client(
     clients.next().unwrap().authority_client_mut()
 }
 
-pub fn transfer_coin_transaction(
-    src: SuiAddress,
-    secret: &dyn Signer<Signature>,
-    dest: SuiAddress,
-    object_ref: ObjectRef,
-    gas_object_ref: ObjectRef,
-) -> VerifiedTransaction {
-    to_sender_signed_transaction(
-        TransactionData::new_transfer_with_dummy_gas_price(
-            dest,
-            object_ref,
-            src,
-            gas_object_ref,
-            MAX_GAS_BUDGET_FOR_TESTING,
-        ),
-        secret,
-    )
-}
-
-pub fn transfer_object_move_transaction(
-    src: SuiAddress,
-    secret: &dyn Signer<Signature>,
-    dest: SuiAddress,
-    object_ref: ObjectRef,
-    framework_obj_id: ObjectID,
-    gas_object_ref: ObjectRef,
-) -> VerifiedTransaction {
-    let args = vec![
-        CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref)),
-        CallArg::Pure(bcs::to_bytes(&AccountAddress::from(dest)).unwrap()),
-    ];
-
-    to_sender_signed_transaction(
-        TransactionData::new_move_call_with_dummy_gas_price(
-            src,
-            framework_obj_id,
-            ident_str!("object_basics").to_owned(),
-            ident_str!("transfer").to_owned(),
-            Vec::new(),
-            gas_object_ref,
-            args,
-            MAX_GAS_BUDGET_FOR_TESTING,
-        )
-        .unwrap(),
-        secret,
-    )
-}
-
 pub fn create_object_move_transaction(
     src: SuiAddress,
     secret: &dyn Signer<Signature>,
@@ -103,6 +56,7 @@ pub fn create_object_move_transaction(
     value: u64,
     package_id: ObjectID,
     gas_object_ref: ObjectRef,
+    gas_price: u64,
 ) -> VerifiedTransaction {
     // When creating an object_basics object, we provide the value (u64) and address which will own the object
     let arguments = vec![
@@ -111,7 +65,7 @@ pub fn create_object_move_transaction(
     ];
 
     to_sender_signed_transaction(
-        TransactionData::new_move_call_with_dummy_gas_price(
+        TransactionData::new_move_call(
             src,
             package_id,
             ident_str!("object_basics").to_owned(),
@@ -119,7 +73,8 @@ pub fn create_object_move_transaction(
             Vec::new(),
             gas_object_ref,
             arguments,
-            MAX_GAS_BUDGET_FOR_TESTING,
+            TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * gas_price,
+            gas_price,
         )
         .unwrap(),
         secret,
@@ -132,9 +87,10 @@ pub fn delete_object_move_transaction(
     object_ref: ObjectRef,
     framework_obj_id: ObjectID,
     gas_object_ref: ObjectRef,
+    gas_price: u64,
 ) -> VerifiedTransaction {
     to_sender_signed_transaction(
-        TransactionData::new_move_call_with_dummy_gas_price(
+        TransactionData::new_move_call(
             src,
             framework_obj_id,
             ident_str!("object_basics").to_owned(),
@@ -142,7 +98,8 @@ pub fn delete_object_move_transaction(
             Vec::new(),
             gas_object_ref,
             vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref))],
-            MAX_GAS_BUDGET_FOR_TESTING,
+            TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * gas_price,
+            gas_price,
         )
         .unwrap(),
         secret,
@@ -156,6 +113,7 @@ pub fn set_object_move_transaction(
     value: u64,
     framework_obj_id: ObjectID,
     gas_object_ref: ObjectRef,
+    gas_price: u64,
 ) -> VerifiedTransaction {
     let args = vec![
         CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref)),
@@ -163,7 +121,7 @@ pub fn set_object_move_transaction(
     ];
 
     to_sender_signed_transaction(
-        TransactionData::new_move_call_with_dummy_gas_price(
+        TransactionData::new_move_call(
             src,
             framework_obj_id,
             ident_str!("object_basics").to_owned(),
@@ -171,7 +129,8 @@ pub fn set_object_move_transaction(
             Vec::new(),
             gas_object_ref,
             args,
-            MAX_GAS_BUDGET_FOR_TESTING,
+            TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * gas_price,
+            gas_price,
         )
         .unwrap(),
         secret,
@@ -283,13 +242,14 @@ async fn execute_transaction_with_fault_configs(
     for (index, config) in configs_before_process_transaction {
         get_local_client(&mut authorities, *index).fault_config = *config;
     }
-
-    let tx = transfer_coin_transaction(
+    let rgp = genesis.reference_gas_price();
+    let tx = make_transfer_object_transaction(
+        gas_object1.compute_object_reference(),
+        gas_object2.compute_object_reference(),
         addr1,
         &key1,
         addr2,
-        gas_object1.compute_object_reference(),
-        gas_object2.compute_object_reference(),
+        rgp,
     );
     let Ok(cert) = authorities.process_transaction(tx).await else {
         return false;
@@ -339,10 +299,11 @@ async fn test_quorum_map_and_reduce_timeout() {
     let gas_object1 = Object::with_owner_for_testing(addr1);
     let genesis_objects = vec![pkg.clone(), gas_object1.clone()];
     let (mut authorities, _, genesis, _) = init_local_authorities(4, genesis_objects).await;
+    let rgp = genesis.reference_gas_price();
     let pkg = genesis.object(pkg.id()).unwrap();
     let gas_object1 = genesis.object(gas_object1.id()).unwrap();
     let gas_ref_1 = gas_object1.compute_object_reference();
-    let tx = create_object_move_transaction(addr1, &key1, addr1, 100, pkg.id(), gas_ref_1);
+    let tx = create_object_move_transaction(addr1, &key1, addr1, 100, pkg.id(), gas_ref_1, rgp);
     let certified_tx = authorities.process_transaction(tx.clone()).await;
     assert!(certified_tx.is_ok());
     let certificate = certified_tx.unwrap().into_cert_for_testing();
@@ -711,7 +672,7 @@ async fn test_handle_transaction_panic() {
         None,
         sender,
         &sender_kp,
-        None,
+        666, // this is a dummy value which does not matter
     );
 
     // Non-quorum of effects without a retryable majority indicating a safety violation
@@ -781,7 +742,7 @@ async fn test_handle_transaction_response() {
         None,
         sender,
         &sender_kp,
-        None,
+        666, // this is a dummy value which does not matter
     );
     let tx2 = make_transfer_sui_transaction(
         gas_object,
@@ -789,7 +750,7 @@ async fn test_handle_transaction_response() {
         Some(1),
         sender,
         &sender_kp,
-        None,
+        666, // this is a dummy value which does not matter
     );
     let package_not_found_error = SuiError::UserInputError {
         error: UserInputError::DependentPackageNotFound {
@@ -1354,7 +1315,7 @@ async fn test_handle_conflicting_transaction_response() {
         Some(1),
         sender,
         &sender_kp,
-        None,
+        666, // this is a dummy value which does not matter
     );
     let conflicting_tx2 = make_transfer_sui_transaction(
         conflicting_object,
@@ -1362,7 +1323,7 @@ async fn test_handle_conflicting_transaction_response() {
         Some(2),
         sender,
         &sender_kp,
-        None,
+        666, // this is a dummy value which does not matter
     );
     let conflicting_error = SuiError::ObjectLockConflict {
         obj_ref: conflicting_object,
@@ -1519,7 +1480,7 @@ async fn test_handle_conflicting_transaction_response() {
         Some(3),
         sender,
         &sender_kp,
-        None,
+        666, // this is a dummy value which does not matter
     );
     let conflicting_error_2 = SuiError::ObjectLockConflict {
         obj_ref: conflicting_object,
@@ -1569,7 +1530,7 @@ async fn test_handle_conflicting_transaction_response() {
         Some(3),
         sender,
         &sender_kp,
-        None,
+        666, // this is a dummy value which does not matter
     );
     let conflicting_error_2 = SuiError::ObjectLockConflict {
         obj_ref: conflicting_object,
@@ -1794,7 +1755,7 @@ async fn test_handle_overload_response() {
         None,
         sender,
         &sender_kp,
-        None,
+        666, // this is a dummy value which does not matter
     );
 
     let overload_error = SuiError::TooManyTransactionsPendingExecution {

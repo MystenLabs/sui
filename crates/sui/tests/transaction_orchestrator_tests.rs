@@ -8,7 +8,7 @@ use sui_macros::sim_test;
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
-    FinalizedEffects, TransactionData, VerifiedTransaction,
+    FinalizedEffects, TransactionData, VerifiedTransaction, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
 use sui_types::object::generate_test_gas_objects_with_owner;
 use sui_types::quorum_driver_types::QuorumDriverError;
@@ -219,13 +219,17 @@ async fn test_tx_across_epoch_boundaries() {
     let (config, mut gas_objects) = test_authority_configs_with_objects(gas_objects);
     let authorities = spawn_test_authorities(&config).await;
     let fullnode = spawn_fullnode(&config, None).await;
+    let rgp = authorities[0]
+        .with(|node| node.state().reference_gas_price_for_testing())
+        .unwrap();
     let gas_object = gas_objects.swap_remove(0);
-    let data = TransactionData::new_transfer_sui_with_dummy_gas_price(
+    let data = TransactionData::new_transfer_sui(
         get_key_pair::<AccountKeyPair>().0,
         sender,
         None,
         gas_object.compute_object_reference(),
-        5000,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        rgp,
     );
     let tx = to_sender_signed_transaction(data, &keypair);
 

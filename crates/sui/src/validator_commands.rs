@@ -245,7 +245,7 @@ impl SuiValidatorCommand {
                         account_address: SuiAddress::from(&account_keypair.public()),
                         network_key: network_keypair.public().clone(),
                         gas_price,
-                        commission_rate: sui_config::ValidatorInfo::DEFAULT_COMMISSION_RATE,
+                        commission_rate: sui_config::node::DEFAULT_COMMISSION_RATE,
                         network_address: Multiaddr::try_from(format!(
                             "/dns/{}/tcp/8080/http",
                             host_name

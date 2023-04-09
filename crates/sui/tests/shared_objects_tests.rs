@@ -7,7 +7,7 @@ use sui_core::authority_client::AuthorityAPI;
 use sui_core::consensus_adapter::position_submit_certificate;
 use sui_types::messages::{
     CallArg, CommandArgumentError, ExecutionFailureStatus, ExecutionStatus, ObjectArg,
-    ObjectInfoRequest, TransactionEffectsAPI,
+    ObjectInfoRequest, TransactionEffectsAPI, TEST_ONLY_GAS_UNIT_FOR_GENERIC,
 };
 use test_utils::authority::get_client;
 use test_utils::transaction::{
@@ -33,13 +33,14 @@ async fn shared_object_transaction() {
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
     let (configs, objects) = test_authority_configs_with_objects(objects);
+    let rgp = configs.genesis.reference_gas_price();
     let mut objects = objects.into_iter();
     let shared_object = objects.next().unwrap();
     let gas_objects: Vec<_> = objects.collect();
     let _handles = spawn_test_authorities(&configs).await;
 
     // Make a test shared object certificate.
-    let transaction = test_shared_object_transactions(Some(shared_object), Some(gas_objects))
+    let transaction = test_shared_object_transactions(Some(shared_object), Some(gas_objects), rgp)
         .pop()
         .unwrap();
 
@@ -60,6 +61,7 @@ async fn many_shared_object_transactions() {
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
     let (configs, objects) = test_authority_configs_with_objects(objects);
+    let rgp = configs.genesis.reference_gas_price();
     let mut objects = objects.into_iter();
     let shared_object = objects.next().unwrap();
     let gas_objects: Vec<_> = objects.collect();
@@ -67,7 +69,7 @@ async fn many_shared_object_transactions() {
     let _handles = spawn_test_authorities(&configs).await;
 
     // Make a test shared object certificate.
-    let transaction = test_shared_object_transactions(Some(shared_object), Some(gas_objects))
+    let transaction = test_shared_object_transactions(Some(shared_object), Some(gas_objects), rgp)
         .pop()
         .unwrap();
 
@@ -87,12 +89,14 @@ async fn call_shared_object_contract() {
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
     let (configs, mut gas_objects) = test_authority_configs_with_objects(gas_objects);
+    let rgp = configs.genesis.reference_gas_price();
     let _handles = spawn_test_authorities(&configs).await;
 
     // Publish the move package to all authorities and get its package ID.
-    let package_id = publish_counter_package(gas_objects.pop().unwrap(), &configs.net_addresses())
-        .await
-        .0;
+    let package_id =
+        publish_counter_package(gas_objects.pop().unwrap(), &configs.net_addresses(), rgp)
+            .await
+            .0;
 
     // Make a transaction to create a counter.
     let transaction = move_transaction(
@@ -101,6 +105,8 @@ async fn call_shared_object_contract() {
         "create",
         package_id,
         /* arguments */ Vec::default(),
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp,
     );
     let (effects, _) = submit_single_owner_transaction(transaction, &configs.net_addresses()).await;
     assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
@@ -129,6 +135,8 @@ async fn call_shared_object_contract() {
                 CallArg::Object(counter_object_arg_imm),
                 CallArg::Pure(0u64.to_le_bytes().to_vec()),
             ],
+            rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+            rgp,
         );
         let (effects, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
             .await
@@ -150,6 +158,8 @@ async fn call_shared_object_contract() {
         "increment",
         package_id,
         vec![CallArg::Object(counter_object_arg)],
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp,
     );
     let (effects, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
         .await
@@ -181,6 +191,8 @@ async fn call_shared_object_contract() {
                 }),
                 CallArg::Pure(1u64.to_le_bytes().to_vec()),
             ],
+            rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+            rgp,
         );
         let (effects, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
             .await
@@ -201,6 +213,8 @@ async fn call_shared_object_contract() {
         "increment",
         package_id,
         vec![CallArg::Object(counter_object_arg_imm)],
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp,
     );
     let (effects, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
         .await
@@ -229,12 +243,14 @@ async fn access_clock_object_test() {
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
     let (configs, mut gas_objects) = test_authority_configs_with_objects(gas_objects);
+    let rgp = configs.genesis.reference_gas_price();
     let handles = spawn_test_authorities(&configs).await;
 
     // Publish the move package to all authorities and get its package ID.
-    let package_id = publish_counter_package(gas_objects.pop().unwrap(), &configs.net_addresses())
-        .await
-        .0;
+    let package_id =
+        publish_counter_package(gas_objects.pop().unwrap(), &configs.net_addresses(), rgp)
+            .await
+            .0;
 
     let clock_object_arg = ObjectArg::SharedObject {
         id: SUI_CLOCK_OBJECT_ID,
@@ -248,6 +264,8 @@ async fn access_clock_object_test() {
         "get_time",
         package_id,
         vec![CallArg::Object(clock_object_arg)],
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp,
     );
     let digest = *transaction.digest();
     let start = SystemTime::now()
@@ -310,12 +328,14 @@ async fn shared_object_flood() {
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
     let (configs, mut gas_objects) = test_authority_configs_with_objects(gas_objects);
+    let rgp = configs.genesis.reference_gas_price();
     let _handles = spawn_test_authorities(&configs).await;
 
     // Publish the move package to all authorities and get its package ID.
-    let package_id = publish_counter_package(gas_objects.pop().unwrap(), &configs.net_addresses())
-        .await
-        .0;
+    let package_id =
+        publish_counter_package(gas_objects.pop().unwrap(), &configs.net_addresses(), rgp)
+            .await
+            .0;
 
     // Make a transaction to create a counter.
     let transaction = move_transaction(
@@ -324,6 +344,8 @@ async fn shared_object_flood() {
         "create",
         package_id,
         /* arguments */ Vec::default(),
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp,
     );
     let (effects, _) = submit_single_owner_transaction(transaction, &configs.net_addresses()).await;
     assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
@@ -344,6 +366,8 @@ async fn shared_object_flood() {
             CallArg::Object(counter_object_arg),
             CallArg::Pure(0u64.to_le_bytes().to_vec()),
         ],
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp,
     );
     let (effects, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
         .await
@@ -357,6 +381,8 @@ async fn shared_object_flood() {
         "increment",
         package_id,
         vec![CallArg::Object(counter_object_arg)],
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp,
     );
     let (effects, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
         .await
@@ -373,6 +399,8 @@ async fn shared_object_flood() {
             CallArg::Object(counter_object_arg),
             CallArg::Pure(1u64.to_le_bytes().to_vec()),
         ],
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp,
     );
     let (effects, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
         .await
@@ -388,12 +416,14 @@ async fn shared_object_sync() {
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
     let (configs, mut gas_objects) = test_authority_configs_with_objects(gas_objects);
+    let rgp = configs.genesis.reference_gas_price();
     let _handles = spawn_test_authorities(&configs).await;
 
     // Publish the move package to all authorities and get its package ID.
-    let package_id = publish_counter_package(gas_objects.pop().unwrap(), &configs.net_addresses())
-        .await
-        .0;
+    let package_id =
+        publish_counter_package(gas_objects.pop().unwrap(), &configs.net_addresses(), rgp)
+            .await
+            .0;
 
     // Send a transaction to create a counter, to all but one authority.
     let create_counter_transaction = move_transaction(
@@ -402,6 +432,8 @@ async fn shared_object_sync() {
         "create",
         package_id,
         /* arguments */ Vec::default(),
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp,
     );
 
     let committee = configs.committee_with_network();
@@ -460,6 +492,8 @@ async fn shared_object_sync() {
         "increment",
         package_id,
         vec![CallArg::Object(counter_object_arg)],
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp,
     );
 
     // Let's submit the transaction to the original set of validators.
@@ -490,12 +524,14 @@ async fn replay_shared_object_transaction() {
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
     let (configs, mut gas_objects) = test_authority_configs_with_objects(gas_objects);
+    let rgp = configs.genesis.reference_gas_price();
     let _handles = spawn_test_authorities(&configs).await;
 
     // Publish the move package to all authorities and get its package ID
-    let package_id = publish_counter_package(gas_objects.pop().unwrap(), &configs.net_addresses())
-        .await
-        .0;
+    let package_id =
+        publish_counter_package(gas_objects.pop().unwrap(), &configs.net_addresses(), rgp)
+            .await
+            .0;
 
     // Send a transaction to create a counter (only to one authority) -- twice.
     let create_counter_transaction = move_transaction(
@@ -504,6 +540,8 @@ async fn replay_shared_object_transaction() {
         "create",
         package_id,
         /* arguments */ Vec::default(),
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp,
     );
 
     let mut version = None;

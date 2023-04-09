@@ -17,6 +17,7 @@ use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointSummary, SignedCheckpointSummary,
 };
 
+// TODO consolidate with `gen_certs` in batch_verification_bench.rs
 fn gen_certs(
     committee: &Committee,
     key_pairs: &[AuthorityKeyPair],

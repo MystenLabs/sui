@@ -14,9 +14,7 @@ use std::sync::Arc;
 use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::crypto::AccountKeyPair;
 use sui_types::gas_coin::GAS;
-use sui_types::messages::{
-    CallArg, ObjectArg, TransactionData, VerifiedTransaction, DUMMY_GAS_PRICE,
-};
+use sui_types::messages::{CallArg, ObjectArg, TransactionData, VerifiedTransaction};
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{coin, SUI_FRAMEWORK_OBJECT_ID};
 use tracing::{debug, error};
@@ -100,14 +98,14 @@ impl BenchmarkBank {
         }
         Ok(workloads)
     }
+
     fn make_split_coin_tx(
         &self,
         split_amounts: Vec<u64>,
-        gas_price: Option<u64>,
+        gas_price: u64,
         keypair: &AccountKeyPair,
         pay_coin: &Gas,
     ) -> Result<VerifiedTransaction> {
-        let gas_price = gas_price.unwrap_or(DUMMY_GAS_PRICE);
         let split_coin = TransactionData::new_move_call(
             self.primary_gas.1,
             SUI_FRAMEWORK_OBJECT_ID,
@@ -125,6 +123,7 @@ impl BenchmarkBank {
         let verified_tx = to_sender_signed_transaction(split_coin, keypair);
         Ok(verified_tx)
     }
+
     async fn split_coin_and_pay(
         &mut self,
         coin_configs: &[GasCoinConfig],
@@ -147,7 +146,7 @@ impl BenchmarkBank {
             debug!("Attempting split of coin#{idx}");
             let verified_tx = self.make_split_coin_tx(
                 split_amounts.clone(),
-                Some(gas_price),
+                gas_price,
                 &self.primary_gas.2,
                 pay_coin,
             )?;
@@ -244,7 +243,7 @@ impl BenchmarkBank {
                 split_amounts,
                 updated_gas.0,
                 &self.primary_gas.2,
-                Some(gas_price),
+                gas_price,
             )?;
             let effects = self
                 .proxy

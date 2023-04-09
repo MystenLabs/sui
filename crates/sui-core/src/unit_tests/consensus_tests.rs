@@ -11,6 +11,7 @@ use narwhal_types::TransactionsServer;
 use narwhal_types::{Empty, TransactionProto};
 use sui_network::tonic;
 use sui_types::crypto::deterministic_random_account_key;
+use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS;
 use sui_types::multiaddr::Multiaddr;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::SUI_FRAMEWORK_OBJECT_ID;
@@ -41,6 +42,7 @@ pub fn test_gas_objects() -> Vec<Object> {
 pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTransaction> {
     let epoch_store = authority.load_epoch_store_one_call_per_task();
     let (sender, keypair) = deterministic_random_account_key();
+    let rgp = epoch_store.reference_gas_price();
 
     let mut certificates = Vec::new();
     let shared_object = Object::shared_for_testing();
@@ -54,7 +56,7 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
         let module = "object_basics";
         let function = "create";
 
-        let data = TransactionData::new_move_call_with_dummy_gas_price(
+        let data = TransactionData::new_move_call(
             sender,
             SUI_FRAMEWORK_OBJECT_ID,
             ident_str!(module).to_owned(),
@@ -67,7 +69,8 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
                 CallArg::Pure(16u64.to_le_bytes().to_vec()),
                 CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
             ],
-            /* max_gas */ 10_000,
+            rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
+            rgp,
         )
         .unwrap();
 
