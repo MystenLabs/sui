@@ -46,7 +46,7 @@ fn indexer_benchmark(c: &mut Criterion) {
     });
 
     c.bench_function("persist_checkpoint", |b| {
-        b.iter(|| rt.block_on(store.persist_checkpoint(&checkpoints.pop().unwrap())))
+        b.iter(|| rt.block_on(store.persist_all_checkpoint_data(&checkpoints.pop().unwrap())))
     });
 
     let mut checkpoints = (20..100).cycle().map(CheckpointId::SequenceNumber);
@@ -79,7 +79,7 @@ fn create_checkpoint(sequence_number: i64) -> TemporaryCheckpointStore {
             .map(|_| create_transaction(sequence_number))
             .collect(),
         events: vec![],
-        objects_changes: vec![TransactionObjectChanges {
+        object_changes: vec![TransactionObjectChanges {
             changed_objects: (1..1000).map(|_| create_object(sequence_number)).collect(),
             deleted_objects: vec![],
         }],
