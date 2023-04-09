@@ -44,6 +44,7 @@ use sui_types::messages_checkpoint::{
 use sui_types::object::ObjectRead;
 
 use crate::errors::{Context, IndexerError};
+use crate::models::addresses::Address;
 use crate::models::checkpoints::Checkpoint;
 use crate::models::epoch::DBEpochInfo;
 use crate::models::events::Event;
@@ -51,7 +52,9 @@ use crate::models::network_metrics::{DBMoveCallMetrics, DBNetworkMetrics};
 use crate::models::objects::{
     compose_object_bulk_insert_update_query, group_and_sort_objects, Object,
 };
+use crate::models::packages::Package;
 use crate::models::system_state::DBValidatorSummary;
+use crate::models::transaction_index::{InputObject, MoveCall, Recipient};
 use crate::models::transactions::Transaction;
 use crate::schema::{
     addresses, checkpoints, checkpoints::dsl as checkpoints_dsl, epochs, epochs::dsl as epochs_dsl,
@@ -1139,7 +1142,7 @@ impl IndexerStore for PgIndexerStore {
         .scope_boxed())
     }
 
-    async fn persist_checkpoint(
+    async fn persist_all_checkpoint_data(
         &self,
         data: &TemporaryCheckpointStore,
     ) -> Result<usize, IndexerError> {
@@ -1147,7 +1150,7 @@ impl IndexerStore for PgIndexerStore {
             checkpoint,
             transactions,
             events,
-            objects_changes: tx_object_changes,
+            object_changes: tx_object_changes,
             addresses,
             packages,
             input_objects,
@@ -1280,6 +1283,176 @@ WHERE e1.epoch = e2.epoch
                 .context("Failed writing checkpoint to PostgresDB")
         }
         .scope_boxed())
+    }
+
+    async fn persist_checkpoint_transactions(
+        &self,
+        checkpoint: &Checkpoint,
+        transactions: &[Transaction],
+    ) -> Result<usize, IndexerError> {
+        transactional!(&self.cp, |conn| async {
+            // Commit indexed transactions
+            for transaction_chunk in transactions.chunks(PG_COMMIT_CHUNK_SIZE) {
+                diesel::insert_into(transactions::table)
+                    .values(transaction_chunk)
+                    .on_conflict(transactions::transaction_digest)
+                    .do_update()
+                    .set((
+                        transactions::timestamp_ms.eq(excluded(transactions::timestamp_ms)),
+                        transactions::checkpoint_sequence_number
+                            .eq(excluded(transactions::checkpoint_sequence_number)),
+                    ))
+                    .execute(conn)
+                    .await
+                    .map_err(IndexerError::from)
+                    .context("Failed writing transactions to PostgresDB")?;
+            }
+
+            // update epoch transaction count
+            let sql = "UPDATE epochs e1
+SET epoch_total_transactions = e2.epoch_total_transactions + $1
+FROM epochs e2
+WHERE e1.epoch = e2.epoch
+  AND e1.epoch = $2;";
+            diesel::sql_query(sql)
+                .bind::<BigInt, _>(checkpoint.transactions.len() as i64)
+                .bind::<BigInt, _>(checkpoint.epoch)
+                .as_query()
+                .execute(conn)
+                .await?;
+
+            // Commit indexed checkpoint last, so that if the checkpoint is committed,
+            // all related data have been committed as well.
+            diesel::insert_into(checkpoints::table)
+                .values(checkpoint)
+                .on_conflict_do_nothing()
+                .execute(conn)
+                .await
+                .map_err(IndexerError::from)
+                .context("Failed writing checkpoint to PostgresDB")
+        }
+        .scope_boxed())
+    }
+
+    async fn persist_object_changes(
+        &self,
+        tx_object_changes: &[TransactionObjectChanges],
+    ) -> Result<(), IndexerError> {
+        transactional!(&self.cp, |conn| async {
+            let mutated_objects: Vec<Object> = tx_object_changes
+                .iter()
+                .flat_map(|changes| changes.changed_objects.iter().cloned())
+                .collect();
+
+            let deleted_changes = tx_object_changes
+                .iter()
+                .flat_map(|changes| changes.deleted_objects.iter().cloned())
+                .collect::<Vec<_>>();
+            let deleted_objects: Vec<Object> = deleted_changes
+                .iter()
+                .map(|deleted_object| deleted_object.clone().into())
+                .collect();
+            persist_transaction_object_changes(conn, mutated_objects, deleted_objects).await?;
+            Ok::<(), IndexerError>(())
+        }
+        .scope_boxed())?;
+        Ok(())
+    }
+
+    async fn persist_events(&self, events: &[Event]) -> Result<(), IndexerError> {
+        transactional!(&self.cp, |conn| async {
+            for event_chunk in events.chunks(PG_COMMIT_CHUNK_SIZE) {
+                diesel::insert_into(events::table)
+                    .values(event_chunk)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await
+                    .map_err(IndexerError::from)
+                    .context("Failed writing events to PostgresDB")?;
+            }
+            Ok::<(), IndexerError>(())
+        }
+        .scope_boxed())?;
+        Ok(())
+    }
+
+    async fn persist_addresses(&self, addresses: &[Address]) -> Result<(), IndexerError> {
+        transactional!(&self.cp, |conn| async {
+            for addresses_chunk in addresses.chunks(PG_COMMIT_CHUNK_SIZE) {
+                diesel::insert_into(addresses::table)
+                    .values(addresses_chunk)
+                    .on_conflict(addresses::account_address)
+                    .do_nothing()
+                    .execute(conn)
+                    .await
+                    .map_err(IndexerError::from)
+                    .context("Failed writing addresses to PostgresDB")?;
+            }
+            Ok::<(), IndexerError>(())
+        }
+        .scope_boxed())?;
+        Ok(())
+    }
+    async fn persist_packages(&self, packages: &[Package]) -> Result<(), IndexerError> {
+        transactional!(&self.cp, |conn| async {
+            for packages_chunk in packages.chunks(PG_COMMIT_CHUNK_SIZE) {
+                diesel::insert_into(packages::table)
+                    .values(packages_chunk)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await
+                    .map_err(IndexerError::from)
+                    .context("Failed writing packages to PostgresDB")?;
+            }
+            Ok::<(), IndexerError>(())
+        }
+        .scope_boxed())?;
+        Ok(())
+    }
+
+    async fn persist_transaction_index_tables(
+        &self,
+        input_objects: &[InputObject],
+        move_calls: &[MoveCall],
+        recipients: &[Recipient],
+    ) -> Result<(), IndexerError> {
+        transactional!(&self.cp, |conn| async {
+            // Commit indexed move calls
+            for move_calls_chunk in move_calls.chunks(PG_COMMIT_CHUNK_SIZE) {
+                diesel::insert_into(move_calls::table)
+                    .values(move_calls_chunk)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await
+                    .map_err(IndexerError::from)
+                    .context("Failed writing move_calls to PostgresDB")?;
+            }
+
+            // Commit indexed input objects
+            for input_objects_chunk in input_objects.chunks(PG_COMMIT_CHUNK_SIZE) {
+                diesel::insert_into(input_objects::table)
+                    .values(input_objects_chunk)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await
+                    .map_err(IndexerError::from)
+                    .context("Failed writing input_objects to PostgresDB")?;
+            }
+
+            // Commit indexed recipients
+            for recipients_chunk in recipients.chunks(PG_COMMIT_CHUNK_SIZE) {
+                diesel::insert_into(recipients::table)
+                    .values(recipients_chunk)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await
+                    .map_err(IndexerError::from)
+                    .context("Failed writing recipients to PostgresDB")?;
+            }
+            Ok::<(), IndexerError>(())
+        }
+        .scope_boxed())?;
+        Ok(())
     }
 
     async fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError> {

@@ -238,33 +238,148 @@ where
 
                 // Write checkpoint to DB
                 let checkpoint_db_guard = self.metrics.checkpoint_db_commit_latency.start_timer();
-                // NOTE: retrials are necessary here, otherwise indexed_checkpoint can be popped and discarded.
-                let mut checkpoint_commit_res =
-                    self.state.persist_checkpoint(&indexed_checkpoint).await;
-                while let Err(e) = checkpoint_commit_res {
+
+                let TemporaryCheckpointStore {
+                    checkpoint,
+                    transactions,
+                    events,
+                    object_changes: tx_object_changes,
+                    addresses,
+                    packages,
+                    input_objects,
+                    move_calls,
+                    recipients,
+                } = indexed_checkpoint;
+
+                // NOTE: retrials are necessary here, otherwise results can be popped and discarded.
+                let object_changes_handler = self.clone();
+                spawn_monitored_task!(async move {
+                    let mut object_changes_commit_res = object_changes_handler
+                        .state
+                        .persist_object_changes(&tx_object_changes)
+                        .await;
+                    while let Err(e) = object_changes_commit_res {
+                        warn!(
+                            "Indexer object changes commit failed with error: {:?}, retrying after {:?} milli-secs...",
+                            e, DB_COMMIT_RETRY_INTERVAL_IN_MILLIS
+                        );
+                        tokio::time::sleep(std::time::Duration::from_millis(
+                            DB_COMMIT_RETRY_INTERVAL_IN_MILLIS,
+                        ))
+                        .await;
+                        object_changes_commit_res = object_changes_handler
+                            .state
+                            .persist_object_changes(&tx_object_changes)
+                            .await;
+                    }
+                });
+
+                let events_handler = self.clone();
+                spawn_monitored_task!(async move {
+                    let mut event_commit_res = events_handler.state.persist_events(&events).await;
+                    while let Err(e) = event_commit_res {
+                        warn!(
+                            "Indexer event commit failed with error: {:?}, retrying after {:?} milli-secs...",
+                            e, DB_COMMIT_RETRY_INTERVAL_IN_MILLIS
+                        );
+                        tokio::time::sleep(std::time::Duration::from_millis(
+                            DB_COMMIT_RETRY_INTERVAL_IN_MILLIS,
+                        ))
+                        .await;
+                        event_commit_res = events_handler.state.persist_events(&events).await;
+                    }
+                });
+
+                let addresses_handler = self.clone();
+                spawn_monitored_task!(async move {
+                    let mut address_commit_res =
+                        addresses_handler.state.persist_addresses(&addresses).await;
+                    while let Err(e) = address_commit_res {
+                        warn!(
+                            "Indexer address commit failed with error: {:?}, retrying after {:?} milli-secs...",
+                            e, DB_COMMIT_RETRY_INTERVAL_IN_MILLIS
+                        );
+                        tokio::time::sleep(std::time::Duration::from_millis(
+                            DB_COMMIT_RETRY_INTERVAL_IN_MILLIS,
+                        ))
+                        .await;
+                        address_commit_res =
+                            addresses_handler.state.persist_addresses(&addresses).await;
+                    }
+                });
+
+                let packages_handler = self.clone();
+                spawn_monitored_task!(async move {
+                    let mut package_commit_res =
+                        packages_handler.state.persist_packages(&packages).await;
+                    while let Err(e) = package_commit_res {
+                        warn!(
+                            "Indexer package commit failed with error: {:?}, retrying after {:?} milli-secs...",
+                            e, DB_COMMIT_RETRY_INTERVAL_IN_MILLIS
+                        );
+                        tokio::time::sleep(std::time::Duration::from_millis(
+                            DB_COMMIT_RETRY_INTERVAL_IN_MILLIS,
+                        ))
+                        .await;
+                        package_commit_res =
+                            packages_handler.state.persist_packages(&packages).await;
+                    }
+                });
+
+                let transactions_handler = self.clone();
+                spawn_monitored_task!(async move {
+                    let mut transaction_index_tables_commit_res = transactions_handler
+                        .state
+                        .persist_transaction_index_tables(&input_objects, &move_calls, &recipients)
+                        .await;
+                    while let Err(e) = transaction_index_tables_commit_res {
+                        warn!(
+                            "Indexer transaction index tables commit failed with error: {:?}, retrying after {:?} milli-secs...",
+                            e, DB_COMMIT_RETRY_INTERVAL_IN_MILLIS
+                        );
+                        tokio::time::sleep(std::time::Duration::from_millis(
+                            DB_COMMIT_RETRY_INTERVAL_IN_MILLIS,
+                        ))
+                        .await;
+                        transaction_index_tables_commit_res = transactions_handler
+                            .state
+                            .persist_transaction_index_tables(
+                                &input_objects,
+                                &move_calls,
+                                &recipients,
+                            )
+                            .await;
+                    }
+                });
+
+                let mut checkpoint_tx_commit_res = self
+                    .state
+                    .persist_checkpoint_transactions(&checkpoint, &transactions)
+                    .await;
+                while let Err(e) = checkpoint_tx_commit_res {
                     warn!(
-                        "Indexer checkpoint commit failed with error: {:?}, retrying after {:?} milli-secs...",
+                        "Indexer checkpoint & transaction commit failed with error: {:?}, retrying after {:?} milli-secs...",
                         e, DB_COMMIT_RETRY_INTERVAL_IN_MILLIS
                     );
                     tokio::time::sleep(std::time::Duration::from_millis(
                         DB_COMMIT_RETRY_INTERVAL_IN_MILLIS,
                     ))
                     .await;
-                    checkpoint_commit_res =
-                        self.state.persist_checkpoint(&indexed_checkpoint).await;
+                    checkpoint_tx_commit_res = self
+                        .state
+                        .persist_checkpoint_transactions(&checkpoint, &transactions)
+                        .await;
                 }
                 checkpoint_db_guard.stop_and_record();
 
                 self.metrics.total_checkpoint_committed.inc();
-                let tx_count = indexed_checkpoint.transactions.len();
+                let tx_count = transactions.len();
                 self.metrics
                     .total_transaction_committed
                     .inc_by(tx_count as u64);
                 info!(
-                    "Checkpoint {} committed with {} transactions and {} object changes.",
-                    indexed_checkpoint.checkpoint.sequence_number,
-                    tx_count,
-                    indexed_checkpoint.objects_changes.len()
+                    "Checkpoint {} committed with {} transactions",
+                    checkpoint.sequence_number, tx_count,
                 );
                 self.metrics
                     .transaction_per_checkpoint
@@ -583,7 +698,7 @@ where
                 checkpoint: Checkpoint::from(checkpoint, total_transactions)?,
                 transactions: db_transactions,
                 events,
-                objects_changes,
+                object_changes: objects_changes,
                 addresses,
                 packages,
                 input_objects,
