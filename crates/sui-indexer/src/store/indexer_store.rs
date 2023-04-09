@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
+use prometheus::Histogram;
 
 use sui_json_rpc_types::{
     Checkpoint as RpcCheckpoint, CheckpointId, EpochInfo, EventFilter, EventPage, MoveCallMetrics,
@@ -197,7 +198,10 @@ pub trait IndexerStore {
     ) -> Result<usize, IndexerError>;
     async fn persist_object_changes(
         &self,
+        checkpoint_seq: i64,
         tx_object_changes: &[TransactionObjectChanges],
+        object_mutation_latency: Histogram,
+        object_deletion_latency: Histogram,
     ) -> Result<(), IndexerError>;
     async fn persist_events(&self, events: &[Event]) -> Result<(), IndexerError>;
     async fn persist_addresses(&self, addresses: &[Address]) -> Result<(), IndexerError>;

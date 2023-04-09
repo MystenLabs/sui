@@ -18,6 +18,7 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
 pub struct IndexerCheckpointHandlerMetrics {
     pub total_checkpoint_received: IntCounter,
     pub total_checkpoint_committed: IntCounter,
+    pub total_object_checkpoint_committed: IntCounter,
     pub total_transaction_committed: IntCounter,
     pub total_object_change_committed: IntCounter,
     pub total_epoch_committed: IntCounter,
@@ -30,6 +31,8 @@ pub struct IndexerCheckpointHandlerMetrics {
     pub checkpoint_index_latency: Histogram,
     pub checkpoint_db_commit_latency: Histogram,
     pub object_db_commit_latency: Histogram,
+    pub object_mutation_db_commit_latency: Histogram,
+    pub object_deletion_db_commit_latency: Histogram,
     pub epoch_db_commit_latency: Histogram,
     // latency of event websocket subscription
     pub subscription_process_latency: Histogram,
@@ -48,6 +51,12 @@ impl IndexerCheckpointHandlerMetrics {
             total_checkpoint_committed: register_int_counter_with_registry!(
                 "total_checkpoint_committed",
                 "Total number of checkpoint committed",
+                registry,
+            )
+            .unwrap(),
+            total_object_checkpoint_committed: register_int_counter_with_registry!(
+                "total_object_checkpoint_committed",
+                "Total number of object checkpoint committed",
                 registry,
             )
             .unwrap(),
@@ -114,6 +123,20 @@ impl IndexerCheckpointHandlerMetrics {
             object_db_commit_latency: register_histogram_with_registry!(
                 "object_db_commit_latency",
                 "Time spent commiting a object to the db",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            object_mutation_db_commit_latency: register_histogram_with_registry!(
+                "object_mutation_db_commit_latency",
+                "Time spent commiting a object mutation to the db",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            object_deletion_db_commit_latency: register_histogram_with_registry!(
+                "object_deletion_db_commit_latency",
+                "Time spent commiting a object deletion to the db",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )

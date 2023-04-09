@@ -162,9 +162,7 @@ where
             let download_futures = (next_cursor_sequence_number
                 ..next_cursor_sequence_number + current_parallel_downloads as i64)
                 .into_iter()
-                .map(|seq_num| {
-                    self.download_checkpoint_data(seq_num as u64)
-                });
+                .map(|seq_num| self.download_checkpoint_data(seq_num as u64));
             let download_results = join_all(download_futures).await;
             let mut downloaded_checkpoints = vec![];
             // NOTE: Push sequentially and if one of the downloads failed,
@@ -413,8 +411,15 @@ where
 
                 // NOTE: commit object changes in the curren task to stick to the original order.
                 let object_db_guard = self.metrics.object_db_commit_latency.start_timer();
-                let mut object_changes_commit_res =
-                    self.state.persist_object_changes(&tx_object_changes).await;
+                let mut object_changes_commit_res = self
+                    .state
+                    .persist_object_changes(
+                        checkpoint_seq,
+                        &tx_object_changes,
+                        self.metrics.object_mutation_db_commit_latency.clone(),
+                        self.metrics.object_deletion_db_commit_latency.clone(),
+                    )
+                    .await;
                 while let Err(e) = object_changes_commit_res {
                     warn!(
                         "Indexer object changes commit failed with error: {:?}, retrying after {:?} milli-secs...",
@@ -424,15 +429,18 @@ where
                         DB_COMMIT_RETRY_INTERVAL_IN_MILLIS,
                     ))
                     .await;
-                    object_changes_commit_res =
-                        self.state.persist_object_changes(&tx_object_changes).await;
+                    object_changes_commit_res = self
+                        .state
+                        .persist_object_changes(
+                            checkpoint_seq,
+                            &tx_object_changes,
+                            self.metrics.object_mutation_db_commit_latency.clone(),
+                            self.metrics.object_deletion_db_commit_latency.clone(),
+                        )
+                        .await;
                 }
                 object_db_guard.stop_and_record();
-                info!(
-                    "Checkpoint {} committed with {} transaction object changes.",
-                    checkpoint_seq,
-                    tx_object_changes.len(),
-                );
+                self.metrics.total_object_checkpoint_committed.inc();
                 self.metrics
                     .total_object_change_committed
                     .inc_by(tx_object_changes.len() as u64);
