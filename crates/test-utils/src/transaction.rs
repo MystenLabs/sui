@@ -44,7 +44,7 @@ use crate::messages::{
     make_tx_certs_and_signed_effects_with_committee, MAX_GAS,
 };
 
-const GAS_BUDGET_IN_UNIT: u64 = 200_000;
+const GAS_BUDGET_IN_UNIT: u64 = 200_000_000;
 
 pub fn make_publish_package(gas_object: Object, path: PathBuf) -> VerifiedTransaction {
     let (sender, keypair) = deterministic_random_account_key();
@@ -121,17 +121,10 @@ pub async fn publish_package_with_wallet(
     dep_ids: Vec<ObjectID>,
 ) -> (ObjectRef, ObjectRef, TransactionDigest) {
     let client = context.get_client().await.unwrap();
-    let gas_price = context.get_reference_gas_price().await.unwrap();
     let transaction = {
         let data = client
             .transaction_builder()
-            .publish(
-                sender,
-                all_module_bytes,
-                dep_ids,
-                None,
-                GAS_BUDGET_IN_UNIT * gas_price,
-            )
+            .publish(sender, all_module_bytes, dep_ids, None, GAS_BUDGET_IN_UNIT)
             .await
             .unwrap();
 
@@ -255,7 +248,6 @@ pub async fn submit_move_transaction(
 ) -> SuiTransactionBlockResponse {
     debug!(?package_id, ?arguments, "move_transaction");
     let client = context.get_client().await.unwrap();
-    let gas_price = context.get_reference_gas_price().await.unwrap();
     let data = client
         .transaction_builder()
         .move_call(
@@ -266,7 +258,7 @@ pub async fn submit_move_transaction(
             vec![], // type_args
             arguments,
             gas_object,
-            GAS_BUDGET_IN_UNIT * gas_price,
+            GAS_BUDGET_IN_UNIT,
         )
         .await
         .unwrap();
