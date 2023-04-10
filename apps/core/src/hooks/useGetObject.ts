@@ -5,7 +5,19 @@ import { useRpcClient } from '../api/RpcClientContext';
 import { normalizeSuiAddress } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 
-export function useGetObject(objectId?: string | null) {
+const defaultOptions = {
+    showType: true,
+    showContent: true,
+    showOwner: true,
+    showPreviousTransaction: true,
+    showStorageRebate: true,
+    showDisplay: true,
+};
+
+export function useGetObject(
+    objectId?: string | null,
+    options = defaultOptions
+) {
     const rpc = useRpcClient();
     const normalizedObjId = objectId && normalizeSuiAddress(objectId);
     return useQuery(
@@ -13,14 +25,7 @@ export function useGetObject(objectId?: string | null) {
         async () =>
             rpc.getObject({
                 id: normalizedObjId!,
-                options: {
-                    showType: true,
-                    showContent: true,
-                    showOwner: true,
-                    showPreviousTransaction: true,
-                    showStorageRebate: true,
-                    showDisplay: true,
-                },
+                options,
             }),
         { enabled: !!normalizedObjId }
     );

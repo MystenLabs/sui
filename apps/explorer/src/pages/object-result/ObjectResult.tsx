@@ -26,7 +26,12 @@ function Fail({ objID }: { objID: string | undefined }) {
 
 export function ObjectResult() {
     const { id: objID } = useParams();
-    const { data, isLoading, isError } = useGetObject(objID!);
+    const { data, isLoading, isError } = useGetObject(objID!, {
+        showType: true,
+        showContent: true,
+        showOwner: true,
+        showDisplay: true,
+    });
 
     if (isLoading) {
         return <LoadingSpinner text="Loading data" />;
