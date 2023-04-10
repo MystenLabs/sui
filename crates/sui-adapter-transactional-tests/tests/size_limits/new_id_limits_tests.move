@@ -32,16 +32,33 @@ module Test::M1 {
 }
 
 // create below create count limit should succeed
-//# run Test::M1::create_n_ids --args 1 --gas-budget 100000000000000
+//# run Test::M1::create_n_ids --args 1 --gas-budget 100000000000000 --gas-price 1 --protocol-version 2
 
 // create below create count limit should succeed
-//# run Test::M1::create_n_ids --args 256 --gas-budget 100000000000000
+//# run Test::M1::create_n_ids --args 256 --gas-budget 100000000000000 --gas-price 1 --protocol-version 2
 
 // create at create count limit should succeed
-//# run Test::M1::create_n_ids --args 2048 --gas-budget 100000000000000 --view-gas-used
+//# run Test::M1::create_n_ids --args 2048 --gas-budget 100000000000000 --gas-price 1 --protocol-version 2
 
 // create above create count limit should fail
-//# run Test::M1::create_n_ids --args 2049 --gas-budget 100000000000000
+//# run Test::M1::create_n_ids --args 2049 --gas-budget 100000000000000 --gas-price 1 --protocol-version 2
 
 // create above create count limit should fail
-//# run Test::M1::create_n_ids --args 4096 --gas-budget 100000000000000
+//# run Test::M1::create_n_ids --args 4096 --gas-budget 100000000000000 --gas-price 1 --protocol-version 2
+
+// tests below all run out of gas with realistic prices
+
+// create below create count limit should succeed
+//# run Test::M1::create_n_ids --args 1 --gas-budget 100000000000000 --gas-price 1
+
+// create below create count limit should succeed
+//# run Test::M1::create_n_ids --args 256 --gas-budget 100000000000000 --gas-price 1
+
+// create at create count limit should succeed
+//# run Test::M1::create_n_ids --args 2048 --gas-budget 100000000000000 --gas-price 1
+
+// create above create count limit should fail
+//# run Test::M1::create_n_ids --args 2049 --gas-budget 100000000000000 --gas-price 1
+
+// create above create count limit should fail
+//# run Test::M1::create_n_ids --args 4096 --gas-budget 100000000000000 --gas-price 1

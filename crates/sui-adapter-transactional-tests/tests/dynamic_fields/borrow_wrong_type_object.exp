@@ -6,10 +6,12 @@ A: object(0,0)
 task 1 'publish'. lines 10-39:
 created: object(1,0)
 mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 7622800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'run'. lines 41-41:
 created: object(2,0), object(2,1), object(2,2)
 mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5890000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3 'run'. lines 43-43:
 Error: Object 0x519c6f4caae4a1a72604cbab9fd1847061b4011003634cb4cae02ae56d8e9f83 is owned by object 0xeaa96af86250771b379418b685c426f34cea4758d7c3db4534f323faa343eb36. Objects owned by other objects cannot be used as input arguments.
