@@ -84,8 +84,8 @@ pub trait IndexerApi {
     ) -> RpcResult<DynamicFieldPage>;
 
     /// Return the dynamic field object information for a specified object
-    #[method(name = "getDynamicFieldObject")]
-    async fn get_dynamic_field_object(
+    #[method(name = "getDynamicFieldObject", blocking)]
+    fn get_dynamic_field_object(
         &self,
         /// The ID of the queried parent object
         parent_object_id: ObjectID,

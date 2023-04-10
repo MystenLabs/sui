@@ -397,14 +397,15 @@ where
         )
     }
 
-    async fn get_dynamic_field_object(
+    fn get_dynamic_field_object(
         &self,
         parent_object_id: ObjectID,
         name: DynamicFieldName,
     ) -> RpcResult<SuiObjectResponse> {
-        self.fullnode
-            .get_dynamic_field_object(parent_object_id, name)
-            .await
+        block_on(
+            self.fullnode
+                .get_dynamic_field_object(parent_object_id, name),
+        )
     }
 
     fn subscribe_event(&self, sink: SubscriptionSink, filter: EventFilter) -> SubscriptionResult {
