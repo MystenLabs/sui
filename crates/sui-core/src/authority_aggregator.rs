@@ -43,6 +43,7 @@ use std::string::ToString;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_types::committee::{CommitteeWithNetworkMetadata, StakeUnit};
+use tap::TapFallible;
 use tokio::time::{sleep, timeout};
 
 use crate::authority::AuthorityStore;
@@ -1193,6 +1194,11 @@ where
             Ok(PlainTransactionInfoResponse::Signed(signed)) => {
                 debug!(?tx_digest, name=?name.concise(), weight, "Received signed transaction from validator handle_transaction");
                 self.handle_transaction_response_with_signed(state, signed)
+                    .tap_ok(|opt_cert| {
+                        if let Some(cert) = opt_cert.as_ref() {
+                            debug!(?tx_digest, ?cert, "Collected tx certificate")
+                        }
+                    })
             }
             Ok(PlainTransactionInfoResponse::ExecutedWithCert(cert, effects, events)) => {
                 debug!(?tx_digest, name=?name.concise(), weight, "Received prev certificate and effects from validator handle_transaction");
@@ -1398,6 +1404,7 @@ where
             quorum_threshold = threshold,
             validity_threshold = validity,
             ?timeout_after_quorum,
+            ?cert_ref,
             "Broadcasting certificate to authorities"
         );
         self.quorum_map_then_reduce_with_timeout(
