@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useRpcClient } from '../api/RpcClientContext';
-import { normalizeSuiAddress } from '@mysten/sui.js';
+import { normalizeSuiAddress, type SuiObjectDataOptions } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 
-const defaultOptions = {
+const defaultOptions: SuiObjectDataOptions = {
     showType: true,
     showContent: true,
     showOwner: true,
