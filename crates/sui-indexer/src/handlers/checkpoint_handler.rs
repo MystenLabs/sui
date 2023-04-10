@@ -392,7 +392,7 @@ where
                     transactions,
                     events,
                     object_changes: _tx_object_changes,
-                    addresses,
+                    addresses: _,
                     packages,
                     input_objects,
                     move_calls,
@@ -417,23 +417,23 @@ where
                     }
                 });
 
-                let addresses_handler = self.clone();
-                spawn_monitored_task!(async move {
-                    let mut address_commit_res =
-                        addresses_handler.state.persist_addresses(&addresses).await;
-                    while let Err(e) = address_commit_res {
-                        warn!(
-                            "Indexer address commit failed with error: {:?}, retrying after {:?} milli-secs...",
-                            e, DB_COMMIT_RETRY_INTERVAL_IN_MILLIS
-                        );
-                        tokio::time::sleep(std::time::Duration::from_millis(
-                            DB_COMMIT_RETRY_INTERVAL_IN_MILLIS,
-                        ))
-                        .await;
-                        address_commit_res =
-                            addresses_handler.state.persist_addresses(&addresses).await;
-                    }
-                });
+                // let addresses_handler = self.clone();
+                // spawn_monitored_task!(async move {
+                //     let mut address_commit_res =
+                //         addresses_handler.state.persist_addresses(&addresses).await;
+                //     while let Err(e) = address_commit_res {
+                //         warn!(
+                //             "Indexer address commit failed with error: {:?}, retrying after {:?} milli-secs...",
+                //             e, DB_COMMIT_RETRY_INTERVAL_IN_MILLIS
+                //         );
+                //         tokio::time::sleep(std::time::Duration::from_millis(
+                //             DB_COMMIT_RETRY_INTERVAL_IN_MILLIS,
+                //         ))
+                //         .await;
+                //         address_commit_res =
+                //             addresses_handler.state.persist_addresses(&addresses).await;
+                //     }
+                // });
 
                 let packages_handler = self.clone();
                 spawn_monitored_task!(async move {
@@ -769,11 +769,13 @@ where
             .flat_map(|tx| tx.get_recipients(checkpoint.epoch, checkpoint.sequence_number))
             .collect();
 
-        // Index addresses
-        let addresses = transactions
-            .iter()
-            .flat_map(|tx| tx.get_addresses(checkpoint.epoch, checkpoint.sequence_number))
-            .collect();
+        // // Index addresses
+        // let addresses = transactions
+        //     .iter()
+        //     .flat_map(|tx| {
+        //         tx.get_addresses(checkpoint.epoch, checkpoint.sequence_number)
+        //     })
+        //     .collect();
 
         // Index epoch
         let epoch_index = if checkpoint.epoch == 0 && checkpoint.sequence_number == 0 {
@@ -890,7 +892,7 @@ where
                 transactions: db_transactions,
                 events,
                 object_changes: objects_changes,
-                addresses,
+                addresses: vec![],
                 packages,
                 input_objects,
                 move_calls,
