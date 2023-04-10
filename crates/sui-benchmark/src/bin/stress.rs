@@ -6,8 +6,11 @@ use clap::*;
 
 use prometheus::Registry;
 use rand::seq::SliceRandom;
+use rand::Rng;
+use tokio::time::sleep;
 
 use std::sync::Arc;
+use std::time::Duration;
 use sui_benchmark::drivers::bench_driver::BenchDriver;
 use sui_benchmark::drivers::driver::Driver;
 use sui_benchmark::drivers::BenchmarkCmp;
@@ -107,6 +110,17 @@ async fn main() -> Result<()> {
     };
     let stress_stat_collection = opts.stress_stat_collection;
     barrier.wait().await;
+
+    // sleep with a random delay to avoid conflicts.
+    const STAGGER_INTERVAL: Duration = Duration::from_secs(60);
+    const STAGGER_MAX_JITTER_MS: u64 = 1000;
+    if opts.staggered_start_max_multiplier > 0 {
+        let delay = STAGGER_INTERVAL
+            * rand::thread_rng().gen_range(0..opts.staggered_start_max_multiplier)
+            + Duration::from_millis(rand::thread_rng().gen_range(0..STAGGER_MAX_JITTER_MS));
+        sleep(delay).await;
+    }
+
     // create client runtime
     let client_runtime = Builder::new_multi_thread()
         .enable_all()

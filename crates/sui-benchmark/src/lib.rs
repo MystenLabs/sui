@@ -6,6 +6,7 @@ use embedded_reconfig_observer::EmbeddedReconfigObserver;
 use fullnode_reconfig_observer::FullNodeReconfigObserver;
 use futures::{stream::FuturesUnordered, StreamExt};
 use prometheus::Registry;
+use rand::Rng;
 use roaring::RoaringBitmap;
 use std::{
     collections::BTreeMap,
@@ -55,7 +56,10 @@ use sui_types::{
     sui_system_state::SuiSystemStateTrait,
 };
 use sui_types::{error::SuiError, gas::GasCostSummary};
-use tokio::{task::JoinSet, time::timeout};
+use tokio::{
+    task::JoinSet,
+    time::{sleep, timeout},
+};
 use tracing::{error, info};
 
 pub mod bank;
@@ -372,11 +376,16 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                     ));
                 }
                 Err(err) => {
+                    let delay = Duration::from_millis(rand::thread_rng().gen_range(100..1000));
                     error!(
                         ?tx_digest,
-                        retry_cnt, "Transaction failed with err: {:?}", err
+                        retry_cnt,
+                        "Transaction failed with err: {:?}. Sleeping for {:?} ...",
+                        err,
+                        delay,
                     );
                     retry_cnt += 1;
+                    sleep(delay).await;
                 }
             }
         }
