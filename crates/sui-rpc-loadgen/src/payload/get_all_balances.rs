@@ -61,6 +61,6 @@ pub async fn get_all_balances(
 ) -> Result<Option<Vec<Balance>>> {
     match client.coin_read_api().get_all_balances(owner_address).await {
         Ok(balances) => Ok(Some(balances)),
-        Err(e) => Ok(None),
+        Err(_e) => Ok(None),
     }
 }
