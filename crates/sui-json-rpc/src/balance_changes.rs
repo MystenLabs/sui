@@ -25,6 +25,7 @@ pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
     object_provider: &P,
     effects: &TransactionEffects,
     input_objs: Vec<InputObjectKind>,
+    mocked_coins: Vec<ObjectID>,
 ) -> Result<Vec<BalanceChange>, E> {
     let (_, gas_owner) = effects.gas_object();
 
@@ -58,6 +59,7 @@ pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
             .map(|(id, version)| (*id, *version, input_objs_to_digest.get(id).cloned()))
             .collect::<Vec<_>>(),
         &all_mutated,
+        mocked_coins,
     )
     .await
 }
@@ -66,9 +68,10 @@ pub async fn get_balance_changes<P: ObjectProvider<Error = E>, E>(
     object_provider: &P,
     modified_at_version: &[(ObjectID, SequenceNumber, Option<ObjectDigest>)],
     all_mutated: &[(ObjectID, SequenceNumber, Option<ObjectDigest>)],
+    mocked_coins: Vec<ObjectID>,
 ) -> Result<Vec<BalanceChange>, E> {
     // 1. subtract all input coins
-    let balances = fetch_coins(object_provider, modified_at_version)
+    let balances = fetch_coins(object_provider, modified_at_version, mocked_coins.clone())
         .await?
         .into_iter()
         .fold(
@@ -79,7 +82,7 @@ pub async fn get_balance_changes<P: ObjectProvider<Error = E>, E>(
             },
         );
     // 2. add all mutated coins
-    let balances = fetch_coins(object_provider, all_mutated)
+    let balances = fetch_coins(object_provider, all_mutated, mocked_coins)
         .await?
         .into_iter()
         .fold(balances, |mut acc, (owner, type_, amount)| {
@@ -105,9 +108,14 @@ pub async fn get_balance_changes<P: ObjectProvider<Error = E>, E>(
 async fn fetch_coins<P: ObjectProvider<Error = E>, E>(
     object_provider: &P,
     objects: &[(ObjectID, SequenceNumber, Option<ObjectDigest>)],
+    mocked_coins: Vec<ObjectID>,
 ) -> Result<Vec<(Owner, TypeTag, u64)>, E> {
     let mut all_mutated_coins = vec![];
     for (id, version, digest_opt) in objects {
+        // We skip the newly created coins because they are randomly created in dry run otherwise check below will fail.
+        if mocked_coins.contains(id) {
+            continue;
+        }
         // TODO: use multi get object
         let o = object_provider.get_object(id, version).await?;
         if let Some(type_) = o.type_() {

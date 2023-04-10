@@ -149,7 +149,13 @@ pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
         .into_iter()
         .map(|(id, version)| (id, version, None))
         .collect();
-    get_balance_changes(object_provider, &modified_at_versions, &all_mutated).await
+    get_balance_changes(
+        object_provider,
+        &modified_at_versions,
+        &all_mutated,
+        Vec::new(),
+    )
+    .await
 }
 
 pub async fn get_object_changes<P: ObjectProvider<Error = E>, E>(

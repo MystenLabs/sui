@@ -20,7 +20,7 @@ use sui_json_rpc_types::{
     SuiTransactionBlockEvents, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc::Module;
-use sui_types::base_types::SuiAddress;
+use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, TransactionEffectsAPI,
     TransactionKind,
@@ -130,6 +130,7 @@ impl TransactionExecutionApi {
                             &object_cache,
                             &effects.effects,
                             input_objs,
+                            Vec::new(),
                         )
                         .await?,
                     )
@@ -179,10 +180,19 @@ impl TransactionExecutionApi {
             .state
             .dry_exec_transaction(txn_data.clone(), txn_digest)
             .await?;
+        let mocked_coins = resp
+            .object_changes
+            .iter()
+            .map(|obj_change| obj_change.object_id())
+            .collect::<Vec<ObjectID>>();
         let object_cache = ObjectProviderCache::new_with_cache(self.state.clone(), written_objects);
-        let balance_changes =
-            get_balance_changes_from_effect(&object_cache, &transaction_effects, input_objs)
-                .await?;
+        let balance_changes = get_balance_changes_from_effect(
+            &object_cache,
+            &transaction_effects,
+            input_objs,
+            mocked_coins,
+        )
+        .await?;
         let object_changes = get_object_changes(
             &object_cache,
             sender,

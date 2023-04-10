@@ -4,6 +4,7 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::time::Duration;
 use std::{collections::HashMap, fs, pin::Pin, sync::Arc};
 
@@ -15,7 +16,7 @@ use fastcrypto::encoding::Encoding;
 use fastcrypto::traits::KeyPair;
 use itertools::Itertools;
 use move_binary_format::CompiledModule;
-use move_core_types::language_storage::ModuleId;
+use move_core_types::language_storage::{ModuleId, StructTag};
 use parking_lot::Mutex;
 use prometheus::{
     register_histogram_with_registry, register_int_counter_vec_with_registry,
@@ -1037,7 +1038,7 @@ impl AuthorityState {
 
         // make a gas object if one was not provided
         let mut gas_object_refs = transaction.gas().to_vec();
-        let (gas_status, input_objects) = if transaction.gas().is_empty() {
+        let ((gas_status, input_objects), used_mock_gas) = if transaction.gas().is_empty() {
             let sender = transaction.sender();
             // use a 100M sui coin
             const MIST_TO_SUI: u64 = 1_000_000_000;
@@ -1051,20 +1052,26 @@ impl AuthorityState {
             );
             let gas_object_ref = gas_object.compute_object_reference();
             gas_object_refs = vec![gas_object_ref];
-            transaction_input_checker::check_transaction_input_with_given_gas(
-                &self.database,
-                epoch_store.as_ref(),
-                &transaction,
-                gas_object,
+            (
+                transaction_input_checker::check_transaction_input_with_given_gas(
+                    &self.database,
+                    epoch_store.as_ref(),
+                    &transaction,
+                    gas_object,
+                )
+                .await?,
+                true,
             )
-            .await?
         } else {
-            transaction_input_checker::check_transaction_input(
-                &self.database,
-                epoch_store.as_ref(),
-                &transaction,
+            (
+                transaction_input_checker::check_transaction_input(
+                    &self.database,
+                    epoch_store.as_ref(),
+                    &transaction,
+                )
+                .await?,
+                false,
             )
-            .await?
         };
 
         let shared_object_refs = input_objects.filter_shared_objects();
@@ -1072,7 +1079,7 @@ impl AuthorityState {
         let transaction_dependencies = input_objects.transaction_dependencies();
         let temporary_store = TemporaryStore::new_for_mock_transaction(
             self.database.clone(),
-            input_objects,
+            input_objects.clone(),
             transaction_digest,
             epoch_store.protocol_config(),
         );
@@ -1108,10 +1115,26 @@ impl AuthorityState {
             TemporaryModuleResolver::new(&inner_temp_store, epoch_store.module_cache().clone());
 
         // Returning empty vector here because we recalculate changes in the rpc layer.
-        let object_changes = Vec::new();
+        let mut object_changes = Vec::new();
 
         // Returning empty vector here because we recalculate changes in the rpc layer.
+        // We will instead pass
         let balance_changes = Vec::new();
+
+        // This is utilized to pass up information to dry runs so that we can distinguish objects
+        // that are mocked by authority.rs
+        if used_mock_gas {
+            for obj in input_objects.into_objects() {
+                object_changes.push(sui_json_rpc_types::ObjectChange::Created {
+                    sender: SuiAddress::random_for_testing_only(),
+                    owner: Owner::AddressOwner(SuiAddress::random_for_testing_only()),
+                    object_type: StructTag::from_str("0x2::coin::Coin<0x2::sui::SUI>").unwrap(),
+                    object_id: obj.1.id(),
+                    version: obj.1.version(),
+                    digest: obj.1.digest(),
+                })
+            }
+        }
 
         Ok((
             DryRunTransactionBlockResponse {
