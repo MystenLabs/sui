@@ -572,9 +572,9 @@ impl TryFrom<&GenericSignature> for SuiAddress {
             GenericSignature::Signature(sig) => {
                 let scheme = sig.scheme();
                 let pub_key_bytes = sig.public_key_bytes();
-                let pub_key = PublicKey::try_from_bytes(scheme, pub_key_bytes).map_err(|e| {
+                let pub_key = PublicKey::try_from_bytes(scheme, pub_key_bytes).map_err(|_| {
                     SuiError::InvalidSignature {
-                        error: e.to_string(),
+                        error: "Cannot parse pubkey".to_string(),
                     }
                 })?;
                 SuiAddress::from(&pub_key)
