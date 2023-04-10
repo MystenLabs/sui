@@ -194,6 +194,7 @@ impl SuiNode {
                 config
                     .expensive_safety_check_config
                     .enable_epoch_sui_conservation_check(),
+                &prometheus_registry,
             )
             .await?,
         );
