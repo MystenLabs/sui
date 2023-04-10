@@ -8,7 +8,7 @@ use sui_json_rpc_types::{
     NetworkMetrics, SuiObjectData, SuiObjectDataFilter, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions,
 };
-use sui_types::base_types::{EpochId, ObjectID, SequenceNumber};
+use sui_types::base_types::{EpochId, ObjectID, SequenceNumber, VersionNumber};
 use sui_types::digests::CheckpointDigest;
 use sui_types::error::SuiError;
 use sui_types::event::EventID;
@@ -219,6 +219,24 @@ impl ObjectStore for CheckpointData {
             .iter()
             .find_map(|(status, o)| match status {
                 ObjectStatus::Created | ObjectStatus::Mutated if &o.object_id == object_id => {
+                    o.clone().try_into().ok()
+                }
+                _ => None,
+            }))
+    }
+
+    fn get_object_by_key(
+        &self,
+        object_id: &ObjectID,
+        version: VersionNumber,
+    ) -> Result<Option<sui_types::object::Object>, SuiError> {
+        Ok(self
+            .changed_objects
+            .iter()
+            .find_map(|(status, o)| match status {
+                ObjectStatus::Created | ObjectStatus::Mutated
+                    if &o.object_id == object_id && o.version == version =>
+                {
                     o.clone().try_into().ok()
                 }
                 _ => None,

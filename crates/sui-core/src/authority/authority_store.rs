@@ -384,20 +384,6 @@ impl AuthorityStore {
             .await
     }
 
-    pub fn get_object_by_key(
-        &self,
-        object_id: &ObjectID,
-        version: VersionNumber,
-    ) -> Result<Option<Object>, SuiError> {
-        Ok(self
-            .perpetual_tables
-            .objects
-            .get(&ObjectKey(*object_id, version))?
-            .map(|object| self.perpetual_tables.object(object))
-            .transpose()?
-            .flatten())
-    }
-
     pub fn get_object_ref_prior_to_key(
         &self,
         object_id: &ObjectID,
@@ -1516,6 +1502,20 @@ impl ObjectStore for AuthorityStore {
     /// Read an object and return it, or Ok(None) if the object was not found.
     fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
         self.perpetual_tables.as_ref().get_object(object_id)
+    }
+
+    fn get_object_by_key(
+        &self,
+        object_id: &ObjectID,
+        version: VersionNumber,
+    ) -> Result<Option<Object>, SuiError> {
+        Ok(self
+            .perpetual_tables
+            .objects
+            .get(&ObjectKey(*object_id, version))?
+            .map(|object| self.perpetual_tables.object(object))
+            .transpose()?
+            .flatten())
     }
 }
 
