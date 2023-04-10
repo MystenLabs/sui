@@ -14,7 +14,7 @@ use move_core_types::language_storage::{ModuleId, StructTag};
 use serde::{de::DeserializeOwned, Serialize};
 use tracing::debug;
 
-use sui_json_rpc_types::SuiObjectDataFilter;
+use sui_json_rpc_types::{Balance, SuiObjectDataFilter};
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest, TxSequenceNumber};
 use sui_types::base_types::{ObjectInfo, ObjectRef};
 use sui_types::digests::TransactionEventsDigest;
@@ -107,6 +107,7 @@ pub struct IndexStoreTables {
     event_by_sender: DBMap<(SuiAddress, EventId), EventIndex>,
     #[default_options_override_fn = "index_table_default_config"]
     event_by_time: DBMap<(u64, EventId), EventIndex>,
+    balance: DBMap<SuiAddress, Balance>,
 }
 
 pub struct IndexStore {
@@ -154,6 +155,7 @@ impl IndexStore {
     pub fn new(path: PathBuf) -> Self {
         let tables =
             IndexStoreTables::open_tables_read_write(path, MetricConf::default(), None, None);
+        tables.balance.rocksdb.drop_cf("balance").unwrap();
         let next_sequence_number = tables
             .transaction_order
             .iter()
