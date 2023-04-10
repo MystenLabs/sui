@@ -274,6 +274,11 @@ pub struct ExpensiveSafetyCheckConfig {
     #[serde(default)]
     enable_epoch_sui_conservation_check: bool,
 
+    /// If enabled, we will check that the total SUI in all input objects of a tx
+    /// (both the Move part and the storage rebate) matches the total SUI in all
+    /// output objects of the tx + gas fees
+    enable_deep_per_tx_sui_conservation_check: bool,
+
     /// Disable epoch SUI conservation check even when we are running in debug mode.
     #[serde(default)]
     force_disable_epoch_sui_conservation_check: bool,
@@ -298,6 +303,7 @@ impl ExpensiveSafetyCheckConfig {
     pub fn new_enable_all() -> Self {
         Self {
             enable_epoch_sui_conservation_check: true,
+            enable_deep_per_tx_sui_conservation_check: true,
             force_disable_epoch_sui_conservation_check: false,
             enable_state_consistency_check: true,
             force_disable_state_consistency_check: false,
@@ -329,6 +335,10 @@ impl ExpensiveSafetyCheckConfig {
 
     pub fn enable_move_vm_paranoid_checks(&self) -> bool {
         self.enable_move_vm_paranoid_checks
+    }
+
+    pub fn enable_deep_per_tx_sui_conservation_check(&self) -> bool {
+        self.enable_deep_per_tx_sui_conservation_check || cfg!(debug_assertions)
     }
 }
 

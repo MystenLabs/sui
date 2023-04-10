@@ -730,6 +730,7 @@ impl<'a> SuiTestAdapter<'a> {
             // TODO: Support different epochs in transactional tests.
             &EpochData::new_test(),
             &PROTOCOL_CONSTANTS,
+            false, // enable_expensive_checks
         );
 
         let mut created_ids: Vec<_> = effects

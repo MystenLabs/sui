@@ -986,6 +986,10 @@ impl AuthorityState {
                 gas_status,
                 &epoch_store.epoch_start_config().epoch_data(),
                 epoch_store.protocol_config(),
+                // TODO: would be nice to pass the whole NodeConfig here, but it creates a
+                // cyclic dependency w/ sui-adapter
+                self.expensive_safety_check_config
+                    .enable_deep_per_tx_sui_conservation_check(),
             );
 
         Ok((inner_temp_store, effects))
@@ -1091,6 +1095,7 @@ impl AuthorityState {
                 gas_status,
                 &epoch_store.epoch_start_config().epoch_data(),
                 epoch_store.protocol_config(),
+                false, // enable_expensive_checks
             );
         let tx_digest = *effects.transaction_digest();
 
@@ -1204,6 +1209,7 @@ impl AuthorityState {
                 gas_status,
                 &epoch_store.epoch_start_config().epoch_data(),
                 protocol_config,
+                false, // enable_expensive_checks
             );
 
         let module_cache =

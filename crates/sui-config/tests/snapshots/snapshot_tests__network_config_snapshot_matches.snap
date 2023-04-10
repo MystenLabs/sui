@@ -76,6 +76,7 @@ validator_configs:
     indirect-objects-threshold: 18446744073709551615
     expensive-safety-check-config:
       enable-epoch-sui-conservation-check: false
+      enable-deep-per-tx-sui-conservation-check: false
       force-disable-epoch-sui-conservation-check: false
       enable-state-consistency-check: false
       force-disable-state-consistency-check: false
@@ -153,6 +154,7 @@ validator_configs:
     indirect-objects-threshold: 18446744073709551615
     expensive-safety-check-config:
       enable-epoch-sui-conservation-check: false
+      enable-deep-per-tx-sui-conservation-check: false
       force-disable-epoch-sui-conservation-check: false
       enable-state-consistency-check: false
       force-disable-state-consistency-check: false
@@ -230,6 +232,7 @@ validator_configs:
     indirect-objects-threshold: 18446744073709551615
     expensive-safety-check-config:
       enable-epoch-sui-conservation-check: false
+      enable-deep-per-tx-sui-conservation-check: false
       force-disable-epoch-sui-conservation-check: false
       enable-state-consistency-check: false
       force-disable-state-consistency-check: false
@@ -307,6 +310,7 @@ validator_configs:
     indirect-objects-threshold: 18446744073709551615
     expensive-safety-check-config:
       enable-epoch-sui-conservation-check: false
+      enable-deep-per-tx-sui-conservation-check: false
       force-disable-epoch-sui-conservation-check: false
       enable-state-consistency-check: false
       force-disable-state-consistency-check: false
@@ -384,6 +388,7 @@ validator_configs:
     indirect-objects-threshold: 18446744073709551615
     expensive-safety-check-config:
       enable-epoch-sui-conservation-check: false
+      enable-deep-per-tx-sui-conservation-check: false
       force-disable-epoch-sui-conservation-check: false
       enable-state-consistency-check: false
       force-disable-state-consistency-check: false
@@ -461,6 +466,7 @@ validator_configs:
     indirect-objects-threshold: 18446744073709551615
     expensive-safety-check-config:
       enable-epoch-sui-conservation-check: false
+      enable-deep-per-tx-sui-conservation-check: false
       force-disable-epoch-sui-conservation-check: false
       enable-state-consistency-check: false
       force-disable-state-consistency-check: false
@@ -538,6 +544,7 @@ validator_configs:
     indirect-objects-threshold: 18446744073709551615
     expensive-safety-check-config:
       enable-epoch-sui-conservation-check: false
+      enable-deep-per-tx-sui-conservation-check: false
       force-disable-epoch-sui-conservation-check: false
       enable-state-consistency-check: false
       force-disable-state-consistency-check: false
