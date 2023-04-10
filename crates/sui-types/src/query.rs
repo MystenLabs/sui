@@ -4,6 +4,7 @@
 use crate::base_types::SuiAddress;
 use crate::messages_checkpoint::CheckpointSequenceNumber;
 use crate::sui_serde::BigInt;
+use crate::sui_serde::Readable;
 use crate::ObjectID;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -16,7 +17,7 @@ pub enum TransactionFilter {
     /// Query by checkpoint.
     Checkpoint(
         #[schemars(with = "BigInt<u64>")]
-        #[serde_as(as = "BigInt<u64>")]
+        #[serde_as(as = "Readable<BigInt<u64>, _>")]
         CheckpointSequenceNumber,
     ),
     /// Query by move function.
