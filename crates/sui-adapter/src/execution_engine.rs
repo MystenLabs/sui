@@ -94,7 +94,7 @@ pub fn execute_transaction_to_effects<
             K::InvariantViolation |
             K::VMInvariantViolation => {
                 #[skip_checked_arithmetic]
-                tracing::error!(
+                tracing::debug!(
                     kind = ?error.kind(),
                     tx_digest = ?transaction_digest,
                     "INVARIANT VIOLATION! Source: {:?}",
@@ -105,7 +105,7 @@ pub fn execute_transaction_to_effects<
             K::SuiMoveVerificationError |
             K::VMVerificationOrDeserializationError => {
                 #[skip_checked_arithmetic]
-                tracing::info!(
+                tracing::debug!(
                     kind = ?error.kind(),
                     tx_digest = ?transaction_digest,
                     "Verification Error. Source: {:?}",
@@ -116,7 +116,7 @@ pub fn execute_transaction_to_effects<
             K::PublishUpgradeMissingDependency |
             K::PublishUpgradeDependencyDowngrade => {
                 #[skip_checked_arithmetic]
-                tracing::info!(
+                tracing::debug!(
                     kind = ?error.kind(),
                     tx_digest = ?transaction_digest,
                     "Publish/Upgrade Error. Source: {:?}",
