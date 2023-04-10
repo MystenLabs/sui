@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { createContext } from 'react';
 import { useParams } from 'react-router-dom';
 
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
@@ -11,8 +10,6 @@ import OwnedCoins from '~/components/OwnedCoins/OwnedCoins';
 import OwnedObjects from '~/components/OwnedObjectsV2/OwnedObjects';
 import { Heading } from '~/ui/Heading';
 import { PageHeader } from '~/ui/PageHeader';
-
-export const AddressContext = createContext('');
 
 function AddressResult() {
     const { id: addressID } = useParams();
