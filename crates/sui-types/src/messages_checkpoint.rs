@@ -15,6 +15,7 @@ use crate::signature::GenericSignature;
 use crate::storage::ReadStore;
 use crate::sui_serde::AsProtocolVersion;
 use crate::sui_serde::BigInt;
+use crate::sui_serde::Readable;
 use crate::{base_types::AuthorityName, committee::Committee, error::SuiError};
 use anyhow::Result;
 use fastcrypto::hash::{Digest, MultisetHash};
@@ -97,13 +98,13 @@ pub struct EndOfEpochData {
     /// The committee is stored as a vector of validator pub key and stake pairs. The vector
     /// should be sorted based on the Committee data structure.
     #[schemars(with = "Vec<(AuthorityName, BigInt<u64>)>")]
-    #[serde_as(as = "Vec<(_, BigInt<u64>)>")]
+    #[serde_as(as = "Vec<(_, Readable<BigInt<u64>, _>)>")]
     pub next_epoch_committee: Vec<(AuthorityName, StakeUnit)>,
 
     /// The protocol version that is in effect during the epoch that starts immediately after this
     /// checkpoint.
     #[schemars(with = "AsProtocolVersion")]
-    #[serde_as(as = "AsProtocolVersion")]
+    #[serde_as(as = "Readable<AsProtocolVersion, _>")]
     pub next_epoch_protocol_version: ProtocolVersion,
 
     /// Commitments to epoch specific state (e.g. live object set)

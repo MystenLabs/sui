@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::sui_serde::BigInt;
+use std::str::FromStr;
+
 use anyhow::ensure;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::account_address::AccountAddress;
@@ -14,11 +15,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::serde_as;
 use serde_with::Bytes;
-use std::str::FromStr;
 
 use crate::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use crate::error::{SuiError, SuiResult};
 use crate::object::{MoveObject, ObjectFormatOptions};
+use crate::sui_serde::BigInt;
+use crate::sui_serde::Readable;
 
 /// A universal Sui event type encapsulating different types of events
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,7 +44,7 @@ pub struct EventEnvelope {
 pub struct EventID {
     pub tx_digest: TransactionDigest,
     #[schemars(with = "BigInt<u64>")]
-    #[serde_as(as = "BigInt<u64>")]
+    #[serde_as(as = "Readable<BigInt<u64>, _>")]
     pub event_seq: u64,
 }
 
