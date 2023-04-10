@@ -7,7 +7,7 @@ import OwnedCoinView from './components/OwnedCoinView';
 
 import { useGetAllBalances } from '~/hooks/useGetAllBalances';
 import { Heading } from '~/ui/Heading';
-import LoadingSpinner from '~/ui/LoadingSpinner';
+import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Pagination } from '~/ui/Pagination';
 import { Text } from '~/ui/Text';
 
