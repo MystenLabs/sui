@@ -8,7 +8,7 @@ import CoinItem from './CoinItem';
 
 import { useGetCoins } from '~/hooks/useGetCoins';
 import { useOnScreen } from '~/hooks/useOnScreen';
-import LoadingSpinner from '~/ui/LoadingSpinner';
+import { LoadingSpinner } from '~/ui/LoadingSpinner';
 
 type CoinsPanelProps = {
     coinType: string;

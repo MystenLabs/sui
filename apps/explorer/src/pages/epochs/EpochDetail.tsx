@@ -15,7 +15,7 @@ import { SuiAmount } from '~/components/transactions/TxCardUtils';
 import { useEnhancedRpcClient } from '~/hooks/useEnhancedRpc';
 import { Banner } from '~/ui/Banner';
 import { Card } from '~/ui/Card';
-import LoadingSpinner from '~/ui/LoadingSpinner';
+import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Stats } from '~/ui/Stats';
 import { TableCard } from '~/ui/TableCard';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';

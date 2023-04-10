@@ -8,7 +8,7 @@ import OwnedObject from './components/OwnedObject';
 
 import { useGetOwnedObjects } from '~/hooks/useGetOwnedObjects';
 import { Heading } from '~/ui/Heading';
-import LoadingSpinner from '~/ui/LoadingSpinner';
+import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Pagination } from '~/ui/Pagination';
 
 export const OBJECTS_PER_PAGE: number = 6;

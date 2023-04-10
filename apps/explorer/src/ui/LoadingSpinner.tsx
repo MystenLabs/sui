@@ -7,7 +7,7 @@ export interface LoadingSpinnerProps {
     text?: string;
 }
 
-function LoadingSpinner({ text }: LoadingSpinnerProps) {
+export function LoadingSpinner({ text }: LoadingSpinnerProps) {
     return (
         <div className="inline-flex flex-row flex-nowrap items-center gap-3">
             <SpinnerSvg className="animate-spin text-steel" />
@@ -19,5 +19,3 @@ function LoadingSpinner({ text }: LoadingSpinnerProps) {
         </div>
     );
 }
-
-export default LoadingSpinner

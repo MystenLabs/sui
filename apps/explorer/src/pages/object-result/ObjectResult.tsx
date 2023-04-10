@@ -10,7 +10,7 @@ import PkgView from './views/PkgView';
 import { TokenView } from './views/TokenView';
 
 import { Banner } from '~/ui/Banner';
-import LoadingSpinner from '~/ui/LoadingSpinner';
+import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { PageHeader } from '~/ui/PageHeader';
 
 const PACKAGE_TYPE_NAME = 'Move Package';

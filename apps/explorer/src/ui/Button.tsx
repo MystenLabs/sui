@@ -5,7 +5,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import clsx from 'clsx';
 import { type ReactNode } from 'react';
 
-import LoadingSpinner from './LoadingSpinner';
+import { LoadingSpinner } from './LoadingSpinner';
 import { ButtonOrLink, type ButtonOrLinkProps } from './utils/ButtonOrLink';
 
 const buttonStyles = cva(['inline-flex items-center justify-center relative'], {

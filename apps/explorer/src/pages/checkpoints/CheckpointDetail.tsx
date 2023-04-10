@@ -9,7 +9,7 @@ import { CheckpointTransactionBlocks } from './CheckpointTransactionBlocks';
 
 import { Banner } from '~/ui/Banner';
 import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
-import LoadingSpinner from '~/ui/LoadingSpinner';
+import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { PageHeader } from '~/ui/PageHeader';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { Text } from '~/ui/Text';
