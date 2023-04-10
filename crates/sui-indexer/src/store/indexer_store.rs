@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
+use prometheus::Histogram;
 
 use sui_json_rpc_types::{
     Checkpoint as RpcCheckpoint, CheckpointId, EpochInfo, EventFilter, EventPage, MoveCallMetrics,
@@ -184,10 +185,35 @@ pub trait IndexerStore {
         tx: Transaction,
         tx_object_changes: TransactionObjectChanges,
     ) -> Result<usize, IndexerError>;
-    async fn persist_checkpoint(
+    // TODO(gegaowp): keep this method in this trait for now for easier reverting,
+    // will remove it if it's no longer needed.
+    async fn persist_all_checkpoint_data(
         &self,
         data: &TemporaryCheckpointStore,
     ) -> Result<usize, IndexerError>;
+    async fn persist_checkpoint_transactions(
+        &self,
+        checkpoint: &Checkpoint,
+        transactions: &[Transaction],
+    ) -> Result<usize, IndexerError>;
+    async fn persist_object_changes(
+        &self,
+        checkpoint_seq: i64,
+        tx_object_changes: &[TransactionObjectChanges],
+        object_mutation_latency: Histogram,
+        object_deletion_latency: Histogram,
+    ) -> Result<(), IndexerError>;
+    async fn persist_events(&self, events: &[Event]) -> Result<(), IndexerError>;
+    async fn persist_addresses(&self, addresses: &[Address]) -> Result<(), IndexerError>;
+    async fn persist_packages(&self, packages: &[Package]) -> Result<(), IndexerError>;
+    // NOTE: these tables are for tx query performance optimization
+    async fn persist_transaction_index_tables(
+        &self,
+        input_objects: &[InputObject],
+        move_calls: &[MoveCall],
+        recipients: &[Recipient],
+    ) -> Result<(), IndexerError>;
+
     async fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError>;
 
     async fn get_epochs(
@@ -249,7 +275,7 @@ pub struct TemporaryCheckpointStore {
     pub checkpoint: Checkpoint,
     pub transactions: Vec<Transaction>,
     pub events: Vec<Event>,
-    pub objects_changes: Vec<TransactionObjectChanges>,
+    pub object_changes: Vec<TransactionObjectChanges>,
     pub addresses: Vec<Address>,
     pub packages: Vec<Package>,
     pub input_objects: Vec<InputObject>,
