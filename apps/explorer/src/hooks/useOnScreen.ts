@@ -5,6 +5,7 @@ import { useState, useEffect, type MutableRefObject } from 'react';
 
 export const useOnScreen = (ref: MutableRefObject<Element | null>) => {
     const [isIntersecting, setIsIntersecting] = useState(false);
+
     const observer = new IntersectionObserver(
         ([entry]) => setIsIntersecting(entry.isIntersecting),
         {
@@ -13,14 +14,11 @@ export const useOnScreen = (ref: MutableRefObject<Element | null>) => {
     );
 
     useEffect(() => {
-        if(ref.current) {
-            observer.observe(ref.current);
-        }
-        
+        ref.current && observer.observe(ref.current);
         return () => {
             observer.disconnect();
         };
-    }), [];
+    });
 
     return { isIntersecting };
 };
