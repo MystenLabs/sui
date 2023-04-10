@@ -287,6 +287,7 @@ impl<'a> FullnodeConfigBuilder<'a> {
             indirect_objects_threshold: usize::MAX,
             // Copy the expensive safety check config from the first validator config.
             expensive_safety_check_config: validator_config.expensive_safety_check_config.clone(),
+            name_service_resolver_object_id: None,
         })
     }
 }

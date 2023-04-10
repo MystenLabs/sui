@@ -1744,6 +1744,61 @@
       ]
     },
     {
+      "name": "suix_resolveNameServiceAddress",
+      "tags": [
+        {
+          "name": "Extended API"
+        }
+      ],
+      "description": "Return the resolved address given resolver and name",
+      "params": [
+        {
+          "name": "name",
+          "description": "The name to resolve",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "result": {
+        "name": "SuiAddress",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/SuiAddress"
+        }
+      }
+    },
+    {
+      "name": "suix_resolveNameServiceNames",
+      "tags": [
+        {
+          "name": "Extended API"
+        }
+      ],
+      "description": "Return the resolved names given address, if multiple names are resolved, the first one is the primary name.",
+      "params": [
+        {
+          "name": "address",
+          "description": "The address to resolve",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec<String>",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
       "name": "suix_subscribeEvent",
       "tags": [
         {

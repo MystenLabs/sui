@@ -97,8 +97,6 @@ pub trait IndexerApi {
     #[method(name = "resolveNameServiceAddress")]
     async fn resolve_name_service_address(
         &self,
-        /// The resolver address
-        resolver_id: ObjectID,
         /// The name to resolve
         name: String,
     ) -> RpcResult<SuiAddress>;
@@ -108,7 +106,6 @@ pub trait IndexerApi {
     #[method(name = "resolveNameServiceNames")]
     async fn resolve_name_service_names(
         &self,
-        resolver_id: ObjectID,
         /// The address to resolve
         address: SuiAddress,
     ) -> RpcResult<Vec<String>>;

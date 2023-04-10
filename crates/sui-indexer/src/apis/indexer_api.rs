@@ -449,20 +449,12 @@ where
         Ok(())
     }
 
-    async fn resolve_name_service_address(
-        &self,
-        _resolver_id: ObjectID,
-        _name: String,
-    ) -> RpcResult<SuiAddress> {
+    async fn resolve_name_service_address(&self, _name: String) -> RpcResult<SuiAddress> {
         // TODO(gegaowp): implement name service resolver in indexer
         todo!()
     }
 
-    async fn resolve_name_service_names(
-        &self,
-        _resolver_id: ObjectID,
-        _address: SuiAddress,
-    ) -> RpcResult<Vec<String>> {
+    async fn resolve_name_service_names(&self, _address: SuiAddress) -> RpcResult<Vec<String>> {
         // TODO(gegaowp): implement name service resolver in indexer
         todo!()
     }
