@@ -70,32 +70,31 @@ describe('JSON-RPC Client', () => {
       'sui_getOwnedObjectsByAddress',
       ['0xsuccess'],
       GetOwnedObjectsResponse,
-      false,
     );
     expect(resp).toHaveLength(1);
     expect(resp[0]).toEqual(EXAMPLE_OBJECT);
   });
 
-  it('requestWithType should throw on type mismatch', async () => {
+  it('requestWithType should throw in tests', async () => {
     const client = new JsonRpcClient(MOCK_ENDPOINT);
+
+    // NOTE: We set `console.warn` to throw in tests, so we can catch it here.
     await expect(
       client.requestWithType(
         'sui_getOwnedObjectsByAddress',
         ['0xfail'],
         GetOwnedObjectsResponse,
-        false,
       ),
     ).rejects.toThrowError();
   });
 
-  it('requestWithType should succeed if skipDataValidation if true', async () => {
+  it('requestWithType should call console.warn', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const client = new JsonRpcClient(MOCK_ENDPOINT);
     await client.requestWithType(
       'sui_getOwnedObjectsByAddress',
       ['0xfail'],
       GetOwnedObjectsResponse,
-      true,
     );
     expect(warn).toHaveBeenCalled();
   });

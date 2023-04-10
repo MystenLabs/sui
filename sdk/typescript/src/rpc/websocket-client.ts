@@ -103,13 +103,10 @@ export class WebsocketClient {
 
   /**
    * @param endpoint Sui node endpoint to connect to (accepts websocket & http)
-   * @param skipValidation If `true`, the rpc client will not check if the responses
-   * from the RPC server conform to the schema defined in the TypeScript SDK
    * @param options Configuration options, such as timeouts & connection behavior
    */
   constructor(
     public endpoint: string,
-    public skipValidation: boolean,
     public options: WebsocketClientOptions = DEFAULT_CLIENT_OPTIONS,
   ) {
     if (this.endpoint.startsWith('http'))
@@ -154,7 +151,7 @@ export class WebsocketClient {
     const params = msg.params;
     if (msg.method === SUBSCRIBE_EVENT_METHOD) {
       // even with validation off, we must ensure a few properties at minimum in a message
-      if (this.skipValidation && isMinimumSubscriptionMessage(params)) {
+      if (isMinimumSubscriptionMessage(params)) {
         const sub = this.eventSubscriptions.get(params.subscription);
         if (sub)
           // cast to bypass type validation of 'result'
