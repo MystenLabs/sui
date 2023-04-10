@@ -103,7 +103,7 @@ sui client gas $PLAYER_X
 ```
 
 ```bash
-sui client gas $PLAYER_0
+sui client gas $PLAYER_O
 ```
 
 The tutorial uses only one gas object per address. Choose the object to use, and then create variables for them as well.
