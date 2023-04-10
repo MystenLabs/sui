@@ -1,11 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import OwnedCoinView from './components/OwnedCoinView';
-
-import type { CoinBalance } from '@mysten/sui.js';
 
 import { useGetAllBalances } from '~/hooks/useGetAllBalances';
 import { Heading } from '~/ui/Heading';

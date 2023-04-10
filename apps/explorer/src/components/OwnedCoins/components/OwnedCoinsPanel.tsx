@@ -31,6 +31,7 @@ function CoinsPanel({ coinType, id }: CoinsPanelProps): JSX.Element {
             setCoinObjects(coins);
         }
     }, [data]);
+    const isSpinnerVisible = hasNextPage || isLoading || isFetching;
 
     useEffect(() => {
         if (isIntersecting && hasNextPage && !isFetching) {
@@ -41,7 +42,8 @@ function CoinsPanel({ coinType, id }: CoinsPanelProps): JSX.Element {
     return (
         <div>
             {coinObjects.map((obj) => <CoinItem key={obj.coinObjectId} coin={obj} />)}
-            {(isLoading || isFetching) && <LoadingSpinner ref={containerRef} />}
+            {(isSpinnerVisible) && <div ref={containerRef}>
+                <LoadingSpinner /></div>}
         </div>
     );
 }
