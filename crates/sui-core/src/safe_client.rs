@@ -239,8 +239,10 @@ impl<C> SafeClient<C> {
                             transaction.into_message(),
                             cert,
                         );
-                        ct.verify_signature(&committee)
-                            .tap_err(|e| debug!(?digest, ?ct, "Received invalid tx cert {}", e))?;
+                        let ct_bytes = bcs::to_bytes(&ct);
+                        ct.verify_signature(&committee).tap_err(|e| {
+                            debug!(?digest, ?ct, ?ct_bytes, "Received invalid tx cert {}", e)
+                        })?;
                         let ct = VerifiedCertificate::new_from_verified(ct);
                         Ok(PlainTransactionInfoResponse::ExecutedWithCert(
                             ct,

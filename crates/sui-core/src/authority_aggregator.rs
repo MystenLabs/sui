@@ -1196,7 +1196,7 @@ where
                 self.handle_transaction_response_with_signed(state, signed)
                     .tap_ok(|opt_cert| {
                         if let Some(cert) = opt_cert.as_ref() {
-                            debug!(?tx_digest, ?cert, "Collected tx certificate")
+                            debug!(?tx_digest, ?cert, "Collected tx certificate for digest")
                         }
                     })
             }
@@ -1261,6 +1261,9 @@ where
             InsertResult::QuorumReached(cert_sig) => {
                 let ct =
                     CertifiedTransaction::new_from_data_and_sig(plain_tx.into_data(), cert_sig);
+                let ct_bytes = bcs::to_bytes(&ct).expect("to_bytes should never fail");
+                let ct_digest = ct.digest();
+                debug!(?ct, ?ct_bytes, ?ct_digest, "Collected tx certificate");
                 Ok(Some(ProcessTransactionResult::Certified(
                     ct.verify(&self.committee)?,
                 )))
@@ -1399,12 +1402,14 @@ where
         let cert_ref = &certificate;
         let threshold = self.committee.quorum_threshold();
         let validity = self.committee.validity_threshold();
+        let cert_bytes = bcs::to_bytes(cert_ref);
         debug!(
             ?tx_digest,
             quorum_threshold = threshold,
             validity_threshold = validity,
             ?timeout_after_quorum,
             ?cert_ref,
+            ?cert_bytes,
             "Broadcasting certificate to authorities"
         );
         self.quorum_map_then_reduce_with_timeout(
