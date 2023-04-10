@@ -9,8 +9,6 @@ const defaultOptions: SuiObjectDataOptions = {
     showType: true,
     showContent: true,
     showOwner: true,
-    showPreviousTransaction: true,
-    showStorageRebate: true,
     showDisplay: true,
 };
 

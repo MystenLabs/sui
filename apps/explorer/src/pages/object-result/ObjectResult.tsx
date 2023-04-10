@@ -30,6 +30,8 @@ export function ObjectResult() {
         showType: true,
         showContent: true,
         showOwner: true,
+        showPreviousTransaction: true,
+        showStorageRebate: true,
         showDisplay: true,
     });
 
