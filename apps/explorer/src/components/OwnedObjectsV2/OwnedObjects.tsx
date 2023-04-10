@@ -12,7 +12,7 @@ import { Pagination } from '~/ui/Pagination';
 
 export const OBJECTS_PER_PAGE: number = 6;
 
-function OwnerObjects({ id }: { id: string }): JSX.Element {
+function OwnedObjects({ id }: { id: string }): JSX.Element {
     const [currentPage, setCurrentPage] = useState(0);
     const { data, isLoading, isError, hasNextPage, fetchNextPage, isFetching } =
         useGetOwnedObjects(id);
@@ -67,4 +67,4 @@ function OwnerObjects({ id }: { id: string }): JSX.Element {
     );
 }
 
-export default OwnerObjects;
+export default OwnedObjects;
