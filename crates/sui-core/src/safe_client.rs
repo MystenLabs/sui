@@ -235,12 +235,15 @@ impl<C> SafeClient<C> {
                 match cert_opt {
                     Some(cert) => {
                         let committee = self.get_committee(&cert.epoch)?;
+                        let ct = CertifiedTransaction::new_from_data_and_sig(
+                            transaction.into_message(),
+                            cert,
+                        );
+                        ct.verify_signature(&committee)
+                            .tap_err(|e| debug!(?digest, ?ct, "Received invalid tx cert {}", e))?;
+                        let ct = VerifiedCertificate::new_from_verified(ct);
                         Ok(PlainTransactionInfoResponse::ExecutedWithCert(
-                            CertifiedTransaction::new_from_data_and_sig(
-                                transaction.into_message(),
-                                cert,
-                            )
-                            .verify(&committee)?,
+                            ct,
                             signed_effects,
                             events,
                         ))
