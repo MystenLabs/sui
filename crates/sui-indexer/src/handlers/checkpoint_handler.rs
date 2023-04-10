@@ -618,7 +618,7 @@ where
                     }
                     epoch_db_guard.stop_and_record();
                     self.metrics.total_epoch_committed.inc();
-                    info!("Epoch {} committed.", indexed_epoch.new_epoch.epoch,);
+                    info!("Epoch {} committed.", indexed_epoch.new_epoch.epoch);
                 }
             } else {
                 // sleep for 1 sec to avoid occupying the mutex, as this happens once per epoch / day
@@ -1041,16 +1041,17 @@ pub async fn fetch_changed_objects(
     })
 }
 
-pub fn to_changed_db_objects(
-    changed_objects: Vec<(ObjectStatus, SuiObjectData)>,
-    epoch: u64,
-    checkpoint: Option<CheckpointSequenceNumber>,
-) -> Vec<Object> {
-    changed_objects
-        .into_iter()
-        .map(|(status, o)| Object::from(epoch, checkpoint.map(<u64>::from), &status, &o))
-        .collect::<Vec<_>>()
-}
+// TODO(gegaowp): temp. disable fast-path
+// pub fn to_changed_db_objects(
+//     changed_objects: Vec<(ObjectStatus, SuiObjectData)>,
+//     epoch: u64,
+//     checkpoint: Option<CheckpointSequenceNumber>,
+// ) -> Vec<Object> {
+//     changed_objects
+//         .into_iter()
+//         .map(|(status, o)| Object::from(epoch, checkpoint.map(<u64>::from), &status, &o))
+//         .collect::<Vec<_>>()
+// }
 
 pub fn get_deleted_db_objects(
     effects: &SuiTransactionBlockEffects,

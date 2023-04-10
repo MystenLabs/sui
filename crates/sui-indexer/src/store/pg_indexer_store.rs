@@ -99,6 +99,8 @@ struct TempDigestTable {
 #[derive(Clone)]
 pub struct PgIndexerStore {
     cp: AsyncPgConnectionPool,
+    // MUSTFIX(gegaowp): temporarily disable partition management.
+    #[allow(dead_code)]
     partition_manager: PartitionManager,
     module_cache: Arc<SyncModuleCache<IndexerModuleResolver>>,
 }
@@ -1475,15 +1477,15 @@ WHERE e1.epoch = e2.epoch
     }
 
     async fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError> {
-        let last_epoch_cp_id = if data.last_epoch.is_none() {
-            0
-        } else {
-            self.get_current_epoch().await?.first_checkpoint_id as i64
-        };
-
-        self.partition_manager
-            .advance_epoch(&data.new_epoch, last_epoch_cp_id)
-            .await?;
+        // MUSTFIX(gegaowp): temporarily disable the epoch advance logic.
+        // let last_epoch_cp_id = if data.last_epoch.is_none() {
+        //     0
+        // } else {
+        //     self.get_current_epoch().await?.first_checkpoint_id as i64
+        // };
+        // self.partition_manager
+        //     .advance_epoch(&data.new_epoch, last_epoch_cp_id)
+        //     .await?;
 
         transactional!(&self.cp, |conn| async {
             if let Some(last_epoch) = &data.last_epoch {
@@ -1758,6 +1760,8 @@ impl PartitionManager {
         Ok(manager)
     }
 
+    // MUSTFIX(gegaowp): temporarily disable partition management.
+    #[allow(dead_code)]
     async fn advance_epoch(
         &self,
         new_epoch: &DBEpochInfo,
@@ -1777,7 +1781,9 @@ impl PartitionManager {
                         "ALTER TABLE {table} DETACH PARTITION {table}_partition_{last_epoch_id};"
                     );
                     let attach_partition_with_new_range = format!("ALTER TABLE {table} ATTACH PARTITION {table}_partition_{last_epoch_id} FOR VALUES FROM ('{last_epoch_start_cp}') TO ('{next_epoch_start_cp}');");
+                    info! {"Changed last epoch partition {last_epoch_id} for {table}, with new range {last_epoch_start_cp} to {next_epoch_start_cp}"};
                     let new_partition = format!("CREATE TABLE {table}_partition_{next_epoch_id} PARTITION OF {table} FOR VALUES FROM ({next_epoch_start_cp}) TO (MAXVALUE);");
+                    info! {"Created epoch partition {next_epoch_id} for {table}, with new range {next_epoch_start_cp} to MAXVALUE"};
                     diesel::RunQueryDsl::execute(diesel::sql_query(detach_partition), conn)?;
                     diesel::RunQueryDsl::execute(
                         diesel::sql_query(attach_partition_with_new_range),
