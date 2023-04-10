@@ -70,12 +70,18 @@ export function HomeMetrics() {
                         tooltip="Peak TPS in the past 30 days excluding this epoch"
                         postfix={`/ ${
                             networkMetrics?.tps30Days
-                                ? roundFloat(networkMetrics.tps30Days, 2)
+                                ? roundFloat(
+                                      networkMetrics.tps30Days,
+                                      2
+                                  ).toLocaleString()
                                 : '--'
                         }`}
                     >
                         {networkMetrics?.currentTps
-                            ? roundFloat(networkMetrics.currentTps, 2)
+                            ? roundFloat(
+                                  networkMetrics.currentTps,
+                                  2
+                              ).toLocaleString()
                             : '--'}
                     </StatsWrapper>
                     <StatsWrapper
@@ -83,7 +89,7 @@ export function HomeMetrics() {
                         tooltip="Current gas price"
                         postfix="MIST"
                     >
-                        {gasData ? String(gasData) : null}
+                        {gasData ? String(gasData).toLocaleString() : null}
                     </StatsWrapper>
                     <StatsWrapper label="Epoch" tooltip="The current epoch">
                         {networkMetrics?.currentEpoch}
@@ -92,7 +98,7 @@ export function HomeMetrics() {
                         label="Checkpoint"
                         tooltip="The current checkpoint"
                     >
-                        {networkMetrics?.currentCheckpoint}
+                        {networkMetrics?.currentCheckpoint.toLocaleString()}
                     </StatsWrapper>
                 </MetricGroup>
 
