@@ -12,6 +12,8 @@ import { transformURL, genFileTypeMsg } from '../../utils/stringUtils';
 
 import styles from './DisplayBox.module.css';
 
+import { LoadingSpinner } from '~/ui/LoadingSpinner';
+
 function ShowBrokenImage({ onClick }: { onClick?: () => void }) {
     return (
         <div
@@ -222,7 +224,7 @@ function DisplayBoxWString({
                 >
                     {!hasDisplayLoaded && (
                         <div className={styles.imagebox} id="pleaseWaitImage">
-                            Image Loading...
+                            <LoadingSpinner />
                         </div>
                     )}
                     {hasFailedToLoad && (

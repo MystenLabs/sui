@@ -55,6 +55,9 @@ const textStyles = cva(['break-words'], {
             true: 'font-mono',
             false: 'font-sans',
         },
+        truncate: {
+            true: 'truncate',
+        },
     },
 });
 
