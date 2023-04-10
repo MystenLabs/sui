@@ -16,6 +16,7 @@ use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use sui_types::messages_checkpoint::ECMHLiveObjectSetDigest;
 use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use tokio::time::Instant;
 use tracing::{debug, info, trace};
 
 use sui_protocol_config::ProtocolConfig;
@@ -42,9 +43,50 @@ use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use super::authority_store_tables::LiveObject;
 use super::{authority_store_tables::AuthorityPerpetualTables, *};
 use mysten_common::sync::notify_read::NotifyRead;
+use sui_types::gas_coin::TOTAL_SUPPLY_MIST;
 use typed_store::rocks::util::is_ref_count_value;
 
 const NUM_SHARDS: usize = 4096;
+
+struct AuthorityStoreMetrics {
+    sui_conservation_check_latency: IntGauge,
+    sui_conservation_live_object_count: IntGauge,
+    sui_conservation_imbalance: IntGauge,
+    sui_conservation_storage_fund: IntGauge,
+    sui_conservation_storage_fund_imbalance: IntGauge,
+}
+
+impl AuthorityStoreMetrics {
+    pub fn new(registry: &Registry) -> Self {
+        Self {
+            sui_conservation_check_latency: register_int_gauge_with_registry!(
+                "sui_conservation_check_latency",
+                "Number of seconds took to scan all live objects in the store for SUI conservation check",
+                registry,
+            ).unwrap(),
+            sui_conservation_live_object_count: register_int_gauge_with_registry!(
+                "sui_conservation_live_object_count",
+                "Number of live objects in the store",
+                registry,
+            ).unwrap(),
+            sui_conservation_imbalance: register_int_gauge_with_registry!(
+                "sui_conservation_imbalance",
+                "Total amount of SUI in the network - 10B * 10^9. This delta shows the amount of imbalance",
+                registry,
+            ).unwrap(),
+            sui_conservation_storage_fund: register_int_gauge_with_registry!(
+                "sui_conservation_storage_fund",
+                "Storage Fund pool balance (only includes the storage fund proper that represents object storage)",
+                registry,
+            ).unwrap(),
+            sui_conservation_storage_fund_imbalance: register_int_gauge_with_registry!(
+                "sui_conservation_storage_fund_imbalance",
+                "Imbalance of storage fund, computed with storage_fund_balance - total_object_storage_rebates",
+                registry,
+            ).unwrap(),
+        }
+    }
+}
 
 /// ALL_OBJ_VER determines whether we want to store all past
 /// versions of every object in the store. Authority doesn't store
@@ -75,6 +117,8 @@ pub struct AuthorityStore {
 
     /// Whether to enable expensive SUI conservation check at epoch boundaries.
     enable_epoch_sui_conservation_check: bool,
+
+    metrics: AuthorityStoreMetrics,
 }
 
 pub type ExecutionLockReadGuard<'a> = RwLockReadGuard<'a, EpochId>;
@@ -90,6 +134,7 @@ impl AuthorityStore {
         committee_store: &Arc<CommitteeStore>,
         indirect_objects_threshold: usize,
         enable_epoch_sui_conservation_check: bool,
+        registry: &Registry,
     ) -> SuiResult<Self> {
         let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(path, db_options.clone()));
         if perpetual_tables.database_is_empty()? {
@@ -111,6 +156,7 @@ impl AuthorityStore {
             &committee,
             indirect_objects_threshold,
             enable_epoch_sui_conservation_check,
+            registry,
         )
         .await
     }
@@ -132,6 +178,7 @@ impl AuthorityStore {
             committee,
             indirect_objects_threshold,
             true,
+            &Registry::new(),
         )
         .await
     }
@@ -142,6 +189,7 @@ impl AuthorityStore {
         committee: &Committee,
         indirect_objects_threshold: usize,
         enable_epoch_sui_conservation_check: bool,
+        registry: &Registry,
     ) -> SuiResult<Self> {
         let epoch = committee.epoch;
 
@@ -155,6 +203,7 @@ impl AuthorityStore {
             objects_lock_table: Arc::new(RwLockTable::new(NUM_SHARDS)),
             indirect_objects_threshold,
             enable_epoch_sui_conservation_check,
+            metrics: AuthorityStoreMetrics::new(registry),
         };
         // Only initialize an empty database.
         if store
@@ -1385,6 +1434,9 @@ impl AuthorityStore {
 
         let mut total_storage_rebate = 0;
         let mut total_sui = 0;
+        info!("Starting SUI conservation check. This may take a while..");
+        let cur_time = Instant::now();
+        let mut count = 0;
         for o in self.iter_live_object_set() {
             match o {
                 LiveObject::Normal(object) => {
@@ -1392,21 +1444,44 @@ impl AuthorityStore {
                     // get_total_sui includes storage rebate, however all storage rebate is
                     // also stored in the storage fund, so we need to subtract it here.
                     total_sui += object.get_total_sui(self)? - object.storage_rebate;
+                    count += 1;
                 }
                 LiveObject::Wrapped(_) => (),
             }
         }
+        info!(
+            "Scanned {} live objects, took {:?}",
+            count,
+            cur_time.elapsed()
+        );
+        self.metrics
+            .sui_conservation_live_object_count
+            .set(count as i64);
+        self.metrics
+            .sui_conservation_check_latency
+            .set(cur_time.elapsed().as_secs() as i64);
+
         let system_state = self
             .get_sui_system_state_object()
             .expect("Reading sui system state object cannot fail")
             .into_sui_system_state_summary();
+        let storage_fund_balance = system_state.storage_fund_total_object_storage_rebates;
         info!(
-            "Total SUI amount in the network: {}, total storage rebate: {} at beginning of epoch {}",
-            total_sui, total_storage_rebate, system_state.epoch
+            "Total SUI amount in the network: {}, storage fund balance: {}, total storage rebate: {} at beginning of epoch {}",
+            total_sui, storage_fund_balance, total_storage_rebate, system_state.epoch
         );
 
-        let storage_fund_balance = system_state.storage_fund_total_object_storage_rebates;
         let imbalance = (storage_fund_balance as i64) - (total_storage_rebate as i64);
+        self.metrics
+            .sui_conservation_storage_fund
+            .set(storage_fund_balance as i64);
+        self.metrics
+            .sui_conservation_storage_fund_imbalance
+            .set(imbalance);
+        self.metrics
+            .sui_conservation_imbalance
+            .set((total_sui as i128 - TOTAL_SUPPLY_MIST as i128) as i64);
+
         if let Some(expected_imbalance) = self
             .perpetual_tables
             .expected_storage_fund_imbalance
