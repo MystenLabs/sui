@@ -2,30 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useRpcClient } from '@mysten/core';
-import { type SuiObjectResponse, normalizeSuiAddress } from '@mysten/sui.js';
-import { useQuery, type UseQueryResult } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 
-export function useGetObject(
-    objectId?: string | null
-): UseQueryResult<SuiObjectResponse, unknown> {
+//TODO: (Jibz) - In another PR, remove this once merged into core
+export function useGetSystemObject() {
     const rpc = useRpcClient();
-    const normalizedObjId = objectId && normalizeSuiAddress(objectId);
-    const response = useQuery(
-        ['object', normalizedObjId],
-        async () =>
-            rpc.getObject({
-                id: normalizedObjId!,
-                options: {
-                    showType: true,
-                    showContent: true,
-                    showOwner: true,
-                    showPreviousTransaction: true,
-                    showStorageRebate: true,
-                    showDisplay: true,
-                },
-            }),
-        { enabled: !!normalizedObjId }
-    );
-
-    return response;
+    return useQuery(['system', 'state'], () => rpc.getLatestSuiSystemState());
 }
