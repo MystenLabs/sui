@@ -6,20 +6,25 @@ import { useState, useEffect, type MutableRefObject, useRef } from 'react';
 export const useOnScreen = (ref: MutableRefObject<Element | null>) => {
     const [isIntersecting, setIsIntersecting] = useState(false);
 
-    const observer = useRef(
-        new IntersectionObserver(
+    const observerRef = useRef<IntersectionObserver>();
+    if (!observerRef.current) {
+        observerRef.current = new IntersectionObserver(
             ([entry]) => setIsIntersecting(entry.isIntersecting),
             {
                 threshold: [1],
             }
-        )
-    );
+        );
+    }
 
     useEffect(() => {
-        const currObserver = observer.current;
-        ref.current && currObserver.observe(ref.current);
+        const currObserver = observerRef.current;
+
+        if (ref.current && currObserver) {
+            currObserver.observe(ref.current);
+        }
+
         return () => {
-            currObserver.disconnect();
+            currObserver && currObserver.disconnect();
         };
     });
 
