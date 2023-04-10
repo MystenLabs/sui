@@ -7,7 +7,6 @@ import { type SuiAddress, type TransactionBlock } from '@mysten/sui.js';
 import { SummaryCard } from '../SummaryCard';
 import { Command } from './Command';
 import { Input } from './Input';
-import LoadingIndicator from '_src/ui/app/components/loading/LoadingIndicator';
 import { useTransactionData } from '_src/ui/app/hooks';
 
 interface Props {
@@ -23,18 +22,24 @@ const Tab = (props: TabProps<'div'>) => (
 );
 
 export function TransactionDetails({ sender, transaction }: Props) {
-    const { data: transactionData } = useTransactionData(sender, transaction);
-
+    const {
+        data: transactionData,
+        isLoading,
+        isError,
+    } = useTransactionData(sender, transaction);
     if (
         transactionData?.transactions.length === 0 &&
         transactionData.inputs.length === 0
     ) {
         return null;
     }
-
     return (
         <SummaryCard header="Transaction Details" initialExpanded>
-            {transactionData ? (
+            {isLoading || isError ? (
+                <div className="ml-0 text-steel-darker text-p2 font-medium">
+                    {isLoading ? 'Gathering data...' : "Couldn't gather data"}
+                </div>
+            ) : transactionData ? (
                 <div>
                     <HeadlessTab.Group>
                         <HeadlessTab.List className="flex gap-6 border-0 border-b border-solid border-gray-45 mb-6">
@@ -72,7 +77,7 @@ export function TransactionDetails({ sender, transaction }: Props) {
                     </HeadlessTab.Group>
                 </div>
             ) : (
-                <LoadingIndicator />
+                ''
             )}
         </SummaryCard>
     );

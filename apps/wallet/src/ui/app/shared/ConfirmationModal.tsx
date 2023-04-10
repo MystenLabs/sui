@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useState } from 'react';
+
 import { Button, type ButtonProps } from './ButtonUI';
 import { ModalDialog } from './ModalDialog';
 import { Text } from './text';
@@ -12,6 +14,7 @@ export type ConfirmationModalProps = {
     confirmText?: string;
     confirmStyle?: ButtonProps['variant'];
     cancelText?: string;
+    cancelStyle?: ButtonProps['variant'];
     onResponse: (confirmed: boolean) => void;
 };
 
@@ -22,8 +25,11 @@ export function ConfirmationModal({
     confirmText = 'Confirm',
     confirmStyle = 'primary',
     cancelText = 'Cancel',
+    cancelStyle = 'outline',
     onResponse,
 }: ConfirmationModalProps) {
+    const [isConfirmLoading, setIsConfirmLoading] = useState(false);
+    const [isCancelLoading, setIsCancelLoading] = useState(false);
     return (
         <ModalDialog
             isOpen={isOpen}
@@ -37,23 +43,40 @@ export function ConfirmationModal({
                     </div>
                 ) : null
             }
-            onClose={() => {
-                onResponse(false);
+            onClose={async () => {
+                if (isCancelLoading || isConfirmLoading) {
+                    return;
+                }
+                setIsCancelLoading(true);
+                await onResponse(false);
+                setIsCancelLoading(false);
             }}
             footer={
                 <div className="flex flex-row self-center gap-3">
                     <div>
                         <Button
-                            variant="outline"
+                            variant={cancelStyle}
                             text={cancelText}
-                            onClick={() => onResponse(false)}
+                            loading={isCancelLoading}
+                            disabled={isConfirmLoading}
+                            onClick={async () => {
+                                setIsCancelLoading(true);
+                                await onResponse(false);
+                                setIsCancelLoading(false);
+                            }}
                         />
                     </div>
                     <div>
                         <Button
                             variant={confirmStyle}
                             text={confirmText}
-                            onClick={() => onResponse(true)}
+                            loading={isConfirmLoading}
+                            disabled={isCancelLoading}
+                            onClick={async () => {
+                                setIsConfirmLoading(true);
+                                await onResponse(true);
+                                setIsConfirmLoading(false);
+                            }}
                         />
                     </div>
                 </div>
