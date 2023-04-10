@@ -19,7 +19,7 @@ use tracing::{error, info, warn};
 
 use mysten_metrics::spawn_monitored_task;
 use sui_core::event_handler::EventHandler;
-use sui_json_rpc::api::ReadApiClient;
+use sui_json_rpc::api::{GovernanceReadApiClient, ReadApiClient};
 use sui_json_rpc_types::{
     OwnedObjectRef, SuiCheckpointSequenceNumber, SuiGetPastObjectRequest, SuiObjectData,
     SuiObjectDataOptions, SuiRawData, SuiTransactionBlockDataAPI, SuiTransactionBlockEffects,
@@ -223,18 +223,22 @@ where
             }
 
             // Index checkpoint data
-            let indexed_checkpoint_epoch_vec = downloaded_checkpoints
-                .iter()
-                .map(|downloaded_checkpoint| self.index_checkpoint(downloaded_checkpoint))
-                .collect::<Result<Vec<_>, IndexerError>>()
-                .map_err(|e| {
-                    error!(
-                        "Failed to index checkpoints {:?} with error: {}",
-                        downloaded_checkpoints,
-                        e.to_string()
-                    );
-                    e
-                })?;
+            let indexed_checkpoint_epoch_vec = join_all(downloaded_checkpoints.iter().map(
+                |downloaded_checkpoint| async {
+                    self.index_checkpoint(downloaded_checkpoint).await
+                },
+            ))
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, IndexerError>>()
+            .map_err(|e| {
+                error!(
+                    "Failed to index checkpoints {:?} with error: {}",
+                    downloaded_checkpoints,
+                    e.to_string()
+                );
+                e
+            })?;
             let (indexed_checkpoints, _indexed_epochs): (Vec<_>, Vec<_>) =
                 indexed_checkpoint_epoch_vec.into_iter().unzip();
 
@@ -297,18 +301,22 @@ where
 
             // Index checkpoint data
             let index_guard = self.metrics.checkpoint_index_latency.start_timer();
-            let indexed_checkpoint_epoch_vec = downloaded_checkpoints
-                .iter()
-                .map(|downloaded_checkpoint| self.index_checkpoint(downloaded_checkpoint))
-                .collect::<Result<Vec<_>, IndexerError>>()
-                .map_err(|e| {
-                    error!(
-                        "Failed to index checkpoints {:?} with error: {}",
-                        downloaded_checkpoints,
-                        e.to_string()
-                    );
-                    e
-                })?;
+            let indexed_checkpoint_epoch_vec = join_all(downloaded_checkpoints.iter().map(
+                |downloaded_checkpoint| async {
+                    self.index_checkpoint(downloaded_checkpoint).await
+                },
+            ))
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, IndexerError>>()
+            .map_err(|e| {
+                error!(
+                    "Failed to index checkpoints {:?} with error: {}",
+                    downloaded_checkpoints,
+                    e.to_string()
+                );
+                e
+            })?;
             let (indexed_checkpoints, indexed_epochs): (Vec<_>, Vec<_>) =
                 indexed_checkpoint_epoch_vec.into_iter().unzip();
             index_guard.stop_and_record();
@@ -687,7 +695,7 @@ where
         })
     }
 
-    fn index_checkpoint(
+    async fn index_checkpoint(
         &self,
         data: &CheckpointData,
     ) -> Result<(TemporaryCheckpointStore, Option<TemporaryEpochStore>), IndexerError> {
@@ -782,8 +790,16 @@ where
         // Index epoch
         let epoch_index = if checkpoint.epoch == 0 && <u64>::from(checkpoint.sequence_number) == 0 {
             // very first epoch
-            let system_state = get_sui_system_state(data)?;
-            let system_state: SuiSystemStateSummary = system_state.into_sui_system_state_summary();
+            let system_state: SuiSystemStateSummary = self
+                .http_client
+                .get_latest_sui_system_state()
+                .await
+                .map_err(|e| {
+                    IndexerError::FullNodeReadingError(format!(
+                        "Failed to get latest system state with error {:?}",
+                        e
+                    ))
+                })?;
             let validators = system_state
                 .active_validators
                 .iter()
@@ -803,8 +819,16 @@ where
             })
         } else if let Some(end_of_epoch_data) = &checkpoint.end_of_epoch_data {
             // Find system state object
-            let system_state = get_sui_system_state(data)?;
-            let system_state: SuiSystemStateSummary = system_state.into_sui_system_state_summary();
+            let system_state: SuiSystemStateSummary = self
+                .http_client
+                .get_latest_sui_system_state()
+                .await
+                .map_err(|e| {
+                    IndexerError::FullNodeReadingError(format!(
+                        "Failed to get latest system state with error {:?}",
+                        e
+                    ))
+                })?;
 
             let epoch_event = transactions.iter().find_map(|tx| {
                 tx.events.data.iter().find(|ev| {
