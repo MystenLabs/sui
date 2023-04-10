@@ -16,10 +16,11 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
 
 #[derive(Clone)]
 pub struct IndexerCheckpointHandlerMetrics {
-    pub total_checkpoint_requested: IntCounter,
     pub total_checkpoint_received: IntCounter,
     pub total_checkpoint_committed: IntCounter,
+    pub total_object_checkpoint_committed: IntCounter,
     pub total_transaction_committed: IntCounter,
+    pub total_object_change_committed: IntCounter,
     pub total_epoch_committed: IntCounter,
     // checkpoint E2E latency is:
     // fullnode_download_latency + checkpoint_index_latency + db_commit_latency
@@ -29,6 +30,9 @@ pub struct IndexerCheckpointHandlerMetrics {
     pub fullnode_object_download_latency: Histogram,
     pub checkpoint_index_latency: Histogram,
     pub checkpoint_db_commit_latency: Histogram,
+    pub object_db_commit_latency: Histogram,
+    pub object_mutation_db_commit_latency: Histogram,
+    pub object_deletion_db_commit_latency: Histogram,
     pub epoch_db_commit_latency: Histogram,
     // latency of event websocket subscription
     pub subscription_process_latency: Histogram,
@@ -38,12 +42,6 @@ pub struct IndexerCheckpointHandlerMetrics {
 impl IndexerCheckpointHandlerMetrics {
     pub fn new(registry: &Registry) -> Self {
         Self {
-            total_checkpoint_requested: register_int_counter_with_registry!(
-                "total_checkpoint_requested",
-                "Total number of checkpoint requested",
-                registry,
-            )
-            .unwrap(),
             total_checkpoint_received: register_int_counter_with_registry!(
                 "total_checkpoint_received",
                 "Total number of checkpoint received",
@@ -56,9 +54,21 @@ impl IndexerCheckpointHandlerMetrics {
                 registry,
             )
             .unwrap(),
+            total_object_checkpoint_committed: register_int_counter_with_registry!(
+                "total_object_checkpoint_committed",
+                "Total number of object checkpoint committed",
+                registry,
+            )
+            .unwrap(),
             total_transaction_committed: register_int_counter_with_registry!(
                 "total_transaction_committed",
                 "Total number of transaction committed",
+                registry,
+            )
+            .unwrap(),
+            total_object_change_committed: register_int_counter_with_registry!(
+                "total_object_change_committed",
+                "Total number of object change committed",
                 registry,
             )
             .unwrap(),
@@ -106,6 +116,27 @@ impl IndexerCheckpointHandlerMetrics {
             checkpoint_db_commit_latency: register_histogram_with_registry!(
                 "checkpoint_db_commit_latency",
                 "Time spent commiting a checkpoint to the db",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            object_db_commit_latency: register_histogram_with_registry!(
+                "object_db_commit_latency",
+                "Time spent commiting a object to the db",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            object_mutation_db_commit_latency: register_histogram_with_registry!(
+                "object_mutation_db_commit_latency",
+                "Time spent commiting a object mutation to the db",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            object_deletion_db_commit_latency: register_histogram_with_registry!(
+                "object_deletion_db_commit_latency",
+                "Time spent commiting a object deletion to the db",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
