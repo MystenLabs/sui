@@ -24,6 +24,7 @@ function OwnedObjects({ id }: { id: string }) {
             </div>
         );
     }
+
     return (
         <div className="pl-7.5">
             {isLoading ? (
@@ -38,7 +39,7 @@ function OwnedObjects({ id }: { id: string }) {
                     ) : (
                         <div className="flex max-h-80 flex-col overflow-auto">
                             <div className="flex flex-wrap">
-                                {data.pages[currentPage].data.map((obj) => (
+                                {data?.pages[currentPage].data.map((obj) => (
                                     <OwnedObject
                                         obj={obj}
                                         key={obj?.data?.objectId}
@@ -47,7 +48,7 @@ function OwnedObjects({ id }: { id: string }) {
                             </div>
                         </div>
                     )}
-                    {(hasNextPage || data.pages.length > 1) && (
+                    {(hasNextPage || data?.pages.length > 1) && (
                         <Pagination
                             onNext={() => {
                                 if (currentPage === data.pages.length - 1) {
