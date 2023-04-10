@@ -194,6 +194,15 @@ impl MoveObjectType {
         }
     }
 
+    pub fn coin_type_maybe(&self) -> Option<TypeTag> {
+        match &self.0 {
+            MoveObjectType_::GasCoin => Some(GAS::type_tag()),
+            MoveObjectType_::Coin(inner) => Some(inner.clone()),
+            MoveObjectType_::StakedSui => None,
+            MoveObjectType_::Other(_) => None,
+        }
+    }
+
     pub fn module_id(&self) -> ModuleId {
         ModuleId::new(self.address(), self.module().to_owned())
     }

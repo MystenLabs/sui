@@ -11,13 +11,17 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use anyhow::anyhow;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{ModuleId, StructTag};
-use serde::{de::DeserializeOwned, Serialize};
-use tracing::debug;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use sui_types::temporary_store::TxCoins;
+// use sui_types::TypeTag;
+use tracing::{debug, trace};
 
 use sui_json_rpc_types::SuiObjectDataFilter;
-use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest, TxSequenceNumber};
+use sui_types::base_types::{
+    ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxSequenceNumber,
+};
 use sui_types::base_types::{ObjectInfo, ObjectRef};
-use sui_types::digests::TransactionEventsDigest;
+use sui_types::digests::{ObjectDigest, TransactionEventsDigest};
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::TransactionEvents;
@@ -30,6 +34,8 @@ use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store_derive::DBMapUtils;
 
 type OwnerIndexKey = (SuiAddress, ObjectID);
+// FIXME, TypeTag or String?
+type CoinIndexKey = (SuiAddress, String, ObjectID);
 type DynamicFieldKey = (ObjectID, ObjectID);
 type EventId = (TxSequenceNumber, usize);
 type EventIndex = (TransactionEventsDigest, TransactionDigest, u64);
@@ -43,6 +49,14 @@ pub struct ObjectIndexChanges {
     pub deleted_dynamic_fields: Vec<DynamicFieldKey>,
     pub new_owners: Vec<(OwnerIndexKey, ObjectInfo)>,
     pub new_dynamic_fields: Vec<(DynamicFieldKey, DynamicFieldInfo)>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq, Debug)]
+pub struct CoinInfo {
+    pub version: SequenceNumber,
+    pub digest: ObjectDigest,
+    pub balance: u64,
+    pub previous_transaction: TransactionDigest,
 }
 
 #[derive(DBMapUtils)]
@@ -89,6 +103,10 @@ pub struct IndexStoreTables {
     /// by a specific user, and their object reference.
     #[default_options_override_fn = "owner_index_table_default_config"]
     owner_index: DBMap<OwnerIndexKey, ObjectInfo>,
+
+    // FIXME use better options
+    #[default_options_override_fn = "owner_index_table_default_config"]
+    coin_index: DBMap<CoinIndexKey, CoinInfo>,
 
     /// This is an index of object references to currently existing dynamic field object, indexed by the
     /// composite key of the object ID of their parent and the object ID of the dynamic field object.
@@ -178,6 +196,7 @@ impl IndexStore {
         object_index_changes: ObjectIndexChanges,
         digest: &TransactionDigest,
         timestamp_ms: u64,
+        tx_coins: TxCoins,
     ) -> SuiResult<u64> {
         let sequence = self.next_sequence_number.fetch_add(1, Ordering::SeqCst);
 
@@ -238,7 +257,7 @@ impl IndexStore {
         // Owner index
         batch.delete_batch(
             &self.tables.owner_index,
-            object_index_changes.deleted_owners.into_iter(),
+            object_index_changes.deleted_owners.iter().cloned(),
         )?;
         batch.delete_batch(
             &self.tables.dynamic_field_index,
@@ -246,12 +265,76 @@ impl IndexStore {
         )?;
         batch.insert_batch(
             &self.tables.owner_index,
-            object_index_changes.new_owners.into_iter(),
+            object_index_changes.new_owners.iter().cloned(),
         )?;
         batch.insert_batch(
             &self.tables.dynamic_field_index,
             object_index_changes.new_dynamic_fields.into_iter(),
         )?;
+
+        // Index coin info
+        let (input_coins, written_coins) = tx_coins;
+
+        // 1. Delete old owner if the object is deleted or transferred to a new owner,
+        // by looking at `object_index_changes.deleted_owners`.
+        // Objects in `deleted_owners` must be owned by `Owner::Address` befoer the tx,
+        // hence must appear in the tx inputs.
+        // They also mut be coin type (see `AuthorityState::commit_certificate`).
+        let coin_delete_keys = object_index_changes
+            .deleted_owners
+            .iter()
+            .filter_map(|(owner, obj_id)| {
+                // If it's not in `input_coins`, then it's not a coin type. Skip.
+                let coin_type_tag = input_coins.get(obj_id)?
+                .coin_type_maybe().unwrap_or_else(|| {
+                    panic!(
+                        "object_id: {:?} in input_coins is not a coin type, input_coins: {:?}, tx_digest: {:?}",
+                        obj_id, input_coins, digest
+                    )
+                });
+                Some((*owner, coin_type_tag.to_string(), *obj_id))
+            }).collect::<Vec<_>>();
+        trace!(
+            tx_digset=?digest,
+            "coin_delete_keys: {:?}",
+            coin_delete_keys,
+        );
+
+        batch.delete_batch(&self.tables.coin_index, coin_delete_keys.into_iter())?;
+
+        // 2. Upsert new owner, by looking at `object_index_changes.new_owners`.
+        // For a object to appear in `new_owners`, it must be owned by `Owner::Address` after the tx.
+        // It also must not be deleted, hence appear in written_coins (see `AuthorityState::commit_certificate`)
+        // It also must be a coin type (see `AuthorityState::commit_certificate`).
+        // Here the coin could be transfered to a new address, to simply have the metadata changed (digest, balance etc)
+        // due to a successful or failed transaction.
+        let coin_add_keys = object_index_changes
+        .new_owners
+        .iter()
+        .filter_map(|((owner, obj_id), obj_info)| {
+            // TODO assert_eq obj_ref with obj_info?
+            // If it's in written_coins, then it's not a coin. Skip it.
+            let (_obj_ref, obj, _write_kind) = written_coins.get(obj_id)?;
+            let coin_type_tag = obj.coin_type_maybe().unwrap_or_else(|| {
+                panic!(
+                    "object_id: {:?} in written_coins is not a coin type, written_coins: {:?}, tx_digest: {:?}",
+                    obj_id, written_coins, digest
+                )
+            });
+            let coin = obj.as_coin_maybe().unwrap_or_else(|| {
+                panic!(
+                    "object_id: {:?} in written_coins cannot be deserialzied as a Coin, written_coins: {:?}, tx_digest: {:?}",
+                    obj_id, written_coins, digest
+                )
+            });
+            Some(((*owner, coin_type_tag.to_string(), *obj_id), (CoinInfo {version: obj_info.version, digest: obj_info.digest, balance: coin.balance.value(), previous_transaction: *digest})))
+        }).collect::<Vec<_>>();
+        trace!(
+            tx_digset=?digest,
+            "coin_add_keys: {:?}",
+            coin_add_keys,
+        );
+        batch.insert_batch(&self.tables.coin_index, coin_add_keys.into_iter())?;
 
         // events
         let event_digest = events.digest();
@@ -800,6 +883,34 @@ impl IndexStore {
             .get_owner_objects_iterator(owner, cursor, filter)?
             .take(limit)
             .collect())
+    }
+
+    pub fn get_owned_coins_iterator(
+        &self,
+        owner: SuiAddress,
+        coin_type_tag: Option<String>,
+        // starting_object_id: ObjectID,
+    ) -> SuiResult<impl Iterator<Item = (String, ObjectID, CoinInfo)> + '_> {
+        let all_coins = coin_type_tag.is_none();
+        let starting_coin_type =
+            coin_type_tag.unwrap_or_else(|| String::from_utf8([0u8].to_vec()).unwrap());
+        Ok(self
+            .tables
+            .coin_index
+            .iter()
+            // FIXME min string?
+            // // The object id 0 is the smallest possible
+            .skip_to(&(owner, starting_coin_type.clone(), ObjectID::ZERO))?
+            .take_while(move |((addr, coin_type, _), _)| {
+                if addr != &owner {
+                    return false;
+                }
+                if !all_coins && &starting_coin_type != coin_type {
+                    return false;
+                }
+                true
+            })
+            .map(|((_, coin_type, obj_id), coin)| (coin_type, obj_id, coin)))
     }
 
     /// starting_object_id can be used to implement pagination, where a client remembers the last
