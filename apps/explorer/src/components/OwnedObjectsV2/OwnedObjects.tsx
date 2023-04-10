@@ -10,8 +10,6 @@ import { Heading } from '~/ui/Heading';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Pagination } from '~/ui/Pagination';
 
-export const OBJECTS_PER_PAGE: number = 6;
-
 function OwnedObjects({ id }: { id: string }) {
     const [currentPage, setCurrentPage] = useState(0);
     const { data, isLoading, isError, hasNextPage, fetchNextPage, isFetching } =
