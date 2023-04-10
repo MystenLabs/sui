@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type CoinStruct } from '@mysten/sui.js';
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 
 import CoinItem from './CoinItem';
 
@@ -16,21 +15,11 @@ type CoinsPanelProps = {
 };
 
 function CoinsPanel({ coinType, id }: CoinsPanelProps): JSX.Element {
-    const [coinObjects, setCoinObjects] = useState<CoinStruct[]>([]);
     const containerRef = useRef(null);
     const { isIntersecting } = useOnScreen(containerRef);
     const { data, isLoading, isFetching, fetchNextPage, hasNextPage } =
         useGetCoins(coinType, id);
 
-    useEffect(() => {
-        if (data) {
-            let coins: CoinStruct[] = [];
-            data.pages.forEach((page) => {
-                coins = [...coins, ...page.data];
-            });
-            setCoinObjects(coins);
-        }
-    }, [data]);
     const isSpinnerVisible = hasNextPage || isLoading || isFetching;
 
     useEffect(() => {
@@ -41,9 +30,12 @@ function CoinsPanel({ coinType, id }: CoinsPanelProps): JSX.Element {
 
     return (
         <div>
-            {coinObjects.map((obj) => (
-                <CoinItem key={obj.coinObjectId} coin={obj} />
-            ))}
+            {data &&
+                data.pages.map((page) =>
+                    page.data.map((coin) => (
+                        <CoinItem key={coin.coinObjectId} coin={coin} />
+                    ))
+                )}
             {isSpinnerVisible && (
                 <div ref={containerRef}>
                     <LoadingSpinner />
