@@ -10,7 +10,11 @@ use move_core_types::{
 use pretty_assertions::assert_str_eq;
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use std::{fs::File, io::Write};
-use sui_types::{base_types::MoveObjectType_, crypto::Signer};
+use sui_types::{
+    base_types::MoveObjectType_,
+    crypto::Signer,
+    messages_checkpoint::{CheckpointContentsDigest, CheckpointDigest, CheckpointSummary},
+};
 use sui_types::{
     base_types::{
         self, MoveObjectType, ObjectDigest, ObjectID, TransactionDigest, TransactionEffectsDigest,
@@ -71,6 +75,12 @@ fn get_registry() -> Result<Registry> {
     let teff = TransactionEffectsDigest::random();
     tracer.trace_value(&mut samples, &teff)?;
 
+    let ccd = CheckpointContentsDigest::random();
+    tracer.trace_value(&mut samples, &ccd)?;
+
+    let ccd = CheckpointDigest::random();
+    tracer.trace_value(&mut samples, &ccd)?;
+
     // 2. Trace the main entry point(s) + every enum separately.
     tracer.trace_type::<Owner>(&samples)?;
     tracer.trace_type::<ExecutionStatus>(&samples)?;
@@ -94,6 +104,11 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<CommandArgumentError>(&samples)?;
     tracer.trace_type::<TypeArgumentError>(&samples)?;
     tracer.trace_type::<PackageUpgradeError>(&samples)?;
+
+    // uncomment once GenericSignature is added
+    // tracer.trace_type::<FullCheckpointContents>(&samples)?;
+    // tracer.trace_type::<CheckpointContents>(&samples)?;
+    tracer.trace_type::<CheckpointSummary>(&samples)?;
 
     tracer.registry()
 }

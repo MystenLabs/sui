@@ -863,7 +863,7 @@ where
                 .iter()
                 .map(|c| match c {
                     CheckpointCommitment::ECMHLiveObjectSetDigest(d) => {
-                        Some(d.digest.digest.to_vec())
+                        Some(d.digest.into_inner().to_vec())
                     }
                 })
                 .collect();

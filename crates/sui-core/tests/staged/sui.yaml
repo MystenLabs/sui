@@ -57,6 +57,39 @@ ChangeEpoch:
                 SEQ: U8
             - SEQ:
                 TYPENAME: ObjectID
+CheckpointCommitment:
+  ENUM:
+    0:
+      ECMHLiveObjectSetDigest:
+        NEWTYPE:
+          TYPENAME: ECMHLiveObjectSetDigest
+CheckpointContentsDigest:
+  NEWTYPESTRUCT:
+    TYPENAME: Digest
+CheckpointDigest:
+  NEWTYPESTRUCT:
+    TYPENAME: Digest
+CheckpointSummary:
+  STRUCT:
+    - epoch: U64
+    - sequence_number: U64
+    - network_total_transactions: U64
+    - content_digest:
+        TYPENAME: CheckpointContentsDigest
+    - previous_digest:
+        OPTION:
+          TYPENAME: CheckpointDigest
+    - epoch_rolling_gas_cost_summary:
+        TYPENAME: GasCostSummary
+    - timestamp_ms: U64
+    - checkpoint_commitments:
+        SEQ:
+          TYPENAME: CheckpointCommitment
+    - end_of_epoch_data:
+        OPTION:
+          TYPENAME: EndOfEpochData
+    - version_specific_data:
+        SEQ: U8
 Command:
   ENUM:
     0:
@@ -160,6 +193,22 @@ DeleteKind:
       Wrap: UNIT
 Digest:
   NEWTYPESTRUCT: BYTES
+ECMHLiveObjectSetDigest:
+  STRUCT:
+    - digest:
+        TYPENAME: Digest
+EndOfEpochData:
+  STRUCT:
+    - nextEpochCommittee:
+        SEQ:
+          TUPLE:
+            - TYPENAME: AuthorityPublicKeyBytes
+            - U64
+    - nextEpochProtocolVersion:
+        TYPENAME: ProtocolVersion
+    - epochCommitments:
+        SEQ:
+          TYPENAME: CheckpointCommitment
 ExecutionFailureStatus:
   ENUM:
     0:
@@ -267,6 +316,12 @@ ExecutionStatus:
               TYPENAME: ExecutionFailureStatus
           - command:
               OPTION: U64
+GasCostSummary:
+  STRUCT:
+    - computationCost: U64
+    - storageCost: U64
+    - storageRebate: U64
+    - nonRefundableStorageFee: U64
 GenesisObject:
   ENUM:
     0:
