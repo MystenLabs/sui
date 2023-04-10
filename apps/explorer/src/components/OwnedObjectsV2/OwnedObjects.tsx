@@ -49,6 +49,10 @@ function OwnedObjects({ id }: { id: string }) {
                     {(hasNextPage || data?.pages.length > 1) && (
                         <Pagination
                             onNext={() => {
+                                if (isLoading || isFetching) {
+                                    return
+                                }
+
                                 if (currentPage === data.pages.length - 1) {
                                     fetchNextPage();
                                 }
