@@ -245,11 +245,18 @@ impl SimpleFaucet {
         // Drops the lock early because sign_and_execute_txn requires the lock.
         drop(wal);
 
-        futures::future::join_all(pending.into_iter().map(|(uuid, recipient, coin_id, tx)| {
-            self.sign_and_execute_txn(uuid, recipient, coin_id, tx)
-        }))
-        .await;
+        let transfer_results =
+            futures::future::join_all(pending.into_iter().map(|(uuid, recipient, coin_id, tx)| {
+                self.sign_and_execute_txn(uuid, recipient, coin_id, tx)
+            }))
+            .await;
 
+        for result in transfer_results.into_iter() {
+            if result.is_ok() {
+                self.metrics.total_available_coins.inc();
+                self.metrics.total_discarded_coins.dec();
+            }
+        }
         Ok(())
     }
 
@@ -821,84 +828,85 @@ mod tests {
         assert!(wal_2.log.is_empty());
     }
 
-    // #[tokio::test]
-    // async fn test_discard_smaller_amount_gas() {
-    //     telemetry_subscribers::init_for_testing();
-    //     let test_cluster = TestClusterBuilder::new().build().await.unwrap();
-    //     let address = test_cluster.get_address_0();
-    //     let mut context = test_cluster.wallet;
-    //     let gases = get_current_gases(address, &mut context).await;
+    #[tokio::test]
+    async fn test_discard_smaller_amount_gas() {
+        telemetry_subscribers::init_for_testing();
+        let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+        let address = test_cluster.get_address_0();
+        let mut context = test_cluster.wallet;
+        let gases = get_current_gases(address, &mut context).await;
 
-    //     // split out a coin that has a very small balance such that
-    //     // this coin will be not used later on.
-    //     let tiny_value = 1;
-    //     let res = SuiClientCommands::SplitCoin {
-    //         coin_id: *gases[0].id(),
-    //         amounts: Some(vec![tiny_value]),
-    //         gas_budget: 50000000,
-    //         gas: None,
-    //         count: None,
-    //     }
-    //     .execute(&mut context)
-    //     .await;
+        // split out a coin that has a very small balance such that
+        // this coin will be not used later on. This is the new default amount for faucet due to gas changes
+        let config = FaucetConfig::default();
+        let tiny_value = (config.num_coins as u64 * config.amount) + 1;
+        let res = SuiClientCommands::SplitCoin {
+            coin_id: *gases[0].id(),
+            amounts: Some(vec![tiny_value]),
+            gas_budget: 50000000,
+            gas: None,
+            count: None,
+        }
+        .execute(&mut context)
+        .await;
 
-    //     let tiny_coin_id = if let SuiClientCommandResult::SplitCoin(resp) = res.unwrap() {
-    //         resp.effects.as_ref().unwrap().created()[0]
-    //             .reference
-    //             .object_id
-    //     } else {
-    //         panic!("split command did not return SuiClientCommandResult::SplitCoin");
-    //     };
+        let tiny_coin_id = if let SuiClientCommandResult::SplitCoin(resp) = res.unwrap() {
+            resp.effects.as_ref().unwrap().created()[0]
+                .reference
+                .object_id
+        } else {
+            panic!("split command did not return SuiClientCommandResult::SplitCoin");
+        };
 
-    //     // Get the latest list of gas
-    //     let gases = get_current_gases(address, &mut context).await;
-    //     let tiny_amount = gases
-    //         .iter()
-    //         .find(|gas| gas.id() == &tiny_coin_id)
-    //         .unwrap()
-    //         .value();
-    //     assert_eq!(tiny_amount, tiny_value);
+        // Get the latest list of gas
+        let gases = get_current_gases(address, &mut context).await;
+        let tiny_amount = gases
+            .iter()
+            .find(|gas| gas.id() == &tiny_coin_id)
+            .unwrap()
+            .value();
+        assert_eq!(tiny_amount, tiny_value);
+        println!("gas list: {gases:?}");
 
-    //     let gases: HashSet<ObjectID> = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
+        let gases: HashSet<ObjectID> = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
 
-    //     let tmp = tempfile::tempdir().unwrap();
-    //     let prom_registry = Registry::new();
-    //     let config = FaucetConfig::default();
-    //     let mut faucet = SimpleFaucet::new(
-    //         context,
-    //         &prom_registry,
-    //         &tmp.path().join("faucet.wal"),
-    //         config,
-    //     )
-    //     .await
-    //     .unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let prom_registry = Registry::new();
+        let mut faucet = SimpleFaucet::new(
+            context,
+            &prom_registry,
+            &tmp.path().join("faucet.wal"),
+            config,
+        )
+        .await
+        .unwrap();
 
-    //     // Ask for a value higher than tiny coin + DEFAULT_GAS_COMPUTATION_BUCKET
-    //     let number_of_coins = gases.len();
-    //     let amounts = &vec![tiny_value + 1; number_of_coins - 1];
-    //     // We traverse the the list ten times, which must trigger the tiny gas to be examined and then discarded
-    //     futures::future::join_all((0..10).map(|_| {
-    //         faucet.send(
-    //             Uuid::new_v4(),
-    //             SuiAddress::random_for_testing_only(),
-    //             amounts,
-    //         )
-    //     }))
-    //     .await;
-    //     info!(
-    //         ?number_of_coins,
-    //         "Sent to random addresses: {} {}",
-    //         amounts[0],
-    //         amounts.len(),
-    //     );
+        // Ask for a value higher than tiny coin + DEFAULT_GAS_COMPUTATION_BUCKET
+        let number_of_coins = gases.len();
+        let amounts = &vec![tiny_value + 1; number_of_coins - 1];
+        // We traverse the the list ten times, which must trigger the tiny gas to be examined and then discarded
+        futures::future::join_all((0..10).map(|_| {
+            faucet.send(
+                Uuid::new_v4(),
+                SuiAddress::random_for_testing_only(),
+                amounts,
+            )
+        }))
+        .await;
+        info!(
+            ?number_of_coins,
+            "Sent to random addresses: {} {}",
+            amounts[0],
+            amounts.len(),
+        );
 
-    //     // Verify that the tiny gas is not in the queue.
-    //     tokio::task::yield_now().await;
-    //     let discarded = faucet.metrics.total_discarded_coins.get();
-    //     let candidates = faucet.drain_gas_queue(gases.len() - 1).await;
-    //     assert_eq!(discarded, 1);
-    //     assert!(candidates.get(&tiny_coin_id).is_none());
-    // }
+        // Verify that the tiny gas is not in the queue.
+        tokio::task::yield_now().await;
+        let discarded = faucet.metrics.total_discarded_coins.get();
+        let candidates = faucet.drain_gas_queue(gases.len() - 1).await;
+        assert_eq!(discarded, 1);
+        assert!(candidates.get(&tiny_coin_id).is_none());
+    }
 
     async fn test_basic_interface(faucet: &impl Faucet) {
         let recipient = SuiAddress::random_for_testing_only();
