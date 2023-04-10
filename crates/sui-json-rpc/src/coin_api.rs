@@ -16,7 +16,7 @@ use sui_json_rpc_types::{Balance, Coin as SuiCoin};
 use sui_json_rpc_types::{CoinPage, SuiCoinMetadata};
 use sui_open_rpc::Module;
 use sui_types::balance::Supply;
-use sui_types::base_types::{MoveObjectType, ObjectID, ObjectRef, SuiAddress};
+use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::coin::{Coin, CoinMetadata, TreasuryCap};
 use sui_types::error::{SuiError, UserInputError};
 use sui_types::gas_coin::GAS;
@@ -273,7 +273,7 @@ impl CoinReadApiServer for CoinReadApi {
     }
 
     fn get_all_balances(&self, owner: SuiAddress) -> RpcResult<Vec<Balance>> {
-        let mut balances: HashMap<MoveObjectType, Balance> = HashMap::new();
+        let mut balances: HashMap<TypeTag, Balance> = HashMap::new();
         // TODO: Add index to improve performance?
         let coin_objs = self.multi_get_coin_objects(
             &self
@@ -281,9 +281,10 @@ impl CoinReadApiServer for CoinReadApi {
                 .collect::<Vec<_>>(),
         )?;
         for coin_obj in coin_objs {
-            // unwraps safe because get_owner_coin_iterator can only return coin objects
+            // unwrap safe because get_owner_coin_iterator can only return coin objects
             let move_obj = coin_obj.data.try_as_move().unwrap();
-            let coin_type = move_obj.type_();
+            // unwrap safe because each coin object has one type param
+            let coin_type = move_obj.type_().type_params().first().unwrap().clone();
             let coin: Coin = bcs::from_bytes(move_obj.contents()).unwrap();
 
             let balance = balances.entry(coin_type.clone()).or_insert(Balance {
