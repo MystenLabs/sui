@@ -23,6 +23,7 @@ import {
   UpgradePolicy,
 } from '../../../src';
 import { retry } from 'ts-retry-promise';
+import { hexToBytes } from '@noble/hashes/utils';
 
 const TEST_ENDPOINTS = localnetConnection;
 const DEFAULT_FAUCET_URL =
@@ -192,20 +193,26 @@ export async function upgradePackage(
   // TODO: Remove this once this actually works:
   tx.setGasBudget(10000000);
 
+  const cap = tx.object(capId);
   const ticket = tx.moveCall({
     target: '0x2::package::authorize_upgrade',
     arguments: [
-      tx.object(capId),
+      cap,
       tx.pure(UpgradePolicy.COMPATIBLE),
-      tx.pure(digest),
+      tx.pure(Array.from(hexToBytes(digest))),
     ],
   });
 
-  tx.upgrade({
+  const receipt = tx.upgrade({
     modules,
     dependencies,
     packageId,
     ticket,
+  });
+
+  tx.moveCall({
+    target: '0x2::package::commit_upgrade',
+    arguments: [cap, receipt],
   });
 
   const result = await toolbox.signer.signAndExecuteTransactionBlock({
@@ -216,13 +223,7 @@ export async function upgradePackage(
     },
   });
 
-  console.log(result);
-
   expect(getExecutionStatusType(result)).toEqual('success');
-
-  console.info(
-    `Upgraded package ${packageId} from address ${await toolbox.signer.getAddress()}}`,
-  );
 }
 
 export function getRandomAddresses(n: number): SuiAddress[] {

@@ -109,7 +109,8 @@ export const PublishTransaction = object({
 });
 export type PublishTransaction = Infer<typeof PublishTransaction>;
 
-// Keep this value in sync with the one in crates/sui-types/src/move_package.rs
+// Keep in sync with constants in
+// crates/sui-framework/packages/sui-framework/sources/package.move
 export enum UpgradePolicy {
   COMPATIBLE = 0,
   ADDITIVE = 128,
