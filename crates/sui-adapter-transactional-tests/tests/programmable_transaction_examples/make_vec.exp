@@ -6,15 +6,19 @@ A: object(0,0)
 task 1 'publish'. lines 6-53:
 created: object(1,0)
 mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 9256800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'programmable'. lines 55-61:
 mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 3 'programmable'. lines 63-69:
 mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 4 'programmable'. lines 71-74:
 mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 5 'programmable'. lines 76-79:
 Error: Transaction Effects Status: Invalid command argument at 0. The argument cannot be deserialized into a value of the specified type
@@ -22,3 +26,4 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 
 task 6 'programmable'. lines 81-85:
 mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0

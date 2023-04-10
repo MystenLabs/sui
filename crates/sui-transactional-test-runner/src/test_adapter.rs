@@ -100,6 +100,8 @@ pub struct SuiTestAdapter<'a> {
     object_enumeration: BiBTreeMap<ObjectID, FakeID>,
     next_fake: (u64, u64),
     rng: StdRng,
+    gas_price: u64,
+    protocol_config: ProtocolConfig,
 }
 
 struct TestAccount {
@@ -121,7 +123,8 @@ struct TxnSummary {
 }
 
 static GENESIS: Lazy<Genesis> = Lazy::new(create_genesis_module_objects);
-static PROTOCOL_CONSTANTS: Lazy<ProtocolConfig> = Lazy::new(ProtocolConfig::get_for_max_version);
+static GENESIS_PROTOCOL_CONSTANTS: Lazy<ProtocolConfig> =
+    Lazy::new(ProtocolConfig::get_for_min_version);
 
 struct Genesis {
     pub objects: Vec<Object>,
@@ -169,7 +172,7 @@ fn create_clock() -> Object {
             has_public_transfer,
             SUI_CLOCK_OBJECT_SHARED_VERSION,
             contents,
-            &PROTOCOL_CONSTANTS,
+            &GENESIS_PROTOCOL_CONSTANTS,
         )
         .unwrap()
     };
@@ -213,15 +216,31 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             pre_compiled_deps.is_some(),
             "Must populate 'pre_compiled_deps' with Sui framework"
         );
-        let (additional_mapping, account_names) = match task_opt.map(|t| t.command) {
-            Some((InitCommand { named_addresses }, SuiInitArgs { accounts })) => {
+        let (additional_mapping, account_names, protocol_config) = match task_opt.map(|t| t.command)
+        {
+            Some((
+                InitCommand { named_addresses },
+                SuiInitArgs {
+                    accounts,
+                    protocol_version,
+                },
+            )) => {
                 let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
                 let accounts = accounts
                     .map(|v| v.into_iter().collect::<BTreeSet<_>>())
                     .unwrap_or_default();
-                (map, accounts)
+                let protocol_config = if let Some(protocol_version) = protocol_version {
+                    ProtocolConfig::get_for_version(protocol_version.into())
+                } else {
+                    ProtocolConfig::get_for_max_version()
+                };
+                (map, accounts, protocol_config)
             }
-            None => (BTreeMap::new(), BTreeSet::new()),
+            None => (
+                BTreeMap::new(),
+                BTreeSet::new(),
+                ProtocolConfig::get_for_max_version(),
+            ),
         };
 
         let mut named_address_mapping = NAMED_ADDRESSES.clone();
@@ -272,7 +291,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             vm: Arc::new(
                 new_move_vm(
                     native_functions,
-                    &PROTOCOL_CONSTANTS,
+                    &protocol_config,
                     enable_move_vm_paranoid_checks,
                 )
                 .unwrap(),
@@ -292,6 +311,9 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             object_enumeration: BiBTreeMap::new(),
             next_fake: (0, 0),
             rng,
+            // TODO: make this configurable
+            gas_price: 1000,
+            protocol_config,
         };
         for well_known in WELL_KNOWN_OBJECTS.iter().copied() {
             test_adapter
@@ -333,7 +355,6 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         let SuiPublishArgs {
             sender,
             upgradeable,
-            view_gas_used,
             dependencies,
         } = extra;
 
@@ -358,6 +379,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 Ok(id)
             })
             .collect::<Result<_, _>>()?;
+        let gas_price = self.gas_price;
         // we are assuming that all packages depend on the system packages, so these don't have to
         // be provided explicitly as parameters
         dependencies.extend(BuiltInFramework::iter_system_packages().map(|p| p.id()));
@@ -370,7 +392,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 builder.publish_immutable(vec![module_bytes], dependencies);
             };
             let pt = builder.finish();
-            TransactionData::new_programmable(sender, vec![gas], pt, gas_budget, 1)
+            TransactionData::new_programmable(sender, vec![gas], pt, gas_budget, gas_price)
         };
         let transaction = self.sign_txn(sender, data);
         let summary = self.execute_txn(transaction, gas_budget)?;
@@ -401,8 +423,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 _ => (),
             }
         }
-        let view_events = false;
-        let output = self.object_summary_output(&summary, view_events, view_gas_used);
+        let output = self.object_summary_output(&summary);
         let published_module_bytes = self
             .storage
             .get_object(&created_package)
@@ -432,8 +453,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         assert!(signers.is_empty(), "signers are not used");
         let SuiRunArgs {
             sender,
-            view_events,
-            view_gas_used,
+            gas_price,
+            protocol_version,
         } = extra;
         let mut builder = ProgrammableTransactionBuilder::new();
         let arguments = args
@@ -443,6 +464,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         let package_id = ObjectID::from(*module_id.address());
 
         let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
+        let gas_price = gas_price.unwrap_or(self.gas_price);
         let data = |sender, gas| {
             builder.command(Command::move_call(
                 package_id,
@@ -452,11 +474,20 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 arguments,
             ));
             let pt = builder.finish();
-            TransactionData::new_programmable(sender, vec![gas], pt, gas_budget, 1)
+            TransactionData::new_programmable(sender, vec![gas], pt, gas_budget, gas_price)
         };
         let transaction = self.sign_txn(sender, data);
+        let default_protocol_version = self.protocol_config.version;
+        if let Some(protocol_version) = protocol_version {
+            // override protocol version, just for this call
+            self.protocol_config = ProtocolConfig::get_for_version(protocol_version.into())
+        }
         let summary = self.execute_txn(transaction, gas_budget)?;
-        let output = self.object_summary_output(&summary, view_events, view_gas_used);
+        let output = self.object_summary_output(&summary);
+        // restore old protocol version (if needed)
+        if protocol_version.is_some() {
+            self.protocol_config = ProtocolConfig::get_for_version(default_protocol_version)
+        }
         let empty = SerializedReturnValues {
             mutable_reference_outputs: vec![],
             return_values: vec![],
@@ -557,7 +588,6 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 recipient,
                 sender,
                 gas_budget,
-                view_gas_used,
             }) => {
                 let mut builder = ProgrammableTransactionBuilder::new();
                 let obj_arg = SuiValue::Object(fake_id).into_argument(&mut builder, self)?;
@@ -576,7 +606,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     TransactionData::new_programmable(sender, vec![gas], pt, gas_budget, 1)
                 });
                 let summary = self.execute_txn(transaction, gas_budget)?;
-                let output = self.object_summary_output(&summary, false, view_gas_used);
+                let output = self.object_summary_output(&summary);
                 Ok(output)
             }
             SuiSubcommand::ConsensusCommitPrologue(ConsensusCommitPrologueCommand {
@@ -585,15 +615,14 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 let transaction =
                     VerifiedTransaction::new_consensus_commit_prologue(0, 0, timestamp_ms);
                 let summary = self.execute_txn(transaction, DEFAULT_GAS_BUDGET)?;
-                let output = self.object_summary_output(&summary, false, false);
+                let output = self.object_summary_output(&summary);
                 Ok(output)
             }
             SuiSubcommand::ProgrammableTransaction(ProgrammableTransactionCommand {
                 sender,
                 gas_budget,
+                gas_price,
                 inputs,
-                view_events,
-                view_gas_used,
             }) => {
                 let inputs = self.compiled_state().resolve_args(inputs)?;
                 let inputs: Vec<CallArg> = inputs
@@ -611,17 +640,18 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     .map(|c| c.into_command(&|s| Some(state.resolve_named_address(s))))
                     .collect::<anyhow::Result<Vec<Command>>>()?;
                 let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
+                let gas_price = gas_price.unwrap_or(self.gas_price);
                 let transaction = self.sign_txn(sender, |sender, gas| {
                     TransactionData::new_programmable(
                         sender,
                         vec![gas],
                         ProgrammableTransaction { inputs, commands },
                         gas_budget,
-                        1,
+                        gas_price,
                     )
                 });
                 let summary = self.execute_txn(transaction, gas_budget)?;
-                let output = self.object_summary_output(&summary, view_events, view_gas_used);
+                let output = self.object_summary_output(&summary);
                 Ok(output)
             }
         }
@@ -656,14 +686,18 @@ impl<'a> SuiTestAdapter<'a> {
         gas_budget: u64,
     ) -> anyhow::Result<TxnSummary> {
         let gas_status = if transaction.inner().is_system_tx() {
-            SuiGasStatus::new_unmetered(&PROTOCOL_CONSTANTS)
+            SuiGasStatus::new_unmetered(&self.protocol_config)
         } else {
-            SuiCostTable::new(&PROTOCOL_CONSTANTS).into_gas_status_for_testing(gas_budget, 1, 1)
+            SuiCostTable::new(&self.protocol_config).into_gas_status_for_testing(
+                gas_budget,
+                self.gas_price,
+                self.protocol_config.storage_gas_price(),
+            )
         };
         transaction
             .data()
             .transaction_data()
-            .validity_check(&PROTOCOL_CONSTANTS)?;
+            .validity_check(&self.protocol_config)?;
         let transaction_digest = TransactionDigest::new(self.rng.gen());
         let (input_objects, objects) = transaction
             .data()
@@ -689,7 +723,7 @@ impl<'a> SuiTestAdapter<'a> {
             self.storage.clone(),
             input_objects,
             transaction_digest,
-            &PROTOCOL_CONSTANTS,
+            &self.protocol_config,
         );
         let transaction_data = &transaction
             .into_inner()
@@ -729,10 +763,9 @@ impl<'a> SuiTestAdapter<'a> {
             gas_status,
             // TODO: Support different epochs in transactional tests.
             &EpochData::new_test(),
-            &PROTOCOL_CONSTANTS,
+            &self.protocol_config,
             false, // enable_expensive_checks
         );
-
         let mut created_ids: Vec<_> = effects
             .created()
             .iter()
@@ -854,16 +887,10 @@ impl<'a> SuiTestAdapter<'a> {
             unwrapped_then_deleted,
             wrapped,
         }: &TxnSummary,
-        view_events: bool,
-        view_gas_summary: bool,
     ) -> Option<String> {
         let mut out = String::new();
-        if view_events {
-            if events.is_empty() {
-                out += "No events"
-            } else {
-                write!(out, "events: {}", self.list_events(events)).unwrap();
-            }
+        if !events.is_empty() {
+            write!(out, "events: {}", self.list_events(events)).unwrap();
         }
         if !created.is_empty() {
             if !out.is_empty() {
@@ -906,10 +933,8 @@ impl<'a> SuiTestAdapter<'a> {
             }
             write!(out, "wrapped: {}", self.list_objs(wrapped)).unwrap();
         }
-        if view_gas_summary {
-            out.push('\n');
-            write!(out, "gas summary: {}", gas_summary).unwrap();
-        }
+        out.push('\n');
+        write!(out, "gas summary: {}", gas_summary).unwrap();
 
         if out.is_empty() {
             None

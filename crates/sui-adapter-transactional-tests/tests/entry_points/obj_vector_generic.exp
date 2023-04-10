@@ -6,22 +6,27 @@ A: object(0,0)
 task 1 'publish'. lines 8-115:
 created: object(1,0)
 mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 13999200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'run'. lines 117-117:
 created: object(2,0)
 mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2599200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3 'run'. lines 119-123:
 mutated: object(0,0)
 deleted: object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2573208, non_refundable_storage_fee: 25992
 
 task 4 'run'. lines 125-125:
 created: object(4,0)
 mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2599200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 5 'run'. lines 127-127:
 created: object(5,0), object(5,1)
 mutated: object(0,0), object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 6665200,  storage_rebate: 2573208, non_refundable_storage_fee: 25992
 
 task 6 'run'. lines 129-133:
 Error: Object 0x56e028b7e51ce99acd6648be76b1d542f2e143bdbc9efc0f40a090c7d4a4825c is owned by object 0x67f73cc9f78eec11a5f083f400d92fe89b575d21520bcfc6c15403ce29585970. Objects owned by other objects cannot be used as input arguments.
@@ -29,6 +34,7 @@ Error: Object 0x56e028b7e51ce99acd6648be76b1d542f2e143bdbc9efc0f40a090c7d4a4825c
 task 7 'run'. lines 135-135:
 created: object(7,0)
 mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2652400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 8 'run'. lines 137-140:
 Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
@@ -37,10 +43,12 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 task 9 'run'. lines 142-142:
 created: object(9,0)
 mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2652400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 10 'run'. lines 144-144:
 created: object(10,0)
 mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2599200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 11 'run'. lines 146-149:
 Error: Transaction Effects Status: Invalid command argument at 1. The type of the value does not match the expected type
@@ -49,6 +57,7 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 task 12 'run'. lines 151-151:
 created: object(12,0)
 mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2599200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 13 'run'. lines 153-156:
 Error: Transaction Effects Status: Invalid command argument at 0. Immutable and shared objects cannot be passed by-value.
@@ -57,6 +66,7 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 task 14 'run'. lines 158-158:
 created: object(14,0)
 mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2599200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 15 'run'. lines 160-163:
 Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
@@ -65,6 +75,7 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 task 16 'run'. lines 165-165:
 created: object(16,0)
 mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2599200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 17 'run'. lines 167-167:
 Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
