@@ -49,6 +49,7 @@ export const builder = new BCS(bcs)
     type_arguments: [VECTOR, TYPE_TAG],
     arguments: [VECTOR, ARGUMENT],
   })
+  // Keep this in sync with crates/sui-types/src/messages.rs
   .registerEnumType(TRANSACTION_INNER, {
     /**
      * A Move Call - any public Move function can be called via
@@ -86,6 +87,13 @@ export const builder = new BCS(bcs)
     MakeMoveVec: {
       type: [OPTION, TYPE_TAG],
       objects: [VECTOR, ARGUMENT],
+    },
+    /**  */
+    Upgrade: {
+      modules: [VECTOR, [VECTOR, BCS.U8]],
+      dependencies: [VECTOR, BCS.ADDRESS],
+      packageId: BCS.ADDRESS,
+      ticket: ARGUMENT,
     },
   });
 

@@ -25,6 +25,7 @@ import {
   setup,
   TestToolbox,
   publishPackage,
+  upgradePackage,
 } from './utils/setup';
 
 describe('Transaction Builders', () => {
@@ -154,19 +155,24 @@ describe('Transaction Builders', () => {
       toolbox,
     );
 
-    const capId = (publishTxn.objectChanges?.find((a) =>
-      is(a, SuiObjectChangeCreated) &&
-      a.objectType.endsWith("UpgradeCap") &&
-      'Immutable' !== a.owner &&
-      'AddressOwner' in a.owner &&
-      a.owner.AddressOwner === toolbox.address()
-    ) as SuiObjectChangeCreated)?.objectId;
+    const capId = (
+      publishTxn.objectChanges?.find(
+        (a) =>
+          is(a, SuiObjectChangeCreated) &&
+          a.objectType.endsWith('UpgradeCap') &&
+          'Immutable' !== a.owner &&
+          'AddressOwner' in a.owner &&
+          a.owner.AddressOwner === toolbox.address(),
+      ) as SuiObjectChangeCreated
+    )?.objectId;
 
     expect(capId).toBeTruthy();
 
-    const sharedObjectId = getObjectId(getCreatedObjects(publishTxn)!
-      .filter((o) => getSharedObjectInitialVersion(o.owner) !== undefined,
-    )[0]);
+    const sharedObjectId = getObjectId(
+      getCreatedObjects(publishTxn)!.filter(
+        (o) => getSharedObjectInitialVersion(o.owner) !== undefined,
+      )[0],
+    );
 
     // Step 2. Confirm that its functions work as expected in its
     // first version
@@ -186,7 +192,8 @@ describe('Transaction Builders', () => {
 
     // Step 4. Make sure the behaviour of the upgrade package matches
     // the newly introduced function
-  })
+    await upgradePackage(packageId, capId, upgradedPackagePath, toolbox);
+  });
 });
 
 async function validateTransaction(signer: RawSigner, tx: TransactionBlock) {

@@ -82,6 +82,9 @@ export const SuiTransaction = union([
   object({ SplitCoins: tuple([SuiArgument, array(SuiArgument)]) }),
   object({ MergeCoins: tuple([SuiArgument, array(SuiArgument)]) }),
   object({ Publish: tuple([SuiMovePackage, array(ObjectId)]) }),
+  object({
+    Upgrade: tuple([SuiMovePackage, array(ObjectId), ObjectId, SuiArgument]),
+  }),
   object({ MakeMoveVec: tuple([nullable(string()), array(SuiArgument)]) }),
 ]);
 

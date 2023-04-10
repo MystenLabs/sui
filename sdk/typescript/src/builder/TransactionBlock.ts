@@ -658,7 +658,7 @@ export class TransactionBlock {
         });
         if (dryRunResult.effects.status.status !== 'success') {
           throw new Error(
-            'Dry run failed, could not automatically determine a budget',
+            `Dry run failed, could not automatically determine a budget: ${dryRunResult.effects.status.error}`,
             { cause: dryRunResult },
           );
         }

@@ -10,7 +10,6 @@ import {
   getPublishedObjectChanges,
   getExecutionStatusType,
   JsonRpcProvider,
-  fromB64,
   localnetConnection,
   Connection,
   Coin,
@@ -20,8 +19,8 @@ import {
   assert,
   SuiAddress,
   ObjectId,
-  normalizeSuiObjectId,
   FaucetRateLimitError,
+  UpgradePolicy,
 } from '../../../src';
 import { retry } from 'ts-retry-promise';
 
@@ -121,10 +120,10 @@ export async function publishPackage(
     ),
   );
   const tx = new TransactionBlock();
-  const cap = tx.publish(
-    modules.map((m: any) => Array.from(fromB64(m))),
-    dependencies.map((addr: string) => normalizeSuiObjectId(addr)),
-  );
+  const cap = tx.publish({
+    modules,
+    dependencies,
+  });
 
   // Transfer the upgrade capability to the sender so they can upgrade the package later if they want.
   tx.transferObjects([cap], tx.pure(await toolbox.signer.getAddress()));
@@ -141,8 +140,9 @@ export async function publishPackage(
   const packageId = getPublishedObjectChanges(publishTxn)[0].packageId.replace(
     /^(0x)(0+)/,
     '0x',
-  );
-  expect(packageId).toBeTruthy();
+  ) as string;
+
+  expect(packageId).toBeTypeOf('string');
 
   console.info(
     `Published package ${packageId} from address ${await toolbox.signer.getAddress()}}`,
@@ -151,16 +151,79 @@ export async function publishPackage(
   return { packageId, publishTxn };
 }
 
+// function computeDigestForModulesAndDeps(
+//   modules: number[][],
+//   dependencies: string[],
+// ) {
+//   const depBytes = dependencies.map((dep) => Array.from(fromHEX(dep)));
+//   const bytes = modules
+//     .concat(...depBytes)
+//     .flat()
+//     .sort();
+
+//   return blake2b(new Uint8Array(bytes), { dkLen: 32 });
+// }
+
 export async function upgradePackage(
   packageId: ObjectId,
   capId: ObjectId,
   packagePath: string,
   toolbox?: TestToolbox,
 ) {
-  // TODO: Finish
+  // TODO: We create a unique publish address per publish, but we really could share one for all publishes.
+  if (!toolbox) {
+    toolbox = await setup();
+  }
+
+  // remove all controlled temporary objects on process exit
+  tmp.setGracefulCleanup();
+
+  const tmpobj = tmp.dirSync({ unsafeCleanup: true });
+
+  const [bytecode, digest] = execSync(
+    `${SUI_BIN} move build --dump-bytecode-as-base64 --dump-package-digest --path ${packagePath} --install-dir ${tmpobj.name}`,
+    { encoding: 'utf-8' },
+  ).split('\n');
+
+  const { modules, dependencies } = JSON.parse(bytecode);
+
+  const tx = new TransactionBlock();
+
+  // TODO: Remove this once this actually works:
+  tx.setGasBudget(10000000);
+
+  const ticket = tx.moveCall({
+    target: '0x2::package::authorize_upgrade',
+    arguments: [
+      tx.object(capId),
+      tx.pure(UpgradePolicy.COMPATIBLE),
+      tx.pure(digest),
+    ],
+  });
+
+  tx.upgrade({
+    modules,
+    dependencies,
+    packageId,
+    ticket,
+  });
+
+  const result = await toolbox.signer.signAndExecuteTransactionBlock({
+    transactionBlock: tx,
+    options: {
+      showEffects: true,
+      showObjectChanges: true,
+    },
+  });
+
+  console.log(result);
+
+  expect(getExecutionStatusType(result)).toEqual('success');
+
+  console.info(
+    `Upgraded package ${packageId} from address ${await toolbox.signer.getAddress()}}`,
+  );
 }
-
-
 
 export function getRandomAddresses(n: number): SuiAddress[] {
   return Array(n)
@@ -171,7 +234,6 @@ export function getRandomAddresses(n: number): SuiAddress[] {
     });
 }
 
-// TODO: shall we move the transaction builder part to Transaction.ts?
 export async function paySui(
   signer: RawSigner,
   numRecipients: number = 1,
