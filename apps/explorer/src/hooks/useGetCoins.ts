@@ -9,10 +9,7 @@ import type { SuiAddress } from '@mysten/sui.js';
 const MAX_COINS_PER_REQUEST = 10;
 
 // Fetch all coins for an address, this will keep calling the API until all coins are fetched
-export function useGetCoins(
-    coinType: string,
-    address?: SuiAddress | null,
-) {
+export function useGetCoins(coinType: string, address?: SuiAddress | null) {
     const rpc = useRpcClient();
     return useInfiniteQuery(
         ['get-coins', address, coinType],

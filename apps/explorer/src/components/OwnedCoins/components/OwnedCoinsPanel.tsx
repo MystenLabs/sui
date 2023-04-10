@@ -41,9 +41,14 @@ function CoinsPanel({ coinType, id }: CoinsPanelProps): JSX.Element {
 
     return (
         <div>
-            {coinObjects.map((obj) => <CoinItem key={obj.coinObjectId} coin={obj} />)}
-            {(isSpinnerVisible) && <div ref={containerRef}>
-                <LoadingSpinner /></div>}
+            {coinObjects.map((obj) => (
+                <CoinItem key={obj.coinObjectId} coin={obj} />
+            ))}
+            {isSpinnerVisible && (
+                <div ref={containerRef}>
+                    <LoadingSpinner />
+                </div>
+            )}
         </div>
     );
 }
