@@ -1390,6 +1390,7 @@ fn create_genesis_transaction(
                 SuiGasStatus::new_unmetered(protocol_config),
                 epoch_data,
                 protocol_config,
+                false, // enable_expensive_checks
             );
         assert!(inner_temp_store.objects.is_empty());
         assert!(inner_temp_store.mutable_inputs.is_empty());
@@ -1950,6 +1951,7 @@ mod test {
                 SuiGasStatus::new_unmetered(&protocol_config),
                 &EpochData::new_test(),
                 &protocol_config,
+                false, // enable_expensive_checks
             );
 
         assert_eq!(effects, genesis.effects);
