@@ -819,6 +819,7 @@ export class JsonRpcProvider {
       'suix_getNetworkMetrics',
       [],
       NetworkMetrics,
+      this.options.skipDataValidation,
     );
   }
   /**
