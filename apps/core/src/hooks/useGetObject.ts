@@ -20,7 +20,7 @@ export function useGetObject(
     const normalizedObjId = objectId && normalizeSuiAddress(objectId);
     return useQuery(
         ['object', normalizedObjId],
-        async () =>
+        () =>
             rpc.getObject({
                 id: normalizedObjId!,
                 options,
