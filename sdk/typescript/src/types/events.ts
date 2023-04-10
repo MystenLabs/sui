@@ -11,6 +11,7 @@ import {
   any,
   optional,
   boolean,
+  integer,
   nullable,
 } from 'superstruct';
 import {
@@ -42,7 +43,7 @@ export const SuiEvent = object({
   parsedJson: optional(record(string(), any())),
   // Base 58 encoded bcs bytes of the move event
   bcs: optional(string()),
-  timestampMs: optional(string()),
+  timestampMs: optional(integer()),
 });
 
 export type SuiEvent = Infer<typeof SuiEvent>;

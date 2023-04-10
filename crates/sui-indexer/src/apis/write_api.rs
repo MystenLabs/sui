@@ -16,11 +16,11 @@ use sui_json_rpc_types::{
     // SuiTransactionBlockEffectsAPI,
     SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions,
+    BigInt,
 };
 use sui_open_rpc::Module;
-use sui_types::base_types::SuiAddress;
+use sui_types::base_types::{EpochId, SuiAddress};
 use sui_types::messages::ExecuteTransactionRequestType;
-use sui_types::sui_serde::BigInt;
 
 // TODO(gegaowp): temp. disable fast-path
 // use crate::handlers::checkpoint_handler::{
@@ -102,8 +102,8 @@ where
         &self,
         sender_address: SuiAddress,
         tx_bytes: Base64,
-        gas_price: Option<BigInt<u64>>,
-        epoch: Option<BigInt<u64>>,
+        gas_price: Option<BigInt>,
+        epoch: Option<EpochId>,
     ) -> RpcResult<DevInspectResults> {
         self.fullnode
             .dev_inspect_transaction_block(sender_address, tx_bytes, gas_price, epoch)

@@ -7,11 +7,12 @@ use jsonrpsee_proc_macros::rpc;
 
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    RPCTransactionRequestParams, SuiTransactionBlockBuilderMode, SuiTypeTag, TransactionBlockBytes,
+    BigInt, RPCTransactionRequestParams, SuiTransactionBlockBuilderMode, SuiTypeTag,
+    TransactionBlockBytes,
 };
+
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SuiAddress};
-use sui_types::sui_serde::BigInt;
 
 #[open_rpc(namespace = "unsafe", tag = "Transaction Builder API")]
 #[rpc(server, client, namespace = "unsafe")]
@@ -28,7 +29,7 @@ pub trait TransactionBuilder {
         /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
-        gas_budget: BigInt<u64>,
+        gas_budget: u64,
         /// the recipient's Sui address
         recipient: SuiAddress,
     ) -> RpcResult<TransactionBlockBytes>;
@@ -42,11 +43,11 @@ pub trait TransactionBuilder {
         /// the Sui coin object to be used in this transaction
         sui_object_id: ObjectID,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
-        gas_budget: BigInt<u64>,
+        gas_budget: u64,
         /// the recipient's Sui address
         recipient: SuiAddress,
         /// the amount to be split out and transferred
-        amount: Option<BigInt<u64>>,
+        amount: Option<u64>,
     ) -> RpcResult<TransactionBlockBytes>;
 
     /// Send `Coin<T>` to a list of addresses, where `T` can be any coin type, following a list of amounts,
@@ -63,11 +64,11 @@ pub trait TransactionBuilder {
         /// the recipients' addresses, the length of this vector must be the same as amounts.
         recipients: Vec<SuiAddress>,
         /// the amounts to be transferred to recipients, following the same order
-        amounts: Vec<BigInt<u64>>,
+        amounts: Vec<BigInt>,
         /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
-        gas_budget: BigInt<u64>,
+        gas_budget: u64,
     ) -> RpcResult<TransactionBlockBytes>;
 
     /// Send SUI coins to a list of addresses, following a list of amounts.
@@ -89,9 +90,9 @@ pub trait TransactionBuilder {
         /// the recipients' addresses, the length of this vector must be the same as amounts.
         recipients: Vec<SuiAddress>,
         /// the amounts to be transferred to recipients, following the same order
-        amounts: Vec<BigInt<u64>>,
+        amounts: Vec<BigInt>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
-        gas_budget: BigInt<u64>,
+        gas_budget: u64,
     ) -> RpcResult<TransactionBlockBytes>;
 
     /// Send all SUI coins to one recipient.
@@ -111,7 +112,7 @@ pub trait TransactionBuilder {
         /// the recipient address,
         recipient: SuiAddress,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
-        gas_budget: BigInt<u64>,
+        gas_budget: u64,
     ) -> RpcResult<TransactionBlockBytes>;
 
     /// Create an unsigned transaction to execute a Move call on the network, by calling the specified function in the module of a given package.
@@ -133,7 +134,7 @@ pub trait TransactionBuilder {
         /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
-        gas_budget: BigInt<u64>,
+        gas_budget: u64,
         /// Whether this is a Normal transaction or a Dev Inspect Transaction. Default to be `SuiTransactionBlockBuilderMode::Commit` when it's None.
         execution_mode: Option<SuiTransactionBlockBuilderMode>,
     ) -> RpcResult<TransactionBlockBytes>;
@@ -151,7 +152,7 @@ pub trait TransactionBuilder {
         /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
-        gas_budget: BigInt<u64>,
+        gas_budget: u64,
     ) -> RpcResult<TransactionBlockBytes>;
 
     /// Create an unsigned transaction to split a coin object into multiple coins.
@@ -163,11 +164,11 @@ pub trait TransactionBuilder {
         /// the coin object to be spilt
         coin_object_id: ObjectID,
         /// the amounts to split out from the coin
-        split_amounts: Vec<BigInt<u64>>,
+        split_amounts: Vec<u64>,
         /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
-        gas_budget: BigInt<u64>,
+        gas_budget: u64,
     ) -> RpcResult<TransactionBlockBytes>;
 
     /// Create an unsigned transaction to split a coin object into multiple equal-size coins.
@@ -179,11 +180,11 @@ pub trait TransactionBuilder {
         /// the coin object to be spilt
         coin_object_id: ObjectID,
         /// the number of coins to split into
-        split_count: BigInt<u64>,
+        split_count: u64,
         /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
-        gas_budget: BigInt<u64>,
+        gas_budget: u64,
     ) -> RpcResult<TransactionBlockBytes>;
 
     /// Create an unsigned transaction to merge multiple coins into one coin.
@@ -199,7 +200,7 @@ pub trait TransactionBuilder {
         /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
-        gas_budget: BigInt<u64>,
+        gas_budget: u64,
     ) -> RpcResult<TransactionBlockBytes>;
 
     /// Create an unsigned batched transaction.
@@ -213,7 +214,7 @@ pub trait TransactionBuilder {
         /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
-        gas_budget: BigInt<u64>,
+        gas_budget: u64,
         /// Whether this is a regular transaction or a Dev Inspect Transaction
         txn_builder_mode: Option<SuiTransactionBlockBuilderMode>,
     ) -> RpcResult<TransactionBlockBytes>;
@@ -227,13 +228,13 @@ pub trait TransactionBuilder {
         /// Coin<SUI> object to stake
         coins: Vec<ObjectID>,
         /// stake amount
-        amount: Option<BigInt<u64>>,
+        amount: Option<u64>,
         /// the validator's Sui address
         validator: SuiAddress,
         /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
-        gas_budget: BigInt<u64>,
+        gas_budget: u64,
     ) -> RpcResult<TransactionBlockBytes>;
 
     /// Withdraw stake from a validator's staking pool.
@@ -247,6 +248,6 @@ pub trait TransactionBuilder {
         /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
-        gas_budget: BigInt<u64>,
+        gas_budget: u64,
     ) -> RpcResult<TransactionBlockBytes>;
 }

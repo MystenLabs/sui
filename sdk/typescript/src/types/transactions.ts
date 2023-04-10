@@ -38,17 +38,17 @@ export const EpochId = string();
 
 export const SuiChangeEpoch = object({
   epoch: EpochId,
-  storage_charge: string(),
-  computation_charge: string(),
-  storage_rebate: string(),
-  epoch_start_timestamp_ms: optional(string()),
+  storage_charge: number(),
+  computation_charge: number(),
+  storage_rebate: number(),
+  epoch_start_timestamp_ms: optional(number()),
 });
 export type SuiChangeEpoch = Infer<typeof SuiChangeEpoch>;
 
 export const SuiConsensusCommitPrologue = object({
-  epoch: EpochId,
-  round: string(),
-  commit_timestamp_ms: string(),
+  epoch: number(),
+  round: number(),
+  commit_timestamp_ms: number(),
 });
 export type SuiConsensusCommitPrologue = Infer<
   typeof SuiConsensusCommitPrologue
@@ -155,7 +155,7 @@ export const SuiTransactionBlockData = object({
   messageVersion: literal('v1'),
   transaction: SuiTransactionBlockKind,
   sender: SuiAddress,
-  gasData: SuiGasData, // this shit is diff bw wallet and explorer
+  gasData: SuiGasData,
 });
 export type SuiTransactionBlockData = Infer<typeof SuiTransactionBlockData>;
 
@@ -380,8 +380,8 @@ export const SuiTransactionBlockResponse = object({
   transaction: optional(SuiTransactionBlock),
   effects: optional(TransactionEffects),
   events: optional(TransactionEvents),
-  timestampMs: optional(string()),
-  checkpoint: optional(string()),
+  timestampMs: optional(number()),
+  checkpoint: optional(number()),
   confirmedLocalExecution: optional(boolean()),
   objectChanges: optional(array(SuiObjectChange)),
   balanceChanges: optional(array(BalanceChange)),
@@ -582,7 +582,7 @@ export function getCreatedObjects(
 
 export function getTimestampFromTransactionResponse(
   data: SuiTransactionBlockResponse,
-): string | undefined {
+): number | undefined {
   return data.timestampMs ?? undefined;
 }
 

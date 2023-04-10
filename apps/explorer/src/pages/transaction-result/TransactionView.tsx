@@ -215,15 +215,13 @@ export function TransactionView({
                                         <StatAmount
                                             amount={formattedAmount}
                                             symbol={symbol}
-                                            date={+(timestamp ?? 0)}
+                                            date={timestamp}
                                         />
                                     </section>
                                 ) : (
                                     timestamp && (
                                         <div className="mb-3">
-                                            <DateCard
-                                                date={+(timestamp ?? 0)}
-                                            />
+                                            <DateCard date={timestamp} />
                                         </div>
                                     )
                                 )}
@@ -305,15 +303,13 @@ export function TransactionView({
                                 </DescriptionItem>
 
                                 <DescriptionItem title="Gas Budget">
-                                    <GasAmount amount={BigInt(gasBudget)} />
+                                    <GasAmount amount={gasBudget} />
                                 </DescriptionItem>
 
                                 {gasFeesExpanded && (
                                     <>
                                         <DescriptionItem title="Gas Price">
-                                            <GasAmount
-                                                amount={BigInt(gasPrice)}
-                                            />
+                                            <GasAmount amount={gasPrice} />
                                         </DescriptionItem>
                                         <DescriptionItem title="Computation Fee">
                                             <GasAmount

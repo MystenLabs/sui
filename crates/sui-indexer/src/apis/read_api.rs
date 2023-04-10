@@ -11,14 +11,13 @@ use jsonrpsee::RpcModule;
 use sui_json_rpc::api::{ReadApiClient, ReadApiServer};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, CheckpointPage, SuiEvent, SuiGetPastObjectRequest,
-    SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse, SuiTransactionBlockResponse,
-    SuiTransactionBlockResponseOptions,
+    BigInt, Checkpoint, CheckpointId, CheckpointPage, SuiCheckpointSequenceNumber, SuiEvent,
+    SuiGetPastObjectRequest, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::digests::TransactionDigest;
-use sui_types::sui_serde::BigInt;
 
 use crate::errors::IndexerError;
 use crate::store::IndexerStore;
@@ -147,7 +146,7 @@ where
         block_on(async { self.fullnode.multi_get_objects(object_ids, options).await })
     }
 
-    async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt<u64>> {
+    async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt> {
         if !self
             .migrated_methods
             .contains(&"get_total_transaction_blocks".to_string())
@@ -211,7 +210,9 @@ where
         )
     }
 
-    async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<BigInt<u64>> {
+    async fn get_latest_checkpoint_sequence_number(
+        &self,
+    ) -> RpcResult<SuiCheckpointSequenceNumber> {
         if !self
             .migrated_methods
             .contains(&"get_latest_checkpoint_sequence_number".to_string())
@@ -236,8 +237,8 @@ where
 
     fn get_checkpoints(
         &self,
-        cursor: Option<BigInt<u64>>,
-        limit: Option<BigInt<u64>>,
+        cursor: Option<SuiCheckpointSequenceNumber>,
+        limit: Option<usize>,
         descending_order: bool,
     ) -> RpcResult<CheckpointPage> {
         return block_on(

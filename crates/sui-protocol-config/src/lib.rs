@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::cell::RefCell;
@@ -22,7 +23,9 @@ const MAX_PROTOCOL_VERSION: u64 = 4;
 // Version 4: New reward slashing rate. Framework changes to skip stake susbidy when the epoch
 //            length is short.
 
-#[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, JsonSchema,
+)]
 pub struct ProtocolVersion(u64);
 
 impl ProtocolVersion {

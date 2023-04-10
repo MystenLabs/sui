@@ -40,8 +40,8 @@ export function EpochsTable({
         ['epochs', { limit, cursor: pagination.cursor }],
         async () =>
             enhancedRpc.getEpochs({
-                limit: limit.toString(),
-                cursor: pagination.cursor?.toString(),
+                limit,
+                cursor: pagination.cursor,
                 descendingOrder: true,
             }),
         {
@@ -102,10 +102,8 @@ export function EpochsTable({
                               <TxTableCol>
                                   <TxTimeType
                                       timestamp={
-                                          +(
-                                              epoch.endOfEpochInfo
-                                                  ?.epochEndTimestamp ?? 0
-                                          )
+                                          epoch.endOfEpochInfo
+                                              ?.epochEndTimestamp
                                       }
                                   />
                               </TxTableCol>
@@ -180,7 +178,7 @@ export function EpochsTable({
                     href="/recent?tab=epochs"
                     label="Epochs"
                     data={epochsData}
-                    count={+(countQuery.data ?? 0)}
+                    count={countQuery.data}
                     limit={limit}
                     onLimitChange={setLimit}
                     pagination={pagination}

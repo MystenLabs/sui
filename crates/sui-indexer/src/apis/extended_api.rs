@@ -15,7 +15,7 @@ use sui_json_rpc_types::{
     QueryObjectsPage, SuiObjectDataFilter, SuiObjectResponse, SuiObjectResponseQuery,
 };
 use sui_open_rpc::Module;
-use sui_types::sui_serde::BigInt;
+use sui_types::base_types::EpochId;
 
 use crate::errors::IndexerError;
 use crate::store::IndexerStore;
@@ -88,17 +88,14 @@ impl<S: IndexerStore> ExtendedApi<S> {
 impl<S: IndexerStore + Sync + Send + 'static> ExtendedApiServer for ExtendedApi<S> {
     async fn get_epochs(
         &self,
-        cursor: Option<BigInt<u64>>,
-        limit: Option<BigInt<u64>>,
+        cursor: Option<EpochId>,
+        limit: Option<usize>,
         descending_order: Option<bool>,
     ) -> RpcResult<EpochPage> {
-        let limit = validate_limit(
-            limit.map(|s| *s as usize),
-            QUERY_MAX_RESULT_LIMIT_CHECKPOINTS,
-        )?;
+        let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS)?;
         let mut epochs = self
             .state
-            .get_epochs(cursor.map(|c| *c), limit + 1, descending_order)
+            .get_epochs(cursor, limit + 1, descending_order)
             .await?;
 
         let has_next_page = epochs.len() > limit;
@@ -106,7 +103,7 @@ impl<S: IndexerStore + Sync + Send + 'static> ExtendedApiServer for ExtendedApi<
         let next_cursor = epochs.last().map(|e| e.epoch);
         Ok(Page {
             data: epochs,
-            next_cursor: next_cursor.map(|id| id.into()),
+            next_cursor,
             has_next_page,
         })
     }
@@ -119,11 +116,9 @@ impl<S: IndexerStore + Sync + Send + 'static> ExtendedApiServer for ExtendedApi<
         &self,
         query: SuiObjectResponseQuery,
         cursor: Option<CheckpointedObjectID>,
-        limit: Option<BigInt<u64>>,
+        limit: Option<usize>,
     ) -> RpcResult<QueryObjectsPage> {
-        Ok(self
-            .query_objects_internal(query, cursor, limit.map(|l| *l as usize))
-            .await?)
+        Ok(self.query_objects_internal(query, cursor, limit).await?)
     }
 
     async fn get_network_metrics(&self) -> RpcResult<NetworkMetrics> {

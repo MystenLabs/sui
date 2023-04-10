@@ -44,10 +44,9 @@ export function ValidatorLogo({
         );
     }, [validatorAddress, data]);
 
-    const stakingPoolActivationEpoch = +(
-        validatorMeta?.stakingPoolActivationEpoch || 0
-    );
-    const currentEpoch = +(data?.epoch || 0);
+    const stakingPoolActivationEpoch =
+        validatorMeta?.stakingPoolActivationEpoch || 0;
+    const currentEpoch = data?.epoch || 0;
 
     // flag as new validator if the validator was activated in the last epoch
     // for genesis validators, this will be false
