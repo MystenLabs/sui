@@ -8,7 +8,7 @@ import CoinItem from './CoinItem';
 
 import { useGetCoins } from '~/hooks/useGetCoins';
 import { useOnScreen } from '~/hooks/useOnScreen';
-import { LoadingSpinner } from '~/ui/LoadingSpinner';
+import LoadingSpinner from '~/ui/LoadingSpinner';
 
 type CoinsPanelProps = {
     coinType: string;
@@ -40,17 +40,8 @@ function CoinsPanel({ coinType, id }: CoinsPanelProps): JSX.Element {
 
     return (
         <div>
-            {coinObjects.map((obj, index) => {
-                if (index === coinObjects.length - 1) {
-                    return (
-                        <div key={obj.coinObjectId} ref={containerRef}>
-                            <CoinItem coin={obj} />
-                        </div>
-                    );
-                }
-                return <CoinItem key={obj.coinObjectId} coin={obj} />;
-            })}
-            {(isLoading || isFetching) && <LoadingSpinner />}
+            {coinObjects.map((obj) => <CoinItem key={obj.coinObjectId} coin={obj} />)}
+            {(isLoading || isFetching) && <LoadingSpinner ref={containerRef} />}
         </div>
     );
 }

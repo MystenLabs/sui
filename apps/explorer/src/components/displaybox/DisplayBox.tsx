@@ -12,7 +12,7 @@ import { transformURL, genFileTypeMsg } from '../../utils/stringUtils';
 
 import styles from './DisplayBox.module.css';
 
-import { LoadingSpinner } from '~/ui/LoadingSpinner';
+import LoadingSpinner from '~/ui/LoadingSpinner';
 
 function ShowBrokenImage({ onClick }: { onClick?: () => void }) {
     return (

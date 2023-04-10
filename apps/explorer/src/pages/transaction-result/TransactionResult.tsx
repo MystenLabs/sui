@@ -7,7 +7,7 @@ import { TransactionView } from './TransactionView';
 
 import { useGetTransaction } from '~/hooks/useGetTransaction';
 import { Banner } from '~/ui/Banner';
-import { LoadingSpinner } from '~/ui/LoadingSpinner';
+import LoadingSpinner from '~/ui/LoadingSpinner';
 
 export default function TransactionResult() {
     const { id } = useParams();

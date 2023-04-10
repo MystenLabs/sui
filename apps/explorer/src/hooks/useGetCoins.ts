@@ -12,7 +12,6 @@ const MAX_COINS_PER_REQUEST = 10;
 export function useGetCoins(
     coinType: string,
     address?: SuiAddress | null,
-    cacheTime = 0
 ) {
     const rpc = useRpcClient();
     return useInfiniteQuery(
@@ -32,7 +31,6 @@ export function useGetCoins(
                       }
                     : false,
             enabled: !!address,
-            cacheTime,
         }
     );
 }

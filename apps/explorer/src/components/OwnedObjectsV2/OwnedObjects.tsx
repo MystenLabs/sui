@@ -8,12 +8,12 @@ import OwnedObject from './components/OwnedObject';
 
 import { useGetOwnedObjects } from '~/hooks/useGetOwnedObjects';
 import { Heading } from '~/ui/Heading';
-import { LoadingSpinner } from '~/ui/LoadingSpinner';
+import LoadingSpinner from '~/ui/LoadingSpinner';
 import { Pagination } from '~/ui/Pagination';
 
 export const OBJECTS_PER_PAGE: number = 6;
 
-function OwnerCoins({ id }: { id: string }): JSX.Element {
+function OwnedObjects({ id }: { id: string }): JSX.Element {
     const [results, setResults] = useState<SuiObjectResponse[]>([]);
     const [currentSlice, setCurrentSlice] = useState(1);
     const { data, isLoading, isError } = useGetOwnedObjects(id);
@@ -74,4 +74,4 @@ function OwnerCoins({ id }: { id: string }): JSX.Element {
     );
 }
 
-export default OwnerCoins;
+export default OwnedObjects;

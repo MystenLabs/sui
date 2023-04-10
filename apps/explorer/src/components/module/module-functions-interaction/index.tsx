@@ -9,7 +9,7 @@ import type { ObjectId } from '@mysten/sui.js';
 
 import { useNormalizedMoveModule } from '~/hooks/useNormalizedMoveModule';
 import { Banner } from '~/ui/Banner';
-import { LoadingSpinner } from '~/ui/LoadingSpinner';
+import LoadingSpinner from '~/ui/LoadingSpinner';
 
 export type ModuleFunctionsInteractionProps = {
     packageId: ObjectId;

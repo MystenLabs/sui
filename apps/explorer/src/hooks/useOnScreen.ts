@@ -1,11 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useState, useEffect, type MutableRefObject } from 'react';
+import { useState, useEffect, type MutableRefObject, useRef } from 'react';
 
 export const useOnScreen = (ref: MutableRefObject<Element | null>) => {
     const [isIntersecting, setIsIntersecting] = useState(false);
-
     const observer = new IntersectionObserver(
         ([entry]) => setIsIntersecting(entry.isIntersecting),
         {
@@ -13,12 +12,14 @@ export const useOnScreen = (ref: MutableRefObject<Element | null>) => {
         }
     );
 
+    const observerRef = useRef(observer)
+
     useEffect(() => {
-        ref.current && observer.observe(ref.current);
+        ref.current && observerRef.current.observe(ref.current);
         return () => {
             observer.disconnect();
         };
-    });
+    }), [];
 
     return { isIntersecting };
 };

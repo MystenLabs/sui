@@ -12,8 +12,6 @@ import OwnedObjects from '~/components/OwnedObjectsV2/OwnedObjects';
 import { Heading } from '~/ui/Heading';
 import { PageHeader } from '~/ui/PageHeader';
 
-export const AddressContext = createContext('');
-
 function AddressResult() {
     const { id: addressID } = useParams();
 
