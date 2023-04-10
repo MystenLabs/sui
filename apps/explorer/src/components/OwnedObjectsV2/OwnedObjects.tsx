@@ -50,7 +50,7 @@ function OwnedObjects({ id }: { id: string }) {
                         <Pagination
                             onNext={() => {
                                 if (isLoading || isFetching) {
-                                    return
+                                    return;
                                 }
 
                                 if (currentPage === data?.pages.length - 1) {
