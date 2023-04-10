@@ -274,6 +274,9 @@ pub struct AuthorityEpochTables {
     /// user signature for this transaction here. This will be included in the checkpoint later.
     user_signatures_for_checkpoints: DBMap<TransactionDigest, Vec<GenericSignature>>,
 
+    /// This table is not ued
+    #[allow(dead_code)]
+    builder_checkpoint_summary: DBMap<CheckpointSequenceNumber, CheckpointSummary>,
     /// Maps sequence number to checkpoint summary, used by CheckpointBuilder to build checkpoint within epoch
     builder_checkpoint_summary_v2: DBMap<CheckpointSequenceNumber, BuilderCheckpointSummary>,
 
