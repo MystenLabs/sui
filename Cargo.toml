@@ -110,6 +110,7 @@ members = [
     "crates/sui-types",
     "crates/sui-verifier",
     "crates/sui-verifier-transactional-tests",
+    "crates/sui-upgrade-compatibility-transactional-tests",
     "crates/telemetry-subscribers",
     "crates/test-utils",
     "crates/typed-store",
