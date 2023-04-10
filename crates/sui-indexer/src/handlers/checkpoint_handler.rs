@@ -48,11 +48,11 @@ use crate::types::{CheckpointTransactionBlockResponse, TemporaryTransactionBlock
 use crate::utils::multi_get_full_transactions;
 use crate::IndexerConfig;
 
-const MAX_PARALLEL_DOWNLOADS: usize = 48;
+const MAX_PARALLEL_DOWNLOADS: usize = 24;
 const DOWNLOAD_RETRY_INTERVAL_IN_SECS: u64 = 10;
 const DB_COMMIT_RETRY_INTERVAL_IN_MILLIS: u64 = 100;
 const MULTI_GET_CHUNK_SIZE: usize = 200;
-const CHECKPOINT_QUEUE_LIMIT: usize = 10;
+const CHECKPOINT_QUEUE_LIMIT: usize = 24;
 const EPOCH_QUEUE_LIMIT: usize = 2;
 
 #[derive(Clone)]
