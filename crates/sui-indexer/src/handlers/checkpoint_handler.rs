@@ -47,11 +47,11 @@ use crate::types::{CheckpointTransactionBlockResponse, TemporaryTransactionBlock
 use crate::utils::multi_get_full_transactions;
 use crate::IndexerConfig;
 
-const MAX_PARALLEL_DOWNLOADS: usize = 10;
+const MAX_PARALLEL_DOWNLOADS: usize = 24;
 const DOWNLOAD_RETRY_INTERVAL_IN_SECS: u64 = 10;
 const DB_COMMIT_RETRY_INTERVAL_IN_MILLIS: u64 = 100;
 const MULTI_GET_CHUNK_SIZE: usize = 200;
-const CHECKPOINT_QUEUE_LIMIT: usize = 10;
+const CHECKPOINT_QUEUE_LIMIT: usize = 24;
 const EPOCH_QUEUE_LIMIT: usize = 2;
 
 #[derive(Clone)]
@@ -209,7 +209,9 @@ where
             let download_futures = (next_cursor_sequence_number
                 ..next_cursor_sequence_number + current_parallel_downloads as i64)
                 .into_iter()
-                .map(|seq_num| self.download_checkpoint_data(seq_num as u64));
+                .map(|seq_num| {
+                    self.download_checkpoint_data(seq_num as u64, /* skip objects */ false)
+                });
             let download_results = join_all(download_futures).await;
             let mut downloaded_checkpoints = vec![];
             // NOTE: Push sequentially and if one of the downloads failed,
@@ -279,7 +281,9 @@ where
             let download_futures = (next_cursor_sequence_number
                 ..next_cursor_sequence_number + current_parallel_downloads as i64)
                 .into_iter()
-                .map(|seq_num| self.download_checkpoint_data(seq_num as u64));
+                .map(|seq_num| {
+                    self.download_checkpoint_data(seq_num as u64, /* skip objects */ true)
+                });
             let download_results = join_all(download_futures).await;
             let mut downloaded_checkpoints = vec![];
             // NOTE: Push sequentially and if one of the downloads failed,
@@ -620,6 +624,7 @@ where
     async fn download_checkpoint_data(
         &self,
         seq: CheckpointSequenceNumber,
+        skip_object: bool,
     ) -> Result<CheckpointData, IndexerError> {
         let mut checkpoint = self
             .http_client
@@ -668,6 +673,14 @@ where
             Ok::<_, IndexerError>(acc)
         })?;
         fn_transaction_guard.stop_and_record();
+
+        if skip_object {
+            return Ok(CheckpointData {
+                checkpoint,
+                transactions,
+                changed_objects: vec![],
+            });
+        }
 
         let fn_object_guard = self.metrics.fullnode_object_download_latency.start_timer();
         let object_changes = transactions
