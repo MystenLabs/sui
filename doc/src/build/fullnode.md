@@ -14,8 +14,6 @@ Sui Full nodes:
 
 - Track and verify the state of the blockchain, independently and locally.
 - Serve read requests from clients.
-- Maximize Sui network throughput.
-- Offer scalable data retention and processing capabilities.
 
 ## State synchronization
 
