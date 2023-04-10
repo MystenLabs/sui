@@ -43,7 +43,7 @@ impl MoveVM {
     /// Right now it is the caller's responsibility to ensure cache coherence of the Move VM Loader
     ///   - When a module gets published in a Move VM Session, and then gets used by another
     ///     transaction, it will be loaded into the code cache and stay there even if the resulted
-    ///     effects do not get commited back to the storage when the Session ends.
+    ///     effects do not get committed back to the storage when the Session ends.
     ///   - As a result, if one wants to have multiple sessions at a time, one needs to make sure
     ///     none of them will try to publish a module. In other words, if there is a module publishing
     ///     Session it must be the only Session existing.

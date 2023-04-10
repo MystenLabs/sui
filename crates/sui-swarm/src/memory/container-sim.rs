@@ -36,8 +36,8 @@ impl Drop for Container {
 impl Container {
     /// Spawn a new Node.
     pub async fn spawn(config: NodeConfig, _runtime: RuntimeType) -> Self {
-        let (startup_sender, mut startup_reciever) = tokio::sync::watch::channel(Weak::new());
-        let (cancel_sender, cancel_reciever) = tokio::sync::watch::channel(false);
+        let (startup_sender, mut startup_receiver) = tokio::sync::watch::channel(Weak::new());
+        let (cancel_sender, cancel_receiver) = tokio::sync::watch::channel(false);
 
         let handle = sui_simulator::runtime::Handle::current();
         let builder = handle.create_node();
@@ -57,7 +57,7 @@ impl Container {
             .init(move || {
                 info!("Node restarted");
                 let config = config.clone();
-                let mut cancel_reciever = cancel_reciever.clone();
+                let mut cancel_receiver = cancel_receiver.clone();
                 let startup_sender = startup_sender.clone();
                 async move {
                     let registry_service = mysten_metrics::RegistryService::new(Registry::new());
@@ -67,7 +67,7 @@ impl Container {
 
                     // run until canceled
                     loop {
-                        if cancel_reciever.changed().await.is_err() || *cancel_reciever.borrow() {
+                        if cancel_receiver.changed().await.is_err() || *cancel_receiver.borrow() {
                             break;
                         }
                     }
@@ -76,12 +76,12 @@ impl Container {
             })
             .build();
 
-        startup_reciever.changed().await.unwrap();
+        startup_receiver.changed().await.unwrap();
 
         Self {
             handle: Some(ContainerHandle { node_id: node.id() }),
             cancel_sender: Some(cancel_sender),
-            node_watch: startup_reciever,
+            node_watch: startup_receiver,
         }
     }
 

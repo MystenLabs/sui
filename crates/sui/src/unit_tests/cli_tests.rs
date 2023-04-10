@@ -846,7 +846,7 @@ async fn test_package_publish_command_non_zero_unpublished_dep_fails() -> Result
 
 #[sim_test]
 async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Error> {
-    let with_unpublished_dependencies = true; // Invalid packages should fail to pubilsh, even if we allow unpublished dependencies.
+    let with_unpublished_dependencies = true; // Invalid packages should fail to publish, even if we allow unpublished dependencies.
 
     let mut test_cluster = TestClusterBuilder::new().build().await?;
     let rgp = test_cluster.get_reference_gas_price().await;

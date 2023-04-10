@@ -137,7 +137,7 @@ pub fn decompress_pubkey(
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 1);
 
-    // Load the cost paramaters from the protocol config
+    // Load the cost parameters from the protocol config
     let ecdsa_k1_decompress_pubkey_cost_params = &context
         .extensions()
         .get::<NativesCostTable>()
@@ -193,7 +193,7 @@ pub fn secp256k1_verify(
 
     let hash = pop_arg!(args, u8);
 
-    // Load the cost paramaters from the protocol config
+    // Load the cost parameters from the protocol config
     let (ecdsa_k1_secp256k1_verify_cost_params, crypto_invalid_arguments_cost) = {
         let cost_table = &context.extensions().get::<NativesCostTable>();
         (

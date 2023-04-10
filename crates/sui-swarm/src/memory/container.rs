@@ -40,8 +40,8 @@ impl Drop for Container {
 impl Container {
     /// Spawn a new Node.
     pub async fn spawn(config: NodeConfig, runtime: RuntimeType) -> Self {
-        let (startup_sender, startup_reciever) = tokio::sync::oneshot::channel();
-        let (cancel_sender, cancel_reciever) = tokio::sync::oneshot::channel();
+        let (startup_sender, startup_receiver) = tokio::sync::oneshot::channel();
+        let (cancel_sender, cancel_receiver) = tokio::sync::oneshot::channel();
 
         let thread = thread::spawn(move || {
             let span = tracing::span!(
@@ -87,13 +87,13 @@ impl Container {
                 // Notify that we've successfully started the node
                 let _ = startup_sender.send(Arc::downgrade(&server));
                 // run until canceled
-                cancel_reciever.map(|_| ()).await;
+                cancel_receiver.map(|_| ()).await;
 
                 trace!("cancellation received; shutting down thread");
             });
         });
 
-        let node = startup_reciever.await.unwrap();
+        let node = startup_receiver.await.unwrap();
 
         Self {
             join_handle: Some(thread),

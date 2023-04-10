@@ -535,7 +535,7 @@ impl AbstractState {
             }
         }
 
-        // Check mutable references can be transfered
+        // Check mutable references can be transferred
         let mut all_references_to_borrow_from = BTreeSet::new();
         let mut mutable_references_to_borrow_from = BTreeSet::new();
         for id in arguments.iter().filter_map(|v| v.ref_id()) {
@@ -611,7 +611,7 @@ impl AbstractState {
             ));
         }
 
-        // Check mutable references can be transfered
+        // Check mutable references can be transferred
         for id in values.into_iter().filter_map(|v| v.ref_id()) {
             if self.borrow_graph.is_mutable(id) && !self.is_writable(id) {
                 return Err(self.error(StatusCode::RET_BORROWED_MUTABLE_REFERENCE_ERROR, offset));

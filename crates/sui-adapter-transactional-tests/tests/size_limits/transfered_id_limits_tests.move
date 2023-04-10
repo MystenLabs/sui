@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Test limts on number of transferd IDs
+// Test limits on number of transferd IDs
 
 //# init --addresses Test=0x0
 
 //# publish
 
-/// Test transfered id limits enforced
+/// Test transferred id limits enforced
 /// Right now, we should never be able to hit the transfer limit because we will hit the create limit first
 module Test::M1 {
     use sui::tx_context::{TxContext, Self};

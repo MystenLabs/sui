@@ -37,7 +37,7 @@ pub fn prepare_verifying_key_internal(
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 2);
 
-    // Load the cost paramaters from the protocol config
+    // Load the cost parameters from the protocol config
     let (groth16_prepare_verifying_key_cost_params, crypto_invalid_arguments_cost) = {
         let cost_table = &context.extensions().get::<NativesCostTable>();
         (
@@ -50,7 +50,7 @@ pub fn prepare_verifying_key_internal(
 
     let curve = pop_arg!(args, u8);
 
-    // Load the cost paramaters from the protocol config
+    // Load the cost parameters from the protocol config
     let base_cost = match curve {
         BLS12381 => {
             groth16_prepare_verifying_key_cost_params
@@ -110,7 +110,7 @@ pub fn verify_groth16_proof_internal(
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 7);
 
-    // Load the cost paramaters from the protocol config
+    // Load the cost parameters from the protocol config
     let (groth16_verify_groth16_proof_internal_cost_params, crypto_invalid_arguments_cost) = {
         let cost_table = &context.extensions().get::<NativesCostTable>();
         (

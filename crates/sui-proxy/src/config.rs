@@ -52,7 +52,7 @@ pub struct PeerValidationConfig {
     pub hostname: Option<String>,
 
     /// incoming client connections to this proxy will be presented with this pub key
-    /// please use an aboslute path
+    /// please use an absolute path
     pub certificate_file: Option<String>,
     /// private key for tls
     /// please use an absolute path

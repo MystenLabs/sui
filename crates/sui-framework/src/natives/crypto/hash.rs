@@ -115,7 +115,7 @@ pub fn blake2b256(
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    // Load the cost paramaters from the protocol config
+    // Load the cost parameters from the protocol config
     let hash_blake2b256_cost_params = &context
         .extensions()
         .get::<NativesCostTable>()
