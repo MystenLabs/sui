@@ -105,19 +105,7 @@ where
         info!("Indexer checkpoint handler started...");
         let download_handler = self.clone();
         spawn_monitored_task!(async move {
-            let mut checkpoint_download_index_res =
-                download_handler.start_download_and_index().await;
-            while let Err(e) = &checkpoint_download_index_res {
-                warn!(
-                    "Indexer checkpoint download & index failed with error: {:?}, retrying after {:?} secs...",
-                    e, DOWNLOAD_RETRY_INTERVAL_IN_SECS
-                );
-                tokio::time::sleep(std::time::Duration::from_secs(
-                    DOWNLOAD_RETRY_INTERVAL_IN_SECS,
-                ))
-                .await;
-                checkpoint_download_index_res = download_handler.start_download_and_index().await;
-            }
+            download_handler.start_download_and_index().await.unwrap();
         });
 
         let object_download_handler = self.clone();
