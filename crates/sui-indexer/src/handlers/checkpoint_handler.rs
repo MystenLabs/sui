@@ -350,6 +350,11 @@ where
                 // otherwise send it to channel to be committed later.
                 if epoch.last_epoch.is_none() {
                     let epoch_db_guard = self.metrics.epoch_db_commit_latency.start_timer();
+                    let mut persist_first_epoch_res = self.state.persist_epoch(&epoch).await;
+                    while persist_first_epoch_res.is_err() {
+                        warn!("Failed to persist first epoch, retrying...");
+                        persist_first_epoch_res = self.state.persist_epoch(&epoch).await;
+                    }
                     self.state.persist_epoch(&epoch).await?;
                     epoch_db_guard.stop_and_record();
                     self.metrics.total_epoch_committed.inc();
