@@ -5,6 +5,7 @@ import { type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 
 import Logo from '../../components/logo';
+import { useNextMenuUrl } from '../../components/menu/hooks';
 import { type API_ENV } from '_src/shared/api-env';
 
 type HeaderProps = {
@@ -22,10 +23,15 @@ export function Header({
     middleContent,
     rightContent,
 }: HeaderProps) {
+    const networkSwitchUrl = useNextMenuUrl(true, '/network');
+
     return (
         <header className="grid grid-cols-header items-center gap-3 px-3 py-1">
             <div>
-                <Link to="/" className="no-underline text-gray-90">
+                <Link
+                    to={networkSwitchUrl}
+                    className="no-underline text-gray-90"
+                >
                     <Logo networkName={networkName} />
                 </Link>
             </div>
