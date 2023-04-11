@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Combobox } from '@headlessui/react';
-import { useGetObject }from '@mysten/core';
+import { useGetObject } from '@mysten/core';
 import {
     getObjectFields,
     getObjectType,
