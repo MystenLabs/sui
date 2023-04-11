@@ -2,11 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useRpcClient } from '@mysten/core';
-import { useIsMutating, useMutation } from '@tanstack/react-query';
+import {
+    useIsMutating,
+    useMutation,
+    type UseMutationOptions,
+} from '@tanstack/react-query';
 
 import { useActiveAddress } from '../../hooks/useActiveAddress';
 
-export function useFaucetMutation() {
+type UseFaucetMutationOptions = Pick<UseMutationOptions, 'onError'>;
+
+export function useFaucetMutation(options?: UseFaucetMutationOptions) {
     const api = useRpcClient();
     const address = useActiveAddress();
     const mutationKey = ['faucet-request-tokens', address];
@@ -26,6 +32,7 @@ export function useFaucetMutation() {
                 0
             );
         },
+        ...options,
     });
     return {
         ...mutation,
