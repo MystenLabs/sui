@@ -23,7 +23,6 @@ import {
   UpgradePolicy,
 } from '../../../src';
 import { retry } from 'ts-retry-promise';
-import { hexToBytes } from '@noble/hashes/utils';
 
 const TEST_ENDPOINTS = localnetConnection;
 const DEFAULT_FAUCET_URL =
@@ -152,19 +151,6 @@ export async function publishPackage(
   return { packageId, publishTxn };
 }
 
-// function computeDigestForModulesAndDeps(
-//   modules: number[][],
-//   dependencies: string[],
-// ) {
-//   const depBytes = dependencies.map((dep) => Array.from(fromHEX(dep)));
-//   const bytes = modules
-//     .concat(...depBytes)
-//     .flat()
-//     .sort();
-
-//   return blake2b(new Uint8Array(bytes), { dkLen: 32 });
-// }
-
 export async function upgradePackage(
   packageId: ObjectId,
   capId: ObjectId,
@@ -181,26 +167,19 @@ export async function upgradePackage(
 
   const tmpobj = tmp.dirSync({ unsafeCleanup: true });
 
-  const [bytecode, digest] = execSync(
-    `${SUI_BIN} move build --dump-bytecode-as-base64 --dump-package-digest --path ${packagePath} --install-dir ${tmpobj.name}`,
-    { encoding: 'utf-8' },
-  ).split('\n');
-
-  const { modules, dependencies } = JSON.parse(bytecode);
+  const { modules, dependencies, digest } = JSON.parse(
+    execSync(
+      `${SUI_BIN} move build --dump-bytecode-as-base64 --path ${packagePath} --install-dir ${tmpobj.name}`,
+      { encoding: 'utf-8' },
+    ),
+  );
 
   const tx = new TransactionBlock();
-
-  // TODO: Remove this once this actually works:
-  tx.setGasBudget(10000000);
 
   const cap = tx.object(capId);
   const ticket = tx.moveCall({
     target: '0x2::package::authorize_upgrade',
-    arguments: [
-      cap,
-      tx.pure(UpgradePolicy.COMPATIBLE),
-      tx.pure(Array.from(hexToBytes(digest))),
-    ],
+    arguments: [cap, tx.pure(UpgradePolicy.COMPATIBLE), tx.pure(digest)],
   });
 
   const receipt = tx.upgrade({
