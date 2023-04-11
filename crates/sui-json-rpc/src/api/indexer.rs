@@ -5,7 +5,7 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 
 use sui_json_rpc_types::{
-    DynamicFieldPage, EventFilter, EventPage, ObjectsPage, SuiEvent, SuiObjectResponse,
+    DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page, SuiEvent, SuiObjectResponse,
     SuiObjectResponseQuery, SuiTransactionBlockResponseQuery, TransactionBlocksPage,
 };
 use sui_open_rpc_macros::open_rpc;
@@ -108,5 +108,7 @@ pub trait IndexerApi {
         &self,
         /// The address to resolve
         address: SuiAddress,
-    ) -> RpcResult<Vec<String>>;
+        cursor: Option<ObjectID>,
+        limit: Option<usize>,
+    ) -> RpcResult<Page<String, ObjectID>>;
 }

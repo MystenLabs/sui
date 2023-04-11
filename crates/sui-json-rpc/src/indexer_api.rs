@@ -287,7 +287,12 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         Ok(addr)
     }
 
-    async fn resolve_name_service_names(&self, address: SuiAddress) -> RpcResult<Vec<String>> {
+    async fn resolve_name_service_names(
+        &self,
+        address: SuiAddress,
+        _cursor: Option<ObjectID>,
+        _limit: Option<usize>,
+    ) -> RpcResult<Page<String, ObjectID>> {
         let dynmaic_field_table_object_id =
             self.get_name_service_dynamic_field_table_object_id(/* reverse_lookup */ true)?;
         let addr_type_tag = TypeTag::Address;
@@ -325,7 +330,11 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 address_info_move_value
             )),
         }?;
-        Ok(vec![primary_name])
+        Ok(Page {
+            data: vec![primary_name],
+            next_cursor: Some(addr_object_id),
+            has_next_page: false,
+        })
     }
 }
 

@@ -454,7 +454,12 @@ where
         todo!()
     }
 
-    async fn resolve_name_service_names(&self, _address: SuiAddress) -> RpcResult<Vec<String>> {
+    async fn resolve_name_service_names(
+        &self,
+        _address: SuiAddress,
+        _cursor: Option<ObjectID>,
+        _limit: Option<usize>,
+    ) -> RpcResult<Page<String, ObjectID>> {
         // TODO(gegaowp): implement name service resolver in indexer
         todo!()
     }
