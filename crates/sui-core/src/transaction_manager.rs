@@ -3,11 +3,10 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
-    sync::Arc,
+    sync::{Arc, RwLock},
 };
 
 use mysten_metrics::monitored_scope;
-use parking_lot::RwLock;
 use sui_types::{
     base_types::ObjectID,
     committee::EpochId,
@@ -205,7 +204,7 @@ impl TransactionManager {
         // executed.
 
         // Internal lock is held only for updating the internal state.
-        let mut inner = self.inner.write();
+        let mut inner = self.inner.write().unwrap();
         let _scope = monitored_scope("TransactionManager::enqueue::wlock");
 
         for mut pending_cert in pending {
@@ -378,7 +377,7 @@ impl TransactionManager {
         input_keys: Vec<InputKey>,
         epoch_store: &AuthorityPerEpochStore,
     ) {
-        let mut inner = self.inner.write();
+        let mut inner = self.inner.write().unwrap();
         let _scope = monitored_scope("TransactionManager::objects_available::wlock");
         if inner.epoch != epoch_store.epoch() {
             warn!(
@@ -431,7 +430,7 @@ impl TransactionManager {
         epoch_store: &AuthorityPerEpochStore,
     ) {
         {
-            let mut inner = self.inner.write();
+            let mut inner = self.inner.write().unwrap();
             let _scope = monitored_scope("TransactionManager::certificate_executed::wlock");
             if inner.epoch != epoch_store.epoch() {
                 warn!("Ignoring committed certificate from wrong epoch. Expected={} Actual={} CertificateDigest={:?}", inner.epoch, epoch_store.epoch(), digest);
@@ -526,7 +525,7 @@ impl TransactionManager {
 
     /// Gets the missing input object keys for the given transaction.
     pub(crate) fn get_missing_input(&self, digest: &TransactionDigest) -> Option<Vec<InputKey>> {
-        let inner = self.inner.read();
+        let inner = self.inner.read().unwrap();
         inner
             .pending_certificates
             .get(digest)
@@ -535,7 +534,7 @@ impl TransactionManager {
 
     // Returns the number of transactions waiting on each object ID.
     pub(crate) fn objects_queue_len(&self, keys: Vec<ObjectID>) -> Vec<(ObjectID, usize)> {
-        let inner = self.inner.read();
+        let inner = self.inner.read().unwrap();
         keys.into_iter()
             .map(|key| {
                 (
@@ -548,14 +547,14 @@ impl TransactionManager {
 
     // Returns the number of certificates pending execution or being executed by the execution driver right now.
     pub(crate) fn execution_queue_len(&self) -> usize {
-        let inner = self.inner.read();
+        let inner = self.inner.read().unwrap();
         inner.pending_certificates.len() + inner.executing_certificates.len()
     }
 
     // Reconfigures the TransactionManager for a new epoch. Existing transactions will be dropped
     // because they are no longer relevant and may be incorrect in the new epoch.
     pub(crate) fn reconfigure(&self, new_epoch: EpochId) {
-        let mut inner = self.inner.write();
+        let mut inner = self.inner.write().unwrap();
         *inner = Inner::new(new_epoch);
     }
 }
