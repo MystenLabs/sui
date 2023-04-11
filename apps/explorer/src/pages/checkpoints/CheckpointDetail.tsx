@@ -9,6 +9,7 @@ import { CheckpointTransactionBlocks } from './CheckpointTransactionBlocks';
 
 import { Banner } from '~/ui/Banner';
 import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
+import { EpochLink } from '~/ui/InternalLink';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { PageHeader } from '~/ui/PageHeader';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
@@ -53,12 +54,7 @@ export default function CheckpointDetail() {
                                     </Text>
                                 </DescriptionItem>
                                 <DescriptionItem title="Epoch">
-                                    <Text
-                                        variant="p1/medium"
-                                        color="steel-darker"
-                                    >
-                                        {data.epoch}
-                                    </Text>
+                                    <EpochLink epoch={data.epoch} />
                                 </DescriptionItem>
                                 <DescriptionItem title="Checkpoint Timestamp">
                                     <Text

@@ -47,7 +47,7 @@ export function EpochProgress({
                         </Text>
                     </div>
                     {!inProgress && end && (
-                        <div className="space-y-1.5">
+                        <div>
                             <Text
                                 variant="p4/normal"
                                 uppercase
