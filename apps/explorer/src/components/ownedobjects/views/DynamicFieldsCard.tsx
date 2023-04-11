@@ -107,7 +107,7 @@ export function DynamicFieldsCard({ id }: { id: string }) {
                                                 language="json"
                                             />
                                             <UnderlyingObjectCard
-                                                parentId={result.objectId}
+                                                parentId={id}
                                                 name={result.name}
                                             />
                                         </div>
