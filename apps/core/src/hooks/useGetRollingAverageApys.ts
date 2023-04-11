@@ -15,7 +15,7 @@ import { roundFloat } from '../utils/roundFloat';
 // APY_e_30rollingaverage = average(APY_e,APY_e-1,…,APY_e-29);
 
 const ROLLING_AVERAGE = 30;
-const DEFAULT_APY_DECIMALS = 4;
+const DEFAULT_APY_DECIMALS = 2;
 
 // define the type parsedJson response
 type ParsedJson = {
