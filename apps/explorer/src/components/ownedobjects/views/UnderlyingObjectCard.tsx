@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useGetDynamicFieldObject } from '@mysten/core';
 import { getObjectDisplay } from '@mysten/sui.js';
 
 import DisplayBox from '~/components/displaybox/DisplayBox';
-import { useGetDynamicFieldObject } from '~/hooks/useGetDynamicFieldObject';
 import { ObjectLink } from '~/ui/InternalLink';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Text } from '~/ui/Text';

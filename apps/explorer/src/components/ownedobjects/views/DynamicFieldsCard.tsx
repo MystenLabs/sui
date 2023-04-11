@@ -79,49 +79,41 @@ export function DynamicFieldsCard({ id }: { id: string }) {
                 <TabPanels>
                     <TabPanel>
                         <div className="mt-4 flex max-h-[600px] flex-col gap-5 overflow-auto overflow-x-scroll">
-                            {data.pages.map(({ data, nextCursor }) => (
-                                <div
-                                    className="flex flex-col gap-5"
-                                    key={nextCursor}
-                                >
-                                    {data.map((result) => (
-                                        <DisclosureBox
-                                            title={
-                                                <div className="min-w-fit max-w-[60%] truncate break-words text-body font-medium leading-relaxed text-steel-dark">
-                                                    {result.name?.value.toString()}
-                                                    :
-                                                </div>
-                                            }
-                                            preview={
-                                                <div className="flex items-center gap-1 break-all">
-                                                    <ObjectLink
-                                                        objectId={
-                                                            result.objectId
-                                                        }
-                                                    />
-                                                </div>
-                                            }
-                                            variant="outline"
-                                            key={result.objectId}
-                                        >
-                                            <div className="flex flex-col divide-y divide-gray-45">
-                                                <SyntaxHighlighter
-                                                    code={JSON.stringify(
-                                                        result,
-                                                        null,
-                                                        2
-                                                    )}
-                                                    language="json"
-                                                />
-                                                <UnderlyingObjectCard
-                                                    parentId={result.objectId}
-                                                    name={result.name}
+                            {data.pages.map(({ data }) =>
+                                data.map((result) => (
+                                    <DisclosureBox
+                                        title={
+                                            <div className="min-w-fit max-w-[60%] truncate break-words text-body font-medium leading-relaxed text-steel-dark">
+                                                {result.name?.value.toString()}:
+                                            </div>
+                                        }
+                                        preview={
+                                            <div className="flex items-center gap-1 break-all">
+                                                <ObjectLink
+                                                    objectId={result.objectId}
                                                 />
                                             </div>
-                                        </DisclosureBox>
-                                    ))}
-                                </div>
-                            ))}
+                                        }
+                                        variant="outline"
+                                        key={result.objectId}
+                                    >
+                                        <div className="flex flex-col divide-y divide-gray-45">
+                                            <SyntaxHighlighter
+                                                code={JSON.stringify(
+                                                    result,
+                                                    null,
+                                                    2
+                                                )}
+                                                language="json"
+                                            />
+                                            <UnderlyingObjectCard
+                                                parentId={result.objectId}
+                                                name={result.name}
+                                            />
+                                        </div>
+                                    </DisclosureBox>
+                                ))
+                            )}
 
                             <div ref={observerElem}>
                                 {isFetchingNextPage && hasNextPage ? (
