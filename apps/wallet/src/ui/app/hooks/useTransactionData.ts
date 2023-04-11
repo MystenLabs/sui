@@ -14,6 +14,19 @@ export function useTransactionData(
     transaction?: TransactionBlock | null
 ) {
     const rpc = useRpcClient();
+<<<<<<< HEAD
+=======
+    const clonedTransaction = useMemo(() => {
+        if (!transaction) return;
+
+        const tx = new TransactionBlock(transaction);
+        if (sender) {
+            tx.setSenderIfNotSet(sender);
+        }
+        return tx;
+    }, [transaction, sender]);
+
+>>>>>>> fork/testnet
     return useQuery(
         ['transaction-data', transaction?.serialize()],
         async () => {

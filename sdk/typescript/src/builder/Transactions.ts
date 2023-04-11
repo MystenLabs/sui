@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+<<<<<<< HEAD
 import { BCS, fromB64 } from '@mysten/bcs';
+=======
+import { BCS } from '@mysten/bcs';
+>>>>>>> fork/testnet
 import {
   is,
   any,
@@ -17,7 +21,11 @@ import {
   Struct,
   define,
 } from 'superstruct';
+<<<<<<< HEAD
 import { ObjectId, normalizeSuiObjectId } from '../types/common';
+=======
+import { ObjectId } from '../types/common';
+>>>>>>> fork/testnet
 import { TRANSACTION_TYPE, WellKnownEncoding, create } from './utils';
 
 const option = <T extends Struct<any, any>>(some: T) =>
@@ -109,6 +117,7 @@ export const PublishTransaction = object({
 });
 export type PublishTransaction = Infer<typeof PublishTransaction>;
 
+<<<<<<< HEAD
 // Keep in sync with constants in
 // crates/sui-framework/packages/sui-framework/sources/package.move
 export enum UpgradePolicy {
@@ -126,13 +135,18 @@ export const UpgradeTransaction = object({
 });
 export type UpgradeTransaction = Infer<typeof UpgradeTransaction>;
 
+=======
+>>>>>>> fork/testnet
 const TransactionTypes = [
   MoveCallTransaction,
   TransferObjectsTransaction,
   SplitCoinsTransaction,
   MergeCoinsTransaction,
   PublishTransaction,
+<<<<<<< HEAD
   UpgradeTransaction,
+=======
+>>>>>>> fork/testnet
   MakeMoveVecTransaction,
 ] as const;
 
@@ -188,6 +202,7 @@ export const Transactions = {
       MergeCoinsTransaction,
     );
   },
+<<<<<<< HEAD
   Publish({
     modules,
     dependencies,
@@ -230,6 +245,14 @@ export const Transactions = {
       UpgradeTransaction,
     );
   },
+=======
+  Publish(modules: number[][], dependencies: ObjectId[]): PublishTransaction {
+    return create(
+      { kind: 'Publish', modules, dependencies },
+      PublishTransaction,
+    );
+  },
+>>>>>>> fork/testnet
   MakeMoveVec({
     type,
     objects,

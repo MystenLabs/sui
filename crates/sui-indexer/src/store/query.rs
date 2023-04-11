@@ -235,7 +235,11 @@ FROM (SELECT DISTINCT ON (o.object_id) *
       FROM objects_history o
       WHERE o.checkpoint <= $1
       AND ((o.owner_type = 'address_owner' AND o.owner_address = '0x92dd4d9b0150c251661d821583ef078024ae9e9ee11063e216500861eec7f381') OR (o.old_owner_type = 'address_owner' AND o.old_owner_address = '0x92dd4d9b0150c251661d821583ef078024ae9e9ee11063e216500861eec7f381'))
+<<<<<<< HEAD
       ORDER BY o.object_id, version, o.checkpoint DESC) AS t1
+=======
+      ORDER BY o.object_id, version DESC) AS t1
+>>>>>>> fork/testnet
 WHERE t1.object_status NOT IN ('deleted', 'wrapped', 'unwrapped_then_deleted')
 AND t1.owner_address = '0x92dd4d9b0150c251661d821583ef078024ae9e9ee11063e216500861eec7f381'
 LIMIT 100;";

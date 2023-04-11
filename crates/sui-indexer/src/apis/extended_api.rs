@@ -11,11 +11,19 @@ use sui_json_rpc::api::{
 };
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
+<<<<<<< HEAD
     CheckpointedObjectID, EpochInfo, EpochPage, MoveCallMetrics, NetworkMetrics, Page,
     QueryObjectsPage, SuiObjectDataFilter, SuiObjectResponse, SuiObjectResponseQuery,
 };
 use sui_open_rpc::Module;
 use sui_types::sui_serde::BigInt;
+=======
+    CheckpointedObjectID, EpochInfo, EpochPage, MoveCallMetrics, NetworkMetrics, ObjectsPage, Page,
+    SuiObjectDataFilter, SuiObjectResponse, SuiObjectResponseQuery,
+};
+use sui_open_rpc::Module;
+use sui_types::base_types::EpochId;
+>>>>>>> fork/testnet
 
 use crate::errors::IndexerError;
 use crate::store::IndexerStore;
@@ -34,7 +42,11 @@ impl<S: IndexerStore> ExtendedApi<S> {
         query: SuiObjectResponseQuery,
         cursor: Option<CheckpointedObjectID>,
         limit: Option<usize>,
+<<<<<<< HEAD
     ) -> Result<QueryObjectsPage, IndexerError> {
+=======
+    ) -> Result<ObjectsPage, IndexerError> {
+>>>>>>> fork/testnet
         let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_OBJECTS)?;
 
         let at_checkpoint = if let Some(CheckpointedObjectID {
@@ -44,7 +56,11 @@ impl<S: IndexerStore> ExtendedApi<S> {
         {
             cp
         } else {
+<<<<<<< HEAD
             self.state.get_latest_checkpoint_sequence_number().await? as u64
+=======
+            self.state.get_latest_checkpoint_sequence_number()? as u64
+>>>>>>> fork/testnet
         };
 
         let object_cursor = cursor.as_ref().map(|c| c.object_id);
@@ -52,10 +68,16 @@ impl<S: IndexerStore> ExtendedApi<S> {
         let SuiObjectResponseQuery { filter, options } = query;
         let filter = filter.unwrap_or_else(|| SuiObjectDataFilter::MatchAll(vec![]));
 
+<<<<<<< HEAD
         let objects_from_db = self
             .state
             .query_objects_history(filter, at_checkpoint, object_cursor, limit + 1)
             .await?;
+=======
+        let objects_from_db =
+            self.state
+                .query_objects(filter, at_checkpoint, object_cursor, limit + 1)?;
+>>>>>>> fork/testnet
 
         let mut data = objects_from_db
             .into_iter()
@@ -119,11 +141,17 @@ impl<S: IndexerStore + Sync + Send + 'static> ExtendedApiServer for ExtendedApi<
         &self,
         query: SuiObjectResponseQuery,
         cursor: Option<CheckpointedObjectID>,
+<<<<<<< HEAD
         limit: Option<BigInt<u64>>,
     ) -> RpcResult<QueryObjectsPage> {
         Ok(self
             .query_objects_internal(query, cursor, limit.map(|l| *l as usize))
             .await?)
+=======
+        limit: Option<usize>,
+    ) -> RpcResult<ObjectsPage> {
+        Ok(self.query_objects_internal(query, cursor, limit)?)
+>>>>>>> fork/testnet
     }
 
     async fn get_network_metrics(&self) -> RpcResult<NetworkMetrics> {

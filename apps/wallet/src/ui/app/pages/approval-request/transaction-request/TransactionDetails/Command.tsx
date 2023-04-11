@@ -16,6 +16,7 @@ import { useState } from 'react';
 import { Text } from '_src/ui/app/shared/text';
 
 function convertCommandArgumentToString(
+<<<<<<< HEAD
     arg:
         | string
         | number
@@ -37,6 +38,11 @@ function convertCommandArgumentToString(
     if (typeof arg === 'object' && 'Some' in arg) {
         return arg.Some;
     }
+=======
+    arg: string | string[] | TransactionArgument | TransactionArgument[]
+): string {
+    if (typeof arg === 'string') return arg;
+>>>>>>> fork/testnet
 
     if (Array.isArray(arg)) {
         // Publish transaction special casing:

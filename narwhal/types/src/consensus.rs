@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(clippy::mutable_key_type)]
 
+<<<<<<< HEAD
 use crate::{Batch, Certificate, CertificateAPI, CertificateDigest, HeaderAPI, Round, TimestampMs};
+=======
+use crate::{Batch, Certificate, CertificateAPI, CertificateDigest, HeaderAPI, Round};
+>>>>>>> fork/testnet
 use config::{AuthorityIdentifier, Committee};
 use enum_dispatch::enum_dispatch;
 use fastcrypto::hash::Hash;

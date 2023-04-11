@@ -828,6 +828,123 @@ fn get_unexecuted_transactions(
     (execution_digests, all_tx_digests, executable_txns)
 }
 
+<<<<<<< HEAD
+=======
+async fn execute_transactions(
+    execution_digests: Vec<ExecutionDigests>,
+    all_tx_digests: Vec<TransactionDigest>,
+    executable_txns: Vec<VerifiedExecutableTransaction>,
+    authority_store: Arc<AuthorityStore>,
+    epoch_store: Arc<AuthorityPerEpochStore>,
+    transaction_manager: Arc<TransactionManager>,
+    log_timeout_sec: u64,
+    checkpoint: VerifiedCheckpoint,
+) -> SuiResult<Vec<TransactionEffects>> {
+    let effects_digests = execution_digests.iter().map(|digest| digest.effects);
+
+    let digest_to_effects: HashMap<TransactionDigest, TransactionEffects> = authority_store
+        .perpetual_tables
+        .effects
+        .multi_get(effects_digests)?
+        .into_iter()
+        .map(|fx| {
+            if fx.is_none() {
+                panic!("Transaction effects do not exist in effects table");
+            }
+            let fx = fx.unwrap();
+            (*fx.transaction_digest(), fx)
+        })
+        .collect();
+
+    for tx in &executable_txns {
+        if tx.contains_shared_object() {
+            epoch_store
+                .acquire_shared_locks_from_effects(
+                    tx,
+                    digest_to_effects.get(tx.digest()).unwrap(),
+                    &authority_store,
+                )
+                .await?;
+        }
+    }
+
+    transaction_manager.enqueue(executable_txns, &epoch_store)?;
+
+    // Once synced_txns have been awaited, all txns should have effects committed.
+    let mut periods = 1;
+    let log_timeout_sec = Duration::from_secs(log_timeout_sec);
+
+    loop {
+        let effects_future = authority_store.notify_read_executed_effects(all_tx_digests.clone());
+
+        match timeout(log_timeout_sec, effects_future).await {
+            Err(_elapsed) => {
+                let missing_digests: Vec<TransactionDigest> = authority_store
+                    .multi_get_executed_effects(&all_tx_digests)?
+                    .iter()
+                    .zip(all_tx_digests.clone())
+                    .filter_map(
+                        |(fx, digest)| {
+                            if fx.is_none() {
+                                Some(digest)
+                            } else {
+                                None
+                            }
+                        },
+                    )
+                    .collect();
+
+                if missing_digests.is_empty() {
+                    // All effects just become available.
+                    continue;
+                }
+
+                warn!(
+                    "Transaction effects for checkpoint tx digests {:?} not present within {:?}. ",
+                    missing_digests,
+                    log_timeout_sec * periods,
+                );
+
+                // Print out more information for the 1st pending transaction, which should have
+                // all of its input available.
+                let pending_digest = missing_digests.first().unwrap();
+                let missing_input = transaction_manager.get_missing_input(pending_digest);
+                let pending_transaction = authority_store
+                    .get_transaction_block(pending_digest)?
+                    .expect("state-sync should have ensured that the transaction exists");
+
+                warn!(
+                    "Transaction {pending_digest:?} has missing input objects {missing_input:?}\
+                    \nTransaction input: {:?}\nTransaction content: {:?}",
+                    pending_transaction
+                        .data()
+                        .intent_message()
+                        .value
+                        .input_objects(),
+                    pending_transaction,
+                );
+                periods += 1;
+            }
+            Ok(Err(err)) => return Err(err),
+            Ok(Ok(effects)) => {
+                for (tx_digest, expected_digest, actual_effects) in
+                    izip!(&all_tx_digests, &execution_digests, &effects)
+                {
+                    let expected_effects_digest = &expected_digest.effects;
+                    assert_not_forked(
+                        &checkpoint,
+                        tx_digest,
+                        expected_effects_digest,
+                        actual_effects,
+                    );
+                }
+                return Ok(effects);
+            }
+        }
+    }
+}
+
+>>>>>>> fork/testnet
 fn finalize_checkpoint(
     authority_store: Arc<AuthorityStore>,
     tx_digests: &[TransactionDigest],

@@ -49,7 +49,10 @@ export const builder = new BCS(bcs)
     type_arguments: [VECTOR, TYPE_TAG],
     arguments: [VECTOR, ARGUMENT],
   })
+<<<<<<< HEAD
   // Keep this in sync with crates/sui-types/src/messages.rs
+=======
+>>>>>>> fork/testnet
   .registerEnumType(TRANSACTION_INNER, {
     /**
      * A Move Call - any public Move function can be called via

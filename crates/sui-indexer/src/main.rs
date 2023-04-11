@@ -31,6 +31,7 @@ async fn main() -> Result<(), IndexerError> {
     );
 
     let registry = registry_service.default_registry();
+<<<<<<< HEAD
     let (blocking_cp, async_cp) = new_pg_connection_pool(&indexer_config.db_url)
         .await
         .map_err(|e| {
@@ -40,6 +41,9 @@ async fn main() -> Result<(), IndexerError> {
             );
             e
         })?;
+=======
+    let pg_connection_pool = new_pg_connection_pool(&indexer_config.db_url)?;
+>>>>>>> fork/testnet
     if indexer_config.reset_db {
         let mut conn = get_pg_pool_connection(&blocking_cp).map_err(|e| {
             error!(

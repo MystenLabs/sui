@@ -414,7 +414,11 @@ export type SuiTransactionBlockResponseOptions = Infer<
 
 export const PaginatedTransactionResponse = object({
   data: array(SuiTransactionBlockResponse),
+<<<<<<< HEAD
   nextCursor: nullable(TransactionDigest),
+=======
+  nextCursor: union([TransactionDigest, literal(null)]),
+>>>>>>> fork/testnet
   hasNextPage: boolean(),
 });
 export type PaginatedTransactionResponse = Infer<
@@ -585,7 +589,11 @@ export function getCreatedObjects(
 
 export function getTimestampFromTransactionResponse(
   data: SuiTransactionBlockResponse,
+<<<<<<< HEAD
 ): string | undefined {
+=======
+): number | undefined {
+>>>>>>> fork/testnet
   return data.timestampMs ?? undefined;
 }
 

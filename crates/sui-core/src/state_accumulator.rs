@@ -187,18 +187,26 @@ impl StateAccumulator {
         // we don't expect to find it in the table.
         let wrapped_objects_to_remove: Vec<WrappedObject> = all_unwrapped
             .iter()
+<<<<<<< HEAD
             .filter_map(|(_tx_digest, id, seq_num)| {
+=======
+            .filter_map(|(id, seq_num)| {
+>>>>>>> fork/testnet
                 let objref = self
                     .authority_store
                     .get_object_ref_prior_to_key(id, *seq_num)
                     .expect("read cannot fail");
 
                 objref.map(|(id, version, digest)| {
+<<<<<<< HEAD
                     assert!(
                         !protocol_config.loaded_child_objects_fixed() || digest.is_wrapped(),
                         "{:?}",
                         id
                     );
+=======
+                    assert!(digest.is_wrapped(), "{:?}", id);
+>>>>>>> fork/testnet
                     WrappedObject::new(id, version)
                 })
             })

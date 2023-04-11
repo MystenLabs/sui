@@ -7,7 +7,10 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use sui_types::base_types::{ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::object::Owner;
+<<<<<<< HEAD
 use sui_types::sui_serde::SequenceNumber as AsSequenceNumber;
+=======
+>>>>>>> fork/testnet
 use sui_types::sui_serde::SuiStructTag;
 
 /// ObjectChange are derived from the object mutations in the TransactionEffect to provide richer object information.

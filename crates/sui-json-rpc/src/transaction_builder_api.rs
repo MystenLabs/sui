@@ -12,15 +12,24 @@ use move_core_types::language_storage::StructTag;
 use sui_adapter::execution_mode::{DevInspect, Normal};
 use sui_core::authority::AuthorityState;
 use sui_json::SuiJsonValue;
+<<<<<<< HEAD
 use sui_json_rpc_types::{RPCTransactionRequestParams, SuiObjectDataFilter};
 use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiObjectResponse, SuiTransactionBlockBuilderMode, SuiTypeTag,
+=======
+use sui_json_rpc_types::{
+    BigInt, SuiObjectDataOptions, SuiObjectResponse, SuiTransactionBlockBuilderMode, SuiTypeTag,
+>>>>>>> fork/testnet
     TransactionBlockBytes,
 };
+use sui_json_rpc_types::{RPCTransactionRequestParams, SuiObjectDataFilter};
 use sui_open_rpc::Module;
 use sui_transaction_builder::{DataReader, TransactionBuilder};
 use sui_types::base_types::ObjectInfo;
+<<<<<<< HEAD
 use sui_types::sui_serde::BigInt;
+=======
+>>>>>>> fork/testnet
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     messages::TransactionData,
@@ -108,7 +117,11 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         sui_object_id: ObjectID,
         gas_budget: BigInt<u64>,
         recipient: SuiAddress,
+<<<<<<< HEAD
         amount: Option<BigInt<u64>>,
+=======
+        amount: Option<u64>,
+>>>>>>> fork/testnet
     ) -> RpcResult<TransactionBlockBytes> {
         let data = self
             .builder
@@ -130,7 +143,11 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         recipients: Vec<SuiAddress>,
         amounts: Vec<BigInt<u64>>,
         gas: Option<ObjectID>,
+<<<<<<< HEAD
         gas_budget: BigInt<u64>,
+=======
+        gas_budget: u64,
+>>>>>>> fork/testnet
     ) -> RpcResult<TransactionBlockBytes> {
         let data = self
             .builder
@@ -151,8 +168,13 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         signer: SuiAddress,
         input_coins: Vec<ObjectID>,
         recipients: Vec<SuiAddress>,
+<<<<<<< HEAD
         amounts: Vec<BigInt<u64>>,
         gas_budget: BigInt<u64>,
+=======
+        amounts: Vec<BigInt>,
+        gas_budget: u64,
+>>>>>>> fork/testnet
     ) -> RpcResult<TransactionBlockBytes> {
         let data = self
             .builder
@@ -172,7 +194,11 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         signer: SuiAddress,
         input_coins: Vec<ObjectID>,
         recipient: SuiAddress,
+<<<<<<< HEAD
         gas_budget: BigInt<u64>,
+=======
+        gas_budget: u64,
+>>>>>>> fork/testnet
     ) -> RpcResult<TransactionBlockBytes> {
         let data = self
             .builder
@@ -187,7 +213,11 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         compiled_modules: Vec<Base64>,
         dependencies: Vec<ObjectID>,
         gas: Option<ObjectID>,
+<<<<<<< HEAD
         gas_budget: BigInt<u64>,
+=======
+        gas_budget: u64,
+>>>>>>> fork/testnet
     ) -> RpcResult<TransactionBlockBytes> {
         let compiled_modules = compiled_modules
             .into_iter()
@@ -206,9 +236,14 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         coin_object_id: ObjectID,
         split_amounts: Vec<BigInt<u64>>,
         gas: Option<ObjectID>,
+<<<<<<< HEAD
         gas_budget: BigInt<u64>,
     ) -> RpcResult<TransactionBlockBytes> {
         let split_amounts = split_amounts.into_iter().map(|a| *a).collect();
+=======
+        gas_budget: u64,
+    ) -> RpcResult<TransactionBlockBytes> {
+>>>>>>> fork/testnet
         let data = self
             .builder
             .split_coin(signer, coin_object_id, split_amounts, gas, *gas_budget)
@@ -222,7 +257,11 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         coin_object_id: ObjectID,
         split_count: BigInt<u64>,
         gas: Option<ObjectID>,
+<<<<<<< HEAD
         gas_budget: BigInt<u64>,
+=======
+        gas_budget: u64,
+>>>>>>> fork/testnet
     ) -> RpcResult<TransactionBlockBytes> {
         let data = self
             .builder
@@ -237,7 +276,11 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         primary_coin: ObjectID,
         coin_to_merge: ObjectID,
         gas: Option<ObjectID>,
+<<<<<<< HEAD
         gas_budget: BigInt<u64>,
+=======
+        gas_budget: u64,
+>>>>>>> fork/testnet
     ) -> RpcResult<TransactionBlockBytes> {
         let data = self
             .builder
@@ -255,7 +298,11 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         type_arguments: Vec<SuiTypeTag>,
         rpc_arguments: Vec<SuiJsonValue>,
         gas: Option<ObjectID>,
+<<<<<<< HEAD
         gas_budget: BigInt<u64>,
+=======
+        gas_budget: u64,
+>>>>>>> fork/testnet
         txn_builder_mode: Option<SuiTransactionBlockBuilderMode>,
     ) -> RpcResult<TransactionBlockBytes> {
         let mode = txn_builder_mode.unwrap_or(SuiTransactionBlockBuilderMode::Commit);
@@ -297,7 +344,11 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         signer: SuiAddress,
         params: Vec<RPCTransactionRequestParams>,
         gas: Option<ObjectID>,
+<<<<<<< HEAD
         gas_budget: BigInt<u64>,
+=======
+        gas_budget: u64,
+>>>>>>> fork/testnet
         txn_builder_mode: Option<SuiTransactionBlockBuilderMode>,
     ) -> RpcResult<TransactionBlockBytes> {
         let mode = txn_builder_mode.unwrap_or(SuiTransactionBlockBuilderMode::Commit);
@@ -323,9 +374,14 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         amount: Option<BigInt<u64>>,
         validator: SuiAddress,
         gas: Option<ObjectID>,
+<<<<<<< HEAD
         gas_budget: BigInt<u64>,
     ) -> RpcResult<TransactionBlockBytes> {
         let amount = amount.map(|a| *a);
+=======
+        gas_budget: u64,
+    ) -> RpcResult<TransactionBlockBytes> {
+>>>>>>> fork/testnet
         Ok(TransactionBlockBytes::from_data(
             self.builder
                 .request_add_stake(signer, coins, amount, validator, gas, *gas_budget)
@@ -338,7 +394,11 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         signer: SuiAddress,
         staked_sui: ObjectID,
         gas: Option<ObjectID>,
+<<<<<<< HEAD
         gas_budget: BigInt<u64>,
+=======
+        gas_budget: u64,
+>>>>>>> fork/testnet
     ) -> RpcResult<TransactionBlockBytes> {
         Ok(TransactionBlockBytes::from_data(
             self.builder

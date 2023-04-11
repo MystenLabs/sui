@@ -19,8 +19,13 @@ use sui_json_rpc::error::Error;
 use sui_json_rpc_types::SuiTypeTag;
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, EventPage, MoveCallParams, ObjectChange, OwnedObjectRef,
+<<<<<<< HEAD
     RPCTransactionRequestParams, SuiData, SuiEvent, SuiExecutionStatus, SuiObjectData,
     SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectRef, SuiObjectResponse,
+=======
+    RPCTransactionRequestParams, SuiData, SuiEvent, SuiExecutionStatus, SuiGasCostSummary,
+    SuiObjectData, SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectRef, SuiObjectResponse,
+>>>>>>> fork/testnet
     SuiObjectResponseQuery, SuiParsedData, SuiPastObjectResponse, SuiTransactionBlock,
     SuiTransactionBlockData, SuiTransactionBlockEffects, SuiTransactionBlockEffectsV1,
     SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
@@ -492,6 +497,7 @@ impl RpcExampleProvider {
             effects: Some(SuiTransactionBlockEffects::V1(
                 SuiTransactionBlockEffectsV1 {
                     status: SuiExecutionStatus::Success,
+<<<<<<< HEAD
                     executed_epoch: 0,
                     modified_at_versions: vec![],
                     gas_used: GasCostSummary {
@@ -499,6 +505,15 @@ impl RpcExampleProvider {
                         storage_cost: 100,
                         storage_rebate: 10,
                         non_refundable_storage_fee: 0,
+=======
+                    executed_epoch: 0.into(),
+                    modified_at_versions: vec![],
+                    gas_used: SuiGasCostSummary {
+                        computation_cost: 100.into(),
+                        storage_cost: 100.into(),
+                        storage_rebate: 10.into(),
+                        non_refundable_storage_fee: 0.into(),
+>>>>>>> fork/testnet
                     },
                     shared_objects: vec![],
                     transaction_digest: TransactionDigest::new(self.rng.gen()),

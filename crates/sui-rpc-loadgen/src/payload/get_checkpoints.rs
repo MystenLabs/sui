@@ -7,12 +7,19 @@ use anyhow::Result;
 use async_trait::async_trait;
 use dashmap::DashSet;
 use futures::future::join_all;
+<<<<<<< HEAD
 use itertools::Itertools;
 use std::sync::Arc;
 
 use crate::payload::checkpoint_utils::get_latest_checkpoint_stats;
 use sui_json_rpc_types::CheckpointId;
 use sui_types::base_types::TransactionDigest;
+=======
+use std::sync::Arc;
+use sui_json_rpc_types::{BigInt, CheckpointId};
+use sui_types::base_types::TransactionDigest;
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+>>>>>>> fork/testnet
 use tokio::sync::Mutex;
 use tracing::log::warn;
 use tracing::{debug, error, info};
@@ -26,19 +33,50 @@ impl<'a> ProcessPayload<'a, &'a GetCheckpoints> for RpcCommandProcessor {
     ) -> Result<()> {
         let clients = self.get_clients().await?;
 
+<<<<<<< HEAD
         let checkpoint_stats = get_latest_checkpoint_stats(&clients, op.end).await;
         let max_checkpoint = checkpoint_stats.max_latest_checkpoint();
         debug!("GetCheckpoints({}, {:?})", op.start, max_checkpoint,);
+=======
+        let end_checkpoints: Vec<CheckpointSequenceNumber> =
+            join_all(clients.iter().map(|client| async {
+                match op.end {
+                    Some(e) => e,
+                    None => client
+                        .read_api()
+                        .get_latest_checkpoint_sequence_number()
+                        .await
+                        .expect("get_latest_checkpoint_sequence_number should not fail"),
+                }
+            }))
+            .await;
+
+        // The latest `latest_checkpoint` among all rpc servers
+        let max_checkpoint = end_checkpoints
+            .iter()
+            .max()
+            .expect("get_latest_checkpoint_sequence_number should not return empty");
+
+        debug!("GetCheckpoints({}, {:?})", op.start, max_checkpoint);
+>>>>>>> fork/testnet
 
         // TODO(chris): read `cross_validate` from config
         let cross_validate = true;
 
+<<<<<<< HEAD
         for seq in op.start..=max_checkpoint {
+=======
+        for seq in op.start..=*max_checkpoint {
+>>>>>>> fork/testnet
             let transaction_digests: Arc<Mutex<DashSet<TransactionDigest>>> =
                 Arc::new(Mutex::new(DashSet::new()));
             let checkpoints = join_all(clients.iter().enumerate().map(|(i, client)| {
                 let transaction_digests = transaction_digests.clone();
+<<<<<<< HEAD
                 let end_checkpoint_for_clients = checkpoint_stats.latest_checkpoints.clone();
+=======
+                let end_checkpoint_for_clients = end_checkpoints.clone();
+>>>>>>> fork/testnet
                 async move {
                     if end_checkpoint_for_clients[i] < seq {
                         // TODO(chris) log actual url
@@ -52,10 +90,17 @@ impl<'a> ProcessPayload<'a, &'a GetCheckpoints> for RpcCommandProcessor {
 
                     match client
                         .read_api()
+<<<<<<< HEAD
                         .get_checkpoint(CheckpointId::SequenceNumber(seq))
                         .await {
                         Ok(t) => {
                             if t.sequence_number != seq {
+=======
+                        .get_checkpoint(CheckpointId::SequenceNumber(<BigInt>::from(seq)))
+                        .await {
+                        Ok(t) => {
+                            if t.sequence_number != <BigInt>::from(seq) {
+>>>>>>> fork/testnet
                                 error!("The RPC server corresponding to the {i}th url has unexpected checkpoint sequence number {}, expected {seq}", t.sequence_number,);
                             }
                             for digest in t.transactions.iter() {
@@ -80,12 +125,17 @@ impl<'a> ProcessPayload<'a, &'a GetCheckpoints> for RpcCommandProcessor {
                 .collect::<Vec<_>>();
 
             if op.verify_transactions {
+<<<<<<< HEAD
                 let transaction_responses = check_transactions(
+=======
+                check_transactions(
+>>>>>>> fork/testnet
                     &clients,
                     &transaction_digests,
                     cross_validate,
                     op.verify_objects,
                 )
+<<<<<<< HEAD
                 .await
                 .into_iter()
                 .concat();
@@ -102,6 +152,11 @@ impl<'a> ProcessPayload<'a, &'a GetCheckpoints> for RpcCommandProcessor {
                 self.add_transaction_digests(transaction_digests);
             };
 
+=======
+                .await;
+            }
+
+>>>>>>> fork/testnet
             if cross_validate {
                 let valid_checkpoint = checkpoints.iter().enumerate().find_map(|(i, x)| {
                     if x.is_some() {

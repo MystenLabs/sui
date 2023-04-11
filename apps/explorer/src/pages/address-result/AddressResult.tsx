@@ -4,6 +4,10 @@
 import { useParams } from 'react-router-dom';
 
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
+<<<<<<< HEAD
+=======
+import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
+>>>>>>> fork/testnet
 import { TransactionsForAddress } from '../../components/transactions/TransactionsForAddress';
 
 import OwnedCoins from '~/components/OwnedCoins/OwnedCoins';

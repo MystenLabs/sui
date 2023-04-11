@@ -154,6 +154,7 @@ impl CoinReadApi {
         Ok(self
             .state
             .get_owner_objects_iterator(owner, None, None)?
+<<<<<<< HEAD
             .filter(move |o| {
                 if let Some(coin_type) = coin_type {
                     o.type_.is_coin_t(coin_type)
@@ -162,6 +163,10 @@ impl CoinReadApi {
                 }
             })
             .map(|info| (info.object_id, info.version, info.digest)))
+=======
+            .filter(move |o| matches!(&o.type_, ObjectType::Struct(type_) if is_coin_type(type_, coin_type)))
+            .map(|info|info.object_id))
+>>>>>>> fork/testnet
     }
 
     async fn find_package_object(

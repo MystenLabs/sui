@@ -46,6 +46,11 @@ import {
 } from '~/ui/TransactionAddressSection';
 import { ReactComponent as ChevronDownIcon } from '~/ui/icons/chevron_down.svg';
 
+<<<<<<< HEAD
+=======
+const MAX_RECIPIENTS_PER_PAGE = 10;
+
+>>>>>>> fork/testnet
 function generateMutatedCreated(tx: SuiTransactionBlockResponse) {
     return [
         ...(tx.effects!.mutated?.length

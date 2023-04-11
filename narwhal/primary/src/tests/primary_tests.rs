@@ -40,7 +40,12 @@ use tokio::{
 use types::{
     now, BatchDigest, Certificate, CertificateAPI, CertificateDigest, FetchCertificatesRequest,
     Header, HeaderAPI, MockPrimaryToWorker, PayloadAvailabilityRequest,
+<<<<<<< HEAD
     PreSubscribedBroadcastSender, PrimaryToPrimary, RequestVoteRequest, Round,
+=======
+    PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToWorkerServer, RequestVoteRequest,
+    Round,
+>>>>>>> fork/testnet
 };
 use worker::{metrics::initialise_metrics, TrivialTransactionValidator, Worker};
 

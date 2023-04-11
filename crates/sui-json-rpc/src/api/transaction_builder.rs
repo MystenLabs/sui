@@ -7,7 +7,12 @@ use jsonrpsee_proc_macros::rpc;
 
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
+<<<<<<< HEAD
     RPCTransactionRequestParams, SuiTransactionBlockBuilderMode, SuiTypeTag, TransactionBlockBytes,
+=======
+    BigInt, RPCTransactionRequestParams, SuiTransactionBlockBuilderMode, SuiTypeTag,
+    TransactionBlockBytes,
+>>>>>>> fork/testnet
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SuiAddress};
@@ -46,7 +51,11 @@ pub trait TransactionBuilder {
         /// the recipient's Sui address
         recipient: SuiAddress,
         /// the amount to be split out and transferred
+<<<<<<< HEAD
         amount: Option<BigInt<u64>>,
+=======
+        amount: Option<u64>,
+>>>>>>> fork/testnet
     ) -> RpcResult<TransactionBlockBytes>;
 
     /// Send `Coin<T>` to a list of addresses, where `T` can be any coin type, following a list of amounts,
@@ -67,7 +76,11 @@ pub trait TransactionBuilder {
         /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
+<<<<<<< HEAD
         gas_budget: BigInt<u64>,
+=======
+        gas_budget: u64,
+>>>>>>> fork/testnet
     ) -> RpcResult<TransactionBlockBytes>;
 
     /// Send SUI coins to a list of addresses, following a list of amounts.
@@ -91,7 +104,11 @@ pub trait TransactionBuilder {
         /// the amounts to be transferred to recipients, following the same order
         amounts: Vec<BigInt<u64>>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
+<<<<<<< HEAD
         gas_budget: BigInt<u64>,
+=======
+        gas_budget: u64,
+>>>>>>> fork/testnet
     ) -> RpcResult<TransactionBlockBytes>;
 
     /// Send all SUI coins to one recipient.
@@ -111,7 +128,11 @@ pub trait TransactionBuilder {
         /// the recipient address,
         recipient: SuiAddress,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
+<<<<<<< HEAD
         gas_budget: BigInt<u64>,
+=======
+        gas_budget: u64,
+>>>>>>> fork/testnet
     ) -> RpcResult<TransactionBlockBytes>;
 
     /// Create an unsigned transaction to execute a Move call on the network, by calling the specified function in the module of a given package.
@@ -133,7 +154,11 @@ pub trait TransactionBuilder {
         /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
+<<<<<<< HEAD
         gas_budget: BigInt<u64>,
+=======
+        gas_budget: u64,
+>>>>>>> fork/testnet
         /// Whether this is a Normal transaction or a Dev Inspect Transaction. Default to be `SuiTransactionBlockBuilderMode::Commit` when it's None.
         execution_mode: Option<SuiTransactionBlockBuilderMode>,
     ) -> RpcResult<TransactionBlockBytes>;
@@ -151,7 +176,11 @@ pub trait TransactionBuilder {
         /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
+<<<<<<< HEAD
         gas_budget: BigInt<u64>,
+=======
+        gas_budget: u64,
+>>>>>>> fork/testnet
     ) -> RpcResult<TransactionBlockBytes>;
 
     /// Create an unsigned transaction to split a coin object into multiple coins.
@@ -167,7 +196,11 @@ pub trait TransactionBuilder {
         /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
+<<<<<<< HEAD
         gas_budget: BigInt<u64>,
+=======
+        gas_budget: u64,
+>>>>>>> fork/testnet
     ) -> RpcResult<TransactionBlockBytes>;
 
     /// Create an unsigned transaction to split a coin object into multiple equal-size coins.
@@ -183,7 +216,11 @@ pub trait TransactionBuilder {
         /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
+<<<<<<< HEAD
         gas_budget: BigInt<u64>,
+=======
+        gas_budget: u64,
+>>>>>>> fork/testnet
     ) -> RpcResult<TransactionBlockBytes>;
 
     /// Create an unsigned transaction to merge multiple coins into one coin.
@@ -199,7 +236,11 @@ pub trait TransactionBuilder {
         /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
+<<<<<<< HEAD
         gas_budget: BigInt<u64>,
+=======
+        gas_budget: u64,
+>>>>>>> fork/testnet
     ) -> RpcResult<TransactionBlockBytes>;
 
     /// Create an unsigned batched transaction.
@@ -233,7 +274,11 @@ pub trait TransactionBuilder {
         /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
+<<<<<<< HEAD
         gas_budget: BigInt<u64>,
+=======
+        gas_budget: u64,
+>>>>>>> fork/testnet
     ) -> RpcResult<TransactionBlockBytes>;
 
     /// Withdraw stake from a validator's staking pool.
@@ -247,6 +292,10 @@ pub trait TransactionBuilder {
         /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
+<<<<<<< HEAD
         gas_budget: BigInt<u64>,
+=======
+        gas_budget: u64,
+>>>>>>> fork/testnet
     ) -> RpcResult<TransactionBlockBytes>;
 }

@@ -45,6 +45,7 @@ import {
   SuiEvent,
   PaginatedObjectsResponse,
   SuiObjectResponseQuery,
+  CheckpointedObjectId,
 } from '../types';
 import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 import {
@@ -67,7 +68,11 @@ export const TARGETED_RPC_VERSION = '0.29.0';
 
 export interface PaginationArguments<Cursor> {
   /** Optional paging cursor */
+<<<<<<< HEAD
   cursor?: Cursor;
+=======
+  cursor?: CheckpointedObjectId | ObjectId | null;
+>>>>>>> fork/testnet
   /** Maximum item returned per page */
   limit?: number | null;
 }
@@ -386,7 +391,11 @@ export class JsonRpcProvider {
   async getOwnedObjects(
     input: {
       owner: SuiAddress;
+<<<<<<< HEAD
     } & PaginationArguments<PaginatedObjectsResponse['nextCursor']> &
+=======
+    } & PaginationArguments &
+>>>>>>> fork/testnet
       SuiObjectResponseQuery,
   ): Promise<PaginatedObjectsResponse> {
     if (!input.owner || !isValidSuiAddress(normalizeSuiAddress(input.owner))) {
@@ -457,7 +466,11 @@ export class JsonRpcProvider {
    */
   async queryTransactionBlocks(
     input: SuiTransactionBlockResponseQuery &
+<<<<<<< HEAD
       PaginationArguments<PaginatedTransactionResponse['nextCursor']> &
+=======
+      PaginationArguments &
+>>>>>>> fork/testnet
       OrderArguments,
   ): Promise<PaginatedTransactionResponse> {
     return await this.client.requestWithType(
@@ -654,7 +667,11 @@ export class JsonRpcProvider {
   }
 
   /**
+<<<<<<< HEAD
    * Runs the transaction block in dev-inspect mode. Which allows for nearly any
+=======
+   * Runs the transaction block in dev-inpsect mode. Which allows for nearly any
+>>>>>>> fork/testnet
    * transaction (or Move call) with any arguments. Detailed results are
    * provided, including both the transaction effects and any return values.
    */

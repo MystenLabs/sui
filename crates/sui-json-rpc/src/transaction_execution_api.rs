@@ -16,7 +16,11 @@ use sui_core::authority::AuthorityState;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_json_rpc_types::{
+<<<<<<< HEAD
     DevInspectResults, DryRunTransactionBlockResponse, SuiTransactionBlock,
+=======
+    BigInt, DevInspectResults, DryRunTransactionBlockResponse, SuiTransactionBlock,
+>>>>>>> fork/testnet
     SuiTransactionBlockEvents, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc::Module;
@@ -79,8 +83,14 @@ impl TransactionExecutionApi {
         for sig in signatures {
             sigs.push(GenericSignature::from_bytes(&sig.to_vec()?)?);
         }
+<<<<<<< HEAD
         let txn = Transaction::from_generic_sig_data(tx_data, Intent::sui_transaction(), sigs);
         let digest = *txn.digest();
+=======
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
+        let txn = Transaction::from_generic_sig_data(tx_data, Intent::default(), sigs);
+        let tx = SuiTransactionBlock::try_from(txn.data().clone(), epoch_store.module_cache())?;
+>>>>>>> fork/testnet
         let raw_transaction = if opts.show_raw_input {
             bcs::to_bytes(txn.data())?
         } else {
@@ -227,7 +237,11 @@ impl WriteApiServer for TransactionExecutionApi {
             bcs::from_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?).map_err(|e| anyhow!(e))?;
         Ok(self
             .state
+<<<<<<< HEAD
             .dev_inspect_transaction_block(sender_address, tx_kind, gas_price.map(|i| *i))
+=======
+            .dev_inspect_transaction_block(sender_address, tx_kind, gas_price.map(<u64>::from))
+>>>>>>> fork/testnet
             .await?)
     }
 

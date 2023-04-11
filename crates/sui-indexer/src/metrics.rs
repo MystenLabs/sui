@@ -13,6 +13,7 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
     0.001, 0.005, 0.01, 0.02, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 3.0, 5.0, 10.0, 20.0, 40.0, 60.0,
     80.0, 100.0, 200.0,
 ];
+<<<<<<< HEAD
 
 #[derive(Clone)]
 pub struct IndexerCheckpointHandlerMetrics {
@@ -37,11 +38,36 @@ pub struct IndexerCheckpointHandlerMetrics {
     // latency of event websocket subscription
     pub subscription_process_latency: Histogram,
     pub transaction_per_checkpoint: Histogram,
+=======
+pub struct IndexerCheckpointHandlerMetrics {
+    pub total_checkpoint_requested: IntCounter,
+    pub total_checkpoint_received: IntCounter,
+    pub total_checkpoint_committed: IntCounter,
+    pub total_transaction_committed: IntCounter,
+    pub total_epoch_committed: IntCounter,
+    // checkpoint E2E latency is:
+    // fullnode_download_latency + checkpoint_index_latency + db_commit_latency
+    pub fullnode_download_latency: Histogram,
+    pub checkpoint_index_latency: Histogram,
+    pub checkpoint_db_commit_latency: Histogram,
+    pub epoch_db_commit_latency: Histogram,
+    // latency of event websocket subscription
+    pub subscription_process_latency: Histogram,
+>>>>>>> fork/testnet
 }
 
 impl IndexerCheckpointHandlerMetrics {
     pub fn new(registry: &Registry) -> Self {
         Self {
+<<<<<<< HEAD
+=======
+            total_checkpoint_requested: register_int_counter_with_registry!(
+                "total_checkpoint_requested",
+                "Total number of checkpoint requested",
+                registry,
+            )
+            .unwrap(),
+>>>>>>> fork/testnet
             total_checkpoint_received: register_int_counter_with_registry!(
                 "total_checkpoint_received",
                 "Total number of checkpoint received",
@@ -54,30 +80,37 @@ impl IndexerCheckpointHandlerMetrics {
                 registry,
             )
             .unwrap(),
+<<<<<<< HEAD
             total_object_checkpoint_committed: register_int_counter_with_registry!(
                 "total_object_checkpoint_committed",
                 "Total number of object checkpoint committed",
                 registry,
             )
             .unwrap(),
+=======
+>>>>>>> fork/testnet
             total_transaction_committed: register_int_counter_with_registry!(
                 "total_transaction_committed",
                 "Total number of transaction committed",
                 registry,
             )
             .unwrap(),
+<<<<<<< HEAD
             total_object_change_committed: register_int_counter_with_registry!(
                 "total_object_change_committed",
                 "Total number of object change committed",
                 registry,
             )
             .unwrap(),
+=======
+>>>>>>> fork/testnet
             total_epoch_committed: register_int_counter_with_registry!(
                 "total_epoch_committed",
                 "Total number of epoch committed",
                 registry,
             )
             .unwrap(),
+<<<<<<< HEAD
             fullnode_checkpoint_wait_and_download_latency: register_histogram_with_registry!(
                 "fullnode_checkpoint_wait_and_download_latency",
                 "Time spent in waiting for a new checkpoint from the Full Node",
@@ -87,18 +120,29 @@ impl IndexerCheckpointHandlerMetrics {
             .unwrap(),
             fullnode_checkpoint_download_latency: register_histogram_with_registry!(
                 "fullnode_checkpoint_download_latency",
+=======
+            fullnode_download_latency: register_histogram_with_registry!(
+                "checkpoint_full_node_read_request_latency",
+>>>>>>> fork/testnet
                 "Time spent in waiting for a new checkpoint from the Full Node",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
+<<<<<<< HEAD
             fullnode_transaction_download_latency: register_histogram_with_registry!(
                 "fullnode_transaction_download_latency",
                 "Time spent in waiting for a new transaction from the Full Node",
+=======
+            checkpoint_index_latency: register_histogram_with_registry!(
+                "checkpoint_index_request_latency",
+                "Time spent in indexing a checkpoint",
+>>>>>>> fork/testnet
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
+<<<<<<< HEAD
             fullnode_object_download_latency: register_histogram_with_registry!(
                 "fullnode_object_download_latency",
                 "Time spent in waiting for a new epoch from the Full Node",
@@ -137,12 +181,21 @@ impl IndexerCheckpointHandlerMetrics {
             object_deletion_db_commit_latency: register_histogram_with_registry!(
                 "object_deletion_db_commit_latency",
                 "Time spent commiting a object deletion to the db",
+=======
+            checkpoint_db_commit_latency: register_histogram_with_registry!(
+                "checkpoint_db_write_request_latency",
+                "Time spent commiting a checkpoint to the db",
+>>>>>>> fork/testnet
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             epoch_db_commit_latency: register_histogram_with_registry!(
+<<<<<<< HEAD
                 "epoch_db_commit_latency",
+=======
+                "epoch_db_write_request_latency",
+>>>>>>> fork/testnet
                 "Time spent commiting a epoch to the db",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
@@ -155,6 +208,7 @@ impl IndexerCheckpointHandlerMetrics {
                 registry,
             )
             .unwrap(),
+<<<<<<< HEAD
             transaction_per_checkpoint: register_histogram_with_registry!(
                 "transaction_per_checkpoint",
                 "Number of transactions per checkpoint",
@@ -162,6 +216,8 @@ impl IndexerCheckpointHandlerMetrics {
                 registry,
             )
             .unwrap(),
+=======
+>>>>>>> fork/testnet
         }
     }
 }

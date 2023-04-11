@@ -42,6 +42,7 @@ use shared_crypto::intent::{Intent, IntentScope};
 use sui_adapter::execution_engine;
 use sui_adapter::{adapter, execution_mode};
 use sui_config::genesis::Genesis;
+<<<<<<< HEAD
 use sui_config::node::{
     AuthorityStorePruningConfig, DBCheckpointConfig, ExpensiveSafetyCheckConfig,
 };
@@ -49,6 +50,13 @@ use sui_framework::BuiltInFramework;
 use sui_json_rpc_types::{
     Checkpoint, DevInspectResults, DryRunTransactionBlockResponse, EventFilter, SuiEvent,
     SuiMoveValue, SuiObjectDataFilter, SuiTransactionBlockData, SuiTransactionBlockEvents,
+=======
+use sui_config::node::{AuthorityStorePruningConfig, DBCheckpointConfig};
+use sui_framework::{MoveStdlib, SuiFramework, SuiSystem, SystemPackage};
+use sui_json_rpc_types::{
+    Checkpoint, DevInspectResults, DryRunTransactionBlockResponse, EventFilter, SuiEvent,
+    SuiMoveValue, SuiObjectDataFilter, SuiTransactionBlockEvents,
+>>>>>>> fork/testnet
 };
 use sui_macros::{fail_point, fail_point_async, nondeterministic};
 use sui_protocol_config::SupportedProtocolVersions;
@@ -1103,9 +1111,18 @@ impl AuthorityState {
         // Returning empty vector here because we recalculate changes in the rpc layer.
         let balance_changes = Vec::new();
 
+        // Update the storage gas price
+        let reference_gas_price = epoch_store.reference_gas_price();
+        let TransactionEffects::V1(mut inner_effects) = effects;
+        inner_effects.gas_used.storage_cost *= reference_gas_price;
+        let effects = TransactionEffects::V1(inner_effects);
+
         Ok((
             DryRunTransactionBlockResponse {
+<<<<<<< HEAD
                 input: SuiTransactionBlockData::try_from(transaction.clone(), &module_cache)?,
+=======
+>>>>>>> fork/testnet
                 effects: effects.clone().try_into()?,
                 events: SuiTransactionBlockEvents::try_from(
                     inner_temp_store.events.clone(),

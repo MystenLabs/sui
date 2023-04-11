@@ -1199,11 +1199,20 @@ async fn execute_add_validator_candidate_tx(
         rgp,
     )
     .unwrap();
+<<<<<<< HEAD
     let transaction = to_sender_signed_transaction(candidate_tx_data, account_kp);
     let effects = execute_transaction_block(authorities, transaction)
         .await
         .unwrap();
     assert!(effects.status().is_ok(), "{:?}", effects.status());
+=======
+    let transaction =
+        to_sender_signed_transaction(candidate_tx_data, node_config.account_key_pair());
+    let effects = execute_transaction_block(authorities, transaction)
+        .await
+        .unwrap();
+    assert!(effects.status().is_ok());
+>>>>>>> fork/testnet
     effects
 }
 
@@ -1254,11 +1263,19 @@ async fn execute_join_committee_txes(
         rgp,
     )
     .unwrap();
+<<<<<<< HEAD
     let transaction = to_sender_signed_transaction(stake_tx_data, account_kp);
     let effects = execute_transaction_block(authorities, transaction)
         .await
         .unwrap();
     assert!(effects.status().is_ok(), "{:?}", effects);
+=======
+    let transaction = to_sender_signed_transaction(stake_tx_data, node_config.account_key_pair());
+    let effects = execute_transaction_block(authorities, transaction)
+        .await
+        .unwrap();
+    assert!(effects.status().is_ok());
+>>>>>>> fork/testnet
 
     effects_ret.push(effects);
 
@@ -1279,11 +1296,20 @@ async fn execute_join_committee_txes(
         rgp,
     )
     .unwrap();
+<<<<<<< HEAD
     let transaction = to_sender_signed_transaction(activation_tx_data, account_kp);
     let effects = execute_transaction_block(authorities, transaction)
         .await
         .unwrap();
     assert!(effects.status().is_ok(), "{:?}", effects.status());
+=======
+    let transaction =
+        to_sender_signed_transaction(activation_tx_data, node_config.account_key_pair());
+    let effects = execute_transaction_block(authorities, transaction)
+        .await
+        .unwrap();
+    assert!(effects.status().is_ok());
+>>>>>>> fork/testnet
     effects_ret.push(effects);
 
     effects_ret
@@ -1315,11 +1341,19 @@ async fn execute_leave_committee_tx(
     )
     .unwrap();
 
+<<<<<<< HEAD
     let transaction = to_sender_signed_transaction(tx_data, account_kp);
     let effects = execute_transaction_block(authorities, transaction)
         .await
         .unwrap();
     assert!(effects.status().is_ok(), "{:?}", effects.status());
+=======
+    let transaction = to_sender_signed_transaction(tx_data, node_config.account_key_pair());
+    let effects = execute_transaction_block(authorities, transaction)
+        .await
+        .unwrap();
+    assert!(effects.status().is_ok());
+>>>>>>> fork/testnet
     effects
 }
 

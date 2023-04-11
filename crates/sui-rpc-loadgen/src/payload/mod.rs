@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+<<<<<<< HEAD
 mod checkpoint_utils;
 mod get_all_balances;
 mod get_checkpoints;
@@ -8,11 +9,17 @@ mod get_object;
 mod get_reference_gas_price;
 mod multi_get_objects;
 mod multi_get_transaction_blocks;
+=======
+mod get_checkpoints;
+>>>>>>> fork/testnet
 mod pay_sui;
 mod query_transactions;
 mod rpc_command_processor;
 mod validation;
+<<<<<<< HEAD
 use strum_macros::EnumString;
+=======
+>>>>>>> fork/testnet
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -100,8 +107,13 @@ impl Command {
     }
 
     pub fn new_query_transaction_blocks(
+<<<<<<< HEAD
         address_type: AddressQueryType,
         addresses: Vec<SuiAddress>,
+=======
+        from_address: Option<String>,
+        to_address: Option<String>,
+>>>>>>> fork/testnet
     ) -> Self {
         let query_transactions = QueryTransactionBlocks {
             address_type,

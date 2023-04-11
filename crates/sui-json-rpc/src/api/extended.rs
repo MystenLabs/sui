@@ -5,11 +5,19 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 
 use sui_json_rpc_types::{
+<<<<<<< HEAD
     CheckpointedObjectID, EpochInfo, EpochPage, MoveCallMetrics, NetworkMetrics, QueryObjectsPage,
     SuiObjectResponseQuery,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::sui_serde::BigInt;
+=======
+    CheckpointedObjectID, EpochInfo, EpochPage, MoveCallMetrics, NetworkMetrics, ObjectsPage,
+    SuiObjectResponseQuery,
+};
+use sui_open_rpc_macros::open_rpc;
+use sui_types::base_types::EpochId;
+>>>>>>> fork/testnet
 
 #[open_rpc(namespace = "suix", tag = "Extended API")]
 #[rpc(server, client, namespace = "suix")]
@@ -39,8 +47,13 @@ pub trait ExtendedApi {
         /// An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.
         cursor: Option<CheckpointedObjectID>,
         /// Max number of items returned per page, default to [QUERY_MAX_RESULT_LIMIT_OBJECTS] if not specified.
+<<<<<<< HEAD
         limit: Option<BigInt<u64>>,
     ) -> RpcResult<QueryObjectsPage>;
+=======
+        limit: Option<usize>,
+    ) -> RpcResult<ObjectsPage>;
+>>>>>>> fork/testnet
 
     /// Return Network metrics
     #[method(name = "getNetworkMetrics")]

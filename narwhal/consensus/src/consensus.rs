@@ -19,7 +19,12 @@ use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, info, instrument};
 use types::{
     metered_channel, Certificate, CertificateAPI, CertificateDigest, CommittedSubDag,
+<<<<<<< HEAD
     ConditionalBroadcastReceiver, ConsensusCommit, HeaderAPI, Round, Timestamp,
+=======
+    CommittedSubDagShell, ConditionalBroadcastReceiver, ConsensusStore, HeaderAPI,
+    ReputationScores, Round, Timestamp,
+>>>>>>> fork/testnet
 };
 
 #[cfg(test)]

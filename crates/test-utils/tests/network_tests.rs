@@ -34,10 +34,14 @@ async fn test_package_override() {
     let framework_ref = {
         let default_cluster = TestClusterBuilder::new().build().await.unwrap();
         let client = default_cluster.rpc_client();
+<<<<<<< HEAD
         let obj = client
             .get_object(SUI_SYSTEM_PACKAGE_ID, None)
             .await
             .unwrap();
+=======
+        let obj = client.get_object(SuiSystem::ID, None).await.unwrap();
+>>>>>>> fork/testnet
 
         if let Some(obj) = obj.data {
             obj.object_ref()
@@ -78,10 +82,14 @@ async fn test_package_override() {
             .unwrap();
 
         let client = modified_cluster.rpc_client();
+<<<<<<< HEAD
         let obj = client
             .get_object(SUI_SYSTEM_PACKAGE_ID, None)
             .await
             .unwrap();
+=======
+        let obj = client.get_object(SuiSystem::ID, None).await.unwrap();
+>>>>>>> fork/testnet
 
         if let Some(obj) = obj.data {
             obj.object_ref()

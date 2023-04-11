@@ -15,7 +15,11 @@ pub use sui_core::test_utils::{
 use sui_json_rpc_types::SuiData;
 use sui_json_rpc_types::SuiObjectResponse;
 use sui_json_rpc_types::{
+<<<<<<< HEAD
     ObjectChange, SuiObjectDataOptions, SuiObjectResponseQuery, SuiTransactionBlockDataAPI,
+=======
+    SuiObjectDataOptions, SuiObjectResponseQuery, SuiTransactionBlockDataAPI,
+>>>>>>> fork/testnet
     SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
@@ -261,7 +265,11 @@ pub async fn upgrade_package_with_wallet(
         .quorum_driver()
         .execute_transaction_block(
             transaction,
+<<<<<<< HEAD
             SuiTransactionBlockResponseOptions::new().with_object_changes(),
+=======
+            SuiTransactionBlockResponseOptions::new().with_effects(),
+>>>>>>> fork/testnet
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await

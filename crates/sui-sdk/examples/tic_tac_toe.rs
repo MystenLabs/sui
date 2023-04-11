@@ -103,12 +103,17 @@ impl TicTacToe {
             .client
             .quorum_driver()
             .execute_transaction_block(
+<<<<<<< HEAD
                 Transaction::from_data(
                     create_game_call,
                     Intent::sui_transaction(),
                     vec![signature],
                 )
                 .verify()?,
+=======
+                Transaction::from_data(create_game_call, Intent::default(), vec![signature])
+                    .verify()?,
+>>>>>>> fork/testnet
                 SuiTransactionBlockResponseOptions::full_content(),
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
@@ -208,12 +213,17 @@ impl TicTacToe {
                 .client
                 .quorum_driver()
                 .execute_transaction_block(
+<<<<<<< HEAD
                     Transaction::from_data(
                         place_mark_call,
                         Intent::sui_transaction(),
                         vec![signature],
                     )
                     .verify()?,
+=======
+                    Transaction::from_data(place_mark_call, Intent::default(), vec![signature])
+                        .verify()?,
+>>>>>>> fork/testnet
                     SuiTransactionBlockResponseOptions::new().with_effects(),
                     Some(ExecuteTransactionRequestType::WaitForLocalExecution),
                 )

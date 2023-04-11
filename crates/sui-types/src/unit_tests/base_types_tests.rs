@@ -16,6 +16,10 @@ use crate::crypto::{
     Signature, SuiAuthoritySignature, SuiSignature,
 };
 use crate::id::{ID, UID};
+<<<<<<< HEAD
+=======
+use crate::OBJECT_START_VERSION;
+>>>>>>> fork/testnet
 use crate::{gas_coin::GasCoin, object::Object, SUI_FRAMEWORK_ADDRESS};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use sui_protocol_config::ProtocolConfig;

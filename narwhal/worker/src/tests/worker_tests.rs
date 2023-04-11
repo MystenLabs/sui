@@ -25,7 +25,12 @@ use test_utils::{batch, temp_dir, test_network, transaction, CommitteeFixture};
 use tokio::sync::watch;
 use types::{
     BatchAPI, MockWorkerToPrimary, MockWorkerToWorker, PreSubscribedBroadcastSender,
+<<<<<<< HEAD
     TransactionProto, TransactionsClient, WorkerBatchMessage, WorkerToWorkerClient,
+=======
+    TransactionProto, TransactionsClient, WorkerBatchMessage, WorkerToPrimaryServer,
+    WorkerToWorkerClient,
+>>>>>>> fork/testnet
 };
 
 // A test validator that rejects every transaction / batch

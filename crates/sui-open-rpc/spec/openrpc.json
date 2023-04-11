@@ -12,7 +12,11 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
+<<<<<<< HEAD
     "version": "0.32.0"
+=======
+    "version": "0.29.1"
+>>>>>>> fork/testnet
   },
   "methods": [
     {
@@ -422,7 +426,11 @@
           "params": [
             {
               "name": "transaction_digest",
+<<<<<<< HEAD
               "value": "AfLBXHTTyHM5FV4FwJDUfdUPEPpLaJzJ1Z4o48YdS6ii"
+=======
+              "value": "Bo1wDt96tFw2NjYMr5z8YBVyG1vn1RttXfgx1rQWUZ9x"
+>>>>>>> fork/testnet
             }
           ],
           "result": {
@@ -432,7 +440,11 @@
                 {
                   "id": {
                     "txDigest": "11a72GCQ5hGNpWGh2QhQkkusTEGS6EDqifJqxr7nSYX",
+<<<<<<< HEAD
                     "eventSeq": "0"
+=======
+                    "eventSeq": 0
+>>>>>>> fork/testnet
                   },
                   "packageId": "0x7f7e625ea319aa0a1848666ffed2291ae24a3f8177353a05220d765ca9c421a3",
                   "transactionModule": "test_module",
@@ -446,7 +458,11 @@
               ],
               "nextCursor": {
                 "txDigest": "11a72GCQ5hGNpWGh2QhQkkusTEGS6EDqifJqxr7nSYX",
+<<<<<<< HEAD
                 "eventSeq": "5"
+=======
+                "eventSeq": 5
+>>>>>>> fork/testnet
               },
               "hasNextPage": false
             }
@@ -464,10 +480,17 @@
       "description": "Return the sequence number of the latest checkpoint that has been executed",
       "params": [],
       "result": {
+<<<<<<< HEAD
         "name": "BigInt<u64>",
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/BigInt_for_uint64"
+=======
+        "name": "SuiCheckpointSequenceNumber",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/BigInt"
+>>>>>>> fork/testnet
         }
       }
     },
@@ -1028,6 +1051,23 @@
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
+<<<<<<< HEAD
+          }
+        },
+        {
+          "name": "version",
+          "description": "the version of the queried object. If None, default to the latest known version",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SequenceNumber"
+          }
+        },
+        {
+          "name": "options",
+          "description": "options for specifying the content to be returned",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectDataOptions"
+=======
           }
         },
         {
@@ -1084,14 +1124,14 @@
               "status": "VersionFound",
               "details": {
                 "objectId": "0x11af4b844ff94b3fbef6e36b518da3ad4c5856fa686464524a876b463d129760",
-                "version": "4",
+                "version": 4,
                 "digest": "5VPAwDXy3BL72ehFc7gSJoz27ahMd6spUg5YwYc4ibcv",
                 "type": "0x2::coin::Coin<0x2::sui::SUI>",
                 "owner": {
                   "AddressOwner": "0x3568c40e814d9d5396d23087a0fd641e91e0e00df6c012cded9ef9ba5e5bf042"
                 },
                 "previousTransaction": "5jQByoouHBwaico5pQB73GdbzerC2StjTiHh5garBjiV",
-                "storageRebate": "100",
+                "storageRebate": 100,
                 "content": {
                   "dataType": "moveObject",
                   "type": "0x2::coin::Coin<0x2::sui::SUI>",
@@ -1340,7 +1380,9 @@
           "name": "epoch",
           "description": "The epoch of interest. If None, default to the latest epoch",
           "schema": {
-            "$ref": "#/components/schemas/BigInt_for_uint64"
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           }
         }
       ],
@@ -1458,6 +1500,842 @@
           "name": "cursor",
           "description": "optional paging cursor",
           "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "limit",
+          "description": "maximum number of items per page",
+          "schema": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "descending_order",
+          "description": "flag to return results in descending order",
+          "schema": {
+            "type": "boolean"
+          }
+        }
+      ],
+      "result": {
+        "name": "EpochPage",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Page_for_EpochInfo_and_uint64"
+        }
+      }
+    },
+    {
+      "name": "suix_getLatestSuiSystemState",
+      "tags": [
+        {
+          "name": "Governance Read API"
+        }
+      ],
+      "description": "Return the latest SUI system state object on-chain.",
+      "params": [],
+      "result": {
+        "name": "SuiSystemStateSummary",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/SuiSystemStateSummary"
+        }
+      }
+    },
+    {
+      "name": "suix_getMoveCallMetrics",
+      "tags": [
+        {
+          "name": "Extended API"
+        }
+      ],
+      "description": "Return Network metrics",
+      "params": [],
+      "result": {
+        "name": "MoveCallMetrics",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/MoveCallMetrics"
+        }
+      }
+    },
+    {
+      "name": "suix_getNetworkMetrics",
+      "tags": [
+        {
+          "name": "Extended API"
+        }
+      ],
+      "description": "Return Network metrics",
+      "params": [],
+      "result": {
+        "name": "NetworkMetrics",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/NetworkMetrics"
+        }
+      }
+    },
+    {
+      "name": "suix_getOwnedObjects",
+      "tags": [
+        {
+          "name": "Extended API"
+        }
+      ],
+      "description": "Return the list of objects owned by an address.",
+      "params": [
+        {
+          "name": "address",
+          "description": "the owner's Sui address",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "query",
+          "description": "the objects query criteria.",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectResponseQuery"
+          }
+        },
+        {
+          "name": "cursor",
+          "description": "An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.",
+          "schema": {
+            "$ref": "#/components/schemas/CheckpointedObjectID"
+          }
+        },
+        {
+          "name": "limit",
+          "description": "Max number of items returned per page, default to [QUERY_MAX_RESULT_LIMIT_OBJECTS] if not specified.",
+          "schema": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0.0
+>>>>>>> fork/testnet
+          }
+        }
+      ],
+      "result": {
+        "name": "ObjectsPage",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Page_for_SuiObjectResponse_and_CheckpointedObjectID"
+        }
+<<<<<<< HEAD
+      },
+      "examples": [
+        {
+          "name": "Get Past Object data",
+          "params": [
+            {
+              "name": "object_id",
+              "value": "0x11af4b844ff94b3fbef6e36b518da3ad4c5856fa686464524a876b463d129760"
+            },
+            {
+              "name": "version",
+              "value": 4
+            },
+            {
+              "name": "options",
+              "value": {
+                "showType": true,
+                "showOwner": true,
+                "showPreviousTransaction": true,
+                "showDisplay": false,
+                "showContent": true,
+                "showBcs": false,
+                "showStorageRebate": true
+              }
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": {
+              "status": "VersionFound",
+              "details": {
+                "objectId": "0x11af4b844ff94b3fbef6e36b518da3ad4c5856fa686464524a876b463d129760",
+                "version": "4",
+                "digest": "5VPAwDXy3BL72ehFc7gSJoz27ahMd6spUg5YwYc4ibcv",
+                "type": "0x2::coin::Coin<0x2::sui::SUI>",
+                "owner": {
+                  "AddressOwner": "0x3568c40e814d9d5396d23087a0fd641e91e0e00df6c012cded9ef9ba5e5bf042"
+                },
+                "previousTransaction": "5jQByoouHBwaico5pQB73GdbzerC2StjTiHh5garBjiV",
+                "storageRebate": "100",
+                "content": {
+                  "dataType": "moveObject",
+                  "type": "0x2::coin::Coin<0x2::sui::SUI>",
+                  "hasPublicTransfer": true,
+                  "fields": {
+                    "balance": "10000",
+                    "id": {
+                      "id": "0x11af4b844ff94b3fbef6e36b518da3ad4c5856fa686464524a876b463d129760"
+                    }
+                  }
+                }
+              }
+            }
+=======
+      }
+    },
+    {
+      "name": "suix_getReferenceGasPrice",
+      "tags": [
+        {
+          "name": "Governance Read API"
+        }
+      ],
+      "description": "Return the reference gas price for the network",
+      "params": [],
+      "result": {
+        "name": "BigInt",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/BigInt"
+        }
+      }
+    },
+    {
+      "name": "suix_getStakes",
+      "tags": [
+        {
+          "name": "Governance Read API"
+        }
+      ],
+      "description": "Return all [DelegatedStake].",
+      "params": [
+        {
+          "name": "owner",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+>>>>>>> fork/testnet
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec<DelegatedStake>",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/DelegatedStake"
+          }
+        }
+      }
+    },
+    {
+      "name": "suix_getStakesByIds",
+      "tags": [
+        {
+          "name": "Governance Read API"
+        }
+      ],
+      "description": "Return one or more [DelegatedStake]. If a Stake was withdrawn its status will be Unstaked.",
+      "params": [
+        {
+          "name": "staked_sui_ids",
+          "required": true,
+          "schema": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectID"
+            }
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec<DelegatedStake>",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/DelegatedStake"
+          }
+        }
+      }
+    },
+    {
+<<<<<<< HEAD
+      "name": "suix_getAllBalances",
+=======
+      "name": "suix_getTotalSupply",
+>>>>>>> fork/testnet
+      "tags": [
+        {
+          "name": "Coin Query API"
+        }
+      ],
+<<<<<<< HEAD
+      "description": "Return the total coin balance for all coin type, owned by the address owner.",
+      "params": [
+        {
+          "name": "owner",
+          "description": "the owner's Sui address",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+=======
+      "description": "Return total supply for a coin",
+      "params": [
+        {
+          "name": "coin_type",
+          "description": "type name for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)",
+          "required": true,
+          "schema": {
+            "type": "string"
+>>>>>>> fork/testnet
+          }
+        }
+      ],
+      "result": {
+<<<<<<< HEAD
+        "name": "Vec<Balance>",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Balance"
+          }
+=======
+        "name": "Supply",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Supply"
+>>>>>>> fork/testnet
+        }
+      }
+    },
+    {
+<<<<<<< HEAD
+      "name": "suix_getAllCoins",
+=======
+      "name": "suix_queryEvents",
+>>>>>>> fork/testnet
+      "tags": [
+        {
+          "name": "Coin Query API"
+        }
+      ],
+<<<<<<< HEAD
+      "description": "Return all Coin objects owned by an address.",
+      "params": [
+        {
+          "name": "owner",
+          "description": "the owner's Sui address",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+=======
+      "description": "Return list of events for a specified query criteria.",
+      "params": [
+        {
+          "name": "query",
+          "description": "the event query criteria.",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/EventFilter"
+>>>>>>> fork/testnet
+          }
+        },
+        {
+          "name": "cursor",
+          "description": "optional paging cursor",
+          "schema": {
+<<<<<<< HEAD
+            "$ref": "#/components/schemas/ObjectID"
+=======
+            "$ref": "#/components/schemas/EventID"
+>>>>>>> fork/testnet
+          }
+        },
+        {
+          "name": "limit",
+          "description": "maximum number of items per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.",
+          "schema": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0.0
+          }
+<<<<<<< HEAD
+        }
+      ],
+      "result": {
+        "name": "CoinPage",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Page_for_Coin_and_ObjectID"
+=======
+        },
+        {
+          "name": "descending_order",
+          "description": "query result ordering, default to false (ascending order), oldest record first.",
+          "schema": {
+            "type": "boolean"
+          }
+        }
+      ],
+      "result": {
+        "name": "EventPage",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Page_for_Event_and_EventID"
+>>>>>>> fork/testnet
+        }
+      }
+    },
+    {
+<<<<<<< HEAD
+      "name": "suix_getBalance",
+=======
+      "name": "suix_queryObjects",
+>>>>>>> fork/testnet
+      "tags": [
+        {
+          "name": "Coin Query API"
+        }
+      ],
+<<<<<<< HEAD
+      "description": "Return the total coin balance for one coin type, owned by the address owner.",
+      "params": [
+        {
+          "name": "owner",
+          "description": "the owner's Sui address",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "coin_type",
+          "description": "optional type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC), default to 0x2::sui::SUI if not specified.",
+          "schema": {
+            "type": "string"
+=======
+      "description": "Return the list of queried objects. Note that this is an enhanced full node only api.",
+      "params": [
+        {
+          "name": "query",
+          "description": "the objects query criteria.",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectResponseQuery"
+          }
+        },
+        {
+          "name": "cursor",
+          "description": "An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.",
+          "schema": {
+            "$ref": "#/components/schemas/CheckpointedObjectID"
+          }
+        },
+        {
+          "name": "limit",
+          "description": "Max number of items returned per page, default to [QUERY_MAX_RESULT_LIMIT_OBJECTS] if not specified.",
+          "schema": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0.0
+>>>>>>> fork/testnet
+          }
+        }
+      ],
+      "result": {
+<<<<<<< HEAD
+        "name": "Balance",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Balance"
+=======
+        "name": "ObjectsPage",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Page_for_SuiObjectResponse_and_CheckpointedObjectID"
+>>>>>>> fork/testnet
+        }
+      }
+    },
+    {
+<<<<<<< HEAD
+      "name": "suix_getCoinMetadata",
+=======
+      "name": "suix_queryTransactionBlocks",
+>>>>>>> fork/testnet
+      "tags": [
+        {
+          "name": "Coin Query API"
+        }
+      ],
+<<<<<<< HEAD
+      "description": "Return metadata(e.g., symbol, decimals) for a coin",
+      "params": [
+        {
+          "name": "coin_type",
+          "description": "type name for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)",
+          "required": true,
+          "schema": {
+            "type": "string"
+=======
+      "description": "Return list of transactions for a specified query criteria.",
+      "params": [
+        {
+          "name": "query",
+          "description": "the transaction query criteria.",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/TransactionBlockResponseQuery"
+          }
+        },
+        {
+          "name": "cursor",
+          "description": "An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.",
+          "schema": {
+            "$ref": "#/components/schemas/TransactionDigest"
+          }
+        },
+        {
+          "name": "limit",
+          "description": "Maximum item returned per page, default to QUERY_MAX_RESULT_LIMIT if not specified.",
+          "schema": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "descending_order",
+          "description": "query result ordering, default to false (ascending order), oldest record first.",
+          "schema": {
+            "type": "boolean"
+>>>>>>> fork/testnet
+          }
+        }
+      ],
+      "result": {
+<<<<<<< HEAD
+        "name": "SuiCoinMetadata",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/SuiCoinMetadata"
+=======
+        "name": "TransactionBlocksPage",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Page_for_TransactionBlockResponse_and_TransactionDigest"
+        }
+      },
+      "examples": [
+        {
+          "name": "Return the transaction digest for specified query criteria",
+          "params": [
+            {
+              "name": "query",
+              "value": {
+                "filter": {
+                  "InputObject": "0x93633829fcba6d6e0ccb13d3dbfe7614b81ea76b255e5d435032cd8595f37eb8"
+                },
+                "options": null
+              }
+            },
+            {
+              "name": "cursor",
+              "value": "HxidAfFfyr4kXSiWeVq1J6Tk526YUVDoSUY5PSnS4tEJ"
+            },
+            {
+              "name": "limit",
+              "value": 100
+            },
+            {
+              "name": "descending_order",
+              "value": false
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": {
+              "data": [
+                {
+                  "digest": "GUPcK4cmRmgsTFr52ab9f6fnzNVg3Lz6hF2aXFcsRzaD"
+                },
+                {
+                  "digest": "B2iV1SVbBjgTKfbJKPQrvTT6F3kNdekFuBwY9tQcAxV2"
+                },
+                {
+                  "digest": "8QrPa4x9iNG5r2zQfmeH8pJoVjjtq9AGzp8rp2fxi8Sk"
+                },
+                {
+                  "digest": "3nek86HEjXZ7K3EtrAcBG4wMrCS21gqr8BqwwC6M6P7F"
+                }
+              ],
+              "nextCursor": "3nek86HEjXZ7K3EtrAcBG4wMrCS21gqr8BqwwC6M6P7F",
+              "hasNextPage": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "suix_subscribeEvent",
+      "tags": [
+        {
+          "name": "Extended API"
+        },
+        {
+          "name": "Websocket"
+        },
+        {
+          "name": "PubSub"
+        }
+      ],
+      "description": "Subscribe to a stream of Sui event",
+      "params": [
+        {
+          "name": "filter",
+          "description": "the filter criteria of the event stream, see the [Sui docs](https://docs.sui.io/build/pubsub#event-filters) for detailed examples.",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/EventFilter"
+          }
+        }
+      ],
+      "result": {
+        "name": "SuiEvent",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Event"
+>>>>>>> fork/testnet
+        }
+      }
+    },
+    {
+      "name": "suix_getCoins",
+      "tags": [
+        {
+          "name": "Coin Query API"
+        }
+      ],
+      "description": "Return all Coin<`coin_type`> objects owned by an address.",
+      "params": [
+        {
+          "name": "owner",
+          "description": "the owner's Sui address",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "coin_type",
+          "description": "optional type name for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC), default to 0x2::sui::SUI if not specified.",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "cursor",
+          "description": "optional paging cursor",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "limit",
+          "description": "maximum number of items per page",
+          "schema": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0.0
+          }
+<<<<<<< HEAD
+        }
+      ],
+      "result": {
+        "name": "CoinPage",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Page_for_Coin_and_ObjectID"
+=======
+        },
+        {
+          "name": "txn_builder_mode",
+          "description": "Whether this is a regular transaction or a Dev Inspect Transaction",
+          "schema": {
+            "$ref": "#/components/schemas/SuiTransactionBlockBuilderMode"
+          }
+        }
+      ],
+      "result": {
+        "name": "TransactionBlockBytes",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionBlockBytes"
+>>>>>>> fork/testnet
+        }
+      }
+    },
+    {
+      "name": "suix_getCommitteeInfo",
+      "tags": [
+        {
+          "name": "Governance Read API"
+        }
+      ],
+      "description": "Return the committee information for the asked `epoch`.",
+      "params": [
+        {
+          "name": "epoch",
+          "description": "The epoch of interest. If None, default to the latest epoch",
+          "schema": {
+            "$ref": "#/components/schemas/BigInt_for_uint64"
+          }
+        }
+      ],
+      "result": {
+        "name": "SuiCommittee",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/CommitteeInfo"
+        }
+      }
+    },
+    {
+      "name": "suix_getCurrentEpoch",
+      "tags": [
+        {
+          "name": "Extended API"
+        }
+      ],
+      "description": "Return current epoch info",
+      "params": [],
+      "result": {
+<<<<<<< HEAD
+        "name": "EpochInfo",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/EpochInfo"
+=======
+        "name": "TransactionBlockBytes",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionBlockBytes"
+>>>>>>> fork/testnet
+        }
+      }
+    },
+    {
+      "name": "suix_getDynamicFieldObject",
+      "tags": [
+        {
+          "name": "Extended API"
+        }
+      ],
+      "description": "Return the dynamic field object information for a specified object",
+      "params": [
+        {
+          "name": "parent_object_id",
+          "description": "The ID of the queried parent object",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "name",
+          "description": "The Name of the dynamic field",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/DynamicFieldName"
+          }
+        }
+      ],
+      "result": {
+        "name": "SuiObjectResponse",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/SuiObjectResponse"
+        }
+      }
+    },
+    {
+      "name": "suix_getDynamicFields",
+      "tags": [
+        {
+          "name": "Extended API"
+        }
+      ],
+      "description": "Return the list of dynamic field objects owned by an object.",
+      "params": [
+        {
+          "name": "parent_object_id",
+          "description": "The ID of the parent object",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "cursor",
+          "description": "An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "limit",
+          "description": "Maximum item returned per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.",
+          "schema": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0.0
+          }
+<<<<<<< HEAD
+        }
+      ],
+      "result": {
+        "name": "DynamicFieldPage",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Page_for_DynamicFieldInfo_and_ObjectID"
+=======
+        },
+        {
+          "name": "execution_mode",
+          "description": "Whether this is a Normal transaction or a Dev Inspect Transaction. Default to be `SuiTransactionBlockBuilderMode::Commit` when it's None.",
+          "schema": {
+            "$ref": "#/components/schemas/SuiTransactionBlockBuilderMode"
+          }
+        }
+      ],
+      "result": {
+        "name": "TransactionBlockBytes",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionBlockBytes"
+>>>>>>> fork/testnet
+        }
+      }
+    },
+    {
+      "name": "suix_getEpochs",
+      "tags": [
+        {
+          "name": "Extended API"
+        }
+      ],
+      "description": "Return a list of epoch info",
+      "params": [
+        {
+          "name": "cursor",
+          "description": "optional paging cursor",
+          "schema": {
             "$ref": "#/components/schemas/BigInt_for_uint64"
           }
         },
@@ -1528,10 +2406,17 @@
       "description": "Return Network metrics",
       "params": [],
       "result": {
+<<<<<<< HEAD
         "name": "NetworkMetrics",
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/NetworkMetrics"
+=======
+        "name": "TransactionBlockBytes",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionBlockBytes"
+>>>>>>> fork/testnet
         }
       }
     },
@@ -1577,10 +2462,17 @@
         }
       ],
       "result": {
+<<<<<<< HEAD
         "name": "ObjectsPage",
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/Page_for_SuiObjectResponse_and_ObjectID"
+=======
+        "name": "TransactionBlockBytes",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionBlockBytes"
+>>>>>>> fork/testnet
         }
       }
     },
@@ -1679,10 +2571,17 @@
         }
       ],
       "result": {
+<<<<<<< HEAD
         "name": "Supply",
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/Supply"
+=======
+        "name": "TransactionBlockBytes",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionBlockBytes"
+>>>>>>> fork/testnet
         }
       }
     },
@@ -1728,10 +2627,17 @@
         }
       ],
       "result": {
+<<<<<<< HEAD
         "name": "EventPage",
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/Page_for_Event_and_EventID"
+=======
+        "name": "TransactionBlockBytes",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionBlockBytes"
+>>>>>>> fork/testnet
         }
       }
     },
@@ -1817,10 +2723,17 @@
         }
       ],
       "result": {
+<<<<<<< HEAD
         "name": "TransactionBlocksPage",
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/Page_for_TransactionBlockResponse_and_TransactionDigest"
+=======
+        "name": "TransactionBlockBytes",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionBlockBytes"
+>>>>>>> fork/testnet
         }
       },
       "examples": [
@@ -1898,10 +2811,17 @@
         }
       ],
       "result": {
+<<<<<<< HEAD
         "name": "SuiEvent",
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/Event"
+=======
+        "name": "TransactionBlockBytes",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionBlockBytes"
+>>>>>>> fork/testnet
         }
       }
     },
@@ -2948,6 +3868,26 @@
         ],
         "properties": {
           "atCheckpoint": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "objectId": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+<<<<<<< HEAD
+        ]
+      },
+      "CheckpointedObjectID": {
+        "type": "object",
+        "required": [
+          "objectId"
+        ],
+        "properties": {
+          "atCheckpoint": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/BigInt_for_uint64"
@@ -2960,6 +3900,8 @@
           "objectId": {
             "$ref": "#/components/schemas/ObjectID"
           }
+=======
+>>>>>>> fork/testnet
         }
       },
       "Coin": {
@@ -3205,6 +4147,7 @@
           }
         ]
       },
+<<<<<<< HEAD
       "DisplayFieldsResponse": {
         "type": "object",
         "properties": {
@@ -3229,6 +4172,8 @@
           }
         }
       },
+=======
+>>>>>>> fork/testnet
       "DryRunTransactionBlockResponse": {
         "type": "object",
         "required": [
@@ -4340,11 +5285,17 @@
         "properties": {
           "currentCheckpoint": {
             "description": "Current checkpoint number",
+<<<<<<< HEAD
             "allOf": [
               {
                 "$ref": "#/components/schemas/BigInt_for_uint64"
               }
             ]
+=======
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+>>>>>>> fork/testnet
           },
           "currentEpoch": {
             "description": "Current epoch number",
@@ -5298,7 +6249,7 @@
           }
         }
       },
-      "Page_for_SuiObjectResponse_and_ObjectID": {
+      "Page_for_SuiObjectResponse_and_CheckpointedObjectID": {
         "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor` if `next_cursor` is `Some`, otherwise it will start from the first item.",
         "type": "object",
         "required": [
@@ -5318,7 +6269,7 @@
           "nextCursor": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/ObjectID"
+                "$ref": "#/components/schemas/CheckpointedObjectID"
               },
               {
                 "type": "null"
@@ -6761,6 +7712,167 @@
           },
           "validatorVeryLowStakeThreshold": {
             "description": "Validators with stake below `validator_very_low_stake_threshold` will be removed immediately at epoch change, no grace period.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      },
+      "SuiTransaction": {
+        "description": "A single transaction in a programmable transaction block.",
+        "oneOf": [
+          {
+            "description": "A call to either an entry or a public Move function",
+            "type": "object",
+            "required": [
+              "MoveCall"
+            ],
+            "properties": {
+              "MoveCall": {
+                "$ref": "#/components/schemas/SuiProgrammableMoveCall"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "`(Vec<forall T:key+store. T>, address)` It sends n-objects to the specified address. These objects must have store (public transfer) and either the previous owner must be an address or the object must be newly created.",
+            "type": "object",
+            "required": [
+              "TransferObjects"
+            ],
+            "properties": {
+              "TransferObjects": {
+                "type": "array",
+                "items": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/SuiArgument"
+                    }
+                  },
+                  {
+                    "$ref": "#/components/schemas/SuiArgument"
+                  }
+                ],
+                "maxItems": 2,
+                "minItems": 2
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "`(&mut Coin<T>, Vec<u64>)` -> `Vec<Coin<T>>` It splits off some amounts into a new coins with those amounts",
+            "type": "object",
+            "required": [
+              "SplitCoins"
+            ],
+            "properties": {
+              "SplitCoins": {
+                "type": "array",
+                "items": [
+                  {
+                    "$ref": "#/components/schemas/SuiArgument"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/SuiArgument"
+                    }
+                  }
+                ],
+                "maxItems": 2,
+                "minItems": 2
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "`(&mut Coin<T>, Vec<Coin<T>>)` It merges n-coins into the first coin",
+            "type": "object",
+            "required": [
+              "MergeCoins"
+            ],
+            "properties": {
+              "MergeCoins": {
+                "type": "array",
+                "items": [
+                  {
+                    "$ref": "#/components/schemas/SuiArgument"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/SuiArgument"
+                    }
+                  }
+                ],
+                "maxItems": 2,
+                "minItems": 2
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Publishes a Move package. It takes the package bytes and a list of the package's transitive dependencies to link against on-chain.",
+            "type": "object",
+            "required": [
+              "Publish"
+            ],
+            "properties": {
+              "Publish": {
+                "type": "array",
+                "items": [
+                  {
+                    "$ref": "#/components/schemas/MovePackage"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/ObjectID"
+                    }
+                  }
+                ],
+                "maxItems": 2,
+                "minItems": 2
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Upgrades a Move package",
+            "type": "object",
+            "required": [
+              "Upgrade"
+            ],
+            "properties": {
+              "Upgrade": {
+                "type": "array",
+                "items": [
+                  {
+                    "$ref": "#/components/schemas/MovePackage"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/ObjectID"
+                    }
+                  },
+                  {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SuiArgument"
+                  }
+                ],
+                "maxItems": 4,
+                "minItems": 4
+              }
+            },
+            "additionalProperties": false
+          },
+<<<<<<< HEAD
+          "validatorVeryLowStakeThreshold": {
+            "description": "Validators with stake below `validator_very_low_stake_threshold` will be removed immediately at epoch change, no grace period.",
             "allOf": [
               {
                 "$ref": "#/components/schemas/BigInt_for_uint64"
@@ -6921,6 +8033,8 @@
             },
             "additionalProperties": false
           },
+=======
+>>>>>>> fork/testnet
           {
             "description": "`forall T: Vec<T> -> vector<T>` Given n-values of the same type, it constructs a vector. For non objects or an empty vector, the type tag must be specified.",
             "type": "object",
@@ -7381,6 +8495,7 @@
                 "allOf": [
                   {
                     "$ref": "#/components/schemas/OwnedObjectRef"
+<<<<<<< HEAD
                   }
                 ]
               },
@@ -7430,6 +8545,57 @@
                   }
                 ]
               },
+=======
+                  }
+                ]
+              },
+              "gasUsed": {
+                "$ref": "#/components/schemas/GasCostSummary"
+              },
+              "messageVersion": {
+                "type": "string",
+                "enum": [
+                  "v1"
+                ]
+              },
+              "modifiedAtVersions": {
+                "description": "The version that every modified (mutated or deleted) object had before it was modified by this transaction.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/TransactionBlockEffectsModifiedAtVersions"
+                }
+              },
+              "mutated": {
+                "description": "ObjectRef and owner of mutated objects, including gas object.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/OwnedObjectRef"
+                }
+              },
+              "sharedObjects": {
+                "description": "The object references of the shared objects used in this transaction. Empty if no shared objects were used.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ObjectRef"
+                }
+              },
+              "status": {
+                "description": "The status of the execution",
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/ExecutionStatus"
+                  }
+                ]
+              },
+              "transactionDigest": {
+                "description": "The transaction digest",
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/TransactionDigest"
+                  }
+                ]
+              },
+>>>>>>> fork/testnet
               "unwrapped": {
                 "description": "ObjectRef and owner of objects that are unwrapped in this transaction. Unwrapped objects are objects that were wrapped into other objects in the past, and just got extracted out.",
                 "type": "array",
@@ -7774,7 +8940,13 @@
             ],
             "properties": {
               "Checkpoint": {
+<<<<<<< HEAD
                 "$ref": "#/components/schemas/BigInt_for_uint64"
+=======
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+>>>>>>> fork/testnet
               }
             },
             "additionalProperties": false

@@ -8797,7 +8797,11 @@ checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
 
 [[package]]
 name = "sui"
+<<<<<<< HEAD
 version = "0.32.0"
+=======
+version = "0.29.1"
+>>>>>>> fork/testnet
 dependencies = [
  "anemo",
  "anyhow",
@@ -9020,7 +9024,11 @@ dependencies = [
 
 [[package]]
 name = "sui-core"
+<<<<<<< HEAD
 version = "0.32.0"
+=======
+version = "0.29.1"
+>>>>>>> fork/testnet
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -9139,7 +9147,11 @@ dependencies = [
 
 [[package]]
 name = "sui-faucet"
+<<<<<<< HEAD
 version = "0.32.0"
+=======
+version = "0.29.1"
+>>>>>>> fork/testnet
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9250,7 +9262,11 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer"
+<<<<<<< HEAD
 version = "0.32.0"
+=======
+version = "0.29.1"
+>>>>>>> fork/testnet
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9428,7 +9444,11 @@ dependencies = [
 
 [[package]]
 name = "sui-move"
+<<<<<<< HEAD
 version = "0.32.0"
+=======
+version = "0.29.1"
+>>>>>>> fork/testnet
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -9503,7 +9523,11 @@ dependencies = [
 
 [[package]]
 name = "sui-node"
+<<<<<<< HEAD
 version = "0.32.0"
+=======
+version = "0.29.1"
+>>>>>>> fork/testnet
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -9704,7 +9728,11 @@ dependencies = [
 
 [[package]]
 name = "sui-rpc-loadgen"
+<<<<<<< HEAD
 version = "0.32.0"
+=======
+version = "0.29.1"
+>>>>>>> fork/testnet
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9753,7 +9781,11 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk"
+<<<<<<< HEAD
 version = "0.32.0"
+=======
+version = "0.29.1"
+>>>>>>> fork/testnet
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -9939,7 +9971,11 @@ dependencies = [
 
 [[package]]
 name = "sui-tool"
+<<<<<<< HEAD
 version = "0.32.0"
+=======
+version = "0.29.1"
+>>>>>>> fork/testnet
 dependencies = [
  "anemo",
  "anemo-cli",

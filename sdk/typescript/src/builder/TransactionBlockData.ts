@@ -163,7 +163,7 @@ export class TransactionBlockDataBuilder {
   inputs: TransactionBlockInput[];
   transactions: TransactionType[];
 
-  constructor(clone?: SerializedTransactionDataBuilder) {
+  constructor(clone?: TransactionBlockDataBuilder) {
     this.sender = clone?.sender;
     this.expiration = clone?.expiration;
     this.gasConfig = clone?.gasConfig ?? {};

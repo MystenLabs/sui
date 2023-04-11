@@ -11,8 +11,13 @@ use std::{collections::HashMap, sync::Arc};
 use storage::ConsensusStore;
 use tracing::{debug, error_span};
 use types::{
+<<<<<<< HEAD
     Certificate, CertificateAPI, CertificateDigest, CommittedSubDag, HeaderAPI, ReputationScores,
     Round,
+=======
+    Certificate, CertificateAPI, CertificateDigest, CommittedSubDag, ConsensusStore, HeaderAPI,
+    ReputationScores, Round,
+>>>>>>> fork/testnet
 };
 
 #[cfg(any(test))]

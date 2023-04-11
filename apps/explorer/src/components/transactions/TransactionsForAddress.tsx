@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useRpcClient } from '@mysten/core';
+<<<<<<< HEAD
 import { type SuiTransactionBlockResponse } from '@mysten/sui.js';
+=======
+>>>>>>> fork/testnet
 import { useQuery } from '@tanstack/react-query';
 
 import { genTableDataFromTxData } from './TxCardUtils';
@@ -42,6 +45,7 @@ export function TransactionsForAddress({ address, type }: Props) {
                 )
             );
 
+<<<<<<< HEAD
             const inserted = new Map();
             const uniqueList: SuiTransactionBlockResponse[] = [];
 
@@ -54,6 +58,11 @@ export function TransactionsForAddress({ address, type }: Props) {
                 });
 
             return uniqueList;
+=======
+            return [...results[0].data, ...results[1].data].sort(
+                (a, b) => (b.timestampMs ?? 0) - (a.timestampMs ?? 0)
+            );
+>>>>>>> fork/testnet
         }
     );
 

@@ -69,7 +69,10 @@ impl Checkpoint {
             network_total_transactions: rpc_checkpoint.network_total_transactions as i64,
             timestamp_ms: rpc_checkpoint.timestamp_ms as i64,
             total_transactions: total_transactions as i64,
+<<<<<<< HEAD
             validator_signature: rpc_checkpoint.validator_signature.encode_base64(),
+=======
+>>>>>>> fork/testnet
         })
     }
 

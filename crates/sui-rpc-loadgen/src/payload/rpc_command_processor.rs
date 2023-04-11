@@ -1,9 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use async_trait::async_trait;
+<<<<<<< HEAD
 use dashmap::{DashMap, DashSet};
+=======
+use dashmap::DashMap;
+>>>>>>> fork/testnet
 use futures::future::join_all;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -14,6 +18,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_json_rpc_types::{
+<<<<<<< HEAD
     SuiExecutionStatus, SuiObjectDataOptions, SuiTransactionBlockDataAPI,
     SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
@@ -21,6 +26,14 @@ use sui_types::digests::TransactionDigest;
 use tokio::sync::RwLock;
 use tokio::time::sleep;
 use tracing::{debug, info};
+=======
+    SuiExecutionStatus, SuiObjectDataOptions, SuiTransactionBlockEffectsAPI,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+};
+use tokio::sync::RwLock;
+use tokio::time::sleep;
+use tracing::debug;
+>>>>>>> fork/testnet
 
 use crate::load_test::LoadTestConfig;
 use sui_sdk::{SuiClient, SuiClientBuilder};
@@ -31,6 +44,7 @@ use sui_types::messages::{ExecuteTransactionRequestType, Transaction, Transactio
 use crate::payload::checkpoint_utils::get_latest_checkpoint_stats;
 use crate::payload::validation::chunk_entities;
 use crate::payload::{
+<<<<<<< HEAD
     Command, CommandData, DryRun, GetAllBalances, GetCheckpoints, GetObject, MultiGetObjects,
     Payload, ProcessPayload, Processor, QueryTransactionBlocks, SignerInfo,
 };
@@ -40,15 +54,26 @@ use super::MultiGetTransactionBlocks;
 pub(crate) const DEFAULT_GAS_BUDGET: u64 = 500_000_000;
 pub(crate) const DEFAULT_LARGE_GAS_BUDGET: u64 = 50_000_000_000;
 pub(crate) const MAX_NUM_NEW_OBJECTS_IN_SINGLE_TRANSACTION: usize = 120;
+=======
+    Command, CommandData, DryRun, GetCheckpoints, Payload, ProcessPayload, Processor, SignerInfo,
+};
+
+pub(crate) const DEFAULT_GAS_BUDGET: u64 = 10_000;
+pub(crate) const DEFAULT_LARGE_GAS_BUDGET: u64 = 100_000_000;
+pub(crate) const MAX_NUM_NEW_OBJECTS_IN_SINGLE_TRANSACTION: usize = 2000;
+>>>>>>> fork/testnet
 
 #[derive(Clone)]
 pub struct RpcCommandProcessor {
     clients: Arc<RwLock<Vec<SuiClient>>>,
     // for equivocation prevention in `WaitForEffectsCert` mode
     object_ref_cache: Arc<DashMap<ObjectID, ObjectRef>>,
+<<<<<<< HEAD
     transaction_digests: Arc<DashSet<TransactionDigest>>,
     addresses: Arc<DashSet<SuiAddress>>,
     data_dir: String,
+=======
+>>>>>>> fork/testnet
 }
 
 impl RpcCommandProcessor {
@@ -66,9 +91,12 @@ impl RpcCommandProcessor {
         Self {
             clients: Arc::new(RwLock::new(clients)),
             object_ref_cache: Arc::new(DashMap::new()),
+<<<<<<< HEAD
             transaction_digests: Arc::new(DashSet::new()),
             addresses: Arc::new(DashSet::new()),
             data_dir,
+=======
+>>>>>>> fork/testnet
         }
     }
 
@@ -148,6 +176,7 @@ impl RpcCommandProcessor {
             }
         }
     }
+<<<<<<< HEAD
 
     pub(crate) fn add_transaction_digests(&self, digests: Vec<TransactionDigest>) {
         // extend method requires mutable access to the underlying DashSet, which is not allowed by the Arc
@@ -218,6 +247,8 @@ impl RpcCommandProcessor {
             .unwrap();
         }
     }
+=======
+>>>>>>> fork/testnet
 }
 
 #[async_trait]
@@ -299,12 +330,15 @@ impl Processor for RpcCommandProcessor {
             _ => vec![config.command.clone(); config.num_threads],
         };
 
+<<<<<<< HEAD
         let command_payloads = command_payloads.into_iter().map(|command| {
             command
                 .with_repeat_interval(*repeat_interval)
                 .with_repeat_n_times(*repeat_n_times)
         });
 
+=======
+>>>>>>> fork/testnet
         let coins_and_keys = if config.signer_info.is_some() {
             Some(
                 prepare_new_signer_and_coins(
@@ -353,6 +387,7 @@ impl<'a> ProcessPayload<'a, &'a DryRun> for RpcCommandProcessor {
     }
 }
 
+<<<<<<< HEAD
 fn write_data_to_file<T: Serialize>(data: &T, file_path: &str) -> Result<(), anyhow::Error> {
     let mut path_buf = PathBuf::from(&file_path);
     path_buf.pop();
@@ -422,6 +457,8 @@ fn read_data_from_file<T: DeserializeOwned>(file_path: &str) -> Result<T, anyhow
     Ok(deserialized_data)
 }
 
+=======
+>>>>>>> fork/testnet
 async fn divide_checkpoint_tasks(
     clients: &[SuiClient],
     data: &GetCheckpoints,
@@ -462,6 +499,7 @@ async fn divide_checkpoint_tasks(
         .collect()
 }
 
+<<<<<<< HEAD
 async fn divide_query_transaction_blocks_tasks(
     data: &QueryTransactionBlocks,
     num_chunks: usize,
@@ -536,6 +574,8 @@ async fn divide_get_object_tasks(data: &GetObject, num_threads: usize) -> Vec<Co
         .collect()
 }
 
+=======
+>>>>>>> fork/testnet
 async fn prepare_new_signer_and_coins(
     client: &SuiClient,
     signer_info: &SignerInfo,
@@ -762,6 +802,7 @@ async fn split_coins(
     .chain(std::iter::once(coin_to_split))
     .collect::<Vec<_>>()
 }
+<<<<<<< HEAD
 
 pub(crate) async fn sign_and_execute(
     client: &SuiClient,
@@ -778,6 +819,22 @@ pub(crate) async fn sign_and_execute(
         .quorum_driver()
         .execute_transaction_block(
             Transaction::from_data(txn_data, Intent::sui_transaction(), vec![signature])
+=======
+
+pub(crate) async fn sign_and_execute(
+    client: &SuiClient,
+    keypair: &SuiKeyPair,
+    txn_data: TransactionData,
+    request_type: ExecuteTransactionRequestType,
+) -> SuiTransactionBlockResponse {
+    let signature =
+        Signature::new_secure(&IntentMessage::new(Intent::default(), &txn_data), keypair);
+
+    let transaction_response = match client
+        .quorum_driver()
+        .execute_transaction_block(
+            Transaction::from_data(txn_data, Intent::default(), vec![signature])
+>>>>>>> fork/testnet
                 .verify()
                 .expect("signature error"),
             SuiTransactionBlockResponseOptions::new().with_effects(),
@@ -836,6 +893,7 @@ mod tests {
 
         assert_eq!(expected, result);
     }
+<<<<<<< HEAD
 
     #[test]
     fn test_calculate_split_amounts_with_remainder() {
@@ -865,6 +923,45 @@ mod tests {
         let amount_per_coin = 100;
         let max_coins_per_txn = 5;
         let expected = vec![(500, 5)];
+=======
+
+    #[test]
+    fn test_calculate_split_amounts_with_remainder() {
+        let num_coins = 12;
+        let amount_per_coin = 100;
+        let max_coins_per_txn = 5;
+        let expected = vec![(500, 5), (500, 5), (200, 2)];
+        let result = calculate_split_amounts(num_coins, amount_per_coin, max_coins_per_txn);
+
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_calculate_split_amounts_single_coin() {
+        let num_coins = 1;
+        let amount_per_coin = 100;
+        let max_coins_per_txn = 5;
+        let expected = vec![(100, 0)];
+>>>>>>> fork/testnet
+        let result = calculate_split_amounts(num_coins, amount_per_coin, max_coins_per_txn);
+
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+<<<<<<< HEAD
+    #[should_panic(expected = "assertion failed: new_coins_per_txn > 0")]
+    fn test_calculate_split_amounts_zero_max_coins() {
+        let num_coins = 5;
+        let amount_per_coin = 100;
+        let max_coins_per_txn = 0;
+
+=======
+    fn test_calculate_split_amounts_max_coins_equals_num_coins() {
+        let num_coins = 5;
+        let amount_per_coin = 100;
+        let max_coins_per_txn = 5;
+        let expected = vec![(500, 5)];
         let result = calculate_split_amounts(num_coins, amount_per_coin, max_coins_per_txn);
 
         assert_eq!(expected, result);
@@ -877,6 +974,7 @@ mod tests {
         let amount_per_coin = 100;
         let max_coins_per_txn = 0;
 
+>>>>>>> fork/testnet
         calculate_split_amounts(num_coins, amount_per_coin, max_coins_per_txn);
     }
 }

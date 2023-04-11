@@ -704,7 +704,11 @@ async fn test_transaction(
     let response = client
         .quorum_driver()
         .execute_transaction_block(
+<<<<<<< HEAD
             Transaction::from_data(data.clone(), Intent::sui_transaction(), vec![signature])
+=======
+            Transaction::from_data(data.clone(), Intent::default(), vec![signature])
+>>>>>>> fork/testnet
                 .verify()
                 .unwrap(),
             SuiTransactionBlockResponseOptions::full_content(),

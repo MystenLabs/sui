@@ -153,10 +153,17 @@ impl MoveObjectType {
     }
 
     pub fn address(&self) -> AccountAddress {
+<<<<<<< HEAD
         match &self.0 {
             MoveObjectType_::GasCoin | MoveObjectType_::Coin(_) => SUI_FRAMEWORK_ADDRESS,
             MoveObjectType_::StakedSui => SUI_SYSTEM_ADDRESS,
             MoveObjectType_::Other(s) => s.address,
+=======
+        match self {
+            MoveObjectType::GasCoin | MoveObjectType::Coin(_) => SUI_FRAMEWORK_ADDRESS,
+            MoveObjectType::StakedSui => SUI_SYSTEM_ADDRESS,
+            MoveObjectType::Other(s) => s.address,
+>>>>>>> fork/testnet
         }
     }
 

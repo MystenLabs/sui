@@ -11,18 +11,31 @@ use jsonrpsee::RpcModule;
 use sui_json_rpc::api::{ReadApiClient, ReadApiServer};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
+<<<<<<< HEAD
     Checkpoint, CheckpointId, CheckpointPage, SuiEvent, SuiGetPastObjectRequest,
     SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions,
+=======
+    BigInt, Checkpoint, CheckpointId, CheckpointPage, SuiCheckpointSequenceNumber, SuiEvent,
+    SuiGetPastObjectRequest, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+>>>>>>> fork/testnet
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::digests::TransactionDigest;
+<<<<<<< HEAD
 use sui_types::sui_serde::BigInt;
 
 use crate::errors::IndexerError;
 use crate::store::IndexerStore;
 use crate::types::SuiTransactionBlockResponseWithOptions;
+=======
+
+use crate::errors::IndexerError;
+use crate::store::IndexerStore;
+use crate::types::{SuiTransactionBlockFullResponse, SuiTransactionBlockFullResponseWithOptions};
+>>>>>>> fork/testnet
 
 pub(crate) struct ReadApi<S> {
     fullnode: HttpClient,
@@ -53,14 +66,25 @@ impl<S: IndexerStore> ReadApi<S> {
     ) -> Result<SuiTransactionBlockResponse, IndexerError> {
         let tx = self
             .state
+<<<<<<< HEAD
             .get_transaction_by_digest(&digest.base58_encode())
             .await?;
         let sui_tx_resp = self
+=======
+            .get_transaction_by_digest(&digest.base58_encode())?;
+        let tx_full_resp: SuiTransactionBlockFullResponse = self
+>>>>>>> fork/testnet
             .state
             .compose_sui_transaction_block_response(tx, options.as_ref())
             .await?;
+<<<<<<< HEAD
         let sui_transaction_response = SuiTransactionBlockResponseWithOptions {
             response: sui_tx_resp,
+=======
+
+        let sui_transaction_response = SuiTransactionBlockFullResponseWithOptions {
+            response: tx_full_resp,
+>>>>>>> fork/testnet
             options: options.unwrap_or_default(),
         }
         .into();
@@ -98,6 +122,7 @@ impl<S: IndexerStore> ReadApi<S> {
             self.state
                 .compose_sui_transaction_block_response(tx, options.as_ref())
         });
+<<<<<<< HEAD
         let sui_tx_resp_vec = join_all(sui_tx_resp_futures)
             .await
             .into_iter()
@@ -106,6 +131,19 @@ impl<S: IndexerStore> ReadApi<S> {
     }
 
     async fn get_object_internal(
+=======
+        let tx_full_resp_vec: Vec<SuiTransactionBlockFullResponse> = join_all(tx_full_resp_futures)
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let tx_resp_vec: Vec<SuiTransactionBlockResponse> =
+            tx_full_resp_vec.into_iter().map(|tx| tx.into()).collect();
+        Ok(tx_resp_vec)
+    }
+
+    fn get_object_with_options_internal(
+>>>>>>> fork/testnet
         &self,
         object_id: ObjectID,
         options: Option<SuiObjectDataOptions>,
@@ -127,27 +165,50 @@ impl<S> ReadApiServer for ReadApi<S>
 where
     S: IndexerStore + Sync + Send + 'static,
 {
+<<<<<<< HEAD
     fn get_object(
+=======
+    async fn get_object(
+>>>>>>> fork/testnet
         &self,
         object_id: ObjectID,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiObjectResponse> {
+<<<<<<< HEAD
         if !self.migrated_methods.contains(&"get_object".into()) {
             return block_on(async { self.fullnode.get_object(object_id, options).await });
+=======
+        if !self
+            .migrated_methods
+            .contains(&"get_object_with_options".into())
+        {
+            return self.fullnode.get_object(object_id, options).await;
+>>>>>>> fork/testnet
         }
 
         Ok(block_on(self.get_object_internal(object_id, options))?)
     }
 
+<<<<<<< HEAD
     fn multi_get_objects(
+=======
+    async fn multi_get_objects(
+>>>>>>> fork/testnet
         &self,
         object_ids: Vec<ObjectID>,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiObjectResponse>> {
+<<<<<<< HEAD
         block_on(async { self.fullnode.multi_get_objects(object_ids, options).await })
     }
 
     async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt<u64>> {
+=======
+        return self.fullnode.multi_get_objects(object_ids, options).await;
+    }
+
+    async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt> {
+>>>>>>> fork/testnet
         if !self
             .migrated_methods
             .contains(&"get_total_transaction_blocks".to_string())
@@ -173,7 +234,11 @@ where
             .await?)
     }
 
+<<<<<<< HEAD
     fn multi_get_transaction_blocks(
+=======
+    async fn multi_get_transaction_blocks(
+>>>>>>> fork/testnet
         &self,
         digests: Vec<TransactionDigest>,
         options: Option<SuiTransactionBlockResponseOptions>,
@@ -182,11 +247,22 @@ where
             .migrated_methods
             .contains(&"multi_get_transaction_blocks".to_string())
         {
+<<<<<<< HEAD
             return block_on(self.fullnode.multi_get_transaction_blocks(digests, options));
         }
         Ok(block_on(
             self.multi_get_transaction_blocks_internal(&digests, options),
         )?)
+=======
+            return self
+                .fullnode
+                .multi_get_transaction_blocks(digests, options)
+                .await;
+        }
+        Ok(self
+            .multi_get_transactions_with_options_internal(&digests, options)
+            .await?)
+>>>>>>> fork/testnet
     }
 
     async fn try_get_past_object(
@@ -248,6 +324,10 @@ where
 
     fn get_events(&self, transaction_digest: TransactionDigest) -> RpcResult<Vec<SuiEvent>> {
         block_on(self.fullnode.get_events(transaction_digest))
+    }
+
+    async fn get_events(&self, transaction_digest: TransactionDigest) -> RpcResult<Vec<SuiEvent>> {
+        self.fullnode.get_events(transaction_digest).await
     }
 }
 

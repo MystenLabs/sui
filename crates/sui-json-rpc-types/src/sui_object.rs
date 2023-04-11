@@ -1,12 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+<<<<<<< HEAD
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
 
+=======
+>>>>>>> fork/testnet
 use anyhow::anyhow;
 use colored::Colorize;
 use fastcrypto::encoding::Base64;
@@ -20,6 +23,14 @@ use serde::Serialize;
 use serde_json::Value;
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
+<<<<<<< HEAD
+=======
+use std::collections::BTreeMap;
+use std::fmt;
+use std::fmt::Write;
+use std::fmt::{Display, Formatter};
+use sui_types::sui_serde::SuiStructTag;
+>>>>>>> fork/testnet
 
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{
@@ -34,6 +45,8 @@ use sui_types::object::{Data, MoveObject, Object, ObjectFormatOptions, ObjectRea
 use sui_types::sui_serde::BigInt;
 use sui_types::sui_serde::SequenceNumber as AsSequenceNumber;
 use sui_types::sui_serde::SuiStructTag;
+
+use crate::{Page, SuiMoveStruct, SuiMoveValue};
 
 use crate::{Page, SuiMoveStruct, SuiMoveValue};
 
@@ -158,12 +171,15 @@ impl TryFrom<SuiObjectResponse> for ObjectInfo {
     }
 }
 
+<<<<<<< HEAD
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq)]
 pub struct DisplayFieldsResponse {
     pub data: Option<BTreeMap<String, String>>,
     pub error: Option<SuiObjectResponseError>,
 }
 
+=======
+>>>>>>> fork/testnet
 #[serde_as]
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq)]
 #[serde(rename_all = "camelCase", rename = "ObjectData")]
@@ -1039,8 +1055,20 @@ pub struct SuiMovePackage {
     pub disassembled: BTreeMap<String, Value>,
 }
 
+<<<<<<< HEAD
 pub type QueryObjectsPage = Page<SuiObjectResponse, CheckpointedObjectID>;
 pub type ObjectsPage = Page<SuiObjectResponse, ObjectID>;
+=======
+pub type ObjectsPage = Page<SuiObjectResponse, CheckpointedObjectID>;
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Copy, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CheckpointedObjectID {
+    pub object_id: ObjectID,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub at_checkpoint: Option<CheckpointSequenceNumber>,
+}
+>>>>>>> fork/testnet
 
 #[serde_as]
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Copy, Eq, PartialEq)]
@@ -1120,6 +1148,57 @@ impl SuiObjectDataFilter {
             SuiObjectDataFilter::MatchAll(filters) => !filters.iter().any(|f| !f.matches(object)),
             SuiObjectDataFilter::MatchAny(filters) => filters.iter().any(|f| f.matches(object)),
             SuiObjectDataFilter::MatchNone(filters) => !filters.iter().any(|f| f.matches(object)),
+            SuiObjectDataFilter::StructType(s) => {
+                let obj_tag: StructTag = match &object.type_ {
+                    ObjectType::Package => return false,
+                    ObjectType::Struct(s) => s.clone().into(),
+                };
+                // If people do not provide type_params, we will match all type_params
+                // e.g. `0x2::coin::Coin` can match `0x2::coin::Coin<0x2::sui::SUI>`
+                if !s.type_params.is_empty() && s.type_params != obj_tag.type_params {
+                    false
+                } else {
+                    obj_tag.address == s.address
+                        && obj_tag.module == s.module
+                        && obj_tag.name == s.name
+                }
+            }
+            SuiObjectDataFilter::MoveModule { package, module } => {
+                matches!(&object.type_, ObjectType::Struct(s) if &ObjectID::from(s.address()) == package
+                        && s.module() == module.as_ident_str())
+            }
+            SuiObjectDataFilter::Package(p) => {
+                matches!(&object.type_, ObjectType::Struct(s) if &ObjectID::from(s.address()) == p)
+            }
+            SuiObjectDataFilter::AddressOwner(a) => {
+                matches!(object.owner, Owner::AddressOwner(addr) if &addr == a)
+            }
+            SuiObjectDataFilter::ObjectOwner(o) => {
+                matches!(object.owner, Owner::ObjectOwner(addr) if addr == SuiAddress::from(*o))
+            }
+            SuiObjectDataFilter::ObjectId(id) => &object.object_id == id,
+            SuiObjectDataFilter::ObjectIds(ids) => ids.contains(&object.object_id),
+            SuiObjectDataFilter::Version(v) => object.version.value() == *v,
+        }
+    }
+}
+
+impl SuiObjectDataFilter {
+    pub fn gas_coin() -> Self {
+        Self::StructType(GasCoin::type_())
+    }
+
+    pub fn and(self, other: Self) -> Self {
+        Self::MatchAll(vec![self, other])
+    }
+    pub fn or(self, other: Self) -> Self {
+        Self::MatchAny(vec![self, other])
+    }
+
+    pub fn matches(&self, object: &ObjectInfo) -> bool {
+        match self {
+            SuiObjectDataFilter::MatchAll(filters) => !filters.iter().any(|f| !f.matches(object)),
+            SuiObjectDataFilter::MatchAny(filters) => filters.iter().any(|f| f.matches(object)),
             SuiObjectDataFilter::StructType(s) => {
                 let obj_tag: StructTag = match &object.type_ {
                     ObjectType::Package => return false,

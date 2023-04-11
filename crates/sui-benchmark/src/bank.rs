@@ -134,6 +134,7 @@ impl BenchmarkBank {
         // TODO: Instead of splitting the coin and then using pay tx to transfer it to recipients,
         // we can do both in one tx with pay_sui which will split the coin out for us before
         // transferring it to recipients
+<<<<<<< HEAD
         let mut updated_pay_coins = Vec::new();
         let mut transferred_coins: Result<Vec<Gas>> = Err(Error::msg("Failed to split coin"));
         debug!(
@@ -229,6 +230,71 @@ impl BenchmarkBank {
                 .map_err(Error::msg)?;
 
             updated_pay_coins.push((
+=======
+        let verified_tx =
+            self.make_split_coin_tx(split_amounts.clone(), Some(gas_price), &self.primary_gas.2)?;
+        let effects = self
+            .proxy
+            .execute_transaction_block(verified_tx.into())
+            .await?;
+        let updated_gas = effects
+            .mutated()
+            .into_iter()
+            .find(|(k, _)| k.0 == self.primary_gas.0 .0)
+            .ok_or("Input gas missing in the effects")
+            .map_err(Error::msg)?;
+        let created_coins: Vec<ObjectRef> = effects.created().into_iter().map(|c| c.0).collect();
+        assert_eq!(created_coins.len(), split_amounts.len());
+        let updated_coin = effects
+            .mutated()
+            .into_iter()
+            .find(|(k, _)| k.0 == self.pay_coin.0 .0)
+            .ok_or("Input gas missing in the effects")
+            .map_err(Error::msg)?;
+        let recipient_addresses: Vec<SuiAddress> = coin_configs.iter().map(|g| g.address).collect();
+        let verified_tx = make_pay_tx(
+            created_coins,
+            self.primary_gas.1,
+            recipient_addresses,
+            split_amounts,
+            updated_gas.0,
+            &self.primary_gas.2,
+            Some(gas_price),
+        )?;
+        let effects = self
+            .proxy
+            .execute_transaction_block(verified_tx.into())
+            .await?;
+        let address_map: HashMap<SuiAddress, Arc<AccountKeyPair>> = coin_configs
+            .iter()
+            .map(|c| (c.address, c.keypair.clone()))
+            .collect();
+        let transferred_coins: Result<Vec<Gas>> = effects
+            .created()
+            .into_iter()
+            .map(|c| {
+                let address = c.1.get_owner_address()?;
+                let keypair = address_map
+                    .get(&address)
+                    .ok_or("Owner address missing in the address map")
+                    .map_err(Error::msg)?;
+                Ok((c.0, address, keypair.clone()))
+            })
+            .collect();
+        let updated_gas = effects
+            .mutated()
+            .into_iter()
+            .find(|(k, _)| k.0 == self.primary_gas.0 .0)
+            .ok_or("Input gas missing in the effects")
+            .map_err(Error::msg)?;
+        Ok((
+            (
+                updated_gas.0,
+                updated_gas.1.get_owner_address()?,
+                self.primary_gas.2.clone(),
+            ),
+            (
+>>>>>>> fork/testnet
                 updated_coin.0,
                 updated_coin.1.get_owner_address()?,
                 self.primary_gas.2.clone(),

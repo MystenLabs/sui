@@ -38,7 +38,12 @@ use types::{
     error::{AcceptNotification, DagError, DagResult},
     metered_channel::Sender,
     Certificate, CertificateAPI, CertificateDigest, Header, HeaderAPI, PrimaryToPrimaryClient,
+<<<<<<< HEAD
     Round, SendCertificateRequest, SendCertificateResponse, WorkerSynchronizeMessage,
+=======
+    PrimaryToWorkerClient, Round, SendCertificateRequest, SendCertificateResponse,
+    WorkerSynchronizeMessage,
+>>>>>>> fork/testnet
 };
 
 use crate::{aggregators::CertificatesAggregator, metrics::PrimaryMetrics, CHANNEL_CAPACITY};
@@ -615,6 +620,10 @@ impl Synchronizer {
         // We can thus continue the processing of the certificate without blocking on batch synchronization.
         let inner = self.inner.clone();
         let header = certificate.header().clone();
+<<<<<<< HEAD
+=======
+        let sync_network = network.clone();
+>>>>>>> fork/testnet
         let max_age = self.inner.gc_depth.saturating_sub(1);
         self.inner.batch_tasks.lock().spawn(async move {
             Synchronizer::sync_batches_internal(inner, &header, max_age, true).await

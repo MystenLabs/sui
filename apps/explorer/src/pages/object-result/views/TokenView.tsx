@@ -267,7 +267,11 @@ export function TokenView({ data }: { data: DataType }) {
                 </div>
             </div>
             <div>
+<<<<<<< HEAD
                 <h2 className={styles.header}>Transaction Blocks</h2>
+=======
+                <h2 className={styles.header}>Transactions</h2>
+>>>>>>> fork/testnet
                 <TransactionsForAddress address={data.id} type="object" />
             </div>
         </div>

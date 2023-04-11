@@ -27,6 +27,10 @@ const getResultsForTransaction = async (
     query: string
 ) => {
     if (!isValidTransactionDigest(query)) return null;
+<<<<<<< HEAD
+=======
+
+>>>>>>> fork/testnet
     const txdata = await rpc.getTransactionBlock({ digest: query });
     return {
         label: 'transaction',

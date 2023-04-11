@@ -7,7 +7,11 @@ use jsonrpsee_proc_macros::rpc;
 use sui_json_rpc_types::{DelegatedStake, SuiCommittee};
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SuiAddress};
+<<<<<<< HEAD
 use sui_types::sui_serde::BigInt;
+=======
+use sui_types::committee::EpochId;
+>>>>>>> fork/testnet
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 
 #[open_rpc(namespace = "suix", tag = "Governance Read API")]

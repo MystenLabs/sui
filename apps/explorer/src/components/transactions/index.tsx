@@ -28,10 +28,15 @@ export function Transactions({
 
     const rpc = useRpcClient();
 
+<<<<<<< HEAD
     const countQuery = useQuery(
         ['transactions', 'count'],
         () => rpc.getTotalTransactionBlocks(),
         { cacheTime: 24 * 60 * 60 * 1000, staleTime: Infinity, retry: false }
+=======
+    const countQuery = useQuery(['transactions', 'count'], () =>
+        rpc.getTotalTransactionBlocks()
+>>>>>>> fork/testnet
     );
 
     const pagination = usePaginationStack();

@@ -130,6 +130,7 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
 
         /* (serialized, transaction, output_cert) */
         let mut transactions = vec![];
+<<<<<<< HEAD
         let timestamp = consensus_output.sub_dag.commit_timestamp();
         let leader_author = consensus_output.sub_dag.leader.header().author();
 
@@ -146,6 +147,10 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
         } else {
             timestamp
         };
+=======
+        // Narwhal enforces some invariants on the header.created_at, so we can use it as a timestamp
+        let timestamp = *consensus_output.sub_dag.leader.header().created_at();
+>>>>>>> fork/testnet
 
         let prologue_transaction = self.consensus_commit_prologue_transaction(round, timestamp);
         transactions.push((
@@ -165,7 +170,16 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
 
         self.metrics
             .consensus_committed_subdags
+<<<<<<< HEAD
             .with_label_values(&[&leader_author.to_string()])
+=======
+            .with_label_values(&[&consensus_output
+                .sub_dag
+                .leader
+                .header()
+                .author()
+                .to_string()])
+>>>>>>> fork/testnet
             .inc();
         for (cert, batches) in consensus_output.batches {
             let author = cert.header().author();

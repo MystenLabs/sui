@@ -57,4 +57,8 @@ function TransactionBlocksPage() {
     );
 }
 
+<<<<<<< HEAD
 export default TransactionBlocksPage;
+=======
+export default memo(TransactionBlocksPage);
+>>>>>>> fork/testnet

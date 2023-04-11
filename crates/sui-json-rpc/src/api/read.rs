@@ -5,6 +5,7 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 
 use sui_json_rpc_types::{
+<<<<<<< HEAD
     Checkpoint, CheckpointId, CheckpointPage, SuiEvent, SuiGetPastObjectRequest,
     SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions,
@@ -12,6 +13,14 @@ use sui_json_rpc_types::{
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::sui_serde::BigInt;
+=======
+    BigInt, Checkpoint, CheckpointId, CheckpointPage, SuiCheckpointSequenceNumber, SuiEvent,
+    SuiGetPastObjectRequest, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+};
+use sui_open_rpc_macros::open_rpc;
+use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest};
+>>>>>>> fork/testnet
 
 #[open_rpc(namespace = "sui", tag = "Read API")]
 #[rpc(server, client, namespace = "sui")]
@@ -29,8 +38,13 @@ pub trait ReadApi {
     /// Returns an ordered list of transaction responses
     /// The method will throw an error if the input contains any duplicate or
     /// the input size exceeds QUERY_MAX_RESULT_LIMIT
+<<<<<<< HEAD
     #[method(name = "multiGetTransactionBlocks", blocking)]
     fn multi_get_transaction_blocks(
+=======
+    #[method(name = "multiGetTransactionBlocks")]
+    async fn multi_get_transaction_blocks(
+>>>>>>> fork/testnet
         &self,
         /// A list of transaction digests.
         digests: Vec<TransactionDigest>,
@@ -39,8 +53,13 @@ pub trait ReadApi {
     ) -> RpcResult<Vec<SuiTransactionBlockResponse>>;
 
     /// Return the object information for a specified object
+<<<<<<< HEAD
     #[method(name = "getObject", blocking)]
     fn get_object(
+=======
+    #[method(name = "getObject")]
+    async fn get_object(
+>>>>>>> fork/testnet
         &self,
         /// the ID of the queried object
         object_id: ObjectID,
@@ -49,8 +68,13 @@ pub trait ReadApi {
     ) -> RpcResult<SuiObjectResponse>;
 
     /// Return the object data for a list of objects
+<<<<<<< HEAD
     #[method(name = "multiGetObjects", blocking)]
     fn multi_get_objects(
+=======
+    #[method(name = "multiGetObjects")]
+    async fn multi_get_objects(
+>>>>>>> fork/testnet
         &self,
         /// the IDs of the queried objects
         object_ids: Vec<ObjectID>,
@@ -107,8 +131,13 @@ pub trait ReadApi {
     ) -> RpcResult<CheckpointPage>;
 
     /// Return transaction events.
+<<<<<<< HEAD
     #[method(name = "getEvents", blocking)]
     fn get_events(
+=======
+    #[method(name = "getEvents")]
+    async fn get_events(
+>>>>>>> fork/testnet
         &self,
         /// the event query criteria.
         transaction_digest: TransactionDigest,
@@ -116,9 +145,18 @@ pub trait ReadApi {
 
     /// Return the total number of transactions known to the server.
     #[method(name = "getTotalTransactionBlocks")]
+<<<<<<< HEAD
     async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt<u64>>;
 
     /// Return the sequence number of the latest checkpoint that has been executed
     #[method(name = "getLatestCheckpointSequenceNumber")]
     async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<BigInt<u64>>;
+=======
+    async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt>;
+
+    /// Return the sequence number of the latest checkpoint that has been executed
+    #[method(name = "getLatestCheckpointSequenceNumber")]
+    async fn get_latest_checkpoint_sequence_number(&self)
+        -> RpcResult<SuiCheckpointSequenceNumber>;
+>>>>>>> fork/testnet
 }

@@ -11,6 +11,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_with::serde_as;
 
+<<<<<<< HEAD
 #[serde_as]
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize)]
 pub enum TransactionFilter {
@@ -20,6 +21,16 @@ pub enum TransactionFilter {
         #[serde_as(as = "Readable<BigInt<u64>, _>")]
         CheckpointSequenceNumber,
     ),
+=======
+use crate::base_types::SuiAddress;
+use crate::messages_checkpoint::CheckpointSequenceNumber;
+use crate::ObjectID;
+
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize)]
+pub enum TransactionFilter {
+    /// Query by checkpoint.
+    Checkpoint(CheckpointSequenceNumber),
+>>>>>>> fork/testnet
     /// Query by move function.
     MoveFunction {
         package: ObjectID,

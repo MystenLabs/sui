@@ -22,7 +22,11 @@ use sui_core::event_handler::EventHandler;
 use sui_json_rpc::api::{GovernanceReadApiClient, ReadApiClient};
 use sui_json_rpc_types::{
     OwnedObjectRef, SuiGetPastObjectRequest, SuiObjectData, SuiObjectDataOptions, SuiRawData,
+<<<<<<< HEAD
     SuiTransactionBlockDataAPI, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
+=======
+    SuiTransactionBlockDataAPI, SuiTransactionBlockEffectsAPI,
+>>>>>>> fork/testnet
 };
 use sui_sdk::error::Error;
 use sui_types::base_types::{ObjectID, SequenceNumber};
@@ -42,7 +46,11 @@ use crate::store::{
     CheckpointData, IndexerStore, TemporaryCheckpointStore, TemporaryEpochStore,
     TransactionObjectChanges,
 };
+<<<<<<< HEAD
 use crate::types::{CheckpointTransactionBlockResponse, TemporaryTransactionBlockResponseStore};
+=======
+use crate::types::SuiTransactionBlockFullResponse;
+>>>>>>> fork/testnet
 use crate::utils::multi_get_full_transactions;
 use crate::IndexerConfig;
 
@@ -205,6 +213,7 @@ where
         // We will start with MAX_PARALLEL_DOWNLOADS, and adjust if no more checkpoints are available.
         let mut current_parallel_downloads = MAX_PARALLEL_DOWNLOADS;
         loop {
+<<<<<<< HEAD
             let download_futures = (next_cursor_sequence_number
                 ..next_cursor_sequence_number + current_parallel_downloads as i64)
                 .into_iter()
@@ -262,6 +271,19 @@ where
                 .map_err(|e| {
                     error!("Failed to send indexed checkpoint to checkpoint commit handler with error: {}", e.to_string());
                     IndexerError::MpscChannelError(e.to_string())
+=======
+            // Download checkpoint data
+            self.metrics.total_checkpoint_requested.inc();
+            let request_guard = self.metrics.fullnode_download_latency.start_timer();
+            let checkpoint = self
+                .download_checkpoint_data(next_cursor_sequence_number as u64)
+                .await.map_err(|e| {
+                    error!(
+                        "Failed to download checkpoint data with checkpoint sequence number {} and error {:?}, retrying...",
+                        next_cursor_sequence_number, e
+                    );
+                    e
+>>>>>>> fork/testnet
                 })?;
             }
             drop(object_sender_guard);
@@ -311,6 +333,7 @@ where
 
             // Index checkpoint data
             let index_guard = self.metrics.checkpoint_index_latency.start_timer();
+<<<<<<< HEAD
             let indexed_checkpoint_epoch_vec = join_all(downloaded_checkpoints.iter().map(
                 |downloaded_checkpoint| async {
                     self.index_checkpoint(downloaded_checkpoint).await
@@ -371,6 +394,44 @@ where
                     drop(epoch_sender_guard);
                 }
             }
+=======
+            let (indexed_checkpoint, indexed_epoch) = self.index_checkpoint(&checkpoint)?;
+            index_guard.stop_and_record();
+
+            // Write checkpoint to DB
+            let tx_count = indexed_checkpoint.transactions.len();
+            let object_count = indexed_checkpoint.objects_changes.len();
+
+            let checkpoint_db_guard = self.metrics.checkpoint_db_commit_latency.start_timer();
+            self.state.persist_checkpoint(&indexed_checkpoint)?;
+            checkpoint_db_guard.stop_and_record();
+
+            self.metrics.total_checkpoint_committed.inc();
+            self.metrics
+                .total_transaction_committed
+                .inc_by(tx_count as u64);
+            info!(
+                "Checkpoint {} committed with {tx_count} transactions and {object_count} object changes.",
+                next_cursor_sequence_number
+            );
+
+            // Write epoch to DB if needed
+            if let Some(indexed_epoch) = indexed_epoch {
+                let epoch_db_guard = self.metrics.epoch_db_commit_latency.start_timer();
+                self.state.persist_epoch(&indexed_epoch)?;
+                epoch_db_guard.stop_and_record();
+                self.metrics.total_epoch_committed.inc();
+            }
+
+            // Process websocket subscription
+            let ws_guard = self.metrics.subscription_process_latency.start_timer();
+            for tx in &checkpoint.transactions {
+                self.event_handler
+                    .process_events(&tx.effects, &tx.events)
+                    .await?;
+            }
+            ws_guard.stop_and_record();
+>>>>>>> fork/testnet
 
             // NOTE(gegaowp): today ws processing actually will block next checkpoint download,
             // we can pipeline this as well in the future if needed
@@ -944,7 +1005,11 @@ where
     }
 
     fn index_packages(
+<<<<<<< HEAD
         transactions: &[CheckpointTransactionBlockResponse],
+=======
+        transactions: &[SuiTransactionBlockFullResponse],
+>>>>>>> fork/testnet
         changed_objects: &[(ObjectStatus, SuiObjectData)],
     ) -> Result<Vec<Package>, IndexerError> {
         let object_map = changed_objects

@@ -19,6 +19,12 @@ In [PR 9618](https://github.com/MystenLabs/sui/pull/9618), the `sui-framework` c
 - `sui-system` contains modules that were in the `sui-framework/sources/governance` directory, including all the validator management and staking related functions, published at `0x3` with named address `sui_system`.
 - `sui-framework` contains all other modules that were not in the `governance` folder. The framework provides library and utility modules for Sui Move developers. It is still published at `0x2` with named address `sui`.
 - `move-stdlib` contains a copy of the Move standard library that used to be in the `sui-framework/deps` folder. It is still published at `0x1` with named address `std`.
+<<<<<<< HEAD
+=======
+- `sui-system` contains modules that were in the `sui-framework/sources/governance` directory, including all the validator management and staking related functions, published at `0x3` with named address `sui_system`.
+- `sui-framework` contains all other modules that were not in the `governance` folder. The framework provides library and utility modules for Sui Move developers. It is still published at `0x2` with named address `sui`.
+- `move-stdlib` contains a copy of the Move standard library that used to be in the `sui-framework/deps` folder. It is still published at `0x1` with named address `std`.
+>>>>>>> fork/testnet
 
 If you develop Sui Move code depending on `sui-framework`, the `Move.toml` file of your Move package has to change to reflect the path changes:
 

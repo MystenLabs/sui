@@ -5,7 +5,10 @@ use crate::api::{
     CoinReadApiClient, GovernanceReadApiClient, IndexerApiClient, ReadApiClient,
     TransactionBuilderClient, WriteApiClient,
 };
+<<<<<<< HEAD
 use std::collections::BTreeMap;
+=======
+>>>>>>> fork/testnet
 use std::path::Path;
 #[cfg(not(msim))]
 use std::str::FromStr;
@@ -114,7 +117,11 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
     let gas = objects.clone().last().unwrap().object().unwrap().object_id;
 
     let transaction_bytes: TransactionBlockBytes = http_client
+<<<<<<< HEAD
         .transfer_object(*address, obj, Some(gas), 10_000.into(), *address)
+=======
+        .transfer_object(*address, obj, Some(gas), 1000, *address)
+>>>>>>> fork/testnet
         .await?;
 
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
@@ -137,9 +144,20 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
         )
         .await?;
 
+<<<<<<< HEAD
     assert_same_object_changes_ignoring_version_and_digest(
         dryrun_response.object_changes,
         tx_response.object_changes.unwrap(),
+=======
+    let SuiTransactionBlockResponse {
+        effects,
+        object_changes,
+        ..
+    } = tx_response;
+    assert_eq!(
+        dryrun_response.effects.transaction_digest(),
+        effects.unwrap().transaction_digest()
+>>>>>>> fork/testnet
     );
     Ok(())
 }
@@ -669,6 +687,7 @@ async fn test_staking() -> Result<(), anyhow::Error> {
     let coin = objects.data[0].object()?.object_id;
     // Delegate some SUI
     let transaction_bytes: TransactionBlockBytes = http_client
+<<<<<<< HEAD
         .request_add_stake(
             *address,
             vec![coin],
@@ -677,6 +696,9 @@ async fn test_staking() -> Result<(), anyhow::Error> {
             None,
             100_000_000.into(),
         )
+=======
+        .request_add_stake(*address, vec![coin], Some(1000000), validator, None, 10000)
+>>>>>>> fork/testnet
         .await?;
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
@@ -899,11 +921,15 @@ async fn test_staking_multiple_coins() -> Result<(), anyhow::Error> {
         .execute_transaction_block(
             tx_bytes,
             signatures,
+<<<<<<< HEAD
             Some(
                 SuiTransactionBlockResponseOptions::new()
                     .with_balance_changes()
                     .with_input(),
             ),
+=======
+            Some(SuiTransactionBlockResponseOptions::new().with_balance_changes()),
+>>>>>>> fork/testnet
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;

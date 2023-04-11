@@ -10,17 +10,25 @@ use std::str::FromStr;
 use fastcrypto::encoding::Hex;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::language_storage::{StructTag, TypeTag};
+<<<<<<< HEAD
 use schemars::JsonSchema;
+=======
+>>>>>>> fork/testnet
 use serde;
 use serde::de::{Deserializer, Error};
 use serde::ser::{Error as SerError, Serializer};
 use serde::{Deserialize, Serialize};
+<<<<<<< HEAD
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
 use serde_with::{Bytes, DeserializeAs, SerializeAs};
 
 use sui_protocol_config::ProtocolVersion;
 
+=======
+use serde_with::{Bytes, DeserializeAs, SerializeAs};
+
+>>>>>>> fork/testnet
 use crate::{parse_sui_struct_tag, parse_sui_type_tag};
 
 #[inline]
@@ -227,6 +235,7 @@ impl<'de> DeserializeAs<'de, TypeTag> for SuiTypeTag {
         parse_sui_type_tag(&s).map_err(D::Error::custom)
     }
 }
+<<<<<<< HEAD
 
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Copy, JsonSchema)]
@@ -348,3 +357,5 @@ impl<'de> DeserializeAs<'de, ProtocolVersion> for AsProtocolVersion {
         Ok(ProtocolVersion::from(*b))
     }
 }
+=======
+>>>>>>> fork/testnet

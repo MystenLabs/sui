@@ -580,8 +580,13 @@ impl ProtocolConfig {
         }
     }
 
+<<<<<<< HEAD
     pub fn package_upgrades_supported(&self) -> bool {
         self.feature_flags.package_upgrades
+=======
+    pub fn check_commit_root_state_digest_supported(&self) -> bool {
+        self.feature_flags.commit_root_state_digest
+>>>>>>> fork/testnet
     }
 
     pub fn check_commit_root_state_digest_supported(&self) -> bool {

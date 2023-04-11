@@ -6,6 +6,7 @@ use std::str::FromStr;
 use diesel::prelude::*;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::identifier::Identifier;
+<<<<<<< HEAD
 use move_core_types::value::MoveStruct;
 
 use sui_json_rpc_types::{SuiEvent, SuiMoveStruct};
@@ -16,6 +17,14 @@ use sui_types::parse_sui_struct_tag;
 
 use crate::errors::IndexerError;
 use crate::schema::events;
+=======
+use serde_json::Value;
+use std::str::FromStr;
+use sui_json_rpc_types::SuiEvent;
+use sui_types::base_types::TransactionDigest;
+use sui_types::event::EventID;
+use sui_types::parse_sui_struct_tag;
+>>>>>>> fork/testnet
 
 #[derive(Queryable, Insertable, Debug, Clone)]
 #[diesel(table_name = events)]
@@ -77,7 +86,11 @@ impl Event {
             package_id,
             transaction_module: Identifier::from_str(&self.module)?,
             sender,
+<<<<<<< HEAD
             type_,
+=======
+            type_: parse_sui_struct_tag(&self.event_type)?,
+>>>>>>> fork/testnet
             bcs: self.event_bcs,
             parsed_json,
             timestamp_ms: self.event_time_ms.map(|t| t as u64),

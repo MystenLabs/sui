@@ -15,18 +15,35 @@ use crate::errors::IndexerError;
 use crate::models::addresses::Address;
 use crate::models::transaction_index::{InputObject, MoveCall, Recipient};
 
+<<<<<<< HEAD
 pub struct FastPathTransactionBlockResponse {
     pub digest: TransactionDigest,
+=======
+#[derive(Debug, Clone)]
+pub struct SuiTransactionBlockFullResponse {
+    pub digest: TransactionDigest,
+    /// Transaction input data
+>>>>>>> fork/testnet
     pub transaction: SuiTransactionBlock,
     pub raw_transaction: Vec<u8>,
     pub effects: SuiTransactionBlockEffects,
     pub events: SuiTransactionBlockEvents,
+<<<<<<< HEAD
     pub object_changes: Vec<ObjectChange>,
     pub balance_changes: Vec<BalanceChange>,
+=======
+    pub object_changes: Option<Vec<ObjectChange>>,
+    pub balance_changes: Option<Vec<BalanceChange>>,
+    pub timestamp_ms: u64,
+>>>>>>> fork/testnet
     pub confirmed_local_execution: Option<bool>,
 }
 
+<<<<<<< HEAD
 impl TryFrom<SuiTransactionBlockResponse> for FastPathTransactionBlockResponse {
+=======
+impl TryFrom<SuiTransactionBlockResponse> for SuiTransactionBlockFullResponse {
+>>>>>>> fork/testnet
     type Error = anyhow::Error;
 
     fn try_from(response: SuiTransactionBlockResponse) -> Result<Self, Self::Error> {
@@ -46,43 +63,76 @@ impl TryFrom<SuiTransactionBlockResponse> for FastPathTransactionBlockResponse {
 
         let transaction = transaction.ok_or_else(|| {
             anyhow::anyhow!(
+<<<<<<< HEAD
                 "Transaction is None in FastPathTransactionBlockResponse of digest {:?}.",
+=======
+                "Transaction is None in SuiTransactionBlockFullResponse of digest {:?}.",
+>>>>>>> fork/testnet
                 digest
             )
         })?;
         let effects = effects.ok_or_else(|| {
             anyhow::anyhow!(
+<<<<<<< HEAD
                 "Effects is None in FastPathTransactionBlockResponse of digest {:?}.",
+=======
+                "Effects is None in SuiTransactionBlockFullResponse of digest {:?}.",
+>>>>>>> fork/testnet
                 digest
             )
         })?;
         let events = events.ok_or_else(|| {
             anyhow::anyhow!(
+<<<<<<< HEAD
                 "Events is None in FastPathTransactionBlockResponse of digest {:?}.",
+=======
+                "Events is None in SuiTransactionBlockFullResponse of digest {:?}.",
+>>>>>>> fork/testnet
                 digest
             )
         })?;
         let object_changes = object_changes.ok_or_else(|| {
             anyhow::anyhow!(
+<<<<<<< HEAD
                 "ObjectChanges is None in FastPathTransactionBlockResponse of digest {:?}.",
+=======
+                "TimestampMs is None in SuiTransactionBlockFullResponse of digest {:?}.",
+>>>>>>> fork/testnet
                 digest
             )
         })?;
         let balance_changes = balance_changes.ok_or_else(|| {
             anyhow::anyhow!(
+<<<<<<< HEAD
                 "BalanceChanges is None in FastPathTransactionBlockResponse of digest {:?}.",
                 digest
             )
         })?;
+=======
+                "Checkpoint is None in SuiTransactionBlockFullResponse of digest {:?}.",
+                digest
+            )
+        })?;
+        if raw_transaction.is_empty() {
+            return Err(anyhow::anyhow!(
+                "Unexpected empty RawTransaction in SuiTransactionBlockFullResponse of digest {:?}.",
+                digest
+            ));
+        }
+>>>>>>> fork/testnet
         if !errors.is_empty() {
             return Err(anyhow::anyhow!(
-                "Errors in SuiTransactionFullResponse of digest {:?}: {:?}",
+                "Errors in SuiTransactionBlockFullResponse of digest {:?}: {:?}",
                 digest,
                 errors
             ));
         }
 
+<<<<<<< HEAD
         Ok(FastPathTransactionBlockResponse {
+=======
+        Ok(SuiTransactionBlockFullResponse {
+>>>>>>> fork/testnet
             digest,
             transaction,
             raw_transaction,
@@ -95,6 +145,7 @@ impl TryFrom<SuiTransactionBlockResponse> for FastPathTransactionBlockResponse {
     }
 }
 
+<<<<<<< HEAD
 #[derive(Debug, Clone)]
 pub struct CheckpointTransactionBlockResponse {
     pub digest: TransactionDigest,
@@ -113,6 +164,11 @@ impl TryFrom<SuiTransactionBlockResponse> for CheckpointTransactionBlockResponse
 
     fn try_from(response: SuiTransactionBlockResponse) -> Result<Self, Self::Error> {
         let SuiTransactionBlockResponse {
+=======
+impl From<SuiTransactionBlockFullResponse> for SuiTransactionBlockResponse {
+    fn from(response: SuiTransactionBlockFullResponse) -> Self {
+        let SuiTransactionBlockFullResponse {
+>>>>>>> fork/testnet
             digest,
             transaction,
             raw_transaction,
@@ -126,6 +182,7 @@ impl TryFrom<SuiTransactionBlockResponse> for CheckpointTransactionBlockResponse
             errors,
         } = response;
 
+<<<<<<< HEAD
         let transaction = transaction.ok_or_else(|| {
             anyhow::anyhow!(
                 "Transaction is None in SuiTransactionBlockFullResponse of digest {:?}.",
@@ -171,6 +228,9 @@ impl TryFrom<SuiTransactionBlockResponse> for CheckpointTransactionBlockResponse
         }
 
         Ok(CheckpointTransactionBlockResponse {
+=======
+        SuiTransactionBlockResponse {
+>>>>>>> fork/testnet
             digest,
             transaction,
             raw_transaction,
@@ -178,12 +238,56 @@ impl TryFrom<SuiTransactionBlockResponse> for CheckpointTransactionBlockResponse
             events,
             timestamp_ms,
             confirmed_local_execution,
+<<<<<<< HEAD
             checkpoint,
         })
     }
 }
 
 impl CheckpointTransactionBlockResponse {
+=======
+            checkpoint: Some(checkpoint),
+            errors: vec![],
+        }
+    }
+}
+
+pub struct SuiTransactionBlockFullResponseWithOptions {
+    pub response: SuiTransactionBlockFullResponse,
+    pub options: SuiTransactionBlockResponseOptions,
+}
+
+impl From<SuiTransactionBlockFullResponseWithOptions> for SuiTransactionBlockResponse {
+    fn from(value: SuiTransactionBlockFullResponseWithOptions) -> Self {
+        let SuiTransactionBlockFullResponseWithOptions { response, options } = value;
+
+        SuiTransactionBlockResponse {
+            digest: response.digest,
+            transaction: options.show_input.then_some(response.transaction),
+            raw_transaction: options
+                .show_raw_input
+                .then_some(response.raw_transaction)
+                .unwrap_or_default(),
+            effects: options.show_effects.then_some(response.effects),
+            events: options.show_events.then_some(response.events),
+            object_changes: options
+                .show_object_changes
+                .then_some(response.object_changes)
+                .unwrap_or_default(),
+            balance_changes: options
+                .show_balance_changes
+                .then_some(response.balance_changes)
+                .unwrap_or_default(),
+            timestamp_ms: Some(response.timestamp_ms),
+            confirmed_local_execution: response.confirmed_local_execution,
+            checkpoint: Some(response.checkpoint),
+            errors: vec![],
+        }
+    }
+}
+
+impl SuiTransactionBlockFullResponse {
+>>>>>>> fork/testnet
     pub fn get_input_objects(&self, epoch: u64) -> Result<Vec<InputObject>, IndexerError> {
         let raw_tx = self.raw_transaction.clone();
         let sender_signed_data: SenderSignedData = bcs::from_bytes(&raw_tx).map_err(|err| {

@@ -58,6 +58,7 @@ describe('offline build', () => {
     await tx.build();
   });
 
+<<<<<<< HEAD
   it('breaks reference equality', () => {
     const tx = setup();
     const tx2 = new TransactionBlock(tx);
@@ -76,6 +77,10 @@ describe('offline build', () => {
 
   it('can determine the type of inputs for built-in transactions', async () => {
     const tx = setup();
+=======
+  it('can determine the type of inputs for built-in transactions', async () => {
+    const tx = setup();
+>>>>>>> fork/testnet
     tx.add(Transactions.SplitCoins(tx.gas, [tx.pure(100)]));
     await tx.build();
   });

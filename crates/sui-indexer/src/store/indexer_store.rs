@@ -7,8 +7,12 @@ use prometheus::Histogram;
 use move_core_types::identifier::Identifier;
 use sui_json_rpc_types::{
     Checkpoint as RpcCheckpoint, CheckpointId, EpochInfo, EventFilter, EventPage, MoveCallMetrics,
+<<<<<<< HEAD
     NetworkMetrics, SuiObjectData, SuiObjectDataFilter, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions,
+=======
+    NetworkMetrics, SuiObjectData, SuiObjectDataFilter, SuiTransactionBlockResponseOptions,
+>>>>>>> fork/testnet
 };
 use sui_types::base_types::{EpochId, ObjectID, SequenceNumber, SuiAddress, VersionNumber};
 use sui_types::digests::CheckpointDigest;
@@ -28,7 +32,11 @@ use crate::models::packages::Package;
 use crate::models::system_state::{DBSystemStateSummary, DBValidatorSummary};
 use crate::models::transaction_index::{InputObject, MoveCall, Recipient};
 use crate::models::transactions::Transaction;
+<<<<<<< HEAD
 use crate::types::CheckpointTransactionBlockResponse;
+=======
+use crate::types::SuiTransactionBlockFullResponse;
+>>>>>>> fork/testnet
 
 #[async_trait]
 pub trait IndexerStore {
@@ -84,8 +92,13 @@ pub trait IndexerStore {
     async fn compose_sui_transaction_block_response(
         &self,
         tx: Transaction,
+<<<<<<< HEAD
         options: Option<&SuiTransactionBlockResponseOptions>,
     ) -> Result<SuiTransactionBlockResponse, IndexerError>;
+=======
+        options: Option<SuiTransactionBlockResponseOptions>,
+    ) -> Result<SuiTransactionBlockFullResponse, IndexerError>;
+>>>>>>> fork/testnet
 
     async fn get_all_transaction_page(
         &self,
@@ -94,7 +107,19 @@ pub trait IndexerStore {
         is_descending: bool,
     ) -> Result<Vec<Transaction>, IndexerError>;
 
+<<<<<<< HEAD
     async fn get_transaction_page_by_checkpoint(
+=======
+    fn get_transaction_digest_page_by_checkpoint(
+        &self,
+        checkpoint_sequence_number: i64,
+        start_sequence: Option<i64>,
+        limit: usize,
+        is_descending: bool,
+    ) -> Result<Vec<String>, IndexerError>;
+
+    fn get_transaction_digest_page_by_transaction_kind(
+>>>>>>> fork/testnet
         &self,
         checkpoint_sequence_number: i64,
         start_sequence: Option<i64>,
@@ -232,7 +257,11 @@ pub trait IndexerStore {
 #[derive(Clone, Debug)]
 pub struct CheckpointData {
     pub checkpoint: RpcCheckpoint,
+<<<<<<< HEAD
     pub transactions: Vec<CheckpointTransactionBlockResponse>,
+=======
+    pub transactions: Vec<SuiTransactionBlockFullResponse>,
+>>>>>>> fork/testnet
     pub changed_objects: Vec<(ObjectStatus, SuiObjectData)>,
 }
 

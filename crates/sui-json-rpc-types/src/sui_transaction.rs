@@ -42,6 +42,7 @@ use sui_types::sui_serde::{
 use crate::balance_changes::BalanceChange;
 use crate::object_changes::ObjectChange;
 use crate::{Page, SuiEvent, SuiMovePackage, SuiObjectRef};
+use sui_types::sui_serde::SuiTypeTag as AsSuiTypeTag;
 
 // similar to EpochId of sui-types but BigInt
 pub type SuiEpochId = BigInt<u64>;
@@ -560,7 +561,11 @@ impl TryFrom<TransactionEffects> for SuiTransactionBlockEffects {
             1 => Ok(SuiTransactionBlockEffects::V1(
                 SuiTransactionBlockEffectsV1 {
                     status: effect.status().clone().into(),
+<<<<<<< HEAD
                     executed_epoch: effect.executed_epoch(),
+=======
+                    executed_epoch: effect.executed_epoch().into(),
+>>>>>>> fork/testnet
                     modified_at_versions: effect
                         .modified_at_versions()
                         .iter()
@@ -572,7 +577,11 @@ impl TryFrom<TransactionEffects> for SuiTransactionBlockEffects {
                             }
                         })
                         .collect(),
+<<<<<<< HEAD
                     gas_used: effect.gas_cost_summary().clone(),
+=======
+                    gas_used: effect.gas_cost_summary().clone().into(),
+>>>>>>> fork/testnet
                     shared_objects: to_sui_object_ref(effect.shared_objects().to_vec()),
                     transaction_digest: *effect.transaction_digest(),
                     created: to_owned_ref(effect.created().to_vec()),
@@ -998,7 +1007,10 @@ pub struct SuiConsensusCommitPrologue {
     pub commit_timestamp_ms: u64,
 }
 
+<<<<<<< HEAD
 #[serde_as]
+=======
+>>>>>>> fork/testnet
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename = "InputObjectKind")]
 pub enum SuiInputObjectKind {

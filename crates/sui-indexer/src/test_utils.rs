@@ -3,6 +3,10 @@
 
 use anyhow::anyhow;
 use prometheus::Registry;
+<<<<<<< HEAD
+=======
+use sui_json_rpc_types::SuiTransactionBlockResponse;
+>>>>>>> fork/testnet
 use tokio::task::JoinHandle;
 
 use sui_json_rpc_types::SuiTransactionBlockResponse;
@@ -16,8 +20,12 @@ use crate::{new_pg_connection_pool, Indexer, IndexerConfig};
 pub async fn start_test_indexer(
     config: IndexerConfig,
 ) -> Result<(PgIndexerStore, JoinHandle<Result<(), IndexerError>>), anyhow::Error> {
+<<<<<<< HEAD
     let (blocking_pool, async_pool) = new_pg_connection_pool(&config.base_connection_url())
         .await
+=======
+    let pg_connection_pool = new_pg_connection_pool(&config.base_connection_url())
+>>>>>>> fork/testnet
         .map_err(|e| anyhow!("unable to connect to Postgres, is it running? {e}"))?;
     if config.reset_db {
         reset_database(

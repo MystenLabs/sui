@@ -161,7 +161,10 @@ pub enum SuiValidatorCommandResponse {
     UpdateMetadata(SuiTransactionBlockResponse),
     UpdateGasPrice(SuiTransactionBlockResponse),
     ReportValidator(SuiTransactionBlockResponse),
+<<<<<<< HEAD
     SerializedPayload(String),
+=======
+>>>>>>> fork/testnet
 }
 
 fn make_key_files(
@@ -585,9 +588,13 @@ async fn call_0x5(
         .quorum_driver()
         .execute_transaction_block(
             transaction,
+<<<<<<< HEAD
             SuiTransactionBlockResponseOptions::new()
                 .with_input()
                 .with_effects(),
+=======
+            SuiTransactionBlockResponseOptions::full_content(),
+>>>>>>> fork/testnet
             Some(sui_types::messages::ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await

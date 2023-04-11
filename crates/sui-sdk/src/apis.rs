@@ -13,11 +13,18 @@ use futures_core::Stream;
 use jsonrpsee::core::client::Subscription;
 
 use sui_json_rpc::api::GovernanceReadApiClient;
+<<<<<<< HEAD
 use sui_json_rpc::api::{
     CoinReadApiClient, IndexerApiClient, MoveUtilsClient, ReadApiClient, WriteApiClient,
 };
 use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, Coin, CoinPage, DelegatedStake,
+=======
+use sui_json_rpc::api::IndexerApiClient;
+use sui_json_rpc::api::MoveUtilsClient;
+use sui_json_rpc_types::{
+    Balance, Checkpoint, CheckpointId, CheckpointedObjectID, Coin, CoinPage, DelegatedStake,
+>>>>>>> fork/testnet
     DryRunTransactionBlockResponse, DynamicFieldPage, EventFilter, EventPage, ObjectsPage,
     SuiCoinMetadata, SuiCommittee, SuiEvent, SuiGetPastObjectRequest, SuiMoveNormalizedModule,
     SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiPastObjectResponse,
@@ -31,7 +38,13 @@ use sui_types::error::TRANSACTION_NOT_FOUND_MSG_PREFIX;
 use sui_types::event::EventID;
 use sui_types::messages::{ExecuteTransactionRequestType, TransactionData, VerifiedTransaction};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+<<<<<<< HEAD
 use sui_types::sui_serde::BigInt;
+=======
+
+use futures::StreamExt;
+use sui_json_rpc::api::{CoinReadApiClient, ReadApiClient, WriteApiClient};
+>>>>>>> fork/testnet
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 
 use crate::error::{Error, SuiRpcResult};
@@ -51,7 +64,7 @@ impl ReadApi {
         &self,
         address: SuiAddress,
         query: Option<SuiObjectResponseQuery>,
-        cursor: Option<ObjectID>,
+        cursor: Option<CheckpointedObjectID>,
         limit: Option<usize>,
     ) -> SuiRpcResult<ObjectsPage> {
         Ok(self
@@ -120,7 +133,11 @@ impl ReadApi {
     }
 
     pub async fn get_total_transaction_blocks(&self) -> SuiRpcResult<u64> {
+<<<<<<< HEAD
         Ok(*self.api.http.get_total_transaction_blocks().await?)
+=======
+        Ok(self.api.http.get_total_transaction_blocks().await?.into())
+>>>>>>> fork/testnet
     }
 
     pub async fn get_transaction_with_options(

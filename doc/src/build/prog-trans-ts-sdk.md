@@ -11,8 +11,13 @@ To get started using Programmable Transaction Blocks, make sure that you have th
 This example starts by constructing a transaction block to send Sui. If you are familiar with the legacy Sui transaction types, this is similar to a `paySui` transaction. To construct transactions, import the `TransactionBlock` class, and construct it:
 
 ```tsx
+<<<<<<< HEAD
 import { TransactionBlock } from "@mysten/sui.js";
 const txb = new TransactionBlock();
+=======
+import { Transaction } from "@mysten/sui.js";
+const tx = new Transaction();
+>>>>>>> fork/testnet
 ```
 
 Using this, you can then add transactions to this transaction block.
@@ -20,10 +25,17 @@ Using this, you can then add transactions to this transaction block.
 ```tsx
 // Create a new coin with balance 100, based on the coins used as gas payment.
 // You can define any balance here.
+<<<<<<< HEAD
 const [coin] = txb.splitCoins(txb.gas, [txb.pure(100)]);
 
 // Transfer the split coin to a specific address.
 txb.transferObjects([coin], txb.pure("0xSomeSuiAddress"));
+=======
+const [coin] = tx.splitCoins(tx.gas, [tx.pure(100)]);
+
+// Transfer the split coin to a specific address.
+tx.transferObjects([coin], tx.pure("0xSomeSuiAddress"));
+>>>>>>> fork/testnet
 ```
 
 Note that you can attach multiple transactions of the same type to a transaction block as well. For example, to get a list of transfers, and iterate over them to transfer coins to each of them:
@@ -40,6 +52,7 @@ const transfers: Transfer[] = getTransfers();
 const txb = new TransactionBlock();
 
 // First, split the gas coin into multiple coins:
+<<<<<<< HEAD
 const coins = txb.splitCoins(
   txb.gas,
   transfers.map((transfer) => txb.pure(transfer.amount))
@@ -48,6 +61,16 @@ const coins = txb.splitCoins(
 // Next, create a transfer transaction for each coin:
 transfers.forEach((transfer, index) => {
   txb.transferObjects([coins[index]], txb.pure(transfer.to));
+=======
+const coins = tx.splitCoins(
+  tx.gas,
+  transfers.map((transfer) => tx.pure(transfer.amount))
+);
+
+// Next, create a transfer command for each coin:
+transfers.forEach((transfer, index) => {
+  tx.transferObjects([coins[index]], tx.pure(transfer.to));
+>>>>>>> fork/testnet
 });
 ```
 
@@ -76,6 +99,7 @@ Inputs are how you provide external values to transaction blocks. For example, d
 
 Sui supports following transactions:
 
+<<<<<<< HEAD
 - `txb.splitCoins(coin, amounts)` - Creates new coins with the defined amounts, split from the provided coin. Returns the coins so that it can be used in subsequent transactions.
   - Example: `txb.splitCoins(txb.gas, [txb.pure(100), txb.pure(200)])`
 - `txb.mergeCoins(destinationCoin, sourceCoins)` - Merges the sourceCoins into the destinationCoin.
@@ -87,6 +111,19 @@ Sui supports following transactions:
 - `txb.makeMoveVec({ type, objects })` - Constructs a vector of objects that can be passed into a `moveCall`. This is required as there’s no way to define a vector as an input.
   - Example: `txb.makeMoveVec({ objects: [txb.object(id1), txb.object(id2)] })`
 - `txb.publish(modules, dependencies)` - Publishes a Move package. Returns the upgrade capability object.
+=======
+- `tx.splitCoins(coin, amounts)` - Creates new coins with the defined amounts, split from the provided coin. Returns the coins so that it can be used in subsequent commands.
+  - Example: `tx.splitCoins(tx.gas, [tx.pure(100), tx.pure(200)])`
+- `tx.mergeCoins(destinationCoin, sourceCoins)` - Merges the sourceCoins into the destinationCoin.
+  - Example: `tx.mergeCoins(tx.object(coin1), [tx.object(coin2), tx.object(coin3)])`
+- `tx.transferObjects(objects, address)` - Transfers a list of objects to the specified address.
+  - Example: `tx.transferObjects([tx.object(thing1), tx.object(thing2)], tx.pure(myAddress))`
+- `tx.moveCall({ target, arguments, typeArguments  })` - Executes a move call. Returns whatever the Sui Move call returns.
+  - Example: `tx.moveCall({ target: '0x2::devnet_nft::mint', arguments: [tx.pure(name), tx.pure(description), tx.pure(image)] })`
+- `tx.makeMoveVec({ type, objects })` - Constructs a vector of objects that can be passed into a `moveCall`. This is required as there’s no way to define a vector as an input.
+  - Example: `tx.makeMoveVec({ objects: [tx.object(id1), tx.object(id2)] })`
+- `tx.publish(modules, dependencies)` - Publishes a Move package. Returns the upgrade capability object.
+>>>>>>> fork/testnet
 
 ## Passing transaction results as arguments
 
@@ -94,7 +131,11 @@ You can use the result of a transaction as an argument in a subsequent transacti
 
 ```tsx
 // Split a coin object off of the gas object:
+<<<<<<< HEAD
 const [coin] = txb.splitCoins(txb.gas, [txb.pure(100)]);
+=======
+const [coin] = tx.splitCoins(tx.gas, [tx.pure(100)]);
+>>>>>>> fork/testnet
 // Transfer the resulting coin object:
 txb.transferObjects([coin], txb.pure(address));
 ```
@@ -103,12 +144,21 @@ When a transaction returns multiple results, you can access the result at a spec
 
 ```tsx
 // Destructuring (preferred, as it gives you logical local names):
+<<<<<<< HEAD
 const [nft1, nft2] = txb.moveCall({ target: "0x2::nft::mint_many" });
 txb.transferObjects([nft1, nft2], txb.pure(address));
 
 // Array indexes:
 const mintMany = txb.moveCall({ target: "0x2::nft::mint_many" });
 txb.transferObjects([mintMany[0], mintMany[1]], txb.pure(address));
+=======
+const [nft1, nft2] = tx.moveCall({ target: "0x2::nft::mint_many" });
+tx.transferObjects([nft1, nft2], tx.pure(address));
+
+// Array indexes:
+const mintMany = tx.moveCall({ target: "0x2::nft::mint_many" });
+tx.transferObjects([mintMany[0], mintMany[1]], tx.pure(address));
+>>>>>>> fork/testnet
 ```
 
 ## Use the gas coin
@@ -137,7 +187,11 @@ If you have transaction block bytes, you can also convert them back into a `Tran
 
 ```tsx
 const bytes = getTransactionBlockBytesFromSomewhere();
+<<<<<<< HEAD
 const txb = TransactionBlock.from(bytes);
+=======
+const tx = Transaction.from(bytes);
+>>>>>>> fork/testnet
 ```
 
 ## Building Offline
@@ -197,9 +251,13 @@ txb.setGasPayment([coin1, coin2]);
 
 The Wallet Standard interface has been updated to support the `TransactionBlock` kind directly. All `signTransaction` and `signAndExecuteTransaction` calls from dapps into wallets will be expected to provide a `TransactionBlock` class. This transaction block class can then be serialized and sent to your wallet for execution.
 
+<<<<<<< HEAD
 To serialize a transaction block for sending to a wallet, Sui recommends using the `txb.serialize()` function, which returns an opaque string representation of the transaction block that can be passed from the wallet standard dapp context to your wallet. This can then be converted back into a `TransactionBlock` using `TransactionBlock.from()`.
 
 **Important:** You should not build the transaction block from bytes in the dApp code. Using `serialize` instead of `build` allows you to build the transaction block bytes within the wallet itself. This allows the wallet to perform gas logic and coin selection as needed.
+=======
+**Important:** The transaction should not be built from bytes in the dApp code. Using `serialize` instead of `build` allows you to build the transaction bytes within the wallet itself. This allows the wallet to perform gas logic and coin selection as needed.
+>>>>>>> fork/testnet
 
 ```tsx
 // Within a dApp
@@ -219,7 +277,11 @@ function handleSignRequest(input) {
 
 ## Sponsored Transaction Blocks
 
+<<<<<<< HEAD
 The transaction block builder can support sponsored transaction blocks by using the `onlyTransactionKind` flag when building the transaction block.
+=======
+The transaction builder can support sponsored transaction by using the `onlyTransactionKind` flag when building the transaction.
+>>>>>>> fork/testnet
 
 ```tsx
 const txb = new TransactionBlock();

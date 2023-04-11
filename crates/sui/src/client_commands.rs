@@ -38,8 +38,13 @@ use sui_framework_build::compiled_package::{
 };
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
+<<<<<<< HEAD
     DynamicFieldPage, SuiData, SuiObjectData, SuiObjectDataFilter, SuiObjectResponse,
     SuiObjectResponseQuery, SuiRawData, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
+=======
+    DynamicFieldPage, SuiData, SuiObjectData, SuiObjectResponse, SuiObjectResponseQuery,
+    SuiRawData, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
+>>>>>>> fork/testnet
     SuiTransactionBlockResponseOptions,
 };
 use sui_json_rpc_types::{SuiExecutionStatus, SuiObjectDataOptions};
@@ -568,7 +573,11 @@ impl SuiClientCommands {
                 )?;
                 let response = context
                     .execute_transaction_block(
+<<<<<<< HEAD
                         Transaction::from_data(data, Intent::sui_transaction(), vec![signature])
+=======
+                        Transaction::from_data(data, Intent::default(), vec![signature])
+>>>>>>> fork/testnet
                             .verify()?,
                     )
                     .await?;
@@ -620,7 +629,11 @@ impl SuiClientCommands {
                 )?;
                 let response = context
                     .execute_transaction_block(
+<<<<<<< HEAD
                         Transaction::from_data(data, Intent::sui_transaction(), vec![signature])
+=======
+                        Transaction::from_data(data, Intent::default(), vec![signature])
+>>>>>>> fork/testnet
                             .verify()?,
                     )
                     .await?;
@@ -704,7 +717,11 @@ impl SuiClientCommands {
                         .sign_secure(&from, &data, Intent::sui_transaction())?;
                 let response = context
                     .execute_transaction_block(
+<<<<<<< HEAD
                         Transaction::from_data(data, Intent::sui_transaction(), vec![signature])
+=======
+                        Transaction::from_data(data, Intent::default(), vec![signature])
+>>>>>>> fork/testnet
                             .verify()?,
                     )
                     .await?;
@@ -741,7 +758,11 @@ impl SuiClientCommands {
                         .sign_secure(&from, &data, Intent::sui_transaction())?;
                 let response = context
                     .execute_transaction_block(
+<<<<<<< HEAD
                         Transaction::from_data(data, Intent::sui_transaction(), vec![signature])
+=======
+                        Transaction::from_data(data, Intent::default(), vec![signature])
+>>>>>>> fork/testnet
                             .verify()?,
                     )
                     .await?;
@@ -790,7 +811,11 @@ impl SuiClientCommands {
                         .sign_secure(&from, &data, Intent::sui_transaction())?;
                 let response = context
                     .execute_transaction_block(
+<<<<<<< HEAD
                         Transaction::from_data(data, Intent::sui_transaction(), vec![signature])
+=======
+                        Transaction::from_data(data, Intent::default(), vec![signature])
+>>>>>>> fork/testnet
                             .verify()?,
                     )
                     .await?;
@@ -841,7 +866,11 @@ impl SuiClientCommands {
                 )?;
                 let response = context
                     .execute_transaction_block(
+<<<<<<< HEAD
                         Transaction::from_data(data, Intent::sui_transaction(), vec![signature])
+=======
+                        Transaction::from_data(data, Intent::default(), vec![signature])
+>>>>>>> fork/testnet
                             .verify()?,
                     )
                     .await?;
@@ -880,7 +909,11 @@ impl SuiClientCommands {
                 )?;
                 let response = context
                     .execute_transaction_block(
+<<<<<<< HEAD
                         Transaction::from_data(data, Intent::sui_transaction(), vec![signature])
+=======
+                        Transaction::from_data(data, Intent::default(), vec![signature])
+>>>>>>> fork/testnet
                             .verify()?,
                     )
                     .await?;
@@ -904,6 +937,7 @@ impl SuiClientCommands {
             SuiClientCommands::Objects { address } => {
                 let address = address.unwrap_or(context.active_address()?);
                 let client = context.get_client().await?;
+<<<<<<< HEAD
                 let mut objects: Vec<SuiObjectResponse> = Vec::new();
                 let mut cursor = None;
                 loop {
@@ -927,6 +961,20 @@ impl SuiClientCommands {
                     }
                 }
                 SuiClientCommandResult::Objects(objects)
+=======
+                let address_object = client
+                    .read_api()
+                    .get_owned_objects(
+                        address,
+                        Some(SuiObjectResponseQuery::new_with_options(
+                            SuiObjectDataOptions::full_content(),
+                        )),
+                        None,
+                        None,
+                    )
+                    .await?;
+                SuiClientCommandResult::Objects(address_object.data)
+>>>>>>> fork/testnet
             }
 
             SuiClientCommands::NewAddress {
@@ -988,7 +1036,11 @@ impl SuiClientCommands {
                 )?;
                 let response = context
                     .execute_transaction_block(
+<<<<<<< HEAD
                         Transaction::from_data(data, Intent::sui_transaction(), vec![signature])
+=======
+                        Transaction::from_data(data, Intent::default(), vec![signature])
+>>>>>>> fork/testnet
                             .verify()?,
                     )
                     .await?;
@@ -1013,7 +1065,11 @@ impl SuiClientCommands {
                 )?;
                 let response = context
                     .execute_transaction_block(
+<<<<<<< HEAD
                         Transaction::from_data(data, Intent::sui_transaction(), vec![signature])
+=======
+                        Transaction::from_data(data, Intent::default(), vec![signature])
+>>>>>>> fork/testnet
                             .verify()?,
                     )
                     .await?;
@@ -1310,6 +1366,23 @@ impl WalletContext {
         address: SuiAddress,
     ) -> Result<Vec<(u64, SuiObjectData)>, anyhow::Error> {
         let client = self.get_client().await?;
+<<<<<<< HEAD
+=======
+        let objects = client
+            .read_api()
+            .get_owned_objects(
+                address,
+                Some(SuiObjectResponseQuery::new_with_options(
+                    SuiObjectDataOptions::full_content(),
+                )),
+                None,
+                None,
+            )
+            .await?
+            .data;
+        // TODO: We should ideally fetch the objects from local cache
+        let mut values_objects = Vec::new();
+>>>>>>> fork/testnet
 
         let mut objects: Vec<SuiObjectResponse> = Vec::new();
         let mut cursor = None;
@@ -1391,12 +1464,15 @@ impl WalletContext {
         ))
     }
 
+<<<<<<< HEAD
     pub async fn get_reference_gas_price(&self) -> Result<u64, anyhow::Error> {
         let client = self.get_client().await?;
         let gas_price = client.governance_api().get_reference_gas_price().await?;
         Ok(gas_price)
     }
 
+=======
+>>>>>>> fork/testnet
     pub async fn execute_transaction_block(
         &self,
         tx: VerifiedTransaction,
@@ -1653,6 +1729,7 @@ pub async fn call_move(
             gas_budget,
         )
         .await?;
+<<<<<<< HEAD
     let signature =
         context
             .config
@@ -1660,6 +1737,13 @@ pub async fn call_move(
             .sign_secure(&sender, &data, Intent::sui_transaction())?;
     let transaction =
         Transaction::from_data(data, Intent::sui_transaction(), vec![signature]).verify()?;
+=======
+    let signature = context
+        .config
+        .keystore
+        .sign_secure(&sender, &data, Intent::default())?;
+    let transaction = Transaction::from_data(data, Intent::default(), vec![signature]).verify()?;
+>>>>>>> fork/testnet
 
     let response = context.execute_transaction_block(transaction).await?;
     let effects = response
@@ -1685,7 +1769,11 @@ fn convert_number_to_string(value: Value) -> Value {
     }
 }
 
+<<<<<<< HEAD
 // TODO(chris): only print out the full response when `--verbose` is provided
+=======
+// TODOD(chris): only print out the full response when `--verbose` is provided
+>>>>>>> fork/testnet
 pub fn write_transaction_response(
     response: &SuiTransactionBlockResponse,
 ) -> Result<String, fmt::Error> {
@@ -1767,7 +1855,10 @@ pub enum SuiClientCommandResult {
     VerifySource,
     Object(SuiObjectResponse),
     RawObject(SuiObjectResponse),
+<<<<<<< HEAD
     TransactionBlock(SuiTransactionBlockResponse),
+=======
+>>>>>>> fork/testnet
     Call(SuiTransactionBlockResponse),
     Transfer(
         // Skipping serialisation for elapsed time.

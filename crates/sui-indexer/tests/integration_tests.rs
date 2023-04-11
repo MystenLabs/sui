@@ -7,15 +7,22 @@ pub mod pg_integration_test {
     use diesel::RunQueryDsl;
     use futures::future::join_all;
     use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
+    use ntest::timeout;
+
+    use tokio::task::JoinHandle;
+
     use move_core_types::ident_str;
     use move_core_types::identifier::Identifier;
     use move_core_types::language_storage::StructTag;
     use move_core_types::parser::parse_struct_tag;
+<<<<<<< HEAD
     use ntest::timeout;
     use std::env;
     use std::str::FromStr;
     use tokio::task::JoinHandle;
 
+=======
+>>>>>>> fork/testnet
     use sui_config::SUI_KEYSTORE_FILENAME;
     use sui_indexer::errors::IndexerError;
     use sui_indexer::models::objects::{
@@ -109,6 +116,7 @@ pub mod pg_integration_test {
         object_id: ObjectID,
         gas: Option<ObjectID>,
     ) -> Result<SuiTransactionBlockResponse, anyhow::Error> {
+<<<<<<< HEAD
         let rgp = test_cluster.get_reference_gas_price().await;
         let transaction_bytes: TransactionBlockBytes = indexer_rpc_client
             .transfer_object(
@@ -118,6 +126,10 @@ pub mod pg_integration_test {
                 (rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER).into(),
                 *recipient,
             )
+=======
+        let transaction_bytes: TransactionBlockBytes = indexer_rpc_client
+            .transfer_object(*sender, object_id, gas, 2000, *recipient)
+>>>>>>> fork/testnet
             .await?;
         let tx_response = sign_and_execute_transaction_block(
             test_cluster,
@@ -277,8 +289,13 @@ pub mod pg_integration_test {
         let (mut test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster(None).await;
         // Allow indexer to sync genesis
         wait_until_next_checkpoint(&store).await;
+<<<<<<< HEAD
         let (package_id, _, _, publish_digest) =
             publish_nfts_package(&mut test_cluster.wallet).await;
+=======
+        let (package_id, publish_digest) =
+            publish_nfts_package(&mut test_cluster.wallet, /* sender */ None).await;
+>>>>>>> fork/testnet
         wait_until_transaction_synced(&store, publish_digest.base58_encode().as_str()).await;
         wait_until_next_checkpoint(&store).await;
 
@@ -304,7 +321,11 @@ pub mod pg_integration_test {
             .map(|tx| tx.digest)
             .collect::<Vec<_>>();
         let mut checkpoint_tx_digest_vec = indexer_rpc_client
+<<<<<<< HEAD
             .get_checkpoint(CheckpointId::SequenceNumber(2u64))
+=======
+            .get_checkpoint(CheckpointId::SequenceNumber(2u64.into()))
+>>>>>>> fork/testnet
             .await
             .unwrap()
             .transactions;
@@ -514,6 +535,7 @@ pub mod pg_integration_test {
         assert_eq!(digest_one, query_response.data[0].id.tx_digest);
         assert_eq!(digest_two, query_response.data[1].id.tx_digest);
 
+<<<<<<< HEAD
         // check parsed event data with FN
         let fn_query_response = test_cluster
             .rpc_client()
@@ -528,6 +550,8 @@ pub mod pg_integration_test {
             query_response.data[0].parsed_json,
             fn_query_response.data[0].parsed_json
         );
+=======
+>>>>>>> fork/testnet
         Ok(())
     }
 
@@ -625,11 +649,16 @@ pub mod pg_integration_test {
             None,
         )
         .await?;
+<<<<<<< HEAD
         wait_until_transaction_synced_in_checkpoint(
             &store,
             tx_response.digest.base58_encode().as_str(),
         )
         .await;
+=======
+        wait_until_transaction_synced(&store, tx_response.digest.base58_encode().as_str()).await;
+        wait_until_next_checkpoint(&store).await;
+>>>>>>> fork/testnet
         let response = indexer_rpc_client
             .get_object(source_object_id, Some(show_all_content.clone()))
             .await?;
@@ -755,11 +784,15 @@ pub mod pg_integration_test {
             &test_cluster.get_address_1(),
         )
         .await?;
+<<<<<<< HEAD
         wait_until_transaction_synced_in_checkpoint(
             &store,
             tx_response.digest.base58_encode().as_str(),
         )
         .await;
+=======
+        wait_until_transaction_synced(&store, tx_response.digest.base58_encode().as_str()).await;
+>>>>>>> fork/testnet
         wait_until_next_checkpoint(&store).await;
 
         let resp = indexer_rpc_client
@@ -967,7 +1000,11 @@ pub mod pg_integration_test {
         let pg_port = env::var("POSTGRES_PORT").unwrap_or_else(|_| "32770".into());
         let pw = env::var("POSTGRES_PASSWORD").unwrap_or_else(|_| "postgrespw".into());
         let db_url = format!("postgres://postgres:{pw}@{pg_host}:{pg_port}");
+<<<<<<< HEAD
         let (pg_connection_pool, _) = new_pg_connection_pool(&db_url).await.unwrap();
+=======
+        let pg_connection_pool = new_pg_connection_pool(&db_url).unwrap();
+>>>>>>> fork/testnet
         let mut pg_pool_conn = get_pg_pool_connection(&pg_connection_pool).unwrap();
 
         let lot_of_data = (1..10000)
@@ -1029,7 +1066,11 @@ pub mod pg_integration_test {
         let pg_port = env::var("POSTGRES_PORT").unwrap_or_else(|_| "32770".into());
         let pw = env::var("POSTGRES_PASSWORD").unwrap_or_else(|_| "postgrespw".into());
         let db_url = format!("postgres://postgres:{pw}@{pg_host}:{pg_port}");
+<<<<<<< HEAD
         let (pg_connection_pool, _) = new_pg_connection_pool(&db_url).await.unwrap();
+=======
+        let pg_connection_pool = new_pg_connection_pool(&db_url).unwrap();
+>>>>>>> fork/testnet
         let mut pg_pool_conn = get_pg_pool_connection(&pg_connection_pool).unwrap();
 
         let bulk_data = (1..=10000)
@@ -1234,7 +1275,11 @@ pub mod pg_integration_test {
         let tx_response = indexer_rpc_client
             .get_transaction_block(
                 tx_response.digest,
+<<<<<<< HEAD
                 Some(SuiTransactionBlockResponseOptions::new()),
+=======
+                Some(SuiTransactionBlockResponseOptions::full_content()),
+>>>>>>> fork/testnet
             )
             .await?;
         let next_cp = tx_response.checkpoint.unwrap();

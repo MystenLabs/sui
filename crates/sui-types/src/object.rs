@@ -948,6 +948,7 @@ impl ObjectRead {
             Self::Exists(_, o, _) => Ok(o),
         }
     }
+<<<<<<< HEAD
 
     pub fn object_id(&self) -> ObjectID {
         match self {
@@ -956,6 +957,8 @@ impl ObjectRead {
             Self::Exists(oref, _, _) => oref.0,
         }
     }
+=======
+>>>>>>> fork/testnet
 }
 
 impl Default for ObjectFormatOptions {

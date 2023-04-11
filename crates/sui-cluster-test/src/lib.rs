@@ -135,7 +135,11 @@ impl TestContext {
             .get_fullnode_client()
             .quorum_driver()
             .execute_transaction_block(
+<<<<<<< HEAD
                 Transaction::from_data(txn_data, Intent::sui_transaction(), vec![signature])
+=======
+                Transaction::from_data(txn_data, Intent::default(), vec![signature])
+>>>>>>> fork/testnet
                     .verify()
                     .unwrap(),
                 SuiTransactionBlockResponseOptions::new()

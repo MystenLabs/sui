@@ -211,6 +211,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         ),
         ClapCommand::QueryTransactionBlocks {
             common,
+<<<<<<< HEAD
             address_type,
         } => {
             let addresses = load_addresses_from_file(expand_path(&opts.data_directory));
@@ -252,6 +253,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let objects = load_objects_from_file(expand_path(&opts.data_directory));
             (Command::new_get_object(objects, chunk_size), common, false)
         }
+=======
+            from_address,
+            to_address,
+        } => (
+            Command::new_query_transaction_blocks(from_address, to_address),
+            common,
+            false,
+        ),
+>>>>>>> fork/testnet
     };
 
     let signer_info = need_keystore.then_some(get_keypair()?);

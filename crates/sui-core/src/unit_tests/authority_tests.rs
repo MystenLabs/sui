@@ -29,7 +29,12 @@ use serde_json::json;
 use sui_types::gas::SuiCostTable;
 
 use sui_json_rpc_types::{
+<<<<<<< HEAD
     SuiArgument, SuiExecutionResult, SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTypeTag,
+=======
+    SuiArgument, SuiExecutionResult, SuiExecutionStatus, SuiGasCostSummary,
+    SuiTransactionBlockEffectsAPI, SuiTypeTag,
+>>>>>>> fork/testnet
 };
 use sui_macros::sim_test;
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};

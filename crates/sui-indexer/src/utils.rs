@@ -26,7 +26,11 @@ use sui_types::object::Owner;
 use sui_types::storage::{DeleteKind, WriteKind};
 
 use crate::errors::IndexerError;
+<<<<<<< HEAD
 use crate::types::CheckpointTransactionBlockResponse;
+=======
+use crate::types::SuiTransactionBlockFullResponse;
+>>>>>>> fork/testnet
 use crate::PgPoolConnection;
 
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
@@ -83,6 +87,7 @@ pub fn drop_all_tables(conn: &mut PgConnection) -> Result<(), diesel::result::Er
 pub async fn multi_get_full_transactions(
     http_client: HttpClient,
     digests: Vec<TransactionDigest>,
+<<<<<<< HEAD
 ) -> Result<Vec<CheckpointTransactionBlockResponse>, IndexerError> {
     let sui_transactions = http_client
         .multi_get_transaction_blocks(
@@ -95,6 +100,18 @@ pub async fn multi_get_full_transactions(
                     .with_events()
                     .with_raw_input(),
             ),
+=======
+) -> Result<Vec<SuiTransactionBlockFullResponse>, IndexerError> {
+    let sui_transactions = read_api
+        .multi_get_transactions_with_options(
+            digests.clone(),
+            // MUSTFIX(gegaowp): avoid double fetching both input and raw_input
+            SuiTransactionBlockResponseOptions::new()
+                .with_input()
+                .with_effects()
+                .with_events()
+                .with_raw_input(),
+>>>>>>> fork/testnet
         )
         .await
         .map_err(|e| {
@@ -104,9 +121,15 @@ pub async fn multi_get_full_transactions(
                 e
             ))
         })?;
+<<<<<<< HEAD
     let sui_full_transactions: Vec<CheckpointTransactionBlockResponse> = sui_transactions
         .into_iter()
         .map(CheckpointTransactionBlockResponse::try_from)
+=======
+    let sui_full_transactions: Vec<SuiTransactionBlockFullResponse> = sui_transactions
+        .into_iter()
+        .map(SuiTransactionBlockFullResponse::try_from)
+>>>>>>> fork/testnet
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| {
             IndexerError::FullNodeReadingError(format!(

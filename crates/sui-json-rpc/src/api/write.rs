@@ -6,7 +6,11 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 
 use sui_json_rpc_types::{
+<<<<<<< HEAD
     DevInspectResults, DryRunTransactionBlockResponse, SuiTransactionBlockResponse,
+=======
+    BigInt, DevInspectResults, DryRunTransactionBlockResponse, SuiTransactionBlockResponse,
+>>>>>>> fork/testnet
     SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc_macros::open_rpc;

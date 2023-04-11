@@ -288,9 +288,13 @@ fn establish_connection(url: &str) -> BoxFuture<ConnectionResult<AsyncPgConnecti
     .boxed()
 }
 
+<<<<<<< HEAD
 pub async fn new_pg_connection_pool(
     db_url: &str,
 ) -> Result<(PgConnectionPool, AsyncPgConnectionPool), IndexerError> {
+=======
+pub fn new_pg_connection_pool(db_url: &str) -> Result<PgConnectionPool, IndexerError> {
+>>>>>>> fork/testnet
     let manager = ConnectionManager::<PgConnection>::new(db_url);
     // default connection pool max size is 10
     let blocking_cp = diesel::r2d2::Pool::builder().build(manager).map_err(|e| {
@@ -374,7 +378,11 @@ pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clo
         event_handler,
         config.migrated_methods.clone(),
     ))?;
+<<<<<<< HEAD
     builder.register_module(WriteApi::new(state.clone(), http_client.clone()))?;
+=======
+    builder.register_module(WriteApi::new(http_client.clone()))?;
+>>>>>>> fork/testnet
     builder.register_module(ExtendedApi::new(state.clone()))?;
     builder.register_module(MoveUtilsApi::new(http_client))?;
     let default_socket_addr = SocketAddr::new(

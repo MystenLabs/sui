@@ -71,8 +71,13 @@ use types::{
     FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, HeaderAPI,
     PayloadAvailabilityRequest, PayloadAvailabilityResponse, PreSubscribedBroadcastSender,
     PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest, RequestVoteResponse, Round,
+<<<<<<< HEAD
     SendCertificateRequest, SendCertificateResponse, Vote, VoteInfoAPI, WorkerOthersBatchMessage,
     WorkerOurBatchMessage, WorkerToPrimary, WorkerToPrimaryServer,
+=======
+    SendCertificateRequest, SendCertificateResponse, Vote, VoteInfoAPI, WorkerInfoResponse,
+    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerToPrimary, WorkerToPrimaryServer,
+>>>>>>> fork/testnet
 };
 
 #[cfg(any(test))]
@@ -789,10 +794,13 @@ impl PrimaryReceiverHandler {
                 DagError::HeaderHasInvalidParentRoundNumbers(header.digest())
             );
             ensure!(
+<<<<<<< HEAD
                 header.created_at() >= parent.header().created_at(),
                 DagError::HeaderHasInvalidParentTimestamp(header.digest())
             );
             ensure!(
+=======
+>>>>>>> fork/testnet
                 parent_authorities.insert(parent.header().author()),
                 DagError::HeaderHasDuplicateParentAuthorities(header.digest())
             );

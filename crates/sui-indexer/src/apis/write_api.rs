@@ -10,11 +10,15 @@ use jsonrpsee::RpcModule;
 use sui_json_rpc::api::{WriteApiClient, WriteApiServer};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
+<<<<<<< HEAD
     DevInspectResults,
     DryRunTransactionBlockResponse,
     // TODO(gegaowp): temp. disable fast-path
     // SuiTransactionBlockEffectsAPI,
     SuiTransactionBlockResponse,
+=======
+    BigInt, DevInspectResults, DryRunTransactionBlockResponse, SuiTransactionBlockResponse,
+>>>>>>> fork/testnet
     SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc::Module;
@@ -52,10 +56,14 @@ impl<S: IndexerStore> WriteApi<S> {
 }
 
 #[async_trait]
+<<<<<<< HEAD
 impl<S> WriteApiServer for WriteApi<S>
 where
     S: IndexerStore + Sync + Send + 'static,
 {
+=======
+impl WriteApiServer for WriteApi {
+>>>>>>> fork/testnet
     async fn execute_transaction_block(
         &self,
         tx_bytes: Base64,
@@ -63,6 +71,7 @@ where
         options: Option<SuiTransactionBlockResponseOptions>,
         request_type: Option<ExecuteTransactionRequestType>,
     ) -> RpcResult<SuiTransactionBlockResponse> {
+<<<<<<< HEAD
         let fast_path_options = SuiTransactionBlockResponseOptions::full_content();
         let sui_transaction_response = self
             .fullnode
@@ -96,6 +105,11 @@ where
             options: options.unwrap_or_default(),
         }
         .into())
+=======
+        self.fullnode
+            .execute_transaction_block(tx_bytes, signatures, options, request_type)
+            .await
+>>>>>>> fork/testnet
     }
 
     async fn dev_inspect_transaction_block(

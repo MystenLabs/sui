@@ -31,7 +31,11 @@ use sui_json_rpc_types::{
 };
 use sui_json_rpc_types::{
     SuiTransactionBlock, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
+<<<<<<< HEAD
     SuiTransactionBlockEvents, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+=======
+    SuiTransactionBlockEvents, SuiTransactionBlockResponseOptions,
+>>>>>>> fork/testnet
 };
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::committee::{EpochId, ProtocolVersion};
@@ -53,7 +57,10 @@ use crate::models::network_metrics::{DBMoveCallMetrics, DBNetworkMetrics};
 use crate::models::objects::{
     compose_object_bulk_insert_update_query, group_and_sort_objects, Object,
 };
+<<<<<<< HEAD
 use crate::models::packages::Package;
+=======
+>>>>>>> fork/testnet
 use crate::models::system_state::DBValidatorSummary;
 use crate::models::transaction_index::{InputObject, MoveCall, Recipient};
 use crate::models::transactions::Transaction;
@@ -72,6 +79,10 @@ use crate::store::module_resolver::IndexerModuleResolver;
 use crate::store::query::DBFilter;
 use crate::store::TransactionObjectChanges;
 use crate::store::{IndexerStore, TemporaryEpochStore};
+<<<<<<< HEAD
+=======
+use crate::types::SuiTransactionBlockFullResponse;
+>>>>>>> fork/testnet
 use crate::utils::{get_balance_changes_from_effect, get_object_changes};
 use crate::{AsyncPgConnectionPool, PgConnectionPool};
 
@@ -117,7 +128,7 @@ impl PgIndexerStore {
         }
     }
 
-    pub async fn get_sui_types_object(
+    pub fn get_sui_types_object(
         &self,
         object_id: &ObjectID,
         version: &SequenceNumber,
@@ -155,7 +166,7 @@ impl PgIndexerStore {
         }
     }
 
-    pub async fn find_sui_types_object_lt_or_eq_version(
+    pub fn find_sui_types_object_lt_or_eq_version(
         &self,
         id: &ObjectID,
         version: &SequenceNumber,
@@ -449,8 +460,13 @@ impl IndexerStore for PgIndexerStore {
     async fn compose_sui_transaction_block_response(
         &self,
         tx: Transaction,
+<<<<<<< HEAD
         options: Option<&SuiTransactionBlockResponseOptions>,
     ) -> Result<SuiTransactionBlockResponse, IndexerError> {
+=======
+        options: Option<SuiTransactionBlockResponseOptions>,
+    ) -> Result<SuiTransactionBlockFullResponse, IndexerError> {
+>>>>>>> fork/testnet
         let transaction: SuiTransactionBlock =
             serde_json::from_str(&tx.transaction_content).map_err(|err| {
                 IndexerError::InsertableParsingError(format!(
@@ -517,16 +533,33 @@ impl IndexerStore for PgIndexerStore {
                 effects_opt = Some(effects);
             }
         }
+<<<<<<< HEAD
 
         Ok(SuiTransactionBlockResponse {
+=======
+        let events = self.get_events(
+            EventFilter::Transaction(tx_digest),
+            None,
+            None,
+            /* descending_order */ false,
+        )?;
+
+        Ok(SuiTransactionBlockFullResponse {
+>>>>>>> fork/testnet
             digest: tx_digest,
             transaction: tx_opt,
             raw_transaction: raw_tx,
             effects: effects_opt,
             confirmed_local_execution: tx.confirmed_local_execution,
+<<<<<<< HEAD
             timestamp_ms: tx.timestamp_ms.map(|t| t as u64),
             checkpoint: tx.checkpoint_sequence_number.map(|c| c as u64),
             events,
+=======
+            timestamp_ms: tx.timestamp_ms as u64,
+            checkpoint: tx.checkpoint_sequence_number as u64,
+            events: SuiTransactionBlockEvents { data: events.data },
+>>>>>>> fork/testnet
             object_changes,
             balance_changes,
             errors: vec![],
@@ -809,13 +842,21 @@ impl IndexerStore for PgIndexerStore {
         }).context(&format!("Failed reading all transaction digests with start_sequence {start_sequence:?} and limit {limit}"))
     }
 
+<<<<<<< HEAD
     async fn get_transaction_page_by_checkpoint(
+=======
+    fn get_transaction_digest_page_by_checkpoint(
+>>>>>>> fork/testnet
         &self,
         checkpoint_sequence_number: i64,
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
+<<<<<<< HEAD
     ) -> Result<Vec<Transaction>, IndexerError> {
+=======
+    ) -> Result<Vec<String>, IndexerError> {
+>>>>>>> fork/testnet
         read_only!(&self.cp, |conn| {
             let mut boxed_query = transactions_dsl::transactions
                 .filter(transactions_dsl::checkpoint_sequence_number.eq(checkpoint_sequence_number))
@@ -831,17 +872,31 @@ impl IndexerStore for PgIndexerStore {
                 boxed_query
                     .order(transactions_dsl::id.desc())
                     .limit((limit) as i64)
+<<<<<<< HEAD
                     .load::<Transaction>(conn).scope_boxed()
+=======
+                    .select(transactions_dsl::transaction_digest)
+                    .load::<String>(conn)
+>>>>>>> fork/testnet
             } else {
                 boxed_query
                     .order(transactions_dsl::id.asc())
                     .limit((limit) as i64)
+<<<<<<< HEAD
                     .load::<Transaction>(conn).scope_boxed()
+=======
+                    .select(transactions_dsl::transaction_digest)
+                    .load::<String>(conn)
+>>>>>>> fork/testnet
             }
         }).context(&format!("Failed reading transaction digests with checkpoint_sequence_number {checkpoint_sequence_number:?} and start_sequence {start_sequence:?} and limit {limit}"))
     }
 
+<<<<<<< HEAD
     async fn get_transaction_page_by_transaction_kind(
+=======
+    fn get_transaction_digest_page_by_transaction_kind(
+>>>>>>> fork/testnet
         &self,
         kind: String,
         start_sequence: Option<i64>,
@@ -1194,6 +1249,7 @@ impl IndexerStore for PgIndexerStore {
             }
 
             // Commit indexed objects
+<<<<<<< HEAD
             let mutated_objects: Vec<Object> = tx_object_changes
                 .iter()
                 .flat_map(|changes| changes.changed_objects.iter().cloned())
@@ -1210,6 +1266,57 @@ impl IndexerStore for PgIndexerStore {
                 .collect();
             persist_transaction_object_changes(conn, mutated_objects, deleted_objects, None, None)
                 .await?;
+=======
+            let all_mutated_objects: Vec<Object> = objects_changes
+                .iter()
+                .flat_map(|changes| changes.mutated_objects.iter().cloned())
+                .collect();
+            // NOTE: to avoid error of `ON CONFLICT DO UPDATE command cannot affect row a second time`,
+            // we have to limit update of one object once in a query.
+            let mut mutated_object_groups = group_and_sort_objects(all_mutated_objects);
+            loop {
+                let mutated_object_group = mutated_object_groups
+                    .iter_mut()
+                    .filter_map(|group| group.pop())
+                    .collect::<Vec<_>>();
+                if mutated_object_group.is_empty() {
+                    break;
+                }
+                // bulk insert/update via UNNEST trick
+                let insert_update_query =
+                    compose_object_bulk_insert_update_query(&mutated_object_group);
+                diesel::sql_query(insert_update_query).execute(conn)?;
+            }
+            // TODO(gegao): monitor the deletion batch size to see
+            // if bulk update via unnest is necessary.
+            let all_deleted_changes = objects_changes
+                .iter()
+                .flat_map(|changes| changes.deleted_objects.iter().cloned())
+                .collect::<Vec<_>>();
+            let all_deleted_objects: Vec<Object> = all_deleted_changes
+                .iter()
+                .map(|deleted_object| deleted_object.clone().into())
+                .collect();
+            for deleted_object_change_chunk in all_deleted_objects.chunks(PG_COMMIT_CHUNK_SIZE) {
+                diesel::insert_into(objects::table)
+                    .values(deleted_object_change_chunk)
+                    .on_conflict(objects::object_id)
+                    .do_update()
+                    .set((
+                        objects::epoch.eq(excluded(objects::epoch)),
+                        objects::checkpoint.eq(excluded(objects::checkpoint)),
+                        objects::version.eq(excluded(objects::version)),
+                        objects::previous_transaction.eq(excluded(objects::previous_transaction)),
+                        objects::object_status.eq(excluded(objects::object_status)),
+                    ))
+                    .execute(conn)
+                    .map_err(IndexerError::from)
+                    .context(&format!(
+                        "Failed writing deleted objects to PostgresDB with chunk: {:?}",
+                        deleted_object_change_chunk
+                    ))?;
+            }
+>>>>>>> fork/testnet
 
             // Commit indexed addresses
             for addresses_chunk in addresses.chunks(PG_COMMIT_CHUNK_SIZE) {
@@ -1850,7 +1957,7 @@ impl ObjectProvider for PgIndexerStore {
         id: &ObjectID,
         version: &SequenceNumber,
     ) -> Result<sui_types::object::Object, Self::Error> {
-        self.get_sui_types_object(id, version).await
+        self.get_sui_types_object(id, version)
     }
 
     async fn find_object_lt_or_eq_version(
@@ -1859,6 +1966,5 @@ impl ObjectProvider for PgIndexerStore {
         version: &SequenceNumber,
     ) -> Result<Option<sui_types::object::Object>, Self::Error> {
         self.find_sui_types_object_lt_or_eq_version(id, version)
-            .await
     }
 }

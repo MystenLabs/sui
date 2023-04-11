@@ -16,8 +16,16 @@ export function ProgrammableTransactionView({ transaction }: Props) {
                 <Inputs inputs={transaction.inputs} />
             </section>
 
+<<<<<<< HEAD
             <section className="py-12">
                 <Transactions transactions={transaction.transactions} />
+=======
+            <section
+                data-testid="programmable-transactions-commands"
+                className="py-12"
+            >
+                <Commands transactions={transaction.transactions} />
+>>>>>>> fork/testnet
             </section>
         </>
     );

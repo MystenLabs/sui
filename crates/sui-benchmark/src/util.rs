@@ -66,6 +66,7 @@ pub async fn publish_basics_package(
 ) -> ObjectRef {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("../../sui_programmability/examples/basics");
+<<<<<<< HEAD
     let transaction = create_publish_move_package_transaction(
         gas,
         path,
@@ -74,6 +75,10 @@ pub async fn publish_basics_package(
         gas_price * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         gas_price,
     );
+=======
+    let transaction =
+        create_publish_move_package_transaction(gas, path, sender, keypair, Some(gas_price));
+>>>>>>> fork/testnet
     let effects = proxy
         .execute_transaction_block(transaction.into())
         .await

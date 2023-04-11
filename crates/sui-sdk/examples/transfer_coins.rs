@@ -42,8 +42,12 @@ async fn main() -> Result<(), anyhow::Error> {
     let transaction_response = sui
         .quorum_driver()
         .execute_transaction_block(
+<<<<<<< HEAD
             Transaction::from_data(transfer_tx, Intent::sui_transaction(), vec![signature])
                 .verify()?,
+=======
+            Transaction::from_data(transfer_tx, Intent::default(), vec![signature]).verify()?,
+>>>>>>> fork/testnet
             SuiTransactionBlockResponseOptions::full_content(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )

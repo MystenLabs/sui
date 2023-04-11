@@ -19,7 +19,11 @@ CREATE TABLE transactions (
     checkpoint_sequence_number  BIGINT,
     timestamp_ms                BIGINT,
     transaction_kind            TEXT         NOT NULL,
+<<<<<<< HEAD
     transaction_count           BIGINT       NOT NULL,
+=======
+    transaction_count               BIGINT       NOT NULL,
+>>>>>>> fork/testnet
     -- object related
     created                     TEXT[]       NOT NULL,
     mutated                     TEXT[]       NOT NULL,

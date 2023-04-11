@@ -11,7 +11,12 @@ use sui_json::SuiJsonValue;
 use sui_json_rpc::api::{TransactionBuilderClient, TransactionBuilderServer};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
+<<<<<<< HEAD
     RPCTransactionRequestParams, SuiTransactionBlockBuilderMode, SuiTypeTag, TransactionBlockBytes,
+=======
+    BigInt, RPCTransactionRequestParams, SuiTransactionBlockBuilderMode, SuiTypeTag,
+    TransactionBlockBytes,
+>>>>>>> fork/testnet
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SuiAddress};
@@ -50,7 +55,11 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         sui_object_id: ObjectID,
         gas_budget: BigInt<u64>,
         recipient: SuiAddress,
+<<<<<<< HEAD
         amount: Option<BigInt<u64>>,
+=======
+        amount: Option<u64>,
+>>>>>>> fork/testnet
     ) -> RpcResult<TransactionBlockBytes> {
         self.fullnode
             .transfer_sui(signer, sui_object_id, gas_budget, recipient, amount)
@@ -64,7 +73,11 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         recipients: Vec<SuiAddress>,
         amounts: Vec<BigInt<u64>>,
         gas: Option<ObjectID>,
+<<<<<<< HEAD
         gas_budget: BigInt<u64>,
+=======
+        gas_budget: u64,
+>>>>>>> fork/testnet
     ) -> RpcResult<TransactionBlockBytes> {
         self.fullnode
             .pay(signer, input_coins, recipients, amounts, gas, gas_budget)
@@ -76,8 +89,13 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         signer: SuiAddress,
         input_coins: Vec<ObjectID>,
         recipients: Vec<SuiAddress>,
+<<<<<<< HEAD
         amounts: Vec<BigInt<u64>>,
         gas_budget: BigInt<u64>,
+=======
+        amounts: Vec<BigInt>,
+        gas_budget: u64,
+>>>>>>> fork/testnet
     ) -> RpcResult<TransactionBlockBytes> {
         self.fullnode
             .pay_sui(signer, input_coins, recipients, amounts, gas_budget)
@@ -89,7 +107,11 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         signer: SuiAddress,
         input_coins: Vec<ObjectID>,
         recipient: SuiAddress,
+<<<<<<< HEAD
         gas_budget: BigInt<u64>,
+=======
+        gas_budget: u64,
+>>>>>>> fork/testnet
     ) -> RpcResult<TransactionBlockBytes> {
         self.fullnode
             .pay_all_sui(signer, input_coins, recipient, gas_budget)
@@ -102,7 +124,11 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         compiled_modules: Vec<Base64>,
         dep_ids: Vec<ObjectID>,
         gas: Option<ObjectID>,
+<<<<<<< HEAD
         gas_budget: BigInt<u64>,
+=======
+        gas_budget: u64,
+>>>>>>> fork/testnet
     ) -> RpcResult<TransactionBlockBytes> {
         self.fullnode
             .publish(sender, compiled_modules, dep_ids, gas, gas_budget)
@@ -115,7 +141,11 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         coin_object_id: ObjectID,
         split_amounts: Vec<BigInt<u64>>,
         gas: Option<ObjectID>,
+<<<<<<< HEAD
         gas_budget: BigInt<u64>,
+=======
+        gas_budget: u64,
+>>>>>>> fork/testnet
     ) -> RpcResult<TransactionBlockBytes> {
         self.fullnode
             .split_coin(signer, coin_object_id, split_amounts, gas, gas_budget)
@@ -128,7 +158,11 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         coin_object_id: ObjectID,
         split_count: BigInt<u64>,
         gas: Option<ObjectID>,
+<<<<<<< HEAD
         gas_budget: BigInt<u64>,
+=======
+        gas_budget: u64,
+>>>>>>> fork/testnet
     ) -> RpcResult<TransactionBlockBytes> {
         self.fullnode
             .split_coin_equal(signer, coin_object_id, split_count, gas, gas_budget)
@@ -141,7 +175,11 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         primary_coin: ObjectID,
         coin_to_merge: ObjectID,
         gas: Option<ObjectID>,
+<<<<<<< HEAD
         gas_budget: BigInt<u64>,
+=======
+        gas_budget: u64,
+>>>>>>> fork/testnet
     ) -> RpcResult<TransactionBlockBytes> {
         self.fullnode
             .merge_coin(signer, primary_coin, coin_to_merge, gas, gas_budget)
@@ -157,7 +195,11 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         type_arguments: Vec<SuiTypeTag>,
         rpc_arguments: Vec<SuiJsonValue>,
         gas: Option<ObjectID>,
+<<<<<<< HEAD
         gas_budget: BigInt<u64>,
+=======
+        gas_budget: u64,
+>>>>>>> fork/testnet
         tx_builder_mode: Option<SuiTransactionBlockBuilderMode>,
     ) -> RpcResult<TransactionBlockBytes> {
         self.fullnode
@@ -180,7 +222,11 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         signer: SuiAddress,
         params: Vec<RPCTransactionRequestParams>,
         gas: Option<ObjectID>,
+<<<<<<< HEAD
         gas_budget: BigInt<u64>,
+=======
+        gas_budget: u64,
+>>>>>>> fork/testnet
         tx_builder_mode: Option<SuiTransactionBlockBuilderMode>,
     ) -> RpcResult<TransactionBlockBytes> {
         self.fullnode
@@ -195,7 +241,11 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         amount: Option<BigInt<u64>>,
         validator: SuiAddress,
         gas: Option<ObjectID>,
+<<<<<<< HEAD
         gas_budget: BigInt<u64>,
+=======
+        gas_budget: u64,
+>>>>>>> fork/testnet
     ) -> RpcResult<TransactionBlockBytes> {
         self.fullnode
             .request_add_stake(signer, coins, amount, validator, gas, gas_budget)
@@ -207,7 +257,11 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         signer: SuiAddress,
         staked_sui: ObjectID,
         gas: Option<ObjectID>,
+<<<<<<< HEAD
         gas_budget: BigInt<u64>,
+=======
+        gas_budget: u64,
+>>>>>>> fork/testnet
     ) -> RpcResult<TransactionBlockBytes> {
         self.fullnode
             .request_withdraw_stake(signer, staked_sui, gas, gas_budget)
