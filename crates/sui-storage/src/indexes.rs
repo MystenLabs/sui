@@ -5,21 +5,28 @@
 //! The main user of this data is the explorer.
 
 use std::cmp::{max, min};
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 use anyhow::anyhow;
+use moka::future::Cache;
 use move_core_types::identifier::Identifier;
-use move_core_types::language_storage::{ModuleId, StructTag};
+use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use serde::{de::DeserializeOwned, Serialize};
 use tracing::debug;
 
+use crate::mutex_table::RwLockTable;
 use sui_json_rpc_types::SuiObjectDataFilter;
-use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest, TxSequenceNumber};
+use sui_types::base_types::{
+    ObjectID, ObjectType, SuiAddress, TransactionDigest, TxSequenceNumber,
+};
 use sui_types::base_types::{ObjectInfo, ObjectRef};
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName};
 use sui_types::error::{SuiError, SuiResult};
+use sui_types::gas_coin::GAS;
 use sui_types::messages::TransactionEvents;
 use sui_types::object::Owner;
 use sui_types::query::TransactionFilter;
@@ -38,11 +45,24 @@ pub const MAX_TX_RANGE_SIZE: u64 = 4096;
 
 pub const MAX_GET_OWNED_OBJECT_SIZE: usize = 256;
 
+#[derive(Default, Copy, Clone, Debug, Eq, PartialEq)]
+pub struct TotalBalance {
+    pub balance: u128,
+    pub num_coins: usize,
+}
+
 pub struct ObjectIndexChanges {
     pub deleted_owners: Vec<OwnerIndexKey>,
     pub deleted_dynamic_fields: Vec<DynamicFieldKey>,
     pub new_owners: Vec<(OwnerIndexKey, ObjectInfo)>,
     pub new_dynamic_fields: Vec<(DynamicFieldKey, DynamicFieldInfo)>,
+}
+
+pub struct IndexStoreCaches {
+    pub per_coin_type_balance: Cache<(SuiAddress, TypeTag), SuiResult<TotalBalance>>,
+    pub per_coin_rw_locks: Arc<RwLockTable<(SuiAddress, TypeTag)>>,
+    pub all_balances: Cache<SuiAddress, SuiResult<Arc<HashMap<TypeTag, TotalBalance>>>>,
+    pub all_balance_rw_locks: Arc<RwLockTable<SuiAddress>>,
 }
 
 #[derive(DBMapUtils)]
@@ -112,6 +132,7 @@ pub struct IndexStoreTables {
 pub struct IndexStore {
     next_sequence_number: AtomicU64,
     tables: IndexStoreTables,
+    pub caches: IndexStoreCaches,
 }
 
 // These functions are used to initialize the DB tables
@@ -154,6 +175,12 @@ impl IndexStore {
     pub fn new(path: PathBuf) -> Self {
         let tables =
             IndexStoreTables::open_tables_read_write(path, MetricConf::default(), None, None);
+        let caches = IndexStoreCaches {
+            per_coin_type_balance: Cache::new(1_000_000),
+            all_balances: Cache::new(1_000_000),
+            per_coin_rw_locks: Arc::new(RwLockTable::new(256)),
+            all_balance_rw_locks: Arc::new(RwLockTable::new(256)),
+        };
         let next_sequence_number = tables
             .transaction_order
             .iter()
@@ -166,10 +193,11 @@ impl IndexStore {
         Self {
             tables,
             next_sequence_number,
+            caches,
         }
     }
 
-    pub fn index_tx(
+    pub async fn index_tx(
         &self,
         sender: SuiAddress,
         active_inputs: impl Iterator<Item = ObjectID>,
@@ -181,7 +209,7 @@ impl IndexStore {
         timestamp_ms: u64,
     ) -> SuiResult<u64> {
         let sequence = self.next_sequence_number.fetch_add(1, Ordering::SeqCst);
-
+        let mut addresses_to_invalidate: HashSet<SuiAddress> = HashSet::new();
         let mut batch = self.tables.transactions_from_addr.batch();
 
         batch.insert_batch(
@@ -237,6 +265,9 @@ impl IndexStore {
         )?;
 
         // Owner index
+        self.invalidate_deleted_coins(&object_index_changes.deleted_owners)
+            .await?;
+        addresses_to_invalidate.extend(object_index_changes.deleted_owners.iter().map(|x| x.0));
         batch.delete_batch(
             &self.tables.owner_index,
             object_index_changes.deleted_owners.into_iter(),
@@ -245,10 +276,17 @@ impl IndexStore {
             &self.tables.dynamic_field_index,
             object_index_changes.deleted_dynamic_fields.into_iter(),
         )?;
+
+        self.invalidate_added_coins(&object_index_changes.new_owners)
+            .await?;
+        addresses_to_invalidate.extend(object_index_changes.new_owners.iter().map(|x| x.0 .0));
         batch.insert_batch(
             &self.tables.owner_index,
             object_index_changes.new_owners.into_iter(),
         )?;
+
+        self.invalidate_all_balance(addresses_to_invalidate).await?;
+
         batch.insert_batch(
             &self.tables.dynamic_field_index,
             object_index_changes.new_dynamic_fields.into_iter(),
@@ -845,5 +883,89 @@ impl IndexStore {
 
     pub fn is_empty(&self) -> bool {
         self.tables.owner_index.is_empty()
+    }
+
+    pub fn get_owner_coin_iterator<'a>(
+        &'a self,
+        owner: SuiAddress,
+        coin_type: Option<&'a TypeTag>,
+    ) -> SuiResult<impl Iterator<Item = ObjectRef> + '_> {
+        Ok(self
+            .get_owner_objects_iterator(owner, ObjectID::ZERO, None)?
+            .filter(move |o| {
+                if let Some(coin_type) = coin_type {
+                    o.type_.is_coin_t(coin_type)
+                } else {
+                    o.type_.is_coin()
+                }
+            })
+            .map(|info| (info.object_id, info.version, info.digest)))
+    }
+
+    async fn invalidate_deleted_coins(&self, owners: &[OwnerIndexKey]) -> SuiResult {
+        for owner in owners.iter() {
+            // This coin should be in the index if it is getting deleted
+            let object_info = self.tables.owner_index.get(owner)?;
+            if let Some(object_info) = object_info {
+                if let Ok(type_tags) = match object_info.type_ {
+                    ObjectType::Package => Err(anyhow!("Cannot create StructTag from Package")),
+                    ObjectType::Struct(move_object_type) => Ok(move_object_type.type_params()),
+                } {
+                    let type_tag = if let Some(type_tag) = type_tags.first() {
+                        type_tag.clone()
+                    } else {
+                        TypeTag::Struct(Box::new(GAS::type_()))
+                    };
+                    let _rwlock = self
+                        .caches
+                        .per_coin_rw_locks
+                        .acquire_lock((owner.0.clone(), type_tag.clone()))
+                        .await;
+                    self.caches
+                        .per_coin_type_balance
+                        .invalidate(&(owner.0, type_tag))
+                        .await;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    async fn invalidate_added_coins(&self, owners: &[(OwnerIndexKey, ObjectInfo)]) -> SuiResult {
+        for (owner, object_info) in owners.iter() {
+            if let Ok(type_tags) = match &object_info.type_ {
+                ObjectType::Package => Err(anyhow!("Cannot create StructTag from Package")),
+                ObjectType::Struct(move_object_type) => Ok(move_object_type.type_params()),
+            } {
+                let type_tag = if let Some(type_tag) = type_tags.first() {
+                    type_tag.clone()
+                } else {
+                    TypeTag::Struct(Box::new(GAS::type_()))
+                };
+                let _rwlock = self
+                    .caches
+                    .per_coin_rw_locks
+                    .acquire_lock((owner.0.clone(), type_tag.clone()))
+                    .await;
+                self.caches
+                    .per_coin_type_balance
+                    .invalidate(&(owner.0, type_tag))
+                    .await;
+            }
+        }
+        Ok(())
+    }
+
+    async fn invalidate_all_balance(&self, addresses: HashSet<SuiAddress>) -> SuiResult {
+        for address in addresses.iter() {
+            let _rwlock = self
+                .caches
+                .all_balance_rw_locks
+                .acquire_lock(address.clone())
+                .await;
+            self.caches.all_balances.invalidate(address).await;
+            eprintln!("busted all cache for address: {:?}", address);
+        }
+        Ok(())
     }
 }

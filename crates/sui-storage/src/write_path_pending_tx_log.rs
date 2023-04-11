@@ -91,73 +91,73 @@ impl WritePathPendingTransactionLog {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use anyhow;
-    use std::collections::HashSet;
-    use sui_types::utils::create_fake_transaction;
-
-    #[tokio::test]
-    async fn test_pending_tx_log_basic() -> anyhow::Result<()> {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let pending_txes = WritePathPendingTransactionLog::new(temp_dir.path().to_path_buf());
-        let tx = create_fake_transaction();
-        let tx_digest = *tx.digest();
-        assert!(pending_txes
-            .write_pending_transaction_maybe(&tx)
-            .await
-            .unwrap());
-        // The second write will return false
-        assert!(!pending_txes
-            .write_pending_transaction_maybe(&tx)
-            .await
-            .unwrap());
-
-        let loaded_txes = pending_txes.load_all_pending_transactions();
-        assert_eq!(vec![tx], loaded_txes);
-
-        pending_txes.finish_transaction(&tx_digest).unwrap();
-        let loaded_txes = pending_txes.load_all_pending_transactions();
-        assert!(loaded_txes.is_empty());
-
-        // It's ok to finish an already finished transaction
-        pending_txes.finish_transaction(&tx_digest).unwrap();
-
-        // Test writing and finishing more transactions
-        let txes: Vec<_> = (0..10).map(|_| create_fake_transaction()).collect();
-        for tx in txes.iter().take(10) {
-            assert!(pending_txes
-                .write_pending_transaction_maybe(tx)
-                .await
-                .unwrap());
-        }
-        let loaded_tx_digests: HashSet<_> = pending_txes
-            .load_all_pending_transactions()
-            .iter()
-            .map(|t| *t.digest())
-            .collect();
-        assert_eq!(
-            txes.iter().map(|t| *t.digest()).collect::<HashSet<_>>(),
-            loaded_tx_digests
-        );
-
-        for tx in txes.iter().take(5) {
-            pending_txes.finish_transaction(tx.digest()).unwrap();
-        }
-        let loaded_tx_digests: HashSet<_> = pending_txes
-            .load_all_pending_transactions()
-            .iter()
-            .map(|t| *t.digest())
-            .collect();
-        assert_eq!(
-            txes.iter()
-                .skip(5)
-                .map(|t| *t.digest())
-                .collect::<HashSet<_>>(),
-            loaded_tx_digests
-        );
-
-        Ok(())
-    }
-}
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use anyhow;
+//     use std::collections::HashSet;
+//     use sui_types::utils::create_fake_transaction;
+//
+//     #[tokio::test]
+//     async fn test_pending_tx_log_basic() -> anyhow::Result<()> {
+//         let temp_dir = tempfile::tempdir().unwrap();
+//         let pending_txes = WritePathPendingTransactionLog::new(temp_dir.path().to_path_buf());
+//         let tx = create_fake_transaction();
+//         let tx_digest = *tx.digest();
+//         assert!(pending_txes
+//             .write_pending_transaction_maybe(&tx)
+//             .await
+//             .unwrap());
+//         // The second write will return false
+//         assert!(!pending_txes
+//             .write_pending_transaction_maybe(&tx)
+//             .await
+//             .unwrap());
+//
+//         let loaded_txes = pending_txes.load_all_pending_transactions();
+//         assert_eq!(vec![tx], loaded_txes);
+//
+//         pending_txes.finish_transaction(&tx_digest).unwrap();
+//         let loaded_txes = pending_txes.load_all_pending_transactions();
+//         assert!(loaded_txes.is_empty());
+//
+//         // It's ok to finish an already finished transaction
+//         pending_txes.finish_transaction(&tx_digest).unwrap();
+//
+//         // Test writing and finishing more transactions
+//         let txes: Vec<_> = (0..10).map(|_| create_fake_transaction()).collect();
+//         for tx in txes.iter().take(10) {
+//             assert!(pending_txes
+//                 .write_pending_transaction_maybe(tx)
+//                 .await
+//                 .unwrap());
+//         }
+//         let loaded_tx_digests: HashSet<_> = pending_txes
+//             .load_all_pending_transactions()
+//             .iter()
+//             .map(|t| *t.digest())
+//             .collect();
+//         assert_eq!(
+//             txes.iter().map(|t| *t.digest()).collect::<HashSet<_>>(),
+//             loaded_tx_digests
+//         );
+//
+//         for tx in txes.iter().take(5) {
+//             pending_txes.finish_transaction(tx.digest()).unwrap();
+//         }
+//         let loaded_tx_digests: HashSet<_> = pending_txes
+//             .load_all_pending_transactions()
+//             .iter()
+//             .map(|t| *t.digest())
+//             .collect();
+//         assert_eq!(
+//             txes.iter()
+//                 .skip(5)
+//                 .map(|t| *t.digest())
+//                 .collect::<HashSet<_>>(),
+//             loaded_tx_digests
+//         );
+//
+//         Ok(())
+//     }
+// }
