@@ -409,6 +409,13 @@ impl CheckpointStore {
             .map_err(SuiError::StorageError)?;
         Ok(())
     }
+
+    pub fn wipe_all_local_execution_data(&self) -> SuiResult {
+        info!("Deleting all local execution data from CheckpointStore");
+        self.watermarks
+            .remove(&CheckpointWatermark::HighestExecuted)?;
+        Ok(())
+    }
 }
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize)]

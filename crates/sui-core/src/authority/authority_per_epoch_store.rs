@@ -1981,6 +1981,23 @@ impl AuthorityPerEpochStore {
             .epoch_total_duration
             .set(self.epoch_open_time.elapsed().as_millis() as i64);
     }
+
+    pub fn wipe_all_per_epoch_stores(parent_path: &PathBuf) -> Result<(), anyhow::Error> {
+        info!("Deleting all per-epoch db stores...");
+        for entry in std::fs::read_dir(parent_path)? {
+            let entry = entry?;
+            let entry_path = entry.path();
+            if entry_path.is_dir() {
+                if let Some(name) = entry_path.file_name() {
+                    if name.to_string_lossy().starts_with(EPOCH_DB_PREFIX) {
+                        std::fs::remove_dir_all(entry_path)?;
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 fn transactions_table_default_config() -> DBOptions {

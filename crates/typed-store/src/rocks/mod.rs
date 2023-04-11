@@ -735,7 +735,9 @@ impl<K, V> DBMap<K, V> {
     }
 
     fn report_metrics(rocksdb: &Arc<RocksDB>, cf_name: &str, db_metrics: &Arc<DBMetrics>) {
-        let cf = rocksdb.cf_handle(cf_name).expect("Failed to get cf");
+        let cf = rocksdb
+            .cf_handle(cf_name)
+            .unwrap_or_else(|| panic!("Failed to get cf {}", cf_name));
         db_metrics
             .cf_metrics
             .rocksdb_total_sst_files_size

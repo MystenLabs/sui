@@ -9147,6 +9147,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-fork-recovery-tool"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap 3.2.23",
+ "prometheus",
+ "sui-config",
+ "sui-core",
+ "sui-types",
+ "telemetry-subscribers",
+ "tokio",
+ "typed-store",
+]
+
+[[package]]
 name = "sui-framework"
 version = "0.1.0"
 dependencies = [

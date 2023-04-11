@@ -1627,6 +1627,34 @@ impl AuthorityStore {
             checkpoint_executor.set_inconsistent_state(is_inconsistent);
         }
     }
+
+    pub async fn wipe_local_execution_state(&self, genesis: &Genesis) -> SuiResult {
+        info!("Deleting local execution state from perpetual_tables...");
+        self.perpetual_tables.executed_effects.clear()?;
+        self.perpetual_tables.objects.clear()?;
+        self.perpetual_tables.events.clear()?;
+        self.perpetual_tables
+            .executed_transactions_to_checkpoint
+            .clear()?;
+        self.perpetual_tables.expected_network_sui_amount.clear()?;
+        self.perpetual_tables
+            .expected_storage_fund_imbalance
+            .clear()?;
+        self.perpetual_tables.indirect_move_objects.clear()?;
+        self.perpetual_tables
+            .owned_object_transaction_locks
+            .clear()?;
+        self.perpetual_tables.pruned_checkpoint.clear()?;
+        self.perpetual_tables.root_state_hash_by_epoch.clear()?;
+        let epoch_start_configuration = EpochStartConfiguration::new_v1(
+            genesis.sui_system_object().into_epoch_start_state(),
+            *genesis.checkpoint().digest(),
+        );
+        self.perpetual_tables
+            .set_epoch_start_configuration(&epoch_start_configuration)
+            .await?;
+        Ok(())
+    }
 }
 
 impl BackingPackageStore for AuthorityStore {

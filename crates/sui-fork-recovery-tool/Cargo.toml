@@ -1,0 +1,17 @@
+[package]
+name = "sui-fork-recovery-tool"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { version = "1.0.64", features = ["backtrace"] }
+clap = { version = "3.2.17", features = ["derive"] }
+prometheus = "0.13.3"
+tokio = { workspace = true, features = ["full"] }
+
+sui-config = { path = "../sui-config" }
+sui-core = { path = "../sui-core" }
+sui-types = { path = "../sui-types" }
+
+telemetry-subscribers.workspace = true
+typed-store.workspace = true
