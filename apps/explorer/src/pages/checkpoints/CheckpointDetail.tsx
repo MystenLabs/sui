@@ -39,8 +39,7 @@ export default function CheckpointDetail() {
                 <TabGroup as="div" size="lg">
                     <TabList>
                         <Tab>Details</Tab>
-                        {/* TODO: Get validator signatures */}
-                        {/* <Tab>Signatures</Tab> */}
+                        <Tab>Signatures</Tab>
                     </TabList>
                     <TabPanels>
                         <TabPanel>
@@ -76,24 +75,26 @@ export default function CheckpointDetail() {
                             </DescriptionList>
                         </TabPanel>
                         <TabPanel>
-                            {/* TODO: Get validator signatures */}
-                            {/* <DescriptionList>
-                                {contentsQuery.data?.user_signatures.map(
-                                    ([signature]) => (
+                            <TabGroup>
+                                <TabList>
+                                    <Tab>Aggregated Validator Signature</Tab>
+                                </TabList>
+                                <TabPanels>
+                                    <DescriptionList>
                                         <DescriptionItem
-                                            key={signature}
+                                            key={data.validatorSignature}
                                             title="Signature"
                                         >
                                             <Text
                                                 variant="p1/medium"
                                                 color="steel-darker"
                                             >
-                                                {signature}
+                                                {data.validatorSignature}
                                             </Text>
                                         </DescriptionItem>
-                                    )
-                                )}
-                            </DescriptionList> */}
+                                    </DescriptionList>
+                                </TabPanels>
+                            </TabGroup>
                         </TabPanel>
                     </TabPanels>
                 </TabGroup>
