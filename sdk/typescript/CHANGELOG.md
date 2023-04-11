@@ -1,5 +1,11 @@
 # @mysten/sui.js
 
+## 0.32.1
+
+### Patch Changes
+
+- 3224ffcd0: Adding support for the `upgrade` transaction type.
+
 ## 0.32.0
 
 ### Minor Changes
