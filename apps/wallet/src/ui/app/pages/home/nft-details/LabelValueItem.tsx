@@ -49,15 +49,23 @@ export function LabelValueItem({
     }
     return display ? (
         <div className="flex flex-row flex-nowrap gap-1">
-            <div className="flex-1 truncate">
-                <Text color="steel-dark" variant="p2" weight="medium" truncate>
+            <div className="flex-1 [&>div]:leading-5">
+                <Text
+                    color="steel-dark"
+                    variant="body"
+                    weight="medium"
+                    truncate
+                >
                     {label}
                 </Text>
             </div>
             <div
-                className={cl('max-w-[60%] break-words text-end', {
-                    'pr-px line-clamp-3 hover:line-clamp-none': multiline,
-                })}
+                className={cl(
+                    'max-w-[60%] break-words text-end [&>div]:leading-5',
+                    {
+                        'pr-px line-clamp-3 hover:line-clamp-none': multiline,
+                    }
+                )}
             >
                 {href && display ? (
                     <Link
@@ -71,7 +79,7 @@ export function LabelValueItem({
                     <Text
                         color="steel-darker"
                         weight="medium"
-                        variant="p2"
+                        variant="body"
                         truncate={!multiline}
                     >
                         {display}
