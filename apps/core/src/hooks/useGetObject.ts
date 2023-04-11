@@ -2,20 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useRpcClient } from '../api/RpcClientContext';
-import { normalizeSuiAddress, type SuiObjectDataOptions } from '@mysten/sui.js';
+import { normalizeSuiAddress } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 
-const defaultOptions: SuiObjectDataOptions = {
+const defaultOptions = {
     showType: true,
     showContent: true,
     showOwner: true,
+    showPreviousTransaction: true,
+    showStorageRebate: true,
     showDisplay: true,
 };
 
-export function useGetObject(
-    objectId?: string | null,
-    options = defaultOptions
-) {
+export function useGetObject(objectId?: string | null) {
     const rpc = useRpcClient();
     const normalizedObjId = objectId && normalizeSuiAddress(objectId);
     return useQuery(
@@ -23,7 +22,7 @@ export function useGetObject(
         () =>
             rpc.getObject({
                 id: normalizedObjId!,
-                options,
+                options: defaultOptions,
             }),
         { enabled: !!normalizedObjId }
     );
