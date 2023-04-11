@@ -69,7 +69,11 @@ class YourWallet implements Wallet {
       },
       "sui:signAndExecuteTransactionBlock": {
         version: "1.1.0",
-        signAndExecuteTransactionBlock: this.#signAndExecuteTransaction,
+        signAndExecuteTransactionBlock: this.#signAndExecuteTransactionBlock,
+      },
+      'sui:signMessage': {
+        version: '1.0.0',
+        signMessage: this.#signMessage,
       },
     };
   },
@@ -87,6 +91,10 @@ class YourWallet implements Wallet {
   };
 
   #signAndExecuteTransactionBlock: SuiSignAndExecuteTransactionBlockMethod = () => {
+    // Your wallet's implementation
+  };
+
+  #signMessage: SuiSignMessageMethod = () => {
     // Your wallet's implementation
   };
 }
