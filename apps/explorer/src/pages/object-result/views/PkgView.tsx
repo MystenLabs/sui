@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { getTransactionSender } from '@mysten/sui.js';
-import {useState} from "react";
+import { useState } from 'react';
+import { type Direction } from 'react-resizable-panels';
 
 import { ErrorBoundary } from '../../../components/error-boundary/ErrorBoundary';
 import PkgModulesWrapper from '../../../components/module/PkgModulesWrapper';
@@ -12,19 +13,24 @@ import { getOwnerStr } from '../../../utils/objectUtils';
 import { trimStdLibPrefix } from '../../../utils/stringUtils';
 import { type DataType } from '../ObjectResultType';
 
-
 import styles from './ObjectView.module.css';
 
-import {Button} from "~/ui/Button";
-import { Heading } from '~/ui/Heading';
 import { AddressLink, ObjectLink } from '~/ui/InternalLink';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
+import { RadioGroup, RadioOption } from '~/ui/Radio';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
 const GENESIS_TX_DIGEST = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
 
+const splitPanelsOrientation = [
+    { label: 'STACKED', value: 'vertical' },
+    { label: 'SIDE-BY-SIDE', value: 'horizontal' },
+];
+
 function PkgView({ data }: { data: DataType }) {
-    const [isSplitPaneHorizontal, setIsSplitPaneHorizontal] = useState(true);
+    const [selectedSplitPanelOrientation, setSplitPanelOrientation] = useState(
+        splitPanelsOrientation[1].value
+    );
 
     const { data: txnData, isLoading } = useGetTransaction(
         data.data.tx_digest!
@@ -102,18 +108,45 @@ function PkgView({ data }: { data: DataType }) {
                     </TabPanels>
                 </TabGroup>
 
-                <div className="mb-3 mt-16 flex justify-between">
-                    <Heading as="h2" variant="heading4/semibold">
-                        Modules
-                    </Heading>
-                    <div className="flex justify-end gap-5">
-                        <Button variant="outline" size="sm" onClick={() => setIsSplitPaneHorizontal(false)}><div className="uppercase">stacked</div></Button>
-                        <Button variant="outline" size="sm" onClick={() => setIsSplitPaneHorizontal(true)}><div className="uppercase">side-by-side</div></Button>
-                    </div>
-                </div>
-                <ErrorBoundary>
-                    <PkgModulesWrapper id={data.id} modules={properties} isSplitPaneHorizontal={isSplitPaneHorizontal} />
-                </ErrorBoundary>
+                <TabGroup size="lg">
+                    <TabList>
+                        <div className="mt-16 flex w-full justify-between">
+                            <Tab>Modules</Tab>
+                            <div>
+                                <RadioGroup
+                                    className="hidden gap-0.5 md:flex"
+                                    ariaLabel="split-panel-bytecode-viewer"
+                                    value={selectedSplitPanelOrientation}
+                                    onChange={setSplitPanelOrientation}
+                                >
+                                    {splitPanelsOrientation.map(
+                                        ({ value, label }) => (
+                                            <RadioOption
+                                                key={value}
+                                                value={value}
+                                                label={label}
+                                            />
+                                        )
+                                    )}
+                                </RadioGroup>
+                            </div>
+                        </div>
+                    </TabList>
+                    <TabPanels>
+                        <TabPanel noGap>
+                            <ErrorBoundary>
+                                <PkgModulesWrapper
+                                    id={data.id}
+                                    modules={properties}
+                                    splitPanelOrientation={
+                                        selectedSplitPanelOrientation as Direction
+                                    }
+                                />
+                            </ErrorBoundary>
+                        </TabPanel>
+                    </TabPanels>
+                </TabGroup>
+
                 <div className={styles.txsection}>
                     <h2 className={styles.header}>Transaction Blocks</h2>
                     <ErrorBoundary>

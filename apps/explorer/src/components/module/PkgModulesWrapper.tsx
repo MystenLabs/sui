@@ -4,6 +4,7 @@
 import { Combobox } from '@headlessui/react';
 import clsx from 'clsx';
 import { useState, useCallback, useEffect } from 'react';
+import { type Direction } from 'react-resizable-panels';
 
 import ModuleView from './ModuleView';
 import { ModuleFunctionsInteraction } from './module-functions-interaction';
@@ -20,7 +21,7 @@ type ModuleType = [moduleName: string, code: string];
 interface Props {
     id?: string;
     modules: ModuleType[];
-    isSplitPaneHorizontal: boolean;
+    splitPanelOrientation: Direction;
 }
 
 interface ModuleViewWrapperProps {
@@ -47,7 +48,7 @@ function ModuleViewWrapper({
     return <ModuleView id={id} name={name} code={code} />;
 }
 
-function PkgModuleViewWrapper({ id, modules, isSplitPaneHorizontal }: Props) {
+function PkgModuleViewWrapper({ id, modules, splitPanelOrientation }: Props) {
     const isMediumOrAbove = useBreakpoint('md');
 
     const modulenames = modules.map(([name]) => name);
@@ -143,7 +144,7 @@ function PkgModuleViewWrapper({ id, modules, isSplitPaneHorizontal }: Props) {
     ];
 
     return (
-        <div className="flex flex-col gap-5 border-y border-gray-45 md:flex-row md:flex-nowrap">
+        <div className="flex flex-col gap-5 border-b border-gray-45 md:flex-row md:flex-nowrap">
             <div className="w-full md:w-1/5">
                 <Combobox value={selectedModule} onChange={onChangeModule}>
                     <div className="mt-2.5 flex w-full justify-between rounded-md border border-gray-50 py-1 pl-3 placeholder-gray-65 shadow-sm">
@@ -218,7 +219,7 @@ function PkgModuleViewWrapper({ id, modules, isSplitPaneHorizontal }: Props) {
             {isMediumOrAbove ? (
                 <div className="w-4/5">
                     <SplitPanes
-                        direction={isSplitPaneHorizontal ? 'horizontal' : 'vertical'}
+                        direction={splitPanelOrientation}
                         defaultSizes={[40, 60]}
                         panels={bytecodeContent}
                     />

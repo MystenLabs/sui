@@ -45,7 +45,11 @@ export function SplitPanes({
         <PanelGroup {...props}>
             {panels.map((panel, index) => (
                 <Fragment key={index}>
-                    <Panel order={index} defaultSize={defaultSizes[index]}>
+                    <Panel
+                        collapsible
+                        order={index}
+                        defaultSize={defaultSizes[index]}
+                    >
                         {panel}
                     </Panel>
                     {index < panels.length - 1 && (
