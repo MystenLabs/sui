@@ -9,7 +9,7 @@ export type LabelValuesContainerProps = {
 
 export function LabelValuesContainer({ children }: LabelValuesContainerProps) {
     return (
-        <div className="flex flex-col flex-nowrap gap-3 text-body font-medium">
+        <div className="flex flex-col flex-nowrap gap-1 text-body font-medium">
             {children}
         </div>
     );
