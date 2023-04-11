@@ -490,7 +490,6 @@ async fn test_validator_resign_effects() {
 }
 
 #[sim_test]
-#[ignore]
 async fn test_validator_candidate_pool_read() {
     let new_validator_key = gen_keys(5).pop().unwrap();
     let new_validator_address: SuiAddress = new_validator_key.public().into();
@@ -547,6 +546,10 @@ async fn test_validator_candidate_pool_read() {
         &new_validator_key,
     )
     .await;
+
+    // Trigger reconfiguration so that the candidate adding txn is executed on all authorities.
+    trigger_reconfiguration(&authorities).await;
+
     // Check that the candidate can be found in the candidate table now.
     authorities[0].with(|node| {
         let system_state = node
