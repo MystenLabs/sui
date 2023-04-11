@@ -78,6 +78,7 @@ export function VerifyLedgerConnectionStatus({
                         }
                     }}
                     color="heroDark"
+                    weight="medium"
                 />
             );
         case VerificationStatus.NOT_VERIFIED:

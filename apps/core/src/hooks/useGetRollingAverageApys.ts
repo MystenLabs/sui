@@ -7,6 +7,7 @@ import { useMemo } from 'react';
 import Decimal from 'decimal.js';
 
 import { useGetValidatorsEvents } from './useGetValidatorsEvents';
+import { useGetSystemState } from './useGetSystemState';
 import { roundFloat } from '../utils/roundFloat';
 
 // recentEpochRewards is list of the last 30 epoch rewards for a specific validator
@@ -14,7 +15,7 @@ import { roundFloat } from '../utils/roundFloat';
 // APY_e_30rollingaverage = average(APY_e,APY_e-1,…,APY_e-29);
 
 const ROLLING_AVERAGE = 30;
-const DEFAULT_APY_DECIMALS = 4;
+const DEFAULT_APY_DECIMALS = 2;
 
 // define the type parsedJson response
 type ParsedJson = {
@@ -60,12 +61,30 @@ export function useGetRollingAverageApys(numberOfValidators: number | null) {
         order: 'descending',
     });
 
+    const { data, isLoading } = useGetSystemState();
+
     const apyByValidator =
         useMemo<ApyByValidator | null>(() => {
-            if (!validatorEpochEvents?.data) {
+            if (!validatorEpochEvents?.data || !data) {
                 return null;
             }
+            const { stakeSubsidyStartEpoch, epoch, activeValidators } =
+                data || {};
+            // return 0 for all validators if current epoch is less than the stake subsidy start epoch
+            if (+epoch < +stakeSubsidyStartEpoch) {
+                return activeValidators.reduce((acc, validator) => {
+                    acc[validator.suiAddress] = 0;
+                    return acc;
+                }, {} as ApyByValidator);
+            }
+
+            // The rolling average epoch is the current epoch - the stake subsidy start epoch
+            const avgEpochNumberAfterSubsidy = Math.max(
+                0,
+                Math.min(ROLLING_AVERAGE, +epoch - +stakeSubsidyStartEpoch)
+            );
             const apyGroups: ApyGroups = {};
+
             validatorEpochEvents.data.forEach(({ parsedJson }) => {
                 const { stake, pool_staking_reward, validator_address } =
                     parsedJson as ParsedJson;
@@ -84,8 +103,9 @@ export function useGetRollingAverageApys(numberOfValidators: number | null) {
             const apyByValidator: ApyByValidator = Object.entries(
                 apyGroups
             ).reduce((acc, [validatorAddr, apyArr]) => {
+                // prevent negative rolling average epoch by setting it to 0
                 const apys = apyArr
-                    .slice(0, ROLLING_AVERAGE)
+                    .slice(0, avgEpochNumberAfterSubsidy)
                     .map((entry) => entry);
 
                 const avgApy =
@@ -99,10 +119,11 @@ export function useGetRollingAverageApys(numberOfValidators: number | null) {
             // return object with validator address as key and APY as value
             // { '0x123': 0.1234, '0x456': 0.4567 }
             return apyByValidator;
-        }, [validatorEpochEvents.data]) || null;
+        }, [validatorEpochEvents.data, data]) || null;
 
     return {
         ...validatorEpochEvents,
+        isLoading: isLoading || validatorEpochEvents.isLoading,
         data: apyByValidator,
     };
 }

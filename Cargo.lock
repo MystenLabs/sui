@@ -10067,6 +10067,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-upgrade-compatibility-transactional-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "datatest-stable",
+ "insta",
+ "move-binary-format",
+ "move-command-line-common",
+ "move-compiler",
+ "move-package",
+ "sui-framework-build",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sui-verifier"
 version = "0.1.0"
 dependencies = [

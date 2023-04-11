@@ -19,6 +19,7 @@ type UserApproveContainerProps = {
     rejectTitle: string;
     approveTitle: string;
     approveDisabled?: boolean;
+    approveLoading?: boolean;
     onSubmit: (approved: boolean) => Promise<void>;
     isWarning?: boolean;
     addressHidden?: boolean;
@@ -33,6 +34,7 @@ export function UserApproveContainer({
     rejectTitle,
     approveTitle,
     approveDisabled = false,
+    approveLoading = false,
     onSubmit,
     isWarning,
     addressHidden = false,
@@ -88,7 +90,7 @@ export function UserApproveContainer({
                             handleOnResponse(true);
                         }}
                         disabled={approveDisabled}
-                        loading={submitting}
+                        loading={submitting || approveLoading}
                         text={approveTitle}
                     />
                 </div>

@@ -1,5 +1,17 @@
 # @mysten/sui.js
 
+## 0.32.1
+
+### Patch Changes
+
+- 3224ffcd0: Adding support for the `upgrade` transaction type.
+
+## 0.32.0
+
+### Minor Changes
+
+- 9b42d0ada: This release replaces all uint64 and uint128 numbers with BigInt in all JSON RPC responses to preserve precision. This is a Major Breaking Change - you must update your TS-SDK to latest version
+
 ## 0.31.0
 
 ### Minor Changes

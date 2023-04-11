@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { BCS } from '@mysten/bcs';
+import { BCS, fromB64 } from '@mysten/bcs';
 import {
   is,
   any,
@@ -17,7 +17,7 @@ import {
   Struct,
   define,
 } from 'superstruct';
-import { ObjectId } from '../types/common';
+import { ObjectId, normalizeSuiObjectId } from '../types/common';
 import { TRANSACTION_TYPE, WellKnownEncoding, create } from './utils';
 
 const option = <T extends Struct<any, any>>(some: T) =>
@@ -109,12 +109,30 @@ export const PublishTransaction = object({
 });
 export type PublishTransaction = Infer<typeof PublishTransaction>;
 
+// Keep in sync with constants in
+// crates/sui-framework/packages/sui-framework/sources/package.move
+export enum UpgradePolicy {
+  COMPATIBLE = 0,
+  ADDITIVE = 128,
+  DEP_ONLY = 192,
+}
+
+export const UpgradeTransaction = object({
+  kind: literal('Upgrade'),
+  modules: array(array(integer())),
+  dependencies: array(ObjectId),
+  packageId: ObjectId,
+  ticket: ObjectTransactionArgument,
+});
+export type UpgradeTransaction = Infer<typeof UpgradeTransaction>;
+
 const TransactionTypes = [
   MoveCallTransaction,
   TransferObjectsTransaction,
   SplitCoinsTransaction,
   MergeCoinsTransaction,
   PublishTransaction,
+  UpgradeTransaction,
   MakeMoveVecTransaction,
 ] as const;
 
@@ -170,10 +188,46 @@ export const Transactions = {
       MergeCoinsTransaction,
     );
   },
-  Publish(modules: number[][], dependencies: ObjectId[]): PublishTransaction {
+  Publish({
+    modules,
+    dependencies,
+  }: {
+    modules: number[][] | string[];
+    dependencies: ObjectId[];
+  }): PublishTransaction {
     return create(
-      { kind: 'Publish', modules, dependencies },
+      {
+        kind: 'Publish',
+        modules: modules.map((module) =>
+          typeof module === 'string' ? Array.from(fromB64(module)) : module,
+        ),
+        dependencies: dependencies.map((dep) => normalizeSuiObjectId(dep)),
+      },
       PublishTransaction,
+    );
+  },
+  Upgrade({
+    modules,
+    dependencies,
+    packageId,
+    ticket,
+  }: {
+    modules: number[][] | string[];
+    dependencies: ObjectId[];
+    packageId: ObjectId;
+    ticket: TransactionArgument;
+  }): UpgradeTransaction {
+    return create(
+      {
+        kind: 'Upgrade',
+        modules: modules.map((module) =>
+          typeof module === 'string' ? Array.from(fromB64(module)) : module,
+        ),
+        dependencies: dependencies.map((dep) => normalizeSuiObjectId(dep)),
+        packageId,
+        ticket,
+      },
+      UpgradeTransaction,
     );
   },
   MakeMoveVec({

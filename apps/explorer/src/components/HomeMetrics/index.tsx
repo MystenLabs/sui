@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { formatAmountParts, roundFloat, useRpcClient } from '@mysten/core';
+import { formatAmountParts, useRpcClient } from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
 
 import { MetricGroup } from './MetricGroup';
@@ -70,12 +70,16 @@ export function HomeMetrics() {
                         tooltip="Peak TPS in the past 30 days excluding this epoch"
                         postfix={`/ ${
                             networkMetrics?.tps30Days
-                                ? roundFloat(networkMetrics.tps30Days, 2)
+                                ? Math.floor(
+                                      networkMetrics.tps30Days
+                                  ).toLocaleString()
                                 : '--'
                         }`}
                     >
                         {networkMetrics?.currentTps
-                            ? roundFloat(networkMetrics.currentTps, 2)
+                            ? Math.floor(
+                                  networkMetrics.currentTps
+                              ).toLocaleString()
                             : '--'}
                     </StatsWrapper>
                     <StatsWrapper
@@ -83,16 +87,24 @@ export function HomeMetrics() {
                         tooltip="Current gas price"
                         postfix="MIST"
                     >
-                        {gasData ? String(gasData) : null}
+                        {gasData ? gasData.toLocaleString() : null}
                     </StatsWrapper>
                     <StatsWrapper label="Epoch" tooltip="The current epoch">
-                        {networkMetrics?.currentEpoch}
+                        {networkMetrics?.currentEpoch
+                            ? BigInt(
+                                  networkMetrics?.currentEpoch
+                              ).toLocaleString()
+                            : null}
                     </StatsWrapper>
                     <StatsWrapper
                         label="Checkpoint"
                         tooltip="The current checkpoint"
                     >
-                        {networkMetrics?.currentCheckpoint}
+                        {networkMetrics?.currentCheckpoint
+                            ? BigInt(
+                                  networkMetrics?.currentCheckpoint
+                              ).toLocaleString()
+                            : null}
                     </StatsWrapper>
                 </MetricGroup>
 

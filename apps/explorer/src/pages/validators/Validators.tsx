@@ -7,6 +7,7 @@ import {
     type ApyByValidator,
     useGetValidatorsEvents,
     formatPercentageDisplay,
+    useGetSystemState,
 } from '@mysten/core';
 import { type SuiEvent, type SuiValidatorSummary } from '@mysten/sui.js';
 import { lazy, Suspense, useMemo } from 'react';
@@ -14,7 +15,6 @@ import { lazy, Suspense, useMemo } from 'react';
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
 import { StakeColumn } from '~/components/top-validators-card/StakeColumn';
 import { DelegationAmount } from '~/components/validator/DelegationAmount';
-import { useGetSystemObject } from '~/hooks/useGetObject';
 import { Banner } from '~/ui/Banner';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
@@ -210,7 +210,7 @@ export function validatorsTableData(
 }
 
 function ValidatorPageResult() {
-    const { data, isLoading, isSuccess, isError } = useGetSystemObject();
+    const { data, isLoading, isSuccess, isError } = useGetSystemState();
 
     const numberOfValidators = data?.activeValidators.length || 0;
 

@@ -337,7 +337,7 @@ fn default_checkpoint_execution_max_concurrency() -> usize {
 }
 
 fn default_local_execution_timeout_sec() -> u64 {
-    10
+    30
 }
 
 impl Default for CheckpointExecutorConfig {

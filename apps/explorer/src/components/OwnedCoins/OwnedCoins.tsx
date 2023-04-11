@@ -1,11 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import OwnedCoinView from './components/OwnedCoinView';
-
-import type { CoinBalance } from '@mysten/sui.js';
 
 import { useGetAllBalances } from '~/hooks/useGetAllBalances';
 import { Heading } from '~/ui/Heading';
@@ -16,15 +14,8 @@ import { Text } from '~/ui/Text';
 export const COINS_PER_PAGE: number = 6;
 
 function OwnedCoins({ id }: { id: string }): JSX.Element {
-    const [uniqueCoins, setUniqueCoins] = useState<CoinBalance[]>([]);
     const [currentSlice, setCurrentSlice] = useState(1);
     const { isLoading, data, isError } = useGetAllBalances(id);
-
-    useEffect(() => {
-        if (data) {
-            setUniqueCoins(data);
-        }
-    }, [data]);
 
     if (isError) {
         return (
@@ -50,7 +41,7 @@ function OwnedCoins({ id }: { id: string }): JSX.Element {
                             <Text variant="caption/medium">Balance</Text>
                         </div>
                         <div>
-                            {uniqueCoins
+                            {data
                                 .slice(
                                     (currentSlice - 1) * COINS_PER_PAGE,
                                     currentSlice * COINS_PER_PAGE
@@ -64,12 +55,12 @@ function OwnedCoins({ id }: { id: string }): JSX.Element {
                                 ))}
                         </div>
                     </div>
-                    {uniqueCoins.length > COINS_PER_PAGE && (
+                    {data.length > COINS_PER_PAGE && (
                         <Pagination
                             onNext={() => setCurrentSlice(currentSlice + 1)}
                             hasNext={
                                 currentSlice !==
-                                Math.ceil(uniqueCoins.length / COINS_PER_PAGE)
+                                Math.ceil(data.length / COINS_PER_PAGE)
                             }
                             hasPrev={currentSlice !== 1}
                             onPrev={() => setCurrentSlice(currentSlice - 1)}
