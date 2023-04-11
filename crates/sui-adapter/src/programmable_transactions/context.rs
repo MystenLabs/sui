@@ -274,12 +274,16 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
         let new_events = events
             .into_iter()
             .map(|(ty, tag, value)| {
-                let layout = self.session.type_to_type_layout(&ty)?;
-                let bytes = value.simple_serialize(&layout).unwrap();
+                let layout = self
+                    .session
+                    .type_to_type_layout(&ty)
+                    .map_err(|e| self.convert_vm_error(e))?;
+                let Some(bytes) = value.simple_serialize(&layout) else {
+                    invariant_violation!("Failed to deserialize already serialized Move value");
+                };
                 Ok((module_id.clone(), tag, bytes))
             })
-            .collect::<Result<Vec<_>, VMError>>()
-            .map_err(|e| self.convert_vm_error(e))?;
+            .collect::<Result<Vec<_>, ExecutionError>>()?;
         self.user_events.extend(new_events);
         Ok(())
     }
@@ -522,28 +526,29 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
         // written as it's value might have changed (and eventually it's sequence number will need
         // to increase)
         let mut by_value_inputs = BTreeSet::new();
-        let mut add_input_object_write = |input| {
+        let mut add_input_object_write = |input| -> Result<(), ExecutionError> {
             let InputValue {
                 object_metadata: object_metadata_opt,
                 inner: ResultValue { value, .. },
             } = input;
-            let Some(object_metadata) = object_metadata_opt else { return };
+            let Some(object_metadata) = object_metadata_opt else { return Ok(()) };
             let is_mutable_input = object_metadata.is_mutable_input;
             let owner = object_metadata.owner;
             let id = object_metadata.id;
             input_object_metadata.insert(object_metadata.id, object_metadata);
             let Some(Value::Object(object_value)) = value else {
                 by_value_inputs.insert(id);
-                return
+                return Ok(())
             };
             if is_mutable_input {
-                add_additional_write(&mut additional_writes, owner, object_value);
+                add_additional_write(&mut additional_writes, owner, object_value)?;
             }
+            Ok(())
         };
         let gas_id_opt = gas.object_metadata.as_ref().map(|info| info.id);
-        add_input_object_write(gas);
+        add_input_object_write(gas)?;
         for input in inputs {
-            add_input_object_write(input)
+            add_input_object_write(input)?
         }
         // check for unused values
         // disable this check for dev inspect
@@ -597,7 +602,7 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
         // add transfers from TransferObjects command
         for (recipient, object_value) in additional_transfers {
             let owner = Owner::AddressOwner(recipient);
-            add_additional_write(&mut additional_writes, owner, object_value)
+            add_additional_write(&mut additional_writes, owner, object_value)?;
         }
         // Refund unused gas
         if let Some(gas_id) = gas_id_opt {
@@ -691,7 +696,9 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
             let layout = tmp_session
                 .type_to_type_layout(&ty)
                 .map_err(|e| convert_vm_error(e, vm, tmp_session.get_resolver()))?;
-            let bytes = value.simple_serialize(&layout).unwrap();
+            let Some(bytes) = value.simple_serialize(&layout) else {
+                invariant_violation!("Failed to deserialize already serialized Move value");
+            };
             // safe because has_public_transfer has been determined by the abilities
             let move_object = unsafe {
                 create_written_object(
@@ -1063,7 +1070,7 @@ fn add_additional_write(
     additional_writes: &mut BTreeMap<ObjectID, AdditionalWrite>,
     owner: Owner,
     object_value: ObjectValue,
-) {
+) -> Result<(), ExecutionError> {
     let ObjectValue {
         type_,
         has_public_transfer,
@@ -1074,7 +1081,9 @@ fn add_additional_write(
         ObjectContents::Coin(coin) => coin.to_bcs_bytes(),
         ObjectContents::Raw(bytes) => bytes,
     };
-    let object_id = MoveObject::id_opt(&bytes).unwrap();
+    let object_id = MoveObject::id_opt(&bytes).map_err(|e| {
+        ExecutionError::invariant_violation(format!("No id for Raw object bytes. {e}"))
+    })?;
     let additional_write = AdditionalWrite {
         recipient: owner,
         type_,
@@ -1082,6 +1091,7 @@ fn add_additional_write(
         bytes,
     };
     additional_writes.insert(object_id, additional_write);
+    Ok(())
 }
 
 /// The max budget was deducted from the gas coin at the beginning of the transaction,

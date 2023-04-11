@@ -1029,7 +1029,7 @@ pub struct TransactionDataV1 {
 }
 
 impl TransactionData {
-    pub fn new_system_transaction(kind: TransactionKind) -> Self {
+    fn new_system_transaction(kind: TransactionKind) -> Self {
         // assert transaction kind if a system transaction
         assert!(kind.is_system_tx());
         let sender = SuiAddress::default();
