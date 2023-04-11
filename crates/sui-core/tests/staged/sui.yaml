@@ -47,6 +47,7 @@ ChangeEpoch:
     - storage_charge: U64
     - computation_charge: U64
     - storage_rebate: U64
+    - non_refundable_storage_fee: U64
     - epoch_start_timestamp_ms: U64
     - system_packages:
         SEQ:
@@ -56,6 +57,39 @@ ChangeEpoch:
                 SEQ: U8
             - SEQ:
                 TYPENAME: ObjectID
+CheckpointCommitment:
+  ENUM:
+    0:
+      ECMHLiveObjectSetDigest:
+        NEWTYPE:
+          TYPENAME: ECMHLiveObjectSetDigest
+CheckpointContentsDigest:
+  NEWTYPESTRUCT:
+    TYPENAME: Digest
+CheckpointDigest:
+  NEWTYPESTRUCT:
+    TYPENAME: Digest
+CheckpointSummary:
+  STRUCT:
+    - epoch: U64
+    - sequence_number: U64
+    - network_total_transactions: U64
+    - content_digest:
+        TYPENAME: CheckpointContentsDigest
+    - previous_digest:
+        OPTION:
+          TYPENAME: CheckpointDigest
+    - epoch_rolling_gas_cost_summary:
+        TYPENAME: GasCostSummary
+    - timestamp_ms: U64
+    - checkpoint_commitments:
+        SEQ:
+          TYPENAME: CheckpointCommitment
+    - end_of_epoch_data:
+        OPTION:
+          TYPENAME: EndOfEpochData
+    - version_specific_data:
+        SEQ: U8
 Command:
   ENUM:
     0:
@@ -129,13 +163,19 @@ CommandArgumentError:
     7:
       InvalidGasCoinUsage: UNIT
     8:
-      InvalidUsageOfBorrowedValue: UNIT
+      InvalidValueUsage: UNIT
     9:
-      InvalidUsageOfTakenValue: UNIT
-    10:
       InvalidObjectByValue: UNIT
-    11:
+    10:
       InvalidObjectByMutRef: UNIT
+CompressedSignature:
+  ENUM:
+    0:
+      Ed25519:
+        NEWTYPE:
+          TUPLEARRAY:
+            CONTENT: U8
+            SIZE: 64
 ConsensusCommitPrologue:
   STRUCT:
     - epoch: U64
@@ -161,6 +201,22 @@ DeleteKind:
       Wrap: UNIT
 Digest:
   NEWTYPESTRUCT: BYTES
+ECMHLiveObjectSetDigest:
+  STRUCT:
+    - digest:
+        TYPENAME: Digest
+EndOfEpochData:
+  STRUCT:
+    - nextEpochCommittee:
+        SEQ:
+          TUPLE:
+            - TYPENAME: AuthorityPublicKeyBytes
+            - U64
+    - nextEpochProtocolVersion:
+        TYPENAME: ProtocolVersion
+    - epochCommitments:
+        SEQ:
+          TYPENAME: CheckpointCommitment
 ExecutionFailureStatus:
   ENUM:
     0:
@@ -252,6 +308,11 @@ ExecutionFailureStatus:
         STRUCT:
           - upgrade_error:
               TYPENAME: PackageUpgradeError
+    28:
+      WrittenObjectsTooLarge:
+        STRUCT:
+          - current_size: U64
+          - max_size: U64
 ExecutionStatus:
   ENUM:
     0:
@@ -263,6 +324,12 @@ ExecutionStatus:
               TYPENAME: ExecutionFailureStatus
           - command:
               OPTION: U64
+GasCostSummary:
+  STRUCT:
+    - computationCost: U64
+    - storageCost: U64
+    - storageRebate: U64
+    - nonRefundableStorageFee: U64
 GenesisObject:
   ENUM:
     0:
@@ -312,6 +379,9 @@ MoveObject:
         TYPENAME: SequenceNumber
     - contents: BYTES
 MoveObjectType:
+  NEWTYPESTRUCT:
+    TYPENAME: MoveObjectType_
+MoveObjectType_:
   ENUM:
     0:
       Other:
@@ -392,6 +462,22 @@ MoveTypeLayout:
       u32: UNIT
     10:
       u256: UNIT
+MultiSig:
+  STRUCT:
+    - sigs:
+        SEQ:
+          TYPENAME: CompressedSignature
+    - bitmap: BYTES
+    - multisig_pk:
+        TYPENAME: MultiSigPublicKey
+MultiSigPublicKey:
+  STRUCT:
+    - pk_map:
+        SEQ:
+          TUPLE:
+            - STR
+            - U8
+    - threshold: U16
 ObjectArg:
   ENUM:
     0:

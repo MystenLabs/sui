@@ -8,9 +8,9 @@ import { useSystemState } from './useSystemState';
 export function useGetTimeBeforeEpochNumber(epoch: number) {
     const data = useSystemState();
     // Current epoch
-    const currentEpoch = data.data?.epoch || 0;
-    const currentEpochStartTime = data.data?.epochStartTimestampMs || 0;
-    const epochPeriod = data.data?.epochDurationMs || 0;
+    const currentEpoch = +(data.data?.epoch || 0);
+    const currentEpochStartTime = +(data.data?.epochStartTimestampMs || 0);
+    const epochPeriod = +(data.data?.epochDurationMs || 0);
     const timeBeforeSpecifiedEpoch =
         epoch > currentEpoch && epoch > 0 && epochPeriod > 0
             ? currentEpochStartTime + (epoch - currentEpoch) * epochPeriod

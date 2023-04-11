@@ -3,15 +3,15 @@
 
 import {
   SignedTransaction,
-  SuiTransactionResponse,
-  Transaction,
+  SuiTransactionBlockResponse,
+  TransactionBlock,
 } from "@mysten/sui.js";
 import { ConnectButton, useWalletKit } from "@mysten/wallet-kit";
 import { ComponentProps, ReactNode, useState } from "react";
 import { provider } from "./utils/rpc";
 import { sponsorTransaction } from "./utils/sponsorTransaction";
 
-const tx = new Transaction();
+const tx = new TransactionBlock();
 tx.moveCall({
   target: "0x2::devnet_nft::mint",
   arguments: [tx.pure("foo"), tx.pure("bar"), tx.pure("baz")],
@@ -49,9 +49,8 @@ export function App() {
     null
   );
   const [signedTx, setSignedTx] = useState<SignedTransaction | null>(null);
-  const [executedTx, setExecutedTx] = useState<SuiTransactionResponse | null>(
-    null
-  );
+  const [executedTx, setExecutedTx] =
+    useState<SuiTransactionBlockResponse | null>(null);
 
   return (
     <div className="p-8">
@@ -101,7 +100,7 @@ export function App() {
                 try {
                   const signed = await signTransaction({
                     transaction: Transaction.from(
-                      sponsoredTx!.transactionBytes
+                      sponsoredTx!.transactionBlockBytes
                     ),
                   });
                   setSignedTx(signed);
@@ -123,8 +122,8 @@ export function App() {
               onClick={async () => {
                 setLoading(true);
                 try {
-                  const executed = await provider.executeTransaction({
-                    transaction: signedTx!.transactionBytes,
+                  const executed = await provider.executeTransactionBlock({
+                    transactionBlock: signedTx!.transactionBlockBytes,
                     signature: [signedTx!.signature, sponsoredTx!.signature],
                     options: {
                       showEffects: true,

@@ -37,7 +37,7 @@ module test::m1 {
 //> 0: test::m1::new();
 //> TransferObjects([Result(0)], Input(0));
 
-//# view-object 107
+//# view-object 0,0
 
 // cast using a Move function
 //# programmable --sender A --inputs 0u256
@@ -45,7 +45,7 @@ module test::m1 {
 //> 1: test::m1::new();
 //> TransferObjects([Result(1)], Result(0));
 
-//# view-object 110
+//# view-object 4,0
 
 // compilicated Move logic
 //# programmable --sender A --inputs @B true
@@ -55,7 +55,7 @@ module test::m1 {
 //> 3: test::m1::addr(Result(1), Input(1));
 //> TransferObjects([Result(2)], Result(3));
 
-//# view-object 112
+//# view-object 6,0
 
 // many object types
 //# programmable --sender A --inputs @B true
@@ -67,8 +67,8 @@ module test::m1 {
 //> 5: test::m1::cup<test::m1::Pub>();
 //> TransferObjects([Result(4), Result(2), Result(5)], Result(3));
 
-//# view-object 114
+//# view-object 8,0
 
-//# view-object 115
+//# view-object 8,1
 
-//# view-object 116
+//# view-object 8,2

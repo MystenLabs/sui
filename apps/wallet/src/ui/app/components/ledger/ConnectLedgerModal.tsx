@@ -10,14 +10,12 @@ import { ModalDialog } from '_src/ui/app/shared/ModalDialog';
 import { Text } from '_src/ui/app/shared/text';
 
 type ConnectLedgerModalProps = {
-    isOpen: boolean;
     onClose: () => void;
     onConfirm: () => void;
     onError: (error: unknown) => void;
 };
 
 export function ConnectLedgerModal({
-    isOpen,
     onClose,
     onConfirm,
     onError,
@@ -28,7 +26,7 @@ export function ConnectLedgerModal({
     const onContinueClick = async () => {
         try {
             setConnectingToLedger(true);
-            await connectToLedger();
+            await connectToLedger(true);
             onConfirm();
         } catch (error) {
             onError(error);
@@ -39,7 +37,7 @@ export function ConnectLedgerModal({
 
     return (
         <ModalDialog
-            isOpen={isOpen}
+            isOpen
             title="Connect Ledger Wallet"
             onClose={onClose}
             body={

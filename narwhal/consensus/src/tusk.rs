@@ -8,9 +8,11 @@ use crate::{
 use config::{Committee, Stake};
 use fastcrypto::hash::Hash;
 use std::{collections::HashMap, sync::Arc};
+use storage::ConsensusStore;
 use tracing::{debug, error_span};
 use types::{
-    Certificate, CertificateDigest, CommittedSubDag, ConsensusStore, ReputationScores, Round,
+    Certificate, CertificateAPI, CertificateDigest, CommittedSubDag, HeaderAPI, ReputationScores,
+    Round,
 };
 
 #[cfg(any(test))]
@@ -69,8 +71,8 @@ impl ConsensusProtocol for Tusk {
             .get(&(r - 1))
             .expect("We should have the whole history by now")
             .values()
-            .filter(|(_, x)| x.header.parents.contains(leader_digest))
-            .map(|(_, x)| self.committee.stake(&x.origin()))
+            .filter(|(_, x)| x.header().parents().contains(leader_digest))
+            .map(|(_, x)| self.committee.stake_by_id(x.origin()))
             .sum();
 
         // If it is the case, we can commit the leader. But first, we need to recursively go back to
@@ -89,7 +91,7 @@ impl ConsensusProtocol for Tusk {
             .iter()
             .rev()
         {
-            let sub_dag_index = state.latest_sub_dag_index + 1;
+            let sub_dag_index = state.next_sub_dag_index();
             let _span = error_span!("tusk_process_sub_dag", sub_dag_index);
 
             let mut sequence = Vec::new();
@@ -104,19 +106,21 @@ impl ConsensusProtocol for Tusk {
             }
             debug!("Subdag has {} certificates", sequence.len());
 
-            let sub_dag = CommittedSubDag {
-                certificates: sequence,
-                leader: leader.clone(),
+            // TODO compute the scores for Tusk as well
+            let sub_dag = CommittedSubDag::new(
+                sequence,
+                leader.clone(),
                 sub_dag_index,
-                reputation_score: ReputationScores::default(), // TODO compute the scores for Tusk as well
-            };
+                ReputationScores::default(),
+                None,
+            );
 
             // Persist the update.
             self.store
                 .write_consensus_state(&state.last_committed, &sub_dag)?;
 
             // Increase the global consensus index.
-            state.latest_sub_dag_index = sub_dag_index;
+            state.last_committed_sub_dag = Some(sub_dag.clone());
 
             committed_sub_dags.push(sub_dag);
         }
@@ -125,7 +129,7 @@ impl ConsensusProtocol for Tusk {
         // Performance note: if tracing at the debug log level is disabled, this is cheap, see
         // https://github.com/tokio-rs/tracing/pull/326
         for (name, round) in &state.last_committed {
-            debug!("Latest commit of {}: Round {}", name.to_string(), round);
+            debug!("Latest commit of {}: Round {}", name, round);
         }
 
         Ok((Outcome::Commit, committed_sub_dags))
@@ -158,7 +162,7 @@ impl Tusk {
         cfg_if::cfg_if! {
             if #[cfg(test)] {
                 // consensus tests rely on returning the same leader.
-                let leader = committee.authorities.iter().next().expect("Empty authorities table!").0;
+                let leader = committee.authorities().next().expect("Empty authorities table!");
             } else {
                 // Elect the leader in a stake-weighted choice seeded by the round
                 let leader = &committee.leader(round);
@@ -166,7 +170,7 @@ impl Tusk {
         }
 
         // Return its certificate and the certificate's digest.
-        dag.get(&round).and_then(|x| x.get(leader))
+        dag.get(&round).and_then(|x| x.get(&leader.id()))
     }
 }
 
@@ -178,7 +182,8 @@ mod tests {
     use prometheus::Registry;
     use rand::Rng;
     use std::collections::BTreeSet;
-    use test_utils::{make_consensus_store, CommitteeFixture};
+    use storage::NodeStorage;
+    use test_utils::CommitteeFixture;
     use types::Certificate;
 
     #[tokio::test]
@@ -189,7 +194,7 @@ mod tests {
         // process certificates for rounds, check we don't grow the dag too much
         let fixture = CommitteeFixture::builder().build();
         let committee = fixture.committee();
-        let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
+        let keys: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
 
         let genesis = Certificate::genesis(&committee)
             .iter()
@@ -199,12 +204,12 @@ mod tests {
             test_utils::make_optimal_certificates(&committee, 1..=rounds, &genesis, &keys);
 
         let store_path = test_utils::temp_dir();
-        let store = make_consensus_store(&store_path);
+        let store = NodeStorage::reopen(&store_path, None);
 
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
-        let mut state = ConsensusState::new(metrics, &committee, gc_depth);
-        let mut tusk = Tusk::new(committee, store, gc_depth);
+        let mut state = ConsensusState::new(metrics, gc_depth);
+        let mut tusk = Tusk::new(committee, store.consensus_store, gc_depth);
         for certificate in certificates {
             tusk.process_certificate(&mut state, certificate).unwrap();
         }
@@ -232,7 +237,7 @@ mod tests {
         // process certificates for rounds, check we don't grow the dag too much
         let fixture = CommitteeFixture::builder().build();
         let committee = fixture.committee();
-        let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
+        let keys: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
 
         let genesis = Certificate::genesis(&committee)
             .iter()
@@ -241,15 +246,19 @@ mod tests {
         // TODO: evidence that this test fails when `failure_probability` parameter >= 1/3
         let (certificates, _next_parents) =
             test_utils::make_certificates(&committee, 1..=rounds, &genesis, &keys, 0.333);
-        let arc_committee = Arc::new(ArcSwap::from_pointee(committee.clone()));
+        let arc_committee = Arc::new(ArcSwap::from_pointee(committee));
 
         let store_path = test_utils::temp_dir();
-        let store = make_consensus_store(&store_path);
+        let store = NodeStorage::reopen(&store_path, None);
 
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
-        let mut state = ConsensusState::new(metrics, &committee, gc_depth);
-        let mut tusk = Tusk::new((**arc_committee.load()).clone(), store, gc_depth);
+        let mut state = ConsensusState::new(metrics, gc_depth);
+        let mut tusk = Tusk::new(
+            (**arc_committee.load()).clone(),
+            store.consensus_store,
+            gc_depth,
+        );
 
         for certificate in certificates {
             tusk.process_certificate(&mut state, certificate).unwrap();

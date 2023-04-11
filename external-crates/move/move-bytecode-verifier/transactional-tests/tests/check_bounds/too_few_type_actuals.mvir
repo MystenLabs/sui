@@ -1,0 +1,11 @@
+//# publish
+module 0x1.M {
+    struct S<T> { b: bool }
+
+    foo() {
+        // missing type arg
+        let x: Self.S<>;
+    label b0:
+        return;
+    }
+}

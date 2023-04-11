@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::access::ModuleAccess;
-use sui_framework::{MoveStdlib, SuiFramework, SuiSystem, SystemPackage};
+use sui_framework::BuiltInFramework;
 use sui_json_rpc::api::ReadApiClient;
 use sui_json_rpc_types::SuiObjectResponse;
 use sui_types::{
-    base_types::ObjectID, digests::TransactionDigest, object::Object, SUI_FRAMEWORK_ADDRESS,
+    base_types::ObjectID, digests::TransactionDigest, object::Object, MOVE_STDLIB_OBJECT_ID,
+    SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_ADDRESS, SUI_SYSTEM_PACKAGE_ID,
 };
 use test_utils::network::TestClusterBuilder;
 
@@ -23,8 +24,8 @@ async fn test_additional_objects() {
         .unwrap();
 
     let client = cluster.rpc_client();
-    let resp = client.get_object_with_options(id, None).await.unwrap();
-    assert!(matches!(resp, SuiObjectResponse::Exists(_)));
+    let resp = client.get_object(id, None).await.unwrap();
+    assert!(matches!(resp, SuiObjectResponse { data: Some(_), .. }));
 }
 
 #[sim_test]
@@ -33,33 +34,40 @@ async fn test_package_override() {
     let framework_ref = {
         let default_cluster = TestClusterBuilder::new().build().await.unwrap();
         let client = default_cluster.rpc_client();
-        let SuiObjectResponse::Exists(obj) = client
-            .get_object_with_options(SuiSystem::ID, None)
+        let obj = client
+            .get_object(SUI_SYSTEM_PACKAGE_ID, None)
             .await
-            .unwrap()
-        else {
-            panic!("Original framework package should exist");
-        };
+            .unwrap();
 
-        obj.object_ref()
+        if let Some(obj) = obj.data {
+            obj.object_ref()
+        } else {
+            panic!("Original framework package should exist");
+        }
     };
 
     let modified_ref = {
-        let mut framework_modules = SuiSystem::as_modules();
+        let mut framework_modules = BuiltInFramework::get_package_by_id(&SUI_SYSTEM_PACKAGE_ID)
+            .modules()
+            .to_vec();
 
         // Create an empty module that is pretending to be part of the sui framework.
         let mut test_module = move_binary_format::file_format::empty_module();
         let address_idx = test_module.self_handle().address.0 as usize;
-        test_module.address_identifiers[address_idx] = SUI_FRAMEWORK_ADDRESS;
+        test_module.address_identifiers[address_idx] = SUI_SYSTEM_ADDRESS;
 
         // Add the dummy module to the rest of the sui-frameworks.  We can't replace the framework
         // entirely because we will call into it for genesis.
         framework_modules.push(test_module);
 
         let package_override = Object::new_package_for_testing(
-            framework_modules,
+            &framework_modules,
             TransactionDigest::genesis(),
-            &[MoveStdlib::as_package(), SuiFramework::as_package()],
+            [
+                BuiltInFramework::get_package_by_id(&MOVE_STDLIB_OBJECT_ID).genesis_move_package(),
+                BuiltInFramework::get_package_by_id(&SUI_FRAMEWORK_OBJECT_ID)
+                    .genesis_move_package(),
+            ],
         )
         .unwrap();
 
@@ -70,15 +78,16 @@ async fn test_package_override() {
             .unwrap();
 
         let client = modified_cluster.rpc_client();
-        let SuiObjectResponse::Exists(obj) = client
-            .get_object_with_options(SuiSystem::ID, None)
+        let obj = client
+            .get_object(SUI_SYSTEM_PACKAGE_ID, None)
             .await
-            .unwrap()
-        else {
-            panic!("Modified framework package should exist");
-        };
+            .unwrap();
 
-        obj.object_ref()
+        if let Some(obj) = obj.data {
+            obj.object_ref()
+        } else {
+            panic!("Original framework package should exist");
+        }
     };
 
     assert_ne!(framework_ref, modified_ref);

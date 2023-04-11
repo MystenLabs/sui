@@ -9,6 +9,8 @@ import ModuleView from './ModuleView';
 import { ModuleFunctionsInteraction } from './module-functions-interaction';
 
 import { ReactComponent as SearchIcon } from '~/assets/SVGIcons/24px/Search.svg';
+import { useBreakpoint } from '~/hooks/useBreakpoint';
+import { SplitPanes } from '~/ui/SplitPanes';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { ListItem, VerticalList } from '~/ui/VerticalList';
 import { useSearchParamsMerged } from '~/ui/utils/LinkWithQuery';
@@ -45,6 +47,8 @@ function ModuleViewWrapper({
 }
 
 function PkgModuleViewWrapper({ id, modules }: Props) {
+    const isMediumOrAbove = useBreakpoint('md');
+
     const modulenames = modules.map(([name]) => name);
     const [searchParams, setSearchParams] = useSearchParamsMerged();
     const [query, setQuery] = useState('');
@@ -89,6 +93,54 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
         });
     };
 
+    const bytecodeContent = [
+        <div
+            key="bytecode"
+            className="grow overflow-auto border-gray-45 pt-5 md:pl-7"
+        >
+            <TabGroup size="md">
+                <TabList>
+                    <Tab>Bytecode</Tab>
+                </TabList>
+                <TabPanels>
+                    <TabPanel>
+                        <div className="h-verticalListLong overflow-auto">
+                            <ModuleViewWrapper
+                                id={id}
+                                modules={modules}
+                                selectedModuleName={selectedModule}
+                            />
+                        </div>
+                    </TabPanel>
+                </TabPanels>
+            </TabGroup>
+        </div>,
+        <div
+            key="execute"
+            className="grow overflow-auto border-gray-45 pt-5 md:pl-7"
+        >
+            <TabGroup size="md">
+                <TabList>
+                    <Tab>Execute</Tab>
+                </TabList>
+                <TabPanels>
+                    <TabPanel>
+                        <div className="h-verticalListLong overflow-auto">
+                            {id && selectedModule ? (
+                                <ModuleFunctionsInteraction
+                                    // force recreating everything when we change modules
+                                    key={`${id}-${selectedModule}`}
+                                    packageId={id}
+                                    moduleName={selectedModule}
+                                />
+                            ) : null}
+                        </div>
+                    </TabPanel>
+                </TabPanels>
+            </TabGroup>
+        </div>,
+    ];
+
     return (
         <div className="flex flex-col gap-5 border-y border-gray-45 md:flex-row md:flex-nowrap">
             <div className="w-full md:w-1/5">
@@ -131,7 +183,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                                     <button
                                         type="button"
                                         className={clsx(
-                                            'mt-0.5 block w-full cursor-pointer rounded-md border py-2 px-1.5 text-left text-body',
+                                            'mt-0.5 block w-full cursor-pointer rounded-md border px-1.5 py-2 text-left text-body',
                                             active
                                                 ? 'border-transparent bg-sui/10 text-gray-80'
                                                 : 'border-transparent bg-white font-medium text-gray-80'
@@ -162,45 +214,17 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                     </VerticalList>
                 </div>
             </div>
-            <div className="grow overflow-auto border-gray-45 pt-5 md:w-2/5 md:border-l md:pl-7">
-                <TabGroup size="md">
-                    <TabList>
-                        <Tab>Bytecode</Tab>
-                    </TabList>
-                    <TabPanels>
-                        <TabPanel>
-                            <div className="h-verticalListLong overflow-auto">
-                                <ModuleViewWrapper
-                                    id={id}
-                                    modules={modules}
-                                    selectedModuleName={selectedModule}
-                                />
-                            </div>
-                        </TabPanel>
-                    </TabPanels>
-                </TabGroup>
-            </div>
-            <div className="grow overflow-auto border-gray-45 pt-5 md:w-3/5 md:border-l md:pl-7">
-                <TabGroup size="md">
-                    <TabList>
-                        <Tab>Execute</Tab>
-                    </TabList>
-                    <TabPanels>
-                        <TabPanel>
-                            <div className="h-verticalListLong overflow-auto">
-                                {id && selectedModule ? (
-                                    <ModuleFunctionsInteraction
-                                        // force recreating everything when we change modules
-                                        key={`${id}-${selectedModule}`}
-                                        packageId={id}
-                                        moduleName={selectedModule}
-                                    />
-                                ) : null}
-                            </div>
-                        </TabPanel>
-                    </TabPanels>
-                </TabGroup>
-            </div>
+            {isMediumOrAbove ? (
+                <div className="w-4/5">
+                    <SplitPanes
+                        direction="horizontal"
+                        defaultSizes={[40, 60]}
+                        panels={bytecodeContent}
+                    />
+                </div>
+            ) : (
+                <>{bytecodeContent}</>
+            )}
         </div>
     );
 }

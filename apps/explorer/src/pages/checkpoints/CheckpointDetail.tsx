@@ -1,12 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFeature, useGrowthBook } from '@growthbook/growthbook-react';
 import { useRpcClient, convertNumberToDate } from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
-import { Navigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 
-import { CheckpointTransactions } from './Transactions';
+import { CheckpointTransactionBlocks } from './CheckpointTransactionBlocks';
 
 import { Banner } from '~/ui/Banner';
 import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
@@ -14,15 +13,14 @@ import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { PageHeader } from '~/ui/PageHeader';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { Text } from '~/ui/Text';
-import { GROWTHBOOK_FEATURES } from '~/utils/growthbook';
 
-function CheckpointDetail() {
+export default function CheckpointDetail() {
     const { id } = useParams<{ id: string }>();
     const digestOrSequenceNumber = /^\d+$/.test(id!) ? parseInt(id!, 10) : id;
 
     const rpc = useRpcClient();
     const { data, isError, isLoading } = useQuery(['checkpoints', id], () =>
-        rpc.getCheckpoint({ id: digestOrSequenceNumber! })
+        rpc.getCheckpoint({ id: String(digestOrSequenceNumber!) })
     );
 
     if (isError)
@@ -41,7 +39,8 @@ function CheckpointDetail() {
                 <TabGroup as="div" size="lg">
                     <TabList>
                         <Tab>Details</Tab>
-                        <Tab>Signatures</Tab>
+                        {/* TODO: Get validator signatures */}
+                        {/* <Tab>Signatures</Tab> */}
                     </TabList>
                     <TabPanels>
                         <TabPanel>
@@ -69,7 +68,7 @@ function CheckpointDetail() {
                                     >
                                         {data.timestampMs
                                             ? convertNumberToDate(
-                                                  data.timestampMs
+                                                  +(data.timestampMs ?? 0)
                                               )
                                             : '--'}
                                     </Text>
@@ -134,11 +133,11 @@ function CheckpointDetail() {
 
                 <TabGroup as="div" size="lg">
                     <TabList>
-                        <Tab>Checkpoint Transactions</Tab>
+                        <Tab>Checkpoint Transaction Blocks</Tab>
                     </TabList>
                     <TabPanels>
                         <div className="mt-4">
-                            <CheckpointTransactions
+                            <CheckpointTransactionBlocks
                                 digest={data.digest}
                                 transactions={data.transactions || []}
                             />
@@ -148,13 +147,4 @@ function CheckpointDetail() {
             </div>
         </div>
     );
-}
-
-export default function CheckpointDetailFeatureFlagged() {
-    const gb = useGrowthBook();
-    const enabled = useFeature(GROWTHBOOK_FEATURES.EPOCHS_CHECKPOINTS).on;
-    if (gb?.ready) {
-        return enabled ? <CheckpointDetail /> : <Navigate to="/" />;
-    }
-    return <LoadingSpinner />;
 }

@@ -77,3 +77,6 @@ The set of objects that are available to be taken as input by a transaction are 
 
 When this DAG contains all committed transactions in the system, it forms a complete (and cryptographically auditable) view of the system's state and history. In addition, we can use the scheme above to construct a DAG of the relevant history for a subset of transactions or objects (e.g., the objects owned by a single address).
 
+## Limits on transactions, objects, and data
+
+Sui has some limits on transactions and data used in transactions, such as a maximum size and number of objects used. To view the full list of limits in source code, see [Transaction input limits](https://github.com/MystenLabs/sui/blob/main/crates/sui-protocol-config/src/lib.rs#L154).

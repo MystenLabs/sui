@@ -11,16 +11,14 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
     100.0, 200.0,
 ];
 
+const POSITIVE_INT_BUCKETS: &[f64] = &[
+    1., 2., 5., 10., 20., 50., 100., 200., 500., 1000., 2000., 5000., 10000., 20000., 50000.,
+];
+
 #[derive(Clone, Debug)]
 pub struct ExecutorMetrics {
     /// occupancy of the channel from the `Subscriber` to `Notifier`
     pub tx_notifier: IntGauge,
-    /// Time it takes to download a payload from local worker peer
-    pub subscriber_local_fetch_latency: Histogram,
-    /// Time it takes to download a payload from remote peer
-    pub subscriber_remote_fetch_latency: Histogram,
-    /// Number of times certificate was found locally
-    pub subscriber_local_hit: IntCounter,
     /// Number of batches processed by subscriber
     pub subscriber_processed_batches: IntCounter,
     /// Round of last certificate seen by subscriber
@@ -31,13 +29,16 @@ pub struct ExecutorMetrics {
     /// The number of certificates processed by Subscriber
     /// during the recovery period to fetch their payloads.
     pub subscriber_recovered_certificates_count: IntCounter,
-    /// The number of pending remote calls to request_batch
-    pub pending_remote_request_batch: IntGauge,
     /// The number of pending payload downloads
     pub waiting_elements_subscriber: IntGauge,
     /// Latency between the time when the batch has been
     /// created and when it has been fetched for execution
     pub batch_execution_latency: Histogram,
+    /// The number of batches per committed subdag to be fetched
+    pub committed_subdag_batch_count: Histogram,
+    /// Latency for time taken to fetch all batches for committed subdag
+    /// either from local or remote worker.
+    pub batch_fetch_for_committed_subdag_total_latency: Histogram,
 }
 
 impl ExecutorMetrics {
@@ -49,30 +50,24 @@ impl ExecutorMetrics {
                 registry
             )
             .unwrap(),
-            subscriber_local_fetch_latency: register_histogram_with_registry!(
-                "subscriber_local_fetch_latency",
-                "Time it takes to download a payload from local worker peer",
-                LATENCY_SEC_BUCKETS.to_vec(),
-                registry
-            )
-            .unwrap(),
-            subscriber_remote_fetch_latency: register_histogram_with_registry!(
-                "subscriber_remote_fetch_latency",
-                "Time it takes to download a payload from remote worker peer",
-                LATENCY_SEC_BUCKETS.to_vec(),
-                registry
-            )
-            .unwrap(),
             subscriber_recovered_certificates_count: register_int_counter_with_registry!(
                 "subscriber_recovered_certificates_count",
                 "The number of certificates processed by Subscriber during the recovery period to fetch their payloads",
                 registry
             ).unwrap(),
-            subscriber_local_hit: register_int_counter_with_registry!(
-                "subscriber_local_hit",
-                "Number of times certificate was found locally",
+            committed_subdag_batch_count: register_histogram_with_registry!(
+                "committed_subdag_batch_count",
+                "The number of batches per committed subdag to be fetched",
+                POSITIVE_INT_BUCKETS.to_vec(),
                 registry
             ).unwrap(),
+            batch_fetch_for_committed_subdag_total_latency: register_histogram_with_registry!(
+                "batch_fetch_for_committed_subdag_total_latency",
+                "Latency for time taken to fetch all batches for committed subdag either from local or remote worker",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry
+            )
+            .unwrap(),
             subscriber_processed_batches: register_int_counter_with_registry!(
                 "subscriber_processed_batches",
                 "Number of batches processed by subscriber",
@@ -81,11 +76,6 @@ impl ExecutorMetrics {
             subscriber_current_round: register_int_gauge_with_registry!(
                 "subscriber_current_round",
                 "Round of last certificate seen by subscriber",
-                registry
-            ).unwrap(),
-            pending_remote_request_batch: register_int_gauge_with_registry!(
-                "pending_remote_request_batch",
-                "The number of pending remote calls to request_batch",
                 registry
             ).unwrap(),
             waiting_elements_subscriber: register_int_gauge_with_registry!(
@@ -104,7 +94,7 @@ impl ExecutorMetrics {
                 "Latency between when the certificate has been created and when it reached the executor",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry
-            ).unwrap()
+            ).unwrap(),
         }
     }
 }

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::base_types::VersionNumber;
 use crate::storage::get_module_by_id;
 use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
@@ -83,11 +84,47 @@ impl ObjectStore for InMemoryStorage {
     fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
         Ok(self.persistent.get(object_id).cloned())
     }
+
+    fn get_object_by_key(
+        &self,
+        object_id: &ObjectID,
+        version: VersionNumber,
+    ) -> Result<Option<Object>, SuiError> {
+        Ok(self
+            .persistent
+            .get(object_id)
+            .and_then(|obj| {
+                if obj.version() == version {
+                    Some(obj)
+                } else {
+                    None
+                }
+            })
+            .cloned())
+    }
 }
 
 impl ObjectStore for &mut InMemoryStorage {
     fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
         Ok(self.persistent.get(object_id).cloned())
+    }
+
+    fn get_object_by_key(
+        &self,
+        object_id: &ObjectID,
+        version: VersionNumber,
+    ) -> Result<Option<Object>, SuiError> {
+        Ok(self
+            .persistent
+            .get(object_id)
+            .and_then(|obj| {
+                if obj.version() == version {
+                    Some(obj)
+                } else {
+                    None
+                }
+            })
+            .cloned())
     }
 }
 

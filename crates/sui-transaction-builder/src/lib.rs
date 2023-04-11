@@ -3,26 +3,27 @@
 
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
+use std::result::Result;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use anyhow::{anyhow, bail, ensure, Ok};
 use async_trait::async_trait;
 use futures::future::join_all;
-
-use anyhow::{anyhow, bail, ensure, Ok};
 use move_binary_format::file_format::SignatureToken;
+use move_binary_format::file_format_common::VERSION_MAX;
 use move_core_types::identifier::Identifier;
-use move_core_types::language_storage::TypeTag;
-use std::result::Result;
+use move_core_types::language_storage::{StructTag, TypeTag};
+
 use sui_adapter::adapter::{resolve_and_type_check, CheckCallArg};
 use sui_adapter::execution_mode::ExecutionMode;
 use sui_json::{resolve_move_function_args, ResolvedCallArg, SuiJsonValue};
 use sui_json_rpc_types::{
-    CheckpointId, ObjectsPage, RPCTransactionRequestParams, SuiData, SuiObjectDataOptions,
-    SuiObjectResponse, SuiObjectResponseQuery, SuiRawData, SuiTypeTag,
+    RPCTransactionRequestParams, SuiData, SuiObjectDataOptions, SuiObjectResponse, SuiRawData,
+    SuiTypeTag,
 };
 use sui_protocol_config::ProtocolConfig;
-use sui_types::base_types::{ObjectID, ObjectRef, ObjectType, SuiAddress};
+use sui_types::base_types::{ObjectID, ObjectInfo, ObjectRef, ObjectType, SuiAddress};
 use sui_types::error::UserInputError;
 use sui_types::gas_coin::GasCoin;
 use sui_types::governance::{ADD_STAKE_MUL_COIN_FUN_NAME, WITHDRAW_STAKE_FUN_NAME};
@@ -43,11 +44,8 @@ pub trait DataReader {
     async fn get_owned_objects(
         &self,
         address: SuiAddress,
-        options: Option<SuiObjectResponseQuery>,
-        cursor: Option<ObjectID>,
-        limit: Option<usize>,
-        checkpoint: Option<CheckpointId>,
-    ) -> Result<ObjectsPage, anyhow::Error>;
+        object_type: StructTag,
+    ) -> Result<Vec<ObjectInfo>, anyhow::Error>;
 
     async fn get_object_with_options(
         &self,
@@ -77,37 +75,18 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         input_objects: Vec<ObjectID>,
         gas_price: u64,
     ) -> Result<ObjectRef, anyhow::Error> {
+        if budget < gas_price {
+            bail!("Gas budget {budget} is less than the reference gas price {gas_price}. The gas budget must be at least the current reference gas price of {gas_price}.")
+        }
         if let Some(gas) = input_gas {
             self.get_object_ref(gas).await
         } else {
-            let objs = self
-                .0
-                .get_owned_objects(
-                    signer,
-                    Some(SuiObjectResponseQuery::new_with_options(
-                        SuiObjectDataOptions::full_content(),
-                    )),
-                    None,
-                    None,
-                    None,
-                )
-                .await?;
-            let gas_objs = objs.data.into_iter().filter(|obj| {
-                let obj_data = obj.clone().into_object();
-                match obj_data {
-                    Result::Ok(o) => o.type_.unwrap().to_string() == GasCoin::type_().to_string(),
-                    _ => false,
-                }
-            });
-            let required_gas_amount = (budget as u128) * (gas_price as u128);
+            let gas_objs = self.0.get_owned_objects(signer, GasCoin::type_()).await?;
 
             for obj in gas_objs {
                 let response = self
                     .0
-                    .get_object_with_options(
-                        obj.clone().into_object()?.object_id,
-                        SuiObjectDataOptions::new().with_bcs(),
-                    )
+                    .get_object_with_options(obj.object_id, SuiObjectDataOptions::new().with_bcs())
                     .await?;
                 let obj = response.object()?;
                 let gas: GasCoin = bcs::from_bytes(
@@ -118,13 +97,11 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
                         .ok_or_else(|| anyhow!("Cannot parse move object to gas object"))?
                         .bcs_bytes,
                 )?;
-                if !input_objects.contains(&obj.object_id)
-                    && (gas.value() as u128) >= required_gas_amount
-                {
+                if !input_objects.contains(&obj.object_id) && gas.value() >= budget {
                     return Ok(obj.object_ref());
                 }
             }
-            Err(anyhow!("Cannot find gas coin for signer address [{signer}] with amount sufficient for the required gas amount [{required_gas_amount}]."))
+            Err(anyhow!("Cannot find gas coin for signer address [{signer}] with amount sufficient for the required gas amount [{budget}]."))
         }
     }
 
@@ -436,7 +413,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
                 }
             })
         }
-        let compiled_module = package.deserialize_module(module)?;
+        let compiled_module = package.deserialize_module(module, VERSION_MAX)?;
 
         // TODO set the Mode from outside?
         resolve_and_type_check::<Mode>(

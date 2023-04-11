@@ -9,7 +9,6 @@ use move_core_types::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::committee::EpochId;
 use crate::object::{MoveObject, Owner};
 use crate::storage::WriteKind;
 use crate::temporary_store::TemporaryStore;
@@ -39,9 +38,6 @@ pub const PAY_MODULE_NAME: &IdentStr = ident_str!("pay");
 pub const PAY_JOIN_FUNC_NAME: &IdentStr = ident_str!("join");
 pub const PAY_SPLIT_N_FUNC_NAME: &IdentStr = ident_str!("divide_and_keep");
 pub const PAY_SPLIT_VEC_FUNC_NAME: &IdentStr = ident_str!("split_vec");
-
-pub const LOCKED_COIN_MODULE_NAME: &IdentStr = ident_str!("locked_coin");
-pub const LOCKED_COIN_STRUCT_NAME: &IdentStr = ident_str!("LockedCoin");
 
 // Rust version of the Move sui::coin::Coin type
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, Eq, PartialEq)]
@@ -248,21 +244,5 @@ impl TryFrom<&Object> for CoinMetadata {
         Err(SuiError::TypeError {
             error: format!("Object type is not a CoinMetadata: {:?}", object),
         })
-    }
-}
-// Rust version of the Move sui::locked_coin::LockedCoin type
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, Eq, PartialEq)]
-pub struct LockedCoin {
-    pub id: UID,
-    pub balance: Balance,
-    pub locked_until_epoch: EpochId,
-}
-
-impl LockedCoin {
-    /// Is this other StructTag representing a Coin?
-    pub fn is_locked_coin(other: &StructTag) -> bool {
-        other.address == SUI_FRAMEWORK_ADDRESS
-            && other.module.as_ident_str() == LOCKED_COIN_MODULE_NAME
-            && other.name.as_ident_str() == LOCKED_COIN_STRUCT_NAME
     }
 }

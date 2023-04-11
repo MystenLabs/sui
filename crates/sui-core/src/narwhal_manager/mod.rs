@@ -9,9 +9,10 @@ use fastcrypto::traits::KeyPair;
 use mysten_metrics::RegistryService;
 use narwhal_config::{Committee, Epoch, Parameters, WorkerCache, WorkerId};
 use narwhal_executor::ExecutionState;
+use narwhal_network::client::NetworkClient;
 use narwhal_node::primary_node::PrimaryNode;
 use narwhal_node::worker_node::WorkerNodes;
-use narwhal_node::NodeStorage;
+use narwhal_node::{CertificateStoreCacheMetrics, NodeStorage};
 use narwhal_worker::TransactionValidator;
 use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
 use std::path::PathBuf;
@@ -75,14 +76,15 @@ impl NarwhalManagerMetrics {
 }
 
 pub struct NarwhalManager {
-    storage_base_path: PathBuf,
     primary_keypair: AuthorityKeyPair,
     network_keypair: NetworkKeyPair,
     worker_ids_and_keypairs: Vec<(WorkerId, NetworkKeyPair)>,
     primary_node: PrimaryNode,
     worker_nodes: WorkerNodes,
+    storage_base_path: PathBuf,
     running: Mutex<Running>,
     metrics: NarwhalManagerMetrics,
+    store_cache_metrics: CertificateStoreCacheMetrics,
 }
 
 impl NarwhalManager {
@@ -98,6 +100,9 @@ impl NarwhalManager {
         let worker_nodes =
             WorkerNodes::new(config.registry_service.clone(), config.parameters.clone());
 
+        let store_cache_metrics =
+            CertificateStoreCacheMetrics::new(&config.registry_service.default_registry());
+
         Self {
             primary_node,
             worker_nodes,
@@ -107,6 +112,7 @@ impl NarwhalManager {
             storage_base_path: config.storage_base_path,
             running: Mutex::new(Running::False),
             metrics,
+            store_cache_metrics,
         }
     }
 
@@ -134,7 +140,10 @@ impl NarwhalManager {
 
         // Create a new store
         let store_path = self.get_store_path(committee.epoch());
-        let store = NodeStorage::reopen(store_path);
+        let store = NodeStorage::reopen(store_path, Some(self.store_cache_metrics.clone()));
+
+        // Create a new client.
+        let network_client = NetworkClient::new_from_keypair(&self.network_keypair);
 
         let name = self.primary_keypair.public().clone();
 
@@ -151,6 +160,7 @@ impl NarwhalManager {
                     self.network_keypair.copy(),
                     committee.clone(),
                     worker_cache.clone(),
+                    network_client.clone(),
                     &store,
                     execution_state.clone(),
                 )
@@ -188,6 +198,7 @@ impl NarwhalManager {
                     id_keypair_copy,
                     committee.clone(),
                     worker_cache.clone(),
+                    network_client.clone(),
                     &store,
                     tx_validator.clone(),
                 )

@@ -1,0 +1,70 @@
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/conditional_global_operations.move:15:9
+   │
+15 │         move_to(s, Box<R> { f: R {} });
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │         │          │   │
+   │         │          │   The type '0x42::M::Box<0x42::M::R>' can have the ability 'key' but the type argument '0x42::M::R' does not have the required ability 'store'
+   │         │          The type '0x42::M::Box<0x42::M::R>' does not have the ability 'key'
+   │         Invalid call of 'move_to'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/conditional_global_operations.move:16:9
+   │
+16 │         borrow_global<Box<T>>(a1);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^
+   │         │             │   │
+   │         │             │   The type '0x42::M::Box<T>' can have the ability 'key' but the type argument 'T' does not have the required ability 'store'
+   │         │             The type '0x42::M::Box<T>' does not have the ability 'key'
+   │         Invalid call of 'borrow_global'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/conditional_global_operations.move:17:9
+   │
+17 │         borrow_global_mut<Box<Box<T>>>(a1);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │         │                 │   │
+   │         │                 │   The type '0x42::M::Box<0x42::M::Box<T>>' can have the ability 'key' but the type argument '0x42::M::Box<T>' does not have the required ability 'store'
+   │         │                 The type '0x42::M::Box<0x42::M::Box<T>>' does not have the ability 'key'
+   │         Invalid call of 'borrow_global_mut'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/conditional_global_operations.move:18:33
+   │
+18 │         Pair { f1: _, f2: _ } = move_from<Pair<S, R>>(a1);
+   │                                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+   │                                 │         │       │
+   │                                 │         │       The type '0x42::M::Pair<0x42::M::S, 0x42::M::R>' can have the ability 'key' but the type argument '0x42::M::R' does not have the required ability 'store'
+   │                                 │         The type '0x42::M::Pair<0x42::M::S, 0x42::M::R>' does not have the ability 'key'
+   │                                 Invalid call of 'move_from'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/conditional_global_operations.move:19:9
+   │
+19 │         exists<Pair<Box<T>, S>>(a1);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │         │      │    │
+   │         │      │    The type '0x42::M::Pair<0x42::M::Box<T>, 0x42::M::S>' can have the ability 'key' but the type argument '0x42::M::Box<T>' does not have the required ability 'store'
+   │         │      The type '0x42::M::Pair<0x42::M::Box<T>, 0x42::M::S>' does not have the ability 'key'
+   │         Invalid call of 'exists'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/conditional_global_operations.move:21:9
+   │
+21 │         borrow_global<Box<K>>(a1);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^
+   │         │             │   │
+   │         │             │   The type '0x42::M::Box<0x42::M::K>' can have the ability 'key' but the type argument '0x42::M::K' does not have the required ability 'store'
+   │         │             The type '0x42::M::Box<0x42::M::K>' does not have the ability 'key'
+   │         Invalid call of 'borrow_global'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/conditional_global_operations.move:22:9
+   │
+22 │         borrow_global_mut<Pair<S, K>>(a1);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │         │                 │       │
+   │         │                 │       The type '0x42::M::Pair<0x42::M::S, 0x42::M::K>' can have the ability 'key' but the type argument '0x42::M::K' does not have the required ability 'store'
+   │         │                 The type '0x42::M::Pair<0x42::M::S, 0x42::M::K>' does not have the ability 'key'
+   │         Invalid call of 'borrow_global_mut'
+

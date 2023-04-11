@@ -33,6 +33,8 @@ pub const TOTAL_SUPPLY_MIST: u64 = TOTAL_SUPPLY_SUI * MIST_PER_SUI;
 pub const GAS_MODULE_NAME: &IdentStr = ident_str!("sui");
 pub const GAS_STRUCT_NAME: &IdentStr = ident_str!("SUI");
 
+sui_macros::checked_arithmetic! {
+
 pub struct GAS {}
 impl GAS {
     pub fn type_() -> StructTag {
@@ -142,4 +144,6 @@ impl Display for GasCoin {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "Coin {{ id: {}, value: {} }}", self.id(), self.value())
     }
+}
+
 }

@@ -1,5 +1,62 @@
 [workspace]
 resolver = "2"
+
+exclude = [
+    "external-crates/move/extensions/move-table-extension",
+    "external-crates/move/move-binary-format",
+    "external-crates/move/move-binary-format/serializer-tests",
+    "external-crates/move/move-borrow-graph",
+    "external-crates/move/move-bytecode-verifier",
+    "external-crates/move/move-bytecode-verifier/bytecode-verifier-tests",
+    "external-crates/move/move-bytecode-verifier/fuzz",
+    "external-crates/move/move-bytecode-verifier/invalid-mutations",
+    "external-crates/move/move-bytecode-verifier/transactional-tests",
+    "external-crates/move/move-command-line-common",
+    "external-crates/move/move-compiler",
+    "external-crates/move/move-compiler/transactional-tests",
+    "external-crates/move/move-core/types",
+    "external-crates/move/move-ir/types",
+    "external-crates/move/move-ir-compiler",
+    "external-crates/move/move-ir-compiler/move-bytecode-source-map",
+    "external-crates/move/move-ir-compiler/move-ir-to-bytecode",
+    "external-crates/move/move-ir-compiler/move-ir-to-bytecode/syntax",
+    "external-crates/move/move-ir-compiler/transactional-tests",
+    "external-crates/move/move-model",
+    "external-crates/move/move-prover",
+    "external-crates/move/move-prover/boogie-backend",
+    "external-crates/move/move-prover/bytecode",
+    "external-crates/move/move-prover/interpreter",
+    "external-crates/move/move-prover/interpreter/crypto",
+    "external-crates/move/move-prover/interpreter-testsuite",
+    "external-crates/move/move-prover/move-abigen",
+    "external-crates/move/move-prover/move-docgen",
+    "external-crates/move/move-prover/move-errmapgen",
+    "external-crates/move/move-prover/test-utils",
+    "external-crates/move/move-stdlib",
+    "external-crates/move/move-symbol-pool",
+    "external-crates/move/move-vm/integration-tests",
+    "external-crates/move/move-vm/paranoid-tests",
+    "external-crates/move/move-vm/runtime",
+    "external-crates/move/move-vm/test-utils",
+    "external-crates/move/move-vm/transactional-tests",
+    "external-crates/move/move-vm/types",
+    "external-crates/move/testing-infra/module-generation",
+    "external-crates/move/testing-infra/test-generation",
+    "external-crates/move/testing-infra/transactional-test-runner",
+    "external-crates/move/tools/move-bytecode-utils",
+    "external-crates/move/tools/move-bytecode-viewer",
+    "external-crates/move/tools/move-cli",
+    "external-crates/move/tools/move-coverage",
+    "external-crates/move/tools/move-disassembler",
+    "external-crates/move/tools/move-explain",
+    "external-crates/move/tools/move-package",
+    "external-crates/move/tools/move-resource-viewer",
+    "external-crates/move/tools/move-unit-test",
+    "external-crates/move/tools/read-write-set",
+    "external-crates/move/tools/read-write-set/dynamic",
+    "external-crates/move/tools/read-write-set/types"
+]
+
 members = [
     "crates/mysten-common",
     "crates/mysten-metrics",
@@ -20,7 +77,8 @@ members = [
     "crates/sui-faucet",
     "crates/sui-framework",
     "crates/sui-framework-build",
-    "crates/sui-framework-test",
+    "crates/sui-framework-snapshot",
+    "crates/sui-framework-tests",
     "crates/sui-indexer",
     "crates/sui-json",
     "crates/sui-json-rpc",
@@ -34,6 +92,7 @@ members = [
     "crates/sui-open-rpc-macros",
     "crates/sui-proc-macros",
     "crates/sui-protocol-config",
+    "crates/sui-protocol-config-macros",
     "crates/sui-proxy",
     "crates/sui-rosetta",
     "crates/sui-rpc-loadgen",
@@ -49,6 +108,7 @@ members = [
     "crates/sui-transaction-builder",
     "crates/sui-transactional-test-runner",
     "crates/sui-types",
+    "crates/sui-upgrade-compatibility-transactional-tests",
     "crates/sui-verifier",
     "crates/sui-verifier-transactional-tests",
     "crates/telemetry-subscribers",
@@ -74,7 +134,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, and sui crates
-version = "0.29.0"
+version = "0.32.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -85,6 +145,12 @@ split-debuginfo = 'packed'
 strip = 'debuginfo'
 # Exit process with SIGABRT when any thread panics
 panic = 'abort'
+
+# Same as release, but build binary with debug symbols (binary size will be ~ 1GB).
+[profile.release-dbgsym]
+inherits = "release"
+split-debuginfo = 'off'
+strip = 'none'
 
 # Inherits from the release profile above.
 [profile.bench]
@@ -106,39 +172,40 @@ opt-level = 1
 
 # Dependencies that should be kept in sync through the whole workspace
 [workspace.dependencies]
-
-tokio = "1.24.1"
+bcs = "0.1.4"
+tokio = "1.27.0"
+axum = { version = "0.6.6", default-features = false, features = ["headers", "tokio", "http1", "http2", "json", "matched-path", "original-uri", "form", "query"] }
 
 # Move dependencies
-move-binary-format = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
-move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
-move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
-move-cli = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
-move-compiler = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
-move-core-types = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54", features = ["address32"] }
-move-disassembler = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
-move-package = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
-move-stdlib = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
-move-vm-runtime = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
-move-unit-test = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
-move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
-move-vm-types = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
-move-command-line-common = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
-move-transactional-test-runner = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
-move-ir-types = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
-move-prover = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
-move-prover-boogie-backend = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
-move-stackless-bytecode = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
-move-symbol-pool = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
+move-binary-format = { path = "external-crates/move/move-binary-format" }
+move-bytecode-utils = { path = "external-crates/move/tools/move-bytecode-utils" }
+move-bytecode-verifier = { path = "external-crates/move/move-bytecode-verifier" }
+move-cli = { path = "external-crates/move/tools/move-cli" }
+move-compiler = { path = "external-crates/move/move-compiler" }
+move-core-types = { path = "external-crates/move/move-core/types", features = ["address32"] }
+move-disassembler = { path = "external-crates/move/tools/move-disassembler" }
+move-package = { path = "external-crates/move/tools/move-package" }
+move-stdlib = { path = "external-crates/move/move-stdlib" }
+move-vm-runtime =  { path = "external-crates/move/move-vm/runtime" }
+move-unit-test = { path = "external-crates/move/tools/move-unit-test" }
+move-vm-test-utils = { path = "external-crates/move/move-vm/test-utils" }
+move-vm-types = { path = "external-crates/move/move-vm/types" }
+move-command-line-common = { path = "external-crates/move/move-command-line-common" }
+move-transactional-test-runner = { path = "external-crates/move/testing-infra/transactional-test-runner" }
+move-ir-types = { path = "external-crates/move/move-ir/types" }
+move-prover = { path = "external-crates/move/move-prover" }
+move-prover-boogie-backend = { path = "external-crates/move/move-prover/boogie-backend" }
+move-stackless-bytecode = { path = "external-crates/move/move-prover/bytecode" }
+move-symbol-pool = { path = "external-crates/move/move-symbol-pool" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c2f79b1807bff7d09517b631191b61f2614c641c" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c2f79b1807bff7d09517b631191b61f2614c641c", package = "fastcrypto-zkp" }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "84fd7c7428c5f59185aecc56a2e0a006e8e07de1" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "84fd7c7428c5f59185aecc56a2e0a006e8e07de1", package = "fastcrypto-zkp" }
 
 # anemo dependencies
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "4ebf4a86952827ff0fcce6a2d8a80f42f34efed9" }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "4ebf4a86952827ff0fcce6a2d8a80f42f34efed9" }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "4ebf4a86952827ff0fcce6a2d8a80f42f34efed9" }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "4ebf4a86952827ff0fcce6a2d8a80f42f34efed9" }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "40e3bf357313fe5caa924673711af8be4dc4096e" }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "40e3bf357313fe5caa924673711af8be4dc4096e" }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "40e3bf357313fe5caa924673711af8be4dc4096e"}
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "40e3bf357313fe5caa924673711af8be4dc4096e"}
 
 # Use the same workspace-hack across crates.
 workspace-hack = { path = "crates/workspace-hack" }

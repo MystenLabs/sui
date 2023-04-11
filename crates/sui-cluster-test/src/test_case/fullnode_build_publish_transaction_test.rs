@@ -5,7 +5,7 @@ use crate::{TestCaseImpl, TestContext};
 use async_trait::async_trait;
 use jsonrpsee::rpc_params;
 use sui_core::test_utils::compile_basics_package;
-use sui_json_rpc_types::SuiTransactionEffectsAPI;
+use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_types::{base_types::ObjectID, object::Owner};
 
 pub struct FullNodeBuildPublishTransactionTest;
@@ -31,7 +31,8 @@ impl TestCaseImpl for FullNodeBuildPublishTransactionTest {
             all_module_bytes,
             dependencies,
             None::<ObjectID>,
-            10000
+            // Doesn't need to be scaled by RGP since most of the cost is storage
+            50_000_000.to_string()
         ];
 
         let data = ctx

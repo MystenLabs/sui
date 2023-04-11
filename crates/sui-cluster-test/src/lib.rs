@@ -13,8 +13,8 @@ use std::sync::Arc;
 use sui::client_commands::WalletContext;
 use sui_faucet::CoinInfo;
 use sui_json_rpc_types::{
-    SuiExecutionStatus, SuiTransactionEffectsAPI, SuiTransactionResponse,
-    SuiTransactionResponseOptions, TransactionBytes,
+    SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
+    SuiTransactionBlockResponseOptions, TransactionBlockBytes,
 };
 use sui_types::base_types::TransactionDigest;
 use sui_types::messages::ExecuteTransactionRequestType;
@@ -29,7 +29,7 @@ use sui_types::{
     messages::{Transaction, TransactionData, VerifiedTransaction},
 };
 use test_case::{
-    call_contract_test::CallContractTest, coin_merge_split_test::CoinMergeSplitTest,
+    coin_merge_split_test::CoinMergeSplitTest,
     fullnode_build_publish_transaction_test::FullNodeBuildPublishTransactionTest,
     fullnode_execute_transaction_test::FullNodeExecuteTransactionTest,
     native_transfer_test::NativeTransferTest, shared_object_test::SharedCounterTest,
@@ -122,23 +122,23 @@ impl TestContext {
         // TODO cache this?
         let rpc_client = HttpClientBuilder::default().build(fn_rpc_url)?;
 
-        TransactionBytes::to_data(rpc_client.request(method, params).await?)
+        TransactionBlockBytes::to_data(rpc_client.request(method, params).await?)
     }
 
     async fn sign_and_execute(
         &self,
         txn_data: TransactionData,
         desc: &str,
-    ) -> SuiTransactionResponse {
+    ) -> SuiTransactionBlockResponse {
         let signature = self.get_context().sign(&txn_data, desc);
         let resp = self
             .get_fullnode_client()
             .quorum_driver()
-            .execute_transaction(
-                Transaction::from_data(txn_data, Intent::default(), vec![signature])
+            .execute_transaction_block(
+                Transaction::from_data(txn_data, Intent::sui_transaction(), vec![signature])
                     .verify()
                     .unwrap(),
-                SuiTransactionResponseOptions::new()
+                SuiTransactionBlockResponseOptions::new()
                     .with_object_changes()
                     .with_balance_changes()
                     .with_effects()
@@ -204,7 +204,7 @@ impl TestContext {
             .client
             .get_fullnode_client()
             .read_api()
-            .get_transaction_with_options(digest, SuiTransactionResponseOptions::new())
+            .get_transaction_with_options(digest, SuiTransactionBlockResponseOptions::new())
             .await
         {
             Ok(_) => (true, digest, retry_times),
@@ -285,7 +285,6 @@ impl ClusterTest {
         let tests = vec![
             TestCase::new(NativeTransferTest {}),
             TestCase::new(CoinMergeSplitTest {}),
-            TestCase::new(CallContractTest {}),
             TestCase::new(SharedCounterTest {}),
             TestCase::new(FullNodeExecuteTransactionTest {}),
             TestCase::new(FullNodeBuildPublishTransactionTest {}),

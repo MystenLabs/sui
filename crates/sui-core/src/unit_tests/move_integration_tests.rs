@@ -13,187 +13,31 @@ use move_core_types::{
     language_storage::StructTag,
     u256::U256,
 };
-use sui_framework::system_package_ids;
+
 use sui_types::{
-    error::ExecutionErrorKind, object::Data,
-    programmable_transaction_builder::ProgrammableTransactionBuilder,
+    error::ExecutionErrorKind, programmable_transaction_builder::ProgrammableTransactionBuilder,
     utils::to_sender_signed_transaction,
 };
 
 use move_core_types::language_storage::TypeTag;
-use move_package::source_package::manifest_parser;
-use sui_framework_build::compiled_package::{
-    check_unpublished_dependencies, gather_dependencies, BuildConfig,
-};
+
+use sui_framework_build::compiled_package::BuildConfig;
 use sui_types::{
     crypto::{get_key_pair, AccountKeyPair},
     error::SuiError,
     messages::ExecutionStatus,
 };
 
-use expect_test::expect;
-use std::fs::File;
-use std::io::Read;
 use std::{collections::HashSet, path::PathBuf};
 use std::{env, str::FromStr};
 use sui_verifier::entry_points_verifier::{
     RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR,
 };
 
-const MAX_GAS: u64 = 10000;
-
-#[tokio::test]
-#[cfg_attr(msim, ignore)]
-async fn test_publishing_with_unpublished_deps() {
-    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let gas = ObjectID::random();
-    let authority = init_state_with_ids(vec![(sender, gas)]).await;
-
-    let package = build_and_publish_test_package(
-        &authority,
-        &sender,
-        &sender_key,
-        &gas,
-        "depends_on_basics",
-        /* with_unpublished_deps */ true,
-    )
-    .await;
-
-    let ObjectRead::Exists(read_ref, package_obj, _) = authority
-        .get_object_read(&package.0)
-        .await
-        .unwrap()
-    else {
-        panic!("Can't read package")
-    };
-
-    assert_eq!(package, read_ref);
-    let Data::Package(move_package) = package_obj.data else {
-        panic!("Not a package")
-    };
-
-    // Check that the published package includes its depended upon module.
-    assert_eq!(
-        move_package
-            .serialized_module_map()
-            .keys()
-            .map(String::as_str)
-            .collect::<HashSet<_>>(),
-        HashSet::from(["depends_on_basics", "object_basics"]),
-    );
-
-    let effects = call_move(
-        &authority,
-        &gas,
-        &sender,
-        &sender_key,
-        &package.0,
-        "depends_on_basics",
-        "delegate",
-        vec![],
-        vec![],
-    )
-    .await
-    .unwrap();
-
-    assert!(effects.status().is_ok());
-    assert_eq!(effects.created().len(), 1);
-    let ((_, v, _), owner) = effects.created()[0];
-
-    // Check that calling the function does what we expect
-    assert!(matches!(
-        owner,
-        Owner::Shared { initial_shared_version: initial } if initial == v
-    ));
-}
-
-#[tokio::test]
-#[cfg_attr(msim, ignore)]
-async fn test_publish_empty_package() {
-    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let gas = ObjectID::random();
-    let authority = init_state_with_ids(vec![(sender, gas)]).await;
-    let gas_object = authority.get_object(&gas).await.unwrap();
-    let gas_object_ref = gas_object.unwrap().compute_object_reference();
-
-    // empty package
-    let data = TransactionData::new_module_with_dummy_gas_price(
-        sender,
-        gas_object_ref,
-        vec![],
-        vec![],
-        MAX_GAS,
-    );
-    let transaction = to_sender_signed_transaction(data, &sender_key);
-    let err = send_and_confirm_transaction(&authority, transaction)
-        .await
-        .unwrap_err();
-    assert_eq!(
-        err,
-        SuiError::UserInputError {
-            error: UserInputError::EmptyCommandInput
-        }
-    );
-
-    // empty module
-    let data = TransactionData::new_module_with_dummy_gas_price(
-        sender,
-        gas_object_ref,
-        vec![vec![]],
-        vec![],
-        MAX_GAS,
-    );
-    let transaction = to_sender_signed_transaction(data, &sender_key);
-    let result = send_and_confirm_transaction(&authority, transaction)
-        .await
-        .unwrap()
-        .1;
-    assert_eq!(
-        result.status(),
-        &ExecutionStatus::Failure {
-            error: ExecutionFailureStatus::VMVerificationOrDeserializationError,
-            command: Some(0)
-        }
-    )
-}
-
-#[tokio::test]
-#[cfg_attr(msim, ignore)]
-async fn test_publish_duplicate_modules() {
-    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let gas = ObjectID::random();
-    let authority = init_state_with_ids(vec![(sender, gas)]).await;
-    let gas_object = authority.get_object(&gas).await.unwrap();
-    let gas_object_ref = gas_object.unwrap().compute_object_reference();
-
-    // empty package
-    let mut modules = build_test_package("object_owner", /* with_unpublished_deps */ false);
-    assert_eq!(modules.len(), 1);
-    modules.push(modules[0].clone());
-    let data = TransactionData::new_module_with_dummy_gas_price(
-        sender,
-        gas_object_ref,
-        modules,
-        system_package_ids(),
-        MAX_GAS,
-    );
-    let transaction = to_sender_signed_transaction(data, &sender_key);
-    let result = send_and_confirm_transaction(&authority, transaction)
-        .await
-        .unwrap()
-        .1;
-    assert_eq!(
-        result.status(),
-        &ExecutionStatus::Failure {
-            error: ExecutionFailureStatus::VMVerificationOrDeserializationError,
-            command: Some(0)
-        }
-    )
-}
-
 #[tokio::test]
 #[cfg_attr(msim, ignore)]
 async fn test_object_wrapping_unwrapping() {
+    telemetry_subscribers::init_for_testing();
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas = ObjectID::random();
     let authority = init_state_with_ids(vec![(sender, gas)]).await;
@@ -734,6 +578,101 @@ async fn test_create_then_delete_parent_child_wrap() {
     );
 }
 
+/// We are explicitly testing the case where a parent and child object are created together - where
+/// no prior child version exists - and then we remove the child successfully.
+#[tokio::test]
+#[cfg_attr(msim, ignore)]
+async fn test_remove_child_when_no_prior_version_exists() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas = ObjectID::random();
+    let authority = init_state_with_ids(vec![(sender, gas)]).await;
+
+    let package = build_and_publish_test_package(
+        &authority,
+        &sender,
+        &sender_key,
+        &gas,
+        "object_owner",
+        /* with_unpublished_deps */ false,
+    )
+    .await;
+
+    // Create a parent and a child together
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package.0,
+        "object_owner",
+        "create_parent_and_child_wrapped",
+        vec![],
+        vec![],
+    )
+    .await
+    .unwrap();
+
+    assert!(effects.status().is_ok());
+    // Modifies the gas object
+    assert_eq!(effects.mutated().len(), 1);
+    // Creates 3 objects, the parent, a field, and the child
+    assert_eq!(effects.created().len(), 2);
+    // not wrapped as it wasn't first created
+    assert_eq!(effects.wrapped().len(), 0);
+
+    let gas_ref = effects.mutated()[0].0;
+
+    let parent = effects
+        .created()
+        .iter()
+        .find(|(_, owner)| matches!(owner, Owner::AddressOwner(_)))
+        .unwrap()
+        .0;
+
+    let field = effects
+        .created()
+        .iter()
+        .find(|((id, _, _), _)| id != &parent.0)
+        .unwrap()
+        .0;
+
+    // Delete the child only
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package.0,
+        "object_owner",
+        "remove_wrapped_child",
+        vec![],
+        vec![TestCallArg::Object(parent.0)],
+    )
+    .await
+    .unwrap();
+
+    assert!(effects.status().is_ok());
+
+    // The field is considered deleted. The child doesn't count because it wasn't
+    // considered created in the first place.
+    assert_eq!(effects.deleted().len(), 1);
+    // The child was never created so it is not unwrapped.
+    assert_eq!(effects.unwrapped_then_deleted().len(), 0);
+
+    assert_eq!(
+        effects
+            .modified_at_versions()
+            .iter()
+            .cloned()
+            .collect::<HashSet<_>>(),
+        HashSet::from([
+            (gas_ref.0, gas_ref.1),
+            (parent.0, parent.1),
+            (field.0, field.1)
+        ]),
+    );
+}
+
 #[tokio::test]
 #[cfg_attr(msim, ignore)]
 async fn test_create_then_delete_parent_child_wrap_separate() {
@@ -783,11 +722,11 @@ async fn test_create_then_delete_parent_child_wrap_separate() {
     )
     .await
     .unwrap();
+
     assert!(effects.status().is_ok());
     let child = effects.created()[0].0;
 
     // Add the child to the parent.
-    println!("add_child_wrapped");
     let effects = call_move(
         &authority,
         &gas,
@@ -860,9 +799,16 @@ async fn test_entry_point_vector_empty() {
         );
         builder.finish()
     };
-    let effects = execute_programmable_transaction(&authority, &gas, &sender, &sender_key, pt)
-        .await
-        .unwrap();
+    let effects = execute_programmable_transaction(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        pt,
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    )
+    .await
+    .unwrap();
     assert!(
         matches!(effects.status(), ExecutionStatus::Success { .. }),
         "{:?}",
@@ -882,9 +828,16 @@ async fn test_entry_point_vector_empty() {
         );
         builder.finish()
     };
-    let effects = execute_programmable_transaction(&authority, &gas, &sender, &sender_key, pt)
-        .await
-        .unwrap();
+    let effects = execute_programmable_transaction(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        pt,
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    )
+    .await
+    .unwrap();
     assert!(
         matches!(effects.status(), ExecutionStatus::Success { .. }),
         "{:?}",
@@ -905,9 +858,16 @@ async fn test_entry_point_vector_empty() {
         );
         builder.finish()
     };
-    let err = execute_programmable_transaction(&authority, &gas, &sender, &sender_key, pt)
-        .await
-        .unwrap_err();
+    let err = execute_programmable_transaction(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        pt,
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    )
+    .await
+    .unwrap_err();
     assert_eq!(
         err,
         SuiError::UserInputError {
@@ -928,9 +888,16 @@ async fn test_entry_point_vector_empty() {
         );
         builder.finish()
     };
-    let err = execute_programmable_transaction(&authority, &gas, &sender, &sender_key, pt)
-        .await
-        .unwrap_err();
+    let err = execute_programmable_transaction(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        pt,
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    )
+    .await
+    .unwrap_err();
     assert_eq!(
         err,
         SuiError::UserInputError {
@@ -1304,7 +1271,7 @@ async fn test_entry_point_vector_error() {
         &ExecutionStatus::Failure {
             error: ExecutionErrorKind::CommandArgumentError {
                 arg_idx: 0,
-                kind: CommandArgumentError::InvalidUsageOfTakenValue,
+                kind: CommandArgumentError::InvalidValueUsage,
             },
             command: Some(1)
         }
@@ -1353,7 +1320,7 @@ async fn test_entry_point_vector_error() {
         &ExecutionStatus::Failure {
             error: ExecutionErrorKind::CommandArgumentError {
                 arg_idx: 0,
-                kind: CommandArgumentError::InvalidUsageOfTakenValue,
+                kind: CommandArgumentError::InvalidValueUsage,
             },
             command: Some(1)
         }
@@ -1691,7 +1658,7 @@ async fn test_entry_point_vector_any_error() {
         &ExecutionStatus::Failure {
             error: ExecutionErrorKind::CommandArgumentError {
                 arg_idx: 0,
-                kind: CommandArgumentError::InvalidUsageOfTakenValue,
+                kind: CommandArgumentError::InvalidValueUsage,
             },
             command: Some(1)
         }
@@ -1739,7 +1706,7 @@ async fn test_entry_point_vector_any_error() {
         &ExecutionStatus::Failure {
             error: ExecutionErrorKind::CommandArgumentError {
                 arg_idx: 0,
-                kind: CommandArgumentError::InvalidUsageOfTakenValue,
+                kind: CommandArgumentError::InvalidValueUsage,
             },
             command: Some(1)
         }
@@ -2321,9 +2288,16 @@ async fn test_make_move_vec_for_type<T: Clone + Serialize>(
     let mut builder = ProgrammableTransactionBuilder::new();
     make_and_drop(&mut builder, package_id, &t, vec![]);
     let pt = builder.finish();
-    let effects = execute_programmable_transaction(authority, gas, sender, sender_key, pt)
-        .await
-        .unwrap();
+    let effects = execute_programmable_transaction(
+        authority,
+        gas,
+        sender,
+        sender_key,
+        pt,
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    )
+    .await
+    .unwrap();
     assert_eq!(effects.status(), &ExecutionStatus::Success);
     assert!(effects.created().is_empty());
     assert_eq!(effects.mutated().len(), 1);
@@ -2336,9 +2310,16 @@ async fn test_make_move_vec_for_type<T: Clone + Serialize>(
     let args = vec![builder.pure(value.clone()).unwrap()];
     make_and_drop(&mut builder, package_id, &t, args);
     let pt = builder.finish();
-    let effects = execute_programmable_transaction(authority, gas, sender, sender_key, pt)
-        .await
-        .unwrap();
+    let effects = execute_programmable_transaction(
+        authority,
+        gas,
+        sender,
+        sender_key,
+        pt,
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    )
+    .await
+    .unwrap();
     assert_eq!(effects.status(), &ExecutionStatus::Success);
     assert!(effects.created().is_empty());
     assert_eq!(effects.mutated().len(), 1);
@@ -2354,9 +2335,16 @@ async fn test_make_move_vec_for_type<T: Clone + Serialize>(
     ];
     make_and_drop(&mut builder, package_id, &t, args);
     let pt = builder.finish();
-    let effects = execute_programmable_transaction(authority, gas, sender, sender_key, pt)
-        .await
-        .unwrap();
+    let effects = execute_programmable_transaction(
+        authority,
+        gas,
+        sender,
+        sender_key,
+        pt,
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    )
+    .await
+    .unwrap();
     assert_eq!(effects.status(), &ExecutionStatus::Success);
     assert!(effects.created().is_empty());
     assert_eq!(effects.mutated().len(), 1);
@@ -2377,9 +2365,16 @@ async fn test_make_move_vec_for_type<T: Clone + Serialize>(
     let args = vec![arg, id_result, arg];
     make_and_drop(&mut builder, package_id, &t, args);
     let pt = builder.finish();
-    let effects = execute_programmable_transaction(authority, gas, sender, sender_key, pt)
-        .await
-        .unwrap();
+    let effects = execute_programmable_transaction(
+        authority,
+        gas,
+        sender,
+        sender_key,
+        pt,
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    )
+    .await
+    .unwrap();
     assert_eq!(effects.status(), &ExecutionStatus::Success);
     assert!(effects.created().is_empty());
     assert_eq!(effects.mutated().len(), 1);
@@ -2407,9 +2402,16 @@ async fn test_make_move_vec_for_type<T: Clone + Serialize>(
         args,
     );
     let pt = builder.finish();
-    let effects = execute_programmable_transaction(authority, gas, sender, sender_key, pt)
-        .await
-        .unwrap();
+    let effects = execute_programmable_transaction(
+        authority,
+        gas,
+        sender,
+        sender_key,
+        pt,
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    )
+    .await
+    .unwrap();
     assert_eq!(effects.status(), &ExecutionStatus::Success);
     assert!(effects.created().is_empty());
     assert_eq!(effects.mutated().len(), 1);
@@ -2540,9 +2542,16 @@ async fn error_test_make_move_vec_for_type<T: Clone + Serialize>(
     let arg = builder.pure(value.clone()).unwrap();
     builder.command(Command::MakeMoveVec(None, vec![arg]));
     let pt = builder.finish();
-    let effects = execute_programmable_transaction(authority, gas, sender, sender_key, pt)
-        .await
-        .unwrap();
+    let effects = execute_programmable_transaction(
+        authority,
+        gas,
+        sender,
+        sender_key,
+        pt,
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    )
+    .await
+    .unwrap();
     assert_eq!(
         effects.status(),
         &ExecutionStatus::Failure {
@@ -2562,9 +2571,16 @@ async fn error_test_make_move_vec_for_type<T: Clone + Serialize>(
     let args = vec![builder.pure_bytes(ALWAYS_INVALID_BYTES.to_vec(), false)];
     builder.command(Command::MakeMoveVec(Some(t.clone()), args));
     let pt = builder.finish();
-    let effects = execute_programmable_transaction(authority, gas, sender, sender_key, pt)
-        .await
-        .unwrap();
+    let effects = execute_programmable_transaction(
+        authority,
+        gas,
+        sender,
+        sender_key,
+        pt,
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    )
+    .await
+    .unwrap();
     assert_eq!(
         effects.status(),
         &ExecutionStatus::Failure {
@@ -2586,9 +2602,16 @@ async fn error_test_make_move_vec_for_type<T: Clone + Serialize>(
     ];
     builder.command(Command::MakeMoveVec(Some(t.clone()), args));
     let pt = builder.finish();
-    let effects = execute_programmable_transaction(authority, gas, sender, sender_key, pt)
-        .await
-        .unwrap();
+    let effects = execute_programmable_transaction(
+        authority,
+        gas,
+        sender,
+        sender_key,
+        pt,
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    )
+    .await
+    .unwrap();
     assert_eq!(
         effects.status(),
         &ExecutionStatus::Failure {
@@ -2701,9 +2724,16 @@ async fn test_make_move_vec_empty() {
     let mut builder = ProgrammableTransactionBuilder::new();
     builder.command(Command::MakeMoveVec(None, vec![]));
     let pt = builder.finish();
-    let result = execute_programmable_transaction(&authority, &gas, &sender, &sender_key, pt)
-        .await
-        .unwrap_err();
+    let result = execute_programmable_transaction(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        pt,
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    )
+    .await
+    .unwrap_err();
     assert_eq!(
         result,
         SuiError::UserInputError {
@@ -2752,119 +2782,6 @@ async fn test_object_no_id_error() {
                  err_str.contains("SuiMoveVerificationError")
                  && err_str.contains("First field of struct NotObject must be 'id'"));
 }
-
-#[tokio::test]
-#[cfg_attr(msim, ignore)]
-async fn test_generate_lock_file() {
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.extend(["src", "unit_tests", "data", "generate_move_lock_file"]);
-
-    let tmp = tempfile::tempdir().expect("Could not create temp dir for Move.lock");
-    let lock_file_path = tmp.path().join("Move.lock");
-
-    let mut build_config = BuildConfig::new_for_testing();
-    build_config.config.lock_file = Some(lock_file_path.clone());
-    sui_framework::build_move_package(&path, build_config).expect("Move package did not build");
-
-    let mut lock_file_contents = String::new();
-    File::open(lock_file_path)
-        .expect("Cannot open lock file")
-        .read_to_string(&mut lock_file_contents)
-        .expect("Error reading Move.lock file");
-
-    let expected = expect![[r##"
-        # @generated by Move, please check-in and do not edit manually.
-
-        [move]
-        version = 0
-
-        dependencies = [
-          { name = "Examples" },
-          { name = "Sui" },
-        ]
-
-        [[move.package]]
-        name = "Examples"
-        source = { local = "../object_basics" }
-
-        dependencies = [
-          { name = "Sui" },
-        ]
-
-        [[move.package]]
-        name = "MoveStdlib"
-        source = { local = "../../../../../sui-framework/packages/move-stdlib" }
-
-        [[move.package]]
-        name = "Sui"
-        source = { local = "../../../../../sui-framework/packages/sui-framework" }
-
-        dependencies = [
-          { name = "MoveStdlib" },
-        ]
-    "##]];
-    expected.assert_eq(lock_file_contents.as_str());
-}
-
-#[tokio::test]
-#[cfg_attr(msim, ignore)]
-async fn test_custom_property_parse_published_at() {
-    let build_config = BuildConfig::new_for_testing();
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.extend(["src", "unit_tests", "data", "custom_properties_in_manifest"]);
-
-    sui_framework::build_move_package(&path, build_config).expect("Move package did not build");
-    let manifest = manifest_parser::parse_move_manifest_from_file(path.as_path())
-        .expect("Could not parse Move.toml");
-    let properties = manifest
-        .package
-        .custom_properties
-        .iter()
-        .map(|(k, v)| (k.to_string(), v.to_string()))
-        .collect::<Vec<_>>();
-
-    let expected = expect![[r#"
-        [
-            (
-                "published-at",
-                "0x777",
-            ),
-        ]
-    "#]];
-    expected.assert_debug_eq(&properties)
-}
-
-#[tokio::test]
-#[cfg_attr(msim, ignore)]
-async fn test_custom_property_check_unpublished_dependencies() {
-    let build_config = BuildConfig::new_for_testing();
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.extend([
-        "src",
-        "unit_tests",
-        "data",
-        "custom_properties_in_manifest_ensure_published_at",
-    ]);
-
-    let resolution_graph = build_config
-        .config
-        .resolution_graph_for_package(&path, &mut std::io::sink())
-        .expect("Could not build resolution graph.");
-
-    let SuiError::ModulePublishFailure { error } =
-        check_unpublished_dependencies(&gather_dependencies(&resolution_graph).unpublished)
-            .err()
-            .unwrap()
-     else {
-        panic!("Expected ModulePublishFailure")
-    };
-
-    let expected = expect![[r#"
-        Package dependency "CustomPropertiesInManifestDependencyMissingPublishedAt" does not specify a published address (the Move.toml manifest for "CustomPropertiesInManifestDependencyMissingPublishedAt" does not contain a published-at field).
-        If this is intentional, you may use the --with-unpublished-dependencies flag to continue publishing these dependencies as part of your package (they won't be linked against existing packages on-chain)."#]];
-    expected.assert_eq(&error)
-}
-
 pub fn build_test_package(test_dir: &str, with_unpublished_deps: bool) -> Vec<Vec<u8>> {
     let build_config = BuildConfig::new_for_testing();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -2884,6 +2801,7 @@ pub async fn build_and_try_publish_test_package(
     gas_object_id: &ObjectID,
     test_dir: &str,
     gas_budget: u64,
+    gas_price: u64,
     with_unpublished_deps: bool,
 ) -> (Transaction, SignedTransactionEffects) {
     let build_config = BuildConfig::new_for_testing();
@@ -2897,12 +2815,13 @@ pub async fn build_and_try_publish_test_package(
     let gas_object = authority.get_object(gas_object_id).await.unwrap();
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
 
-    let data = TransactionData::new_module_with_dummy_gas_price(
+    let data = TransactionData::new_module(
         *sender,
         gas_object_ref,
         all_module_bytes,
         dependencies,
         gas_budget,
+        gas_price,
     );
     let transaction = to_sender_signed_transaction(data, sender_key);
 
@@ -2943,13 +2862,16 @@ pub async fn build_and_publish_test_package_with_upgrade_cap(
     test_dir: &str,
     with_unpublished_deps: bool,
 ) -> (ObjectRef, ObjectRef) {
+    let gas_price = authority.reference_gas_price_for_testing().unwrap();
+    let gas_budget = TEST_ONLY_GAS_UNIT_FOR_PUBLISH * gas_price;
     let effects = build_and_try_publish_test_package(
         authority,
         sender,
         sender_key,
         gas_object_id,
         test_dir,
-        MAX_GAS,
+        gas_budget,
+        gas_price,
         with_unpublished_deps,
     )
     .await

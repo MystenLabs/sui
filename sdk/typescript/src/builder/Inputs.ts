@@ -10,7 +10,12 @@ import {
   string,
   union,
 } from 'superstruct';
-import { ObjectId, SharedObjectRef, SuiObjectRef } from '../types';
+import {
+  normalizeSuiAddress,
+  ObjectId,
+  SharedObjectRef,
+  SuiObjectRef,
+} from '../types';
 import { builder } from './bcs';
 
 const ObjectArg = union([
@@ -40,34 +45,54 @@ export const Inputs = {
       ),
     };
   },
-  ObjectRef(ref: SuiObjectRef): ObjectCallArg {
-    return { Object: { ImmOrOwned: ref } };
+  ObjectRef({ objectId, digest, version }: SuiObjectRef): ObjectCallArg {
+    return {
+      Object: {
+        ImmOrOwned: {
+          digest,
+          version,
+          objectId: normalizeSuiAddress(objectId),
+        },
+      },
+    };
   },
-  SharedObjectRef(ref: SharedObjectRef): ObjectCallArg {
-    return { Object: { Shared: ref } };
+  SharedObjectRef({
+    objectId,
+    mutable,
+    initialSharedVersion,
+  }: SharedObjectRef): ObjectCallArg {
+    return {
+      Object: {
+        Shared: {
+          mutable,
+          initialSharedVersion,
+          objectId: normalizeSuiAddress(objectId),
+        },
+      },
+    };
   },
 };
 
 export function getIdFromCallArg(arg: ObjectId | ObjectCallArg) {
   if (typeof arg === 'string') {
-    return arg;
+    return normalizeSuiAddress(arg);
   }
   if ('ImmOrOwned' in arg.Object) {
-    return arg.Object.ImmOrOwned.objectId;
+    return normalizeSuiAddress(arg.Object.ImmOrOwned.objectId);
   }
-  return arg.Object.Shared.objectId;
+  return normalizeSuiAddress(arg.Object.Shared.objectId);
 }
 
 export function getSharedObjectInput(
   arg: BuilderCallArg,
 ): SharedObjectRef | undefined {
-  return typeof arg == 'object' && 'Object' in arg && 'Shared' in arg.Object
+  return typeof arg === 'object' && 'Object' in arg && 'Shared' in arg.Object
     ? arg.Object.Shared
     : undefined;
 }
 
 export function isSharedObjectInput(arg: BuilderCallArg): boolean {
-  return getSharedObjectInput(arg) !== undefined;
+  return !!getSharedObjectInput(arg);
 }
 
 export function isMutableSharedObjectInput(arg: BuilderCallArg): boolean {

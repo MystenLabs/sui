@@ -9,7 +9,7 @@ use crate::committee::{Committee, StakeUnit};
 use crate::multiaddr::Multiaddr;
 use anemo::types::{PeerAffinity, PeerInfo};
 use anemo::PeerId;
-use narwhal_config::{Committee as NarwhalCommittee, WorkerCache, WorkerIndex};
+use narwhal_config::{Committee as NarwhalCommittee, CommitteeBuilder, WorkerCache, WorkerIndex};
 use serde::{Deserialize, Serialize};
 use sui_protocol_config::ProtocolVersion;
 use tracing::warn;
@@ -26,6 +26,7 @@ pub trait EpochStartSystemStateTrait {
     fn get_narwhal_committee(&self) -> NarwhalCommittee;
     fn get_validator_as_p2p_peers(&self, excluding_self: AuthorityName) -> Vec<PeerInfo>;
     fn get_authority_names_to_peer_ids(&self) -> HashMap<AuthorityName, PeerId>;
+    fn get_authority_names_to_hostnames(&self) -> HashMap<AuthorityName, String>;
     fn get_narwhal_worker_cache(&self, transactions_address: &Multiaddr) -> WorkerCache;
 }
 
@@ -91,7 +92,7 @@ impl EpochStartSystemStateV1 {
     pub fn new_for_testing_with_epoch(epoch: EpochId) -> Self {
         Self {
             epoch,
-            protocol_version: ProtocolVersion::MIN.as_u64(),
+            protocol_version: ProtocolVersion::MAX.as_u64(),
             reference_gas_price: 1,
             safe_mode: false,
             epoch_start_timestamp_ms: 0,
@@ -137,23 +138,18 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
 
     #[allow(clippy::mutable_key_type)]
     fn get_narwhal_committee(&self) -> NarwhalCommittee {
-        let narwhal_committee = self
-            .active_validators
-            .iter()
-            .map(|validator| {
-                let authority = narwhal_config::Authority {
-                    stake: validator.voting_power as narwhal_config::Stake,
-                    primary_address: validator.narwhal_primary_address.clone(),
-                    network_key: validator.narwhal_network_pubkey.clone(),
-                };
-                (validator.protocol_pubkey.clone(), authority)
-            })
-            .collect();
+        let mut committee_builder = CommitteeBuilder::new(self.epoch as narwhal_config::Epoch);
 
-        narwhal_config::Committee {
-            authorities: narwhal_committee,
-            epoch: self.epoch as narwhal_config::Epoch,
+        for validator in self.active_validators.iter() {
+            committee_builder = committee_builder.add_authority(
+                validator.protocol_pubkey.clone(),
+                validator.voting_power as narwhal_config::Stake,
+                validator.narwhal_primary_address.clone(),
+                validator.narwhal_network_pubkey.clone(),
+            );
         }
+
+        committee_builder.build()
     }
 
     fn get_validator_as_p2p_peers(&self, excluding_self: AuthorityName) -> Vec<PeerInfo> {
@@ -190,6 +186,18 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
                 let peer_id = PeerId(validator.narwhal_network_pubkey.0.to_bytes());
 
                 (name, peer_id)
+            })
+            .collect()
+    }
+
+    fn get_authority_names_to_hostnames(&self) -> HashMap<AuthorityName, String> {
+        self.active_validators
+            .iter()
+            .map(|validator| {
+                let name = validator.authority_name();
+                let hostname = validator.hostname.clone();
+
+                (name, hostname)
             })
             .collect()
     }
@@ -233,6 +241,7 @@ pub struct EpochStartValidatorInfoV1 {
     pub narwhal_primary_address: Multiaddr,
     pub narwhal_worker_address: Multiaddr,
     pub voting_power: StakeUnit,
+    pub hostname: String,
 }
 
 impl EpochStartValidatorInfoV1 {

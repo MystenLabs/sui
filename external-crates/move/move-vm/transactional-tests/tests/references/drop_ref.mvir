@@ -1,0 +1,9 @@
+//# run --signers 0x1
+main(account: signer) {
+    let u: u64;
+    let u_ref: &u64;
+label b0:
+    u = 10;
+    u_ref = freeze(&mut u);
+    return;
+}

@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_json_rpc_types::{
-    BalanceChange, ObjectChange, SuiCommand, SuiTransaction, SuiTransactionDataAPI,
-    SuiTransactionEffects, SuiTransactionEffectsAPI, SuiTransactionEvents, SuiTransactionKind,
-    SuiTransactionResponse, SuiTransactionResponseOptions,
+    BalanceChange, ObjectChange, SuiCommand, SuiTransactionBlock, SuiTransactionBlockDataAPI,
+    SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI, SuiTransactionBlockEvents,
+    SuiTransactionBlockKind, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_types::digests::TransactionDigest;
 use sui_types::messages::{SenderSignedData, TransactionDataAPI};
@@ -15,26 +15,22 @@ use crate::errors::IndexerError;
 use crate::models::addresses::Address;
 use crate::models::transaction_index::{InputObject, MoveCall, Recipient};
 
-#[derive(Debug, Clone)]
-pub struct SuiTransactionFullResponse {
+pub struct FastPathTransactionBlockResponse {
     pub digest: TransactionDigest,
-    /// Transaction input data
-    pub transaction: SuiTransaction,
+    pub transaction: SuiTransactionBlock,
     pub raw_transaction: Vec<u8>,
-    pub effects: SuiTransactionEffects,
-    pub events: SuiTransactionEvents,
-    pub object_changes: Option<Vec<ObjectChange>>,
-    pub balance_changes: Option<Vec<BalanceChange>>,
-    pub timestamp_ms: u64,
+    pub effects: SuiTransactionBlockEffects,
+    pub events: SuiTransactionBlockEvents,
+    pub object_changes: Vec<ObjectChange>,
+    pub balance_changes: Vec<BalanceChange>,
     pub confirmed_local_execution: Option<bool>,
-    pub checkpoint: CheckpointSequenceNumber,
 }
 
-impl TryFrom<SuiTransactionResponse> for SuiTransactionFullResponse {
+impl TryFrom<SuiTransactionBlockResponse> for FastPathTransactionBlockResponse {
     type Error = anyhow::Error;
 
-    fn try_from(response: SuiTransactionResponse) -> Result<Self, Self::Error> {
-        let SuiTransactionResponse {
+    fn try_from(response: SuiTransactionBlockResponse) -> Result<Self, Self::Error> {
+        let SuiTransactionBlockResponse {
             digest,
             transaction,
             raw_transaction,
@@ -42,48 +38,42 @@ impl TryFrom<SuiTransactionResponse> for SuiTransactionFullResponse {
             events,
             object_changes,
             balance_changes,
-            timestamp_ms,
+            timestamp_ms: _,
             confirmed_local_execution,
-            checkpoint,
+            checkpoint: _,
             errors,
         } = response;
 
         let transaction = transaction.ok_or_else(|| {
             anyhow::anyhow!(
-                "Transaction is None in SuiTransactionFullResponse of digest {:?}.",
+                "Transaction is None in FastPathTransactionBlockResponse of digest {:?}.",
                 digest
             )
         })?;
         let effects = effects.ok_or_else(|| {
             anyhow::anyhow!(
-                "Effects is None in SuiTransactionFullResponse of digest {:?}.",
+                "Effects is None in FastPathTransactionBlockResponse of digest {:?}.",
                 digest
             )
         })?;
         let events = events.ok_or_else(|| {
             anyhow::anyhow!(
-                "Events is None in SuiTransactionFullResponse of digest {:?}.",
+                "Events is None in FastPathTransactionBlockResponse of digest {:?}.",
                 digest
             )
         })?;
-        let timestamp_ms = timestamp_ms.ok_or_else(|| {
+        let object_changes = object_changes.ok_or_else(|| {
             anyhow::anyhow!(
-                "TimestampMs is None in SuiTransactionFullResponse of digest {:?}.",
+                "ObjectChanges is None in FastPathTransactionBlockResponse of digest {:?}.",
                 digest
             )
         })?;
-        let checkpoint = checkpoint.ok_or_else(|| {
+        let balance_changes = balance_changes.ok_or_else(|| {
             anyhow::anyhow!(
-                "Checkpoint is None in SuiTransactionFullResponse of digest {:?}.",
+                "BalanceChanges is None in FastPathTransactionBlockResponse of digest {:?}.",
                 digest
             )
         })?;
-        if raw_transaction.is_empty() {
-            return Err(anyhow::anyhow!(
-                "Unexpected empty RawTransaction in SuiTransactionFullResponse of digest {:?}.",
-                digest
-            ));
-        }
         if !errors.is_empty() {
             return Err(anyhow::anyhow!(
                 "Errors in SuiTransactionFullResponse of digest {:?}: {:?}",
@@ -92,7 +82,7 @@ impl TryFrom<SuiTransactionResponse> for SuiTransactionFullResponse {
             ));
         }
 
-        Ok(SuiTransactionFullResponse {
+        Ok(FastPathTransactionBlockResponse {
             digest,
             transaction,
             raw_transaction,
@@ -100,6 +90,92 @@ impl TryFrom<SuiTransactionResponse> for SuiTransactionFullResponse {
             events,
             object_changes,
             balance_changes,
+            confirmed_local_execution,
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CheckpointTransactionBlockResponse {
+    pub digest: TransactionDigest,
+    /// Transaction input data
+    pub transaction: SuiTransactionBlock,
+    pub raw_transaction: Vec<u8>,
+    pub effects: SuiTransactionBlockEffects,
+    pub events: SuiTransactionBlockEvents,
+    pub timestamp_ms: u64,
+    pub confirmed_local_execution: Option<bool>,
+    pub checkpoint: CheckpointSequenceNumber,
+}
+
+impl TryFrom<SuiTransactionBlockResponse> for CheckpointTransactionBlockResponse {
+    type Error = anyhow::Error;
+
+    fn try_from(response: SuiTransactionBlockResponse) -> Result<Self, Self::Error> {
+        let SuiTransactionBlockResponse {
+            digest,
+            transaction,
+            raw_transaction,
+            effects,
+            events,
+            object_changes: _,
+            balance_changes: _,
+            timestamp_ms,
+            confirmed_local_execution,
+            checkpoint,
+            errors,
+        } = response;
+
+        let transaction = transaction.ok_or_else(|| {
+            anyhow::anyhow!(
+                "Transaction is None in SuiTransactionBlockFullResponse of digest {:?}.",
+                digest
+            )
+        })?;
+        let effects = effects.ok_or_else(|| {
+            anyhow::anyhow!(
+                "Effects is None in SuiTransactionBlockFullResponse of digest {:?}.",
+                digest
+            )
+        })?;
+        let events = events.ok_or_else(|| {
+            anyhow::anyhow!(
+                "Events is None in SuiTransactionBlockFullResponse of digest {:?}.",
+                digest
+            )
+        })?;
+        let timestamp_ms = timestamp_ms.ok_or_else(|| {
+            anyhow::anyhow!(
+                "TimestampMs is None in SuiTransactionBlockFullResponse of digest {:?}.",
+                digest
+            )
+        })?;
+        let checkpoint = checkpoint.ok_or_else(|| {
+            anyhow::anyhow!(
+                "Checkpoint is None in SuiTransactionBlockFullResponse of digest {:?}.",
+                digest
+            )
+        })?;
+        if raw_transaction.is_empty() {
+            return Err(anyhow::anyhow!(
+                "Unexpected empty RawTransaction in SuiTransactionBlockFullResponse of digest {:?}.",
+                digest
+            ));
+        }
+        if !errors.is_empty() {
+            return Err(anyhow::anyhow!(
+                "Errors in SuiTransactionBlockFullResponse of digest {:?}: {:?}",
+                digest,
+                errors
+            ));
+        }
+
+        Ok(CheckpointTransactionBlockResponse {
+            digest,
+            transaction,
+            raw_transaction,
+            effects,
+            events,
             timestamp_ms,
             confirmed_local_execution,
             checkpoint,
@@ -107,72 +183,7 @@ impl TryFrom<SuiTransactionResponse> for SuiTransactionFullResponse {
     }
 }
 
-impl From<SuiTransactionFullResponse> for SuiTransactionResponse {
-    fn from(response: SuiTransactionFullResponse) -> Self {
-        let SuiTransactionFullResponse {
-            digest,
-            transaction,
-            effects,
-            events,
-            object_changes,
-            balance_changes,
-            timestamp_ms,
-            confirmed_local_execution,
-            checkpoint,
-            raw_transaction,
-        } = response;
-
-        SuiTransactionResponse {
-            digest,
-            transaction: Some(transaction),
-            raw_transaction,
-            effects: Some(effects),
-            events: Some(events),
-            object_changes,
-            balance_changes,
-            timestamp_ms: Some(timestamp_ms),
-            confirmed_local_execution,
-            checkpoint: Some(checkpoint),
-            errors: vec![],
-        }
-    }
-}
-
-pub struct SuiTransactionFullResponseWithOptions {
-    pub response: SuiTransactionFullResponse,
-    pub options: SuiTransactionResponseOptions,
-}
-
-impl From<SuiTransactionFullResponseWithOptions> for SuiTransactionResponse {
-    fn from(value: SuiTransactionFullResponseWithOptions) -> Self {
-        let SuiTransactionFullResponseWithOptions { response, options } = value;
-
-        SuiTransactionResponse {
-            digest: response.digest,
-            transaction: options.show_input.then_some(response.transaction),
-            raw_transaction: options
-                .show_raw_input
-                .then_some(response.raw_transaction)
-                .unwrap_or_default(),
-            effects: options.show_effects.then_some(response.effects),
-            events: options.show_events.then_some(response.events),
-            object_changes: options
-                .show_object_changes
-                .then_some(response.object_changes)
-                .unwrap_or_default(),
-            balance_changes: options
-                .show_balance_changes
-                .then_some(response.balance_changes)
-                .unwrap_or_default(),
-            timestamp_ms: Some(response.timestamp_ms),
-            confirmed_local_execution: response.confirmed_local_execution,
-            checkpoint: Some(response.checkpoint),
-            errors: vec![],
-        }
-    }
-}
-
-impl SuiTransactionFullResponse {
+impl CheckpointTransactionBlockResponse {
     pub fn get_input_objects(&self, epoch: u64) -> Result<Vec<InputObject>, IndexerError> {
         let raw_tx = self.raw_transaction.clone();
         let sender_signed_data: SenderSignedData = bcs::from_bytes(&raw_tx).map_err(|err| {
@@ -208,7 +219,7 @@ impl SuiTransactionFullResponse {
         let tx_kind = self.transaction.data.transaction();
         let sender = self.transaction.data.sender();
         match tx_kind {
-            SuiTransactionKind::ProgrammableTransaction(pt) => {
+            SuiTransactionBlockKind::ProgrammableTransaction(pt) => {
                 let move_calls: Vec<MoveCall> = pt
                     .commands
                     .clone()
@@ -247,6 +258,7 @@ impl SuiTransactionFullResponse {
                     transaction_digest: self.digest.to_string(),
                     checkpoint_sequence_number: checkpoint as i64,
                     epoch: epoch as i64,
+                    sender: self.transaction.data.sender().to_string(),
                     recipient: address.to_string(),
                 }),
                 _ => None,
@@ -269,5 +281,110 @@ impl SuiTransactionFullResponse {
                 first_appearance_time: self.timestamp_ms as i64,
             })
             .collect::<Vec<Address>>()
+    }
+}
+
+pub struct TemporaryTransactionBlockResponseStore {
+    pub digest: TransactionDigest,
+    /// Transaction input data
+    pub transaction: SuiTransactionBlock,
+    pub raw_transaction: Vec<u8>,
+    pub effects: SuiTransactionBlockEffects,
+    pub events: SuiTransactionBlockEvents,
+    pub object_changes: Option<Vec<ObjectChange>>,
+    pub balance_changes: Option<Vec<BalanceChange>>,
+    pub timestamp_ms: Option<u64>,
+    pub confirmed_local_execution: Option<bool>,
+    pub checkpoint: Option<CheckpointSequenceNumber>,
+}
+
+impl From<FastPathTransactionBlockResponse> for TemporaryTransactionBlockResponseStore {
+    fn from(value: FastPathTransactionBlockResponse) -> Self {
+        let FastPathTransactionBlockResponse {
+            digest,
+            transaction,
+            raw_transaction,
+            effects,
+            events,
+            object_changes,
+            balance_changes,
+            confirmed_local_execution,
+        } = value;
+
+        TemporaryTransactionBlockResponseStore {
+            digest,
+            transaction,
+            raw_transaction,
+            effects,
+            events,
+            object_changes: Some(object_changes),
+            balance_changes: Some(balance_changes),
+            timestamp_ms: None,
+            confirmed_local_execution,
+            checkpoint: None,
+        }
+    }
+}
+
+impl From<CheckpointTransactionBlockResponse> for TemporaryTransactionBlockResponseStore {
+    fn from(value: CheckpointTransactionBlockResponse) -> Self {
+        let CheckpointTransactionBlockResponse {
+            digest,
+            transaction,
+            raw_transaction,
+            effects,
+            events,
+            timestamp_ms,
+            confirmed_local_execution,
+            checkpoint,
+        } = value;
+
+        TemporaryTransactionBlockResponseStore {
+            digest,
+            transaction,
+            raw_transaction,
+            effects,
+            events,
+            object_changes: None,
+            balance_changes: None,
+            timestamp_ms: Some(timestamp_ms),
+            confirmed_local_execution,
+            checkpoint: Some(checkpoint),
+        }
+    }
+}
+
+// SuiTransactionBlockResponseWithOptions is only used on the reading path
+pub struct SuiTransactionBlockResponseWithOptions {
+    pub response: SuiTransactionBlockResponse,
+    pub options: SuiTransactionBlockResponseOptions,
+}
+
+impl From<SuiTransactionBlockResponseWithOptions> for SuiTransactionBlockResponse {
+    fn from(value: SuiTransactionBlockResponseWithOptions) -> Self {
+        let SuiTransactionBlockResponseWithOptions { response, options } = value;
+
+        SuiTransactionBlockResponse {
+            digest: response.digest,
+            transaction: options.show_input.then_some(response.transaction).flatten(),
+            raw_transaction: options
+                .show_raw_input
+                .then_some(response.raw_transaction)
+                .unwrap_or_default(),
+            effects: options.show_effects.then_some(response.effects).flatten(),
+            events: options.show_events.then_some(response.events).flatten(),
+            object_changes: options
+                .show_object_changes
+                .then_some(response.object_changes)
+                .flatten(),
+            balance_changes: options
+                .show_balance_changes
+                .then_some(response.balance_changes)
+                .flatten(),
+            timestamp_ms: response.timestamp_ms,
+            confirmed_local_execution: response.confirmed_local_execution,
+            checkpoint: response.checkpoint,
+            errors: vec![],
+        }
     }
 }

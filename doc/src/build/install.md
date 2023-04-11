@@ -24,7 +24,7 @@ The Sui repository includes two primary branches, `devnet` and `main`.
 
 ## Documentation in the Sui repository
 
-The source for the documentation published on this site also resides in the Sui repository. The content differs between the branches of the repository just like the Sui source code. Use the version of the documentation that corresponds to the Sui network you plan to use. For example, to use the Sui Devnet network, use the **Devnet** version of the documentation. To use the latest Sui updates, use the **Latest build** version of the documentation.
+The source for the documentation published on this site also resides in the Sui repository. The content differs between the branches of the repository just like the Sui source code. Use the version of the documentation that corresponds to the Sui network you plan to use. For example, to use the Sui Devnet network, use the **Devnet** version of the documentation. To use the Sui Testnet network, use the **Testnet** version of the documentation.
 
 
 ## Supported operating systems
@@ -264,7 +264,7 @@ The command installs Sui components in the `~/.cargo/bin` folder.
 
 ### Confirm the installation
 
-To confirm that Sui installed correctly, type `sui` and press Enter. YOu should see a message about the Sui version installed and help for using Sui commands.
+To confirm that Sui installed correctly, type `sui` and press Enter. You should see a message about the Sui version installed and help for using Sui commands.
 
 ## Integrated development environment
 
@@ -306,7 +306,6 @@ git clone https://github.com/MystenLabs/sui.git --branch devnet
 
 The following primary directories offer a good starting point for exploring Sui's source code:
  * [sui](https://github.com/MystenLabs/sui/tree/main/crates/sui) - Sui, including the Sui CLI Client
- * [sui_framework](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/sources) - Sui Move core smart contracts (e.g., coin.move, object.move, test_scenario.move, ...)
  * [sui_programmability](https://github.com/MystenLabs/sui/tree/main/sui_programmability) - Sui Move code examples (games, defi, nfts, ...)
  * [sui_core](https://github.com/MystenLabs/sui/tree/main/crates/sui-core) - Core Sui components
  * [sui-types](https://github.com/MystenLabs/sui/tree/main/crates/sui-types) - Sui object types, such as coins and gas

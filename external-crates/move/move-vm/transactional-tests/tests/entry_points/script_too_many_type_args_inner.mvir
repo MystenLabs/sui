@@ -1,0 +1,10 @@
+//# publish
+module 0x1.M {
+    struct Ex<T> { flag: bool }
+}
+
+//# run --type-args 0x1::M::Ex<bool,u64>
+main<T>() { // too many type args
+label b0:
+    return;
+}

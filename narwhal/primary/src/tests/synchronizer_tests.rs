@@ -4,12 +4,14 @@ use crate::{
     common::create_db_stores, metrics::PrimaryMetrics, synchronizer::Synchronizer,
     NUM_SHUTDOWN_RECEIVERS,
 };
+use config::Committee;
 use consensus::consensus::ConsensusRound;
 use consensus::utils::gc_round;
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use fastcrypto::{hash::Hash, traits::KeyPair};
 use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
+use network::client::NetworkClient;
 use prometheus::Registry;
 use std::{
     collections::{BTreeSet, HashMap},
@@ -19,7 +21,10 @@ use std::{
 };
 use test_utils::{make_optimal_signed_certificates, mock_signed_certificate, CommitteeFixture};
 use tokio::sync::{oneshot, watch};
-use types::{error::DagError, Certificate, PreSubscribedBroadcastSender, Round};
+use types::{
+    error::DagError, Certificate, CertificateAPI, Header, HeaderAPI, PreSubscribedBroadcastSender,
+    Round,
+};
 
 #[tokio::test]
 async fn accept_certificates() {
@@ -28,8 +33,9 @@ async fn accept_certificates() {
     let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().last().unwrap();
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
-    let name = primary.public_key();
+    let authority_id = primary.id();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let client = NetworkClient::new_from_keypair(&primary.network_keypair());
 
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, mut rx_new_certificates) = test_utils::test_channel!(3);
@@ -43,10 +49,11 @@ async fn accept_certificates() {
 
     // Make a synchronizer.
     let synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        authority_id,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
+        client,
         certificate_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
@@ -59,7 +66,7 @@ async fn accept_certificates() {
     ));
 
     let own_address = committee
-        .primary(&name)
+        .primary_by_id(&authority_id)
         .unwrap()
         .to_anemo_address()
         .unwrap();
@@ -78,10 +85,7 @@ async fn accept_certificates() {
         .map(|h| fixture.certificate(h))
         .collect();
     for cert in certificates.clone() {
-        synchronizer
-            .try_accept_certificate(cert, &network)
-            .await
-            .unwrap();
+        synchronizer.try_accept_certificate(cert).await.unwrap();
     }
 
     // Ensure the Synchronizer sends the parents of the certificates to the proposer.
@@ -130,8 +134,8 @@ async fn accept_suspended_certificates() {
     let worker_cache = fixture.worker_cache();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
     let primary = fixture.authorities().next().unwrap();
-    let name = primary.public_key();
-    let network = test_utils::test_network(primary.network_keypair(), primary.address());
+    let authority_id = primary.id();
+    let client = NetworkClient::new_from_keypair(&primary.network_keypair());
 
     let (_header_store, certificate_store, payload_store) = create_db_stores();
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(100);
@@ -142,10 +146,11 @@ async fn accept_suspended_certificates() {
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        authority_id,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
+        client,
         certificate_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
@@ -163,7 +168,10 @@ async fn accept_suspended_certificates() {
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
-    let keys: Vec<_> = fixture.authorities().map(|a| a.keypair().copy()).collect();
+    let keys: Vec<_> = fixture
+        .authorities()
+        .map(|a| (a.id(), a.keypair().copy()))
+        .collect();
     let (certificates, next_parents) =
         make_optimal_signed_certificates(1..=5, &genesis, &committee, keys.as_slice());
     let certificates = certificates.into_iter().collect_vec();
@@ -171,10 +179,7 @@ async fn accept_suspended_certificates() {
     // Try to aceept certificates from round 2 to 5. All of them should be suspended.
     let accept = FuturesUnordered::new();
     for cert in &certificates[NUM_AUTHORITIES..] {
-        match synchronizer
-            .try_accept_certificate(cert.clone(), &network)
-            .await
-        {
+        match synchronizer.try_accept_certificate(cert.clone()).await {
             Ok(()) => panic!("Unexpected acceptance of {cert:?}"),
             Err(DagError::Suspended(notify)) => {
                 accept.push(async move { notify.wait().await });
@@ -186,10 +191,7 @@ async fn accept_suspended_certificates() {
 
     // Try to aceept certificates from round 1. All of them should be accepted.
     for cert in &certificates[..NUM_AUTHORITIES] {
-        match synchronizer
-            .try_accept_certificate(cert.clone(), &network)
-            .await
-        {
+        match synchronizer.try_accept_certificate(cert.clone()).await {
             Ok(()) => continue,
             Err(e) => panic!("Unexpected error {e}"),
         }
@@ -200,10 +202,7 @@ async fn accept_suspended_certificates() {
 
     // Try to aceept certificates from round 2 and above again. All of them should be accepted.
     for cert in &certificates[NUM_AUTHORITIES..] {
-        match synchronizer
-            .try_accept_certificate(cert.clone(), &network)
-            .await
-        {
+        match synchronizer.try_accept_certificate(cert.clone()).await {
             Ok(()) => continue,
             Err(e) => panic!("Unexpected error {e}"),
         }
@@ -218,10 +217,7 @@ async fn accept_suspended_certificates() {
         &committee,
     );
     // The certificate should not be accepted or suspended.
-    match synchronizer
-        .try_accept_certificate(cert.clone(), &network)
-        .await
-    {
+    match synchronizer.try_accept_certificate(cert.clone()).await {
         Ok(()) => panic!("Unexpected success!"),
         Err(DagError::TooNew(_, _, _)) => {}
         Err(e) => panic!("Unexpected error {e}!"),
@@ -234,8 +230,9 @@ async fn synchronizer_recover_basic() {
     let committee = fixture.committee();
     let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().last().unwrap();
+    let client = NetworkClient::new_from_keypair(&primary.network_keypair());
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
-    let name = primary.public_key();
+    let name = primary.id();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
@@ -250,10 +247,11 @@ async fn synchronizer_recover_basic() {
 
     // Make Synchronizer.
     let synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        name,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
+        client.clone(),
         certificate_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
@@ -266,7 +264,7 @@ async fn synchronizer_recover_basic() {
     ));
 
     let own_address = committee
-        .primary(&name)
+        .primary_by_id(&name)
         .unwrap()
         .to_anemo_address()
         .unwrap();
@@ -285,10 +283,7 @@ async fn synchronizer_recover_basic() {
         .map(|h| fixture.certificate(h))
         .collect();
     for cert in certificates.clone() {
-        synchronizer
-            .try_accept_certificate(cert, &network)
-            .await
-            .unwrap();
+        synchronizer.try_accept_certificate(cert).await.unwrap();
     }
     tokio::time::sleep(Duration::from_secs(5)).await;
 
@@ -302,10 +297,11 @@ async fn synchronizer_recover_basic() {
     let (tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let _synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        name,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
+        client,
         certificate_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
@@ -353,8 +349,9 @@ async fn synchronizer_recover_partial_certs() {
     let committee = fixture.committee();
     let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().last().unwrap();
+    let client = NetworkClient::new_from_keypair(&primary.network_keypair());
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
-    let name = primary.public_key();
+    let name = primary.id();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
@@ -369,10 +366,11 @@ async fn synchronizer_recover_partial_certs() {
 
     // Make a synchronizer.
     let synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        name,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
+        client.clone(),
         certificate_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
@@ -385,7 +383,7 @@ async fn synchronizer_recover_partial_certs() {
     ));
 
     let own_address = committee
-        .primary(&name)
+        .primary_by_id(&name)
         .unwrap()
         .to_anemo_address()
         .unwrap();
@@ -405,7 +403,7 @@ async fn synchronizer_recover_partial_certs() {
         .collect();
     let last_cert = certificates.clone().into_iter().last().unwrap();
     synchronizer
-        .try_accept_certificate(last_cert, &network)
+        .try_accept_certificate(last_cert)
         .await
         .unwrap();
     tokio::time::sleep(Duration::from_secs(2)).await;
@@ -420,10 +418,11 @@ async fn synchronizer_recover_partial_certs() {
     let (tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        name,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
+        client,
         certificate_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
@@ -438,10 +437,7 @@ async fn synchronizer_recover_partial_certs() {
 
     // Send remaining 2f certs.
     for cert in certificates.clone().into_iter().take(2) {
-        synchronizer
-            .try_accept_certificate(cert, &network)
-            .await
-            .unwrap();
+        synchronizer.try_accept_certificate(cert).await.unwrap();
     }
     tokio::time::sleep(Duration::from_secs(5)).await;
 
@@ -466,8 +462,9 @@ async fn synchronizer_recover_previous_round() {
     let committee = fixture.committee();
     let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().last().unwrap();
+    let client = NetworkClient::new_from_keypair(&primary.network_keypair());
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
-    let name = primary.public_key();
+    let name = primary.id();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
@@ -482,10 +479,11 @@ async fn synchronizer_recover_previous_round() {
 
     // Make a synchronizer.
     let synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        name,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
+        client.clone(),
         certificate_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
@@ -498,7 +496,7 @@ async fn synchronizer_recover_previous_round() {
     ));
 
     let own_address = committee
-        .primary(&name)
+        .primary_by_id(&name)
         .unwrap()
         .to_anemo_address()
         .unwrap();
@@ -517,7 +515,7 @@ async fn synchronizer_recover_previous_round() {
         .collect::<BTreeSet<_>>();
     let keys = fixture
         .authorities()
-        .map(|a| a.keypair().copy())
+        .map(|a| (a.id(), a.keypair().copy()))
         .take(3)
         .collect::<Vec<_>>();
     let (all_certificates, _next_parents) =
@@ -530,7 +528,7 @@ async fn synchronizer_recover_previous_round() {
         .chain(round_2_certificates.iter())
     {
         synchronizer
-            .try_accept_certificate(cert.clone(), &network)
+            .try_accept_certificate(cert.clone())
             .await
             .unwrap();
     }
@@ -547,10 +545,11 @@ async fn synchronizer_recover_previous_round() {
     let (tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let _synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        name,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
+        client,
         certificate_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
@@ -577,7 +576,9 @@ async fn synchronizer_recover_previous_round() {
 #[tokio::test]
 async fn deliver_certificate_using_dag() {
     let fixture = CommitteeFixture::builder().build();
-    let name = fixture.authorities().next().unwrap().public_key();
+    let primary = fixture.authorities().next().unwrap();
+    let client = NetworkClient::new_from_keypair(&primary.network_keypair());
+    let name = primary.id();
     let committee = fixture.committee();
     let worker_cache = fixture.worker_cache();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
@@ -608,6 +609,7 @@ async fn deliver_certificate_using_dag() {
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
+        client,
         certificates_store,
         payload_store,
         tx_certificate_fetcher,
@@ -628,7 +630,7 @@ async fn deliver_certificate_using_dag() {
 
     let keys = fixture
         .authorities()
-        .map(|a| a.keypair().copy())
+        .map(|a| (a.id(), a.keypair().copy()))
         .take(3)
         .collect::<Vec<_>>();
     let (mut certificates, _next_parents) =
@@ -654,7 +656,9 @@ async fn deliver_certificate_using_dag() {
 #[tokio::test]
 async fn deliver_certificate_using_store() {
     let fixture = CommitteeFixture::builder().build();
-    let name = fixture.authorities().next().unwrap().public_key();
+    let primary = fixture.authorities().next().unwrap();
+    let client = NetworkClient::new_from_keypair(&primary.network_keypair());
+    let name = primary.id();
     let committee = fixture.committee();
     let worker_cache = fixture.worker_cache();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
@@ -672,6 +676,7 @@ async fn deliver_certificate_using_store() {
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
+        client,
         certificates_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
@@ -692,7 +697,7 @@ async fn deliver_certificate_using_store() {
 
     let keys = fixture
         .authorities()
-        .map(|a| a.keypair().copy())
+        .map(|a| (a.id(), a.keypair().copy()))
         .take(3)
         .collect::<Vec<_>>();
     let (mut certificates, _next_parents) =
@@ -718,7 +723,9 @@ async fn deliver_certificate_using_store() {
 #[tokio::test]
 async fn deliver_certificate_not_found_parents() {
     let fixture = CommitteeFixture::builder().build();
-    let name = fixture.authorities().next().unwrap().public_key();
+    let primary = fixture.authorities().next().unwrap();
+    let client = NetworkClient::new_from_keypair(&primary.network_keypair());
+    let name = primary.id();
     let committee = fixture.committee();
     let worker_cache = fixture.worker_cache();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
@@ -736,6 +743,7 @@ async fn deliver_certificate_not_found_parents() {
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
+        client,
         certificates_store,
         payload_store,
         tx_certificate_fetcher,
@@ -756,7 +764,7 @@ async fn deliver_certificate_not_found_parents() {
 
     let keys = fixture
         .authorities()
-        .map(|a| a.keypair().copy())
+        .map(|a| (a.id(), a.keypair().copy()))
         .take(3)
         .collect::<Vec<_>>();
     let (mut certificates, _next_parents) =
@@ -790,9 +798,8 @@ async fn sync_batches_drops_old() {
     let worker_cache = fixture.worker_cache();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
     let primary = fixture.authorities().next().unwrap();
-    let name = primary.public_key();
     let author = fixture.authorities().nth(2).unwrap();
-    let network = test_utils::test_network(primary.network_keypair(), primary.address());
+    let client = NetworkClient::new_from_keypair(&primary.network_keypair());
 
     let (_header_store, certificate_store, payload_store) = create_db_stores();
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
@@ -803,10 +810,11 @@ async fn sync_batches_drops_old() {
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        primary.id(),
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
+        client,
         certificate_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
@@ -820,37 +828,38 @@ async fn sync_batches_drops_old() {
 
     let mut certificates = HashMap::new();
     for _ in 0..3 {
-        let header = author
-            .header_builder(&fixture.committee())
-            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
-            .build()
-            .unwrap();
+        let header = Header::V1(
+            author
+                .header_builder(&fixture.committee())
+                .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
+                .build()
+                .unwrap(),
+        );
 
         let certificate = fixture.certificate(&header);
         let digest = certificate.clone().digest();
 
         certificates.insert(digest, certificate.clone());
         certificate_store.write(certificate.clone()).unwrap();
-        for (digest, (worker_id, _)) in &certificate.header.payload {
+        for (digest, (worker_id, _)) in certificate.header().payload() {
             payload_store.write(digest, worker_id).unwrap();
         }
     }
-    let test_header = author
-        .header_builder(&fixture.committee())
-        .round(2)
-        .parents(certificates.keys().cloned().collect())
-        .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
-        .build()
-        .unwrap();
+    let test_header = Header::V1(
+        author
+            .header_builder(&fixture.committee())
+            .round(2)
+            .parents(certificates.keys().cloned().collect())
+            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
+            .build()
+            .unwrap(),
+    );
 
     tokio::task::spawn(async move {
         tokio::time::sleep(Duration::from_millis(100)).await;
         let _ = tx_consensus_round_updates.send(ConsensusRound::new(30, 0));
     });
-    match synchronizer
-        .sync_header_batches(&test_header, network.clone(), 10)
-        .await
-    {
+    match synchronizer.sync_header_batches(&test_header, 10).await {
         Err(DagError::TooOld(_, _, _)) => (),
         result => panic!("unexpected result {result:?}"),
     }
@@ -869,8 +878,7 @@ async fn gc_suspended_certificates() {
     let worker_cache = fixture.worker_cache();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
     let primary = fixture.authorities().next().unwrap();
-    let name = primary.public_key();
-    let network = test_utils::test_network(primary.network_keypair(), primary.address());
+    let client = NetworkClient::new_from_keypair(&primary.network_keypair());
 
     let (_header_store, certificate_store, payload_store) = create_db_stores();
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(100);
@@ -881,10 +889,11 @@ async fn gc_suspended_certificates() {
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        primary.id(),
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ GC_DEPTH,
+        client,
         certificate_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
@@ -897,12 +906,15 @@ async fn gc_suspended_certificates() {
     ));
 
     // Make fake certificates.
-    let committee = fixture.committee();
+    let committee: Committee = fixture.committee();
     let genesis = Certificate::genesis(&committee)
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
-    let keys: Vec<_> = fixture.authorities().map(|a| a.keypair().copy()).collect();
+    let keys: Vec<_> = fixture
+        .authorities()
+        .map(|a| (a.id(), a.keypair().copy()))
+        .collect();
     let (certificates, _next_parents) =
         make_optimal_signed_certificates(1..=5, &genesis, &committee, keys.as_slice());
     let certificates = certificates.into_iter().collect_vec();
@@ -910,10 +922,7 @@ async fn gc_suspended_certificates() {
     // Try to aceept certificates from round 2 and above. All of them should be suspended.
     let accept = FuturesUnordered::new();
     for cert in &certificates[NUM_AUTHORITIES..] {
-        match synchronizer
-            .try_accept_certificate(cert.clone(), &network)
-            .await
-        {
+        match synchronizer.try_accept_certificate(cert.clone()).await {
             Ok(()) => panic!("Unexpected acceptance of {cert:?}"),
             Err(DagError::Suspended(notify)) => {
                 accept.push(async move { notify.wait().await });
@@ -926,7 +935,7 @@ async fn gc_suspended_certificates() {
     // Re-insertion of missing certificate as fetched certificates should be ok.
     for cert in &certificates[NUM_AUTHORITIES * 2..NUM_AUTHORITIES * 4] {
         match synchronizer
-            .try_accept_fetched_certificate(cert.clone(), &network)
+            .try_accept_fetched_certificate(cert.clone())
             .await
         {
             Ok(()) => panic!("Unexpected acceptance of {cert:?}"),

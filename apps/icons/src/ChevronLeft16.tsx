@@ -3,19 +3,19 @@
 import { SVGProps } from "react";
 const SvgChevronLeft16 = (props: SVGProps<SVGSVGElement>) => (
   <svg
+    xmlns="http://www.w3.org/2000/svg"
     width="1em"
     height="1em"
-    viewBox="0 0 16 16"
     fill="none"
-    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 16 16"
     {...props}
   >
     <path
-      d="M10 4 6 8l4 4"
       stroke="currentColor"
-      strokeWidth={1.5}
       strokeLinecap="round"
       strokeLinejoin="round"
+      strokeWidth={1.5}
+      d="M10 4 6 8l4 4"
     />
   </svg>
 );

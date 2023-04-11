@@ -1,0 +1,30 @@
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/block_empty_invalid.move:3:14
+  │
+3 │         ({}: u64);
+  │          --  ^^^
+  │          │   │
+  │          │   Invalid type annotation
+  │          │   Expected: 'u64'
+  │          Given: '()'
+
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/block_empty_invalid.move:4:14
+  │
+4 │         ({}: &u64);
+  │          --  ^^^^
+  │          │   │
+  │          │   Invalid type annotation
+  │          │   Expected: '&u64'
+  │          Given: '()'
+
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/block_empty_invalid.move:5:14
+  │
+5 │         ({}: (u64, bool));
+  │          --  ^^^^^^^^^^^
+  │          │   │
+  │          │   Invalid type annotation
+  │          │   Expected: '(u64, bool)'
+  │          Given: '()'
+

@@ -71,8 +71,8 @@ module test::object_basics {
 
 //# run test::object_basics::create --args 10 @A --sender A
 
-//# run test::object_basics::freeze_object --args object(107) --sender A
+//# run test::object_basics::freeze_object --args object(2,0) --sender A
 
-//# run test::object_basics::transfer --args object(107) @A --sender A
+//# run test::object_basics::transfer --args object(2,0) @A --sender A
 
-//# run test::object_basics::set_value --args object(107) 1 --sender A
+//# run test::object_basics::set_value --args object(2,0) 1 --sender A

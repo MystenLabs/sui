@@ -75,7 +75,7 @@ pub fn keccak256(
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    // Load the cost paramaters from the protocol config
+    // Load the cost parameters from the protocol config
     let hash_keccak256_cost_params = &context
         .extensions()
         .get::<NativesCostTable>()
@@ -88,7 +88,7 @@ pub fn keccak256(
         context,
         ty_args,
         args,
-        hash_keccak256_cost_params.hash_keccak256_cost_base,
+        hash_keccak256_cost_params.hash_keccak256_data_cost_per_byte,
         hash_keccak256_cost_params.hash_keccak256_data_cost_per_block,
         KECCAK_256_BLOCK_SIZE,
     )
@@ -115,7 +115,7 @@ pub fn blake2b256(
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    // Load the cost paramaters from the protocol config
+    // Load the cost parameters from the protocol config
     let hash_blake2b256_cost_params = &context
         .extensions()
         .get::<NativesCostTable>()

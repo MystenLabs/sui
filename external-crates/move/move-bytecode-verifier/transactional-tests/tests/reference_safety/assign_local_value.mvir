@@ -1,0 +1,13 @@
+//# run
+main() {
+    let v: u64;
+    let ref_v: &mut u64;
+label b0:
+    v = 5;
+    ref_v = &mut v;
+    assert(*copy(ref_v) == 5, 42);
+    *copy(ref_v) = 42; // safe to modify ref
+    assert(*move(ref_v) == 42, 42);
+    assert(copy(v) == 42, 42);
+    return;
+}

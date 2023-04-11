@@ -1,13 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::workload::Workload;
-use crate::workloads::{Gas, WorkloadBuilderInfo, WorkloadParams};
-
 use crate::system_state_observer::SystemStateObserver;
+use crate::util::publish_basics_package;
 use crate::workloads::payload::Payload;
-use crate::workloads::workload::{WorkloadBuilder, MAX_GAS_FOR_TESTING};
+use crate::workloads::workload::{
+    Workload, WorkloadBuilder, ESTIMATED_COMPUTATION_COST, MAX_GAS_FOR_TESTING,
+    STORAGE_COST_PER_COUNTER,
+};
 use crate::workloads::GasCoinConfig;
+use crate::workloads::{Gas, WorkloadBuilderInfo, WorkloadParams};
 use crate::{ExecutionEffects, ValidatorProxy};
 use async_trait::async_trait;
 use futures::future::join_all;
@@ -19,9 +21,7 @@ use sui_types::{
     messages::VerifiedTransaction,
 };
 use test_utils::messages::{make_counter_create_transaction, make_counter_increment_transaction};
-
-use crate::util::publish_basics_package;
-use tracing::info;
+use tracing::{debug, error, info};
 
 #[derive(Debug)]
 pub struct SharedCounterTestPayload {
@@ -40,6 +40,10 @@ impl std::fmt::Display for SharedCounterTestPayload {
 
 impl Payload for SharedCounterTestPayload {
     fn make_new_payload(&mut self, effects: &ExecutionEffects) {
+        if !effects.is_ok() {
+            effects.print_gas_summary();
+            error!("Shared counter tx failed...");
+        }
         self.gas.0 = effects.gas_object().0;
     }
     fn make_transaction(&mut self) -> VerifiedTransaction {
@@ -50,7 +54,10 @@ impl Payload for SharedCounterTestPayload {
             self.counter_initial_shared_version,
             self.gas.1,
             &self.gas.2,
-            Some(*self.system_state_observer.reference_gas_price.borrow()),
+            self.system_state_observer
+                .state
+                .borrow()
+                .reference_gas_price,
         )
     }
 }
@@ -124,11 +131,14 @@ impl WorkloadBuilder<dyn Payload> for SharedCounterWorkloadBuilder {
     }
     async fn generate_coin_config_for_payloads(&self) -> Vec<GasCoinConfig> {
         let mut configs = vec![];
+        let amount = MAX_GAS_FOR_TESTING
+            + ESTIMATED_COMPUTATION_COST
+            + STORAGE_COST_PER_COUNTER * self.num_counters;
         // Gas coins for running workload
         for _i in 0..self.num_payloads {
             let (address, keypair) = get_key_pair();
             configs.push(GasCoinConfig {
-                amount: MAX_GAS_FOR_TESTING,
+                amount,
                 address,
                 keypair: Arc::new(keypair),
             });
@@ -167,7 +177,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
         if self.basics_package_id.is_some() {
             return;
         }
-        let gas_price = *system_state_observer.reference_gas_price.borrow();
+        let gas_price = system_state_observer.state.borrow().reference_gas_price;
         let (head, tail) = self
             .init_gas
             .split_first()
@@ -191,11 +201,14 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
                 self.basics_package_id.unwrap(),
                 *sender,
                 keypair,
-                Some(gas_price),
+                gas_price,
             );
             let proxy_ref = proxy.clone();
             futures.push(async move {
-                if let Ok(effects) = proxy_ref.execute_transaction(transaction.into()).await {
+                if let Ok(effects) = proxy_ref
+                    .execute_transaction_block(transaction.into())
+                    .await
+                {
                     effects.created()[0].0
                 } else {
                     panic!("Failed to create shared counter!");
@@ -212,7 +225,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
         // create counters using gas objects we created above
         info!("Creating shared txn payloads, hang tight..");
         let mut shared_payloads = vec![];
-        eprintln!(
+        debug!(
             "num of gas = {:?}, {:?}",
             self.payload_gas.len(),
             self.counters.len()

@@ -4,6 +4,7 @@
 use anyhow::Result;
 use clap::Parser;
 
+mod external_crates_tests;
 mod lint;
 
 /// Simple program to greet a person
@@ -19,6 +20,9 @@ enum Command {
     #[clap(name = "lint")]
     /// Run lints
     Lint(lint::Args),
+    #[clap(name = "external-crates-tests")]
+    /// Run external crate tests
+    ExternalCratesTests,
 }
 
 fn main() -> Result<()> {
@@ -26,5 +30,6 @@ fn main() -> Result<()> {
 
     match args.cmd {
         Command::Lint(args) => lint::run(args),
+        Command::ExternalCratesTests => external_crates_tests::run(),
     }
 }

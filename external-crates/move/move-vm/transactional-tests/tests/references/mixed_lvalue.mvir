@@ -1,0 +1,55 @@
+//# publish
+module 0x1.A {
+
+    struct S { f: u64 }
+
+    four(): u64 * u64 * u64 * u64 {
+    label b0:
+        return 0, 1, 2, 3;
+    }
+
+    public mixed() {
+        let x: u64;
+        let r: u64;
+        let r_ref: &mut u64;
+        let s: Self.S;
+    label b0:
+        r = 0;
+        r_ref = &mut r;
+        s = S { f: 0 };
+
+        _, x, *copy(r_ref), *&mut (&mut s).S::f = Self.four();
+        assert(move(x) == 1, 42);
+        assert(*copy(r_ref) == 2, 42);
+        assert(*&(&s).S::f == 3, 42);
+
+        *&mut (&mut s).S::f, _, x, *copy(r_ref) = Self.four();
+        assert(move(x) == 2, 42);
+        assert(*copy(r_ref) == 3, 42);
+        assert(*&(&s).S::f == 0, 42);
+
+        *copy(r_ref), *&mut (&mut s).S::f, _, x = Self.four();
+        assert(move(x) == 3, 42);
+        assert(*copy(r_ref) == 0, 42);
+        assert(*&(&s).S::f == 1, 42);
+
+        x, *copy(r_ref), *&mut (&mut s).S::f, _ = Self.four();
+        assert(move(x) == 0, 42);
+        assert(*move(r_ref) == 1, 42);
+        assert(*&(&s).S::f == 2, 42);
+
+        S { f: r } = move(s);
+
+        return;
+    }
+}
+
+
+//# run
+import 0x1.A;
+
+main() {
+label b0:
+    A.mixed();
+    return;
+}

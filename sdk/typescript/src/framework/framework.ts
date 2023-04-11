@@ -15,7 +15,7 @@ import { normalizeSuiObjectId, ObjectId, SuiAddress } from '../types/common';
 import { getOption, Option } from '../types/option';
 import { CoinStruct } from '../types/coin';
 import { StructTag } from '../types/sui-bcs';
-import { Infer, literal, number, object, string, union } from 'superstruct';
+import { Infer, nullable, number, object, string } from 'superstruct';
 
 export const SUI_SYSTEM_ADDRESS = '0x3';
 export const SUI_FRAMEWORK_ADDRESS = '0x2';
@@ -24,6 +24,8 @@ export const OBJECT_MODULE_NAME = 'object';
 export const UID_STRUCT_NAME = 'UID';
 export const ID_STRUCT_NAME = 'ID';
 export const SUI_TYPE_ARG = `${SUI_FRAMEWORK_ADDRESS}::sui::SUI`;
+export const VALIDATORS_EVENTS_QUERY =
+  '0x3::validator_set::ValidatorEpochInfoEvent';
 
 export const SUI_CLOCK_OBJECT_ID = normalizeSuiObjectId('0x6');
 
@@ -36,13 +38,19 @@ export const COIN_TYPE_ARG_REGEX = /^0x2::coin::Coin<(.+)>$/;
 type ObjectData = ObjectDataFull | SuiObjectInfo;
 type ObjectDataFull = SuiObjectResponse | SuiMoveObject;
 
+export function isObjectDataFull(
+  resp: ObjectData | ObjectDataFull,
+): resp is SuiObjectResponse {
+  return !!(resp as SuiObjectResponse).data || !!(resp as SuiMoveObject).type;
+}
+
 export const CoinMetadataStruct = object({
   decimals: number(),
   name: string(),
   symbol: string(),
   description: string(),
-  iconUrl: union([string(), literal(null)]),
-  id: union([ObjectId, literal(null)]),
+  iconUrl: nullable(string()),
+  id: nullable(ObjectId),
 });
 
 export type CoinMetadata = Infer<typeof CoinMetadataStruct>;
@@ -124,7 +132,7 @@ export class Coin {
   }
 
   private static getType(data: ObjectData): string | undefined {
-    if ('status' in data) {
+    if (isObjectDataFull(data)) {
       return getObjectType(data);
     }
     return data.type;

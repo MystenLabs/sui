@@ -100,8 +100,7 @@ module.exports = {
 
         // Always use shorthand fragments when applicable
         'react/jsx-fragments': ['error', 'syntax'],
-        'react/jsx-no-useless-fragment': 'error',
-
+        'react/jsx-no-useless-fragment': ['error', { allowExpressions: true }],
         'react/jsx-handler-names': [
             'error',
             {

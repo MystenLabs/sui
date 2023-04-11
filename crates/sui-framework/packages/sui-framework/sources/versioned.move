@@ -73,6 +73,7 @@ module sui::versioned {
         assert!(versioned_id == object::id(self), EInvalidUpgrade);
         assert!(old_version < new_version, EInvalidUpgrade);
         dynamic_field::add(&mut self.id, new_version, new_value);
+        self.version = new_version;
     }
 
     /// Destroy this Versioned container, and return the inner object.

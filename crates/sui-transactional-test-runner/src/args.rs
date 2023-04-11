@@ -3,16 +3,18 @@
 
 use anyhow::{bail, ensure};
 use clap;
+use move_command_line_common::parser::{parse_u256, parse_u64};
 use move_command_line_common::values::{ParsableValue, ParsedValue};
 use move_command_line_common::{parser::Parser as MoveCLParser, values::ValueToken};
-use move_compiler::shared::parse_u128;
 use move_core_types::identifier::Identifier;
+use move_core_types::u256::U256;
 use move_core_types::value::{MoveStruct, MoveValue};
+use sui_types::base_types::SuiAddress;
 use sui_types::messages::{Argument, CallArg, ObjectArg};
 use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 
-use crate::test_adapter::SuiTestAdapter;
+use crate::test_adapter::{FakeID, SuiTestAdapter};
 
 pub const SUI_ARGS_LONG: &str = "sui-args";
 
@@ -50,12 +52,14 @@ pub struct SuiInitArgs {
 
 #[derive(Debug, clap::Parser)]
 pub struct ViewObjectCommand {
-    pub id: u64,
+    #[clap(parse(try_from_str = parse_fake_id))]
+    pub id: FakeID,
 }
 
 #[derive(Debug, clap::Parser)]
 pub struct TransferObjectCommand {
-    pub id: u64,
+    #[clap(parse(try_from_str = parse_fake_id))]
+    pub id: FakeID,
     #[clap(long = "recipient")]
     pub recipient: String,
     #[clap(long = "sender")]
@@ -106,13 +110,13 @@ pub enum SuiSubcommand {
 
 #[derive(Debug)]
 pub enum SuiExtraValueArgs {
-    Object(u64),
+    Object(FakeID),
 }
 
 pub enum SuiValue {
     MoveValue(MoveValue),
-    Object(u64),
-    ObjVec(Vec<u64>),
+    Object(FakeID),
+    ObjVec(Vec<FakeID>),
 }
 
 impl SuiExtraValueArgs {
@@ -122,13 +126,24 @@ impl SuiExtraValueArgs {
         let contents = parser.advance(ValueToken::Ident)?;
         ensure!(contents == "object");
         parser.advance(ValueToken::LParen)?;
-        let u_str = parser.advance(ValueToken::Number)?;
-        let (fake_id, _) = parse_u128(u_str)?;
-        if fake_id > (u64::MAX as u128) {
-            bail!("Object id too large")
-        }
+        let i_str = parser.advance(ValueToken::Number)?;
+        let (i, _) = parse_u256(i_str)?;
+        let fake_id = if let Some(ValueToken::Comma) = parser.peek_tok() {
+            parser.advance(ValueToken::Comma)?;
+            let j_str = parser.advance(ValueToken::Number)?;
+            let (j, _) = parse_u64(j_str)?;
+            if i > U256::from(u64::MAX) {
+                bail!("Object ID too large")
+            }
+            FakeID::Enumerated(i.unchecked_as_u64(), j)
+        } else {
+            let mut u256_bytes = i.to_le_bytes().to_vec();
+            u256_bytes.reverse();
+            let address: SuiAddress = SuiAddress::from_bytes(&u256_bytes).unwrap();
+            FakeID::Known(address.into())
+        };
         parser.advance(ValueToken::RParen)?;
-        Ok(SuiExtraValueArgs::Object(fake_id as u64))
+        Ok(SuiExtraValueArgs::Object(fake_id))
     }
 }
 
@@ -141,7 +156,7 @@ impl SuiValue {
         }
     }
 
-    fn assert_object(self) -> u64 {
+    fn assert_object(self) -> FakeID {
         match self {
             SuiValue::MoveValue(_) => panic!("unexpected nested non-object value in args"),
             SuiValue::Object(v) => v,
@@ -149,7 +164,7 @@ impl SuiValue {
         }
     }
 
-    fn object_arg(fake_id: u64, test_adapter: &SuiTestAdapter) -> anyhow::Result<ObjectArg> {
+    fn object_arg(fake_id: FakeID, test_adapter: &SuiTestAdapter) -> anyhow::Result<ObjectArg> {
         let id = match test_adapter.fake_to_real_object_id(fake_id) {
             Some(id) => id,
             None => bail!("INVALID TEST. Unknown object, object({})", fake_id),
@@ -252,4 +267,18 @@ impl ParsableValue for SuiExtraValueArgs {
             SuiExtraValueArgs::Object(id) => Ok(SuiValue::Object(id)),
         }
     }
+}
+
+fn parse_fake_id(s: &str) -> anyhow::Result<FakeID> {
+    Ok(if let Some((s1, s2)) = s.split_once(',') {
+        let (i, _) = parse_u64(s1)?;
+        let (j, _) = parse_u64(s2)?;
+        FakeID::Enumerated(i, j)
+    } else {
+        let (i, _) = parse_u256(s)?;
+        let mut u256_bytes = i.to_le_bytes().to_vec();
+        u256_bytes.reverse();
+        let address: SuiAddress = SuiAddress::from_bytes(&u256_bytes).unwrap();
+        FakeID::Known(address.into())
+    })
 }

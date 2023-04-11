@@ -1,0 +1,4 @@
+processed 1 task
+
+task 0 'print-bytecode'. lines 1-8:
+Error: Unbound struct Self.M

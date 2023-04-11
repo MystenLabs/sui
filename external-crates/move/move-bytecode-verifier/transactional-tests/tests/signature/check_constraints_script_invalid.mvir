@@ -1,0 +1,71 @@
+//# publish
+module 0x1.M {
+    struct BoxCopy<T> has copy { f: T }
+    struct BoxDrop<T> has drop { f: T }
+    struct BoxStore<T> has store { f: T }
+    struct BoxKey<T> has key { f: T }
+
+    struct NeedsCopy<T: copy> { dummy: bool }
+    struct NeedsDrop<T: drop> { dummy: bool }
+    struct NeedsStore<T: store> { dummy: bool }
+    struct NeedsKey<T: key> { dummy: bool }
+}
+
+// tests various invalid constraints in script arguments
+// all tests should give a constraint violation, even without type arguments passed in to 'run'
+
+//# run
+import 0x1.M;
+main<T: drop>(x: M.NeedsCopy<T>) {
+    label l0:
+    abort 0;
+}
+
+//# run
+import 0x1.M;
+main<T: copy + store>(x: M.NeedsDrop<T>) {
+    label l0:
+    abort 0;
+}
+
+//# run
+import 0x1.M;
+main<T: key>(x: M.NeedsStore<T>) {
+    label l0:
+    abort 0;
+}
+
+//# run
+import 0x1.M;
+main<T>(x: M.NeedsKey<T>) {
+    label l0:
+    abort 0;
+}
+
+//# run
+import 0x1.M;
+main<T: store>(x: M.NeedsCopy<M.BoxCopy<T>>) {
+    label l0:
+    abort 0;
+}
+
+//# run
+import 0x1.M;
+main<T: key + store>(x: M.NeedsDrop<M.BoxDrop<T>>) {
+    label l0:
+    abort 0;
+}
+
+//# run
+import 0x1.M;
+main<T>(x: M.NeedsStore<M.BoxStore<T>>) {
+    label l0:
+    abort 0;
+}
+
+//# run
+import 0x1.M;
+main<T: drop>(x: M.NeedsKey<M.BoxKey<T>>) {
+    label l0:
+    abort 0;
+}

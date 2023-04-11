@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useGetObject } from '@mysten/core';
 import { useParams } from 'react-router-dom';
 
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
-import { useGetObject } from '../../hooks/useGetObject';
 import { translate, type DataType } from './ObjectResultType';
 import PkgView from './views/PkgView';
 import { TokenView } from './views/TokenView';
@@ -37,7 +37,7 @@ export function ObjectResult() {
     }
 
     // TODO: Handle status better NotExists, Deleted, Other
-    if (data?.status !== 'Exists') {
+    if (data.error) {
         return <Fail objID={objID} />;
     }
 
@@ -45,7 +45,7 @@ export function ObjectResult() {
     const isPackage = resp.objType === PACKAGE_TYPE_NAME;
 
     return (
-        <div className="mt-5 mb-10">
+        <div className="mb-10">
             <PageHeader
                 type={isPackage ? 'Package' : 'Object'}
                 title={resp.id}

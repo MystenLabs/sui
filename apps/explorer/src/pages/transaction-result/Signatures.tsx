@@ -9,11 +9,12 @@ import {
     getTransactionSignature,
     normalizeSuiAddress,
     type SuiAddress,
-    type SuiTransactionResponse,
+    type SuiTransactionBlockResponse,
     type SignaturePubkeyPair,
 } from '@mysten/sui.js';
 
 import { DescriptionItem, DescriptionList } from '~/ui/DescriptionList';
+import { AddressLink } from '~/ui/InternalLink';
 import { Tab, TabGroup, TabList } from '~/ui/Tabs';
 import { Text } from '~/ui/Text';
 
@@ -36,10 +37,10 @@ function SignaturePanel({
                     </Text>
                 </DescriptionItem>
                 <DescriptionItem title="Address">
-                    <Text variant="p1/medium" color="steel-darker">
-                        0x
-                        {signature.pubKey.toSuiAddress()}
-                    </Text>
+                    <AddressLink
+                        noTruncate
+                        address={signature.pubKey.toSuiAddress()}
+                    />
                 </DescriptionItem>
                 <DescriptionItem title="Signature">
                     <Text variant="p1/medium" color="steel-darker">
@@ -57,13 +58,12 @@ function getSignatureFromAddress(
 ) {
     return signatures.find(
         (signature) =>
-            normalizeSuiAddress(signature.pubKey.toSuiAddress()) ===
-            normalizeSuiAddress(suiAddress)
+            signature.pubKey.toSuiAddress() === normalizeSuiAddress(suiAddress)
     );
 }
 
 interface Props {
-    transaction: SuiTransactionResponse;
+    transaction: SuiTransactionBlockResponse;
 }
 
 export function Signatures({ transaction }: Props) {

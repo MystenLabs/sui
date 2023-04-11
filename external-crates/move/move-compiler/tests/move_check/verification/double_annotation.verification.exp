@@ -1,0 +1,16 @@
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_check/verification/double_annotation.move:8:7
+  │
+7 │     #[verify_only]
+  │       ----------- Attribute previously given here
+8 │     #[verify_only]
+  │       ^^^^^^^^^^^ Duplicate attribute 'verify_only' attached to the same item
+
+error[E02001]: duplicate declaration, item, or annotation
+   ┌─ tests/move_check/verification/double_annotation.move:18:7
+   │
+17 │     #[verify_only]
+   │       ----------- Attribute previously given here
+18 │     #[verify_only]
+   │       ^^^^^^^^^^^ Duplicate attribute 'verify_only' attached to the same item
+

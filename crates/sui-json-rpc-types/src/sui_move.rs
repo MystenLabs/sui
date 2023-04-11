@@ -3,16 +3,6 @@
 
 use colored::Colorize;
 use itertools::Itertools;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
-use serde_with::{serde_as, DisplayFromStr};
-use std::collections::BTreeMap;
-use std::fmt;
-use std::fmt::{Display, Formatter, Write};
-use sui_types::base_types::{ObjectID, SuiAddress};
-use tracing::warn;
-
 use move_binary_format::file_format::{Ability, AbilitySet, StructTypeParameter, Visibility};
 use move_binary_format::normalized::{
     Field as NormalizedField, Function as SuiNormalizedFunction, Module as NormalizedModule,
@@ -21,6 +11,18 @@ use move_binary_format::normalized::{
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
 use move_core_types::value::{MoveStruct, MoveValue};
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use serde_with::serde_as;
+use std::collections::BTreeMap;
+use std::fmt;
+use std::fmt::{Display, Formatter, Write};
+use sui_types::sui_serde::BigInt;
+use tracing::warn;
+
+use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::sui_serde::SuiStructTag;
 
 pub type SuiMoveTypeParameterIndex = u16;
 
@@ -137,10 +139,12 @@ impl From<NormalizedModule> for SuiMoveNormalizedModule {
                 .map(|(name, struct_)| (name.to_string(), SuiMoveNormalizedStruct::from(struct_)))
                 .collect::<BTreeMap<String, SuiMoveNormalizedStruct>>(),
             exposed_functions: module
-                .exposed_functions
+                .functions
                 .into_iter()
-                .map(|(name, function)| {
-                    (name.to_string(), SuiMoveNormalizedFunction::from(function))
+                .filter_map(|(name, function)| {
+                    // TODO: Do we want to expose the private functions as well?
+                    (function.is_entry || function.visibility != Visibility::Private)
+                        .then(|| (name.to_string(), SuiMoveNormalizedFunction::from(function)))
                 })
                 .collect::<BTreeMap<String, SuiMoveNormalizedFunction>>(),
         }
@@ -280,15 +284,22 @@ pub enum MoveFunctionArgType {
     Object(ObjectValueKind),
 }
 
+#[serde_as]
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
 #[serde(untagged, rename = "MoveValue")]
 pub enum SuiMoveValue {
-    Number(u64),
+    Number(
+        #[schemars(with = "BigInt<u64>")]
+        #[serde_as(as = "BigInt<u64>")]
+        u64,
+    ),
     Bool(bool),
     Address(SuiAddress),
     Vector(Vec<SuiMoveValue>),
     String(String),
-    UID { id: ObjectID },
+    UID {
+        id: ObjectID,
+    },
     Struct(SuiMoveStruct),
     Option(Box<Option<SuiMoveValue>>),
 }
@@ -387,7 +398,7 @@ pub enum SuiMoveStruct {
     WithTypes {
         #[schemars(with = "String")]
         #[serde(rename = "type")]
-        #[serde_as(as = "DisplayFromStr")]
+        #[serde_as(as = "SuiStructTag")]
         type_: StructTag,
         fields: BTreeMap<String, SuiMoveValue>,
     },

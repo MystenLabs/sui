@@ -18,15 +18,16 @@ thiserror = "1.0.35"
 tokio = { workspace = true, features = ["full"] }
 tokio-stream = "0.1.10"
 tracing = "0.1.36"
-tracing-subscriber = { version = "0.3.15", features = ["time", "env-filter"] }
+tracing-subscriber = { version = "0.3.15", default-features = false, features = ["std", "smallvec", "fmt", "ansi", "time", "env-filter"] }
 url = "2.3.1"
-axum = "0.6.2"
+axum.workspace = true
 
 config = { path = "../config", package = "narwhal-config" }
 consensus = { path = "../consensus", package = "narwhal-consensus" }
 fastcrypto.workspace = true
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 executor = { path = "../executor", package = "narwhal-executor" }
+network = { path = "../network", package = "narwhal-network" }
 primary = { path = "../primary", package = "narwhal-primary" }
 prometheus = "0.13.3"
 storage = { path = "../storage", package = "narwhal-storage" }
@@ -43,7 +44,6 @@ workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 anemo.workspace = true
 reqwest = { version = "0.11.13", default_features= false, features = ["json", "rustls-tls"] }
-fail = "0.5.1"
 
 [dev-dependencies]
 pretty_assertions = "1.3.0"

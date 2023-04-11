@@ -1,6 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::cmp::Ordering;
+use std::collections::BTreeMap;
+use std::fmt;
+use std::fmt::Write;
+use std::fmt::{Display, Formatter};
+
 use anyhow::anyhow;
 use colored::Colorize;
 use fastcrypto::encoding::Base64;
@@ -14,28 +20,148 @@ use serde::Serialize;
 use serde_json::Value;
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
-use std::collections::BTreeMap;
-use std::fmt;
-use std::fmt::Write;
-use std::fmt::{Display, Formatter};
+
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{
-    MoveObjectType, ObjectDigest, ObjectID, ObjectInfo, ObjectRef, ObjectType, SequenceNumber,
+    ObjectDigest, ObjectID, ObjectInfo, ObjectRef, ObjectType, SequenceNumber, SuiAddress,
     TransactionDigest,
 };
-use sui_types::error::{UserInputError, UserInputResult};
+use sui_types::error::{SuiObjectResponseError, UserInputError, UserInputResult};
 use sui_types::gas_coin::GasCoin;
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::move_package::{MovePackage, TypeOrigin, UpgradeInfo};
 use sui_types::object::{Data, MoveObject, Object, ObjectFormatOptions, ObjectRead, Owner};
+use sui_types::sui_serde::BigInt;
+use sui_types::sui_serde::SequenceNumber as AsSequenceNumber;
+use sui_types::sui_serde::SuiStructTag;
 
 use crate::{Page, SuiMoveStruct, SuiMoveValue};
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema, Clone, PartialEq, Eq)]
-#[serde(tag = "status", content = "details", rename = "ObjectRead")]
-pub enum SuiObjectResponse {
-    Exists(SuiObjectData),
-    NotExists(ObjectID),
-    Deleted(SuiObjectRef),
+pub struct SuiObjectResponse {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<SuiObjectData>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<SuiObjectResponseError>,
+}
+
+impl SuiObjectResponse {
+    pub fn new(data: Option<SuiObjectData>, error: Option<SuiObjectResponseError>) -> Self {
+        Self { data, error }
+    }
+
+    pub fn new_with_data(data: SuiObjectData) -> Self {
+        Self {
+            data: Some(data),
+            error: None,
+        }
+    }
+
+    pub fn new_with_error(error: SuiObjectResponseError) -> Self {
+        Self {
+            data: None,
+            error: Some(error),
+        }
+    }
+}
+
+impl Ord for SuiObjectResponse {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (&self.data, &other.data) {
+            (Some(data), Some(data_2)) => {
+                if data.object_id.cmp(&data_2.object_id).eq(&Ordering::Greater) {
+                    return Ordering::Greater;
+                } else if data.object_id.cmp(&data_2.object_id).eq(&Ordering::Less) {
+                    return Ordering::Less;
+                }
+                Ordering::Equal
+            }
+            // In this ordering those with data will come before SuiObjectResponses that are errors.
+            (Some(_), None) => Ordering::Less,
+            (None, Some(_)) => Ordering::Greater,
+            // SuiObjectResponses that are errors are just considered equal.
+            _ => Ordering::Equal,
+        }
+    }
+}
+
+impl PartialOrd for SuiObjectResponse {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl SuiObjectResponse {
+    pub fn move_object_bcs(&self) -> Option<&Vec<u8>> {
+        if let Some(data) = &self.data {
+            match &data.bcs {
+                Some(SuiRawData::MoveObject(obj)) => Some(&obj.bcs_bytes),
+                _ => None,
+            };
+        }
+        None
+    }
+    pub fn owner(&self) -> Option<Owner> {
+        if let Some(data) = &self.data {
+            return data.owner;
+        }
+        None
+    }
+
+    pub fn object_id(&self) -> Result<ObjectID, anyhow::Error> {
+        match (&self.data, &self.error) {
+            (Some(obj_data), None) => Ok(obj_data.object_id),
+            (None, Some(SuiObjectResponseError::NotExists { object_id })) => Ok(*object_id),
+            (
+                None,
+                Some(SuiObjectResponseError::Deleted {
+                    object_id,
+                    version: _,
+                    digest: _,
+                }),
+            ) => Ok(*object_id),
+            _ => Err(anyhow!("Could not get object_id, something went wrong with SuiObjectResponse construction.")),
+        }
+    }
+
+    pub fn object_ref_if_exists(&self) -> Option<ObjectRef> {
+        match (&self.data, &self.error) {
+            (Some(obj_data), None) => Some(obj_data.object_ref()),
+            _ => None,
+        }
+    }
+}
+
+impl TryFrom<SuiObjectResponse> for ObjectInfo {
+    type Error = anyhow::Error;
+
+    fn try_from(value: SuiObjectResponse) -> Result<Self, Self::Error> {
+        let SuiObjectData {
+            object_id,
+            version,
+            digest,
+            type_,
+            owner,
+            previous_transaction,
+            ..
+        } = value.into_object()?;
+
+        Ok(ObjectInfo {
+            object_id,
+            version,
+            digest,
+            type_: type_.ok_or_else(|| anyhow!("Object type not found for object."))?,
+            owner: owner.ok_or_else(|| anyhow!("Owner not found for object."))?,
+            previous_transaction: previous_transaction
+                .ok_or_else(|| anyhow!("Transaction digest not found for object."))?,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq)]
+pub struct DisplayFieldsResponse {
+    pub data: Option<BTreeMap<String, String>>,
+    pub error: Option<SuiObjectResponseError>,
 }
 
 #[serde_as]
@@ -44,6 +170,8 @@ pub enum SuiObjectResponse {
 pub struct SuiObjectData {
     pub object_id: ObjectID,
     /// Object version.
+    #[schemars(with = "AsSequenceNumber")]
+    #[serde_as(as = "AsSequenceNumber")]
     pub version: SequenceNumber,
     /// Base64 string representing the object digest
     pub digest: ObjectDigest,
@@ -63,13 +191,15 @@ pub struct SuiObjectData {
     /// The amount of SUI we would rebate if this object gets deleted.
     /// This number is re-calculated each time the object is mutated based on
     /// the present storage gas price.
+    #[schemars(with = "Option<BigInt<u64>>")]
+    #[serde_as(as = "Option<BigInt<u64>>")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub storage_rebate: Option<u64>,
     /// The Display metadata for frontend UI rendering, default to be None unless SuiObjectDataOptions.showContent is set to true
     /// This can also be None if the struct type does not have Display defined
     /// See more details in <https://forums.sui.io/t/nft-object-display-proposal/4872>
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub display: Option<BTreeMap<String, String>>,
+    pub display: Option<DisplayFieldsResponse>,
     /// Move object content or package content, default to be None unless SuiObjectDataOptions.showContent is set to true
     #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<SuiParsedData>,
@@ -92,7 +222,7 @@ impl SuiObjectData {
 
     pub fn is_gas_coin(&self) -> bool {
         match self.type_.as_ref() {
-            Some(ObjectType::Struct(MoveObjectType::GasCoin)) => true,
+            Some(ObjectType::Struct(ty)) if ty.is_gas_coin() => true,
             Some(_) => false,
             None => false,
         }
@@ -176,12 +306,20 @@ impl TryFrom<&SuiMoveStruct> for GasCoin {
     fn try_from(move_struct: &SuiMoveStruct) -> Result<Self, Self::Error> {
         match move_struct {
             SuiMoveStruct::WithFields(fields) | SuiMoveStruct::WithTypes { type_: _, fields } => {
-                if let Some(SuiMoveValue::String(balance)) = fields.get("balance") {
-                    if let Ok(balance) = balance.parse::<u64>() {
+                match fields.get("balance") {
+                    Some(SuiMoveValue::Number(balance)) => {
                         if let Some(SuiMoveValue::UID { id }) = fields.get("id") {
-                            return Ok(GasCoin::new(*id, balance));
+                            return Ok(GasCoin::new(*id, *balance));
                         }
                     }
+                    Some(SuiMoveValue::String(balance)) => {
+                        if let Ok(balance) = balance.parse::<u64>() {
+                            if let Some(SuiMoveValue::UID { id }) = fields.get("id") {
+                                return Ok(GasCoin::new(*id, balance));
+                            }
+                        }
+                    }
+                    _ => {}
                 }
             }
             _ => {}
@@ -283,11 +421,20 @@ impl TryFrom<(ObjectRead, SuiObjectDataOptions)> for SuiObjectResponse {
         (object_read, options): (ObjectRead, SuiObjectDataOptions),
     ) -> Result<Self, Self::Error> {
         match object_read {
-            ObjectRead::NotExists(id) => Ok(Self::NotExists(id)),
+            ObjectRead::NotExists(id) => Ok(SuiObjectResponse::new_with_error(
+                SuiObjectResponseError::NotExists { object_id: id },
+            )),
             ObjectRead::Exists(object_ref, o, layout) => {
-                Ok(Self::Exists((object_ref, o, layout, options).try_into()?))
+                let data = (object_ref, o, layout, options).try_into()?;
+                Ok(SuiObjectResponse::new_with_data(data))
             }
-            ObjectRead::Deleted(oref) => Ok(Self::Deleted(oref.into())),
+            ObjectRead::Deleted((object_id, version, digest)) => Ok(
+                SuiObjectResponse::new_with_error(SuiObjectResponseError::Deleted {
+                    object_id,
+                    version,
+                    digest,
+                }),
+            ),
         }
     }
 }
@@ -305,7 +452,7 @@ impl TryFrom<(ObjectInfo, SuiObjectDataOptions)> for SuiObjectResponse {
             ..
         } = options;
 
-        Ok(Self::Exists(SuiObjectData {
+        Ok(Self::new_with_data(SuiObjectData {
             object_id: object_info.object_id,
             version: object_info.version,
             digest: object_info.digest,
@@ -416,7 +563,7 @@ impl
         Object,
         Option<MoveStructLayout>,
         SuiObjectDataOptions,
-        Option<BTreeMap<String, String>>,
+        Option<DisplayFieldsResponse>,
     )> for SuiObjectData
 {
     type Error = anyhow::Error;
@@ -427,7 +574,7 @@ impl
             Object,
             Option<MoveStructLayout>,
             SuiObjectDataOptions,
-            Option<BTreeMap<String, String>>,
+            Option<DisplayFieldsResponse>,
         ),
     ) -> Result<Self, Self::Error> {
         let show_display = options.show_display;
@@ -442,31 +589,31 @@ impl
 impl SuiObjectResponse {
     /// Returns a reference to the object if there is any, otherwise an Err if
     /// the object does not exist or is deleted.
-    pub fn object(&self) -> UserInputResult<&SuiObjectData> {
-        match &self {
-            Self::Deleted(oref) => Err(UserInputError::ObjectDeleted {
-                object_ref: oref.to_object_ref(),
-            }),
-            Self::NotExists(id) => Err(UserInputError::ObjectNotFound {
-                object_id: *id,
-                version: None,
-            }),
-            Self::Exists(o) => Ok(o),
+    pub fn object(&self) -> Result<&SuiObjectData, SuiObjectResponseError> {
+        let data = &self.data;
+        let error = self.error.clone();
+        if let Some(data) = data {
+            Ok(data)
+        } else if let Some(error) = error {
+            Err(error)
+        } else {
+            // We really shouldn't reach this code block since either data, or error field should always be filled.
+            Err(SuiObjectResponseError::Unknown)
         }
     }
 
     /// Returns the object value if there is any, otherwise an Err if
     /// the object does not exist or is deleted.
-    pub fn into_object(self) -> UserInputResult<SuiObjectData> {
-        match self {
-            Self::Deleted(oref) => Err(UserInputError::ObjectDeleted {
-                object_ref: oref.to_object_ref(),
-            }),
-            Self::NotExists(id) => Err(UserInputError::ObjectNotFound {
-                object_id: id,
-                version: None,
-            }),
-            Self::Exists(o) => Ok(o),
+    pub fn into_object(self) -> Result<SuiObjectData, SuiObjectResponseError> {
+        let data = self.data.clone();
+        let error = self.error;
+        if let Some(data) = data {
+            Ok(data)
+        } else if let Some(error) = error {
+            Err(error)
+        } else {
+            // We really shouldn't reach this code block since either data, or error field should always be filled.
+            Err(SuiObjectResponseError::Unknown)
         }
     }
 }
@@ -690,7 +837,7 @@ pub trait SuiMoveObject: Sized {
 #[serde(rename = "MoveObject", rename_all = "camelCase")]
 pub struct SuiParsedMoveObject {
     #[serde(rename = "type")]
-    #[serde_as(as = "DisplayFromStr")]
+    #[serde_as(as = "SuiStructTag")]
     #[schemars(with = "String")]
     pub type_: StructTag,
     pub has_public_transfer: bool,
@@ -742,7 +889,7 @@ pub fn type_and_fields_from_move_struct(
 pub struct SuiRawMoveObject {
     #[schemars(with = "String")]
     #[serde(rename = "type")]
-    #[serde_as(as = "DisplayFromStr")]
+    #[serde_as(as = "SuiStructTag")]
     pub type_: StructTag,
     pub has_public_transfer: bool,
     pub version: SequenceNumber,
@@ -892,20 +1039,38 @@ pub struct SuiMovePackage {
     pub disassembled: BTreeMap<String, Value>,
 }
 
+pub type QueryObjectsPage = Page<SuiObjectResponse, CheckpointedObjectID>;
 pub type ObjectsPage = Page<SuiObjectResponse, ObjectID>;
 
+#[serde_as]
+#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Copy, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CheckpointedObjectID {
+    pub object_id: ObjectID,
+    #[schemars(with = "Option<BigInt<u64>>")]
+    #[serde_as(as = "Option<BigInt<u64>>")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub at_checkpoint: Option<CheckpointSequenceNumber>,
+}
+
+#[serde_as]
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
 #[serde(rename = "GetPastObjectRequest", rename_all = "camelCase")]
 pub struct SuiGetPastObjectRequest {
     /// the ID of the queried object
     pub object_id: ObjectID,
     /// the version of the queried object.
+    #[schemars(with = "AsSequenceNumber")]
+    #[serde_as(as = "AsSequenceNumber")]
     pub version: SequenceNumber,
 }
 
 #[serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub enum SuiObjectDataFilter {
+    MatchAll(Vec<SuiObjectDataFilter>),
+    MatchAny(Vec<SuiObjectDataFilter>),
+    MatchNone(Vec<SuiObjectDataFilter>),
     /// Query by type a specified Package.
     Package(ObjectID),
     /// Query by type a specified Move module.
@@ -920,9 +1085,74 @@ pub enum SuiObjectDataFilter {
     /// Query by type
     StructType(
         #[schemars(with = "String")]
-        #[serde_as(as = "DisplayFromStr")]
+        #[serde_as(as = "SuiStructTag")]
         StructTag,
     ),
+    AddressOwner(SuiAddress),
+    ObjectOwner(ObjectID),
+    ObjectId(ObjectID),
+    // allow querying for multiple object ids
+    ObjectIds(Vec<ObjectID>),
+    Version(
+        #[schemars(with = "BigInt<u64>")]
+        #[serde_as(as = "BigInt<u64>")]
+        u64,
+    ),
+}
+
+impl SuiObjectDataFilter {
+    pub fn gas_coin() -> Self {
+        Self::StructType(GasCoin::type_())
+    }
+
+    pub fn and(self, other: Self) -> Self {
+        Self::MatchAll(vec![self, other])
+    }
+    pub fn or(self, other: Self) -> Self {
+        Self::MatchAny(vec![self, other])
+    }
+    pub fn not(self, other: Self) -> Self {
+        Self::MatchNone(vec![self, other])
+    }
+
+    pub fn matches(&self, object: &ObjectInfo) -> bool {
+        match self {
+            SuiObjectDataFilter::MatchAll(filters) => !filters.iter().any(|f| !f.matches(object)),
+            SuiObjectDataFilter::MatchAny(filters) => filters.iter().any(|f| f.matches(object)),
+            SuiObjectDataFilter::MatchNone(filters) => !filters.iter().any(|f| f.matches(object)),
+            SuiObjectDataFilter::StructType(s) => {
+                let obj_tag: StructTag = match &object.type_ {
+                    ObjectType::Package => return false,
+                    ObjectType::Struct(s) => s.clone().into(),
+                };
+                // If people do not provide type_params, we will match all type_params
+                // e.g. `0x2::coin::Coin` can match `0x2::coin::Coin<0x2::sui::SUI>`
+                if !s.type_params.is_empty() && s.type_params != obj_tag.type_params {
+                    false
+                } else {
+                    obj_tag.address == s.address
+                        && obj_tag.module == s.module
+                        && obj_tag.name == s.name
+                }
+            }
+            SuiObjectDataFilter::MoveModule { package, module } => {
+                matches!(&object.type_, ObjectType::Struct(s) if &ObjectID::from(s.address()) == package
+                        && s.module() == module.as_ident_str())
+            }
+            SuiObjectDataFilter::Package(p) => {
+                matches!(&object.type_, ObjectType::Struct(s) if &ObjectID::from(s.address()) == p)
+            }
+            SuiObjectDataFilter::AddressOwner(a) => {
+                matches!(object.owner, Owner::AddressOwner(addr) if &addr == a)
+            }
+            SuiObjectDataFilter::ObjectOwner(o) => {
+                matches!(object.owner, Owner::ObjectOwner(addr) if addr == SuiAddress::from(*o))
+            }
+            SuiObjectDataFilter::ObjectId(id) => &object.object_id == id,
+            SuiObjectDataFilter::ObjectIds(ids) => ids.contains(&object.object_id),
+            SuiObjectDataFilter::Version(v) => object.version.value() == *v,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Default)]

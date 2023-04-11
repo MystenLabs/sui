@@ -123,13 +123,13 @@ module Test::M {
 // create a parent/child object pair, pass child by-value and parent as a single element of a vector
 // to check if authentication works (success)
 
-//# run Test::M::obj_vec_destroy --sender A --args vector[object(108)]
+//# run Test::M::obj_vec_destroy --sender A --args vector[object(3,0)]
 
 //# run Test::M::mint --sender A --args 42
 
-//# run Test::M::mint_child --sender A --args 42 object(111)
+//# run Test::M::mint_child --sender A --args 42 object(5,0)
 
-//# run Test::M::child_access --sender A --args object(111) vector[object(113)]
+//# run Test::M::child_access --sender A --args object(5,0) vector[object(6,0)]
 
 
 // create an object of one type and try to pass it as a single element of a vector whose elements
@@ -137,7 +137,7 @@ module Test::M {
 
 //# run Test::M::mint_another --sender A --args 42
 
-//# run Test::M::obj_vec_destroy --sender A --args vector[object(117)]
+//# run Test::M::obj_vec_destroy --sender A --args vector[object(8,0)]
 
 
 // create two objects of different types and try to pass them both as elements of a vector (failure)
@@ -146,25 +146,25 @@ module Test::M {
 
 //# run Test::M::mint --sender A --args 42
 
-//# run Test::M::two_obj_vec_destroy --sender A --args vector[object(120),object(122)]
+//# run Test::M::two_obj_vec_destroy --sender A --args vector[object(10,0),object(11,0)]
 
 
 // create a shared object and try to pass it as a single element of a vector (failure)
 
 //# run Test::M::mint_shared --sender A --args 42
 
-//# run Test::M::obj_vec_destroy --sender A --args vector[object(125)]
+//# run Test::M::obj_vec_destroy --sender A --args vector[object(13,0)]
 
 
 // create an object and pass it both by-value and as element of a vector (failure)
 
 //# run Test::M::mint --sender A --args 42
 
-//# run Test::M::same_objects --sender A --args object(128) vector[object(128)]
+//# run Test::M::same_objects --sender A --args object(15,0) vector[object(15,0)]
 
 
 // create an object and pass it both by-reference and as element of a vector (failure)
 
 //# run Test::M::mint --sender A --args 42
 
-//# run Test::M::same_objects_ref --sender A --args object(130) vector[object(130)]
+//# run Test::M::same_objects_ref --sender A --args object(17,0) vector[object(17,0)]

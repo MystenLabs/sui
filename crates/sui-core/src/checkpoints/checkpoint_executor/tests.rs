@@ -3,6 +3,7 @@
 
 use super::*;
 use fastcrypto::traits::KeyPair;
+use sui_config::node::ExpensiveSafetyCheckConfig;
 use sui_types::gas::GasCostSummary;
 use tempfile::tempdir;
 
@@ -114,7 +115,7 @@ pub async fn test_checkpoint_executor_cross_epoch() {
     let tempdir = tempdir().unwrap();
     let checkpoint_store = CheckpointStore::new(tempdir.path());
 
-    let (authority_state, mut executor, _accumulator, checkpoint_sender, first_committee): (
+    let (authority_state, mut executor, accumulator, checkpoint_sender, first_committee): (
         Arc<AuthorityState>,
         CheckpointExecutor,
         Arc<StateAccumulator>,
@@ -231,6 +232,9 @@ pub async fn test_checkpoint_executor_cross_epoch() {
             SupportedProtocolVersions::SYSTEM_DEFAULT,
             second_committee.committee().clone(),
             EpochStartConfiguration::new_v1(system_state, Default::default()),
+            &executor,
+            accumulator,
+            &ExpensiveSafetyCheckConfig::default(),
         )
         .await
         .unwrap();
@@ -449,7 +453,7 @@ async fn sync_end_of_epoch_checkpoint(
     authority_state
         .create_and_execute_advance_epoch_tx(
             &authority_state.epoch_store_for_testing().clone(),
-            &GasCostSummary::new(0, 0, 0),
+            &GasCostSummary::new(0, 0, 0, 0),
             *checkpoint.sequence_number(),
             0, // epoch_start_timestamp_ms
         )

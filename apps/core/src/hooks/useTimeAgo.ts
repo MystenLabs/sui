@@ -79,11 +79,11 @@ export function useTimeAgo(
     const [now, setNow] = useState(() => Date.now());
 
     // end interval when the difference between now and timeFrom is less than or equal to 0
-    const endInterval = shouldEnd && (timeFrom || now) - now >= 1000;
+    const continueInterval = shouldEnd ? (timeFrom || now) - now >= 0 : true;
     const intervalEnabled =
         !!timeFrom &&
         Math.abs(now - (timeFrom || now)) < ONE_HOUR &&
-        endInterval;
+        continueInterval;
 
     const formattedTime = useMemo(
         () => timeAgo(timeFrom, now, shortedTimeLabel, endLabel),

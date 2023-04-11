@@ -51,19 +51,18 @@ impl WritePathPendingTransactionLog {
         tx: &VerifiedTransaction,
     ) -> SuiResult<IsFirstRecord> {
         let tx_digest = tx.digest();
-        let transaction = self.pending_transactions.logs.transaction()?;
+        let mut transaction = self.pending_transactions.logs.transaction()?;
         if transaction
             .get(&self.pending_transactions.logs, tx_digest)?
             .is_some()
         {
             return Ok(false);
         }
-        let result = transaction
-            .insert_batch(
-                &self.pending_transactions.logs,
-                [(tx_digest, tx.serializable_ref())],
-            )?
-            .commit();
+        transaction.insert_batch(
+            &self.pending_transactions.logs,
+            [(tx_digest, tx.serializable_ref())],
+        )?;
+        let result = transaction.commit();
         Ok(result.is_ok())
     }
 
@@ -78,9 +77,8 @@ impl WritePathPendingTransactionLog {
     //        thinks it is the first record. It's preventable by checking this
     //        transaction again after the call of `write_pending_transaction_maybe`.
     pub fn finish_transaction(&self, tx: &TransactionDigest) -> SuiResult {
-        let write_batch = self.pending_transactions.logs.batch();
-        let write_batch =
-            write_batch.delete_batch(&self.pending_transactions.logs, std::iter::once(tx))?;
+        let mut write_batch = self.pending_transactions.logs.batch();
+        write_batch.delete_batch(&self.pending_transactions.logs, std::iter::once(tx))?;
         write_batch.write().map_err(SuiError::from)
     }
 

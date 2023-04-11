@@ -11,25 +11,24 @@ use crate::scoring_decision::update_low_scoring_authorities;
 use crate::transaction_manager::TransactionManager;
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
+use fastcrypto::traits::ToFromBytes;
 use lru::LruCache;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
+use narwhal_config::Committee;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
-use narwhal_types::ConsensusOutput;
+use narwhal_types::{BatchAPI, CertificateAPI, ConsensusOutput, HeaderAPI};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
-use sui_types::committee::Committee;
 use sui_types::messages::{
     ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
     VerifiedExecutableTransaction, VerifiedTransaction,
 };
-
-use sui_simulator::anemo::PeerId;
 use sui_types::storage::ParentSync;
 
 use tracing::{debug, error, instrument};
@@ -44,10 +43,10 @@ pub struct ConsensusHandler<T> {
     parent_sync_store: T,
     /// Reputation scores used by consensus adapter that we update, forwarded from consensus
     low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
-    /// The committee used to do stake computations for deciding set of low scoring authorities
-    committee: Arc<Committee>,
+    /// The narwhal committee used to do stake computations for deciding set of low scoring authorities
+    committee: Committee,
     /// Mappings used for logging and metrics
-    authority_names_to_peer_ids: Arc<HashMap<AuthorityName, PeerId>>,
+    authority_names_to_hostnames: HashMap<AuthorityName, String>,
     // TODO: ConsensusHandler doesn't really share metrics with AuthorityState. We could define
     // a new metrics type here if we want to.
     metrics: Arc<AuthorityMetrics>,
@@ -65,8 +64,8 @@ impl<T> ConsensusHandler<T> {
         transaction_manager: Arc<TransactionManager>,
         parent_sync_store: T,
         low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
-        committee: Arc<Committee>,
-        authority_names_to_peer_ids: Arc<HashMap<AuthorityName, PeerId>>,
+        authority_names_to_hostnames: HashMap<AuthorityName, String>,
+        committee: Committee,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
         let last_seen = Mutex::new(Default::default());
@@ -79,7 +78,7 @@ impl<T> ConsensusHandler<T> {
             parent_sync_store,
             low_scoring_authorities,
             committee,
-            authority_names_to_peer_ids,
+            authority_names_to_hostnames,
             metrics,
             processed_cache: Mutex::new(LruCache::new(
                 NonZeroUsize::new(PROCESSED_CACHE_CAP).unwrap(),
@@ -131,8 +130,22 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
 
         /* (serialized, transaction, output_cert) */
         let mut transactions = vec![];
-        // Narwhal enforces some invariants on the header.created_at, so we can use it as a timestamp
-        let timestamp = consensus_output.sub_dag.leader.header.created_at;
+        let timestamp = consensus_output.sub_dag.commit_timestamp();
+        let leader_author = consensus_output.sub_dag.leader.header().author();
+
+        let epoch_start = self
+            .epoch_store
+            .epoch_start_config()
+            .epoch_start_timestamp_ms();
+        let timestamp = if timestamp < epoch_start {
+            error!(
+                "Unexpected commit timestamp {timestamp} less then epoch start time {epoch_start}, author {leader_author}, round {round}",
+
+            );
+            epoch_start
+        } else {
+            timestamp
+        };
 
         let prologue_transaction = self.consensus_commit_prologue_transaction(round, timestamp);
         transactions.push((
@@ -144,18 +157,18 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
         // TODO: spawn a separate task for this as an optimization
         update_low_scoring_authorities(
             self.low_scoring_authorities.clone(),
-            self.committee.clone(),
+            &self.committee,
             consensus_output.sub_dag.reputation_score.clone(),
-            self.authority_names_to_peer_ids.clone(),
+            self.authority_names_to_hostnames.clone(),
             &self.metrics,
         );
 
         self.metrics
             .consensus_committed_subdags
-            .with_label_values(&[&consensus_output.sub_dag.leader.header.author.to_string()])
+            .with_label_values(&[&leader_author.to_string()])
             .inc();
         for (cert, batches) in consensus_output.batches {
-            let author = cert.header.author.clone();
+            let author = cert.header().author();
             self.metrics
                 .consensus_committed_certificates
                 .with_label_values(&[&author.to_string()])
@@ -163,11 +176,11 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             let output_cert = Arc::new(cert);
             for batch in batches {
                 self.metrics.consensus_handler_processed_batches.inc();
-                for serialized_transaction in batch.transactions {
+                for serialized_transaction in batch.transactions() {
                     bytes += serialized_transaction.len();
 
                     let transaction = match bcs::from_bytes::<ConsensusTransaction>(
-                        &serialized_transaction,
+                        serialized_transaction,
                     ) {
                         Ok(transaction) => transaction,
                         Err(err) => {
@@ -184,7 +197,11 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
                         .with_label_values(&[classify(&transaction)])
                         .inc();
                     let transaction = SequencedConsensusTransactionKind::External(transaction);
-                    transactions.push((serialized_transaction, transaction, output_cert.clone()));
+                    transactions.push((
+                        serialized_transaction.clone(),
+                        transaction,
+                        output_cert.clone(),
+                    ));
                 }
             }
         }
@@ -207,8 +224,18 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
                 }
             };
 
+            let certificate_author = AuthorityName::from_bytes(
+                self.committee
+                    .authority_safe(&output_cert.header().author())
+                    .protocol_key_bytes()
+                    .0
+                    .as_ref(),
+            )
+            .unwrap();
+
             sequenced_transactions.push(SequencedConsensusTransaction {
                 certificate: output_cert.clone(),
+                certificate_author,
                 consensus_index: index_with_hash,
                 transaction,
             });
@@ -218,40 +245,46 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             .consensus_handler_processed_bytes
             .inc_by(bytes as u64);
 
-        let mut transactions_to_schedule = vec![];
-        for sequenced_transaction in sequenced_transactions {
-            // todo if we can make handle_consensus_transaction into sync function,
-            // we could acquire mutex once for entire loop
-            if self
-                .processed_cache
-                .lock()
-                .put(sequenced_transaction.key(), ())
-                .is_some()
-            {
-                self.metrics.skipped_consensus_txns_cache_hit.inc();
-                continue;
-            }
-            let verified_transaction = match self.epoch_store.verify_consensus_transaction(
-                sequenced_transaction,
-                &self.metrics.skipped_consensus_txns,
-            ) {
-                Ok(verified_transaction) => verified_transaction,
-                Err(()) => continue,
-            };
+        let verified_transactions = {
+            let mut processed_cache = self.processed_cache.lock();
+            // We need a set here as well, since the processed_cache is a LRU cache and can drop
+            // entries while we're iterating over the sequenced transactions.
+            let mut processed_set = HashSet::new();
 
-            if let Some(transaction) = self
-                .epoch_store
-                .process_consensus_transaction(
-                    verified_transaction,
-                    &self.checkpoint_service,
-                    &self.parent_sync_store,
-                )
-                .await
-                .expect("Unrecoverable error in consensus handler")
-            {
-                transactions_to_schedule.push(transaction);
-            }
-        }
+            sequenced_transactions
+                .into_iter()
+                .filter_map(|sequenced_transaction| {
+                    let key = sequenced_transaction.key();
+                    let in_set = !processed_set.insert(key);
+                    let in_cache = processed_cache
+                        .put(sequenced_transaction.key(), ())
+                        .is_some();
+
+                    if in_set || in_cache {
+                        self.metrics.skipped_consensus_txns_cache_hit.inc();
+                        return None;
+                    }
+
+                    match self.epoch_store.verify_consensus_transaction(
+                        sequenced_transaction,
+                        &self.metrics.skipped_consensus_txns,
+                    ) {
+                        Ok(verified_transaction) => Some(verified_transaction),
+                        Err(()) => None,
+                    }
+                })
+                .collect()
+        };
+
+        let transactions_to_schedule = self
+            .epoch_store
+            .process_consensus_transactions(
+                verified_transactions,
+                &self.checkpoint_service,
+                &self.parent_sync_store,
+            )
+            .await
+            .expect("Unrecoverable error in consensus handler");
 
         self.transaction_scheduler
             .schedule(transactions_to_schedule)
@@ -341,6 +374,7 @@ fn classify(transaction: &ConsensusTransaction) -> &'static str {
 
 pub struct SequencedConsensusTransaction {
     pub certificate: Arc<narwhal_types::Certificate>,
+    pub certificate_author: AuthorityName,
     pub consensus_index: ExecutionIndicesWithHash,
     pub transaction: SequencedConsensusTransactionKind,
 }
@@ -385,7 +419,7 @@ impl SequencedConsensusTransactionKind {
 
 impl SequencedConsensusTransaction {
     pub fn sender_authority(&self) -> AuthorityName {
-        (&self.certificate.header.author).into()
+        self.certificate_author
     }
 
     pub fn key(&self) -> SequencedConsensusTransactionKey {
@@ -408,6 +442,7 @@ impl SequencedConsensusTransaction {
         Self {
             transaction: SequencedConsensusTransactionKind::External(transaction),
             certificate: Default::default(),
+            certificate_author: AuthorityName::ZERO,
             consensus_index: Default::default(),
         }
     }

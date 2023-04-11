@@ -27,11 +27,15 @@ mod stake_aggregator;
 pub mod state_accumulator;
 pub mod storage;
 pub mod streamer;
+#[cfg(feature = "test-utils")]
 pub mod test_utils;
 pub mod transaction_input_checker;
 mod transaction_manager;
 pub mod transaction_orchestrator;
 
+#[cfg(test)]
+#[path = "unit_tests/move_package_publish_tests.rs"]
+mod move_package_publish_tests;
 #[cfg(test)]
 #[path = "unit_tests/move_package_tests.rs"]
 mod move_package_tests;
@@ -42,7 +46,10 @@ mod move_package_upgrade_tests;
 #[path = "unit_tests/pay_sui_tests.rs"]
 mod pay_sui_tests;
 pub mod test_authority_clients;
+#[cfg(test)]
+#[path = "unit_tests/type_param_tests.rs"]
+mod type_param_tests;
 
-pub mod batch_bls_verifier;
+pub mod signature_verifier;
 
 pub const SUI_CORE_VERSION: &str = env!("CARGO_PKG_VERSION");

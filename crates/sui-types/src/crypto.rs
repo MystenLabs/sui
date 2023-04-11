@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use anyhow::{anyhow, Error};
-use derive_more::From;
+use derive_more::{AsMut, AsRef, From};
 use eyre::eyre;
 use fastcrypto::bls12381::min_sig::{
     BLS12381AggregateSignature, BLS12381AggregateSignatureAsBytes, BLS12381KeyPair,
@@ -72,10 +72,6 @@ pub type NetworkKeyPair = Ed25519KeyPair;
 pub type NetworkPublicKey = Ed25519PublicKey;
 pub type NetworkPrivateKey = Ed25519PrivateKey;
 
-pub const DERIVATION_PATH_COIN_TYPE: u32 = 784;
-pub const DERVIATION_PATH_PURPOSE_ED25519: u32 = 44;
-pub const DERVIATION_PATH_PURPOSE_SECP256K1: u32 = 54;
-
 pub type DefaultHash = Blake2b256;
 
 pub const DEFAULT_EPOCH_ID: EpochId = 0;
@@ -83,7 +79,7 @@ pub const DEFAULT_EPOCH_ID: EpochId = 0;
 /// Creates a proof of that the authority account address is owned by the
 /// holder of authority protocol key, and also ensures that the authority
 /// protocol public key exists. A proof of possession is an authority
-/// signature committed over the intent message `intent || message` (See
+/// signature committed over the intent message `intent || message || epoch` (See
 /// more at [struct IntentMessage] and [struct Intent]) where the message is
 /// constructed as `authority_pubkey_bytes || authority_account_address`.
 pub fn generate_proof_of_possession(
@@ -94,10 +90,7 @@ pub fn generate_proof_of_possession(
     msg.extend_from_slice(keypair.public().as_bytes());
     msg.extend_from_slice(address.as_ref());
     AuthoritySignature::new_secure(
-        &IntentMessage::new(
-            Intent::default().with_scope(IntentScope::ProofOfPossession),
-            msg,
-        ),
+        &IntentMessage::new(Intent::sui_app(IntentScope::ProofOfPossession), msg),
         &DEFAULT_EPOCH_ID,
         keypair,
     )
@@ -110,14 +103,15 @@ pub fn verify_proof_of_possession(
     protocol_pubkey: &narwhal_crypto::PublicKey,
     sui_address: SuiAddress,
 ) -> Result<(), SuiError> {
-    protocol_pubkey.validate()?;
+    protocol_pubkey
+        .validate()
+        .map_err(|_| SuiError::InvalidSignature {
+            error: "Fail to validate pubkey".to_string(),
+        })?;
     let mut msg = protocol_pubkey.as_bytes().to_vec();
     msg.extend_from_slice(sui_address.as_ref());
     pop.verify_secure(
-        &IntentMessage::new(
-            Intent::default().with_scope(IntentScope::ProofOfPossession),
-            msg,
-        ),
+        &IntentMessage::new(Intent::sui_app(IntentScope::ProofOfPossession), msg),
         DEFAULT_EPOCH_ID,
         protocol_pubkey.into(),
     )
@@ -346,6 +340,7 @@ impl PublicKey {
             _ => Err(eyre!("Unsupported curve")),
         }
     }
+
     pub fn scheme(&self) -> SignatureScheme {
         match self {
             PublicKey::Ed25519(_) => Ed25519SuiSignature::SCHEME,
@@ -359,8 +354,19 @@ impl PublicKey {
 /// in Sui
 #[serde_as]
 #[derive(
-    Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, schemars::JsonSchema,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    schemars::JsonSchema,
+    AsRef,
 )]
+#[as_ref(forward)]
 pub struct AuthorityPublicKeyBytes(
     #[schemars(with = "Base64")]
     #[serde_as(as = "Readable<Base64, Bytes>")]
@@ -374,29 +380,49 @@ impl AuthorityPublicKeyBytes {
         Ok(())
     }
 
-    /// Get a ConciseAuthorityPublicKeyBytes. Usage:
+    /// Get a ConciseAuthorityPublicKeyBytesRef. Usage:
     ///
     ///   debug!(name = ?authority.concise());
     ///   format!("{:?}", authority.concise());
-    pub fn concise(&self) -> ConciseAuthorityPublicKeyBytes<'_> {
+    pub fn concise(&self) -> ConciseAuthorityPublicKeyBytesRef<'_> {
+        ConciseAuthorityPublicKeyBytesRef(self)
+    }
+
+    pub fn into_concise(self) -> ConciseAuthorityPublicKeyBytes {
         ConciseAuthorityPublicKeyBytes(self)
     }
 }
 
 /// A wrapper around AuthorityPublicKeyBytes that provides a concise Debug impl.
-pub struct ConciseAuthorityPublicKeyBytes<'a>(&'a AuthorityPublicKeyBytes);
+pub struct ConciseAuthorityPublicKeyBytesRef<'a>(&'a AuthorityPublicKeyBytes);
 
-impl Debug for ConciseAuthorityPublicKeyBytes<'_> {
+impl Debug for ConciseAuthorityPublicKeyBytesRef<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         let s = Hex::encode(self.0 .0.get(0..4).ok_or(std::fmt::Error)?);
         write!(f, "k#{}..", s)
     }
 }
 
-impl std::fmt::Display for ConciseAuthorityPublicKeyBytes<'_> {
+impl Display for ConciseAuthorityPublicKeyBytesRef<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        Debug::fmt(self, f)
+    }
+}
+
+/// A wrapper around AuthorityPublicKeyBytes but owns it.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct ConciseAuthorityPublicKeyBytes(AuthorityPublicKeyBytes);
+
+impl Debug for ConciseAuthorityPublicKeyBytes {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         let s = Hex::encode(self.0 .0.get(0..4).ok_or(std::fmt::Error)?);
         write!(f, "k#{}..", s)
+    }
+}
+
+impl Display for ConciseAuthorityPublicKeyBytes {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        Debug::fmt(self, f)
     }
 }
 
@@ -411,12 +437,6 @@ impl TryFrom<AuthorityPublicKeyBytes> for AuthorityPublicKey {
 impl From<&AuthorityPublicKey> for AuthorityPublicKeyBytes {
     fn from(pk: &AuthorityPublicKey) -> AuthorityPublicKeyBytes {
         AuthorityPublicKeyBytes::from_bytes(pk.as_ref()).unwrap()
-    }
-}
-
-impl AsRef<[u8]> for AuthorityPublicKeyBytes {
-    fn as_ref(&self) -> &[u8] {
-        &self.0[..]
     }
 }
 
@@ -513,28 +533,15 @@ impl SuiAuthoritySignature for AuthoritySignature {
         })?;
         public_key
             .verify(&message[..], self)
-            .map_err(|_| SuiError::InvalidSignature {
-                error: "Invalid signature".to_string(),
+            .map_err(|e| SuiError::InvalidSignature {
+                error: format!(
+                    "Fail to verify auth sig {} epoch: {} author: {}",
+                    e,
+                    epoch,
+                    author.concise()
+                ),
             })
     }
-}
-
-pub fn random_key_pairs<KP: KeypairTraits>(num: usize) -> Vec<KP>
-where
-    <KP as KeypairTraits>::PubKey: SuiPublicKey,
-{
-    let mut items = num;
-    let mut rng = OsRng;
-
-    std::iter::from_fn(|| {
-        if items == 0 {
-            None
-        } else {
-            items -= 1;
-            Some(get_key_pair_from_rng(&mut rng).1)
-        }
-    })
-    .collect::<Vec<_>>()
 }
 
 // TODO: get_key_pair() and get_key_pair_from_bytes() should return KeyPair only.
@@ -546,13 +553,7 @@ where
     get_key_pair_from_rng(&mut OsRng)
 }
 
-pub const TEST_COMMITTEE_SIZE: usize = 4;
-
-pub fn random_committee_key_pairs() -> Vec<AuthorityKeyPair> {
-    random_committee_key_pairs_of_size(TEST_COMMITTEE_SIZE)
-}
-
-/// Generate a random committee key pairs with size of TEST_COMMITTEE_SIZE.
+/// Generate a random committee key pairs with a given committee size
 pub fn random_committee_key_pairs_of_size(size: usize) -> Vec<AuthorityKeyPair> {
     let mut rng = StdRng::from_seed([0; 32]);
     (0..size)
@@ -762,17 +763,11 @@ impl ToFromBytes for Signature {
         match bytes.first() {
             Some(x) => {
                 if x == &Ed25519SuiSignature::SCHEME.flag() {
-                    Ok(<Ed25519SuiSignature as ToFromBytes>::from_bytes(bytes)
-                        .map_err(|_| signature::Error::new())?
-                        .into())
+                    Ok(<Ed25519SuiSignature as ToFromBytes>::from_bytes(bytes)?.into())
                 } else if x == &Secp256k1SuiSignature::SCHEME.flag() {
-                    Ok(<Secp256k1SuiSignature as ToFromBytes>::from_bytes(bytes)
-                        .map_err(|_| signature::Error::new())?
-                        .into())
+                    Ok(<Secp256k1SuiSignature as ToFromBytes>::from_bytes(bytes)?.into())
                 } else if x == &Secp256r1SuiSignature::SCHEME.flag() {
-                    Ok(<Secp256r1SuiSignature as ToFromBytes>::from_bytes(bytes)
-                        .map_err(|_| signature::Error::new())?
-                        .into())
+                    Ok(<Secp256r1SuiSignature as ToFromBytes>::from_bytes(bytes)?.into())
                 } else {
                     Err(FastCryptoError::InvalidInput)
                 }
@@ -795,7 +790,9 @@ impl SuiPublicKey for BLS12381PublicKey {
 //
 
 #[serde_as]
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash, AsRef, AsMut)]
+#[as_ref(forward)]
+#[as_mut(forward)]
 pub struct Ed25519SuiSignature(
     #[schemars(with = "Base64")]
     #[serde_as(as = "Readable<Base64, Bytes>")]
@@ -820,18 +817,6 @@ impl SuiPublicKey for Ed25519PublicKey {
     const SIGNATURE_SCHEME: SignatureScheme = SignatureScheme::ED25519;
 }
 
-impl AsRef<[u8]> for Ed25519SuiSignature {
-    fn as_ref(&self) -> &[u8] {
-        self.0.as_ref()
-    }
-}
-
-impl AsMut<[u8]> for Ed25519SuiSignature {
-    fn as_mut(&mut self) -> &mut [u8] {
-        self.0.as_mut()
-    }
-}
-
 impl ToFromBytes for Ed25519SuiSignature {
     fn from_bytes(bytes: &[u8]) -> Result<Self, FastCryptoError> {
         if bytes.len() != Self::LENGTH {
@@ -853,7 +838,9 @@ impl Signer<Signature> for Ed25519KeyPair {
 // Secp256k1 Sui Signature port
 //
 #[serde_as]
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash, AsRef, AsMut)]
+#[as_ref(forward)]
+#[as_mut(forward)]
 pub struct Secp256k1SuiSignature(
     #[schemars(with = "Base64")]
     #[serde_as(as = "Readable<Base64, Bytes>")]
@@ -869,18 +856,6 @@ impl SuiSignatureInner for Secp256k1SuiSignature {
 
 impl SuiPublicKey for Secp256k1PublicKey {
     const SIGNATURE_SCHEME: SignatureScheme = SignatureScheme::Secp256k1;
-}
-
-impl AsRef<[u8]> for Secp256k1SuiSignature {
-    fn as_ref(&self) -> &[u8] {
-        self.0.as_ref()
-    }
-}
-
-impl AsMut<[u8]> for Secp256k1SuiSignature {
-    fn as_mut(&mut self) -> &mut [u8] {
-        self.0.as_mut()
-    }
 }
 
 impl ToFromBytes for Secp256k1SuiSignature {
@@ -904,7 +879,9 @@ impl Signer<Signature> for Secp256k1KeyPair {
 // Secp256r1 Sui Signature port
 //
 #[serde_as]
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash, AsRef, AsMut)]
+#[as_ref(forward)]
+#[as_mut(forward)]
 pub struct Secp256r1SuiSignature(
     #[schemars(with = "Base64")]
     #[serde_as(as = "Readable<Base64, Bytes>")]
@@ -920,18 +897,6 @@ impl SuiSignatureInner for Secp256r1SuiSignature {
 
 impl SuiPublicKey for Secp256r1PublicKey {
     const SIGNATURE_SCHEME: SignatureScheme = SignatureScheme::Secp256r1;
-}
-
-impl AsRef<[u8]> for Secp256r1SuiSignature {
-    fn as_ref(&self) -> &[u8] {
-        self.0.as_ref()
-    }
-}
-
-impl AsMut<[u8]> for Secp256r1SuiSignature {
-    fn as_mut(&mut self) -> &mut [u8] {
-        self.0.as_mut()
-    }
 }
 
 impl ToFromBytes for Secp256r1SuiSignature {
@@ -976,9 +941,9 @@ pub trait SuiSignatureInner: Sized + ToFromBytes + PartialEq + Eq + Hash {
         }
 
         // deserialize the signature
-        let signature = Self::Sig::from_bytes(self.signature_bytes()).map_err(|err| {
+        let signature = Self::Sig::from_bytes(self.signature_bytes()).map_err(|_| {
             SuiError::InvalidSignature {
-                error: err.to_string(),
+                error: "Fail to get pubkey and sig".to_string(),
             }
         })?;
 
@@ -1041,14 +1006,14 @@ impl<S: SuiSignatureInner + Sized> SuiSignature for S {
         let (sig, pk) = &self.get_verification_inputs(author)?;
         pk.verify(&digest, sig)
             .map_err(|e| SuiError::InvalidSignature {
-                error: format!("{}", e),
+                error: format!("Fail to verify user sig {}", e),
             })
     }
 }
 
 /// AuthoritySignInfoTrait is a trait used specifically for a few structs in messages.rs
 /// to template on whether the struct is signed by an authority. We want to limit how
-/// those structs can be instanted on, hence the sealed trait.
+/// those structs can be instantiated on, hence the sealed trait.
 /// TODO: We could also add the aggregated signature as another impl of the trait.
 ///       This will make CertifiedTransaction also an instance of the same struct.
 pub trait AuthoritySignInfoTrait: private::SealedAuthoritySignInfoTrait {
@@ -1095,6 +1060,7 @@ pub struct AuthoritySignInfo {
     pub authority: AuthorityName,
     pub signature: AuthoritySignature,
 }
+
 impl AuthoritySignInfoTrait for AuthoritySignInfo {
     fn verify_secure<T: Serialize>(
         &self,
@@ -1143,7 +1109,7 @@ impl AuthoritySignInfoTrait for AuthoritySignInfo {
             .ok_or(SuiError::InvalidAddress)?
             .add_signature(self.signature.clone())
             .map_err(|_| SuiError::InvalidSignature {
-                error: "Invalid Signature".to_string(),
+                error: "Fail to aggregator auth sig".to_string(),
             })?;
         Ok(())
     }
@@ -1446,12 +1412,14 @@ mod private {
 pub trait Signable<W> {
     fn write(&self, writer: &mut W);
 }
+
 pub trait SignableBytes
 where
     Self: Sized,
 {
     fn from_signable_bytes(bytes: &[u8]) -> Result<Self, Error>;
 }
+
 /// Activate the blanket implementation of `Signable` based on serde and BCS.
 /// * We use `serde_name` to extract a seed from the name of structs and enums.
 /// * We use `BCS` to generate canonical bytes suitable for hashing and signing.
@@ -1462,8 +1430,6 @@ where
 /// MUST be on types that comply with the `serde_name` machinery
 /// for the below implementations not to panic. One way to check they work is to write
 /// a unit test for serialization to / deserialization from signable bytes.
-///
-///
 mod bcs_signable {
 
     pub trait BcsSignable: serde::Serialize + serde::de::DeserializeOwned {}
@@ -1592,8 +1558,8 @@ impl<'a> VerificationObligation<'a> {
             pks,
             &self.messages.iter().map(|x| &x[..]).collect::<Vec<_>>()[..],
         )
-        .map_err(|error| SuiError::InvalidSignature {
-            error: format!("{error}"),
+        .map_err(|e| SuiError::InvalidSignature {
+            error: format!("Failed to batch verify aggregated auth sig {}", e),
         })?;
         Ok(())
     }
@@ -1624,7 +1590,7 @@ pub mod bcs_signable_test {
         let idx = obligation.add_message(
             value,
             0,
-            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            Intent::sui_app(IntentScope::SenderSignedTransaction),
         );
         (obligation, idx)
     }

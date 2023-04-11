@@ -16,7 +16,7 @@ use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
-use sui_json_rpc_types::SuiTransactionResponseOptions;
+use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_sdk::rpc_types::Checkpoint;
 use sui_sdk::SuiClient;
 use sui_types::base_types::{EpochId, SuiAddress};
@@ -237,7 +237,7 @@ impl CheckpointBlockProvider {
                 .read_api()
                 .get_transaction_with_options(
                     *digest,
-                    SuiTransactionResponseOptions::new()
+                    SuiTransactionBlockResponseOptions::new()
                         .with_input()
                         .with_effects()
                         .with_balance_changes()
@@ -311,6 +311,8 @@ fn extract_balance_changes_from_ops(ops: Operations) -> HashMap<SuiAddress, i128
                     OperationType::SuiBalanceChange
                     | OperationType::Gas
                     | OperationType::PaySui
+                    | OperationType::StakeReward
+                    | OperationType::StakePrinciple
                     | OperationType::Stake => {
                         if let (Some(addr), Some(amount)) = (op.account, op.amount) {
                             *changes.entry(addr.address).or_default() += amount.value

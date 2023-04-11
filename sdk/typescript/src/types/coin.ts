@@ -5,13 +5,11 @@ import {
   array,
   boolean,
   Infer,
-  literal,
   nullable,
   number,
   object,
   optional,
   string,
-  union,
 } from 'superstruct';
 import { ObjectId, TransactionDigest } from './common';
 
@@ -19,9 +17,9 @@ export const CoinStruct = object({
   coinType: string(),
   // TODO(chris): rename this to objectId
   coinObjectId: ObjectId,
-  version: number(),
+  version: string(),
   digest: TransactionDigest,
-  balance: number(),
+  balance: string(),
   lockedUntilEpoch: nullable(number()),
   previousTransaction: TransactionDigest,
 });
@@ -30,7 +28,7 @@ export type CoinStruct = Infer<typeof CoinStruct>;
 
 export const PaginatedCoins = object({
   data: array(CoinStruct),
-  nextCursor: union([ObjectId, literal(null)]),
+  nextCursor: nullable(ObjectId),
   hasNextPage: boolean(),
 });
 
@@ -39,7 +37,7 @@ export type PaginatedCoins = Infer<typeof PaginatedCoins>;
 export const CoinBalance = object({
   coinType: string(),
   coinObjectCount: number(),
-  totalBalance: number(),
+  totalBalance: string(),
   lockedBalance: object({
     epochId: optional(number()),
     number: optional(number()),
@@ -49,7 +47,7 @@ export const CoinBalance = object({
 export type CoinBalance = Infer<typeof CoinBalance>;
 
 export const CoinSupply = object({
-  value: number(),
+  value: string(),
 });
 
 export type CoinSupply = Infer<typeof CoinSupply>;

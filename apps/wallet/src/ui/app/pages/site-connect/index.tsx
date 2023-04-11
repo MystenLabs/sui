@@ -46,9 +46,9 @@ function SiteConnectPage() {
         () => (activeAddress ? [activeAddress] : [])
     );
     const handleOnSubmit = useCallback(
-        (allowed: boolean) => {
+        async (allowed: boolean) => {
             if (requestID && accountsToConnect) {
-                dispatch(
+                await dispatch(
                     respondToPermissionRequest({
                         id: requestID,
                         accounts: allowed ? accountsToConnect : [],
@@ -77,11 +77,11 @@ function SiteConnectPage() {
     const [displayWarning, setDisplayWarning] = useState(!isSecure);
 
     const handleHideWarning = useCallback(
-        (allowed: boolean) => {
+        async (allowed: boolean) => {
             if (allowed) {
                 setDisplayWarning(false);
             } else {
-                handleOnSubmit(false);
+                await handleOnSubmit(false);
             }
         },
         [handleOnSubmit]
@@ -102,7 +102,6 @@ function SiteConnectPage() {
                         rejectTitle="Reject"
                         onSubmit={handleHideWarning}
                         isWarning
-                        isConnect
                         addressHidden
                     >
                         <PageMainLayoutTitle title="Insecure Website" />
@@ -128,7 +127,6 @@ function SiteConnectPage() {
                         approveTitle="Connect"
                         rejectTitle="Reject"
                         onSubmit={handleOnSubmit}
-                        isConnect
                         addressHidden
                         approveDisabled={!accountsToConnect.length}
                     >

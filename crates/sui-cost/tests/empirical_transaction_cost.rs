@@ -11,6 +11,7 @@ use sui_types::coin::PAY_JOIN_FUNC_NAME;
 use sui_types::coin::PAY_MODULE_NAME;
 use sui_types::coin::PAY_SPLIT_VEC_FUNC_NAME;
 use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
+use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_GENERIC;
 use sui_types::messages::{TransactionEffectsAPI, VerifiedTransaction};
 use sui_types::object::{generate_test_gas_objects, Object};
 use sui_types::SUI_FRAMEWORK_OBJECT_ID;
@@ -80,7 +81,13 @@ async fn test_good_snapshot() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-async fn split_n_tx(n: u64, coin: &Object, gas: &Object) -> VerifiedTransaction {
+async fn split_n_tx(
+    n: u64,
+    coin: &Object,
+    gas: &Object,
+    gas_budget: u64,
+    gas_price: u64,
+) -> VerifiedTransaction {
     let split_amounts = vec![10u64; n as usize];
     let type_args = vec![coin.get_move_template_type().unwrap()];
 
@@ -94,6 +101,8 @@ async fn split_n_tx(n: u64, coin: &Object, gas: &Object) -> VerifiedTransaction 
             CallArg::Object(ObjectArg::ImmOrOwnedObject(coin.compute_object_reference())),
             CallArg::Pure(bcs::to_bytes(&split_amounts).unwrap()),
         ],
+        gas_budget,
+        gas_price,
     )
 }
 
@@ -102,6 +111,7 @@ async fn create_txes(
     keypair: &AccountKeyPair,
     gas_objects: &[Object],
     configs: &NetworkConfig,
+    gas_price: u64,
 ) -> BTreeMap<CommonTransactionCosts, VerifiedTransaction> {
     let mut ret = BTreeMap::new();
     let mut gas_objects = gas_objects.to_vec().clone();
@@ -115,7 +125,7 @@ async fn create_txes(
     //
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("dummy_modules_publish");
-    let publish_tx = make_publish_package(gas_objects.pop().unwrap(), package_path);
+    let publish_tx = make_publish_package(gas_objects.pop().unwrap(), package_path, gas_price);
     ret.insert(CommonTransactionCosts::Publish, publish_tx);
 
     //
@@ -127,7 +137,7 @@ async fn create_txes(
         None,
         sender,
         keypair,
-        None,
+        gas_price,
     );
     let partial_sui_coin_tx = make_transfer_sui_transaction(
         gas_objects.pop().unwrap().compute_object_reference(),
@@ -135,7 +145,7 @@ async fn create_txes(
         Some(100),
         sender,
         keypair,
-        None,
+        gas_price,
     );
     ret.insert(
         CommonTransactionCosts::TransferWholeSuiCoin,
@@ -155,7 +165,7 @@ async fn create_txes(
         sender,
         keypair,
         SuiAddress::default(),
-        None,
+        gas_price,
     );
 
     ret.insert(CommonTransactionCosts::TransferWholeCoin, whole_coin_tx);
@@ -178,6 +188,8 @@ async fn create_txes(
                 gas_objects.pop().unwrap().compute_object_reference(),
             )),
         ],
+        gas_price * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        gas_price,
     );
     ret.insert(CommonTransactionCosts::MergeCoin, merge_tx);
 
@@ -188,7 +200,15 @@ async fn create_txes(
     for n in 0..4 {
         let gas = gas_objects.pop().unwrap();
         let coin = gas_objects.pop().unwrap();
-        let split_tx = split_n_tx(n, &gas, &coin).await.clone();
+        let split_tx = split_n_tx(
+            n,
+            &gas,
+            &coin,
+            gas_price * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+            gas_price,
+        )
+        .await
+        .clone();
         ret.insert(CommonTransactionCosts::SplitCoin(n as usize), split_tx);
     }
 
@@ -197,9 +217,13 @@ async fn create_txes(
     // Using the `counter` example
     //
 
-    let package_id = publish_counter_package(gas_objects.pop().unwrap(), &configs.net_addresses())
-        .await
-        .0;
+    let package_id = publish_counter_package(
+        gas_objects.pop().unwrap(),
+        &configs.net_addresses(),
+        gas_price,
+    )
+    .await
+    .0;
 
     // Make a transaction to create a counter.
     tokio::task::yield_now().await;
@@ -209,6 +233,8 @@ async fn create_txes(
         "create",
         package_id,
         /* arguments */ Vec::default(),
+        gas_price * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        gas_price,
     );
     let (effects, _) =
         submit_single_owner_transaction(transaction.clone(), &configs.net_addresses()).await;
@@ -233,6 +259,8 @@ async fn create_txes(
             CallArg::Object(counter_object_arg),
             CallArg::Pure(0u64.to_le_bytes().to_vec()),
         ],
+        gas_price * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        gas_price,
     );
 
     ret.insert(
@@ -248,6 +276,8 @@ async fn create_txes(
         "increment",
         package_id,
         vec![CallArg::Object(counter_object_arg)],
+        gas_price * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        gas_price,
     );
 
     ret.insert(CommonTransactionCosts::SharedCounterIncrement, transaction);
@@ -264,12 +294,18 @@ async fn run_actual_costs(
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
     let (configs, gas_objects) = test_authority_configs_with_objects(gas_objects);
-    let _ = spawn_test_authorities(&configs).await;
+    let authorities = spawn_test_authorities(&configs).await;
+    let rgp = authorities
+        .get(0)
+        .unwrap()
+        .with(|sui_node| sui_node.state().reference_gas_price_for_testing())
+        .unwrap();
+
     // Publish the move package to all authorities and get the new package ref.
     tokio::task::yield_now().await;
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
 
-    let tx_map = create_txes(sender, &keypair, &gas_objects, &configs).await;
+    let tx_map = create_txes(sender, &keypair, &gas_objects, &configs, rgp).await;
     for (tx_type, tx) in tx_map {
         let gas_used = if tx_type.is_shared_object_tx() {
             submit_shared_object_transaction(tx, &configs.net_addresses())

@@ -1,0 +1,43 @@
+//# publish
+module 0x2.A {
+  struct C has drop { x: u64 }
+
+  public make(): Self.C {
+  label b0:
+    return C { x: 0};
+  }
+
+  public mutate(c: &mut Self.C) {
+    let c_ref: &mut u64;
+  label b0:
+    c_ref = &mut move(c).C::x;
+    *move(c_ref) = 10;
+    return;
+  }
+
+  public value(c: &Self.C): u64 {
+    let c_ref: &u64;
+  label b0:
+    c_ref = &move(c).C::x;
+    return *move(c_ref);
+  }
+}
+
+//# run --signers 0x1 --check-runtime-types
+import 0x2.A;
+main(account: signer) {
+    let c: A.C;
+    let c_ref_mut: &mut A.C;
+    let c_ref: &A.C;
+    let v: u64;
+
+label b0:
+    c = A.make();
+    c_ref_mut = &mut c;
+    A.mutate(move(c_ref_mut));
+    c_ref = &c;
+    v = A.value(move(c_ref));
+    assert(move(v) == 10, 1);
+
+    return;
+}

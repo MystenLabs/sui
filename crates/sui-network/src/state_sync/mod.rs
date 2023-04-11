@@ -323,7 +323,19 @@ where
                     self.handle_peer_event(peer_event);
                 },
                 Some(task_result) = self.tasks.join_next() => {
-                    task_result.unwrap();
+                    match task_result {
+                        Ok(()) => {},
+                        Err(e) => {
+                            if e.is_cancelled() {
+                                // avoid crashing on ungraceful shutdown
+                            } else if e.is_panic() {
+                                // propagate panics.
+                                std::panic::resume_unwind(e.into_panic());
+                            } else {
+                                panic!("task failed: {e}");
+                            }
+                        },
+                    };
 
                     if matches!(&self.sync_checkpoint_contents_task, Some(t) if t.is_finished()) {
                         self.sync_checkpoint_contents_task = None;
@@ -931,7 +943,7 @@ where
         debug!(
             current_epoch = current_epoch,
             checkpoint_epoch = checkpoint.epoch(),
-            "cannont verify checkpoint with too high of an epoch",
+            "cannot verify checkpoint with too high of an epoch",
         );
         return Err(checkpoint);
     }

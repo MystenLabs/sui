@@ -5,8 +5,11 @@ import { useRpcClient } from '@mysten/core';
 import {
     Coin,
     getObjectId,
+    getObjectType,
+    getObjectOwner,
     PaginatedObjectsResponse,
     is,
+    getObjectDisplay,
 } from '@mysten/sui.js';
 import { useEffect, useState } from 'react';
 
@@ -65,15 +68,29 @@ function OwnedObject({ id, byAddress }: { id: string; byAddress: boolean }) {
                 .then((results) => {
                     setResults(
                         results
-                            .filter(({ status }) => status === 'Exists')
+                            .filter((resp) => {
+                                if (
+                                    byAddress &&
+                                    getObjectType(resp) === 'moveObject'
+                                ) {
+                                    const owner = getObjectOwner(resp);
+                                    const addressOwner =
+                                        owner &&
+                                        owner !== 'Immutable' &&
+                                        'AddressOwner' in owner
+                                            ? owner.AddressOwner
+                                            : null;
+                                    return (
+                                        resp !== undefined &&
+                                        addressOwner === id
+                                    );
+                                }
+                                return resp !== undefined;
+                            })
                             .map(
                                 (resp) => {
-                                    const displayMeta =
-                                        typeof resp.details === 'object' &&
-                                        'display' in resp.details
-                                            ? resp.details.display
-                                            : undefined;
-                                    const url = parseImageURL(displayMeta);
+                                    const displayMeta = getObjectDisplay(resp);
+                                    const url = parseImageURL(displayMeta.data);
                                     return {
                                         id: getObjectId(resp),
                                         Type: parseObjectType(resp),
@@ -82,7 +99,8 @@ function OwnedObject({ id, byAddress }: { id: string; byAddress: boolean }) {
                                             ? transformURL(url)
                                             : undefined,
                                         balance: Coin.getBalance(resp),
-                                        name: extractName(displayMeta) || '',
+                                        name:
+                                            extractName(displayMeta.data) || '',
                                     };
                                 }
                                 // TODO - add back version

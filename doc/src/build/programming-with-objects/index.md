@@ -6,8 +6,6 @@ Sui is a blockchain centered on [objects](../../learn/objects.md). Once you star
 
 In this tutorial series, we will walk through all the powerful ways to interact with objects in [Sui Move](../../learn/sui-move-diffs.md). At the end, we will also explore the designs of a few (close-to-)real-world examples to demonstrate the tradeoffs of using different object types and ownership relationships.
 
-You can find more Sui code tutorial examples in the [explore](../../explore/index.md) section.
-
 ## Prerequisites
 
 Understand:
@@ -33,3 +31,7 @@ Install:
   - Extending objects with fields that reference other objects, and that you can add, access, and remove dynamically.
 - [Chapter 6: Collections](../../build/programming-with-objects/ch6-collections.md)
   - Working with objects in on-chain homogeneous and heterogeneous key-value stores built on top of dynamic fields.
+
+## Limits on transactions, objects, and data
+
+Sui has some limits on transactions and data used in transactions, such as a maximum size and number of objects used. To view the full list of limits in source code, see [Transaction input limits](https://github.com/MystenLabs/sui/blob/main/crates/sui-protocol-config/src/lib.rs#L154).

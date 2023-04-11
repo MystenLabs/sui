@@ -1,0 +1,7 @@
+[package]
+name = "Token"
+version = "0.0.0"
+
+[dependencies]
+MoveStdlib = { local = "../../../../move-stdlib" }
+EvmStdlib = { local = "../../../stdlib" }

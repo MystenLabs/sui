@@ -50,6 +50,8 @@ module display_test::boars {
             utf8(b"buyer"),
             utf8(b"full_url"),
             utf8(b"escape_syntax"),
+            utf8(b"id"),
+            utf8(b"bad_name"),
         ], vector[
             utf8(b"{name}"),
             // test multiple fields and UID
@@ -69,8 +71,13 @@ module display_test::boars {
             utf8(b"{full_url}"),
             // test escape syntax
             utf8(b"\\{name\\}"),
+            // bad id
+            utf8(b"{idd}"),
+            // Bad name
+            utf8(b"{namee}")
         ]);
 
+        display::update_version(&mut display);
         transfer::public_transfer(display, sender(ctx));
         transfer::public_transfer(pub, sender(ctx));
 

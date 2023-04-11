@@ -67,7 +67,7 @@ Sui Node uses the following ports by default:
 | ------------- | ---------------- | --------------------------------- |
 | TCP/8080      | inbound          | protocol/transaction interface    |
 | UDP/8081      | inbound/outbound | narwhal primary interface         |
-| UDP/8082      | inbound/outbound | narwhal primary interface         |
+| UDP/8082      | inbound/outbound | narwhal worker interface         |
 | TCP/8083      | localhost        | sui -> narwhal interface          |
 | UDP/8084      | inbound/outbound | peer to peer state sync interface |
 | TCP/8443      | outbound         | metrics pushing                   |
@@ -179,7 +179,7 @@ curl localhost:1337/logging -d "info"
 
 Public dashboard for network wide visibility:
 
-- [Sui Testnet Validators](https://metrics.testnet.sui.io/public-dashboards/49484483fe0a40e9ae5d0fad331cda5b)
+- [Sui Testnet Validators](https://metrics.sui.io/public-dashboards/9b841d63c9bf43fe8acec4f0fa991f5e)
 
 ## Software Updates
 
@@ -226,6 +226,8 @@ chmod +x sui
 It is recommended and often required that the `sui` binary release/version matches that of the deployed network.
 
 ### Updating On-chain Metadata
+
+You can leverage [Validator Tool](validator_tool.md) to perform majority of the following tasks.
 
 An active/pending validator can update its on-chain metadata by submitting a transaction. Some metadata changes take effect immediately, including:
 * name

@@ -4,7 +4,7 @@ title: Sui Wallet
 
 This topic describes how to install and use the [Sui Wallet browser extension](https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil).
 
-The early versions of Sui Wallet let you experiment with the Sui network for testing. The Sui network is still in development, and the tokens have no real value. Accounts reset with each deployment of a new version of the network. View the [devnet-updates](https://discord.com/channels/916379725201563759/1004638487078772736) channel in Discord for updates about the network.
+Sui Wallet lets you experiment with the Sui network for testing. The Sui network is still in development, and the tokens have no real value.
 
 To test more advanced features not available in Sui Wallet, see [Sui CLI client](../build/cli-client.md).
 
@@ -14,15 +14,12 @@ You can use Sui Wallet to:
 
  * Create Sui accounts (addresses)
  * Import private keys from other wallets (must be a 32 or 64 byte address)
- * Mint NFTs
  * Stake and earn SUI
  * Transfer coins and NFTs to another address
  * View your coins, tokens, and NFTs
  * View recent transactions
  * Auto split/merge coins to the exact transfer amount
  * Easily access transaction history in the [Sui Explorer](https://explorer.sui.io/)
-
-In the current release, Sui Wallet includes **Buy** and **Swap** buttons. These are placeholders for functionality included in future versions of Sui Wallet.
 
 ## Install the Sui Wallet browser extension
 
@@ -201,29 +198,6 @@ You can view all transactions for your address in [Sui Explorer](https://explore
 To view all of the transactions for your address, click **Apps** and then click **View account on Sui Explorer**.
 
 Sui Explorer opens with the details for your wallet address displayed.
-
-## Mint an example NFT
-
-You can mint an example Sui NFT directly from Sui Wallet.
-
-Click **Apps**, then click **Mint an NFT**. In the current version, you can mint only example NFTs.
-
-## Create a new NFT
-
-The [Sui Wallet demo](https://sui-wallet-demo.sui.io/) site lets you create a new NFT on the Sui network using your own image file. To access the site directly from Sui Wallet, click the **Apps** tab, and then click **Sui NFT Mint**. You must have an active wallet to mint NFTs.
-
-To mint a new NFT using the demo site
-1. Open the [Sui Wallet demo](https://sui-wallet-demo.sui.io/) site.
-1. Click **Connect**.
-1. In your Sui Wallet, click **Connect** to connect your wallet with the demo site.
-   You may need to enter your wallet password.
-1. Enter a **Name** and **Description** for your NFT, and then enter Image URL to the image to use.
-1. Click **Create**.
-1. Click **Approve** in your wallet to allow the site to add the NFT to your wallet and withdraw gas fees from your SUI balance.
-
-After you successfully create a new NFT, you can transfer it to another wallet address. Enter the address to send it to in the **Recipient** field, then click **Transfer**. Click **Approve** in your wallet to allow the transfer.
-
-You can view details for the transactions to create the NFT and then transfer it in [Sui Explorer](https://explorer.sui.io/).
 
 ## View your NFTs
 

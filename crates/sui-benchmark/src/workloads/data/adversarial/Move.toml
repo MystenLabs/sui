@@ -3,7 +3,7 @@ name = "adversarial"
 version = "0.0.1"
 
 [dependencies]
-Sui = { local = "../../../../../sui-framework" }
+Sui = { local = "../../../../../sui-framework/packages/sui-framework" }
 
 [addresses]
 adversarial =  "0x0"

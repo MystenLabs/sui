@@ -6,14 +6,16 @@ use fastcrypto::encoding::Base64;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::RpcModule;
+
 use sui_json::SuiJsonValue;
 use sui_json_rpc::api::{TransactionBuilderClient, TransactionBuilderServer};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
-    BigInt, RPCTransactionRequestParams, SuiTransactionBuilderMode, SuiTypeTag, TransactionBytes,
+    RPCTransactionRequestParams, SuiTransactionBlockBuilderMode, SuiTypeTag, TransactionBlockBytes,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::sui_serde::BigInt;
 
 pub(crate) struct TransactionBuilderApi {
     fullnode: HttpClient,
@@ -34,9 +36,9 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         signer: SuiAddress,
         object_id: ObjectID,
         gas: Option<ObjectID>,
-        gas_budget: u64,
+        gas_budget: BigInt<u64>,
         recipient: SuiAddress,
-    ) -> RpcResult<TransactionBytes> {
+    ) -> RpcResult<TransactionBlockBytes> {
         self.fullnode
             .transfer_object(signer, object_id, gas, gas_budget, recipient)
             .await
@@ -46,10 +48,10 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         &self,
         signer: SuiAddress,
         sui_object_id: ObjectID,
-        gas_budget: u64,
+        gas_budget: BigInt<u64>,
         recipient: SuiAddress,
-        amount: Option<u64>,
-    ) -> RpcResult<TransactionBytes> {
+        amount: Option<BigInt<u64>>,
+    ) -> RpcResult<TransactionBlockBytes> {
         self.fullnode
             .transfer_sui(signer, sui_object_id, gas_budget, recipient, amount)
             .await
@@ -60,10 +62,10 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         signer: SuiAddress,
         input_coins: Vec<ObjectID>,
         recipients: Vec<SuiAddress>,
-        amounts: Vec<BigInt>,
+        amounts: Vec<BigInt<u64>>,
         gas: Option<ObjectID>,
-        gas_budget: u64,
-    ) -> RpcResult<TransactionBytes> {
+        gas_budget: BigInt<u64>,
+    ) -> RpcResult<TransactionBlockBytes> {
         self.fullnode
             .pay(signer, input_coins, recipients, amounts, gas, gas_budget)
             .await
@@ -74,9 +76,9 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         signer: SuiAddress,
         input_coins: Vec<ObjectID>,
         recipients: Vec<SuiAddress>,
-        amounts: Vec<BigInt>,
-        gas_budget: u64,
-    ) -> RpcResult<TransactionBytes> {
+        amounts: Vec<BigInt<u64>>,
+        gas_budget: BigInt<u64>,
+    ) -> RpcResult<TransactionBlockBytes> {
         self.fullnode
             .pay_sui(signer, input_coins, recipients, amounts, gas_budget)
             .await
@@ -87,8 +89,8 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         signer: SuiAddress,
         input_coins: Vec<ObjectID>,
         recipient: SuiAddress,
-        gas_budget: u64,
-    ) -> RpcResult<TransactionBytes> {
+        gas_budget: BigInt<u64>,
+    ) -> RpcResult<TransactionBlockBytes> {
         self.fullnode
             .pay_all_sui(signer, input_coins, recipient, gas_budget)
             .await
@@ -100,8 +102,8 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         compiled_modules: Vec<Base64>,
         dep_ids: Vec<ObjectID>,
         gas: Option<ObjectID>,
-        gas_budget: u64,
-    ) -> RpcResult<TransactionBytes> {
+        gas_budget: BigInt<u64>,
+    ) -> RpcResult<TransactionBlockBytes> {
         self.fullnode
             .publish(sender, compiled_modules, dep_ids, gas, gas_budget)
             .await
@@ -111,10 +113,10 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         &self,
         signer: SuiAddress,
         coin_object_id: ObjectID,
-        split_amounts: Vec<u64>,
+        split_amounts: Vec<BigInt<u64>>,
         gas: Option<ObjectID>,
-        gas_budget: u64,
-    ) -> RpcResult<TransactionBytes> {
+        gas_budget: BigInt<u64>,
+    ) -> RpcResult<TransactionBlockBytes> {
         self.fullnode
             .split_coin(signer, coin_object_id, split_amounts, gas, gas_budget)
             .await
@@ -124,10 +126,10 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         &self,
         signer: SuiAddress,
         coin_object_id: ObjectID,
-        split_count: u64,
+        split_count: BigInt<u64>,
         gas: Option<ObjectID>,
-        gas_budget: u64,
-    ) -> RpcResult<TransactionBytes> {
+        gas_budget: BigInt<u64>,
+    ) -> RpcResult<TransactionBlockBytes> {
         self.fullnode
             .split_coin_equal(signer, coin_object_id, split_count, gas, gas_budget)
             .await
@@ -139,8 +141,8 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         primary_coin: ObjectID,
         coin_to_merge: ObjectID,
         gas: Option<ObjectID>,
-        gas_budget: u64,
-    ) -> RpcResult<TransactionBytes> {
+        gas_budget: BigInt<u64>,
+    ) -> RpcResult<TransactionBlockBytes> {
         self.fullnode
             .merge_coin(signer, primary_coin, coin_to_merge, gas, gas_budget)
             .await
@@ -155,9 +157,9 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         type_arguments: Vec<SuiTypeTag>,
         rpc_arguments: Vec<SuiJsonValue>,
         gas: Option<ObjectID>,
-        gas_budget: u64,
-        txn_builder_mode: Option<SuiTransactionBuilderMode>,
-    ) -> RpcResult<TransactionBytes> {
+        gas_budget: BigInt<u64>,
+        tx_builder_mode: Option<SuiTransactionBlockBuilderMode>,
+    ) -> RpcResult<TransactionBlockBytes> {
         self.fullnode
             .move_call(
                 signer,
@@ -168,7 +170,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
                 rpc_arguments,
                 gas,
                 gas_budget,
-                txn_builder_mode,
+                tx_builder_mode,
             )
             .await
     }
@@ -178,11 +180,11 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         signer: SuiAddress,
         params: Vec<RPCTransactionRequestParams>,
         gas: Option<ObjectID>,
-        gas_budget: u64,
-        txn_builder_mode: Option<SuiTransactionBuilderMode>,
-    ) -> RpcResult<TransactionBytes> {
+        gas_budget: BigInt<u64>,
+        tx_builder_mode: Option<SuiTransactionBlockBuilderMode>,
+    ) -> RpcResult<TransactionBlockBytes> {
         self.fullnode
-            .batch_transaction(signer, params, gas, gas_budget, txn_builder_mode)
+            .batch_transaction(signer, params, gas, gas_budget, tx_builder_mode)
             .await
     }
 
@@ -190,11 +192,11 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         &self,
         signer: SuiAddress,
         coins: Vec<ObjectID>,
-        amount: Option<u64>,
+        amount: Option<BigInt<u64>>,
         validator: SuiAddress,
         gas: Option<ObjectID>,
-        gas_budget: u64,
-    ) -> RpcResult<TransactionBytes> {
+        gas_budget: BigInt<u64>,
+    ) -> RpcResult<TransactionBlockBytes> {
         self.fullnode
             .request_add_stake(signer, coins, amount, validator, gas, gas_budget)
             .await
@@ -205,8 +207,8 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         signer: SuiAddress,
         staked_sui: ObjectID,
         gas: Option<ObjectID>,
-        gas_budget: u64,
-    ) -> RpcResult<TransactionBytes> {
+        gas_budget: BigInt<u64>,
+    ) -> RpcResult<TransactionBlockBytes> {
         self.fullnode
             .request_withdraw_stake(signer, staked_sui, gas, gas_budget)
             .await

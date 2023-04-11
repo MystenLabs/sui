@@ -1,14 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use arc_swap::ArcSwap;
+use arc_swap::{ArcSwap, ArcSwapOption};
 use bytes::Bytes;
 use dashmap::try_result::TryResult;
 use dashmap::DashMap;
 use futures::future::{select, Either};
 use futures::FutureExt;
 use itertools::Itertools;
+use mysten_network::Multiaddr;
 use narwhal_types::{TransactionProto, TransactionsClient};
+use narwhal_worker::LocalNarwhalClient;
 use parking_lot::{Mutex, RwLockReadGuard};
 use prometheus::IntGauge;
 use prometheus::Registry;
@@ -36,7 +38,7 @@ use sui_types::{
 use tap::prelude::*;
 use tokio::sync::{Semaphore, SemaphorePermit};
 use tokio::task::JoinHandle;
-use tokio::time;
+use tokio::time::{self, sleep, timeout};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::epoch::reconfiguration::{ReconfigState, ReconfigurationInitiator};
@@ -184,6 +186,78 @@ impl SubmitToConsensus for TransactionsClient<sui_network::tonic::transport::Cha
     }
 }
 
+/// A Narwhal client that instantiates LocalNarwhalClient lazily.
+pub struct LazyNarwhalClient {
+    /// Outer ArcSwapOption allows initialization after the first connection to Narwhal.
+    /// Inner ArcSwap allows Narwhal restarts across epoch changes.
+    client: ArcSwapOption<ArcSwap<LocalNarwhalClient>>,
+    addr: Multiaddr,
+}
+
+impl LazyNarwhalClient {
+    /// Lazily instantiates LocalNarwhalClient keyed by the address of the Narwhal worker.
+    pub fn new(addr: Multiaddr) -> Self {
+        Self {
+            client: ArcSwapOption::empty(),
+            addr,
+        }
+    }
+
+    async fn get(&self) -> Arc<ArcSwap<LocalNarwhalClient>> {
+        // Narwhal may not have started and created LocalNarwhalClient, so retry in a loop.
+        // Retries should only happen on Sui process start.
+        if let Ok(client) = timeout(Duration::from_secs(30), async {
+            loop {
+                match LocalNarwhalClient::get_global(&self.addr) {
+                    Some(c) => return c,
+                    None => {
+                        sleep(Duration::from_millis(100)).await;
+                        continue;
+                    }
+                };
+            }
+        })
+        .await
+        {
+            return client;
+        }
+        panic!("Timed out waiting for Narwhal to start on {}!", self.addr);
+    }
+}
+
+#[async_trait::async_trait]
+impl SubmitToConsensus for LazyNarwhalClient {
+    async fn submit_to_consensus(
+        &self,
+        transaction: &ConsensusTransaction,
+        _epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult {
+        let transaction =
+            bcs::to_bytes(transaction).expect("Serializing consensus transaction cannot fail");
+        // The retrieved LocalNarwhalClient can be from the past epoch. Submit would fail after
+        // Narwhal shuts down, so there should be no correctness issue.
+        let client = {
+            let c = self.client.load();
+            if c.is_some() {
+                c
+            } else {
+                self.client.store(Some(self.get().await));
+                self.client.load()
+            }
+        };
+        let client = client.as_ref().unwrap().load();
+        client
+            .submit_transaction(transaction)
+            .await
+            .map_err(|e| SuiError::FailedToSubmitToConsensus(format!("{:?}", e)))
+            .tap_err(|r| {
+                // Will be logged by caller as well.
+                warn!("Submit transaction failed with: {:?}", r);
+            })?;
+        Ok(())
+    }
+}
+
 /// Submit Sui certificates to the consensus.
 pub struct ConsensusAdapter {
     /// The network client connecting to the consensus node of this authority.
@@ -302,8 +376,10 @@ impl ConsensusAdapter {
                 let (position, mapped_to_low_scoring) =
                     self.submission_position(committee, tx_digest);
                 const DEFAULT_LATENCY: Duration = Duration::from_secs(5);
+                const MAX_LATENCY: Duration = Duration::from_secs(5 * 60);
                 let latency = self.latency_observer.latency().unwrap_or(DEFAULT_LATENCY);
                 let latency = std::cmp::max(latency, DEFAULT_LATENCY);
+                let latency = std::cmp::min(latency, MAX_LATENCY);
                 self.metrics
                     .sequencing_estimated_latency
                     .set(latency.as_millis() as i64);
@@ -357,56 +433,38 @@ impl ConsensusAdapter {
     /// negative in connectivity to another, such as in the case of a network partition.
     ///
     /// Recursively, if the authority further ahead of us in the positions is a low performing authority, we will
-    /// move our positions up one, and submit at the same time. This allows low performing
-    /// node a chance to participate in consensus and redeem their scores while maintaining performance
+    /// move our positions up one, and submit the transaction. This allows maintaining performance
     /// overall. We will only do this part for authorities that are not low performers themselves to
     /// prevent extra amplification in the case that the positions look like [low_scoring_a1, low_scoring_a2, a3]
     fn check_submission_wrt_connectivity_and_scores(
         &self,
         positions: Vec<AuthorityName>,
     ) -> (usize, bool) {
-        let mut mapped_to_low_scoring = false;
+        let low_scoring_authorities = self.low_scoring_authorities.load().load_full();
+        if low_scoring_authorities.get(&self.authority).is_some() {
+            return (positions.len(), true);
+        }
+        let initial_position = get_position_in_list(self.authority, positions.clone());
+
         let filtered_positions = positions
             .into_iter()
             .filter(|authority| {
-                // Filter out any nodes that appear disconnected to us
-                self.authority == *authority
-                    || self
+                self.authority == *authority // Don't filter yourself out!
+                    ||
+                (
+                    self // Filter out any nodes that appear disconnected
                         .connection_monitor_status
                         .check_connection(&self.authority, authority)
                         .unwrap_or(ConnectionStatus::Disconnected)
                         == ConnectionStatus::Connected
-            })
-            .filter(|authority| {
-                // If we are a low scoring authority, we do not filter out ourselves from the list,
-                // nor do we filter out other low scoring authorities. If we are a high scoring
-                // authority, we will co-submit with any low scoring authorities in front of us.
-                let ourself_is_low_scoring = self.authority_is_low_scoring(&self.authority);
-                let authority_is_low_scoring = self.authority_is_low_scoring(authority);
-
-                // if we filtered anything out here, the tx was mapped to a low scoring authority
-                if !ourself_is_low_scoring && authority_is_low_scoring {
-                    mapped_to_low_scoring = true;
-                }
-
-                ourself_is_low_scoring || !authority_is_low_scoring
+                    && // Filter out low scoring nodes
+                    low_scoring_authorities.get(authority).is_none()
+                )
             })
             .collect();
 
         let position = get_position_in_list(self.authority, filtered_positions);
-        (
-            position,
-            mapped_to_low_scoring
-                || (position == 0 && self.authority_is_low_scoring(&self.authority)),
-        )
-    }
-
-    fn authority_is_low_scoring(&self, authority: &AuthorityName) -> bool {
-        self.low_scoring_authorities
-            .load()
-            .load_full()
-            .get(authority)
-            .is_some()
+        (position, position < initial_position)
     }
 
     /// This method blocks until transaction is persisted in local database
@@ -505,16 +563,25 @@ impl ConsensusAdapter {
             Either::Right(((), processed_waiter)) => Some(processed_waiter),
         };
         let transaction_key = transaction.key();
-        let _monitor = CancelOnDrop(spawn_monitored_task!(async {
-            let mut i = 0u64;
-            loop {
-                i += 1;
-                const WARN_DELAY_S: u64 = 30;
-                tokio::time::sleep(Duration::from_secs(WARN_DELAY_S)).await;
-                let total_wait = i * WARN_DELAY_S;
-                warn!("Still waiting {total_wait} seconds for transaction {transaction_key:?} to commit in narwhal");
-            }
-        }));
+        // Log warnings for capability or end of publish transactions that fail to get sequenced
+        let _monitor = if matches!(
+            transaction.kind,
+            ConsensusTransactionKind::EndOfPublish(_)
+                | ConsensusTransactionKind::CapabilityNotification(_)
+        ) {
+            Some(CancelOnDrop(spawn_monitored_task!(async {
+                let mut i = 0u64;
+                loop {
+                    i += 1;
+                    const WARN_DELAY_S: u64 = 30;
+                    tokio::time::sleep(Duration::from_secs(WARN_DELAY_S)).await;
+                    let total_wait = i * WARN_DELAY_S;
+                    warn!("Still waiting {total_wait} seconds for transaction {transaction_key:?} to commit in narwhal");
+                }
+            })))
+        } else {
+            None
+        };
         if let Some(processed_waiter) = processed_waiter {
             debug!("Submitting {transaction_key:?} to consensus");
 
@@ -896,7 +963,10 @@ mod adapter_tests {
                 )
             })
             .collect::<Vec<_>>();
-        let committee = Committee::new(0, authorities.iter().cloned().collect());
+        let committee = Committee::new_for_testing_with_normalized_voting_power(
+            0,
+            authorities.iter().cloned().collect(),
+        );
 
         // generate random transaction digests, and account for validator selection
         const NUM_TEST_TRANSACTIONS: usize = 1000;

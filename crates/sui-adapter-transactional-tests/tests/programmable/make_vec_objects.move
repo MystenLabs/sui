@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// tessts various vector instantions with objects
+// tests various vector instantions with objects
 
 //# init --addresses test=0x0 --accounts A B
 
@@ -70,9 +70,9 @@ module test::m1 {
 //> 0: test::m1::new();
 //> TransferObjects([Result(0)], Input(0));
 
-//# view-object 111
+//# view-object 5,0
 
-//# programmable --sender A --inputs object(111)
+//# programmable --sender A --inputs object(5,0)
 //> 0: test::m1::new();
 //> 1: test::m1::new();
 //> 2: test::m1::new();

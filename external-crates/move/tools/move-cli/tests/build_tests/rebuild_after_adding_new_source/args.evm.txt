@@ -1,0 +1,3 @@
+build -v --arch ethereum
+> touch sources/Bar.move
+build -v --arch ethereum

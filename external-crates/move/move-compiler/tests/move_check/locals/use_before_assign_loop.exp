@@ -1,0 +1,41 @@
+error[E06002]: use of unassigned variable
+  ┌─ tests/move_check/locals/use_before_assign_loop.move:4:24
+  │
+3 │         let x: u64;
+  │             - The variable 'x' might not have a value. The variable must be assigned a value before being used.
+4 │         loop { let y = move x + 1; x = 0; y; }
+  │                        ^^^^^^ Invalid usage of unassigned variable 'x'
+
+error[E06002]: use of unassigned variable
+  ┌─ tests/move_check/locals/use_before_assign_loop.move:9:24
+  │
+8 │         let x: u64;
+  │             - The variable 'x' might not have a value. The variable must be assigned a value before being used.
+9 │         loop { let y = x + 1; if (cond) { continue }; x = 0; y; }
+  │                        ^ Invalid usage of unassigned variable 'x'
+
+error[E06002]: use of unassigned variable
+   ┌─ tests/move_check/locals/use_before_assign_loop.move:14:24
+   │
+13 │         let x: u64;
+   │             - The variable 'x' might not have a value. The variable must be assigned a value before being used.
+14 │         loop { let y = &x; _ = move y; x = 0 }
+   │                        ^^ Invalid usage of unassigned variable 'x'
+
+error[E06002]: use of unassigned variable
+   ┌─ tests/move_check/locals/use_before_assign_loop.move:19:24
+   │
+18 │         let x: u64;
+   │             - The variable 'x' does not have a value. The variable must be assigned a value before being used.
+19 │         loop { let y = &x; _ = move y; if (cond) { x = 0 }; break };
+   │                        ^^ Invalid usage of unassigned variable 'x'
+
+error[E06002]: use of unassigned variable
+   ┌─ tests/move_check/locals/use_before_assign_loop.move:20:9
+   │
+18 │         let x: u64;
+   │             - The variable 'x' might not have a value. The variable must be assigned a value before being used.
+19 │         loop { let y = &x; _ = move y; if (cond) { x = 0 }; break };
+20 │         x;
+   │         ^ Invalid usage of unassigned variable 'x'
+

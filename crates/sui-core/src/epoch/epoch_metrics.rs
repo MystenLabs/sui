@@ -24,9 +24,6 @@ pub struct EpochMetrics {
     /// Total amount of gas rewards (i.e. computation gas cost) in the epoch.
     pub epoch_total_gas_reward: IntGauge,
 
-    /// Total amount of stakes in the epoch.
-    pub epoch_total_votes: IntGauge,
-
     // An active validator reconfigures through the following steps:
     // 1. Halt validator (a.k.a. close epoch) and stop accepting user transaction certs.
     // 2. Finishes processing all pending certificates and then send EndOfPublish message.
@@ -76,6 +73,9 @@ pub struct EpochMetrics {
     /// without committing results to the store. It's useful to know whether this execution leads
     /// to safe_mode, since in theory the result could be different from checkpoint executor.
     pub checkpoint_builder_advance_epoch_is_safe_mode: IntGauge,
+
+    /// Buffer stake current in effect for this epoch
+    pub effective_buffer_stake: IntGauge,
 }
 
 impl EpochMetrics {
@@ -111,11 +111,6 @@ impl EpochMetrics {
             epoch_total_gas_reward: register_int_gauge_with_registry!(
                 "epoch_total_gas_reward",
                 "Total amount of gas rewards (i.e. computation gas cost) in the epoch",
-                registry
-            ).unwrap(),
-            epoch_total_votes: register_int_gauge_with_registry!(
-                "epoch_total_votes",
-                "Total amount of votes among validators in the epoch.",
                 registry
             ).unwrap(),
             epoch_pending_certs_processed_time_since_epoch_close_ms: register_int_gauge_with_registry!(
@@ -156,6 +151,11 @@ impl EpochMetrics {
             checkpoint_builder_advance_epoch_is_safe_mode: register_int_gauge_with_registry!(
                 "checkpoint_builder_advance_epoch_is_safe_mode",
                 "Whether the advance epoch execution leads to safe mode while building the last checkpoint",
+                registry,
+            ).unwrap(),
+            effective_buffer_stake: register_int_gauge_with_registry!(
+                "effective_buffer_stake",
+                "Buffer stake current in effect for this epoch",
                 registry,
             ).unwrap(),
         };

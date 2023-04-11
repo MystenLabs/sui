@@ -3,11 +3,13 @@
 
 use move_binary_format::file_format::CompiledModule;
 
+use sui_adapter::adapter::{default_verifier_config, run_metered_move_bytecode_verifier_impl};
 use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage};
+use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::ObjectID,
     digests::TransactionDigest,
-    error::ExecutionErrorKind,
+    error::{ExecutionErrorKind, SuiError},
     move_package::{MovePackage, TypeOrigin, UpgradeInfo},
     object::{Data, Object, OBJECT_START_VERSION},
 };
@@ -45,30 +47,13 @@ macro_rules! linkage_table {
 #[test]
 fn test_new_initial() {
     let c_id1 = ObjectID::from_single_byte(0xc1);
-    let c_pkg = MovePackage::new_initial(
-        OBJECT_START_VERSION,
-        build_test_modules("Cv1"),
-        u64::MAX,
-        [],
-    )
-    .unwrap();
+    let c_pkg = MovePackage::new_initial(&build_test_modules("Cv1"), u64::MAX, []).unwrap();
 
     let b_id1 = ObjectID::from_single_byte(0xb1);
-    let b_pkg = MovePackage::new_initial(
-        OBJECT_START_VERSION,
-        build_test_modules("B"),
-        u64::MAX,
-        [&c_pkg],
-    )
-    .unwrap();
+    let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, [&c_pkg]).unwrap();
 
-    let a_pkg = MovePackage::new_initial(
-        OBJECT_START_VERSION,
-        build_test_modules("A"),
-        u64::MAX,
-        [&b_pkg, &c_pkg],
-    )
-    .unwrap();
+    let a_pkg =
+        MovePackage::new_initial(&build_test_modules("A"), u64::MAX, [&b_pkg, &c_pkg]).unwrap();
 
     assert_eq!(
         a_pkg.linkage_table(),
@@ -113,17 +98,11 @@ fn test_new_initial() {
 #[test]
 fn test_upgraded() {
     let c_id1 = ObjectID::from_single_byte(0xc1);
-    let c_pkg = MovePackage::new_initial(
-        OBJECT_START_VERSION,
-        build_test_modules("Cv1"),
-        u64::MAX,
-        [],
-    )
-    .unwrap();
+    let c_pkg = MovePackage::new_initial(&build_test_modules("Cv1"), u64::MAX, []).unwrap();
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let c_new = c_pkg
-        .new_upgraded(c_id2, build_test_modules("Cv2"), u64::MAX, [])
+        .new_upgraded(c_id2, &build_test_modules("Cv2"), u64::MAX, [])
         .unwrap();
 
     let mut expected_version = OBJECT_START_VERSION;
@@ -142,26 +121,14 @@ fn test_upgraded() {
 #[test]
 fn test_depending_on_upgrade() {
     let c_id1 = ObjectID::from_single_byte(0xc1);
-    let c_pkg = MovePackage::new_initial(
-        OBJECT_START_VERSION,
-        build_test_modules("Cv1"),
-        u64::MAX,
-        [],
-    )
-    .unwrap();
+    let c_pkg = MovePackage::new_initial(&build_test_modules("Cv1"), u64::MAX, []).unwrap();
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let c_new = c_pkg
-        .new_upgraded(c_id2, build_test_modules("Cv2"), u64::MAX, [])
+        .new_upgraded(c_id2, &build_test_modules("Cv2"), u64::MAX, [])
         .unwrap();
 
-    let b_pkg = MovePackage::new_initial(
-        OBJECT_START_VERSION,
-        build_test_modules("B"),
-        u64::MAX,
-        [&c_new],
-    )
-    .unwrap();
+    let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, [&c_new]).unwrap();
 
     assert_eq!(
         b_pkg.linkage_table(),
@@ -174,30 +141,18 @@ fn test_depending_on_upgrade() {
 #[test]
 fn test_upgrade_upgrades_linkage() {
     let c_id1 = ObjectID::from_single_byte(0xc1);
-    let c_pkg = MovePackage::new_initial(
-        OBJECT_START_VERSION,
-        build_test_modules("Cv1"),
-        u64::MAX,
-        [],
-    )
-    .unwrap();
+    let c_pkg = MovePackage::new_initial(&build_test_modules("Cv1"), u64::MAX, []).unwrap();
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let c_new = c_pkg
-        .new_upgraded(c_id2, build_test_modules("Cv2"), u64::MAX, [])
+        .new_upgraded(c_id2, &build_test_modules("Cv2"), u64::MAX, [])
         .unwrap();
 
-    let b_pkg = MovePackage::new_initial(
-        OBJECT_START_VERSION,
-        build_test_modules("B"),
-        u64::MAX,
-        [&c_pkg],
-    )
-    .unwrap();
+    let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, [&c_pkg]).unwrap();
 
     let b_id2 = ObjectID::from_single_byte(0xb2);
     let b_new = b_pkg
-        .new_upgraded(b_id2, build_test_modules("B"), u64::MAX, [&c_new])
+        .new_upgraded(b_id2, &build_test_modules("B"), u64::MAX, [&c_new])
         .unwrap();
 
     assert_eq!(
@@ -218,30 +173,18 @@ fn test_upgrade_upgrades_linkage() {
 #[test]
 fn test_upgrade_linkage_digest_to_new_dep() {
     let c_id1 = ObjectID::from_single_byte(0xc1);
-    let c_pkg = MovePackage::new_initial(
-        OBJECT_START_VERSION,
-        build_test_modules("Cv1"),
-        u64::MAX,
-        [],
-    )
-    .unwrap();
+    let c_pkg = MovePackage::new_initial(&build_test_modules("Cv1"), u64::MAX, []).unwrap();
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let c_new = c_pkg
-        .new_upgraded(c_id2, build_test_modules("Cv2"), u64::MAX, [])
+        .new_upgraded(c_id2, &build_test_modules("Cv2"), u64::MAX, [])
         .unwrap();
 
-    let b_pkg = MovePackage::new_initial(
-        OBJECT_START_VERSION,
-        build_test_modules("B"),
-        u64::MAX,
-        [&c_pkg],
-    )
-    .unwrap();
+    let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, [&c_pkg]).unwrap();
 
     let b_id2 = ObjectID::from_single_byte(0xb2);
     let b_new = b_pkg
-        .new_upgraded(b_id2, build_test_modules("B"), u64::MAX, [&c_new])
+        .new_upgraded(b_id2, &build_test_modules("B"), u64::MAX, [&c_new])
         .unwrap();
 
     assert_eq!(
@@ -272,30 +215,18 @@ fn test_upgrade_linkage_digest_to_new_dep() {
 #[test]
 fn test_upgrade_downngrades_linkage() {
     let c_id1 = ObjectID::from_single_byte(0xc1);
-    let c_pkg = MovePackage::new_initial(
-        OBJECT_START_VERSION,
-        build_test_modules("Cv1"),
-        u64::MAX,
-        [],
-    )
-    .unwrap();
+    let c_pkg = MovePackage::new_initial(&build_test_modules("Cv1"), u64::MAX, []).unwrap();
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let c_new = c_pkg
-        .new_upgraded(c_id2, build_test_modules("Cv2"), u64::MAX, [])
+        .new_upgraded(c_id2, &build_test_modules("Cv2"), u64::MAX, [])
         .unwrap();
 
-    let b_pkg = MovePackage::new_initial(
-        OBJECT_START_VERSION,
-        build_test_modules("B"),
-        u64::MAX,
-        [&c_new],
-    )
-    .unwrap();
+    let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, [&c_new]).unwrap();
 
     let b_id2 = ObjectID::from_single_byte(0xb2);
     let b_new = b_pkg
-        .new_upgraded(b_id2, build_test_modules("B"), u64::MAX, [&c_pkg])
+        .new_upgraded(b_id2, &build_test_modules("B"), u64::MAX, [&c_pkg])
         .unwrap();
 
     assert_eq!(
@@ -316,35 +247,18 @@ fn test_upgrade_downngrades_linkage() {
 #[test]
 fn test_transitively_depending_on_upgrade() {
     let c_id1 = ObjectID::from_single_byte(0xc1);
-    let c_pkg = MovePackage::new_initial(
-        OBJECT_START_VERSION,
-        build_test_modules("Cv1"),
-        u64::MAX,
-        [],
-    )
-    .unwrap();
+    let c_pkg = MovePackage::new_initial(&build_test_modules("Cv1"), u64::MAX, []).unwrap();
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let c_new = c_pkg
-        .new_upgraded(c_id2, build_test_modules("Cv2"), u64::MAX, [])
+        .new_upgraded(c_id2, &build_test_modules("Cv2"), u64::MAX, [])
         .unwrap();
 
     let b_id1 = ObjectID::from_single_byte(0xb1);
-    let b_pkg = MovePackage::new_initial(
-        OBJECT_START_VERSION,
-        build_test_modules("B"),
-        u64::MAX,
-        [&c_pkg],
-    )
-    .unwrap();
+    let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, [&c_pkg]).unwrap();
 
-    let a_pkg = MovePackage::new_initial(
-        OBJECT_START_VERSION,
-        build_test_modules("A"),
-        u64::MAX,
-        [&b_pkg, &c_new],
-    )
-    .unwrap();
+    let a_pkg =
+        MovePackage::new_initial(&build_test_modules("A"), u64::MAX, [&b_pkg, &c_new]).unwrap();
 
     assert_eq!(
         a_pkg.linkage_table(),
@@ -357,34 +271,16 @@ fn test_transitively_depending_on_upgrade() {
 
 #[test]
 fn package_digest_changes_with_dep_upgrades_and_in_sync_with_move_package_digest() {
-    let c_v1 = MovePackage::new_initial(
-        OBJECT_START_VERSION,
-        build_test_modules("Cv1"),
-        u64::MAX,
-        [],
-    )
-    .unwrap();
+    let c_v1 = MovePackage::new_initial(&build_test_modules("Cv1"), u64::MAX, []).unwrap();
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let c_v2 = c_v1
-        .new_upgraded(c_id2, build_test_modules("Cv2"), u64::MAX, [])
+        .new_upgraded(c_id2, &build_test_modules("Cv2"), u64::MAX, [])
         .unwrap();
 
-    let b_pkg = MovePackage::new_initial(
-        OBJECT_START_VERSION,
-        build_test_modules("B"),
-        u64::MAX,
-        [&c_v1],
-    )
-    .unwrap();
+    let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, [&c_v1]).unwrap();
 
-    let b_v2 = MovePackage::new_initial(
-        OBJECT_START_VERSION,
-        build_test_modules("Bv2"),
-        u64::MAX,
-        [&c_v2],
-    )
-    .unwrap();
+    let b_v2 = MovePackage::new_initial(&build_test_modules("Bv2"), u64::MAX, [&c_v2]).unwrap();
 
     let local_v1 = build_test_package("B").get_package_digest(false);
     let local_v2 = build_test_package("Bv2").get_package_digest(false);
@@ -398,13 +294,12 @@ fn package_digest_changes_with_dep_upgrades_and_in_sync_with_move_package_digest
 #[test]
 #[should_panic]
 fn test_panic_on_empty_package() {
-    let _ = MovePackage::new_initial(OBJECT_START_VERSION, vec![], u64::MAX, []);
+    let _ = MovePackage::new_initial(&[], u64::MAX, []);
 }
 
 #[test]
 fn test_fail_on_missing_dep() {
-    let err = MovePackage::new_initial(OBJECT_START_VERSION, build_test_modules("B"), u64::MAX, [])
-        .unwrap_err();
+    let err = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, []).unwrap_err();
 
     assert_eq!(
         err.kind(),
@@ -414,29 +309,11 @@ fn test_fail_on_missing_dep() {
 
 #[test]
 fn test_fail_on_missing_transitive_dep() {
-    let c_pkg = MovePackage::new_initial(
-        OBJECT_START_VERSION,
-        build_test_modules("Cv1"),
-        u64::MAX,
-        [],
-    )
-    .unwrap();
+    let c_pkg = MovePackage::new_initial(&build_test_modules("Cv1"), u64::MAX, []).unwrap();
 
-    let b_pkg = MovePackage::new_initial(
-        OBJECT_START_VERSION,
-        build_test_modules("B"),
-        u64::MAX,
-        [&c_pkg],
-    )
-    .unwrap();
+    let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, [&c_pkg]).unwrap();
 
-    let err = MovePackage::new_initial(
-        OBJECT_START_VERSION,
-        build_test_modules("A"),
-        u64::MAX,
-        [&b_pkg],
-    )
-    .unwrap_err();
+    let err = MovePackage::new_initial(&build_test_modules("A"), u64::MAX, [&b_pkg]).unwrap_err();
 
     assert_eq!(
         err.kind(),
@@ -446,34 +323,17 @@ fn test_fail_on_missing_transitive_dep() {
 
 #[test]
 fn test_fail_on_transitive_dependency_downgrade() {
-    let c_pkg = MovePackage::new_initial(
-        OBJECT_START_VERSION,
-        build_test_modules("Cv1"),
-        u64::MAX,
-        [],
-    )
-    .unwrap();
+    let c_pkg = MovePackage::new_initial(&build_test_modules("Cv1"), u64::MAX, []).unwrap();
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let c_new = c_pkg
-        .new_upgraded(c_id2, build_test_modules("Cv2"), u64::MAX, [])
+        .new_upgraded(c_id2, &build_test_modules("Cv2"), u64::MAX, [])
         .unwrap();
 
-    let b_pkg = MovePackage::new_initial(
-        OBJECT_START_VERSION,
-        build_test_modules("B"),
-        u64::MAX,
-        [&c_new],
-    )
-    .unwrap();
+    let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, [&c_new]).unwrap();
 
-    let err = MovePackage::new_initial(
-        OBJECT_START_VERSION,
-        build_test_modules("A"),
-        u64::MAX,
-        [&b_pkg, &c_pkg],
-    )
-    .unwrap_err();
+    let err =
+        MovePackage::new_initial(&build_test_modules("A"), u64::MAX, [&b_pkg, &c_pkg]).unwrap_err();
 
     assert_eq!(
         err.kind(),
@@ -483,17 +343,11 @@ fn test_fail_on_transitive_dependency_downgrade() {
 
 #[test]
 fn test_fail_on_upgrade_missing_type() {
-    let c_pkg = MovePackage::new_initial(
-        OBJECT_START_VERSION,
-        build_test_modules("Cv2"),
-        u64::MAX,
-        [],
-    )
-    .unwrap();
+    let c_pkg = MovePackage::new_initial(&build_test_modules("Cv2"), u64::MAX, []).unwrap();
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let err = c_pkg
-        .new_upgraded(c_id2, build_test_modules("Cv1"), u64::MAX, [])
+        .new_upgraded(c_id2, &build_test_modules("Cv1"), u64::MAX, [])
         .unwrap_err();
 
     assert_eq!(err.kind(), &ExecutionErrorKind::InvariantViolation);
@@ -511,4 +365,39 @@ pub fn build_test_modules(test_dir: &str) -> Vec<CompiledModule> {
         .get_modules()
         .cloned()
         .collect()
+}
+
+#[tokio::test]
+async fn test_metered_move_bytecode_verifier() {
+    let path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../sui-framework/packages/sui-framework");
+    let compiled_package =
+        sui_framework::build_move_package(&path, BuildConfig::new_for_testing()).unwrap();
+    let compiled_modules_bytes: Vec<_> = compiled_package.get_modules().cloned().collect();
+
+    let mut metered_verifier_config = default_verifier_config(
+        &ProtocolConfig::get_for_max_version(),
+        true, /* enable metering */
+    );
+
+    // Default case should pass
+    let r =
+        run_metered_move_bytecode_verifier_impl(&compiled_modules_bytes, &metered_verifier_config);
+    assert!(r.is_ok());
+
+    // Use low limits. Should fail
+    metered_verifier_config.max_back_edges_per_function = Some(100);
+    metered_verifier_config.max_back_edges_per_module = Some(1_000);
+    metered_verifier_config.max_per_mod_meter_units = Some(10_000);
+    metered_verifier_config.max_per_fun_meter_units = Some(10_000);
+
+    let r =
+        run_metered_move_bytecode_verifier_impl(&compiled_modules_bytes, &metered_verifier_config);
+
+    assert!(
+        r.unwrap_err()
+            == SuiError::ModuleVerificationFailure {
+                error: "Verification timedout".to_string()
+            }
+    );
 }

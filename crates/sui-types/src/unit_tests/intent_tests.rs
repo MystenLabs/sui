@@ -9,7 +9,7 @@ use crate::{
         AccountKeyPair, AuthorityKeyPair, AuthoritySignature, Signature, SuiAuthoritySignature,
         SuiSignature,
     },
-    messages::{Transaction, TransactionData},
+    messages::{Transaction, TransactionData, TEST_ONLY_GAS_UNIT_FOR_TRANSFER},
     object::Object,
 };
 
@@ -27,7 +27,7 @@ fn test_personal_message_intent() {
     let p_message_2 = p_message.clone();
     let p_message_bcs = bcs::to_bytes(&p_message).unwrap();
 
-    let intent = Intent::default().with_scope(IntentScope::PersonalMessage);
+    let intent = Intent::sui_app(IntentScope::PersonalMessage);
     let intent1 = intent.clone();
     let intent2 = intent.clone();
     let intent_bcs = bcs::to_bytes(&IntentMessage::new(intent, &p_message)).unwrap();
@@ -61,18 +61,20 @@ fn test_authority_signature_intent() {
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let object = Object::immutable_with_id_for_testing(object_id);
-    let data = TransactionData::new_transfer_sui_with_dummy_gas_price(
+    let gas_price = 1000;
+    let data = TransactionData::new_transfer_sui(
         recipient,
         sender,
         None,
         object.compute_object_reference(),
-        10000,
+        gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        gas_price,
     );
     let signature = Signature::new_secure(
-        &IntentMessage::new(Intent::default(), data.clone()),
+        &IntentMessage::new(Intent::sui_transaction(), data.clone()),
         &sender_key,
     );
-    let tx = Transaction::from_data(data, Intent::default(), vec![signature]);
+    let tx = Transaction::from_data(data, Intent::sui_transaction(), vec![signature]);
     let tx1 = tx.clone();
     assert!(tx.verify().is_ok());
 
@@ -83,9 +85,9 @@ fn test_authority_signature_intent() {
     assert_eq!(
         &intent_bcs[..3],
         vec![
+            IntentScope::TransactionData as u8,
             IntentVersion::V0 as u8,
             AppId::Sui as u8,
-            IntentScope::TransactionData as u8,
         ]
     );
 

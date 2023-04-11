@@ -21,7 +21,6 @@ async fn main() -> Result<(), anyhow::Error> {
             )),
             None,
             None,
-            None,
         )
         .await?;
     println!("{:?}", objects);

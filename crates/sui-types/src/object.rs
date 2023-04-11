@@ -31,7 +31,7 @@ use crate::{
 };
 use sui_protocol_config::ProtocolConfig;
 
-pub const GAS_VALUE_FOR_TESTING: u64 = 2_000_000_u64;
+pub const GAS_VALUE_FOR_TESTING: u64 = 300_000_000_000_000;
 pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
 
 #[serde_as]
@@ -329,11 +329,11 @@ impl MoveObject {
     pub fn get_total_sui(&self, resolver: &impl GetModule) -> Result<u64, SuiError> {
         let layout = self.get_layout(ObjectFormatOptions::with_types(), resolver)?;
         let move_struct = self.to_move_struct(&layout)?;
-        Ok(Self::get_total_sui_(&move_struct, 0))
+        Ok(Self::get_total_sui_in_struct(&move_struct, 0))
     }
 
     /// Get all SUI in `s`, either directly or in its (transitive) fields. Intended for testing purposes
-    fn get_total_sui_(s: &MoveStruct, acc: u64) -> u64 {
+    fn get_total_sui_in_struct(s: &MoveStruct, acc: u64) -> u64 {
         match s {
             MoveStruct::WithTypes { type_, fields } => {
                 if GasCoin::is_gas_balance(type_) {
@@ -342,13 +342,22 @@ impl MoveObject {
                         _ => unreachable!(), // a Balance<SUI> object should have exactly one field, of type int
                     }
                 } else {
-                    fields.iter().fold(acc, |acc, (_, v)| match v {
-                        MoveValue::Struct(s) => Self::get_total_sui_(s, acc),
-                        _ => acc,
-                    })
+                    fields
+                        .iter()
+                        .fold(acc, |acc, (_, v)| Self::get_total_sui_in_value(v, acc))
                 }
             }
             _ => unreachable!(),
+        }
+    }
+
+    fn get_total_sui_in_value(v: &MoveValue, acc: u64) -> u64 {
+        match v {
+            MoveValue::Struct(s) => Self::get_total_sui_in_struct(s, acc),
+            MoveValue::Vector(vec) => vec
+                .iter()
+                .fold(acc, |acc, v| Self::get_total_sui_in_value(v, acc)),
+            _ => acc,
         }
     }
 }
@@ -542,7 +551,7 @@ impl Object {
     /// Create a system package which is not subject to size limits. Panics if the object ID is not
     /// a known system package.
     pub fn new_system_package(
-        modules: Vec<CompiledModule>,
+        modules: &[CompiledModule],
         version: SequenceNumber,
         dependencies: Vec<ObjectID>,
         previous_transaction: TransactionDigest,
@@ -567,15 +576,13 @@ impl Object {
 
     // Note: this will panic if `modules` is empty
     pub fn new_package<'p>(
-        modules: Vec<CompiledModule>,
-        version: SequenceNumber,
+        modules: &[CompiledModule],
         previous_transaction: TransactionDigest,
         max_move_package_size: u64,
         dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
         Ok(Self::new_package_from_data(
             Data::Package(MovePackage::new_initial(
-                version,
                 modules,
                 max_move_package_size,
                 dependencies,
@@ -584,13 +591,13 @@ impl Object {
         ))
     }
 
-    pub fn new_upgraded_package<'a>(
+    pub fn new_upgraded_package<'p>(
         previous_package: &MovePackage,
         new_package_id: ObjectID,
-        modules: Vec<CompiledModule>,
+        modules: &[CompiledModule],
         previous_transaction: TransactionDigest,
         max_move_package_size: u64,
-        dependencies: impl IntoIterator<Item = &'a MovePackage>,
+        dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
         Ok(Self::new_package_from_data(
             Data::Package(previous_package.new_upgraded(
@@ -603,17 +610,17 @@ impl Object {
         ))
     }
 
-    pub fn new_package_for_testing<'p>(
-        modules: Vec<CompiledModule>,
+    pub fn new_package_for_testing(
+        modules: &[CompiledModule],
         previous_transaction: TransactionDigest,
-        dependencies: impl IntoIterator<Item = &'p MovePackage>,
+        dependencies: impl IntoIterator<Item = MovePackage>,
     ) -> Result<Self, ExecutionError> {
+        let dependencies: Vec<_> = dependencies.into_iter().collect();
         Self::new_package(
             modules,
-            OBJECT_START_VERSION,
             previous_transaction,
             ProtocolConfig::get_for_max_version().max_move_package_size(),
-            dependencies,
+            &dependencies,
         )
     }
 
@@ -759,6 +766,14 @@ impl Object {
         }
     }
 
+    pub fn immutable_for_testing() -> Self {
+        thread_local! {
+            static IMMUTABLE_OBJECT_ID: ObjectID = ObjectID::random();
+        }
+
+        Self::immutable_with_id_for_testing(IMMUTABLE_OBJECT_ID.with(|id| *id))
+    }
+
     /// make a test shared object.
     pub fn shared_for_testing() -> Object {
         thread_local! {
@@ -875,6 +890,20 @@ pub fn generate_test_gas_objects_with_owner(count: usize, owner: SuiAddress) -> 
         .collect()
 }
 
+/// Make a few test gas objects (all with the same owner).
+pub fn generate_test_gas_objects_with_owner_and_value(
+    count: usize,
+    owner: SuiAddress,
+    value: u64,
+) -> Vec<Object> {
+    (0..count)
+        .map(|_i| {
+            let gas_object_id = ObjectID::random();
+            Object::with_id_owner_gas_for_testing(gas_object_id, owner, value)
+        })
+        .collect()
+}
+
 /// Make a few test gas objects (all with the same owner) with TOTAL_SUPPLY_MIST / count balance
 pub fn generate_max_test_gas_objects_with_owner(count: u64, owner: SuiAddress) -> Vec<Object> {
     let coin_size = TOTAL_SUPPLY_MIST / count;
@@ -882,21 +911,6 @@ pub fn generate_max_test_gas_objects_with_owner(count: u64, owner: SuiAddress) -
         .map(|_i| {
             let gas_object_id = ObjectID::random();
             Object::with_id_owner_gas_for_testing(gas_object_id, owner, coin_size)
-        })
-        .collect()
-}
-
-/// Make a few test gas objects with specific owners.
-pub fn generate_test_gas_objects_with_owner_list<O>(owners: O) -> Vec<Object>
-where
-    O: IntoIterator<Item = SuiAddress>,
-{
-    owners
-        .into_iter()
-        .enumerate()
-        .map(|(_, owner)| {
-            let gas_object_id = ObjectID::random();
-            Object::with_id_owner_for_testing(gas_object_id, owner)
         })
         .collect()
 }
@@ -921,6 +935,25 @@ impl ObjectRead {
                 version: None,
             }),
             Self::Exists(_, o, _) => Ok(o),
+        }
+    }
+
+    pub fn object(&self) -> UserInputResult<&Object> {
+        match self {
+            Self::Deleted(oref) => Err(UserInputError::ObjectDeleted { object_ref: *oref }),
+            Self::NotExists(id) => Err(UserInputError::ObjectNotFound {
+                object_id: *id,
+                version: None,
+            }),
+            Self::Exists(_, o, _) => Ok(o),
+        }
+    }
+
+    pub fn object_id(&self) -> ObjectID {
+        match self {
+            Self::Deleted(oref) => oref.0,
+            Self::NotExists(id) => *id,
+            Self::Exists(oref, _, _) => oref.0,
         }
     }
 }

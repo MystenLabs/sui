@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{temp_dir, CommitteeFixture};
-use config::{Committee, Parameters, WorkerCache, WorkerId};
+use config::{AuthorityIdentifier, Committee, Parameters, WorkerCache, WorkerId};
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
 use executor::SerializedTransaction;
 use fastcrypto::traits::KeyPair as _;
 use itertools::Itertools;
 use mysten_metrics::RegistryService;
 use mysten_network::multiaddr::Multiaddr;
+use network::client::NetworkClient;
 use node::primary_node::PrimaryNode;
 use node::worker_node::WorkerNode;
 use node::{execution_state::SimpleExecutionState, metrics::worker_metrics_registry};
@@ -65,6 +66,7 @@ impl Cluster {
 
             let authority = AuthorityDetails::new(
                 id,
+                authority_fixture.id(),
                 authority_fixture.keypair().copy(),
                 authority_fixture.network_keypair().copy(),
                 authority_fixture.worker_keypairs(),
@@ -104,7 +106,7 @@ impl Cluster {
         workers_per_authority: Option<usize>,
         boot_wait_time: Option<Duration>,
     ) {
-        let max_authorities = self.committee.authorities.len();
+        let max_authorities = self.committee.size();
         let authorities = authorities_number.unwrap_or(max_authorities);
 
         if authorities > max_authorities {
@@ -272,6 +274,7 @@ impl Cluster {
 #[derive(Clone)]
 pub struct PrimaryNodeDetails {
     pub id: usize,
+    pub name: AuthorityIdentifier,
     pub key_pair: Arc<KeyPair>,
     pub network_key_pair: Arc<NetworkKeyPair>,
     pub tx_transaction_confirmation: Sender<SerializedTransaction>,
@@ -287,6 +290,7 @@ pub struct PrimaryNodeDetails {
 impl PrimaryNodeDetails {
     fn new(
         id: usize,
+        name: AuthorityIdentifier,
         key_pair: KeyPair,
         network_key_pair: NetworkKeyPair,
         parameters: Parameters,
@@ -307,6 +311,7 @@ impl PrimaryNodeDetails {
 
         Self {
             id,
+            name,
             key_pair: Arc::new(key_pair),
             network_key_pair: Arc::new(network_key_pair),
             store_path: temp_dir(),
@@ -330,7 +335,7 @@ impl PrimaryNodeDetails {
         metric.map(|m| m.get_metric().first().unwrap().clone())
     }
 
-    async fn start(&mut self, preserve_store: bool) {
+    async fn start(&mut self, client: NetworkClient, preserve_store: bool) {
         if self.is_running().await {
             panic!("Tried to start a node that is already running");
         }
@@ -352,7 +357,7 @@ impl PrimaryNodeDetails {
         let (tx_transaction_confirmation, mut rx_transaction_confirmation) = channel(100);
 
         // Primary node
-        let primary_store: NodeStorage = NodeStorage::reopen(store_path.clone());
+        let primary_store: NodeStorage = NodeStorage::reopen(store_path.clone(), None);
 
         self.node
             .start(
@@ -360,6 +365,7 @@ impl PrimaryNodeDetails {
                 self.network_key_pair.copy(),
                 self.committee.clone(),
                 self.worker_cache.clone(),
+                client,
                 &primary_store,
                 Arc::new(SimpleExecutionState::new(tx_transaction_confirmation)),
             )
@@ -404,7 +410,8 @@ pub struct WorkerNodeDetails {
     pub id: WorkerId,
     pub transactions_address: Multiaddr,
     pub registry: Registry,
-    name: PublicKey,
+    name: AuthorityIdentifier,
+    primary_key: PublicKey,
     node: WorkerNode,
     committee: Committee,
     worker_cache: WorkerCache,
@@ -414,7 +421,8 @@ pub struct WorkerNodeDetails {
 impl WorkerNodeDetails {
     fn new(
         id: WorkerId,
-        name: PublicKey,
+        name: AuthorityIdentifier,
+        primary_key: PublicKey,
         parameters: Parameters,
         transactions_address: Multiaddr,
         committee: Committee,
@@ -426,6 +434,7 @@ impl WorkerNodeDetails {
         Self {
             id,
             name,
+            primary_key,
             registry: Registry::new(),
             store_path: temp_dir(),
             transactions_address,
@@ -436,7 +445,12 @@ impl WorkerNodeDetails {
     }
 
     /// Starts the node. When preserve_store is true then the last used
-    async fn start(&mut self, keypair: NetworkKeyPair, preserve_store: bool) {
+    async fn start(
+        &mut self,
+        keypair: NetworkKeyPair,
+        client: NetworkClient,
+        preserve_store: bool,
+    ) {
         if self.is_running().await {
             panic!(
                 "Worker with id {} is already running, can't start again",
@@ -444,7 +458,7 @@ impl WorkerNodeDetails {
             );
         }
 
-        let registry = worker_metrics_registry(self.id, self.name.clone());
+        let registry = worker_metrics_registry(self.id, self.name);
 
         // Make the data store.
         let store_path = if preserve_store {
@@ -453,13 +467,15 @@ impl WorkerNodeDetails {
             temp_dir()
         };
 
-        let worker_store = NodeStorage::reopen(store_path.clone());
+        let worker_store = NodeStorage::reopen(store_path.clone(), None);
+
         self.node
             .start(
-                self.name.clone(),
+                self.primary_key.clone(),
                 keypair,
                 self.committee.clone(),
                 self.worker_cache.clone(),
+                client,
                 &worker_store,
                 TrivialTransactionValidator::default(),
                 None,
@@ -496,7 +512,9 @@ impl WorkerNodeDetails {
 #[derive(Clone)]
 pub struct AuthorityDetails {
     pub id: usize,
-    pub name: PublicKey,
+    pub name: AuthorityIdentifier,
+    pub public_key: PublicKey,
+    client: NetworkClient,
     internal: Arc<RwLock<AuthorityDetailsInternal>>,
 }
 
@@ -509,6 +527,7 @@ struct AuthorityDetailsInternal {
 impl AuthorityDetails {
     pub fn new(
         id: usize,
+        name: AuthorityIdentifier,
         key_pair: KeyPair,
         network_key_pair: NetworkKeyPair,
         worker_keypairs: Vec<NetworkKeyPair>,
@@ -517,10 +536,14 @@ impl AuthorityDetails {
         worker_cache: WorkerCache,
         internal_consensus_enabled: bool,
     ) -> Self {
+        // Create network client.
+        let client = NetworkClient::new_from_keypair(&network_key_pair);
+
         // Create all the nodes we have in the committee
-        let name = key_pair.public().clone();
+        let public_key = key_pair.public().clone();
         let primary = PrimaryNodeDetails::new(
             id,
+            name,
             key_pair,
             network_key_pair,
             parameters.clone(),
@@ -533,10 +556,11 @@ impl AuthorityDetails {
         // act as place holder setups. That gives us the power in a clear way manage
         // the nodes independently.
         let mut workers = HashMap::new();
-        for (worker_id, addresses) in worker_cache.workers.get(&name).unwrap().0.clone() {
+        for (worker_id, addresses) in worker_cache.workers.get(&public_key).unwrap().0.clone() {
             let worker = WorkerNodeDetails::new(
                 worker_id,
-                name.clone(),
+                name,
+                public_key.clone(),
                 parameters.clone(),
                 addresses.transactions.clone(),
                 committee.clone(),
@@ -553,7 +577,9 @@ impl AuthorityDetails {
 
         Self {
             id,
+            public_key,
             name,
+            client,
             internal: Arc::new(RwLock::new(internal)),
         }
     }
@@ -584,7 +610,10 @@ impl AuthorityDetails {
     pub async fn start_primary(&self, preserve_store: bool) {
         let mut internal = self.internal.write().await;
 
-        internal.primary.start(preserve_store).await;
+        internal
+            .primary
+            .start(self.client.clone(), preserve_store)
+            .await;
     }
 
     pub async fn stop_primary(&self) {
@@ -603,7 +632,9 @@ impl AuthorityDetails {
 
         for (id, worker) in internal.workers.iter_mut() {
             let keypair = worker_keypairs.get(*id as usize).unwrap().copy();
-            worker.start(keypair, preserve_store).await;
+            worker
+                .start(keypair, self.client.clone(), preserve_store)
+                .await;
         }
     }
 
@@ -619,7 +650,9 @@ impl AuthorityDetails {
             .get_mut(&id)
             .unwrap_or_else(|| panic!("Worker with id {} not found ", id));
 
-        worker.start(keypair, preserve_store).await;
+        worker
+            .start(keypair, self.client.clone(), preserve_store)
+            .await;
     }
 
     pub async fn stop_worker(&self, id: WorkerId) {
@@ -635,10 +668,10 @@ impl AuthorityDetails {
 
     /// Stops all the nodes (primary & workers).
     pub async fn stop_all(&self) {
+        self.client.shutdown();
+
         let internal = self.internal.read().await;
-
         internal.primary.stop().await;
-
         for (_, worker) in internal.workers.iter() {
             worker.stop().await;
         }

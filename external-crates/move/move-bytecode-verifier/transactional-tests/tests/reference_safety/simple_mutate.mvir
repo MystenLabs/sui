@@ -1,0 +1,33 @@
+//# publish
+module 0x42.A {
+    struct T has drop {f: u64}
+
+    public new(f: u64): Self.T {
+    label b0:
+        return T{f: move(f)};
+    }
+
+    public t(this: &mut Self.T) {
+        let f: &mut u64;
+    label b0:
+        f = &mut copy(this).T::f;
+        // mutation allowed
+        *copy(f) = 2;
+        assert(*move(f) == 2, 42);
+        _ = move(this);
+        return;
+    }
+}
+
+//# run
+import 0x42.A;
+
+main() {
+    let x: A.T;
+    let x_ref: &mut A.T;
+label b0:
+    x = A.new(0);
+    x_ref = &mut x;
+    A.t(move(x_ref));
+    return;
+}

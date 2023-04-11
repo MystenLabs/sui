@@ -104,6 +104,8 @@ pub struct BenchmarkStats {
     pub num_success_txes: u64,
     /// Total number of commands in transactions that executed successfully
     pub num_success_cmds: u64,
+    /// Total gas used
+    pub total_gas_used: u64,
     pub latency_ms: HistogramWrapper,
 }
 
@@ -113,6 +115,7 @@ impl BenchmarkStats {
         self.num_error_txes += sample_stat.num_error_txes;
         self.num_success_txes += sample_stat.num_success_txes;
         self.num_success_cmds += sample_stat.num_success_cmds;
+        self.total_gas_used += sample_stat.total_gas_used;
         self.latency_ms
             .histogram
             .add(&sample_stat.latency_ms.histogram)
@@ -131,6 +134,8 @@ impl BenchmarkStats {
                 "latency (min)",
                 "latency (p50)",
                 "latency (p99)",
+                "gas used (MIST total)",
+                "gas used/hr (MIST approx.)",
             ]);
         let mut row = Row::new();
         row.add_cell(Cell::new(self.duration.as_secs()));
@@ -143,6 +148,16 @@ impl BenchmarkStats {
         row.add_cell(Cell::new(self.latency_ms.histogram.min()));
         row.add_cell(Cell::new(self.latency_ms.histogram.value_at_quantile(0.5)));
         row.add_cell(Cell::new(self.latency_ms.histogram.value_at_quantile(0.99)));
+        row.add_cell(Cell::new(format_num_with_separators(
+            self.total_gas_used,
+            3,
+            ",",
+        )));
+        row.add_cell(Cell::new(format_num_with_separators(
+            self.total_gas_used * 60 * 60 / self.duration.as_secs(),
+            3,
+            ",",
+        )));
         table.add_row(row);
         table
     }
@@ -360,4 +375,21 @@ impl BenchmarkCmp<'_> {
             speedup,
         }
     }
+}
+
+/// Convert an unsigned number into a string separated by `delim` every `step_size` digits
+/// For example used to make 100000 more readable as 100,000
+fn format_num_with_separators<T: Into<u128> + std::fmt::Display>(
+    x: T,
+    step_size: u8,
+    delim: &'static str,
+) -> String {
+    x.to_string()
+        .as_bytes()
+        .rchunks(step_size as usize)
+        .rev()
+        .map(std::str::from_utf8)
+        .collect::<Result<Vec<&str>, _>>()
+        .unwrap()
+        .join(delim)
 }

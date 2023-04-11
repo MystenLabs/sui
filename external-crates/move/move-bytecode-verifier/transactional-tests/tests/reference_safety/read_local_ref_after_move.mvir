@@ -1,0 +1,11 @@
+//# run
+main() {
+    let v: u64;
+    let ref_v: &mut u64;
+    let dead: u64;
+label b0:
+    v = 5;
+    ref_v = &mut v;
+    dead = move(v); // cannot move v, it is still borrowed
+    return;
+}

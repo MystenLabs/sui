@@ -77,7 +77,7 @@ pub struct PrimaryChannelMetrics {
     /// occupancy of the channel from the `primary::Synchronizer` to the `Consensus`
     pub tx_new_certificates: IntGauge,
     /// occupancy of the channel signaling own committed headers
-    pub tx_commited_own_headers: IntGauge,
+    pub tx_committed_own_headers: IntGauge,
 
     // totals
     /// total received on channel from the `primary::WorkerReceiverHandler` to the `primary::PayloadReceiver`
@@ -99,7 +99,7 @@ pub struct PrimaryChannelMetrics {
     /// total received on channel from the `primary::Synchronizer` to the `Consensus`
     pub tx_new_certificates_total: IntCounter,
     /// total received on the channel signaling own committed headers
-    pub tx_commited_own_headers_total: IntCounter,
+    pub tx_committed_own_headers_total: IntCounter,
 }
 
 impl PrimaryChannelMetrics {
@@ -167,8 +167,8 @@ impl PrimaryChannelMetrics {
                 Self::DESC_NEW_CERTS,
                 registry
             ).unwrap(),
-            tx_commited_own_headers: register_int_gauge_with_registry!(
-                "tx_commited_own_headers",
+            tx_committed_own_headers: register_int_gauge_with_registry!(
+                "tx_committed_own_headers",
                 "occupancy of the channel signaling own committed headers.",
                 registry
             ).unwrap(),
@@ -219,8 +219,8 @@ impl PrimaryChannelMetrics {
                 Self::DESC_NEW_CERTS_TOTAL,
                 registry
             ).unwrap(),
-            tx_commited_own_headers_total: register_int_counter_with_registry!(
-                "tx_commited_own_headers_total",
+            tx_committed_own_headers_total: register_int_counter_with_registry!(
+                "tx_committed_own_headers_total",
                 "total received on channel signaling own committed headers.",
                 registry
             ).unwrap(),
@@ -314,6 +314,8 @@ pub struct PrimaryMetrics {
     pub proposer_resend_batches: IntCounter,
     /// Time it takes for a header to be materialised to a certificate
     pub header_to_certificate_latency: Histogram,
+    /// Millisecs taken to wait for max parent time, when proposing headers.
+    pub header_max_parent_wait_ms: IntCounter,
 }
 
 impl PrimaryMetrics {
@@ -476,7 +478,12 @@ impl PrimaryMetrics {
                 "Time it takes for a header to be materialised to a certificate",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry
-            ).unwrap()
+            ).unwrap(),
+            header_max_parent_wait_ms: register_int_counter_with_registry!(
+                "header_max_parent_wait_ms",
+                "Millisecs taken to wait for max parent time, when proposing headers.",
+                registry
+            ).unwrap(),
         }
     }
 }

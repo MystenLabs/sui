@@ -28,10 +28,10 @@ module test::m {
 
 //# run test::m::mint_s
 
-//# run test::m::mint_child --args object(108)
+//# run test::m::mint_child --args object(2,0)
 
-//# view-object 110
+//# view-object 3,0
 
-//# transfer-object 110 --sender A --recipient B
+//# transfer-object 3,0 --sender A --recipient B
 
-//# view-object 110
+//# view-object 3,0

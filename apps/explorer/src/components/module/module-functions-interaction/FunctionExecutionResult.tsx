@@ -10,7 +10,10 @@ import {
 
 import { LinkGroup } from './LinkGroup';
 
-import type { SuiTransactionResponse, OwnedObjectRef } from '@mysten/sui.js';
+import type {
+    SuiTransactionBlockResponse,
+    OwnedObjectRef,
+} from '@mysten/sui.js';
 
 import { Banner } from '~/ui/Banner';
 
@@ -22,7 +25,7 @@ function toObjectLink(object: OwnedObjectRef) {
 }
 
 type FunctionExecutionResultProps = {
-    result: SuiTransactionResponse | null;
+    result: SuiTransactionBlockResponse | null;
     error: string | false;
     onClear: () => void;
 };
@@ -45,13 +48,13 @@ export function FunctionExecutionResult({
         >
             <div className="space-y-4 text-bodySmall">
                 <LinkGroup
-                    title="Transaction ID"
+                    title="Digest"
                     links={
                         result
                             ? [
                                   {
                                       text: getTransactionDigest(result),
-                                      to: `/transaction/${encodeURIComponent(
+                                      to: `/txblock/${encodeURIComponent(
                                           getTransactionDigest(result)
                                       )}`,
                                   },

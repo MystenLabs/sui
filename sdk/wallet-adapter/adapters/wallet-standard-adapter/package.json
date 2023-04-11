@@ -1,6 +1,6 @@
 {
   "name": "@mysten/wallet-adapter-wallet-standard",
-  "version": "0.6.3",
+  "version": "0.7.3",
   "description": "Integration of the Wallet Standard for the Sui Wallet Adapter",
   "license": "Apache-2.0",
   "author": "Mysten Labs <build@mystenlabs.com>",
@@ -34,7 +34,7 @@
     "mitt": "^3.0.0"
   },
   "devDependencies": {
-    "tsup": "^6.6.3",
+    "tsup": "^6.7.0",
     "typescript": "^4.9.4"
   }
 }

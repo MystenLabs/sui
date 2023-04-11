@@ -55,6 +55,10 @@ struct Args {
     /// if we should run indexer
     #[clap(long, takes_value = false)]
     pub with_indexer: bool,
+
+    /// TODO(gegao): remove this after indexer migration is complete.
+    #[clap(long)]
+    pub use_indexer_experimental_methods: bool,
 }
 
 #[tokio::main]
@@ -72,6 +76,7 @@ async fn main() -> Result<()> {
         epoch_duration_ms,
         faucet_port,
         with_indexer,
+        use_indexer_experimental_methods,
     } = args;
 
     let cluster = LocalNewCluster::start(&ClusterTestOpt {
@@ -83,6 +88,7 @@ async fn main() -> Result<()> {
         )),
         faucet_address: None,
         epoch_duration_ms: Some(epoch_duration_ms),
+        use_indexer_experimental_methods,
     })
     .await?;
 

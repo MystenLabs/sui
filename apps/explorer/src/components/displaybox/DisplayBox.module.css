@@ -8,7 +8,7 @@ img.smallimage {
 
 div.modalcontainer,
 div.detailsbg {
-    @apply fixed top-0 left-0 z-20 h-full w-full;
+    @apply fixed left-0 top-0 z-20 h-full w-full;
 }
 
 @keyframes fadein {
@@ -31,7 +31,7 @@ div.fade {
 }
 
 .fig {
-    @apply mt-auto mb-[60px] sm:relative sm:left-[19px] sm:my-auto;
+    @apply mb-[60px] mt-auto sm:relative sm:left-[19px] sm:my-auto;
 }
 
 div.imageandcross {

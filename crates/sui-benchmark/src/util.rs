@@ -9,7 +9,10 @@ use crate::ValidatorProxy;
 use std::path::PathBuf;
 use std::sync::Arc;
 use sui_types::base_types::ObjectRef;
-use sui_types::messages::{TransactionData, VerifiedTransaction, DUMMY_GAS_PRICE};
+use sui_types::messages::{
+    TransactionData, VerifiedTransaction, TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+    TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+};
 use sui_types::utils::to_sender_signed_transaction;
 
 use crate::workloads::Gas;
@@ -19,9 +22,8 @@ use test_utils::transaction::parse_package_ref;
 
 // This is the maximum gas we will transfer from primary coin into any gas coin
 // for running the benchmark
-pub const MAX_GAS_FOR_TESTING: u64 = 1_000_000_000;
 
-pub type UpdatedAndNewlyMintedGasCoins = (Gas, Gas, Vec<Gas>);
+pub type UpdatedAndNewlyMintedGasCoins = Vec<Gas>;
 
 pub fn get_ed25519_keypair_from_keystore(
     keystore_path: PathBuf,
@@ -41,7 +43,7 @@ pub fn make_pay_tx(
     split_amounts: Vec<u64>,
     gas: ObjectRef,
     keypair: &AccountKeyPair,
-    gas_price: Option<u64>,
+    gas_price: u64,
 ) -> Result<VerifiedTransaction> {
     let pay = TransactionData::new_pay(
         sender,
@@ -49,8 +51,8 @@ pub fn make_pay_tx(
         addresses,
         split_amounts,
         gas,
-        1000000,
-        gas_price.unwrap_or(DUMMY_GAS_PRICE),
+        TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
+        gas_price,
     )?;
     Ok(to_sender_signed_transaction(pay, keypair))
 }
@@ -64,8 +66,17 @@ pub async fn publish_basics_package(
 ) -> ObjectRef {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("../../sui_programmability/examples/basics");
-    let transaction =
-        create_publish_move_package_transaction(gas, path, sender, keypair, Some(gas_price));
-    let effects = proxy.execute_transaction(transaction.into()).await.unwrap();
+    let transaction = create_publish_move_package_transaction(
+        gas,
+        path,
+        sender,
+        keypair,
+        gas_price * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        gas_price,
+    );
+    let effects = proxy
+        .execute_transaction_block(transaction.into())
+        .await
+        .unwrap();
     parse_package_ref(&effects.created()).unwrap()
 }

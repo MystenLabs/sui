@@ -123,7 +123,7 @@ export function SendTokenForm({
                 onSubmit={({ to, amount, isPayAllSui }: FormValues) => {
                     if (!coins || !suiCoins) return;
                     const coinsIDs = [...coins]
-                        .sort((a, b) => b.balance - a.balance)
+                        .sort((a, b) => +b.balance - +a.balance)
                         .map(({ coinObjectId }) => coinObjectId);
 
                     const data = {

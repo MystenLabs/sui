@@ -5,36 +5,50 @@ use std::collections::HashMap;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 
+use crate::Page;
 use sui_types::base_types::{
     EpochId, ObjectDigest, ObjectID, ObjectRef, SequenceNumber, TransactionDigest,
 };
 use sui_types::coin::CoinMetadata;
-
 use sui_types::error::SuiError;
 use sui_types::object::Object;
-
-use crate::Page;
+use sui_types::sui_serde::BigInt;
+use sui_types::sui_serde::SequenceNumber as AsSequenceNumber;
 
 pub type CoinPage = Page<Coin, ObjectID>;
 
+#[serde_as]
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Balance {
     pub coin_type: String,
     pub coin_object_count: usize,
+    #[schemars(with = "BigInt<u128>")]
+    #[serde_as(as = "BigInt<u128>")]
     pub total_balance: u128,
+    // TODO: This should be removed
+    #[schemars(with = "HashMap<BigInt<u64>, BigInt<u128>>")]
+    #[serde_as(as = "HashMap<BigInt<u64>, BigInt<u128>>")]
     pub locked_balance: HashMap<EpochId, u128>,
 }
 
+#[serde_as]
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Coin {
     pub coin_type: String,
     pub coin_object_id: ObjectID,
+    #[schemars(with = "AsSequenceNumber")]
+    #[serde_as(as = "AsSequenceNumber")]
     pub version: SequenceNumber,
     pub digest: ObjectDigest,
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
     pub balance: u64,
+    #[schemars(with = "Option<BigInt<u64>>")]
+    #[serde_as(as = "Option<BigInt<u64>>")]
     pub locked_until_epoch: Option<EpochId>,
     pub previous_transaction: TransactionDigest,
 }

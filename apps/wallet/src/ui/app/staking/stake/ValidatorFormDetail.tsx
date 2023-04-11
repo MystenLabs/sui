@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { calculateAPY } from '@mysten/core';
+import {
+    formatPercentageDisplay,
+    useGetRollingAverageApys,
+} from '@mysten/core';
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
@@ -45,6 +48,10 @@ export function ValidatorFormDetail({
         error,
     } = useGetDelegatedStake(accountAddress || '');
 
+    const { data: rollingAverageApys } = useGetRollingAverageApys(
+        system?.activeValidators.length || null
+    );
+
     const validatorData = useMemo(() => {
         if (!system) return null;
         return system.activeValidators.find(
@@ -71,17 +78,14 @@ export function ValidatorFormDetail({
     }, [system]);
 
     const totalStakePercentage = useMemo(() => {
-        if (!system || !stakeData) return 0;
+        if (!system || !stakeData) return null;
         return calculateStakeShare(
             getTokenStakeSuiForValidator(stakeData, validatorAddress),
             BigInt(totalValidatorsStake)
         );
     }, [stakeData, system, totalValidatorsStake, validatorAddress]);
 
-    const apy = useMemo(() => {
-        if (!validatorData || !system) return 0;
-        return calculateAPY(validatorData, +system.epoch);
-    }, [validatorData, system]);
+    const apy = rollingAverageApys?.[validatorAddress] ?? null;
 
     if (isLoading || loadingValidators) {
         return (
@@ -154,7 +158,7 @@ export function ValidatorFormDetail({
                                 weight="semibold"
                                 color="gray-90"
                             >
-                                {apy > 0 ? `${apy}%` : '--'}
+                                {apy === null ? '--' : `${apy}%`}
                             </Text>
                         </div>
                         <div className="flex gap-2 items-center justify-between">
@@ -174,9 +178,7 @@ export function ValidatorFormDetail({
                                 weight="semibold"
                                 color="gray-90"
                             >
-                                {totalStakePercentage > 0
-                                    ? `${totalStakePercentage}%`
-                                    : '--'}
+                                {formatPercentageDisplay(totalStakePercentage)}
                             </Text>
                         </div>
 

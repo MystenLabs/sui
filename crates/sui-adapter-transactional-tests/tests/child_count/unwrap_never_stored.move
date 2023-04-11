@@ -40,4 +40,4 @@ module test::m {
 
 //# run test::m::create --sender A
 
-//# run test::m::delete --args object(108) --sender A
+//# run test::m::delete --args object(2,0) --sender A

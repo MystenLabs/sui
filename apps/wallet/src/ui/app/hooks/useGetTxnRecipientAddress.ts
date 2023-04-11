@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-    type SuiTransactionResponse,
+    type SuiTransactionBlockResponse,
     type SuiAddress,
     getTransactionKind,
     getTransactionSender,
@@ -12,7 +12,7 @@ import { useMemo } from 'react';
 import { getAmount } from '_helpers';
 
 type Props = {
-    txn: SuiTransactionResponse;
+    txn: SuiTransactionBlockResponse;
     address: SuiAddress;
 };
 

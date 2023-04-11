@@ -15,14 +15,11 @@ use serde::{de::DeserializeOwned, Serialize};
 use tracing::debug;
 
 use sui_json_rpc_types::SuiObjectDataFilter;
-use sui_types::base_types::{
-    ObjectID, ObjectType, SuiAddress, TransactionDigest, TxSequenceNumber,
-};
+use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest, TxSequenceNumber};
 use sui_types::base_types::{ObjectInfo, ObjectRef};
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName};
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::fp_ensure;
 use sui_types::messages::TransactionEvents;
 use sui_types::object::Owner;
 use sui_types::query::TransactionFilter;
@@ -184,36 +181,36 @@ impl IndexStore {
     ) -> SuiResult<u64> {
         let sequence = self.next_sequence_number.fetch_add(1, Ordering::SeqCst);
 
-        let batch = self.tables.transactions_from_addr.batch();
+        let mut batch = self.tables.transactions_from_addr.batch();
 
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.transaction_order,
             std::iter::once((sequence, *digest)),
         )?;
 
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.transactions_seq,
             std::iter::once((*digest, sequence)),
         )?;
 
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.transactions_from_addr,
             std::iter::once(((sender, sequence), *digest)),
         )?;
 
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.transactions_by_input_object_id,
             active_inputs.map(|id| ((id, sequence), *digest)),
         )?;
 
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.transactions_by_mutated_object_id,
             mutated_objects
                 .clone()
                 .map(|(obj_ref, _)| ((obj_ref.0, sequence), *digest)),
         )?;
 
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.transactions_by_move_function,
             move_functions.map(|(obj_id, module, function)| {
                 (
@@ -223,7 +220,7 @@ impl IndexStore {
             }),
         )?;
 
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.transactions_to_addr,
             mutated_objects.filter_map(|(_, owner)| {
                 owner
@@ -233,32 +230,32 @@ impl IndexStore {
             }),
         )?;
 
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.timestamps,
             std::iter::once((*digest, timestamp_ms)),
         )?;
 
         // Owner index
-        let batch = batch.delete_batch(
+        batch.delete_batch(
             &self.tables.owner_index,
             object_index_changes.deleted_owners.into_iter(),
         )?;
-        let batch = batch.delete_batch(
+        batch.delete_batch(
             &self.tables.dynamic_field_index,
             object_index_changes.deleted_dynamic_fields.into_iter(),
         )?;
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.owner_index,
             object_index_changes.new_owners.into_iter(),
         )?;
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.dynamic_field_index,
             object_index_changes.new_dynamic_fields.into_iter(),
         )?;
 
         // events
         let event_digest = events.digest();
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.event_order,
             events
                 .data
@@ -266,7 +263,7 @@ impl IndexStore {
                 .enumerate()
                 .map(|(i, _)| ((sequence, i), (event_digest, *digest, timestamp_ms))),
         )?;
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.event_by_move_module,
             events
                 .data
@@ -280,7 +277,7 @@ impl IndexStore {
                 })
                 .map(|(i, m)| ((m, (sequence, i)), (event_digest, *digest, timestamp_ms))),
         )?;
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.event_by_sender,
             events.data.iter().enumerate().map(|(i, e)| {
                 (
@@ -289,7 +286,7 @@ impl IndexStore {
                 )
             }),
         )?;
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.event_by_move_event,
             events.data.iter().enumerate().map(|(i, e)| {
                 (
@@ -299,7 +296,7 @@ impl IndexStore {
             }),
         )?;
 
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.event_by_time,
             events.data.iter().enumerate().map(|(i, _)| {
                 (
@@ -334,26 +331,29 @@ impl IndexStore {
         } else {
             None
         };
-        Ok(match filter {
+        match filter {
             Some(TransactionFilter::MoveFunction {
                 package,
                 module,
                 function,
-            }) => self.get_transactions_by_move_function(
+            }) => Ok(self.get_transactions_by_move_function(
                 package, module, function, cursor, limit, reverse,
-            )?,
+            )?),
             Some(TransactionFilter::InputObject(object_id)) => {
-                self.get_transactions_by_input_object(object_id, cursor, limit, reverse)?
+                Ok(self.get_transactions_by_input_object(object_id, cursor, limit, reverse)?)
             }
             Some(TransactionFilter::ChangedObject(object_id)) => {
-                self.get_transactions_by_mutated_object(object_id, cursor, limit, reverse)?
+                Ok(self.get_transactions_by_mutated_object(object_id, cursor, limit, reverse)?)
             }
             Some(TransactionFilter::FromAddress(address)) => {
-                self.get_transactions_from_addr(address, cursor, limit, reverse)?
+                Ok(self.get_transactions_from_addr(address, cursor, limit, reverse)?)
             }
             Some(TransactionFilter::ToAddress(address)) => {
-                self.get_transactions_to_addr(address, cursor, limit, reverse)?
+                Ok(self.get_transactions_to_addr(address, cursor, limit, reverse)?)
             }
+            // NOTE: filter via checkpoint sequence number is implemented in
+            // `get_transactions` of authority.rs.
+            Some(_) => Err(anyhow!("Unsupported filter: {:?}", filter)),
             None => {
                 let iter = self.tables.transaction_order.iter();
 
@@ -364,9 +364,9 @@ impl IndexStore {
                         .skip(usize::from(cursor.is_some()))
                         .map(|(_, digest)| digest);
                     if let Some(limit) = limit {
-                        iter.take(limit).collect()
+                        Ok(iter.take(limit).collect())
                     } else {
-                        iter.collect()
+                        Ok(iter.collect())
                     }
                 } else {
                     let iter = iter
@@ -374,77 +374,13 @@ impl IndexStore {
                         .skip(usize::from(cursor.is_some()))
                         .map(|(_, digest)| digest);
                     if let Some(limit) = limit {
-                        iter.take(limit).collect()
+                        Ok(iter.take(limit).collect())
                     } else {
-                        iter.collect()
+                        Ok(iter.collect())
                     }
                 }
             }
-        })
-    }
-
-    pub fn get_transactions_in_range_deprecated(
-        &self,
-        start: TxSequenceNumber,
-        end: TxSequenceNumber,
-    ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
-        fp_ensure!(
-            start <= end,
-            SuiError::FullNodeInvalidTxRangeQuery {
-                error: format!(
-                    "start must not exceed end, (start={}, end={}) given",
-                    start, end
-                ),
-            }
-            .into()
-        );
-        fp_ensure!(
-            end - start <= MAX_TX_RANGE_SIZE,
-            SuiError::FullNodeInvalidTxRangeQuery {
-                error: format!(
-                    "Number of transactions queried must not exceed {}, {} queried",
-                    MAX_TX_RANGE_SIZE,
-                    end - start
-                ),
-            }
-            .into()
-        );
-        let res = self.transactions_in_seq_range(start, end)?;
-        debug!(?start, ?end, ?res, "Fetched transactions");
-        Ok(res)
-    }
-
-    fn transactions_in_seq_range(
-        &self,
-        start: TxSequenceNumber,
-        end: TxSequenceNumber,
-    ) -> SuiResult<Vec<(TxSequenceNumber, TransactionDigest)>> {
-        Ok(self
-            .tables
-            .transaction_order
-            .iter()
-            .skip_to(&start)?
-            .take_while(|(seq, _tx)| *seq < end)
-            .collect())
-    }
-
-    pub fn get_recent_transactions(
-        &self,
-        count: u64,
-    ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
-        fp_ensure!(
-            count <= MAX_TX_RANGE_SIZE,
-            SuiError::FullNodeInvalidTxRangeQuery {
-                error: format!(
-                    "Number of transactions queried must not exceed {}, {} queried",
-                    MAX_TX_RANGE_SIZE, count
-                ),
-            }
-            .into()
-        );
-        let end = self.next_sequence_number();
-        let start = if end >= count { end - count } else { 0 };
-        self.get_transactions_in_range_deprecated(start, end)
+        }
     }
 
     /// Returns unix timestamp for a transaction if it exists
@@ -860,9 +796,9 @@ impl IndexStore {
             Some(cursor) => cursor,
             None => ObjectID::ZERO,
         };
-
         Ok(self
-            .get_owner_objects_iterator(owner, cursor, limit, filter)?
+            .get_owner_objects_iterator(owner, cursor, filter)?
+            .take(limit)
             .collect())
     }
 
@@ -872,68 +808,33 @@ impl IndexStore {
         &self,
         owner: SuiAddress,
         starting_object_id: ObjectID,
-        count: usize,
         filter: Option<SuiObjectDataFilter>,
     ) -> SuiResult<impl Iterator<Item = ObjectInfo> + '_> {
-        // We use +1 to grab the next cursor
-        let count = min(count, MAX_GET_OWNED_OBJECT_SIZE + 1);
-        debug!(?owner, ?count, ?starting_object_id, "get_owner_objects");
         Ok(self
             .tables
             .owner_index
             .iter()
             // The object id 0 is the smallest possible
             .skip_to(&(owner, starting_object_id))?
-            .filter(move |((object_owner, _), obj_info)| {
-                let to_include: bool = match &filter {
-                    Some(SuiObjectDataFilter::StructType(struct_tag)) => {
-                        let obj_tag: StructTag = match obj_info.type_.clone().try_into() {
-                            Ok(tag) => tag,
-                            Err(_) => {
-                                return false;
-                            }
-                        };
-                        // If people do not provide type_params, we will match all type_params
-                        // e.g. `0x2::coin::Coin` can match `0x2::coin::Coin<0x2::sui::SUI>`
-                        if !struct_tag.type_params.is_empty()
-                            && struct_tag.type_params != obj_tag.type_params
-                        {
-                            return false;
-                        }
-                        return obj_tag.address == struct_tag.address
-                            && obj_tag.module == struct_tag.module
-                            && obj_tag.name == struct_tag.name;
-                    }
-                    Some(SuiObjectDataFilter::MoveModule { package, module }) => {
-                        if let ObjectType::Struct(o) = obj_info.clone().type_ {
-                            o.address().to_string() == package.to_string()
-                                && o.module().to_string() == module.to_string()
-                        } else {
-                            false
-                        }
-                    }
-                    Some(SuiObjectDataFilter::Package(package_id)) => {
-                        if let ObjectType::Struct(o) = obj_info.clone().type_ {
-                            o.address().to_string() == package_id.to_string()
-                        } else {
-                            false
-                        }
-                    }
-                    None => true,
-                };
-                object_owner == &owner && to_include
+            .skip(usize::from(starting_object_id != ObjectID::ZERO))
+            .filter(move |(_, o)| {
+                if let Some(filter) = filter.as_ref() {
+                    filter.matches(o)
+                } else {
+                    true
+                }
             })
-            .take(count)
+            .take_while(move |((address_owner, _), _)| address_owner == &owner)
             .map(|(_, object_info)| object_info))
     }
 
     pub fn insert_genesis_objects(&self, object_index_changes: ObjectIndexChanges) -> SuiResult {
-        let batch = self.tables.owner_index.batch();
-        let batch = batch.insert_batch(
+        let mut batch = self.tables.owner_index.batch();
+        batch.insert_batch(
             &self.tables.owner_index,
             object_index_changes.new_owners.into_iter(),
         )?;
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.dynamic_field_index,
             object_index_changes.new_dynamic_fields.into_iter(),
         )?;

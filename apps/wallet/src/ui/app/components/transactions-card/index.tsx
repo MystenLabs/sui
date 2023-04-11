@@ -23,7 +23,7 @@ import { useGetTransferAmount, useGetTxnRecipientAddress } from '_hooks';
 import type {
     SuiAddress,
     // SuiEvent,
-    SuiTransactionResponse,
+    SuiTransactionBlockResponse,
     // TransactionEvents,
 } from '@mysten/sui.js';
 
@@ -45,7 +45,7 @@ export function TransactionCard({
     txn,
     address,
 }: {
-    txn: SuiTransactionResponse;
+    txn: SuiTransactionBlockResponse;
     address: SuiAddress;
 }) {
     const transaction = getTransactionKind(txn)!;
@@ -178,7 +178,7 @@ export function TransactionCard({
                         </>
                     )}
 
-                    {timestamp && <DateCard timestamp={timestamp} size="sm" />}
+                    {timestamp && <DateCard timestamp={+timestamp} size="sm" />}
                 </div>
             </div>
         </Link>

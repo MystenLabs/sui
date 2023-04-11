@@ -95,6 +95,6 @@ pub fn emit(
 
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
 
-    obj_runtime.emit_event(*tag, event_value)?;
+    obj_runtime.emit_event(ty, *tag, event_value)?;
     Ok(NativeResult::ok(context.gas_used(), smallvec![]))
 }

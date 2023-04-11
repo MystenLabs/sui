@@ -7,7 +7,7 @@
     rust_2021_compatibility
 )]
 
-use base_types::SequenceNumber;
+use base_types::{SequenceNumber, SuiAddress};
 use messages::{CallArg, ObjectArg};
 pub use move_core_types::language_storage::TypeTag;
 use move_core_types::{account_address::AccountAddress, language_storage::StructTag};
@@ -35,6 +35,7 @@ pub mod dynamic_field;
 pub mod event;
 pub mod gas;
 pub mod gas_coin;
+pub mod gas_model;
 pub mod governance;
 pub mod id;
 pub mod in_memory_storage;
@@ -55,6 +56,8 @@ pub mod temporary_store;
 pub mod versioned;
 
 pub mod epoch_data;
+
+#[cfg(feature = "test-utils")]
 #[path = "./unit_tests/utils.rs"]
 pub mod utils;
 
@@ -132,5 +135,17 @@ pub trait MoveTypeTagTrait {
 impl MoveTypeTagTrait for u64 {
     fn get_type_tag() -> TypeTag {
         TypeTag::U64
+    }
+}
+
+impl MoveTypeTagTrait for ObjectID {
+    fn get_type_tag() -> TypeTag {
+        TypeTag::Address
+    }
+}
+
+impl MoveTypeTagTrait for SuiAddress {
+    fn get_type_tag() -> TypeTag {
+        TypeTag::Address
     }
 }

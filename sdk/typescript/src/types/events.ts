@@ -5,15 +5,13 @@ import {
   object,
   number,
   string,
-  union,
-  literal,
   Infer,
   array,
   record,
   any,
   optional,
   boolean,
-  integer,
+  nullable,
 } from 'superstruct';
 import {
   ObjectId,
@@ -44,7 +42,7 @@ export const SuiEvent = object({
   parsedJson: optional(record(string(), any())),
   // Base 58 encoded bcs bytes of the move event
   bcs: optional(string()),
-  timestampMs: optional(integer()),
+  timestampMs: optional(string()),
 });
 
 export type SuiEvent = Infer<typeof SuiEvent>;
@@ -86,7 +84,7 @@ export type SuiEventFilter =
 
 export const PaginatedEvents = object({
   data: array(SuiEvent),
-  nextCursor: union([EventId, literal(null)]),
+  nextCursor: nullable(EventId),
   hasNextPage: boolean(),
 });
 export type PaginatedEvents = Infer<typeof PaginatedEvents>;

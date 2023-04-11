@@ -1,0 +1,6 @@
+[package]
+name = "ERC20DecimalsMock"
+version = "0.0.0"
+
+[dependencies]
+EvmStdlib = { local = "../../../stdlib" }

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::test_utils::make_transfer_object_transaction;
 use crate::test_utils::make_transfer_sui_transaction;
 use move_core_types::{account_address::AccountAddress, ident_str};
 use rand::rngs::StdRng;
@@ -10,7 +11,6 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use sui_framework::make_system_packages;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_types::crypto::get_key_pair_from_rng;
 use sui_types::crypto::{get_key_pair, AccountKeyPair, AuthorityKeyPair};
@@ -20,7 +20,7 @@ use sui_types::utils::create_fake_transaction;
 
 use sui_macros::sim_test;
 use sui_types::messages::*;
-use sui_types::object::{Object, GAS_VALUE_FOR_TESTING};
+use sui_types::object::Object;
 
 use super::*;
 use crate::authority_client::AuthorityAPI;
@@ -29,6 +29,7 @@ use crate::test_authority_clients::{
     MockAuthorityApi,
 };
 use crate::test_utils::init_local_authorities;
+use sui_framework::BuiltInFramework;
 use sui_types::utils::to_sender_signed_transaction;
 use tokio::time::Instant;
 
@@ -48,54 +49,6 @@ pub fn get_local_client(
     clients.next().unwrap().authority_client_mut()
 }
 
-pub fn transfer_coin_transaction(
-    src: SuiAddress,
-    secret: &dyn Signer<Signature>,
-    dest: SuiAddress,
-    object_ref: ObjectRef,
-    gas_object_ref: ObjectRef,
-) -> VerifiedTransaction {
-    to_sender_signed_transaction(
-        TransactionData::new_transfer_with_dummy_gas_price(
-            dest,
-            object_ref,
-            src,
-            gas_object_ref,
-            GAS_VALUE_FOR_TESTING / 2,
-        ),
-        secret,
-    )
-}
-
-pub fn transfer_object_move_transaction(
-    src: SuiAddress,
-    secret: &dyn Signer<Signature>,
-    dest: SuiAddress,
-    object_ref: ObjectRef,
-    framework_obj_id: ObjectID,
-    gas_object_ref: ObjectRef,
-) -> VerifiedTransaction {
-    let args = vec![
-        CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref)),
-        CallArg::Pure(bcs::to_bytes(&AccountAddress::from(dest)).unwrap()),
-    ];
-
-    to_sender_signed_transaction(
-        TransactionData::new_move_call_with_dummy_gas_price(
-            src,
-            framework_obj_id,
-            ident_str!("object_basics").to_owned(),
-            ident_str!("transfer").to_owned(),
-            Vec::new(),
-            gas_object_ref,
-            args,
-            GAS_VALUE_FOR_TESTING / 2,
-        )
-        .unwrap(),
-        secret,
-    )
-}
-
 pub fn create_object_move_transaction(
     src: SuiAddress,
     secret: &dyn Signer<Signature>,
@@ -103,6 +56,7 @@ pub fn create_object_move_transaction(
     value: u64,
     package_id: ObjectID,
     gas_object_ref: ObjectRef,
+    gas_price: u64,
 ) -> VerifiedTransaction {
     // When creating an object_basics object, we provide the value (u64) and address which will own the object
     let arguments = vec![
@@ -111,7 +65,7 @@ pub fn create_object_move_transaction(
     ];
 
     to_sender_signed_transaction(
-        TransactionData::new_move_call_with_dummy_gas_price(
+        TransactionData::new_move_call(
             src,
             package_id,
             ident_str!("object_basics").to_owned(),
@@ -119,7 +73,8 @@ pub fn create_object_move_transaction(
             Vec::new(),
             gas_object_ref,
             arguments,
-            GAS_VALUE_FOR_TESTING / 2,
+            TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * gas_price,
+            gas_price,
         )
         .unwrap(),
         secret,
@@ -132,9 +87,10 @@ pub fn delete_object_move_transaction(
     object_ref: ObjectRef,
     framework_obj_id: ObjectID,
     gas_object_ref: ObjectRef,
+    gas_price: u64,
 ) -> VerifiedTransaction {
     to_sender_signed_transaction(
-        TransactionData::new_move_call_with_dummy_gas_price(
+        TransactionData::new_move_call(
             src,
             framework_obj_id,
             ident_str!("object_basics").to_owned(),
@@ -142,7 +98,8 @@ pub fn delete_object_move_transaction(
             Vec::new(),
             gas_object_ref,
             vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref))],
-            GAS_VALUE_FOR_TESTING / 2,
+            TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * gas_price,
+            gas_price,
         )
         .unwrap(),
         secret,
@@ -156,6 +113,7 @@ pub fn set_object_move_transaction(
     value: u64,
     framework_obj_id: ObjectID,
     gas_object_ref: ObjectRef,
+    gas_price: u64,
 ) -> VerifiedTransaction {
     let args = vec![
         CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref)),
@@ -163,7 +121,7 @@ pub fn set_object_move_transaction(
     ];
 
     to_sender_signed_transaction(
-        TransactionData::new_move_call_with_dummy_gas_price(
+        TransactionData::new_move_call(
             src,
             framework_obj_id,
             ident_str!("object_basics").to_owned(),
@@ -171,7 +129,8 @@ pub fn set_object_move_transaction(
             Vec::new(),
             gas_object_ref,
             args,
-            GAS_VALUE_FOR_TESTING / 2,
+            TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * gas_price,
+            gas_price,
         )
         .unwrap(),
         secret,
@@ -283,13 +242,14 @@ async fn execute_transaction_with_fault_configs(
     for (index, config) in configs_before_process_transaction {
         get_local_client(&mut authorities, *index).fault_config = *config;
     }
-
-    let tx = transfer_coin_transaction(
+    let rgp = genesis.reference_gas_price();
+    let tx = make_transfer_object_transaction(
+        gas_object1.compute_object_reference(),
+        gas_object2.compute_object_reference(),
         addr1,
         &key1,
         addr2,
-        gas_object1.compute_object_reference(),
-        gas_object2.compute_object_reference(),
+        rgp,
     );
     let Ok(cert) = authorities.process_transaction(tx).await else {
         return false;
@@ -324,26 +284,26 @@ async fn test_quorum_map_and_reduce_timeout() {
     let build_config = BuildConfig::new_for_testing();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/object_basics");
-    let modules = sui_framework::build_move_package(&path, build_config)
+    let modules: Vec<_> = sui_framework::build_move_package(&path, build_config)
         .unwrap()
         .get_modules()
-        .into_iter()
         .cloned()
         .collect();
     let pkg = Object::new_package_for_testing(
-        modules,
+        &modules,
         TransactionDigest::genesis(),
-        &make_system_packages(),
+        BuiltInFramework::genesis_move_packages(),
     )
     .unwrap();
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);
     let genesis_objects = vec![pkg.clone(), gas_object1.clone()];
     let (mut authorities, _, genesis, _) = init_local_authorities(4, genesis_objects).await;
+    let rgp = genesis.reference_gas_price();
     let pkg = genesis.object(pkg.id()).unwrap();
     let gas_object1 = genesis.object(gas_object1.id()).unwrap();
     let gas_ref_1 = gas_object1.compute_object_reference();
-    let tx = create_object_move_transaction(addr1, &key1, addr1, 100, pkg.id(), gas_ref_1);
+    let tx = create_object_move_transaction(addr1, &key1, addr1, 100, pkg.id(), gas_ref_1, rgp);
     let certified_tx = authorities.process_transaction(tx.clone()).await;
     assert!(certified_tx.is_ok());
     let certificate = certified_tx.unwrap().into_cert_for_testing();
@@ -640,7 +600,7 @@ fn get_genesis_agg<A>(
     authorities: BTreeMap<AuthorityName, StakeUnit>,
     clients: BTreeMap<AuthorityName, A>,
 ) -> AuthorityAggregator<A> {
-    let committee = Committee::new(0, authorities);
+    let committee = Committee::new_for_testing_with_normalized_voting_power(0, authorities);
     let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
 
     AuthorityAggregator::new_with_timeouts(
@@ -664,7 +624,7 @@ where
     A: Clone,
 {
     let mut agg = get_genesis_agg(authorities.clone(), clients);
-    let committee = Committee::new(epoch, authorities);
+    let committee = Committee::new_for_testing_with_normalized_voting_power(epoch, authorities);
     agg.committee_store
         .insert_new_committee(&committee)
         .unwrap();
@@ -712,7 +672,7 @@ async fn test_handle_transaction_panic() {
         None,
         sender,
         &sender_kp,
-        None,
+        666, // this is a dummy value which does not matter
     );
 
     // Non-quorum of effects without a retryable majority indicating a safety violation
@@ -782,7 +742,7 @@ async fn test_handle_transaction_response() {
         None,
         sender,
         &sender_kp,
-        None,
+        666, // this is a dummy value which does not matter
     );
     let tx2 = make_transfer_sui_transaction(
         gas_object,
@@ -790,7 +750,7 @@ async fn test_handle_transaction_response() {
         Some(1),
         sender,
         &sender_kp,
-        None,
+        666, // this is a dummy value which does not matter
     );
     let package_not_found_error = SuiError::UserInputError {
         error: UserInputError::DependentPackageNotFound {
@@ -836,7 +796,8 @@ async fn test_handle_transaction_response() {
     println!("Case 2 - Retryable Transaction (WrongEpoch Error)");
     // Validators return signed-tx with epoch 0, client expects 1
     // Update client to epoch 1
-    let committee_1 = Committee::new(1, authorities.clone());
+    let committee_1 =
+        Committee::new_for_testing_with_normalized_voting_power(1, authorities.clone());
     agg.committee_store
         .insert_new_committee(&committee_1)
         .unwrap();
@@ -890,7 +851,8 @@ async fn test_handle_transaction_response() {
     )
     .await;
 
-    let committee_1 = Committee::new(1, authorities.clone());
+    let committee_1 =
+        Committee::new_for_testing_with_normalized_voting_power(1, authorities.clone());
     agg.committee_store
         .insert_new_committee(&committee_1)
         .unwrap();
@@ -1170,7 +1132,8 @@ async fn test_handle_transaction_response() {
 
     println!("Case 7.1 - Retryable Transaction (WrongEpoch Error)");
     // Update committee store, now SafeClient will pass
-    let committee_1 = Committee::new(1, authorities.clone());
+    let committee_1 =
+        Committee::new_for_testing_with_normalized_voting_power(1, authorities.clone());
     agg.committee_store
         .insert_new_committee(&committee_1)
         .unwrap();
@@ -1352,7 +1315,7 @@ async fn test_handle_conflicting_transaction_response() {
         Some(1),
         sender,
         &sender_kp,
-        None,
+        666, // this is a dummy value which does not matter
     );
     let conflicting_tx2 = make_transfer_sui_transaction(
         conflicting_object,
@@ -1360,7 +1323,7 @@ async fn test_handle_conflicting_transaction_response() {
         Some(2),
         sender,
         &sender_kp,
-        None,
+        666, // this is a dummy value which does not matter
     );
     let conflicting_error = SuiError::ObjectLockConflict {
         obj_ref: conflicting_object,
@@ -1517,7 +1480,7 @@ async fn test_handle_conflicting_transaction_response() {
         Some(3),
         sender,
         &sender_kp,
-        None,
+        666, // this is a dummy value which does not matter
     );
     let conflicting_error_2 = SuiError::ObjectLockConflict {
         obj_ref: conflicting_object,
@@ -1567,7 +1530,7 @@ async fn test_handle_conflicting_transaction_response() {
         Some(3),
         sender,
         &sender_kp,
-        None,
+        666, // this is a dummy value which does not matter
     );
     let conflicting_error_2 = SuiError::ObjectLockConflict {
         obj_ref: conflicting_object,
@@ -1742,7 +1705,8 @@ async fn test_handle_conflicting_transaction_response() {
 
     println!("Case 5.1 - Retryable Transaction (WrongEpoch Error)");
     // Update committee store to epoch 2, now SafeClient will pass
-    let committee_2 = Committee::new(2, authorities.clone());
+    let committee_2 =
+        Committee::new_for_testing_with_normalized_voting_power(2, authorities.clone());
     agg.committee_store
         .insert_new_committee(&committee_2)
         .unwrap();
@@ -1771,15 +1735,101 @@ async fn test_handle_conflicting_transaction_response() {
 }
 
 #[tokio::test]
+async fn test_handle_overload_response() {
+    let mut authorities = BTreeMap::new();
+    let mut clients = BTreeMap::new();
+    let mut authority_keys = Vec::new();
+    for _ in 0..4 {
+        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
+        let name: AuthorityName = sec.public().into();
+        authorities.insert(name, 1);
+        authority_keys.push((name, sec));
+        clients.insert(name, HandleTransactionTestAuthorityClient::new());
+    }
+
+    let (sender, sender_kp): (_, AccountKeyPair) = get_key_pair();
+    let gas_object = random_object_ref();
+    let txn = make_transfer_sui_transaction(
+        gas_object,
+        SuiAddress::default(),
+        None,
+        sender,
+        &sender_kp,
+        666, // this is a dummy value which does not matter
+    );
+
+    let overload_error = SuiError::TooManyTransactionsPendingExecution {
+        queue_len: 100,
+        threshold: 100,
+    };
+    let rpc_error = SuiError::RpcError("RPC".into(), "Error".into());
+
+    // Have 2f + 1 validators return the overload error and we should get the `SystemOverload` error.
+    set_retryable_tx_info_response_error(&mut clients, &authority_keys);
+    set_tx_info_response_with_error(&mut clients, authority_keys.iter().skip(1), overload_error);
+
+    let agg = get_genesis_agg(authorities.clone(), clients.clone());
+    assert_resp_err(
+        &agg,
+        txn.clone(),
+        |e| {
+            matches!(
+                e,
+                AggregatorProcessTransactionError::SystemOverload {
+                    overloaded_stake,
+                    ..
+                } if *overloaded_stake == 7500
+            )
+        },
+        |e| {
+            matches!(
+                e,
+                SuiError::TooManyTransactionsPendingExecution { .. } | SuiError::RpcError(..)
+            )
+        },
+    )
+    .await;
+
+    // Change one of the valdiators' errors to RPC error so the system is considered not overloaded now and a `RetryableTransaction`
+    // should be returned.
+    clients
+        .get_mut(&authority_keys[1].0)
+        .unwrap()
+        .set_tx_info_response_error(rpc_error);
+
+    let agg = get_genesis_agg(authorities.clone(), clients.clone());
+
+    assert_resp_err(
+        &agg,
+        txn.clone(),
+        |e| {
+            matches!(
+                e,
+                AggregatorProcessTransactionError::RetryableTransaction { .. }
+            )
+        },
+        |e| {
+            matches!(
+                e,
+                SuiError::TooManyTransactionsPendingExecution { .. } | SuiError::RpcError(..)
+            )
+        },
+    )
+    .await;
+}
+
+#[tokio::test]
 async fn test_byzantine_authority_sig_aggregation() {
     telemetry_subscribers::init_for_testing();
     // For 4 validators, we need 2f+1 = 3 for quorum for signing a sender signed tx.
     assert!(run_aggregator(1, 4).await.is_ok());
     assert!(run_aggregator(2, 4).await.is_err());
 
-    // For 6 validators, we need 2f+1 = 5 for quorum for signing a sender signed tx.
+    // For 6 validators, voting power normaliziation in test Committee construction
+    // will result in 2f+1 = 4 for quorum for signing a sender signed tx.
     assert!(run_aggregator(1, 6).await.is_ok());
-    assert!(run_aggregator(2, 6).await.is_err());
+    assert!(run_aggregator(2, 6).await.is_ok());
+    assert!(run_aggregator(3, 6).await.is_err());
 
     // For 4 validators, we need 2f+1 = 3 for quorum for signing transaction effects.
     assert!(process_with_cert(1, 4).await.is_ok());
@@ -1797,7 +1847,7 @@ async fn test_byzantine_authority_sig_aggregation() {
 #[should_panic]
 async fn test_fork_panic_process_cert_6_auths() {
     telemetry_subscribers::init_for_testing();
-    let _ = process_with_cert(2, 6).await;
+    let _ = process_with_cert(3, 6).await;
 }
 
 #[tokio::test]
@@ -1845,7 +1895,7 @@ async fn run_aggregator(
             AuthoritySignInfo::new(
                 0,
                 tx.clone().data(),
-                Intent::default().with_scope(IntentScope::ProofOfPossession), // bad intent
+                Intent::sui_app(IntentScope::ProofOfPossession), // bad intent
                 *name,
                 secret,
             )
@@ -1854,7 +1904,7 @@ async fn run_aggregator(
             AuthoritySignInfo::new(
                 0,
                 tx.clone().data(),
-                Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+                Intent::sui_app(IntentScope::SenderSignedTransaction),
                 *name,
                 secret,
             )
@@ -1918,7 +1968,7 @@ async fn process_with_cert(
             AuthoritySignInfo::new(
                 0,
                 &effects.clone(),
-                Intent::default().with_scope(IntentScope::ProofOfPossession), // bad intent
+                Intent::sui_app(IntentScope::ProofOfPossession), // bad intent
                 *name,
                 secret,
             )
@@ -1927,7 +1977,7 @@ async fn process_with_cert(
             AuthoritySignInfo::new(
                 0,
                 &effects.clone(),
-                Intent::default().with_scope(IntentScope::TransactionEffects),
+                Intent::sui_app(IntentScope::TransactionEffects),
                 *name,
                 secret,
             )
@@ -1983,6 +2033,10 @@ async fn assert_resp_err<E, F>(
             AggregatorProcessTransactionError::FatalTransaction { errors } => {
                 assert!(errors.iter().map(|e| &e.0).all(sui_err_checker));
             }
+
+            AggregatorProcessTransactionError::SystemOverload { errors, .. } => {
+                assert!(errors.iter().map(|e| &e.0).all(sui_err_checker));
+            }
         },
         Err(received_agg_err) => {
             assert!(
@@ -2033,13 +2087,21 @@ fn set_tx_info_response_with_signed_tx(
 
 fn set_retryable_tx_info_response_error(
     clients: &mut BTreeMap<AuthorityName, HandleTransactionTestAuthorityClient>,
-    authority_keys: &Vec<(AuthorityName, AuthorityKeyPair)>,
+    authority_keys: &[(AuthorityName, AuthorityKeyPair)],
+) {
+    let error = SuiError::RpcError("RPC".into(), "Error".into());
+    set_tx_info_response_with_error(clients, authority_keys.iter(), error);
+}
+
+fn set_tx_info_response_with_error<'a>(
+    clients: &mut BTreeMap<AuthorityName, HandleTransactionTestAuthorityClient>,
+    authority_keys: impl Iterator<Item = &'a (AuthorityName, AuthorityKeyPair)>,
+    error: SuiError,
 ) {
     for (name, _) in authority_keys {
-        let error = SuiError::RpcError("RPC".into(), "Error".into());
         clients
             .get_mut(name)
             .unwrap()
-            .set_tx_info_response_error(error);
+            .set_tx_info_response_error(error.clone());
     }
 }

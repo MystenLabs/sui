@@ -1,0 +1,11 @@
+//# run
+main() {
+    let x: u64;
+    let x_ref: &u64;
+    let no: bool;
+label b0:
+    x = 0;
+    x_ref = &x;
+    no = 0 == move(x_ref); // == type mismatch
+    return;
+}

@@ -4,23 +4,23 @@
 import {
   array,
   Infer,
-  literal,
   number,
   object,
   string,
-  union,
   tuple,
   boolean,
   optional,
   any,
+  nullable,
 } from 'superstruct';
 
 import { TransactionDigest, TransactionEffectsDigest } from './common';
 
 export const GasCostSummary = object({
-  computationCost: number(),
-  storageCost: number(),
-  storageRebate: number(),
+  computationCost: string(),
+  storageCost: string(),
+  storageRebate: string(),
+  nonRefundableStorageFee: string(),
 });
 export type GasCostSummary = Infer<typeof GasCostSummary>;
 
@@ -38,9 +38,12 @@ export type ECMHLiveObjectSetDigest = Infer<typeof ECMHLiveObjectSetDigest>;
 export const CheckpointCommitment = any();
 export type CheckpointCommitment = Infer<typeof CheckpointCommitment>;
 
+export const ValidatorSignature = string();
+export type ValidatorSignature = Infer<typeof ValidatorSignature>;
+
 export const EndOfEpochData = object({
-  nextEpochCommittee: array(tuple([string(), number()])),
-  nextEpochProtocolVersion: number(),
+  nextEpochCommittee: array(tuple([string(), string()])),
+  nextEpochProtocolVersion: string(),
   epochCommitments: array(CheckpointCommitment),
 });
 export type EndOfEpochData = Infer<typeof EndOfEpochData>;
@@ -51,14 +54,16 @@ export const ExecutionDigests = object({
 });
 
 export const Checkpoint = object({
-  epoch: number(),
-  sequenceNumber: number(),
+  epoch: string(),
+  sequenceNumber: string(),
   digest: CheckpointDigest,
-  networkTotalTransactions: number(),
+  networkTotalTransactions: string(),
   previousDigest: optional(CheckpointDigest),
   epochRollingGasCostSummary: GasCostSummary,
-  timestampMs: number(),
+  timestampMs: string(),
   endOfEpochData: optional(EndOfEpochData),
+  // TODO(jian): remove optional after 0.30.0 is released
+  validatorSignature: optional(ValidatorSignature),
   transactions: array(TransactionDigest),
   checkpointCommitments: array(CheckpointCommitment),
 });
@@ -66,7 +71,7 @@ export type Checkpoint = Infer<typeof Checkpoint>;
 
 export const CheckpointPage = object({
   data: array(Checkpoint),
-  nextCursor: union([number(), literal(null)]),
+  nextCursor: nullable(string()),
   hasNextPage: boolean(),
 });
 export type CheckpointPage = Infer<typeof CheckpointPage>;

@@ -2,8 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{metrics::PrimaryMetrics, NetworkModel};
-use config::{Committee, Epoch, WorkerId};
-use crypto::PublicKey;
+use config::{AuthorityIdentifier, Committee, Epoch, WorkerId};
 use fastcrypto::hash::Hash as _;
 use mysten_metrics::spawn_logged_monitored_task;
 use std::collections::{BTreeMap, VecDeque};
@@ -15,11 +14,11 @@ use tokio::{
     task::JoinHandle,
     time::{sleep, Duration},
 };
-use tracing::{debug, enabled, error, info};
+use tracing::{debug, enabled, error, info, trace};
 use types::{
     error::{DagError, DagResult},
     metered_channel::{Receiver, Sender},
-    BatchDigest, Certificate, Header, Round, TimestampMs,
+    BatchDigest, Certificate, CertificateAPI, Header, HeaderAPI, Round, TimestampMs,
 };
 use types::{now, ConditionalBroadcastReceiver};
 
@@ -41,8 +40,8 @@ const DEFAULT_HEADER_RESEND_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// The proposer creates new headers and send them to the core for broadcasting and further processing.
 pub struct Proposer {
-    /// The public key of this primary.
-    name: PublicKey,
+    /// The id of this primary.
+    authority_id: AuthorityIdentifier,
     /// The committee information.
     committee: Committee,
     /// The threshold number of batches that can trigger
@@ -103,7 +102,7 @@ impl Proposer {
     #[allow(clippy::too_many_arguments)]
     #[must_use]
     pub fn spawn(
-        name: PublicKey,
+        authority_id: AuthorityIdentifier,
         committee: Committee,
         proposer_store: ProposerStore,
         header_num_of_batches_threshold: usize,
@@ -124,7 +123,7 @@ impl Proposer {
         spawn_logged_monitored_task!(
             async move {
                 Self {
-                    name,
+                    authority_id,
                     committee,
                     header_num_of_batches_threshold,
                     max_header_num_of_batches,
@@ -165,12 +164,12 @@ impl Proposer {
         self.proposer_store.write_last_proposed(&header)?;
 
         #[cfg(feature = "benchmark")]
-        for digest in header.payload.keys() {
+        for digest in header.payload().keys() {
             // NOTE: This log entry is used to compute performance.
             info!("Created {} -> {:?}", header, digest);
         }
 
-        let num_of_included_digests = header.payload.len();
+        let num_of_included_digests = header.payload().len();
 
         // Send the new header to the `Certifier` that will broadcast and certify it.
         self.tx_headers
@@ -190,7 +189,7 @@ impl Proposer {
 
         // Check if we already have stored a header for this round.
         if let Some(last_header) = self.proposer_store.get_last_proposed()? {
-            if last_header.round == this_round && last_header.epoch == this_epoch {
+            if last_header.round() == this_round && last_header.epoch() == this_epoch {
                 // We have already produced a header for the current round, idempotent re-send
                 debug!("Proposer re-using existing header for round {this_round}");
                 self.last_parents.clear(); // Clear parents that are now invalid for next round.
@@ -206,21 +205,24 @@ impl Proposer {
         // Here we check that the timestamp we will include in the header is consistent with the
         // parents, ie our current time is *after* the timestamp in all the included headers. If
         // not we log an error and hope a kind operator fixes the clock.
-        let current_time = now();
         let parent_max_time = parents
             .iter()
-            .map(|c| c.header.created_at)
+            .map(|c| *c.header().created_at())
             .max()
             .unwrap_or(0);
+        let current_time = now();
         if current_time < parent_max_time {
+            let drift_ms = parent_max_time - current_time;
             error!(
-                "Current time {} earlier than max parent time {}",
-                current_time, parent_max_time
+                "Current time {} earlier than max parent time {}, sleeping for {}ms until max parent time.",
+                current_time, parent_max_time, drift_ms,
             );
+            self.metrics.header_max_parent_wait_ms.inc_by(drift_ms);
+            sleep(Duration::from_millis(drift_ms)).await;
         }
 
         let header = Header::new(
-            self.name.clone(),
+            self.authority_id,
             this_round,
             this_epoch,
             header_digests
@@ -232,15 +234,15 @@ impl Proposer {
         .await;
 
         let leader_and_support = if this_round % 2 == 0 {
-            let leader_name = self.committee.leader(this_round);
-            if self.name == leader_name {
+            let authority = self.committee.leader(this_round);
+            if self.authority_id == authority.id() {
                 "even_round_is_leader"
             } else {
                 "even_round_not_leader"
             }
         } else {
-            let leader_name = self.committee.leader(this_round - 1);
-            if parents.iter().any(|c| c.origin() == leader_name) {
+            let authority = self.committee.leader(this_round - 1);
+            if parents.iter().any(|c| c.origin() == authority.id()) {
                 "odd_round_gives_support"
             } else {
                 "odd_round_no_support"
@@ -252,19 +254,21 @@ impl Proposer {
             .inc();
         self.metrics.header_parents.observe(parents.len() as f64);
 
-        if enabled!(tracing::Level::DEBUG) {
+        if enabled!(tracing::Level::TRACE) {
             let mut msg = format!("Created header {header:?} with parent certificates:\n");
             for parent in parents.iter() {
                 msg.push_str(&format!("{parent:?}\n"));
             }
-            debug!(msg);
+            trace!(msg);
+        } else {
+            debug!("Created header {header:?}");
         }
 
         // Update metrics related to latency
         let mut total_inclusion_secs = 0.0;
         for digest in &header_digests {
             let batch_inclusion_secs =
-                Duration::from_millis(header.created_at - digest.timestamp).as_secs_f64();
+                Duration::from_millis(*header.created_at() - digest.timestamp).as_secs_f64();
             total_inclusion_secs += batch_inclusion_secs;
 
             #[cfg(feature = "benchmark")]
@@ -287,7 +291,7 @@ impl Proposer {
         let (header_creation_secs, avg_inclusion_secs) =
             if let Some(digest) = header_digests.front() {
                 (
-                    Duration::from_millis(header.created_at - digest.timestamp).as_secs_f64(),
+                    Duration::from_millis(*header.created_at() - digest.timestamp).as_secs_f64(),
                     total_inclusion_secs / header_digests.len() as f64,
                 )
             } else {
@@ -315,7 +319,7 @@ impl Proposer {
             // round, we set a lower max timeout value to increase its chance of committing
             // the leader.
             NetworkModel::PartiallySynchronous
-                if self.committee.leader(self.round + 1) == self.name =>
+                if self.committee.leader(self.round + 1).id() == self.authority_id =>
             {
                 self.max_header_delay / 2
             }
@@ -332,7 +336,7 @@ impl Proposer {
             // min delay value to increase the chance of committing the leader.
             NetworkModel::PartiallySynchronous
                 if self.committee.size() > 1
-                    && self.committee.leader(self.round + 1) == self.name =>
+                    && self.committee.leader(self.round + 1).id() == self.authority_id =>
             {
                 Duration::ZERO
             }
@@ -344,11 +348,11 @@ impl Proposer {
 
     /// Update the last leader certificate. This is only relevant in partial synchrony.
     fn update_leader(&mut self) -> bool {
-        let leader_name = self.committee.leader(self.round);
+        let leader = self.committee.leader(self.round);
         self.last_leader = self
             .last_parents
             .iter()
-            .find(|x| x.origin() == leader_name)
+            .find(|x| x.origin() == leader.id())
             .cloned();
 
         if let Some(leader) = self.last_leader.as_ref() {
@@ -362,7 +366,7 @@ impl Proposer {
     /// (i) f+1 votes for the leader, (ii) 2f+1 nodes not voting for the leader,
     /// (iii) there is no leader to vote for. This is only relevant in partial synchrony.
     fn enough_votes(&self) -> bool {
-        if self.committee.leader(self.round + 1) == self.name {
+        if self.committee.leader(self.round + 1).id() == self.authority_id {
             return true;
         }
 
@@ -374,8 +378,8 @@ impl Proposer {
         let mut votes_for_leader = 0;
         let mut no_votes = 0;
         for certificate in &self.last_parents {
-            let stake = self.committee.stake(&certificate.origin());
-            if certificate.header.parents.contains(&leader) {
+            let stake = self.committee.stake_by_id(certificate.origin());
+            if certificate.header().parents().contains(&leader) {
                 votes_for_leader += stake;
             } else {
                 no_votes += stake;
@@ -431,7 +435,7 @@ impl Proposer {
 
         info!(
             "Proposer on node {} has started successfully with header resend timeout {:?}.",
-            self.name, header_resend_timeout
+            self.authority_id, header_resend_timeout
         );
         loop {
             // Check if we can propose a new header. We propose a new header when we have a quorum of parents
@@ -476,7 +480,7 @@ impl Proposer {
                     self.metrics
                         .proposal_latency
                         .with_label_values(&[reason])
-                        .observe((current_timestamp - t) as f64);
+                        .observe(Duration::from_millis(current_timestamp - t).as_secs_f64());
                 }
                 self.last_round_timestamp = Some(current_timestamp);
                 debug!("Dag moved to round {}", self.round);

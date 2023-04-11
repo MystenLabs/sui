@@ -10,7 +10,7 @@ use move_core_types::identifier::Identifier;
 use rand::seq::{IteratorRandom, SliceRandom};
 use serde_json::json;
 use signature::rand_core::OsRng;
-use sui_json_rpc_types::SuiTransactionResponseOptions;
+use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 
 use crate::operations::Operations;
@@ -22,14 +22,17 @@ use sui_json_rpc_types::{
 use sui_keys::keystore::AccountKeystore;
 use sui_keys::keystore::Keystore;
 use sui_sdk::rpc_types::{
-    OwnedObjectRef, SuiData, SuiExecutionStatus, SuiTransactionEffectsAPI, SuiTransactionResponse,
+    OwnedObjectRef, SuiData, SuiExecutionStatus, SuiTransactionBlockEffectsAPI,
+    SuiTransactionBlockResponse,
 };
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
     CallArg, ExecuteTransactionRequestType, InputObjectKind, ObjectArg, ProgrammableTransaction,
-    Transaction, TransactionData, TransactionDataAPI, TransactionKind, DUMMY_GAS_PRICE,
+    Transaction, TransactionData, TransactionDataAPI, TransactionKind,
+    TEST_ONLY_GAS_UNIT_FOR_GENERIC, TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN,
+    TEST_ONLY_GAS_UNIT_FOR_STAKING, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
 use test_utils::network::TestClusterBuilder;
 
@@ -41,6 +44,7 @@ async fn test_transfer_sui() {
     let network = TestClusterBuilder::new().build().await.unwrap();
     let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
+    let rgp = network.get_reference_gas_price().await;
 
     // Test Transfer Sui
     let sender = get_random_address(&network.accounts, vec![]);
@@ -57,7 +61,8 @@ async fn test_transfer_sui() {
         sender,
         pt,
         vec![],
-        10000,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        rgp,
         false,
     )
     .await;
@@ -68,6 +73,7 @@ async fn test_transfer_sui_whole_coin() {
     let network = TestClusterBuilder::new().build().await.unwrap();
     let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
+    let rgp = network.get_reference_gas_price().await;
 
     // Test transfer sui whole coin
     let sender = get_random_address(&network.accounts, vec![]);
@@ -84,7 +90,8 @@ async fn test_transfer_sui_whole_coin() {
         sender,
         pt,
         vec![],
-        10000,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        rgp,
         false,
     )
     .await;
@@ -95,6 +102,7 @@ async fn test_transfer_object() {
     let network = TestClusterBuilder::new().build().await.unwrap();
     let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
+    let rgp = network.get_reference_gas_price().await;
 
     // Test transfer object
     let sender = get_random_address(&network.accounts, vec![]);
@@ -112,7 +120,8 @@ async fn test_transfer_object() {
         sender,
         pt,
         vec![],
-        10000,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        rgp,
         false,
     )
     .await;
@@ -123,6 +132,7 @@ async fn test_publish_and_move_call() {
     let network = TestClusterBuilder::new().build().await.unwrap();
     let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
+    let rgp = network.get_reference_gas_price().await;
 
     // Test publish
     let sender = get_random_address(&network.accounts, vec![]);
@@ -139,8 +149,18 @@ async fn test_publish_and_move_call() {
         builder.publish_immutable(compiled_modules_bytes, dependencies);
         builder.finish()
     };
-    let response =
-        test_transaction(&client, keystore, vec![], sender, pt, vec![], 10000, false).await;
+    let response = test_transaction(
+        &client,
+        keystore,
+        vec![],
+        sender,
+        pt,
+        vec![],
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp,
+        false,
+    )
+    .await;
     let object_changes = response.object_changes.unwrap();
 
     // Test move call (reuse published module from above test)
@@ -177,7 +197,18 @@ async fn test_publish_and_move_call() {
         builder.finish()
     };
 
-    test_transaction(&client, keystore, vec![], sender, pt, vec![], 10000, false).await;
+    test_transaction(
+        &client,
+        keystore,
+        vec![],
+        sender,
+        pt,
+        vec![],
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp,
+        false,
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -185,6 +216,7 @@ async fn test_split_coin() {
     let network = TestClusterBuilder::new().build().await.unwrap();
     let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
+    let rgp = network.get_reference_gas_price().await;
 
     // Test spilt coin
     let sender = get_random_address(&network.accounts, vec![]);
@@ -198,7 +230,18 @@ async fn test_split_coin() {
         TransactionKind::ProgrammableTransaction(pt) => pt,
         _ => unreachable!(),
     };
-    test_transaction(&client, keystore, vec![], sender, pt, vec![], 10000, false).await;
+    test_transaction(
+        &client,
+        keystore,
+        vec![],
+        sender,
+        pt,
+        vec![],
+        rgp * TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN,
+        rgp,
+        false,
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -206,6 +249,7 @@ async fn test_merge_coin() {
     let network = TestClusterBuilder::new().build().await.unwrap();
     let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
+    let rgp = network.get_reference_gas_price().await;
 
     // Test merge coin
     let sender = get_random_address(&network.accounts, vec![]);
@@ -220,7 +264,18 @@ async fn test_merge_coin() {
         TransactionKind::ProgrammableTransaction(pt) => pt,
         _ => unreachable!(),
     };
-    test_transaction(&client, keystore, vec![], sender, pt, vec![], 10000, false).await;
+    test_transaction(
+        &client,
+        keystore,
+        vec![],
+        sender,
+        pt,
+        vec![],
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp,
+        false,
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -228,6 +283,7 @@ async fn test_pay() {
     let network = TestClusterBuilder::new().build().await.unwrap();
     let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
+    let rgp = network.get_reference_gas_price().await;
 
     // Test Pay
     let sender = get_random_address(&network.accounts, vec![]);
@@ -247,7 +303,8 @@ async fn test_pay() {
         sender,
         pt,
         vec![],
-        10000,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        rgp,
         false,
     )
     .await;
@@ -258,6 +315,7 @@ async fn test_pay_multiple_coin_multiple_recipient() {
     let network = TestClusterBuilder::new().build().await.unwrap();
     let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
+    let rgp = network.get_reference_gas_price().await;
 
     // Test Pay multiple coin multiple recipient
     let sender = get_random_address(&network.accounts, vec![]);
@@ -283,7 +341,8 @@ async fn test_pay_multiple_coin_multiple_recipient() {
         sender,
         pt,
         vec![],
-        10000,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        rgp,
         false,
     )
     .await;
@@ -294,6 +353,7 @@ async fn test_pay_sui_multiple_coin_same_recipient() {
     let network = TestClusterBuilder::new().build().await.unwrap();
     let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
+    let rgp = network.get_reference_gas_price().await;
 
     // Test Pay multiple coin same recipient
     let sender = get_random_address(&network.accounts, vec![]);
@@ -317,7 +377,8 @@ async fn test_pay_sui_multiple_coin_same_recipient() {
         sender,
         pt,
         vec![coin1, coin2],
-        10000,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        rgp,
         false,
     )
     .await;
@@ -328,6 +389,7 @@ async fn test_pay_sui() {
     let network = TestClusterBuilder::new().build().await.unwrap();
     let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
+    let rgp = network.get_reference_gas_price().await;
 
     // Test Pay Sui
     let sender = get_random_address(&network.accounts, vec![]);
@@ -349,7 +411,8 @@ async fn test_pay_sui() {
         sender,
         pt,
         vec![coin1, coin2],
-        10000,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        rgp,
         false,
     )
     .await;
@@ -360,6 +423,7 @@ async fn test_failed_pay_sui() {
     let network = TestClusterBuilder::new().build().await.unwrap();
     let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
+    let rgp = network.get_reference_gas_price().await;
 
     // Test failed Pay Sui
     let sender = get_random_address(&network.accounts, vec![]);
@@ -381,7 +445,8 @@ async fn test_failed_pay_sui() {
         sender,
         pt,
         vec![coin1, coin2],
-        110,
+        2000,
+        rgp,
         true,
     )
     .await;
@@ -392,6 +457,7 @@ async fn test_stake_sui() {
     let network = TestClusterBuilder::new().build().await.unwrap();
     let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
+    let rgp = network.get_reference_gas_price().await;
 
     // Test Delegate Sui
     let sender = get_random_address(&network.accounts, vec![]);
@@ -409,10 +475,10 @@ async fn test_stake_sui() {
         .request_add_stake(
             sender,
             vec![coin1.0, coin2.0],
-            Some(1000000),
+            Some(1000000000),
             validator,
             None,
-            100000,
+            10_000_000,
         )
         .await
         .unwrap();
@@ -420,7 +486,18 @@ async fn test_stake_sui() {
         TransactionKind::ProgrammableTransaction(pt) => pt,
         _ => unreachable!(),
     };
-    test_transaction(&client, keystore, vec![], sender, pt, vec![], 10000, false).await;
+    test_transaction(
+        &client,
+        keystore,
+        vec![],
+        sender,
+        pt,
+        vec![],
+        rgp * TEST_ONLY_GAS_UNIT_FOR_STAKING,
+        rgp,
+        false,
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -428,6 +505,7 @@ async fn test_stake_sui_with_none_amount() {
     let network = TestClusterBuilder::new().build().await.unwrap();
     let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
+    let rgp = network.get_reference_gas_price().await;
 
     // Test Staking Sui
     let sender = get_random_address(&network.accounts, vec![]);
@@ -448,7 +526,7 @@ async fn test_stake_sui_with_none_amount() {
             None,
             validator,
             None,
-            100000,
+            rgp * TEST_ONLY_GAS_UNIT_FOR_STAKING,
         )
         .await
         .unwrap();
@@ -456,7 +534,18 @@ async fn test_stake_sui_with_none_amount() {
         TransactionKind::ProgrammableTransaction(pt) => pt,
         _ => unreachable!(),
     };
-    test_transaction(&client, keystore, vec![], sender, pt, vec![], 10000, false).await;
+    test_transaction(
+        &client,
+        keystore,
+        vec![],
+        sender,
+        pt,
+        vec![],
+        rgp * TEST_ONLY_GAS_UNIT_FOR_STAKING,
+        rgp,
+        false,
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -464,6 +553,7 @@ async fn test_pay_all_sui() {
     let network = TestClusterBuilder::new().build().await.unwrap();
     let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
+    let rgp = network.get_reference_gas_price().await;
 
     // Test Pay All Sui
     let sender = get_random_address(&network.accounts, vec![]);
@@ -482,7 +572,8 @@ async fn test_pay_all_sui() {
         sender,
         pt,
         vec![coin1, coin2],
-        10000,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        rgp,
         false,
     )
     .await;
@@ -491,6 +582,7 @@ async fn test_pay_all_sui() {
 #[tokio::test]
 async fn test_delegation_parsing() -> Result<(), anyhow::Error> {
     let network = TestClusterBuilder::new().build().await.unwrap();
+    let rgp = network.get_reference_gas_price().await;
     let client = network.wallet.get_client().await.unwrap();
     let sender = get_random_address(&network.accounts, vec![]);
     let gas = get_random_sui(&client, sender, vec![]).await;
@@ -517,8 +609,8 @@ async fn test_delegation_parsing() -> Result<(), anyhow::Error> {
         coins: vec![gas],
         objects: vec![],
         total_coin_value: 0,
-        gas_price: client.read_api().get_reference_gas_price().await?,
-        budget: 10000,
+        gas_price: rgp,
+        budget: rgp * TEST_ONLY_GAS_UNIT_FOR_STAKING,
     };
     let parsed_data = ops.clone().into_internal()?.try_into_data(metadata)?;
     assert_eq!(ops, Operations::try_from(parsed_data)?);
@@ -567,9 +659,10 @@ async fn test_transaction(
     sender: SuiAddress,
     tx: ProgrammableTransaction,
     gas: Vec<ObjectRef>,
-    budget: u64,
+    gas_budget: u64,
+    gas_price: u64,
     expect_fail: bool,
-) -> SuiTransactionResponse {
+) -> SuiTransactionBlockResponse {
     let gas = if !gas.is_empty() {
         gas
     } else {
@@ -592,12 +685,12 @@ async fn test_transaction(
         TransactionKind::programmable(tx.clone()),
         sender,
         gas,
-        budget,
-        DUMMY_GAS_PRICE,
+        gas_budget,
+        gas_price,
     );
 
     let signature = keystore
-        .sign_secure(&data.sender(), &data, Intent::default())
+        .sign_secure(&data.sender(), &data, Intent::sui_transaction())
         .unwrap();
 
     // Balance before execution
@@ -610,11 +703,11 @@ async fn test_transaction(
 
     let response = client
         .quorum_driver()
-        .execute_transaction(
-            Transaction::from_data(data.clone(), Intent::default(), vec![signature])
+        .execute_transaction_block(
+            Transaction::from_data(data.clone(), Intent::sui_transaction(), vec![signature])
                 .verify()
                 .unwrap(),
-            SuiTransactionResponseOptions::full_content(),
+            SuiTransactionBlockResponseOptions::full_content(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await
@@ -672,7 +765,6 @@ async fn get_random_sui(
             )),
             /* cursor */ None,
             /* limit */ None,
-            /* at_checkpoint */ None,
         )
         .await
         .unwrap()
@@ -712,7 +804,6 @@ async fn get_balance(client: &SuiClient, address: SuiAddress) -> u64 {
             )),
             /* cursor */ None,
             /* limit */ None,
-            /* at_checkpoint */ None,
         )
         .await
         .unwrap()

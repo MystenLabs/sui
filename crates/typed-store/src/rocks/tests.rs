@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use crate::rocks::util::reference_count_merge_operator;
-use crate::RocksDB::DBWithThreadMode;
+use crate::rocks::util::{is_ref_count_value, reference_count_merge_operator};
 use crate::{reopen, retry_transaction, retry_transaction_forever};
 use rstest::rstest;
 use serde::Deserialize;
@@ -149,32 +148,38 @@ async fn test_skip(#[values(true, false)] is_transactional: bool) {
         .expect("Failed to insert");
 
     // Skip all smaller
-    let key_vals: Vec<_> = db.iter().skip_to(&456).expect("Seek failed").collect();
+    let key_vals: Vec<_> = db.safe_iter().skip_to(&456).expect("Seek failed").collect();
     assert_eq!(key_vals.len(), 2);
-    assert_eq!(key_vals[0], (456, "456".to_string()));
-    assert_eq!(key_vals[1], (789, "789".to_string()));
+    assert_eq!(key_vals[0], Ok((456, "456".to_string())));
+    assert_eq!(key_vals[1], Ok((789, "789".to_string())));
 
     // Skip all smaller: same for the keys iterator
     let keys: Vec<_> = db.keys().skip_to(&456).expect("Seek failed").collect();
     assert_eq!(keys.len(), 2);
-    assert_eq!(keys[0], (456));
-    assert_eq!(keys[1], (789));
+    assert_eq!(keys[0], Ok(456));
+    assert_eq!(keys[1], Ok(789));
 
     // Skip to the end
-    assert_eq!(db.iter().skip_to(&999).expect("Seek failed").count(), 0);
+    assert_eq!(
+        db.safe_iter().skip_to(&999).expect("Seek failed").count(),
+        0
+    );
     // same for the keys
     assert_eq!(db.keys().skip_to(&999).expect("Seek failed").count(), 0);
 
     // Skip to last
     assert_eq!(
-        db.iter().skip_to_last().next(),
-        Some((789, "789".to_string()))
+        db.safe_iter().skip_to_last().next(),
+        Some(Ok((789, "789".to_string())))
     );
     // same for the keys
-    assert_eq!(db.keys().skip_to_last().next(), Some(789));
+    assert_eq!(db.keys().skip_to_last().next(), Some(Ok(789)));
 
     // Skip to successor of first value
-    assert_eq!(db.iter().skip_to(&000).expect("Skip failed").count(), 3);
+    assert_eq!(
+        db.safe_iter().skip_to(&000).expect("Skip failed").count(),
+        3
+    );
     assert_eq!(db.keys().skip_to(&000).expect("Skip failed").count(), 3);
 }
 
@@ -192,12 +197,12 @@ async fn test_skip_to_previous_simple(#[values(true, false)] is_transactional: b
 
     // Skip to the one before the end
     let key_vals: Vec<_> = db
-        .iter()
+        .safe_iter()
         .skip_prior_to(&999)
         .expect("Seek failed")
         .collect();
     assert_eq!(key_vals.len(), 1);
-    assert_eq!(key_vals[0], (789, "789".to_string()));
+    assert_eq!(key_vals[0], Ok((789, "789".to_string())));
     // Same for the keys iterator
     let keys: Vec<_> = db
         .keys()
@@ -205,12 +210,15 @@ async fn test_skip_to_previous_simple(#[values(true, false)] is_transactional: b
         .expect("Seek failed")
         .collect();
     assert_eq!(keys.len(), 1);
-    assert_eq!(keys[0], (789));
+    assert_eq!(keys[0], Ok(789));
 
     // Skip to prior of first value
     // Note: returns an empty iterator!
     assert_eq!(
-        db.iter().skip_prior_to(&000).expect("Seek failed").count(),
+        db.safe_iter()
+            .skip_prior_to(&000)
+            .expect("Seek failed")
+            .count(),
         0
     );
     // Same for the keys iterator
@@ -232,12 +240,12 @@ async fn test_iter_skip_to_previous_gap(#[values(true, false)] is_transactional:
     }
 
     // Skip prior to will return an iterator starting with an "unexpected" key if the sought one is not in the table
-    let db_iter = db.iter().skip_prior_to(&50).unwrap();
+    let db_iter = db.safe_iter().skip_prior_to(&50).unwrap();
 
     assert_eq!(
         (49..50)
             .chain(51..100)
-            .map(|i| (i, i.to_string()))
+            .map(|i| Ok((i, i.to_string())))
             .collect::<Vec<_>>(),
         db_iter.collect::<Vec<_>>()
     );
@@ -245,7 +253,7 @@ async fn test_iter_skip_to_previous_gap(#[values(true, false)] is_transactional:
     let db_iter = db.keys().skip_prior_to(&50).unwrap();
 
     assert_eq!(
-        (49..50).chain(51..100).collect::<Vec<_>>(),
+        (49..50).chain(51..100).map(Ok).collect::<Vec<_>>(),
         db_iter.collect::<Vec<_>>()
     );
 }
@@ -270,8 +278,8 @@ async fn test_iter(#[values(true, false)] is_transactional: bool) {
     db.insert(&123456789, &"123456789".to_string())
         .expect("Failed to insert");
 
-    let mut iter = db.iter();
-    assert_eq!(Some((123456789, "123456789".to_string())), iter.next());
+    let mut iter = db.safe_iter();
+    assert_eq!(Some(Ok((123456789, "123456789".to_string()))), iter.next());
     assert_eq!(None, iter.next());
 }
 
@@ -284,15 +292,15 @@ async fn test_iter_reverse(#[values(true, false)] is_transactional: bool) {
     db.insert(&2, &"2".to_string()).expect("Failed to insert");
     db.insert(&3, &"3".to_string()).expect("Failed to insert");
 
-    let mut iter = db.iter().skip_to_last().reverse();
-    assert_eq!(Some((3, "3".to_string())), iter.next());
-    assert_eq!(Some((2, "2".to_string())), iter.next());
-    assert_eq!(Some((1, "1".to_string())), iter.next());
+    let mut iter = db.safe_iter().skip_to_last().reverse();
+    assert_eq!(Some(Ok((3, "3".to_string()))), iter.next());
+    assert_eq!(Some(Ok((2, "2".to_string()))), iter.next());
+    assert_eq!(Some(Ok((1, "1".to_string()))), iter.next());
     assert_eq!(None, iter.next());
 
-    let mut iter = db.iter().skip_to(&2).unwrap().reverse();
-    assert_eq!(Some((2, "2".to_string())), iter.next());
-    assert_eq!(Some((1, "1".to_string())), iter.next());
+    let mut iter = db.safe_iter().skip_to(&2).unwrap().reverse();
+    assert_eq!(Some(Ok((2, "2".to_string()))), iter.next());
+    assert_eq!(Some(Ok((1, "1".to_string()))), iter.next());
     assert_eq!(None, iter.next());
 }
 
@@ -305,7 +313,7 @@ async fn test_keys(#[values(true, false)] is_transactional: bool) {
         .expect("Failed to insert");
 
     let mut keys = db.keys();
-    assert_eq!(Some(123456789), keys.next());
+    assert_eq!(Some(Ok(123456789)), keys.next());
     assert_eq!(None, keys.next());
 }
 
@@ -318,7 +326,7 @@ async fn test_values(#[values(true, false)] is_transactional: bool) {
         .expect("Failed to insert");
 
     let mut values = db.values();
-    assert_eq!(Some("123456789".to_string()), values.next());
+    assert_eq!(Some(Ok("123456789".to_string())), values.next());
     assert_eq!(None, values.next());
 }
 
@@ -355,8 +363,8 @@ async fn test_try_extend_from_slice(#[values(true, false)] is_transactional: boo
 async fn test_insert_batch(#[values(true, false)] is_transactional: bool) {
     let db = open_map(temp_dir(), None, is_transactional);
     let keys_vals = (1..100).map(|i| (i, i.to_string()));
-    let insert_batch = db
-        .batch()
+    let mut insert_batch = db.batch();
+    insert_batch
         .insert_batch(&db, keys_vals.clone())
         .expect("Failed to batch insert");
     insert_batch.write().expect("Failed to execute batch");
@@ -379,8 +387,8 @@ async fn test_insert_batch_across_cf(#[values(true, false)] is_transactional: bo
         .expect("Failed to open storage");
     let keys_vals_2 = (1000..1100).map(|i| (i, i.to_string()));
 
-    let batch = db_cf_1
-        .batch()
+    let mut batch = db_cf_1.batch();
+    batch
         .insert_batch(&db_cf_1, keys_vals_1.clone())
         .expect("Failed to batch insert")
         .insert_batch(&db_cf_2, keys_vals_2.clone())
@@ -434,21 +442,21 @@ async fn test_delete_batch() {
     .expect("Failed to open storage");
 
     let keys_vals = (1..100).map(|i| (i, i.to_string()));
-    let insert_batch = db
-        .batch()
+    let mut batch = db.batch();
+    batch
         .insert_batch(&db, keys_vals)
         .expect("Failed to batch insert");
 
     // delete the odd-index keys
     let deletion_keys = (1..100).step_by(2);
-    let delete_batch = insert_batch
+    batch
         .delete_batch(&db, deletion_keys)
         .expect("Failed to batch delete");
 
-    delete_batch.write().expect("Failed to execute batch");
+    batch.write().expect("Failed to execute batch");
 
     for k in db.keys() {
-        assert_eq!(k % 2, 0);
+        assert_eq!(k.unwrap() % 2, 0);
     }
 }
 
@@ -465,16 +473,16 @@ async fn test_delete_range() {
 
     // Note that the last element is (100, "100".to_owned()) here
     let keys_vals = (0..101).map(|i| (i, i.to_string()));
-    let insert_batch = db
-        .batch()
+    let mut batch = db.batch();
+    batch
         .insert_batch(&db, keys_vals)
         .expect("Failed to batch insert");
 
-    let delete_range_batch = insert_batch
+    batch
         .delete_range(&db, &50, &100)
         .expect("Failed to delete range");
 
-    delete_range_batch.write().expect("Failed to execute batch");
+    batch.write().expect("Failed to execute batch");
 
     for k in 0..50 {
         assert!(db.contains_key(&k).expect("Failed to query legal key"),);
@@ -501,25 +509,25 @@ async fn test_clear() {
     let _ = db.clear();
 
     let keys_vals = (0..101).map(|i| (i, i.to_string()));
-    let insert_batch = db
-        .batch()
+    let mut insert_batch = db.batch();
+    insert_batch
         .insert_batch(&db, keys_vals)
         .expect("Failed to batch insert");
 
     insert_batch.write().expect("Failed to execute batch");
 
     // Check we have multiple entries
-    assert!(db.iter().count() > 1);
+    assert!(db.safe_iter().count() > 1);
     let _ = db.clear();
-    assert_eq!(db.iter().count(), 0);
+    assert_eq!(db.safe_iter().count(), 0);
     // Clear again to ensure safety when clearing empty map
     let _ = db.clear();
-    assert_eq!(db.iter().count(), 0);
+    assert_eq!(db.safe_iter().count(), 0);
     // Clear with one item
     let _ = db.insert(&1, &"e".to_string());
-    assert_eq!(db.iter().count(), 1);
+    assert_eq!(db.safe_iter().count(), 1);
     let _ = db.clear();
-    assert_eq!(db.iter().count(), 0);
+    assert_eq!(db.safe_iter().count(), 0);
 }
 
 #[tokio::test]
@@ -539,20 +547,20 @@ async fn test_is_empty() {
     assert!(db.is_empty());
 
     let keys_vals = (0..101).map(|i| (i, i.to_string()));
-    let insert_batch = db
-        .batch()
+    let mut insert_batch = db.batch();
+    insert_batch
         .insert_batch(&db, keys_vals)
         .expect("Failed to batch insert");
 
     insert_batch.write().expect("Failed to execute batch");
 
     // Check we have multiple entries and not empty
-    assert!(db.iter().count() > 1);
+    assert!(db.safe_iter().count() > 1);
     assert!(!db.is_empty());
 
     // Clear again to ensure empty works after clearing
     let _ = db.clear();
-    assert_eq!(db.iter().count(), 0);
+    assert_eq!(db.safe_iter().count(), 0);
     assert!(db.is_empty());
 }
 
@@ -632,7 +640,7 @@ async fn test_multi_remove(#[values(true, false)] is_transactional: bool) {
     // Remove 50 items
     db.multi_remove(keys_vals.clone().map(|kv| kv.0).take(50))
         .expect("Failed to multi-remove");
-    assert_eq!(db.iter().count(), 101 - 50);
+    assert_eq!(db.safe_iter().count(), 101 - 50);
 
     // Check that the remaining are present
     for (k, v) in keys_vals.skip(50) {
@@ -655,11 +663,9 @@ async fn test_transactional() {
     let mut tx1 = db.transaction().expect("failed to initiate transaction");
     let mut tx2 = db.transaction().expect("failed to initiate transaction");
 
-    tx1 = tx1
-        .insert_batch(&db, vec![(key.to_string(), "1".to_string())])
+    tx1.insert_batch(&db, vec![(key.to_string(), "1".to_string())])
         .unwrap();
-    tx2 = tx2
-        .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
+    tx2.insert_batch(&db, vec![(key.to_string(), "2".to_string())])
         .unwrap();
 
     tx1.commit().expect("failed to commit first transaction");
@@ -684,8 +690,7 @@ async fn test_transaction_snapshot() {
         .expect("failed to initiate transaction");
     // write occurs after transaction is created but before first write
     db.insert(&key, &"1".to_string()).unwrap();
-    tx1 = tx1
-        .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
+    tx1.insert_batch(&db, vec![(key.to_string(), "2".to_string())])
         .unwrap();
     tx1.commit().expect("failed to commit first transaction");
     assert_eq!(db.get(&key).unwrap().unwrap(), "2".to_string());
@@ -695,8 +700,7 @@ async fn test_transaction_snapshot() {
     let mut tx1 = db
         .transaction_without_snapshot()
         .expect("failed to initiate transaction");
-    tx1 = tx1
-        .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
+    tx1.insert_batch(&db, vec![(key.to_string(), "2".to_string())])
         .unwrap();
     db.insert(&key, &"1".to_string()).unwrap();
     assert!(matches!(
@@ -709,8 +713,7 @@ async fn test_transaction_snapshot() {
     let mut tx1 = db.transaction().expect("failed to initiate transaction");
     // write occurs after transaction is created, so the conflict is detected
     db.insert(&key, &"1".to_string()).unwrap();
-    tx1 = tx1
-        .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
+    tx1.insert_batch(&db, vec![(key.to_string(), "2".to_string())])
         .unwrap();
     assert!(matches!(
         tx1.commit(),
@@ -718,8 +721,7 @@ async fn test_transaction_snapshot() {
     ));
 
     let mut tx1 = db.transaction().expect("failed to initiate transaction");
-    tx1 = tx1
-        .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
+    tx1.insert_batch(&db, vec![(key.to_string(), "2".to_string())])
         .unwrap();
     // no conflicting writes, should succeed this time.
     tx1.commit().unwrap();
@@ -732,11 +734,9 @@ async fn test_transaction_snapshot() {
     let mut tx2 = db
         .transaction_without_snapshot()
         .expect("failed to initiate transaction");
-    tx1 = tx1
-        .insert_batch(&db, vec![(key.to_string(), "1".to_string())])
+    tx1.insert_batch(&db, vec![(key.to_string(), "1".to_string())])
         .unwrap();
-    tx2 = tx2
-        .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
+    tx2.insert_batch(&db, vec![(key.to_string(), "2".to_string())])
         .unwrap();
     // which ever tx is committed first will succeed.
     tx1.commit().expect("failed to commit");
@@ -752,12 +752,11 @@ async fn test_transaction_snapshot() {
     let mut tx2 = db
         .transaction_without_snapshot()
         .expect("failed to initiate transaction");
-    tx1 = tx1
-        .insert_batch(&db, vec![(key.to_string(), "1".to_string())])
+    tx1.insert_batch(&db, vec![(key.to_string(), "1".to_string())])
         .unwrap();
     tx1.commit().expect("failed to commit");
 
-    tx2 = tx2.insert_batch(&db, vec![(key, "2".to_string())]).unwrap();
+    tx2.insert_batch(&db, vec![(key, "2".to_string())]).unwrap();
     tx2.commit().expect("failed to commit");
 }
 
@@ -776,8 +775,7 @@ async fn test_retry_transaction() {
         let mut tx1 = db
             .transaction_without_snapshot()
             .expect("failed to initiate transaction");
-        tx1 = tx1
-            .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
+        tx1.insert_batch(&db, vec![(key.to_string(), "2".to_string())])
             .unwrap();
         if conflicts < 3 {
             db.insert(&key, &"1".to_string()).unwrap();
@@ -792,8 +790,7 @@ async fn test_retry_transaction() {
         let mut tx1 = db
             .transaction_without_snapshot()
             .expect("failed to initiate transaction");
-        tx1 = tx1
-            .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
+        tx1.insert_batch(&db, vec![(key.to_string(), "2".to_string())])
             .unwrap();
         db.insert(&key, &"1".to_string()).unwrap();
         tx1.commit()
@@ -808,8 +805,7 @@ async fn test_retry_transaction() {
             let mut tx1 = db
                 .transaction_without_snapshot()
                 .expect("failed to initiate transaction");
-            tx1 = tx1
-                .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
+            tx1.insert_batch(&db, vec![(key.to_string(), "2".to_string())])
                 .unwrap();
             db.insert(&key, &"1".to_string()).unwrap();
             tx1.commit()
@@ -835,15 +831,14 @@ async fn test_transaction_read_your_write() {
         .expect("Failed to re-open storage");
     db.insert(&key1.to_string(), &"1".to_string()).unwrap();
     let mut tx = db.transaction().expect("failed to initiate transaction");
-    tx = tx
-        .insert_batch(
-            &db,
-            vec![
-                (key1.to_string(), "11".to_string()),
-                (key2.to_string(), "2".to_string()),
-            ],
-        )
-        .unwrap();
+    tx.insert_batch(
+        &db,
+        vec![
+            (key1.to_string(), "11".to_string()),
+            (key2.to_string(), "2".to_string()),
+        ],
+    )
+    .unwrap();
     assert_eq!(db.get(&key1.to_string()).unwrap(), Some("1".to_string()));
     assert_eq!(db.get(&key2.to_string()).unwrap(), None);
 
@@ -856,17 +851,17 @@ async fn test_transaction_read_your_write() {
         Some("2".to_string())
     );
 
-    tx = tx.delete_batch(&db, vec![(key2.to_string())]).unwrap();
+    tx.delete_batch(&db, vec![(key2.to_string())]).unwrap();
 
     assert_eq!(
         tx.multi_get(&db, vec![key1.to_string(), key2.to_string()])
             .unwrap(),
         vec![Some("11".to_string()), None]
     );
-    let keys: Vec<String> = tx.keys(&db).into_iter().collect();
+    let keys: Vec<String> = tx.keys(&db).into_iter().map(|x| x.unwrap()).collect();
     assert_eq!(keys, vec![key1.to_string()]);
     let values: Vec<_> = tx.values(&db).into_iter().collect();
-    assert_eq!(values, vec!["11".to_string()]);
+    assert_eq!(values, vec![Ok("11".to_string())]);
     assert!(tx.commit().is_ok());
 }
 
@@ -932,8 +927,8 @@ struct ObjectWithRefCount {
 }
 
 fn increment_counter(db: &DBMap<String, ObjectWithRefCount>, key: &str, value: i64) {
-    let batch = db
-        .batch()
+    let mut batch = db.batch();
+    batch
         .partial_merge_batch(db, [(key.to_string(), value.to_le_bytes())])
         .unwrap();
     batch.write().unwrap();
@@ -963,11 +958,9 @@ async fn refcount_test() {
     // increment value 10 times
     let iterations = 10;
     for _ in 0..iterations {
-        db.batch()
-            .merge_batch(&db, [(key.to_string(), object)])
-            .unwrap()
-            .write()
-            .unwrap();
+        let mut batch = db.batch();
+        batch.merge_batch(&db, [(key.to_string(), object)]).unwrap();
+        batch.write().unwrap();
     }
     let value = db
         .get(&key)
@@ -1005,10 +998,8 @@ async fn refcount_with_compaction_test() {
         value: 3,
         ref_count: 1,
     };
-    let batch = db
-        .batch()
-        .merge_batch(&db, [(key.to_string(), object)])
-        .unwrap();
+    let mut batch = db.batch();
+    batch.merge_batch(&db, [(key.to_string(), object)]).unwrap();
     batch.write().unwrap();
     // increment value once
     increment_counter(&db, &key, 1);
@@ -1019,19 +1010,16 @@ async fn refcount_with_compaction_test() {
     increment_counter(&db, &key, -1);
     increment_counter(&db, &key, -1);
     // ref count went to zero. Reading value returns empty array
-    let value = db.get_raw_bytes(&key).unwrap().unwrap();
+    assert!(db.get(&key).is_err());
+    let value = db.multi_get_raw_bytes([(&key)]).unwrap()[0]
+        .clone()
+        .unwrap();
     assert!(value.is_empty());
 
     // refcount increment makes value visible again
     increment_counter(&db, &key, 1);
     let value = db.get(&key).unwrap().unwrap();
     assert_eq!(value.value, object.value);
-
-    // decrement to zero, run compaction and increment back to 1
-    let _snapshot;
-    if let DBWithThreadMode(db) = &*db.rocksdb {
-        _snapshot = db.underlying.snapshot();
-    };
 
     increment_counter(&db, &key, -1);
     db.compact_range(
@@ -1042,10 +1030,10 @@ async fn refcount_with_compaction_test() {
         },
     )
     .unwrap();
+
     increment_counter(&db, &key, 1);
-    // snapshot creation prevents compaction job from removing the value
-    let value = db.get(&key).unwrap().unwrap();
-    assert_eq!(value.value, object.value);
+    let value = db.get_raw_bytes(&key).unwrap().unwrap();
+    assert!(is_ref_count_value(&value));
 }
 
 fn open_map<P: AsRef<Path>, K, V>(

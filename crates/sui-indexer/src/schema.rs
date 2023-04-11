@@ -40,19 +40,16 @@ diesel::table! {
         epoch -> Int8,
         transactions -> Array<Nullable<Text>>,
         previous_checkpoint_digest -> Nullable<Varchar>,
-        next_epoch_committee -> Nullable<Text>,
-        next_epoch_protocol_version -> Nullable<Int8>,
-        end_of_epoch_data -> Nullable<Text>,
+        end_of_epoch -> Bool,
         total_gas_cost -> Int8,
         total_computation_cost -> Int8,
         total_storage_cost -> Int8,
         total_storage_rebate -> Int8,
+        total_transaction_blocks -> Int8,
         total_transactions -> Int8,
-        total_transactions_current_epoch -> Int8,
-        total_transactions_from_genesis -> Int8,
+        network_total_transactions -> Int8,
         timestamp_ms -> Int8,
-        timestamp_ms_str -> Timestamp,
-        checkpoint_tps -> Float4,
+        validator_signature -> Text,
     }
 }
 
@@ -64,6 +61,10 @@ diesel::table! {
         epoch_start_timestamp -> Int8,
         epoch_end_timestamp -> Nullable<Int8>,
         epoch_total_transactions -> Int8,
+        next_epoch_version -> Nullable<Int8>,
+        next_epoch_committee -> Array<Nullable<Bytea>>,
+        next_epoch_committee_stake -> Array<Nullable<Int8>>,
+        epoch_commitments -> Array<Nullable<Bytea>>,
         protocol_version -> Nullable<Int8>,
         reference_gas_price -> Nullable<Int8>,
         total_stake -> Nullable<Int8>,
@@ -88,7 +89,6 @@ diesel::table! {
         module -> Text,
         event_type -> Text,
         event_time_ms -> Nullable<Int8>,
-        parsed_json -> Jsonb,
         event_bcs -> Bytea,
     }
 }
@@ -147,7 +147,7 @@ diesel::table! {
     use super::sql_types::ObjectStatus;
     use super::sql_types::BcsBytes;
 
-    objects_history (epoch, object_id, version) {
+    objects_history (object_id, version, checkpoint) {
         epoch -> Int8,
         checkpoint -> Int8,
         object_id -> Varchar,
@@ -155,6 +155,8 @@ diesel::table! {
         object_digest -> Varchar,
         owner_type -> OwnerType,
         owner_address -> Nullable<Varchar>,
+        old_owner_type -> Nullable<OwnerType>,
+        old_owner_address -> Nullable<Varchar>,
         initial_shared_version -> Nullable<Int8>,
         previous_transaction -> Varchar,
         object_type -> Varchar,
@@ -162,42 +164,6 @@ diesel::table! {
         has_public_transfer -> Bool,
         storage_rebate -> Int8,
         bcs -> Array<Nullable<BcsBytes>>,
-    }
-}
-
-diesel::table! {
-    use diesel::sql_types::*;
-    use super::sql_types::OwnerType;
-    use super::sql_types::ObjectStatus;
-
-    owner (object_id) {
-        epoch -> Int8,
-        checkpoint -> Int8,
-        object_id -> Varchar,
-        version -> Int8,
-        object_digest -> Varchar,
-        owner_type -> OwnerType,
-        owner_address -> Nullable<Varchar>,
-        object_status -> ObjectStatus,
-    }
-}
-
-diesel::table! {
-    use diesel::sql_types::*;
-    use super::sql_types::OwnerType;
-    use super::sql_types::ObjectStatus;
-
-    owner_history (epoch, object_id, version) {
-        epoch -> Int8,
-        checkpoint -> Int8,
-        object_id -> Varchar,
-        version -> Int8,
-        object_digest -> Varchar,
-        owner_type -> Nullable<OwnerType>,
-        owner_address -> Nullable<Varchar>,
-        old_owner_type -> Nullable<OwnerType>,
-        old_owner_address -> Nullable<Varchar>,
-        object_status -> ObjectStatus,
     }
 }
 
@@ -219,6 +185,7 @@ diesel::table! {
         transaction_digest -> Varchar,
         checkpoint_sequence_number -> Int8,
         epoch -> Int8,
+        sender -> Varchar,
         recipient -> Varchar,
     }
 }
@@ -232,8 +199,8 @@ diesel::table! {
         reference_gas_price -> Int8,
         safe_mode -> Bool,
         epoch_start_timestamp_ms -> Int8,
-        stake_subsidy_start_epoch -> Int8,
         epoch_duration_ms -> Int8,
+        stake_subsidy_start_epoch -> Int8,
         stake_subsidy_epoch_counter -> Int8,
         stake_subsidy_balance -> Int8,
         stake_subsidy_current_epoch_amount -> Int8,
@@ -256,9 +223,10 @@ diesel::table! {
         transaction_digest -> Varchar,
         sender -> Varchar,
         recipients -> Array<Nullable<Text>>,
-        checkpoint_sequence_number -> Int8,
-        timestamp_ms -> Int8,
+        checkpoint_sequence_number -> Nullable<Int8>,
+        timestamp_ms -> Nullable<Int8>,
         transaction_kind -> Text,
+        transaction_count -> Int8,
         created -> Array<Nullable<Text>>,
         mutated -> Array<Nullable<Text>>,
         deleted -> Array<Nullable<Text>>,
@@ -273,6 +241,7 @@ diesel::table! {
         computation_cost -> Int8,
         storage_cost -> Int8,
         storage_rebate -> Int8,
+        non_refundable_storage_fee -> Int8,
         gas_price -> Int8,
         raw_transaction -> Bytea,
         transaction_content -> Text,
@@ -336,8 +305,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     move_calls,
     objects,
     objects_history,
-    owner,
-    owner_history,
     packages,
     recipients,
     system_states,

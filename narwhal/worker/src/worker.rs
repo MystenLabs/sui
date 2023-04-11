@@ -2,10 +2,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
+    batch_fetcher::BatchFetcher,
     batch_maker::BatchMaker,
     handlers::{PrimaryReceiverHandler, WorkerReceiverHandler},
     metrics::WorkerChannelMetrics,
-    primary_connector::PrimaryConnector,
     quorum_waiter::QuorumWaiter,
     TransactionValidator, NUM_SHUTDOWN_RECEIVERS,
 };
@@ -18,10 +18,11 @@ use anemo_tower::{
     trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer},
 };
 use anemo_tower::{rate_limit, set_header::SetResponseHeaderLayer};
-use config::{Committee, Parameters, WorkerCache, WorkerId};
-use crypto::{traits::KeyPair as _, NetworkKeyPair, NetworkPublicKey, PublicKey};
+use config::{Authority, AuthorityIdentifier, Committee, Parameters, WorkerCache, WorkerId};
+use crypto::{traits::KeyPair as _, NetworkKeyPair, NetworkPublicKey};
 use mysten_metrics::spawn_logged_monitored_task;
 use mysten_network::{multiaddr::Protocol, Multiaddr};
+use network::client::NetworkClient;
 use network::epoch_filter::{AllowedEpoch, EPOCH_HEADER_KEY};
 use network::failpoints::FailpointsMakeCallbackHandler;
 use network::metrics::MetricsMakeCallbackHandler;
@@ -34,9 +35,8 @@ use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
 use tracing::{error, info};
 use types::{
-    metered_channel::{channel_with_total, Sender},
-    Batch, BatchDigest, ConditionalBroadcastReceiver, PreSubscribedBroadcastSender,
-    PrimaryToWorkerServer, WorkerOurBatchMessage, WorkerToWorkerServer,
+    metered_channel::channel_with_total, Batch, BatchDigest, ConditionalBroadcastReceiver,
+    PreSubscribedBroadcastSender, PrimaryToWorkerServer, WorkerToWorkerServer,
 };
 
 #[cfg(test)]
@@ -50,8 +50,8 @@ use crate::metrics::{Metrics, WorkerEndpointMetrics, WorkerMetrics};
 use crate::transactions_server::TxServer;
 
 pub struct Worker {
-    /// The public key of this authority.
-    primary_name: PublicKey,
+    /// This authority.
+    authority: Authority,
     // The private-public key pair of this worker.
     keypair: NetworkKeyPair,
     /// The id of this worker used for index-based lookup by other NW nodes.
@@ -68,26 +68,25 @@ pub struct Worker {
 
 impl Worker {
     pub fn spawn(
-        primary_name: PublicKey,
+        authority: Authority,
         keypair: NetworkKeyPair,
         id: WorkerId,
         committee: Committee,
         worker_cache: WorkerCache,
         parameters: Parameters,
         validator: impl TransactionValidator,
+        client: NetworkClient,
         store: DBMap<BatchDigest, Batch>,
         metrics: Metrics,
         tx_shutdown: &mut PreSubscribedBroadcastSender,
     ) -> Vec<JoinHandle<()>> {
-        info!(
-            "Boot worker node with id {} peer id {}",
-            id,
-            PeerId(keypair.public().0.to_bytes())
-        );
+        let worker_name = keypair.public().clone();
+        let worker_peer_id = PeerId(worker_name.0.to_bytes());
+        info!("Boot worker node with id {} peer id {}", id, worker_peer_id,);
 
         // Define a worker instance.
         let worker = Self {
-            primary_name: primary_name.clone(),
+            authority: authority.clone(),
             keypair,
             id,
             committee: committee.clone(),
@@ -103,23 +102,11 @@ impl Worker {
         let outbound_network_metrics = Arc::new(metrics.outbound_network_metrics.unwrap());
         let network_connection_metrics = metrics.network_connection_metrics.unwrap();
 
-        // Spawn all worker tasks.
-        let (tx_our_batch, rx_our_batch) = channel_with_total(
-            CHANNEL_CAPACITY,
-            &channel_metrics.tx_our_batch,
-            &channel_metrics.tx_our_batch_total,
-        );
-        let (tx_others_batch, rx_others_batch) = channel_with_total(
-            CHANNEL_CAPACITY,
-            &channel_metrics.tx_others_batch,
-            &channel_metrics.tx_others_batch_total,
-        );
-
         let mut shutdown_receivers = tx_shutdown.subscribe_n(NUM_SHUTDOWN_RECEIVERS);
 
         let mut worker_service = WorkerToWorkerServer::new(WorkerReceiverHandler {
             id: worker.id,
-            tx_others_batch,
+            client: client.clone(),
             store: worker.store.clone(),
             validator: validator.clone(),
         });
@@ -141,21 +128,24 @@ impl Worker {
             ));
         }
 
+        // Legacy RPC interface, only used by delete_batches() for external consensus.
         let primary_service = PrimaryToWorkerServer::new(PrimaryReceiverHandler {
-            name: worker.primary_name.clone(),
+            authority_id: worker.authority.id(),
             id: worker.id,
             committee: worker.committee.clone(),
             worker_cache: worker.worker_cache.clone(),
             store: worker.store.clone(),
             request_batch_timeout: worker.parameters.sync_retry_delay,
             request_batch_retry_nodes: worker.parameters.sync_retry_nodes,
+            network: None,
+            batch_fetcher: None,
             validator: validator.clone(),
         });
 
         // Receive incoming messages from other workers.
         let address = worker
             .worker_cache
-            .worker(&primary_name, &id)
+            .worker(authority.protocol_key(), &id)
             .expect("Our public key or worker id is not in the worker cache")
             .worker_address;
         let address = address
@@ -163,13 +153,10 @@ impl Worker {
             .unwrap();
         let addr = address.to_anemo_address().unwrap();
 
-        let epoch_string: String = committee.epoch.to_string();
+        let epoch_string: String = committee.epoch().to_string();
 
         // Set up anemo Network.
-        let our_primary_peer_id = committee
-            .network_key(&primary_name)
-            .map(|public_key| PeerId(public_key.0.to_bytes()))
-            .unwrap();
+        let our_primary_peer_id = PeerId(authority.network_key().0.to_bytes());
         let primary_to_worker_router = anemo::Router::new()
             .add_rpc_service(primary_service)
             // Add an Authorization Layer to ensure that we only service requests from our primary
@@ -281,11 +268,33 @@ impl Worker {
 
         info!("Worker {} listening to worker messages on {}", id, address);
 
+        let batch_fetcher = BatchFetcher::new(
+            worker_name,
+            network.clone(),
+            worker.store.clone(),
+            node_metrics.clone(),
+        );
+        client.set_primary_to_worker_local_handler(
+            worker_peer_id,
+            Arc::new(PrimaryReceiverHandler {
+                authority_id: worker.authority.id(),
+                id: worker.id,
+                committee: worker.committee.clone(),
+                worker_cache: worker.worker_cache.clone(),
+                store: worker.store.clone(),
+                request_batch_timeout: worker.parameters.sync_retry_delay,
+                request_batch_retry_nodes: worker.parameters.sync_retry_nodes,
+                network: Some(network.clone()),
+                batch_fetcher: Some(batch_fetcher),
+                validator: validator.clone(),
+            }),
+        );
+
         let mut peer_types = HashMap::new();
 
         let other_workers = worker
             .worker_cache
-            .others_workers_by_id(&primary_name, &id)
+            .others_workers_by_id(authority.protocol_key(), &id)
             .into_iter()
             .map(|(_, info)| (info.name, info.worker_address));
 
@@ -300,16 +309,11 @@ impl Worker {
         }
 
         // Connect worker to its corresponding primary.
-        let primary_address = committee
-            .primary(&primary_name)
-            .expect("Our primary is not in the committee");
-
-        let primary_network_key = committee
-            .network_key(&primary_name)
-            .expect("Our primary is not in the committee");
-
-        let (peer_id, address) =
-            Self::add_peer_in_network(&network, primary_network_key.clone(), &primary_address);
+        let (peer_id, address) = Self::add_peer_in_network(
+            &network,
+            authority.network_key(),
+            &authority.primary_address(),
+        );
         peer_types.insert(peer_id, "our_primary".to_string());
         info!(
             "Adding our primary with peer id {} and address {}",
@@ -318,8 +322,8 @@ impl Worker {
 
         // update the peer_types with the "other_primary". We do not add them in the Network
         // struct, otherwise the networking library will try to connect to it
-        let other_primaries: Vec<(PublicKey, Multiaddr, NetworkPublicKey)> =
-            committee.others_primaries(&primary_name);
+        let other_primaries: Vec<(AuthorityIdentifier, Multiaddr, NetworkPublicKey)> =
+            committee.others_primaries_by_id(authority.id());
         for (_, _, network_key) in other_primaries {
             peer_types.insert(
                 PeerId(network_key.0.to_bytes()),
@@ -331,6 +335,7 @@ impl Worker {
             network.downgrade(),
             network_connection_metrics,
             peer_types,
+            Some(shutdown_receivers.pop().unwrap()),
         );
 
         let network_admin_server_base_port = parameters
@@ -349,24 +354,17 @@ impl Worker {
             shutdown_receivers.pop().unwrap(),
         );
 
-        let primary_connector_handle = PrimaryConnector::spawn(
-            primary_network_key,
-            shutdown_receivers.pop().unwrap(),
-            rx_our_batch,
-            rx_others_batch,
-            network.clone(),
-        );
         let client_flow_handles = worker.handle_clients_transactions(
             vec![
                 shutdown_receivers.pop().unwrap(),
                 shutdown_receivers.pop().unwrap(),
                 shutdown_receivers.pop().unwrap(),
             ],
-            tx_our_batch,
             node_metrics,
             channel_metrics,
             endpoint_metrics,
             validator,
+            client,
             network.clone(),
         );
 
@@ -379,16 +377,12 @@ impl Worker {
             id,
             worker
                 .worker_cache
-                .worker(&worker.primary_name, &worker.id)
+                .worker(authority.protocol_key(), &worker.id)
                 .expect("Our public key or worker id is not in the worker cache")
                 .transactions
         );
 
-        let mut handles = vec![
-            primary_connector_handle,
-            connection_monitor_handle,
-            network_shutdown_handle,
-        ];
+        let mut handles = vec![connection_monitor_handle, network_shutdown_handle];
         handles.extend(admin_handles);
         handles.extend(client_flow_handles);
         handles
@@ -437,14 +431,11 @@ impl Worker {
     fn handle_clients_transactions(
         &self,
         mut shutdown_receivers: Vec<ConditionalBroadcastReceiver>,
-        tx_our_batch: Sender<(
-            WorkerOurBatchMessage,
-            Option<tokio::sync::oneshot::Sender<()>>,
-        )>,
         node_metrics: Arc<WorkerMetrics>,
         channel_metrics: Arc<WorkerChannelMetrics>,
         endpoint_metrics: WorkerEndpointMetrics,
         validator: impl TransactionValidator,
+        client: NetworkClient,
         network: anemo::Network,
     ) -> Vec<JoinHandle<()>> {
         let (tx_batch_maker, rx_batch_maker) = channel_with_total(
@@ -461,7 +452,7 @@ impl Worker {
         // We first receive clients' transactions from the network.
         let address = self
             .worker_cache
-            .worker(&self.primary_name, &self.id)
+            .worker(self.authority.protocol_key(), &self.id)
             .expect("Our public key or worker id is not in the worker cache")
             .transactions;
         let address = address
@@ -487,14 +478,14 @@ impl Worker {
             rx_batch_maker,
             tx_quorum_waiter,
             node_metrics,
+            client,
             self.store.clone(),
-            tx_our_batch,
         );
 
         // The `QuorumWaiter` waits for 2f authorities to acknowledge reception of the batch. It then forwards
         // the batch to the `Processor`.
         let quorum_waiter_handle = QuorumWaiter::spawn(
-            self.primary_name.clone(),
+            self.authority.clone(),
             self.id,
             self.committee.clone(),
             self.worker_cache.clone(),

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::object_runtime::{ObjectRuntime, TransferResult};
-use crate::{legacy_emit_cost, natives::NativesCostTable};
+use crate::natives::NativesCostTable;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress, gas_algebra::InternalGas, language_storage::TypeTag,
@@ -14,10 +14,7 @@ use move_vm_types::{
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
-use sui_types::{
-    base_types::{MoveObjectType, SequenceNumber},
-    object::Owner,
-};
+use sui_types::{base_types::SequenceNumber, object::Owner};
 
 const E_SHARED_NON_NEW_OBJECT: u64 = 0;
 
@@ -133,7 +130,7 @@ pub fn share_object(
         ty,
         obj,
     )?;
-    let cost = legacy_emit_cost();
+    let cost = context.gas_used();
     Ok(match transfer_result {
         // New means the ID was created in this transaction
         // SameOwner means the object was previously shared and was re-shared; since
@@ -150,15 +147,13 @@ fn object_runtime_transfer(
     ty: Type,
     obj: Value,
 ) -> PartialVMResult<TransferResult> {
-    let tag = match context.type_to_type_tag(&ty)? {
-        TypeTag::Struct(s) => *s,
-        _ => {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Sui verifier guarantees this is a struct".to_string()),
-            )
-        }
-    };
+    if !matches!(context.type_to_type_tag(&ty)?, TypeTag::Struct(_)) {
+        return Err(
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                .with_message("Sui verifier guarantees this is a struct".to_string()),
+        );
+    }
+
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
-    obj_runtime.transfer(owner, ty, MoveObjectType::from(tag), obj)
+    obj_runtime.transfer(owner, ty, obj)
 }

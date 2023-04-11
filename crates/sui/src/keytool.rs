@@ -32,23 +32,30 @@ mod keytool_tests;
 pub enum KeyToolCommand {
     /// Generate a new keypair with key scheme flag {ed25519 | secp256k1 | secp256r1}
     /// with optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or
-    /// m/54'/784'/0'/0/0 for secp256k1 or m/74'/784'/0'/0/0 for secp256r1.
+    /// m/54'/784'/0'/0/0 for secp256k1 or m/74'/784'/0'/0/0 for secp256r1. Word
+    /// length can be { word12 | word15 | word18 | word21 | word24} default to word12
+    /// if not specified.
     ///
     /// The keypair file is output to the current directory. The content of the file is
     /// a Base64 encoded string of 33-byte `flag || privkey`. Note: To generate and add keypair
     /// to sui.keystore, use `sui client new-address`), see more at [enum SuiClientCommands].
     Generate {
         key_scheme: SignatureScheme,
+        word_length: Option<String>,
         derivation_path: Option<DerivationPath>,
     },
     /// This reads the content at the provided file path. The accepted format can be
     /// [enum SuiKeyPair] (Base64 encoded of 33-byte `flag || privkey`) or `type AuthorityKeyPair`
     /// (Base64 encoded `privkey`). It prints its Base64 encoded public key and the key scheme flag.
-    Show { file: PathBuf },
+    Show {
+        file: PathBuf,
+    },
     /// This takes [enum SuiKeyPair] of Base64 encoded of 33-byte `flag || privkey`). It
     /// outputs the keypair into a file at the current directory, and prints out its Sui
     /// address, Base64 encoded public key, and the key scheme flag.
-    Unpack { keypair: SuiKeyPair },
+    Unpack {
+        keypair: SuiKeyPair,
+    },
     /// List all keys by its Sui address, Base64 encoded public key, key scheme name in
     /// sui.keystore.
     List,
@@ -68,7 +75,7 @@ pub enum KeyToolCommand {
     },
     /// Add a new key to sui.key based on the input mnemonic phrase, the key scheme flag {ed25519 | secp256k1 | secp256r1}
     /// and an optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1
-    /// or m/74'/784'/0'/0/0 for secp256r1.
+    /// or m/74'/784'/0'/0/0 for secp256r1. Supports mnemonic phrase of word length 12, 15, 18`, 21, 24.
     Import {
         mnemonic_phrase: String,
         key_scheme: SignatureScheme,
@@ -78,7 +85,13 @@ pub enum KeyToolCommand {
     /// [enum SuiKeyPair] (Base64 encoded of 33-byte `flag || privkey`) or `type AuthorityKeyPair`
     /// (Base64 encoded `privkey`). This prints out the account keypair as Base64 encoded `flag || privkey`,
     /// the network keypair, worker keypair, protocol keypair as Base64 encoded `privkey`.
-    LoadKeypair { file: PathBuf },
+    LoadKeypair {
+        file: PathBuf,
+    },
+
+    Base64PubKeyToAddress {
+        base64_key: String,
+    },
 
     /// To MultiSig Sui Address. Pass in a list of all public keys `flag || pk` in Base64.
     /// See `keytool list` for example public keys.
@@ -112,6 +125,7 @@ impl KeyToolCommand {
             KeyToolCommand::Generate {
                 key_scheme,
                 derivation_path,
+                word_length,
             } => {
                 if "bls12381" == key_scheme.to_string() {
                     // Generate BLS12381 key for authority without key derivation.
@@ -120,7 +134,8 @@ impl KeyToolCommand {
                     let file_name = format!("bls-{address}.key");
                     write_authority_keypair_to_file(&keypair, file_name)?;
                 } else {
-                    let (address, kp, scheme, _) = generate_new_key(key_scheme, derivation_path)?;
+                    let (address, kp, scheme, _) =
+                        generate_new_key(key_scheme, derivation_path, word_length)?;
                     let file = format!("{address}.key");
                     write_keypair_to_file(&kp, &file)?;
                     println!(
@@ -180,7 +195,7 @@ impl KeyToolCommand {
             } => {
                 println!("Signer address: {}", address);
                 println!("Raw tx_bytes to execute: {}", data);
-                let intent = intent.unwrap_or_default();
+                let intent = intent.unwrap_or_else(Intent::sui_transaction);
                 println!("Intent: {:?}", intent);
                 let msg: TransactionData =
                     bcs::from_bytes(&Base64::decode(&data).map_err(|e| {
@@ -202,6 +217,7 @@ impl KeyToolCommand {
                     sui_signature.encode_base64()
                 );
             }
+
             KeyToolCommand::Import {
                 mnemonic_phrase,
                 key_scheme,
@@ -210,6 +226,13 @@ impl KeyToolCommand {
                 let address =
                     keystore.import_from_mnemonic(&mnemonic_phrase, key_scheme, derivation_path)?;
                 info!("Key imported for address [{address}]");
+            }
+
+            KeyToolCommand::Base64PubKeyToAddress { base64_key } => {
+                let pk = PublicKey::decode_base64(&base64_key)
+                    .map_err(|e| anyhow!("Invalid base64 key: {:?}", e))?;
+                let address = SuiAddress::from(&pk);
+                println!("Address {:?}", address);
             }
 
             KeyToolCommand::LoadKeypair { file } => {

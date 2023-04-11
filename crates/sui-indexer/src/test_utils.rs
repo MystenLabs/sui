@@ -3,8 +3,9 @@
 
 use anyhow::anyhow;
 use prometheus::Registry;
-use sui_json_rpc_types::SuiTransactionResponse;
 use tokio::task::JoinHandle;
+
+use sui_json_rpc_types::SuiTransactionBlockResponse;
 
 use crate::errors::IndexerError;
 use crate::store::PgIndexerStore;
@@ -15,18 +16,18 @@ use crate::{new_pg_connection_pool, Indexer, IndexerConfig};
 pub async fn start_test_indexer(
     config: IndexerConfig,
 ) -> Result<(PgIndexerStore, JoinHandle<Result<(), IndexerError>>), anyhow::Error> {
-    let pg_connection_pool = new_pg_connection_pool(&config.base_connection_url())
+    let (blocking_pool, async_pool) = new_pg_connection_pool(&config.base_connection_url())
         .await
         .map_err(|e| anyhow!("unable to connect to Postgres, is it running? {e}"))?;
     if config.reset_db {
         reset_database(
-            &mut pg_connection_pool
+            &mut blocking_pool
                 .get()
                 .map_err(|e| anyhow!("Fail to get pg_connection_pool {e}"))?,
             true,
         )?;
     }
-    let store = PgIndexerStore::new(pg_connection_pool);
+    let store = PgIndexerStore::new(async_pool, blocking_pool).await;
 
     let registry = Registry::default();
     let store_clone = store.clone();
@@ -35,34 +36,29 @@ pub async fn start_test_indexer(
 }
 
 #[derive(Clone)]
-pub struct SuiTransactionResponseBuilder<'a> {
-    response: SuiTransactionResponse,
-    full_response: &'a SuiTransactionResponse,
-    required_fields: &'a SuiTransactionResponse,
+pub struct SuiTransactionBlockResponseBuilder<'a> {
+    response: SuiTransactionBlockResponse,
+    full_response: &'a SuiTransactionBlockResponse,
 }
 
-impl<'a> SuiTransactionResponseBuilder<'a> {
-    pub fn new(
-        full_response: &'a SuiTransactionResponse,
-        required_fields: &'a SuiTransactionResponse,
-    ) -> Self {
+impl<'a> SuiTransactionBlockResponseBuilder<'a> {
+    pub fn new(full_response: &'a SuiTransactionBlockResponse) -> Self {
         Self {
-            response: SuiTransactionResponse::default(),
+            response: SuiTransactionBlockResponse::default(),
             full_response,
-            required_fields,
         }
     }
 
-    pub fn with_transaction(mut self) -> Self {
-        self.response = SuiTransactionResponse {
+    pub fn with_input(mut self) -> Self {
+        self.response = SuiTransactionBlockResponse {
             transaction: self.full_response.transaction.clone(),
             ..self.response
         };
         self
     }
 
-    pub fn with_raw_transaction(mut self) -> Self {
-        self.response = SuiTransactionResponse {
+    pub fn with_raw_input(mut self) -> Self {
+        self.response = SuiTransactionBlockResponse {
             raw_transaction: self.full_response.raw_transaction.clone(),
             ..self.response
         };
@@ -70,7 +66,7 @@ impl<'a> SuiTransactionResponseBuilder<'a> {
     }
 
     pub fn with_effects(mut self) -> Self {
-        self.response = SuiTransactionResponse {
+        self.response = SuiTransactionBlockResponse {
             effects: self.full_response.effects.clone(),
             ..self.response
         };
@@ -78,7 +74,7 @@ impl<'a> SuiTransactionResponseBuilder<'a> {
     }
 
     pub fn with_events(mut self) -> Self {
-        self.response = SuiTransactionResponse {
+        self.response = SuiTransactionBlockResponse {
             events: self.full_response.events.clone(),
             ..self.response
         };
@@ -86,7 +82,7 @@ impl<'a> SuiTransactionResponseBuilder<'a> {
     }
 
     pub fn with_balance_changes(mut self) -> Self {
-        self.response = SuiTransactionResponse {
+        self.response = SuiTransactionBlockResponse {
             balance_changes: self.full_response.balance_changes.clone(),
             ..self.response
         };
@@ -94,7 +90,7 @@ impl<'a> SuiTransactionResponseBuilder<'a> {
     }
 
     pub fn with_object_changes(mut self) -> Self {
-        self.response = SuiTransactionResponse {
+        self.response = SuiTransactionBlockResponse {
             object_changes: self.full_response.object_changes.clone(),
             ..self.response
         };
@@ -102,7 +98,7 @@ impl<'a> SuiTransactionResponseBuilder<'a> {
     }
 
     pub fn with_input_and_changes(mut self) -> Self {
-        self.response = SuiTransactionResponse {
+        self.response = SuiTransactionBlockResponse {
             transaction: self.full_response.transaction.clone(),
             balance_changes: self.full_response.balance_changes.clone(),
             object_changes: self.full_response.object_changes.clone(),
@@ -111,28 +107,16 @@ impl<'a> SuiTransactionResponseBuilder<'a> {
         self
     }
 
-    pub fn with_all(mut self) -> Self {
-        self.response = SuiTransactionResponse {
-            transaction: self.full_response.transaction.clone(),
-            raw_transaction: self.full_response.raw_transaction.clone(),
-            effects: self.full_response.effects.clone(),
-            events: self.full_response.events.clone(),
-            balance_changes: self.full_response.balance_changes.clone(),
-            object_changes: self.full_response.object_changes.clone(),
-            ..self.response
-        };
-        self
-    }
-
-    pub fn build(self) -> SuiTransactionResponse {
-        SuiTransactionResponse {
+    pub fn build(self) -> SuiTransactionBlockResponse {
+        SuiTransactionBlockResponse {
             transaction: self.response.transaction,
             raw_transaction: self.response.raw_transaction,
             effects: self.response.effects,
             events: self.response.events,
             balance_changes: self.response.balance_changes,
             object_changes: self.response.object_changes,
-            ..self.required_fields.clone()
+            // Use full response for any fields that aren't showable
+            ..self.full_response.clone()
         }
     }
 }

@@ -1,0 +1,1 @@
+sandbox run sources/bad_borrow.move

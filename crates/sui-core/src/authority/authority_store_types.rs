@@ -81,10 +81,17 @@ impl From<StoreObject> for StoreObjectWrapper {
     }
 }
 
+#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
+pub enum StoreObjectV1 {
+    Value(StoreObjectValue),
+    Deleted,
+    Wrapped,
+}
+
 /// Forked version of [`sui_types::object::Object`]
 /// Used for efficient storing of move objects in the database
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
-pub struct StoreObjectV1 {
+pub struct StoreObjectValue {
     pub data: StoreData,
     pub owner: Owner,
     pub previous_transaction: TransactionDigest,
@@ -213,16 +220,19 @@ pub(crate) fn get_store_object_pair(
             }
         }
     };
-    let store_object = StoreObject {
+    let store_object = StoreObjectValue {
         data,
         owner: object.owner,
         previous_transaction: object.previous_transaction,
         storage_rebate: object.storage_rebate,
     };
-    StoreObjectPair(store_object.into(), indirect_object.map(|i| i.into()))
+    StoreObjectPair(
+        StoreObject::Value(store_object).into(),
+        indirect_object.map(|i| i.into()),
+    )
 }
 
-pub struct MigratedStoreObjectPair(pub StoreObject, pub Option<StoreMoveObject>);
+pub struct MigratedStoreObjectPair(pub StoreObjectValue, pub Option<StoreMoveObject>);
 impl TryFrom<MigratedStoreObjectPair> for Object {
     type Error = SuiError;
 

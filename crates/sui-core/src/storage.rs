@@ -96,11 +96,11 @@ impl ReadStore for RocksDbStore {
         Ok(self.committee_store.get_committee(&epoch).unwrap())
     }
 
-    fn get_transaction(
+    fn get_transaction_block(
         &self,
         digest: &TransactionDigest,
     ) -> Result<Option<VerifiedTransaction>, Self::Error> {
-        self.authority_store.get_transaction(digest)
+        self.authority_store.get_transaction_block(digest)
     }
 
     fn get_transaction_effects(

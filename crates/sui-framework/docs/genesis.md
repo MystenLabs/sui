@@ -9,6 +9,7 @@
 -  [Struct `GenesisChainParameters`](#0x3_genesis_GenesisChainParameters)
 -  [Struct `TokenDistributionSchedule`](#0x3_genesis_TokenDistributionSchedule)
 -  [Struct `TokenAllocation`](#0x3_genesis_TokenAllocation)
+-  [Constants](#@Constants_0)
 -  [Function `create`](#0x3_genesis_create)
 -  [Function `allocate_tokens`](#0x3_genesis_allocate_tokens)
 -  [Function `activate_validators`](#0x3_genesis_activate_validators)
@@ -16,11 +17,11 @@
 
 <pre><code><b>use</b> <a href="">0x1::option</a>;
 <b>use</b> <a href="">0x1::vector</a>;
-<b>use</b> <a href="">0x2::balance</a>;
-<b>use</b> <a href="">0x2::coin</a>;
-<b>use</b> <a href="">0x2::object</a>;
-<b>use</b> <a href="">0x2::sui</a>;
-<b>use</b> <a href="">0x2::tx_context</a>;
+<b>use</b> <a href="../../../.././build/Sui/docs/balance.md#0x2_balance">0x2::balance</a>;
+<b>use</b> <a href="../../../.././build/Sui/docs/coin.md#0x2_coin">0x2::coin</a>;
+<b>use</b> <a href="../../../.././build/Sui/docs/object.md#0x2_object">0x2::object</a>;
+<b>use</b> <a href="../../../.././build/Sui/docs/sui.md#0x2_sui">0x2::sui</a>;
+<b>use</b> <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 <b>use</b> <a href="stake_subsidy.md#0x3_stake_subsidy">0x3::stake_subsidy</a>;
 <b>use</b> <a href="sui_system.md#0x3_sui_system">0x3::sui_system</a>;
 <b>use</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner">0x3::sui_system_state_inner</a>;
@@ -306,6 +307,31 @@
 
 </details>
 
+<a name="@Constants_0"></a>
+
+## Constants
+
+
+<a name="0x3_genesis_EDuplicateValidator"></a>
+
+The <code>create</code> function was called with duplicate validators.
+
+
+<pre><code><b>const</b> <a href="genesis.md#0x3_genesis_EDuplicateValidator">EDuplicateValidator</a>: u64 = 1;
+</code></pre>
+
+
+
+<a name="0x3_genesis_ENotCalledAtGenesis"></a>
+
+The <code>create</code> function was called at a non-genesis epoch.
+
+
+<pre><code><b>const</b> <a href="genesis.md#0x3_genesis_ENotCalledAtGenesis">ENotCalledAtGenesis</a>: u64 = 0;
+</code></pre>
+
+
+
 <a name="0x3_genesis_create"></a>
 
 ## Function `create`
@@ -315,7 +341,7 @@ It will create a singleton SuiSystemState object, which contains
 all the information we need in the system.
 
 
-<pre><code><b>fun</b> <a href="genesis.md#0x3_genesis_create">create</a>(sui_system_state_id: <a href="_UID">object::UID</a>, sui_supply: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, genesis_chain_parameters: <a href="genesis.md#0x3_genesis_GenesisChainParameters">genesis::GenesisChainParameters</a>, genesis_validators: <a href="">vector</a>&lt;<a href="genesis.md#0x3_genesis_GenesisValidatorMetadata">genesis::GenesisValidatorMetadata</a>&gt;, token_distribution_schedule: <a href="genesis.md#0x3_genesis_TokenDistributionSchedule">genesis::TokenDistributionSchedule</a>, ctx: &<b>mut</b> <a href="_TxContext">tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="genesis.md#0x3_genesis_create">create</a>(sui_system_state_id: <a href="../../../.././build/Sui/docs/object.md#0x2_object_UID">object::UID</a>, sui_supply: <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="../../../.././build/Sui/docs/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, genesis_chain_parameters: <a href="genesis.md#0x3_genesis_GenesisChainParameters">genesis::GenesisChainParameters</a>, genesis_validators: <a href="">vector</a>&lt;<a href="genesis.md#0x3_genesis_GenesisValidatorMetadata">genesis::GenesisValidatorMetadata</a>&gt;, token_distribution_schedule: <a href="genesis.md#0x3_genesis_TokenDistributionSchedule">genesis::TokenDistributionSchedule</a>, ctx: &<b>mut</b> <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -333,18 +359,18 @@ all the information we need in the system.
     ctx: &<b>mut</b> TxContext,
 ) {
     // Ensure this is only called at <a href="genesis.md#0x3_genesis">genesis</a>
-    <b>assert</b>!(<a href="_epoch">tx_context::epoch</a>(ctx) == 0, 0);
+    <b>assert</b>!(<a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx) == 0, <a href="genesis.md#0x3_genesis_ENotCalledAtGenesis">ENotCalledAtGenesis</a>);
 
     <b>let</b> <a href="genesis.md#0x3_genesis_TokenDistributionSchedule">TokenDistributionSchedule</a> {
         stake_subsidy_fund_mist,
         allocations,
     } = token_distribution_schedule;
 
-    <b>let</b> subsidy_fund = <a href="_split">balance::split</a>(
+    <b>let</b> subsidy_fund = <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_split">balance::split</a>(
         &<b>mut</b> sui_supply,
         stake_subsidy_fund_mist,
     );
-    <b>let</b> storage_fund = <a href="_zero">balance::zero</a>();
+    <b>let</b> <a href="storage_fund.md#0x3_storage_fund">storage_fund</a> = <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_zero">balance::zero</a>();
 
     // Create all the `Validator` structs
     <b>let</b> validators = <a href="_empty">vector::empty</a>();
@@ -391,7 +417,7 @@ all the information we need in the system.
         // Ensure that each <a href="validator.md#0x3_validator">validator</a> is unique
         <b>assert</b>!(
             !<a href="validator_set.md#0x3_validator_set_is_duplicate_validator">validator_set::is_duplicate_validator</a>(&validators, &<a href="validator.md#0x3_validator">validator</a>),
-            2,
+            <a href="genesis.md#0x3_genesis_EDuplicateValidator">EDuplicateValidator</a>,
         );
 
         <a href="_push_back">vector::push_back</a>(&<b>mut</b> validators, <a href="validator.md#0x3_validator">validator</a>);
@@ -435,7 +461,7 @@ all the information we need in the system.
     <a href="sui_system.md#0x3_sui_system_create">sui_system::create</a>(
         sui_system_state_id,
         validators,
-        storage_fund,
+        <a href="storage_fund.md#0x3_storage_fund">storage_fund</a>,
         genesis_chain_parameters.protocol_version,
         genesis_chain_parameters.chain_start_timestamp_ms,
         system_parameters,
@@ -455,7 +481,7 @@ all the information we need in the system.
 
 
 
-<pre><code><b>fun</b> <a href="genesis.md#0x3_genesis_allocate_tokens">allocate_tokens</a>(sui_supply: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, allocations: <a href="">vector</a>&lt;<a href="genesis.md#0x3_genesis_TokenAllocation">genesis::TokenAllocation</a>&gt;, validators: &<b>mut</b> <a href="">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, ctx: &<b>mut</b> <a href="_TxContext">tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="genesis.md#0x3_genesis_allocate_tokens">allocate_tokens</a>(sui_supply: <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="../../../.././build/Sui/docs/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, allocations: <a href="">vector</a>&lt;<a href="genesis.md#0x3_genesis_TokenAllocation">genesis::TokenAllocation</a>&gt;, validators: &<b>mut</b> <a href="">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, ctx: &<b>mut</b> <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -478,7 +504,7 @@ all the information we need in the system.
             staked_with_validator,
         } = <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> allocations);
 
-        <b>let</b> allocation_balance = <a href="_split">balance::split</a>(&<b>mut</b> sui_supply, amount_mist);
+        <b>let</b> allocation_balance = <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> sui_supply, amount_mist);
 
         <b>if</b> (<a href="_is_some">option::is_some</a>(&staked_with_validator)) {
             <b>let</b> validator_address = <a href="_destroy_some">option::destroy_some</a>(staked_with_validator);
@@ -490,8 +516,8 @@ all the information we need in the system.
                 ctx
             );
         } <b>else</b> {
-            <a href="_transfer">sui::transfer</a>(
-                <a href="_from_balance">coin::from_balance</a>(allocation_balance, ctx),
+            <a href="../../../.././build/Sui/docs/sui.md#0x2_sui_transfer">sui::transfer</a>(
+                <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_from_balance">coin::from_balance</a>(allocation_balance, ctx),
                 recipient_address,
             );
         };
@@ -500,7 +526,7 @@ all the information we need in the system.
 
     // Provided allocations must fully allocate the sui_supply and there
     // should be none left at this point.
-    <a href="_destroy_zero">balance::destroy_zero</a>(sui_supply);
+    <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_destroy_zero">balance::destroy_zero</a>(sui_supply);
 }
 </code></pre>
 

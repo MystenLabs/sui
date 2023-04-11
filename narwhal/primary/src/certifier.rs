@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{aggregators::VotesAggregator, metrics::PrimaryMetrics, synchronizer::Synchronizer};
 
-use config::Committee;
-use crypto::{NetworkPublicKey, PublicKey, Signature};
+use config::{AuthorityIdentifier, Committee};
+use crypto::{NetworkPublicKey, Signature};
 use fastcrypto::signature_service::SignatureService;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
@@ -13,6 +13,7 @@ use network::anemo_ext::NetworkExt;
 use std::sync::Arc;
 use std::time::Duration;
 use storage::{CertificateStore, HeaderStore};
+use sui_macros::fail_point_async;
 use tokio::{
     sync::oneshot,
     task::{JoinHandle, JoinSet},
@@ -22,8 +23,8 @@ use types::{
     ensure,
     error::{DagError, DagResult},
     metered_channel::Receiver,
-    Certificate, CertificateDigest, ConditionalBroadcastReceiver, Header, PrimaryToPrimaryClient,
-    RequestVoteRequest, Vote,
+    Certificate, CertificateDigest, ConditionalBroadcastReceiver, Header, HeaderAPI,
+    PrimaryToPrimaryClient, RequestVoteRequest, Vote, VoteAPI,
 };
 
 #[cfg(test)]
@@ -36,8 +37,8 @@ pub mod certifier_tests;
 /// It receives headers to propose from Proposer via `rx_headers`, and sends out certificates to be
 /// broadcasted by calling `Synchronizer::accept_own_certificate()`.
 pub struct Certifier {
-    /// The public key of this primary.
-    name: PublicKey,
+    /// The identifier of this primary.
+    authority_id: AuthorityIdentifier,
     /// The committee information.
     committee: Committee,
     /// The persistent storage keyed to headers.
@@ -70,7 +71,7 @@ impl Certifier {
     #[allow(clippy::too_many_arguments)]
     #[must_use]
     pub fn spawn(
-        name: PublicKey,
+        authority_id: AuthorityIdentifier,
         committee: Committee,
         header_store: HeaderStore,
         certificate_store: CertificateStore,
@@ -84,7 +85,7 @@ impl Certifier {
         spawn_logged_monitored_task!(
             async move {
                 Self {
-                    name,
+                    authority_id,
                     committee,
                     header_store,
                     certificate_store,
@@ -122,18 +123,12 @@ impl Certifier {
         network: anemo::Network,
         committee: Committee,
         certificate_store: CertificateStore,
-        authority: PublicKey,
+        authority: AuthorityIdentifier,
         target: NetworkPublicKey,
         header: Header,
     ) -> DagResult<Vote> {
         let peer_id = anemo::PeerId(target.0.to_bytes());
         let peer = network.waiting_peer(peer_id);
-
-        fail::fail_point!("request-vote", |_| {
-            Err(DagError::NetworkError(format!(
-                "Injected error in request vote for {header}"
-            )))
-        });
 
         let mut client = PrimaryToPrimaryClient::new(peer);
 
@@ -151,7 +146,7 @@ impl Certifier {
                         missing_parents
                             .into_iter()
                             // Only provide certs that are parents for the requested vote.
-                            .filter(|parent| header.parents.contains(parent)),
+                            .filter(|parent| header.parents().contains(parent)),
                     )?
                     .into_iter()
                     .flatten()
@@ -205,34 +200,48 @@ impl Certifier {
 
         // Verify the vote. Note that only the header digest is signed by the vote.
         ensure!(
-            vote.header_digest == header.digest()
-                && vote.origin == header.author
-                && vote.author == authority,
-            DagError::UnexpectedVote(vote.header_digest)
+            vote.header_digest() == header.digest()
+                && vote.origin() == header.author()
+                && vote.author() == authority,
+            DagError::UnexpectedVote(vote.header_digest())
         );
         // Possible equivocations.
         ensure!(
-            header.epoch == vote.epoch,
+            header.epoch() == vote.epoch(),
             DagError::InvalidEpoch {
-                expected: header.epoch,
-                received: vote.epoch
+                expected: header.epoch(),
+                received: vote.epoch()
             }
         );
         ensure!(
-            header.round == vote.round,
+            header.round() == vote.round(),
             DagError::InvalidRound {
-                expected: header.round,
-                received: vote.round
+                expected: header.round(),
+                received: vote.round()
             }
         );
-        vote.verify(&committee)?;
+
+        // Ensure the header is from the correct epoch.
+        ensure!(
+            vote.epoch() == committee.epoch(),
+            DagError::InvalidEpoch {
+                expected: committee.epoch(),
+                received: vote.epoch()
+            }
+        );
+
+        // Ensure the authority has voting rights.
+        ensure!(
+            committee.stake_by_id(vote.author()) > 0,
+            DagError::UnknownAuthority(vote.author().to_string())
+        );
 
         Ok(vote)
     }
 
     #[instrument(level = "debug", skip_all, fields(header_digest = ?header.digest()))]
     async fn propose_header(
-        name: PublicKey,
+        authority_id: AuthorityIdentifier,
         committee: Committee,
         header_store: HeaderStore,
         certificate_store: CertificateStore,
@@ -242,30 +251,30 @@ impl Certifier {
         header: Header,
         mut cancel: oneshot::Receiver<()>,
     ) -> DagResult<Certificate> {
-        if header.epoch != committee.epoch() {
+        if header.epoch() != committee.epoch() {
             debug!(
                 "Certifier received mismatched header proposal for epoch {}, currently at epoch {}",
-                header.epoch,
+                header.epoch(),
                 committee.epoch()
             );
             return Err(DagError::InvalidEpoch {
                 expected: committee.epoch(),
-                received: header.epoch,
+                received: header.epoch(),
             });
         }
 
         // Process the header.
         header_store.write(&header)?;
-        metrics.proposed_header_round.set(header.round as i64);
+        metrics.proposed_header_round.set(header.round() as i64);
 
         // Reset the votes aggregator and sign our own header.
         let mut votes_aggregator = VotesAggregator::new(metrics.clone());
-        let vote = Vote::new(&header, &name, &signature_service).await;
+        let vote = Vote::new(&header, &authority_id, &signature_service).await;
         let mut certificate = votes_aggregator.append(vote, &committee, &header)?;
 
         // Trigger vote requests.
         let peers = committee
-            .others_primaries(&name)
+            .others_primaries_by_id(authority_id)
             .into_iter()
             .map(|(name, _, network_key)| (name, network_key));
         let mut requests: FuturesUnordered<_> = peers
@@ -300,7 +309,7 @@ impl Certifier {
                     }
                 },
                 _ = &mut cancel => {
-                    debug!("canceling Header proposal {header} for round {}", header.round);
+                    debug!("canceling Header proposal {header} for round {}", header.round());
                     return Err(DagError::Canceled)
                 },
             }
@@ -312,7 +321,7 @@ impl Certifier {
                 let mut msg = format!(
                     "Failed to form certificate from header {header:?} with parent certificates:\n"
                 );
-                for parent_digest in header.parents.iter() {
+                for parent_digest in header.parents().iter() {
                     let parent_msg = match certificate_store.read(*parent_digest) {
                         Ok(Some(cert)) => format!("{cert:?}\n"),
                         Ok(None) => {
@@ -352,7 +361,10 @@ impl Certifier {
 
     // Main loop listening to incoming messages.
     pub async fn run(mut self) -> DagResult<Self> {
-        info!("Certifier on node {} has started successfully.", self.name);
+        info!(
+            "Core on node {} has started successfully.",
+            self.authority_id
+        );
         loop {
             let result = tokio::select! {
                 // We also receive here our new headers created by the `Proposer`.
@@ -364,13 +376,14 @@ impl Certifier {
                     }
                     self.cancel_proposed_header = Some(tx_cancel);
 
-                    let name = self.name.clone();
+                    let name = self.authority_id;
                     let committee = self.committee.clone();
                     let header_store = self.header_store.clone();
                     let certificate_store = self.certificate_store.clone();
                     let signature_service = self.signature_service.clone();
                     let metrics = self.metrics.clone();
                     let network = self.network.clone();
+                    fail_point_async!("narwhal-delay");
                     self.propose_header_tasks.spawn(monitored_future!(Self::propose_header(
                         name,
                         committee,
@@ -390,10 +403,21 @@ impl Certifier {
                 Some(result) = self.propose_header_tasks.join_next() => {
                     match result {
                         Ok(Ok(certificate)) => {
-                            self.synchronizer.accept_own_certificate(certificate, &self.network).await
+                            fail_point_async!("narwhal-delay");
+                            self.synchronizer.accept_own_certificate(certificate).await
                         },
                         Ok(Err(e)) => Err(e),
-                        Err(_) => Err(DagError::ShuttingDown),
+                        Err(e) => {
+                            if e.is_cancelled() {
+                                // Ungraceful shutdown.
+                                Err(DagError::ShuttingDown)
+                            } else if e.is_panic() {
+                                // propagate panics.
+                                std::panic::resume_unwind(e.into_panic());
+                            } else {
+                                panic!("propose header task failed: {e}");
+                            }
+                        },
                     }
                 },
 

@@ -1,17 +1,36 @@
 ---
+AuthorityIdentifier:
+  NEWTYPESTRUCT: U16
 Batch:
+  ENUM:
+    0:
+      V1:
+        NEWTYPE:
+          TYPENAME: BatchV1
+BatchDigest:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 32
+BatchV1:
   STRUCT:
     - transactions:
         SEQ:
           SEQ: U8
     - metadata:
         TYPENAME: Metadata
-BatchDigest:
+Certificate:
+  ENUM:
+    0:
+      V1:
+        NEWTYPE:
+          TYPENAME: CertificateV1
+CertificateDigest:
   NEWTYPESTRUCT:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
-Certificate:
+CertificateV1:
   STRUCT:
     - header:
         TYPENAME: Header
@@ -22,17 +41,21 @@ Certificate:
     - signed_authorities: BYTES
     - metadata:
         TYPENAME: Metadata
-CertificateDigest:
+Header:
+  ENUM:
+    0:
+      V1:
+        NEWTYPE:
+          TYPENAME: HeaderV1
+HeaderDigest:
   NEWTYPESTRUCT:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
-Header:
+HeaderV1:
   STRUCT:
     - author:
-        TUPLEARRAY:
-          CONTENT: U8
-          SIZE: 96
+        TYPENAME: AuthorityIdentifier
     - round: U64
     - epoch: U64
     - created_at: U64
@@ -46,11 +69,6 @@ Header:
     - parents:
         SEQ:
           TYPENAME: CertificateDigest
-HeaderDigest:
-  NEWTYPESTRUCT:
-    TUPLEARRAY:
-      CONTENT: U8
-      SIZE: 32
 Metadata:
   STRUCT:
     - created_at: U64
@@ -86,8 +104,6 @@ WorkerSynchronizeMessage:
         SEQ:
           TYPENAME: BatchDigest
     - target:
-        TUPLEARRAY:
-          CONTENT: U8
-          SIZE: 96
+        TYPENAME: AuthorityIdentifier
     - is_certified: BOOL
 

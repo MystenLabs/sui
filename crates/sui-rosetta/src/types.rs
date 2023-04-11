@@ -15,7 +15,7 @@ use serde_json::Value;
 use strum_macros::EnumIter;
 use strum_macros::EnumString;
 
-use sui_sdk::rpc_types::{SuiExecutionStatus, SuiTransactionKind};
+use sui_sdk::rpc_types::{SuiExecutionStatus, SuiTransactionBlockKind};
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::crypto::PublicKey as SuiPublicKey;
 use sui_types::crypto::SignatureScheme;
@@ -143,8 +143,15 @@ pub struct Amount {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct AmountMetadata {
+    pub sub_balances: Vec<SubBalance>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct SubBalance {
     pub stake_id: ObjectID,
     pub validator: SuiAddress,
+    #[serde(with = "str_format")]
+    pub value: i128,
 }
 
 impl Amount {
@@ -155,14 +162,13 @@ impl Amount {
             metadata: None,
         }
     }
-    pub fn new_stake(value: i128, stake_id: ObjectID, validator: SuiAddress) -> Self {
+    pub fn new_from_sub_balances(sub_balances: Vec<SubBalance>) -> Self {
+        let value = sub_balances.iter().map(|b| b.value).sum();
+
         Self {
             value,
             currency: SUI.clone(),
-            metadata: Some(AmountMetadata {
-                stake_id,
-                validator,
-            }),
+            metadata: Some(AmountMetadata { sub_balances }),
         }
     }
 }
@@ -405,15 +411,15 @@ pub enum OperationType {
     ProgrammableTransaction,
 }
 
-impl From<&SuiTransactionKind> for OperationType {
-    fn from(tx: &SuiTransactionKind) -> Self {
+impl From<&SuiTransactionBlockKind> for OperationType {
+    fn from(tx: &SuiTransactionBlockKind) -> Self {
         match tx {
-            SuiTransactionKind::ChangeEpoch(_) => OperationType::EpochChange,
-            SuiTransactionKind::Genesis(_) => OperationType::Genesis,
-            SuiTransactionKind::ConsensusCommitPrologue(_) => {
+            SuiTransactionBlockKind::ChangeEpoch(_) => OperationType::EpochChange,
+            SuiTransactionBlockKind::Genesis(_) => OperationType::Genesis,
+            SuiTransactionBlockKind::ConsensusCommitPrologue(_) => {
                 OperationType::ConsensusCommitPrologue
             }
-            SuiTransactionKind::ProgrammableTransaction(_) => {
+            SuiTransactionBlockKind::ProgrammableTransaction(_) => {
                 OperationType::ProgrammableTransaction
             }
         }

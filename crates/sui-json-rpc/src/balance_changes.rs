@@ -1,28 +1,30 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::ops::Neg;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use move_core_types::language_storage::TypeTag;
+use sui_types::digests::ObjectDigest;
 use tokio::sync::RwLock;
 
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::BalanceChange;
-use sui_types::base_types::{MoveObjectType, ObjectID, ObjectRef, SequenceNumber};
+use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
 use sui_types::coin::Coin;
 use sui_types::error::SuiError;
 use sui_types::gas_coin::GAS;
-use sui_types::messages::TransactionEffectsAPI;
 use sui_types::messages::{ExecutionStatus, TransactionEffects};
+use sui_types::messages::{InputObjectKind, TransactionEffectsAPI};
 use sui_types::object::{Object, Owner};
 use sui_types::storage::WriteKind;
 
-pub async fn get_balance_change_from_effect<P: ObjectProvider<Error = E>, E>(
+pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
     object_provider: &P,
     effects: &TransactionEffects,
+    input_objs: Vec<InputObjectKind>,
 ) -> Result<Vec<BalanceChange>, E> {
     let (_, gas_owner) = effects.gas_object();
 
@@ -38,21 +40,32 @@ pub async fn get_balance_change_from_effect<P: ObjectProvider<Error = E>, E>(
     let all_mutated: Vec<(&ObjectRef, &Owner, WriteKind)> = effects.all_changed_objects();
     let all_mutated = all_mutated
         .iter()
-        .map(|((id, version, _), _, _)| (*id, *version))
+        .map(|((id, version, digest), _, _)| (*id, *version, Some(*digest)))
         .collect::<Vec<_>>();
 
-    get_balance_change(
+    let input_objs_to_digest = input_objs
+        .iter()
+        .filter_map(|k| match k {
+            InputObjectKind::ImmOrOwnedMoveObject(o) => Some((o.0, o.2)),
+            InputObjectKind::MovePackage(_) | InputObjectKind::SharedMoveObject { .. } => None,
+        })
+        .collect::<HashMap<ObjectID, ObjectDigest>>();
+    get_balance_changes(
         object_provider,
-        effects.modified_at_versions(),
+        &effects
+            .modified_at_versions()
+            .iter()
+            .map(|(id, version)| (*id, *version, input_objs_to_digest.get(id).cloned()))
+            .collect::<Vec<_>>(),
         &all_mutated,
     )
     .await
 }
 
-pub async fn get_balance_change<P: ObjectProvider<Error = E>, E>(
+pub async fn get_balance_changes<P: ObjectProvider<Error = E>, E>(
     object_provider: &P,
-    modified_at_version: &[(ObjectID, SequenceNumber)],
-    all_mutated: &[(ObjectID, SequenceNumber)],
+    modified_at_version: &[(ObjectID, SequenceNumber, Option<ObjectDigest>)],
+    all_mutated: &[(ObjectID, SequenceNumber, Option<ObjectDigest>)],
 ) -> Result<Vec<BalanceChange>, E> {
     // 1. subtract all input coins
     let balances = fetch_coins(object_provider, modified_at_version)
@@ -91,27 +104,30 @@ pub async fn get_balance_change<P: ObjectProvider<Error = E>, E>(
 
 async fn fetch_coins<P: ObjectProvider<Error = E>, E>(
     object_provider: &P,
-    objects: &[(ObjectID, SequenceNumber)],
+    objects: &[(ObjectID, SequenceNumber, Option<ObjectDigest>)],
 ) -> Result<Vec<(Owner, TypeTag, u64)>, E> {
     let mut all_mutated_coins = vec![];
-    for (id, version) in objects {
+    for (id, version, digest_opt) in objects {
         // TODO: use multi get object
         if let Ok(o) = object_provider.get_object(id, version).await {
             if let Some(type_) = o.type_() {
-                match type_ {
-                    MoveObjectType::GasCoin => all_mutated_coins.push((
+                if type_.is_coin() {
+                    if let Some(digest) = digest_opt {
+                        // TODO: can we return Err here instead?
+                        assert_eq!(
+                            *digest,
+                            o.digest(),
+                            "Object digest mismatch--got bad data from object_provider?"
+                        )
+                    }
+                    let [coin_type]: [TypeTag; 1] =
+                        type_.clone().into_type_params().try_into().unwrap();
+                    all_mutated_coins.push((
                         o.owner,
-                        GAS::type_tag(),
+                        coin_type,
                         // we know this is a coin, safe to unwrap
                         Coin::extract_balance_if_coin(&o).unwrap().unwrap(),
-                    )),
-                    MoveObjectType::Coin(coin_type) => all_mutated_coins.push((
-                        o.owner,
-                        coin_type.clone(),
-                        // we know this is a coin, safe to unwrap
-                        Coin::extract_balance_if_coin(&o).unwrap().unwrap(),
-                    )),
-                    _ => {}
+                    ))
                 }
             }
         }
@@ -168,6 +184,36 @@ impl<P> ObjectProviderCache<P> {
         Self {
             object_cache: Default::default(),
             last_version_cache: Default::default(),
+            provider,
+        }
+    }
+
+    pub fn new_with_cache(
+        provider: P,
+        written_objects: BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
+    ) -> Self {
+        let mut object_cache = BTreeMap::new();
+        let mut last_version_cache = BTreeMap::new();
+
+        for (object_id, (object_ref, object, _)) in written_objects {
+            let key = (object_id, object_ref.1);
+            object_cache.insert(key, object.clone());
+
+            match last_version_cache.get_mut(&key) {
+                Some(existing_seq_number) => {
+                    if object_ref.1 > *existing_seq_number {
+                        *existing_seq_number = object_ref.1
+                    }
+                }
+                None => {
+                    last_version_cache.insert(key, object_ref.1);
+                }
+            }
+        }
+
+        Self {
+            object_cache: RwLock::new(object_cache),
+            last_version_cache: RwLock::new(last_version_cache),
             provider,
         }
     }

@@ -44,7 +44,7 @@ export function SenderTransactionAddress({
 
 type RecipientTransactionAddressesProps = {
     recipients: {
-        amount?: number | null;
+        amount?: bigint | number | null;
         coinType?: string | null;
         address: string;
     }[];

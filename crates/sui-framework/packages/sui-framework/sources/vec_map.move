@@ -78,6 +78,17 @@ module sui::vec_map {
         &entry.value
     }
 
+    /// Safely try borrow a value bound to `key` in `self`.
+    /// Return Some(V) if the value exists, None otherwise.
+    /// Only works for a "copyable" value as references cannot be stored in `vector`.
+    public fun try_get<K: copy, V: copy>(self: &VecMap<K,V>, key: &K): Option<V> {
+        if (contains(self, key)) {
+            option::some(*get(self, key))
+        } else {
+            option::none()
+        }
+    }
+
     /// Return true if `self` contains an entry for `key`, false otherwise
     public fun contains<K: copy, V>(self: &VecMap<K, V>, key: &K): bool {
         option::is_some(&get_idx_opt(self, key))

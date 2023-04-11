@@ -109,7 +109,7 @@ export class Ed25519Keypair implements Keypair {
   /**
    * Return the signature for the provided data using Ed25519.
    */
-  signData(data: Uint8Array, _useRecoverable: boolean = false): Uint8Array {
+  signData(data: Uint8Array): Uint8Array {
     return nacl.sign.detached(data, this.keypair.secretKey);
   }
 

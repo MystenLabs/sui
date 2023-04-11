@@ -41,10 +41,10 @@ module t::m {
 
 //# run t::m::create --sender A
 
-//# view-object 110
+//# view-object 2,3
 
-//# run t::m::share --args object(110) --sender A
+//# run t::m::share --args object(2,3) --sender A
 
-//# run t::m::share_wrapped --args object(110) --sender A
+//# run t::m::share_wrapped --args object(2,3) --sender A
 
-//# run t::m::share_child --args object(110) --sender A
+//# run t::m::share_child --args object(2,3) --sender A

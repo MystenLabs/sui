@@ -9,7 +9,7 @@ use fastcrypto::traits::KeyPair;
 use mysten_metrics::RegistryService;
 use narwhal_config::{Epoch, WorkerCache};
 use narwhal_executor::ExecutionState;
-use narwhal_types::{ConsensusOutput, TransactionProto, TransactionsClient};
+use narwhal_types::{BatchAPI, ConsensusOutput, TransactionProto, TransactionsClient};
 use narwhal_worker::TrivialTransactionValidator;
 use prometheus::Registry;
 use std::sync::Arc;
@@ -30,8 +30,11 @@ impl ExecutionState for NoOpExecutionState {
     async fn handle_consensus_output(&self, consensus_output: ConsensusOutput) {
         for (_, batches) in consensus_output.batches {
             for batch in batches {
-                for transaction in batch.transactions.into_iter() {
-                    assert_eq!(transaction, Bytes::from(self.epoch.to_be_bytes().to_vec()));
+                for transaction in batch.transactions().iter() {
+                    assert_eq!(
+                        transaction.clone(),
+                        Bytes::from(self.epoch.to_be_bytes().to_vec())
+                    );
                 }
             }
         }
@@ -108,7 +111,7 @@ async fn test_narwhal_manager() {
         let worker_cache = system_state.get_narwhal_worker_cache(transactions_addr);
 
         let execution_state = Arc::new(NoOpExecutionState {
-            epoch: narwhal_committee.epoch,
+            epoch: narwhal_committee.epoch(),
         });
 
         let narwhal_config = NarwhalConfiguration {
@@ -148,7 +151,7 @@ async fn test_narwhal_manager() {
             send_transactions(
                 &name,
                 worker_cache.clone(),
-                narwhal_committee.epoch,
+                narwhal_committee.epoch(),
                 rx_shutdown,
             )
             .await
@@ -178,15 +181,11 @@ async fn test_narwhal_manager() {
             .get_sui_system_state_object_for_testing()
             .expect("Reading Sui system state object cannot fail")
             .into_epoch_start_state();
-        let mut narwhal_committee = system_state.get_narwhal_committee();
-        let mut worker_cache = system_state.get_narwhal_worker_cache(&transactions_addr);
-
-        // advance epoch
-        narwhal_committee.epoch = 1;
-        worker_cache.epoch = 1;
+        let narwhal_committee = system_state.get_narwhal_committee();
+        let worker_cache = system_state.get_narwhal_worker_cache(&transactions_addr);
 
         let execution_state = Arc::new(NoOpExecutionState {
-            epoch: narwhal_committee.epoch,
+            epoch: narwhal_committee.epoch(),
         });
 
         // start narwhal with advanced epoch
@@ -205,7 +204,7 @@ async fn test_narwhal_manager() {
             send_transactions(
                 &name,
                 worker_cache.clone(),
-                narwhal_committee.epoch,
+                narwhal_committee.epoch(),
                 rx_shutdown,
             )
             .await

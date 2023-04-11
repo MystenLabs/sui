@@ -9,7 +9,6 @@ use fastcrypto::traits::AggregateAuthenticator;
 use fastcrypto::traits::KeyPair;
 use move_core_types::language_storage::StructTag;
 use roaring::RoaringBitmap;
-use test_utils::messages::MAX_GAS;
 
 use super::*;
 use crate::base_types::random_object_ref;
@@ -43,31 +42,33 @@ fn test_signed_values() {
         /* address */ AuthorityPublicKeyBytes::from(sec2.public()),
         /* voting right */ 0,
     );
-    let committee = Committee::new(0, authorities);
-
+    let committee = Committee::new_for_testing_with_normalized_voting_power(0, authorities);
+    let gas_price = 10;
     let transaction = Transaction::from_data_and_signer(
-        TransactionData::new_transfer_with_dummy_gas_price(
+        TransactionData::new_transfer(
             _a2,
             random_object_ref(),
             a_sender,
             random_object_ref(),
-            10000,
+            TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
+            gas_price,
         ),
-        Intent::default(),
+        Intent::sui_transaction(),
         vec![&sender_sec],
     )
     .verify()
     .unwrap();
 
     let bad_transaction = VerifiedTransaction::new_unchecked(Transaction::from_data_and_signer(
-        TransactionData::new_transfer_with_dummy_gas_price(
+        TransactionData::new_transfer(
             _a2,
             random_object_ref(),
             a_sender,
             random_object_ref(),
-            10000,
+            TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
+            gas_price,
         ),
-        Intent::default(),
+        Intent::sui_transaction(),
         vec![&sender_sec2],
     ));
 
@@ -120,17 +121,18 @@ fn test_certificates() {
         /* address */ AuthorityPublicKeyBytes::from(sec2.public()),
         /* voting right */ 1,
     );
-    let committee = Committee::new(0, authorities);
-
+    let committee = Committee::new_for_testing_with_normalized_voting_power(0, authorities);
+    let gas_price = 10;
     let transaction = Transaction::from_data_and_signer(
-        TransactionData::new_transfer_with_dummy_gas_price(
+        TransactionData::new_transfer(
             a2,
             random_object_ref(),
             a_sender,
             random_object_ref(),
-            10000,
+            TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
+            gas_price,
         ),
-        Intent::default(),
+        Intent::sui_transaction(),
         vec![&sender_sec],
     )
     .verify()
@@ -184,7 +186,7 @@ fn test_new_with_signatures() {
         signatures.push(AuthoritySignInfo::new(
             0,
             &message,
-            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            Intent::sui_app(IntentScope::SenderSignedTransaction),
             name,
             &sec,
         ));
@@ -193,7 +195,7 @@ fn test_new_with_signatures() {
     let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
     authorities.insert(AuthorityPublicKeyBytes::from(sec.public()), 1);
 
-    let committee = Committee::new(0, authorities.clone());
+    let committee = Committee::new_for_testing_with_normalized_voting_power(0, authorities.clone());
     let quorum =
         AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(signatures.clone(), &committee)
             .unwrap();
@@ -233,20 +235,20 @@ fn test_handle_reject_malicious_signature() {
             signatures.push(AuthoritySignInfo::new(
                 0,
                 &Foo("some data".to_string()),
-                Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+                Intent::sui_app(IntentScope::SenderSignedTransaction),
                 name,
                 &sec,
             ))
         };
     }
 
-    let committee = Committee::new(0, authorities.clone());
+    let committee = Committee::new_for_testing_with_normalized_voting_power(0, authorities.clone());
     let mut quorum =
         AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(signatures, &committee).unwrap();
     {
         let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
         let sig = AuthoritySignature::new_secure(
-            &IntentMessage::new(Intent::default(), message.clone()),
+            &IntentMessage::new(Intent::sui_transaction(), message.clone()),
             &committee.epoch,
             &sec,
         );
@@ -266,14 +268,14 @@ fn test_auth_sig_commit_to_wrong_epoch_id_fail() {
     let idx = obligation.add_message(
         &message,
         0, // Obligation added with correct epoch id.
-        Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+        Intent::sui_app(IntentScope::SenderSignedTransaction),
     );
     let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
 
     // Auth signtaure commits to epoch 0 verifies ok.
     let sig = AuthoritySignature::new_secure(
         &IntentMessage::new(
-            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            Intent::sui_app(IntentScope::SenderSignedTransaction),
             message.clone(),
         ),
         &0,
@@ -288,11 +290,11 @@ fn test_auth_sig_commit_to_wrong_epoch_id_fail() {
     let idx1 = obligation.add_message(
         &message,
         0, // Obligation added with correct epoch id.
-        Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+        Intent::sui_app(IntentScope::SenderSignedTransaction),
     );
     let sig1 = AuthoritySignature::new_secure(
         &IntentMessage::new(
-            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            Intent::sui_app(IntentScope::SenderSignedTransaction),
             message.clone(),
         ),
         &1,
@@ -315,13 +317,13 @@ fn test_bitmap_out_of_range() {
         signatures.push(AuthoritySignInfo::new(
             0,
             &Foo("some data".to_string()),
-            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            Intent::sui_app(IntentScope::SenderSignedTransaction),
             name,
             &sec,
         ));
     }
 
-    let committee = Committee::new(0, authorities.clone());
+    let committee = Committee::new_for_testing_with_normalized_voting_power(0, authorities.clone());
     let mut quorum =
         AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(signatures, &committee).unwrap();
 
@@ -347,7 +349,7 @@ fn test_reject_extra_public_key() {
         signatures.push(AuthoritySignInfo::new(
             0,
             &Foo("some data".to_string()),
-            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            Intent::sui_app(IntentScope::SenderSignedTransaction),
             name,
             &sec,
         ));
@@ -362,7 +364,7 @@ fn test_reject_extra_public_key() {
         signatures[3].clone(),
     ];
 
-    let committee = Committee::new(0, authorities.clone());
+    let committee = Committee::new_for_testing_with_normalized_voting_power(0, authorities.clone());
     let mut quorum =
         AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(used_signatures, &committee)
             .unwrap();
@@ -387,7 +389,7 @@ fn test_reject_reuse_signatures() {
         signatures.push(AuthoritySignInfo::new(
             0,
             &Foo("some data".to_string()),
-            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            Intent::sui_app(IntentScope::SenderSignedTransaction),
             name,
             &sec,
         ));
@@ -400,7 +402,7 @@ fn test_reject_reuse_signatures() {
         signatures[2].clone(),
     ];
 
-    let committee = Committee::new(0, authorities.clone());
+    let committee = Committee::new_for_testing_with_normalized_voting_power(0, authorities.clone());
     let quorum =
         AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(used_signatures, &committee)
             .unwrap();
@@ -423,13 +425,13 @@ fn test_empty_bitmap() {
         signatures.push(AuthoritySignInfo::new(
             0,
             &Foo("some data".to_string()),
-            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            Intent::sui_app(IntentScope::SenderSignedTransaction),
             name,
             &sec,
         ));
     }
 
-    let committee = Committee::new(0, authorities.clone());
+    let committee = Committee::new_for_testing_with_normalized_voting_power(0, authorities.clone());
     let mut quorum =
         AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(signatures, &committee).unwrap();
     quorum.signers_map = RoaringBitmap::new();
@@ -453,17 +455,19 @@ fn test_digest_caching() {
     authorities.insert(sec1.public().into(), 1);
     authorities.insert(sec2.public().into(), 0);
 
-    let committee = Committee::new(0, authorities);
+    let committee = Committee::new_for_testing_with_normalized_voting_power(0, authorities);
 
+    let gas_price = 10;
     let transaction = Transaction::from_data_and_signer(
-        TransactionData::new_transfer_with_dummy_gas_price(
+        TransactionData::new_transfer(
             sa1,
             random_object_ref(),
             sa2,
             random_object_ref(),
-            10000,
+            TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
+            gas_price,
         ),
-        Intent::default(),
+        Intent::sui_transaction(),
         vec![&ssec2],
     )
     .verify()
@@ -532,23 +536,28 @@ fn test_user_signature_committed_in_transactions() {
     let (a_sender, sender_sec): (_, AccountKeyPair) = get_key_pair();
     let (a_sender2, sender_sec2): (_, AccountKeyPair) = get_key_pair();
 
-    let tx_data = TransactionData::new_transfer_with_dummy_gas_price(
+    let gas_price = 10;
+    let tx_data = TransactionData::new_transfer(
         a_sender2,
         random_object_ref(),
         a_sender,
         random_object_ref(),
-        10000,
+        TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
+        gas_price,
     );
 
     let mut tx_data_2 = tx_data.clone();
     tx_data_2.gas_data_mut().budget += 1;
 
-    let transaction_a =
-        Transaction::from_data_and_signer(tx_data.clone(), Intent::default(), vec![&sender_sec]);
+    let transaction_a = Transaction::from_data_and_signer(
+        tx_data.clone(),
+        Intent::sui_transaction(),
+        vec![&sender_sec],
+    );
     let transaction_b =
-        Transaction::from_data_and_signer(tx_data, Intent::default(), vec![&sender_sec2]);
+        Transaction::from_data_and_signer(tx_data, Intent::sui_transaction(), vec![&sender_sec2]);
     let transaction_c =
-        Transaction::from_data_and_signer(tx_data_2, Intent::default(), vec![&sender_sec2]);
+        Transaction::from_data_and_signer(tx_data_2, Intent::sui_transaction(), vec![&sender_sec2]);
 
     let tx_digest_a = transaction_a.digest();
     let tx_digest_b = transaction_b.digest();
@@ -581,21 +590,26 @@ fn test_user_signature_committed_in_signed_transactions() {
     let (a_sender, sender_sec): (_, AccountKeyPair) = get_key_pair();
     let (a_sender2, sender_sec2): (_, AccountKeyPair) = get_key_pair();
 
-    let tx_data = TransactionData::new_transfer_with_dummy_gas_price(
+    let gas_price = 10;
+    let tx_data = TransactionData::new_transfer(
         a_sender2,
         random_object_ref(),
         a_sender,
         random_object_ref(),
-        10000,
+        TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
+        gas_price,
     );
-    let transaction_a =
-        Transaction::from_data_and_signer(tx_data.clone(), Intent::default(), vec![&sender_sec])
-            .verify()
-            .unwrap();
+    let transaction_a = Transaction::from_data_and_signer(
+        tx_data.clone(),
+        Intent::sui_transaction(),
+        vec![&sender_sec],
+    )
+    .verify()
+    .unwrap();
     // transaction_b intentionally invalid (sender does not match signer).
     let transaction_b = VerifiedTransaction::new_unchecked(Transaction::from_data_and_signer(
         tx_data,
-        Intent::default(),
+        Intent::sui_transaction(),
         vec![&sender_sec2],
     ));
 
@@ -620,12 +634,12 @@ fn test_user_signature_committed_in_signed_transactions() {
     // Ensure that signed tx verifies against the transaction with a correct user signature.
     let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
     authorities.insert(AuthorityPublicKeyBytes::from(sec1.public()), 1);
-    let committee = Committee::new(0, authorities.clone());
+    let committee = Committee::new_for_testing_with_normalized_voting_power(0, authorities.clone());
     assert!(signed_tx_a
         .auth_sig()
         .verify_secure(
             transaction_a.data(),
-            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            Intent::sui_app(IntentScope::SenderSignedTransaction),
             &committee
         )
         .is_ok());
@@ -633,7 +647,7 @@ fn test_user_signature_committed_in_signed_transactions() {
         .auth_sig()
         .verify_secure(
             transaction_b.data(),
-            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            Intent::sui_app(IntentScope::SenderSignedTransaction),
             &committee
         )
         .is_err());
@@ -669,20 +683,21 @@ fn test_sponsored_transaction_message() {
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
         builder
-            .transfer_object(get_new_address::<AccountKeyPair>(), random_object_ref())
+            .transfer_object(dbg_addr(1), random_object_ref())
             .unwrap();
         builder.finish()
     };
+    let gas_price = 10;
     let kind = TransactionKind::programmable(pt);
     let gas_obj_ref = random_object_ref();
     let gas_data = GasData {
         payment: vec![gas_obj_ref],
         owner: sponsor,
-        price: DUMMY_GAS_PRICE,
-        budget: 10000,
+        price: gas_price,
+        budget: gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
     };
     let tx_data = TransactionData::new_with_gas_data(kind, sender, gas_data.clone());
-    let intent = Intent::default();
+    let intent = Intent::sui_transaction();
     let sender_sig: GenericSignature =
         signature_from_signer(tx_data.clone(), intent.clone(), &sender_kp).into();
     let sponsor_sig: GenericSignature =
@@ -774,18 +789,19 @@ fn test_sponsored_transaction_validity_check() {
     let sponsor = (&sponsor_kp.public()).into();
 
     // This is a sponsored transaction
+    let gas_price = 10;
     assert_ne!(sender, sponsor);
     let gas_data = GasData {
         payment: vec![random_object_ref()],
         owner: sponsor,
-        price: DUMMY_GAS_PRICE,
-        budget: 10000,
+        price: gas_price,
+        budget: gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
     };
 
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
         builder
-            .transfer_object(get_new_address::<AccountKeyPair>(), random_object_ref())
+            .transfer_object(dbg_addr(1), random_object_ref())
             .unwrap();
         builder.finish()
     };
@@ -883,7 +899,7 @@ fn verify_sender_signature_correctly_with_flag() {
     let (_, sec2): (_, AuthorityKeyPair) = get_key_pair();
     authorities.insert(sec1.public().into(), 1);
     authorities.insert(sec2.public().into(), 0);
-    let committee = Committee::new(0, authorities);
+    let committee = Committee::new_for_testing_with_normalized_voting_power(0, authorities);
 
     // create a receiver keypair with Secp256k1
     let receiver_kp = SuiKeyPair::Secp256k1(get_key_pair().1);
@@ -892,12 +908,14 @@ fn verify_sender_signature_correctly_with_flag() {
     // create a sender keypair with Secp256k1
     let sender_kp = SuiKeyPair::Secp256k1(get_key_pair().1);
     // and creates a corresponding transaction
-    let tx_data = TransactionData::new_transfer_with_dummy_gas_price(
+    let gas_price = 10;
+    let tx_data = TransactionData::new_transfer(
         receiver_address,
         random_object_ref(),
         (&sender_kp.public()).into(),
         random_object_ref(),
-        10000,
+        TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
+        gas_price,
     );
 
     // create a sender keypair with Ed25519
@@ -913,7 +931,7 @@ fn verify_sender_signature_correctly_with_flag() {
     tx_data_3.gas_data_mut().owner = tx_data_3.sender();
 
     let transaction =
-        Transaction::from_data_and_signer(tx_data, Intent::default(), vec![&sender_kp])
+        Transaction::from_data_and_signer(tx_data, Intent::sui_transaction(), vec![&sender_kp])
             .verify()
             .unwrap();
 
@@ -937,13 +955,13 @@ fn verify_sender_signature_correctly_with_flag() {
         .auth_sig()
         .verify_secure(
             transaction.data(),
-            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            Intent::sui_app(IntentScope::SenderSignedTransaction),
             &committee
         )
         .is_ok());
 
     let transaction_1 =
-        Transaction::from_data_and_signer(tx_data_2, Intent::default(), vec![&sender_kp_2])
+        Transaction::from_data_and_signer(tx_data_2, Intent::sui_transaction(), vec![&sender_kp_2])
             .verify()
             .unwrap();
 
@@ -966,7 +984,7 @@ fn verify_sender_signature_correctly_with_flag() {
         .auth_sig()
         .verify_secure(
             transaction_1.data(),
-            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            Intent::sui_app(IntentScope::SenderSignedTransaction),
             &committee
         )
         .is_ok());
@@ -975,13 +993,14 @@ fn verify_sender_signature_correctly_with_flag() {
         .auth_sig()
         .verify_secure(
             transaction.data(),
-            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            Intent::sui_app(IntentScope::SenderSignedTransaction),
             &committee
         )
         .is_err());
 
     // create transaction with r1 signer
-    let tx_3 = Transaction::from_data_and_signer(tx_data_3, Intent::default(), vec![&sender_kp_3]);
+    let tx_3 =
+        Transaction::from_data_and_signer(tx_data_3, Intent::sui_transaction(), vec![&sender_kp_3]);
     let tx_31 = tx_3.clone();
     let tx_32 = tx_3.clone();
 
@@ -999,7 +1018,7 @@ fn verify_sender_signature_correctly_with_flag() {
         .auth_sig()
         .verify_secure(
             tx_32.data(),
-            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            Intent::sui_app(IntentScope::SenderSignedTransaction),
             &committee
         )
         .is_ok());
@@ -1007,7 +1026,7 @@ fn verify_sender_signature_correctly_with_flag() {
 
 #[test]
 fn test_change_epoch_transaction() {
-    let tx = VerifiedTransaction::new_change_epoch(1, ProtocolVersion::MIN, 0, 0, 0, 0, vec![]);
+    let tx = VerifiedTransaction::new_change_epoch(1, ProtocolVersion::MIN, 0, 0, 0, 0, 0, vec![]);
     assert!(tx.contains_shared_object());
     assert_eq!(
         tx.shared_input_objects().next().unwrap(),
@@ -1105,11 +1124,12 @@ fn test_move_input_objects() {
         type_args,
         args,
     ));
-    let data = TransactionData::new_programmable_with_dummy_gas_price(
+    let data = TransactionData::new_programmable(
         SuiAddress::random_for_testing_only(),
         vec![gas_object_ref],
         builder.finish(),
-        MAX_GAS,
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        1,
     );
     let mut input_objects = data.input_objects().unwrap();
     macro_rules! rem {
@@ -1189,13 +1209,13 @@ fn test_unique_input_objects() {
 
     let sender_kp = SuiKeyPair::Ed25519(get_key_pair().1);
     let sender = (&sender_kp.public()).into();
-
+    let gas_price = 10;
     let gas_object_ref = random_object_ref();
     let gas_data = GasData {
         payment: vec![gas_object_ref],
         owner: sender,
-        price: DUMMY_GAS_PRICE,
-        budget: 10000,
+        price: gas_price,
+        budget: gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
     };
 
     builder.command(Command::move_call(
@@ -1234,16 +1254,18 @@ fn test_certificate_digest() {
     let (sender1, sender1_sec): (_, AccountKeyPair) = get_key_pair();
     let (sender2, sender2_sec): (_, AccountKeyPair) = get_key_pair();
 
+    let gas_price = 10;
     let make_tx = |sender, sender_sec| {
         Transaction::from_data_and_signer(
-            TransactionData::new_transfer_with_dummy_gas_price(
+            TransactionData::new_transfer(
                 receiver,
                 random_object_ref(),
                 sender,
                 random_object_ref(),
-                10000,
+                TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
+                gas_price,
             ),
-            Intent::default(),
+            Intent::sui_transaction(),
             vec![&sender_sec],
         )
         .verify()

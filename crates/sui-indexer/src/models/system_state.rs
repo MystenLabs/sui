@@ -6,7 +6,6 @@ use std::str::FromStr;
 use diesel::{Insertable, Queryable};
 
 use sui_types::base_types::{EpochId, ObjectID, SuiAddress};
-use sui_types::id::ID;
 use sui_types::sui_system_state::sui_system_state_summary::{
     SuiSystemStateSummary, SuiValidatorSummary,
 };
@@ -24,8 +23,8 @@ pub struct DBSystemStateSummary {
     pub reference_gas_price: i64,
     pub safe_mode: bool,
     pub epoch_start_timestamp_ms: i64,
-    pub stake_subsidy_start_epoch: i64,
     pub epoch_duration_ms: i64,
+    pub stake_subsidy_start_epoch: i64,
     pub stake_subsidy_epoch_counter: i64,
     pub stake_subsidy_balance: i64,
     pub stake_subsidy_current_epoch_amount: i64,
@@ -47,7 +46,8 @@ impl From<SuiSystemStateSummary> for DBSystemStateSummary {
             epoch: s.epoch as i64,
             protocol_version: s.protocol_version as i64,
             system_state_version: s.system_state_version as i64,
-            storage_fund: s.storage_fund as i64,
+            storage_fund: (s.storage_fund_non_refundable_balance
+                + s.storage_fund_total_object_storage_rebates) as i64,
             reference_gas_price: s.reference_gas_price as i64,
             safe_mode: s.safe_mode,
             epoch_start_timestamp_ms: s.epoch_start_timestamp_ms as i64,
@@ -141,7 +141,7 @@ impl From<(EpochId, SuiValidatorSummary)> for DBValidatorSummary {
             next_epoch_primary_address: v.next_epoch_primary_address,
             next_epoch_worker_address: v.next_epoch_worker_address,
             voting_power: v.voting_power as i64,
-            operation_cap_id: v.operation_cap_id.bytes.to_string(),
+            operation_cap_id: v.operation_cap_id.to_string(),
             gas_price: v.gas_price as i64,
             commission_rate: v.commission_rate as i64,
             next_epoch_stake: v.next_epoch_stake as i64,
@@ -188,9 +188,7 @@ impl TryFrom<DBValidatorSummary> for SuiValidatorSummary {
             next_epoch_primary_address: db.next_epoch_primary_address,
             next_epoch_worker_address: db.next_epoch_worker_address,
             voting_power: db.voting_power as u64,
-            operation_cap_id: ID {
-                bytes: ObjectID::from_str(&db.operation_cap_id)?,
-            },
+            operation_cap_id: ObjectID::from_str(&db.operation_cap_id)?,
             gas_price: db.gas_price as u64,
             commission_rate: db.commission_rate as u64,
             next_epoch_stake: db.next_epoch_stake as u64,

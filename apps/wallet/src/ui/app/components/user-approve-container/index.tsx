@@ -19,8 +19,8 @@ type UserApproveContainerProps = {
     rejectTitle: string;
     approveTitle: string;
     approveDisabled?: boolean;
-    onSubmit: (approved: boolean) => void;
-    isConnect?: boolean;
+    approveLoading?: boolean;
+    onSubmit: (approved: boolean) => Promise<void>;
     isWarning?: boolean;
     addressHidden?: boolean;
     address?: SuiAddress;
@@ -34,8 +34,8 @@ export function UserApproveContainer({
     rejectTitle,
     approveTitle,
     approveDisabled = false,
+    approveLoading = false,
     onSubmit,
-    isConnect,
     isWarning,
     addressHidden = false,
     address,
@@ -90,7 +90,7 @@ export function UserApproveContainer({
                             handleOnResponse(true);
                         }}
                         disabled={approveDisabled}
-                        loading={submitting}
+                        loading={submitting || approveLoading}
                         text={approveTitle}
                     />
                 </div>

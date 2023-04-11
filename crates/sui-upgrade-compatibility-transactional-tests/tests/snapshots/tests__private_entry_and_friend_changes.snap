@@ -1,0 +1,66 @@
+---
+source: crates/sui-upgrade-compatibility-transactional-tests/tests/tests.rs
+expression: results
+---
+====
+Compatibility { check_struct_and_pub_function_linking: true, check_struct_layout: true, check_friend_linking: true, check_private_entry_linking: true }
+0000000000000000000000000000000000000000000000000000000000000000::base_module:
+	base->upgrade: false
+	upgrade->base: false
+0000000000000000000000000000000000000000000000000000000000000000::friend_module:
+	base->upgrade: true
+	upgrade->base: true
+====
+====
+Compatibility { check_struct_and_pub_function_linking: true, check_struct_layout: true, check_friend_linking: true, check_private_entry_linking: false }
+0000000000000000000000000000000000000000000000000000000000000000::base_module:
+	base->upgrade: false
+	upgrade->base: false
+0000000000000000000000000000000000000000000000000000000000000000::friend_module:
+	base->upgrade: true
+	upgrade->base: true
+====
+====
+Compatibility { check_struct_and_pub_function_linking: true, check_struct_layout: true, check_friend_linking: false, check_private_entry_linking: false }
+0000000000000000000000000000000000000000000000000000000000000000::base_module:
+	base->upgrade: true
+	upgrade->base: true
+0000000000000000000000000000000000000000000000000000000000000000::friend_module:
+	base->upgrade: true
+	upgrade->base: true
+====
+====
+Compatibility { check_struct_and_pub_function_linking: true, check_struct_layout: true, check_friend_linking: false, check_private_entry_linking: true }
+0000000000000000000000000000000000000000000000000000000000000000::base_module:
+	base->upgrade: false
+	upgrade->base: true
+0000000000000000000000000000000000000000000000000000000000000000::friend_module:
+	base->upgrade: true
+	upgrade->base: true
+====
+====
+Compatibility { check_struct_and_pub_function_linking: false, check_struct_layout: false, check_friend_linking: false, check_private_entry_linking: false }
+0000000000000000000000000000000000000000000000000000000000000000::base_module:
+	base->upgrade: true
+	upgrade->base: true
+0000000000000000000000000000000000000000000000000000000000000000::friend_module:
+	base->upgrade: true
+	upgrade->base: true
+========
+Equal
+0000000000000000000000000000000000000000000000000000000000000000::base_module:
+	base->upgrade: false
+	upgrade->base: false
+0000000000000000000000000000000000000000000000000000000000000000::friend_module:
+	base->upgrade: false
+	upgrade->base: false
+====
+====
+Subset
+0000000000000000000000000000000000000000000000000000000000000000::base_module:
+	base->upgrade: false
+	upgrade->base: false
+0000000000000000000000000000000000000000000000000000000000000000::friend_module:
+	base->upgrade: false
+	upgrade->base: false
+====

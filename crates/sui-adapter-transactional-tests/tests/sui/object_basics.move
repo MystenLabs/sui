@@ -71,14 +71,14 @@ module test::object_basics {
 
 //# run test::object_basics::create --sender A --args 10 @A
 
-//# view-object 108
+//# view-object 2,0
 
-//# run test::object_basics::transfer --sender A --args object(108) @B
+//# run test::object_basics::transfer --sender A --args object(2,0) @B
 
-//# view-object 108
+//# view-object 2,0
 
 //# run test::object_basics::create --sender B --args 20 @B
 
-//# run test::object_basics::update --sender B --args object(108) object(111) --view-events
+//# run test::object_basics::update --sender B --args object(2,0) object(6,0) --view-events
 
-//# run test::object_basics::delete --sender B --args object(108)
+//# run test::object_basics::delete --sender B --args object(2,0)

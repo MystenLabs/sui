@@ -9,13 +9,13 @@ use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use move_core_types::value::{MoveStruct, MoveValue};
 
-use sui_types::base_types::SequenceNumber;
+use sui_types::base_types::{ObjectDigest, SequenceNumber};
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::gas_coin::GasCoin;
-use sui_types::object::MoveObject;
-use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS};
+use sui_types::object::{MoveObject, Owner};
+use sui_types::{parse_sui_struct_tag, MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS};
 
-use crate::{SuiMoveStruct, SuiMoveValue};
+use crate::{ObjectChange, SuiMoveStruct, SuiMoveValue};
 
 #[test]
 fn test_move_value_to_sui_coin() {
@@ -141,5 +141,31 @@ fn test_serde() {
             "Error converting {:?} [{json}], got {:?}",
             value, serde_value
         )
+    }
+}
+
+#[test]
+fn test_type_tag_struct_tag_devnet_inc_222() {
+    let offending_tags = [
+        "0x1::address::MyType",
+        "0x1::vector::MyType",
+        "0x1::address::MyType<0x1::address::OtherType>",
+        "0x1::address::MyType<0x1::address::OtherType, 0x1::vector::VecTyper>",
+        "0x1::address::address<0x1::vector::address, 0x1::vector::vector>",
+    ];
+
+    for tag in offending_tags {
+        let oc = ObjectChange::Created {
+            sender: Default::default(),
+            owner: Owner::Immutable,
+            object_type: parse_sui_struct_tag(tag).unwrap(),
+            object_id: ObjectID::random(),
+            version: Default::default(),
+            digest: ObjectDigest::random(),
+        };
+
+        let serde_json = serde_json::to_string(&oc).unwrap();
+        let deser: ObjectChange = serde_json::from_str(&serde_json).unwrap();
+        assert_eq!(oc, deser);
     }
 }

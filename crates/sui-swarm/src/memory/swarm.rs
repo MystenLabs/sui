@@ -18,6 +18,7 @@ use sui_config::builder::{
 use sui_config::genesis_config::{GenesisConfig, ValidatorConfigInfo};
 use sui_config::node::DBCheckpointConfig;
 use sui_config::NetworkConfig;
+use sui_node::SuiNodeHandle;
 use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
 use sui_types::base_types::AuthorityName;
 use sui_types::object::Object;
@@ -312,9 +313,19 @@ impl Swarm {
         self.validators.get(&name)
     }
 
+    pub fn validator_mut(&mut self, name: AuthorityName) -> Option<&mut Node> {
+        self.validators.get_mut(&name)
+    }
+
     /// Return an iterator over shared references of all Validators.
     pub fn validators(&self) -> impl Iterator<Item = &Node> {
         self.validators.values()
+    }
+
+    pub fn validator_node_handles(&self) -> Vec<SuiNodeHandle> {
+        self.validators()
+            .map(|node| node.get_node_handle().unwrap())
+            .collect()
     }
 
     /// Attempt to lookup and return a shared reference to the Fullnode with the provided `name`.

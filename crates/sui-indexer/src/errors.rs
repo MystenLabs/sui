@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use fastcrypto::error::FastCryptoError;
 use jsonrpsee::core::Error as RpcError;
 use jsonrpsee::types::error::CallError;
 use thiserror::Error;
 
 use sui_types::base_types::ObjectIDParseError;
-use sui_types::error::SuiError;
+use sui_types::error::{SuiError, SuiObjectResponseError, UserInputError};
 
 #[derive(Debug, Error)]
 pub enum IndexerError {
@@ -46,14 +47,14 @@ pub enum IndexerError {
     #[error(transparent)]
     PostgresError(#[from] diesel::result::Error),
 
-    #[error("Indexer failed to initialize fullnode RPC client with error: `{0}`")]
-    RpcClientInitError(String),
+    #[error("Indexer failed to initialize fullnode Http client with error: `{0}`")]
+    HttpClientInitError(String),
 
     #[error("Indexer failed to serialize/deserialize with error: `{0}`")]
     SerdeError(String),
 
-    #[error("Indexer does not support the feature yet with error: `{0}`")]
-    NotImplementedError(String),
+    #[error("Indexer does not support the feature with error: `{0}`")]
+    NotSupportedError(String),
 
     #[error(transparent)]
     UncategorizedError(#[from] anyhow::Error),
@@ -70,8 +71,20 @@ pub enum IndexerError {
     #[error("Invalid argument with error: `{0}`")]
     InvalidArgumentError(String),
 
+    #[error(transparent)]
+    UserInputError(#[from] UserInputError),
+
+    #[error(transparent)]
+    ObjectResponseError(#[from] SuiObjectResponseError),
+
+    #[error(transparent)]
+    FastCryptoError(#[from] FastCryptoError),
+
     #[error("`{0}`: `{1}`")]
     ErrorWithContext(String, Box<IndexerError>),
+
+    #[error("Indexer failed to send item to channel with error: `{0}`")]
+    MpscChannelError(String),
 }
 
 pub trait Context<T> {

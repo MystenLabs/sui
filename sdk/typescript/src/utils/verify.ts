@@ -4,7 +4,8 @@
 import { fromB64 } from '@mysten/bcs';
 import nacl from 'tweetnacl';
 import { IntentScope, messageWithIntent } from './intent';
-import * as secp from '@noble/secp256k1';
+import { secp256k1 } from '@noble/curves/secp256k1';
+import { sha256 } from '@noble/hashes/sha256';
 import {
   fromSerializedSignature,
   SerializedSignature,
@@ -35,9 +36,9 @@ export async function verifyMessage(
         signature.pubKey.toBytes(),
       );
     case 'Secp256k1':
-      return secp.verify(
-        secp.Signature.fromCompact(signature.signature),
-        await secp.utils.sha256(digest),
+      return secp256k1.verify(
+        secp256k1.Signature.fromCompact(signature.signature),
+        sha256(digest),
         signature.pubKey.toBytes(),
       );
     default:

@@ -57,7 +57,9 @@ mysten-common.workspace = true
 mysten-metrics = { path = "../mysten-metrics" }
 narwhal-config = { path = "../../narwhal/config" }
 narwhal-executor = { path = "../../narwhal/executor" }
+narwhal-network = { path = "../../narwhal/network" }
 narwhal-node = { path = "../../narwhal/node" }
+narwhal-crypto = { path = "../../narwhal/crypto" }
 narwhal-types = { path = "../../narwhal/types" }
 narwhal-worker = { path = "../../narwhal/worker" }
 telemetry-subscribers.workspace = true
@@ -76,6 +78,7 @@ sui-macros = { path = "../sui-macros" }
 shared-crypto = { path = "../shared-crypto" }
 
 [dev-dependencies]
+move-symbol-pool.workspace = true
 clap = { version = "3.2.17", features = ["derive"] }
 criterion = { version = "0.4.0" }
 fs_extra = "1.2.0"
@@ -85,6 +88,7 @@ serde_yaml = "0.8.26"
 pretty_assertions = "1.2.1"
 narwhal-test-utils = { path = "../../narwhal/test-utils" }
 sui-verifier = { path = "../sui-verifier" }
+sui-types = { path = "../sui-types", features = ["test-utils"] }
 
 [target.'cfg(not(target_env = "msvc"))'.dev-dependencies]
 pprof = { version = "0.11.0", features = ["cpp", "frame-pointer"] }
@@ -107,3 +111,6 @@ harness = false
 [[bench]]
 name = "batch_verification_bench"
 harness = false
+
+[features]
+test-utils = []

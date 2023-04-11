@@ -1,0 +1,32 @@
+// A language configuration that specifies VS Code behaviors such as comment toggling
+// and matching bracket highlighting.
+// Use IntelliSense to learn about possible attributes.
+// Hover to view descriptions of existing attributes.
+// For more information, visit:
+// https://code.visualstudio.com/api/language-extensions/language-configuration-guide
+{
+    "autoClosingPairs": [
+        { "open": "{", "close": "}" },
+        { "open": "[", "close": "]" },
+        { "open": "(", "close": ")" },
+        { "open": "\"", "close": "\"", "notIn": ["string", "comment"] },
+        { "open": "/*", "close": "*/", "notIn": ["string"] }
+    ],
+    "brackets": [
+        ["{", "}"],
+        ["[", "]"],
+        ["(", ")"],
+        ["<", ">"],
+    ],
+    "comments": {
+        "lineComment": "//",
+        "blockComment": ["/*", "*/"]
+    },
+    "surroundingPairs": [
+        ["{", "}"],
+        ["[", "]"],
+        ["(", ")"],
+        ["<", ">"],
+        ["\"", "\""]
+    ],
+}

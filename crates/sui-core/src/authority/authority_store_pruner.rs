@@ -1,9 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::authority_store_types::{ObjectContentDigest, StoreData};
+use crate::authority::authority_store_types::{ObjectContentDigest, StoreData, StoreObject};
 use crate::checkpoints::CheckpointStore;
 use mysten_metrics::monitored_scope;
+use prometheus::{
+    register_int_counter_with_registry, register_int_gauge_with_registry, IntCounter, IntGauge,
+    Registry,
+};
 use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::{sync::Arc, time::Duration};
@@ -26,6 +30,31 @@ pub struct AuthorityStorePruner {
     _objects_pruner_cancel_handle: oneshot::Sender<()>,
 }
 
+pub struct AuthorityStorePruningMetrics {
+    pub last_pruned_checkpoint: IntGauge,
+    pub num_pruned_objects: IntCounter,
+}
+
+impl AuthorityStorePruningMetrics {
+    pub fn new(registry: &Registry) -> Arc<Self> {
+        let this = Self {
+            last_pruned_checkpoint: register_int_gauge_with_registry!(
+                "last_pruned_checkpoint",
+                "Last pruned checkpoint",
+                registry
+            )
+            .unwrap(),
+            num_pruned_objects: register_int_counter_with_registry!(
+                "num_pruned_objects",
+                "Number of pruned objects",
+                registry
+            )
+            .unwrap(),
+        };
+        Arc::new(this)
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 enum DeletionMethod {
     RangeDelete,
@@ -40,6 +69,7 @@ impl AuthorityStorePruner {
         objects_lock_table: &Arc<RwLockTable<ObjectContentDigest>>,
         checkpoint_number: CheckpointSequenceNumber,
         deletion_method: DeletionMethod,
+        metrics: Arc<AuthorityStorePruningMetrics>,
     ) -> anyhow::Result<()> {
         let _scope = monitored_scope("ObjectsLivePruner");
         let mut wb = perpetual_db.objects.batch();
@@ -50,15 +80,20 @@ impl AuthorityStorePruner {
                 object_keys_to_prune.push(ObjectKey(*object_id, *seq_number));
             }
         }
+        metrics
+            .num_pruned_objects
+            .inc_by(object_keys_to_prune.len() as u64);
         let mut indirect_objects: HashMap<_, i64> = HashMap::new();
         for object in perpetual_db
             .objects
             .multi_get(object_keys_to_prune.iter())?
+            .into_iter()
+            .flatten()
         {
-            if let Some(StoreData::IndirectObject(indirect_object)) =
-                object.map(|o| o.into_inner().data)
-            {
-                *indirect_objects.entry(indirect_object.digest).or_default() -= 1;
+            if let StoreObject::Value(obj) = object.into_inner() {
+                if let StoreData::IndirectObject(indirect_object) = obj.data {
+                    *indirect_objects.entry(indirect_object.digest).or_default() -= 1;
+                }
             }
         }
 
@@ -78,20 +113,21 @@ impl AuthorityStorePruner {
                 for (object_id, (min_version, max_version)) in updates {
                     let start_range = ObjectKey(object_id, min_version);
                     let end_range = ObjectKey(object_id, (max_version.value() + 1).into());
-                    wb = wb.delete_range(&perpetual_db.objects, &start_range, &end_range)?;
+                    wb.delete_range(&perpetual_db.objects, &start_range, &end_range)?;
                 }
             }
             DeletionMethod::PointDelete => {
-                wb = wb.delete_batch(&perpetual_db.objects, object_keys_to_prune)?;
+                wb.delete_batch(&perpetual_db.objects, object_keys_to_prune)?;
             }
         }
         if !indirect_objects.is_empty() {
             let ref_count_update = indirect_objects
                 .iter()
                 .map(|(digest, delta)| (digest, delta.to_le_bytes()));
-            wb = wb.partial_merge_batch(&perpetual_db.indirect_move_objects, ref_count_update)?;
+            wb.partial_merge_batch(&perpetual_db.indirect_move_objects, ref_count_update)?;
         }
-        wb = perpetual_db.set_highest_pruned_checkpoint(wb, checkpoint_number)?;
+        perpetual_db.set_highest_pruned_checkpoint(&mut wb, checkpoint_number)?;
+        metrics.last_pruned_checkpoint.set(checkpoint_number as i64);
 
         let _locks = objects_lock_table
             .acquire_locks(indirect_objects.into_keys())
@@ -106,6 +142,7 @@ impl AuthorityStorePruner {
         checkpoint_store: &Arc<CheckpointStore>,
         objects_lock_table: &Arc<RwLockTable<ObjectContentDigest>>,
         config: AuthorityStorePruningConfig,
+        metrics: Arc<AuthorityStorePruningMetrics>,
     ) -> anyhow::Result<()> {
         let deletion_method = if config.use_range_deletion {
             DeletionMethod::RangeDelete
@@ -113,9 +150,9 @@ impl AuthorityStorePruner {
             DeletionMethod::PointDelete
         };
         let mut checkpoint_number = perpetual_db.get_highest_pruned_checkpoint()?;
-        let current_epoch = checkpoint_store
+        let (highest_executed_checkpoint, current_epoch) = checkpoint_store
             .get_highest_executed_checkpoint()?
-            .map(|c| c.epoch())
+            .map(|c| (c.sequence_number, c.epoch()))
             .unwrap_or_default();
         let mut checkpoints_in_batch = 0;
         let mut batch_effects = vec![];
@@ -133,11 +170,15 @@ impl AuthorityStorePruner {
 
         #[allow(clippy::explicit_counter_loop)]
         for (_, checkpoint) in iter {
-            // checkpoint's epoch is too new. Skipping for now
-            if current_epoch < checkpoint.epoch() + config.num_epochs_to_retain {
+            checkpoint_number = *checkpoint.sequence_number();
+            // Skipping because  checkpoint's epoch or checkpoint number is too new.
+            // We have to respect the highest executed checkpoint watermark because there might be
+            // parts of the system that still require access to old object versions (i.e. state accumulator)
+            if (current_epoch < checkpoint.epoch() + config.num_epochs_to_retain)
+                || (checkpoint_number > highest_executed_checkpoint)
+            {
                 break;
             }
-            checkpoint_number = *checkpoint.sequence_number();
             checkpoints_in_batch += 1;
             if network_total_transactions == checkpoint.network_total_transactions {
                 continue;
@@ -165,6 +206,7 @@ impl AuthorityStorePruner {
                     objects_lock_table,
                     checkpoint_number,
                     deletion_method,
+                    metrics.clone(),
                 )
                 .await?;
                 batch_effects = vec![];
@@ -178,6 +220,7 @@ impl AuthorityStorePruner {
                 objects_lock_table,
                 checkpoint_number,
                 deletion_method,
+                metrics.clone(),
             )
             .await?;
         }
@@ -194,6 +237,7 @@ impl AuthorityStorePruner {
         perpetual_db: Arc<AuthorityPerpetualTables>,
         checkpoint_store: Arc<CheckpointStore>,
         objects_lock_table: Arc<RwLockTable<ObjectContentDigest>>,
+        metrics: Arc<AuthorityStorePruningMetrics>,
     ) -> Sender<()> {
         let (sender, mut recv) = tokio::sync::oneshot::channel();
         debug!(
@@ -203,7 +247,7 @@ impl AuthorityStorePruner {
         let tick_duration = if config.num_epochs_to_retain > 0 {
             Duration::from_millis(epoch_duration_ms / 2)
         } else {
-            Duration::from_secs(1)
+            Duration::from_secs(config.pruning_run_delay_seconds.unwrap_or(60))
         };
 
         let pruning_initial_delay = min(tick_duration, Duration::from_secs(300));
@@ -214,7 +258,7 @@ impl AuthorityStorePruner {
             loop {
                 tokio::select! {
                     _ = prune_interval.tick(), if config.num_epochs_to_retain != u64::MAX => {
-                        if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, &objects_lock_table, config).await {
+                        if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, &objects_lock_table, config, metrics.clone()).await {
                             error!("Failed to prune objects: {:?}", err);
                         }
                     },
@@ -230,6 +274,7 @@ impl AuthorityStorePruner {
         objects_lock_table: Arc<RwLockTable<ObjectContentDigest>>,
         pruning_config: AuthorityStorePruningConfig,
         epoch_duration_ms: u64,
+        registry: &Registry,
     ) -> Self {
         AuthorityStorePruner {
             _objects_pruner_cancel_handle: Self::setup_objects_pruning(
@@ -238,6 +283,7 @@ impl AuthorityStorePruner {
                 perpetual_db,
                 checkpoint_store,
                 objects_lock_table,
+                AuthorityStorePruningMetrics::new(registry),
             ),
         }
     }
@@ -252,13 +298,15 @@ mod tests {
     use std::{collections::HashSet, sync::Arc};
     use tracing::log::{error, info};
 
-    use crate::authority::authority_store_pruner::DeletionMethod;
+    use crate::authority::authority_store_pruner::{AuthorityStorePruningMetrics, DeletionMethod};
     use crate::authority::authority_store_tables::AuthorityPerpetualTables;
     use crate::authority::authority_store_types::{
-        get_store_object_pair, ObjectContentDigest, StoreData, StoreObjectPair, StoreObjectWrapper,
+        get_store_object_pair, ObjectContentDigest, StoreData, StoreObject, StoreObjectPair,
+        StoreObjectWrapper,
     };
     #[cfg(not(target_env = "msvc"))]
     use pprof::Symbol;
+    use prometheus::Registry;
     use sui_storage::mutex_table::RwLockTable;
     use sui_types::base_types::{ObjectDigest, VersionNumber};
     use sui_types::messages::{TransactionEffects, TransactionEffectsAPI};
@@ -374,15 +422,17 @@ mod tests {
                 }
                 let StoreObjectPair(obj, indirect_obj) =
                     get_store_object_pair(Object::immutable_with_id_for_testing(id), 1);
-                batch = batch.insert_batch(
+                batch.insert_batch(
                     &db.objects,
                     [(ObjectKey(id, SequenceNumber::from(i)), obj.clone())],
                 )?;
-                if let StoreData::IndirectObject(metadata) = obj.into_inner().data {
-                    batch = batch.merge_batch(
-                        &db.indirect_move_objects,
-                        [(metadata.digest, indirect_obj.unwrap())],
-                    )?;
+                if let StoreObject::Value(o) = obj.into_inner() {
+                    if let StoreData::IndirectObject(metadata) = o.data {
+                        batch.merge_batch(
+                            &db.indirect_move_objects,
+                            [(metadata.digest, indirect_obj.unwrap())],
+                        )?;
+                    }
                 }
             }
         }
@@ -406,6 +456,8 @@ mod tests {
         total_unique_object_ids: u32,
         deletion_method: DeletionMethod,
     ) -> Vec<ObjectKey> {
+        let registry = Registry::default();
+        let metrics = AuthorityStorePruningMetrics::new(&registry);
         let to_keep = {
             let db = Arc::new(AuthorityPerpetualTables::open(path, None));
             let (to_keep, to_delete) = generate_test_data(
@@ -424,6 +476,7 @@ mod tests {
                 &lock_table(),
                 0,
                 deletion_method,
+                metrics,
             )
             .await
             .unwrap();
@@ -505,12 +558,15 @@ mod tests {
 
         let mut effects = TransactionEffects::default();
         *effects.modified_at_versions_mut_for_testing() = to_delete;
+        let registry = Registry::default();
+        let metrics = AuthorityStorePruningMetrics::new(&registry);
         let total_pruned = AuthorityStorePruner::prune_effects(
             vec![effects],
             &perpetual_db,
             &lock_table(),
             0,
             DeletionMethod::RangeDelete,
+            metrics,
         )
         .await;
         info!("Total pruned keys = {:?}", total_pruned);
@@ -536,6 +592,8 @@ mod tests {
         // then does a bunch of get(). We open the db with `ignore_range_delete` set to true (default mode).
         // We then record a cpu profile of the `get()` calls and do not find any range fragmentation stack frame
         // in it.
+        let registry = Registry::default();
+        let metrics = AuthorityStorePruningMetrics::new(&registry);
         let primary_path = tempfile::tempdir()?.into_path();
         let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&primary_path, None));
         let effects = insert_keys(&perpetual_db.objects)?;
@@ -545,6 +603,7 @@ mod tests {
             &lock_table(),
             0,
             DeletionMethod::RangeDelete,
+            metrics,
         )
         .await?;
         let guard = pprof::ProfilerGuardBuilder::default()
@@ -571,12 +630,15 @@ mod tests {
         let primary_path = tempfile::tempdir()?.into_path();
         let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&primary_path, None));
         let effects = insert_keys(&perpetual_db.objects)?;
+        let registry = Registry::default();
+        let metrics = AuthorityStorePruningMetrics::new(&registry);
         AuthorityStorePruner::prune_effects(
             vec![effects],
             &perpetual_db,
             &lock_table(),
             0,
             DeletionMethod::RangeDelete,
+            metrics,
         )
         .await?;
         if let Ok(()) = perpetual_db.objects.flush() {

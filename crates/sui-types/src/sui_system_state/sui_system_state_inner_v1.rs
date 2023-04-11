@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::balance::Balance;
-use crate::base_types::{EpochId, ObjectID, SuiAddress};
+use crate::base_types::{ObjectID, SuiAddress};
 use crate::collection_types::{Bag, Table, TableVec, VecMap, VecSet};
-use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata, ProtocolVersion};
+use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata};
 use crate::crypto::verify_proof_of_possession;
 use crate::crypto::AuthorityPublicKeyBytes;
 use crate::id::ID;
@@ -18,7 +18,7 @@ use std::collections::BTreeMap;
 
 use super::epoch_start_sui_system_state::EpochStartValidatorInfoV1;
 use super::sui_system_state_summary::{SuiSystemStateSummary, SuiValidatorSummary};
-use super::{SuiSystemStateTrait, INIT_SYSTEM_STATE_VERSION};
+use super::{AdvanceEpochParams, SuiSystemStateTrait};
 
 const E_METADATA_INVALID_POP: u64 = 0;
 const E_METADATA_INVALID_PUBKEY: u64 = 1;
@@ -396,7 +396,7 @@ impl ValidatorV1 {
             next_epoch_primary_address,
             next_epoch_worker_address,
             voting_power,
-            operation_cap_id,
+            operation_cap_id: operation_cap_id.bytes,
             gas_price,
             staking_pool_id,
             staking_pool_activation_epoch,
@@ -417,7 +417,7 @@ impl ValidatorV1 {
     }
 }
 
-/// Rust version of the Move sui::staking_pool::StakingPool type
+/// Rust version of the Move sui_system::staking_pool::StakingPool type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct StakingPoolV1 {
     pub id: ObjectID,
@@ -433,7 +433,7 @@ pub struct StakingPoolV1 {
     pub extra_fields: Bag,
 }
 
-/// Rust version of the Move sui::validator_set::ValidatorSet type
+/// Rust version of the Move sui_system::validator_set::ValidatorSet type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct ValidatorSetV1 {
     pub total_stake: u64,
@@ -447,15 +447,21 @@ pub struct ValidatorSetV1 {
     pub extra_fields: Bag,
 }
 
-/// Rust version of the Move sui::sui_system::SuiSystemStateInner type
-/// We want to keep it named as SuiSystemState in Rust since this is the primary interface type.
+/// Rust version of the Move sui_system::storage_fund::StorageFund type
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct StorageFundV1 {
+    pub total_object_storage_rebates: Balance,
+    pub non_refundable_balance: Balance,
+}
+
+/// Rust version of the Move sui_system::sui_system::SuiSystemStateInner type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct SuiSystemStateInnerV1 {
     pub epoch: u64,
     pub protocol_version: u64,
     pub system_state_version: u64,
     pub validators: ValidatorSetV1,
-    pub storage_fund: Balance,
+    pub storage_fund: StorageFundV1,
     pub parameters: SystemParametersV1,
     pub reference_gas_price: u64,
     pub validator_report_records: VecMap<SuiAddress, VecSet<SuiAddress>>,
@@ -464,18 +470,10 @@ pub struct SuiSystemStateInnerV1 {
     pub safe_mode_storage_rewards: Balance,
     pub safe_mode_computation_rewards: Balance,
     pub safe_mode_storage_rebates: u64,
+    pub safe_mode_non_refundable_storage_fee: u64,
     pub epoch_start_timestamp_ms: u64,
     pub extra_fields: Bag,
     // TODO: Use getters instead of all pub.
-}
-
-impl SuiSystemStateInnerV1 {
-    pub fn new_for_testing(epoch: EpochId) -> Self {
-        Self {
-            epoch,
-            ..Default::default()
-        }
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
@@ -529,6 +527,19 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
         self.safe_mode
     }
 
+    fn advance_epoch_safe_mode(&mut self, params: &AdvanceEpochParams) {
+        self.epoch = params.epoch;
+        self.safe_mode = true;
+        self.safe_mode_storage_rewards
+            .deposit_for_safe_mode(params.storage_charge);
+        self.safe_mode_storage_rebates += params.storage_rebate;
+        self.safe_mode_computation_rewards
+            .deposit_for_safe_mode(params.computation_charge);
+        self.safe_mode_non_refundable_storage_fee += params.non_refundable_storage_fee;
+        self.epoch_start_timestamp_ms = params.epoch_start_timestamp_ms;
+        self.protocol_version = params.next_protocol_version.as_u64();
+    }
+
     fn get_current_epoch_committee(&self) -> CommitteeWithNetworkMetadata {
         let mut voting_rights = BTreeMap::new();
         let mut network_metadata = BTreeMap::new();
@@ -573,6 +584,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
                         narwhal_primary_address: metadata.primary_address.clone(),
                         narwhal_worker_address: metadata.worker_address.clone(),
                         voting_power: validator.voting_power,
+                        hostname: metadata.name.clone(),
                     }
                 })
                 .collect(),
@@ -651,6 +663,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
             safe_mode_storage_rewards,
             safe_mode_computation_rewards,
             safe_mode_storage_rebates,
+            safe_mode_non_refundable_storage_fee,
             epoch_start_timestamp_ms,
             extra_fields: _,
         } = self;
@@ -658,12 +671,16 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
             epoch,
             protocol_version,
             system_state_version,
-            storage_fund: storage_fund.value(),
+            storage_fund_total_object_storage_rebates: storage_fund
+                .total_object_storage_rebates
+                .value(),
+            storage_fund_non_refundable_balance: storage_fund.non_refundable_balance.value(),
             reference_gas_price,
             safe_mode,
             safe_mode_storage_rewards: safe_mode_storage_rewards.value(),
             safe_mode_computation_rewards: safe_mode_computation_rewards.value(),
             safe_mode_storage_rebates,
+            safe_mode_non_refundable_storage_fee,
             epoch_start_timestamp_ms,
             stake_subsidy_start_epoch,
             epoch_duration_ms,
@@ -703,55 +720,9 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
     }
 }
 
-// The default implementation for tests
-impl Default for SuiSystemStateInnerV1 {
-    fn default() -> Self {
-        let validator_set = ValidatorSetV1 {
-            total_stake: 2,
-            active_validators: vec![],
-            pending_active_validators: TableVec::default(),
-            pending_removals: vec![],
-            staking_pool_mappings: Table::default(),
-            inactive_validators: Table::default(),
-            validator_candidates: Table::default(),
-            at_risk_validators: VecMap { contents: vec![] },
-            extra_fields: Default::default(),
-        };
-        Self {
-            epoch: 0,
-            protocol_version: ProtocolVersion::MIN.as_u64(),
-            system_state_version: INIT_SYSTEM_STATE_VERSION,
-            validators: validator_set,
-            storage_fund: Balance::new(0),
-            parameters: SystemParametersV1 {
-                stake_subsidy_start_epoch: 0,
-                epoch_duration_ms: 10000,
-                max_validator_count: crate::governance::MAX_VALIDATOR_COUNT,
-                min_validator_joining_stake: crate::governance::MIN_VALIDATOR_JOINING_STAKE_MIST,
-                validator_low_stake_threshold:
-                    crate::governance::VALIDATOR_LOW_STAKE_THRESHOLD_MIST,
-                validator_very_low_stake_threshold:
-                    crate::governance::VALIDATOR_VERY_LOW_STAKE_THRESHOLD_MIST,
-                validator_low_stake_grace_period:
-                    crate::governance::VALIDATOR_LOW_STAKE_GRACE_PERIOD,
-                extra_fields: Default::default(),
-            },
-            reference_gas_price: 1,
-            validator_report_records: VecMap { contents: vec![] },
-            stake_subsidy: StakeSubsidyV1 {
-                balance: Balance::new(0),
-                distribution_counter: 0,
-                current_distribution_amount: 0,
-                stake_subsidy_period_length: 1,
-                stake_subsidy_decrease_rate: 0,
-                extra_fields: Default::default(),
-            },
-            safe_mode: false,
-            safe_mode_storage_rewards: Balance::new(0),
-            safe_mode_computation_rewards: Balance::new(0),
-            safe_mode_storage_rebates: 0,
-            epoch_start_timestamp_ms: 0,
-            extra_fields: Default::default(),
-        }
-    }
+/// Rust version of the Move sui_system::validator_cap::UnverifiedValidatorOperationCap type
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct UnverifiedValidatorOperationCapV1 {
+    pub id: ObjectID,
+    pub authorizer_validator_address: SuiAddress,
 }

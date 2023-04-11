@@ -8,21 +8,29 @@ use move_core_types::{
     vm_status::AbortLocation,
 };
 use pretty_assertions::assert_str_eq;
+use rand::rngs::StdRng;
+use rand::SeedableRng;
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
+use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
 use std::{fs::File, io::Write};
-use sui_types::crypto::Signer;
+use sui_types::{
+    base_types::MoveObjectType_,
+    crypto::Signer,
+    messages_checkpoint::{CheckpointContentsDigest, CheckpointDigest, CheckpointSummary},
+};
 use sui_types::{
     base_types::{
         self, MoveObjectType, ObjectDigest, ObjectID, TransactionDigest, TransactionEffectsDigest,
     },
     crypto::{
-        get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes,
-        AuthoritySignature, KeypairTraits, Signature,
+        get_key_pair, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
+        AuthorityPublicKeyBytes, AuthoritySignature, KeypairTraits, Signature, SuiKeyPair,
     },
     messages::{
         Argument, CallArg, Command, CommandArgumentError, ExecutionFailureStatus, ExecutionStatus,
         ObjectArg, ObjectInfoRequestKind, PackageUpgradeError, TransactionKind, TypeArgumentError,
     },
+    multisig::{MultiSig, MultiSigPublicKey},
     object::{Data, Owner},
     storage::DeleteKind,
 };
@@ -58,9 +66,29 @@ fn get_registry() -> Result<Registry> {
     let sig: Signature = Signer::sign(&s_kp, b"hello world");
     tracer.trace_value(&mut samples, &sig)?;
 
+    let kp1: SuiKeyPair =
+        SuiKeyPair::Ed25519(get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1);
+    let kp2: SuiKeyPair =
+        SuiKeyPair::Ed25519(get_key_pair_from_rng(&mut StdRng::from_seed([1; 32])).1);
+
+    let multisig_pk =
+        MultiSigPublicKey::new(vec![kp1.public(), kp2.public()], vec![1, 1], 2).unwrap();
+
+    let msg = IntentMessage::new(
+        Intent::sui_transaction(),
+        PersonalMessage {
+            message: "Message".as_bytes().to_vec(),
+        },
+    );
+
+    let sig1 = Signature::new_secure(&msg, &kp1);
+    let sig2 = Signature::new_secure(&msg, &kp1);
+
+    let multi_sig = MultiSig::combine(vec![sig1, sig2], multisig_pk).unwrap();
+    tracer.trace_value(&mut samples, &multi_sig)?;
+
     // ObjectID and SuiAddress are the same length
-    let addr_bytes: [u8; ObjectID::LENGTH] = addr.as_ref().try_into().unwrap();
-    let oid = ObjectID::from(addr_bytes);
+    let oid: ObjectID = addr.into();
     tracer.trace_value(&mut samples, &oid)?;
 
     // ObjectDigest and Transaction digest use the `serde_as`speedup for ser/de => trace them
@@ -71,6 +99,12 @@ fn get_registry() -> Result<Registry> {
 
     let teff = TransactionEffectsDigest::random();
     tracer.trace_value(&mut samples, &teff)?;
+
+    let ccd = CheckpointContentsDigest::random();
+    tracer.trace_value(&mut samples, &ccd)?;
+
+    let ccd = CheckpointDigest::random();
+    tracer.trace_value(&mut samples, &ccd)?;
 
     // 2. Trace the main entry point(s) + every enum separately.
     tracer.trace_type::<Owner>(&samples)?;
@@ -87,6 +121,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<MoveStructLayout>(&samples)?;
     tracer.trace_type::<MoveTypeLayout>(&samples)?;
     tracer.trace_type::<MoveObjectType>(&samples)?;
+    tracer.trace_type::<MoveObjectType_>(&samples)?;
     tracer.trace_type::<base_types::SuiAddress>(&samples)?;
     tracer.trace_type::<DeleteKind>(&samples)?;
     tracer.trace_type::<Argument>(&samples)?;
@@ -94,6 +129,11 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<CommandArgumentError>(&samples)?;
     tracer.trace_type::<TypeArgumentError>(&samples)?;
     tracer.trace_type::<PackageUpgradeError>(&samples)?;
+
+    // uncomment once GenericSignature is added
+    // tracer.trace_type::<FullCheckpointContents>(&samples)?;
+    // tracer.trace_type::<CheckpointContents>(&samples)?;
+    tracer.trace_type::<CheckpointSummary>(&samples)?;
 
     tracer.registry()
 }

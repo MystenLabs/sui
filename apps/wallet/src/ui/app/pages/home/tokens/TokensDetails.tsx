@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFeatureIsOn } from '@growthbook/growthbook-react';
+import { Info12 } from '@mysten/icons';
 import { SUI_TYPE_ARG, Coin } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
@@ -48,7 +50,7 @@ function MyTokens() {
                         {balance.map(({ coinType, totalBalance }) => (
                             <CoinBalance
                                 type={coinType}
-                                balance={totalBalance}
+                                balance={BigInt(totalBalance)}
                                 key={coinType}
                             />
                         ))}
@@ -77,6 +79,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
         isLoading,
         isFetched,
     } = useGetCoinBalance(activeCoinType, accountAddress);
+    const networkOutage = useFeatureIsOn('wallet-network-outage');
 
     const tokenBalance = coinBalance?.totalBalance || BigInt(0);
 
@@ -88,82 +91,100 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
     const isFirstTimeLoading = isLoading && !isFetched;
 
     return (
-        <Loading loading={isFirstTimeLoading}>
-            {coinType && <PageTitle title={coinSymbol} back="/tokens" />}
-
-            <div
-                className="flex flex-col h-full flex-1 flex-grow items-center"
-                data-testid="coin-page"
-            >
-                {!coinType && <AccountSelector />}
-                <div className="mt-1.5">
-                    <CoinBalance
-                        balance={tokenBalance}
-                        type={activeCoinType}
-                        mode="standalone"
-                    />
-                </div>
-                {isError ? (
-                    <Alert>
-                        <div>
-                            <strong>Error updating balance</strong>
-                        </div>
-                    </Alert>
-                ) : null}
-                <div className="flex flex-nowrap gap-2 justify-center w-full mt-5">
-                    <IconLink
-                        icon={SuiIcons.Buy}
-                        to="/"
-                        disabled={true}
-                        text="Buy"
-                    />
-                    <IconLink
-                        icon={SuiIcons.ArrowLeft}
-                        to={`/send${
-                            coinBalance?.coinType
-                                ? `?${new URLSearchParams({
-                                      type: coinBalance.coinType,
-                                  }).toString()}`
-                                : ''
-                        }`}
-                        disabled={!tokenBalance}
-                        text="Send"
-                    />
-                    <IconLink
-                        icon={SuiIcons.Swap}
-                        to="/"
-                        disabled={true}
-                        text="Swap"
-                    />
-                </div>
-
-                {activeCoinType === SUI_TYPE_ARG && accountAddress ? (
-                    <div className="mt-6 flex justify-start gap-2 flex-col w-full">
-                        <Text
-                            variant="caption"
-                            color="steel-darker"
-                            weight="semibold"
-                        >
-                            SUI Stake
+        <>
+            {networkOutage && (
+                <div className="rounded-2xl bg-warning-light border border-solid border-warning-dark/20 text-warning-dark flex items-center py-2 px-3">
+                    <Info12 className="shrink-0" />
+                    <div className="ml-2">
+                        <Text variant="p2" weight="medium">
+                            We're sorry that the app is running slower than
+                            usual. We're working to fix the issue and appreciate
+                            your patience.
                         </Text>
-                        <TokenIconLink accountAddress={accountAddress} />
                     </div>
-                ) : null}
+                </div>
+            )}
+            <Loading loading={isFirstTimeLoading}>
+                {coinType && <PageTitle title={coinSymbol} back="/tokens" />}
 
-                {!coinType ? (
-                    <MyTokens />
-                ) : (
-                    <div className="mt-6 flex-1 justify-start gap-2 flex-col w-full">
-                        <Text variant="caption" color="steel" weight="semibold">
-                            {coinSymbol} activity
-                        </Text>
-                        <div className="flex flex-col flex-nowrap flex-1">
-                            <CoinActivitiesCard coinType={activeCoinType} />
-                        </div>
+                <div
+                    className="flex flex-col h-full flex-1 flex-grow items-center"
+                    data-testid="coin-page"
+                >
+                    {!coinType && <AccountSelector />}
+                    <div className="mt-1.5">
+                        <CoinBalance
+                            balance={BigInt(tokenBalance)}
+                            type={activeCoinType}
+                            mode="standalone"
+                        />
                     </div>
-                )}
-            </div>
-        </Loading>
+                    {isError ? (
+                        <Alert>
+                            <div>
+                                <strong>Error updating balance</strong>
+                            </div>
+                        </Alert>
+                    ) : null}
+                    <div className="flex flex-nowrap gap-2 justify-center w-full mt-5">
+                        <IconLink
+                            icon={SuiIcons.Buy}
+                            to="/"
+                            disabled={true}
+                            text="Buy"
+                        />
+                        <IconLink
+                            icon={SuiIcons.ArrowLeft}
+                            to={`/send${
+                                coinBalance?.coinType
+                                    ? `?${new URLSearchParams({
+                                          type: coinBalance.coinType,
+                                      }).toString()}`
+                                    : ''
+                            }`}
+                            disabled={!tokenBalance}
+                            text="Send"
+                        />
+                        <IconLink
+                            icon={SuiIcons.Swap}
+                            to="/"
+                            disabled={true}
+                            text="Swap"
+                        />
+                    </div>
+
+                    {activeCoinType === SUI_TYPE_ARG && accountAddress ? (
+                        <div className="mt-6 flex justify-start gap-2 flex-col w-full">
+                            <Text
+                                variant="caption"
+                                color="steel-darker"
+                                weight="semibold"
+                            >
+                                SUI Stake
+                            </Text>
+                            <TokenIconLink accountAddress={accountAddress} />
+                        </div>
+                    ) : null}
+
+                    {!coinType ? (
+                        <MyTokens />
+                    ) : (
+                        <div className="mt-6 flex-1 justify-start gap-2 flex-col w-full">
+                            <Text
+                                variant="caption"
+                                color="steel"
+                                weight="semibold"
+                            >
+                                {coinSymbol} activity
+                            </Text>
+                            <div className="flex flex-col flex-nowrap flex-1">
+                                <CoinActivitiesCard coinType={activeCoinType} />
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </Loading>
+        </>
     );
 }
 

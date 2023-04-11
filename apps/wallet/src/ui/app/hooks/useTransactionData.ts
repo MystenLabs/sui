@@ -2,41 +2,38 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFormatCoin, useRpcClient } from '@mysten/core';
-import { type SuiAddress, SUI_TYPE_ARG, Transaction } from '@mysten/sui.js';
+import {
+    type SuiAddress,
+    SUI_TYPE_ARG,
+    TransactionBlock,
+} from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
-import { useMemo } from 'react';
 
 export function useTransactionData(
     sender?: SuiAddress | null,
-    transaction?: Transaction | null
+    transaction?: TransactionBlock | null
 ) {
     const rpc = useRpcClient();
-    const clonedTransaction = useMemo(() => {
-        if (!transaction) return;
-
-        const tx = new Transaction(transaction);
-        if (sender) {
-            tx.setSenderIfNotSet(sender);
-        }
-        return tx;
-    }, [transaction, sender]);
-
     return useQuery(
-        ['transaction-data', clonedTransaction?.serialize()],
+        ['transaction-data', transaction?.serialize()],
         async () => {
+            const clonedTransaction = new TransactionBlock(transaction!);
+            if (sender) {
+                clonedTransaction.setSenderIfNotSet(sender);
+            }
             // Build the transaction to bytes, which will ensure that the transaction data is fully populated:
             await clonedTransaction!.build({ provider: rpc });
-            return clonedTransaction!.transactionData;
+            return clonedTransaction!.blockData;
         },
         {
-            enabled: !!clonedTransaction,
+            enabled: !!transaction,
         }
     );
 }
 
 export function useTransactionGasBudget(
     sender?: SuiAddress | null,
-    transaction?: Transaction | null
+    transaction?: TransactionBlock | null
 ) {
     const { data, ...rest } = useTransactionData(sender, transaction);
 

@@ -8,14 +8,14 @@ import ReactDOM from 'react-dom/client';
 import { RouterProvider } from 'react-router-dom';
 
 import { router } from './pages';
-import { loadFeatures } from './utils/growthbook';
+import { growthbook } from './utils/growthbook';
 import './utils/sentry';
 import { reportWebVitals } from './utils/vitals';
 
 import './index.css';
 
 // Start loading features as early as we can:
-loadFeatures();
+growthbook.loadFeatures();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>

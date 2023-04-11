@@ -1,0 +1,27 @@
+//# publish
+module 0x42.Test {
+    struct T has drop {fint: u64, fv: bool}
+
+    public t1(fint: u64, fv: bool): Self.T {
+    label b0:
+        return T{fint: move(fint), fv: move(fv)};
+    }
+
+    public t2(fint: u64): Self.T {
+    label b0:
+        return T{fint:  move(fint), fv: false};
+    }
+}
+
+//# run
+
+import 0x42.Test;
+
+main() {
+    let t1: Test.T;
+    let t2: Test.T;
+label b0:
+    t1 = Test.t1(0, false);
+    t2 = Test.t2(0);
+    return;
+}

@@ -6,7 +6,7 @@ import {
     formatAddress,
     is,
     toB64,
-    type TransactionInput,
+    type TransactionBlockInput,
 } from '@mysten/sui.js';
 
 import ExplorerLink from '_src/ui/app/components/explorer-link';
@@ -14,7 +14,7 @@ import { ExplorerLinkType } from '_src/ui/app/components/explorer-link/ExplorerL
 import { Text } from '_src/ui/app/shared/text';
 
 interface InputProps {
-    input: TransactionInput;
+    input: TransactionBlockInput;
 }
 
 export function Input({ input }: InputProps) {

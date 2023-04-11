@@ -7,8 +7,8 @@ CREATE TABLE system_states
     reference_gas_price                BIGINT   NOT NULL,
     safe_mode                          BOOLEAN  NOT NULL,
     epoch_start_timestamp_ms           BIGINT   NOT NULL,
-    governance_start_epoch             BIGINT   NOT NULL,
     epoch_duration_ms                  BIGINT   NOT NULL,
+    stake_subsidy_start_epoch          BIGINT   NOT NULL,
     stake_subsidy_epoch_counter        BIGINT   NOT NULL,
     stake_subsidy_balance              BIGINT   NOT NULL,
     stake_subsidy_current_epoch_amount BIGINT   NOT NULL,
@@ -78,3 +78,15 @@ CREATE TABLE at_risk_validators
     CONSTRAINT at_risk_validators_pk PRIMARY KEY (EPOCH, address)
 );
 
+CREATE OR REPLACE VIEW network_metrics AS
+SELECT (SELECT COALESCE(SUM(transaction_count)::float8 / 10, 0)
+        FROM transactions
+        WHERE timestamp_ms >
+              (SELECT timestamp_ms FROM checkpoints ORDER BY sequence_number DESC LIMIT 1) - 10000) AS current_tps,
+       (SELECT COALESCE(tps_30_days, 0) FROM epoch_network_metrics)                                 AS tps_30_days,
+       (SELECT COUNT(1) FROM addresses)                                                             AS total_addresses,
+       -- row estimation
+       (SELECT reltuples AS estimate FROM pg_class WHERE relname = 'objects')::BIGINT               AS total_objects,
+       (SELECT COUNT(1) FROM packages)                                                              AS total_packages,
+       (SELECT MAX(epoch) FROM epochs)                                                              AS current_epoch,
+       (SELECT MAX(sequence_number) FROM checkpoints)                                               AS current_checkpoint;

@@ -6,13 +6,19 @@ use crate::{
     crypto::DefaultHash,
     error::{ExecutionError, ExecutionErrorKind, SuiError, SuiResult},
     id::{ID, UID},
+    object::OBJECT_START_VERSION,
     SUI_FRAMEWORK_ADDRESS,
 };
+use derive_more::Display;
 use fastcrypto::hash::HashFunction;
-use move_binary_format::access::ModuleAccess;
 use move_binary_format::binary_views::BinaryIndexedView;
 use move_binary_format::file_format::CompiledModule;
 use move_binary_format::normalized;
+use move_binary_format::{
+    access::ModuleAccess,
+    compatibility::{Compatibility, InclusionCheck},
+    errors::PartialVMResult,
+};
 use move_core_types::{
     account_address::AccountAddress,
     ident_str,
@@ -103,18 +109,59 @@ pub struct MovePackage {
     linkage_table: BTreeMap<ObjectID, UpgradeInfo>,
 }
 
+// NB: do _not_ add `Serialize` or `Deserialize` to this enum. Convert to u8 first  or use the
+// associated constants before storing in any serialization setting.
 /// Rust representation of upgrade policy constants in `sui::package`.
-pub const UPGRADE_POLICY_COMPATIBLE: u8 = 0;
-pub const UPGRADE_POLICY_ADDITIVE: u8 = 128;
-pub const UPGRADE_POLICY_DEP_ONLY: u8 = 192;
+#[repr(u8)]
+#[derive(Display, Debug, Clone, Copy)]
+pub enum UpgradePolicy {
+    #[display(fmt = "COMPATIBLE")]
+    Compatible = 0,
+    #[display(fmt = "ADDITIVE")]
+    Additive = 128,
+    #[display(fmt = "DEP_ONLY")]
+    DepOnly = 192,
+}
 
-pub fn is_valid_package_upgrade_policy(policy: &u8) -> bool {
-    [
-        UPGRADE_POLICY_COMPATIBLE,
-        UPGRADE_POLICY_ADDITIVE,
-        UPGRADE_POLICY_DEP_ONLY,
-    ]
-    .contains(policy)
+impl UpgradePolicy {
+    /// Convenience accessors to the upgrade policies as u8s.
+    pub const COMPATIBLE: u8 = Self::Compatible as u8;
+    pub const ADDITIVE: u8 = Self::Additive as u8;
+    pub const DEP_ONLY: u8 = Self::DepOnly as u8;
+
+    pub fn is_valid_policy(policy: &u8) -> bool {
+        Self::try_from(*policy).is_ok()
+    }
+
+    pub fn check_compatibility(
+        &self,
+        old_module: &normalized::Module,
+        new_module: &normalized::Module,
+    ) -> PartialVMResult<()> {
+        match self {
+            Self::Compatible => Compatibility {
+                check_struct_and_pub_function_linking: true,
+                check_struct_layout: true,
+                check_friend_linking: false,
+                check_private_entry_linking: false,
+            }
+            .check(old_module, new_module),
+            Self::Additive => InclusionCheck::Subset.check(old_module, new_module),
+            Self::DepOnly => InclusionCheck::Equal.check(old_module, new_module),
+        }
+    }
+}
+
+impl TryFrom<u8> for UpgradePolicy {
+    type Error = ();
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            x if x == Self::Compatible as u8 => Ok(Self::Compatible),
+            x if x == Self::Additive as u8 => Ok(Self::Additive),
+            x if x == Self::DepOnly as u8 => Ok(Self::DepOnly),
+            _ => Err(()),
+        }
+    }
 }
 
 /// Rust representation of `sui::package::UpgradeCap`.
@@ -204,21 +251,20 @@ impl MovePackage {
     /// Create an initial version of the package along with this version's type origin and linkage
     /// tables.
     pub fn new_initial<'p>(
-        version: SequenceNumber,
-        modules: Vec<CompiledModule>,
+        modules: &[CompiledModule],
         max_move_package_size: u64,
         transitive_dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
         let module = modules
             .first()
             .expect("Tried to build a Move package from an empty iterator of Compiled modules");
-        let self_id = ObjectID::from(*module.address());
-        let storage_id = self_id;
-        let type_origin_table = build_initial_type_origin_table(&modules);
+        let runtime_id = ObjectID::from(*module.address());
+        let storage_id = runtime_id;
+        let type_origin_table = build_initial_type_origin_table(modules);
         Self::from_module_iter_with_type_origin_table(
             storage_id,
-            self_id,
-            version,
+            runtime_id,
+            OBJECT_START_VERSION,
             modules,
             max_move_package_size,
             type_origin_table,
@@ -231,20 +277,20 @@ impl MovePackage {
     pub fn new_upgraded<'p>(
         &self,
         storage_id: ObjectID,
-        modules: Vec<CompiledModule>,
+        modules: &[CompiledModule],
         max_move_package_size: u64,
         transitive_dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
         let module = modules
             .first()
             .expect("Tried to build a Move package from an empty iterator of Compiled modules");
-        let self_id = ObjectID::from(*module.address());
-        let type_origin_table = build_upgraded_type_origin_table(self, &modules, storage_id)?;
+        let runtime_id = ObjectID::from(*module.address());
+        let type_origin_table = build_upgraded_type_origin_table(self, modules, storage_id)?;
         let mut new_version = self.version();
         new_version.increment();
         Self::from_module_iter_with_type_origin_table(
             storage_id,
-            self_id,
+            runtime_id,
             new_version,
             modules,
             max_move_package_size,
@@ -255,7 +301,7 @@ impl MovePackage {
 
     pub fn new_system(
         version: SequenceNumber,
-        modules: Vec<CompiledModule>,
+        modules: &[CompiledModule],
         dependencies: impl IntoIterator<Item = ObjectID>,
     ) -> Self {
         let module = modules
@@ -263,7 +309,7 @@ impl MovePackage {
             .expect("Tried to build a Move package from an empty iterator of Compiled modules");
 
         let storage_id = ObjectID::from(*module.address());
-        let type_origin_table = build_initial_type_origin_table(&modules);
+        let type_origin_table = build_initial_type_origin_table(modules);
 
         let linkage_table = BTreeMap::from_iter(dependencies.into_iter().map(|dep| {
             let info = UpgradeInfo {
@@ -274,8 +320,8 @@ impl MovePackage {
                 //
                 // However, in the case of system packages, although they can be upgraded, unlike
                 // other packages, only one version can be in use on the network at any given time,
-                // so it is not possible for the a package to require a different system package
-                // version compared to its dependencies.
+                // so it is not possible for a package to require a different system package version
+                // compared to its dependencies.
                 //
                 // This reason, coupled with the fact that system packages can only depend on each
                 // other, mean that their own linkage tables always report a version of zero.
@@ -284,7 +330,7 @@ impl MovePackage {
             (dep, info)
         }));
 
-        let module_map = BTreeMap::from_iter(modules.into_iter().map(|module| {
+        let module_map = BTreeMap::from_iter(modules.iter().map(|module| {
             let name = module.name().to_string();
             let mut bytes = Vec::new();
             module.serialize(&mut bytes).unwrap();
@@ -306,7 +352,7 @@ impl MovePackage {
         storage_id: ObjectID,
         self_id: ObjectID,
         version: SequenceNumber,
-        modules: impl IntoIterator<Item = CompiledModule>,
+        modules: &[CompiledModule],
         max_move_package_size: u64,
         type_origin_table: Vec<TypeOrigin>,
         transitive_dependencies: impl IntoIterator<Item = &'p MovePackage>,
@@ -421,7 +467,11 @@ impl MovePackage {
         (*module.address()).into()
     }
 
-    pub fn deserialize_module(&self, module: &Identifier) -> SuiResult<CompiledModule> {
+    pub fn deserialize_module(
+        &self,
+        module: &Identifier,
+        max_binary_format_version: u32,
+    ) -> SuiResult<CompiledModule> {
         // TODO use the session's cache
         let bytes = self
             .serialized_module_map()
@@ -429,16 +479,22 @@ impl MovePackage {
             .ok_or_else(|| SuiError::ModuleNotFound {
                 module_name: module.to_string(),
             })?;
-        Ok(CompiledModule::deserialize(bytes)
-            .expect("Unwrap safe because Sui serializes/verifies modules before publishing them"))
+        CompiledModule::deserialize_with_max_version(bytes, max_binary_format_version).map_err(
+            |error| SuiError::ModuleDeserializationFailure {
+                error: error.to_string(),
+            },
+        )
     }
 
     pub fn disassemble(&self) -> SuiResult<BTreeMap<String, Value>> {
         disassemble_modules(self.module_map.values())
     }
 
-    pub fn normalize(&self) -> SuiResult<BTreeMap<String, normalized::Module>> {
-        normalize_modules(self.module_map.values())
+    pub fn normalize(
+        &self,
+        max_binary_format_version: u32,
+    ) -> SuiResult<BTreeMap<String, normalized::Module>> {
+        normalize_modules(self.module_map.values(), max_binary_format_version)
     }
 }
 
@@ -459,7 +515,7 @@ impl UpgradeCap {
             id: UID::new(uid),
             package: ID::new(package_id),
             version: 1,
-            policy: UPGRADE_POLICY_COMPATIBLE,
+            policy: UpgradePolicy::COMPATIBLE,
         }
     }
 }
@@ -501,6 +557,8 @@ where
 {
     let mut disassembled = BTreeMap::new();
     for bytecode in modules {
+        // this function is only from JSON RPC - it is OK to deserialize with max Move binary
+        // version
         let module = CompiledModule::deserialize(bytecode).map_err(|error| {
             SuiError::ModuleDeserializationFailure {
                 error: error.to_string(),
@@ -522,17 +580,20 @@ where
     Ok(disassembled)
 }
 
-pub fn normalize_modules<'a, I>(modules: I) -> SuiResult<BTreeMap<String, normalized::Module>>
+pub fn normalize_modules<'a, I>(
+    modules: I,
+    max_binary_format_version: u32,
+) -> SuiResult<BTreeMap<String, normalized::Module>>
 where
     I: Iterator<Item = &'a Vec<u8>>,
 {
     let mut normalized_modules = BTreeMap::new();
     for bytecode in modules {
-        let module = CompiledModule::deserialize(bytecode).map_err(|error| {
-            SuiError::ModuleDeserializationFailure {
-                error: error.to_string(),
-            }
-        })?;
+        let module =
+            CompiledModule::deserialize_with_max_version(bytecode, max_binary_format_version)
+                .map_err(|error| SuiError::ModuleDeserializationFailure {
+                    error: error.to_string(),
+                })?;
         let normalized_module = normalized::Module::new(&module);
         normalized_modules.insert(normalized_module.name.to_string(), normalized_module);
     }
@@ -559,6 +620,9 @@ fn build_linkage_table<'p>(
     let mut dep_linkage_tables = vec![];
 
     for transitive_dep in transitive_dependencies.into_iter() {
+        // original_package_id will deserialize a module but only for the purpose of obtaining
+        // "original ID" of the package containing it so using max Move binary version during
+        // deserialization is OK
         let original_id = transitive_dep.original_package_id();
 
         if immediate_dependencies.remove(&original_id) {

@@ -10,7 +10,8 @@ use futures::StreamExt;
 
 use shared_crypto::intent::{Intent, IntentMessage};
 use sui_json_rpc_types::{
-    StakeStatus, SuiObjectDataOptions, SuiTransactionEffectsAPI, SuiTransactionResponseOptions,
+    StakeStatus, SuiObjectDataOptions, SuiTransactionBlockEffectsAPI,
+    SuiTransactionBlockResponseOptions,
 };
 use sui_sdk::rpc_types::SuiExecutionStatus;
 use sui_types::base_types::SuiAddress;
@@ -64,7 +65,7 @@ pub async fn payloads(
         .operations
         .into_internal()?
         .try_into_data(metadata)?;
-    let intent_msg = IntentMessage::new(Intent::default(), data);
+    let intent_msg = IntentMessage::new(Intent::sui_transaction(), data);
     let intent_msg_bytes = bcs::to_bytes(&intent_msg)?;
 
     let mut hasher = DefaultHash::default();
@@ -106,7 +107,7 @@ pub async fn combine(
 
     let signed_tx = Transaction::from_generic_sig_data(
         intent_msg.value,
-        Intent::default(),
+        Intent::sui_transaction(),
         vec![GenericSignature::from_bytes(
             &[&*flag, &*sig_bytes, &*pub_key].concat(),
         )?],
@@ -134,9 +135,9 @@ pub async fn submit(
     let response = context
         .client
         .quorum_driver()
-        .execute_transaction(
+        .execute_transaction_block(
             signed_tx,
-            SuiTransactionResponseOptions::new()
+            SuiTransactionBlockResponseOptions::new()
                 .with_input()
                 .with_effects()
                 .with_balance_changes(),
@@ -219,9 +220,9 @@ pub async fn metadata(
     let (total_required_amount, objects, budget) = match &option.internal_operation {
         InternalOperation::PaySui { amounts, .. } => {
             let amount = amounts.iter().sum::<u64>();
-            (Some(amount), vec![], 2000)
+            (Some(amount), vec![], 5_000_000)
         }
-        InternalOperation::Stake { amount, .. } => (*amount, vec![], 2000),
+        InternalOperation::Stake { amount, .. } => (*amount, vec![], 100_000_000),
         InternalOperation::WithdrawStake { sender, stake_ids } => {
             let stake_ids = if stake_ids.is_empty() {
                 // unstake all
@@ -260,7 +261,7 @@ pub async fn metadata(
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(SuiError::from)?;
 
-            (Some(0), stake_refs, 10000)
+            (Some(0), stake_refs, 100_000_000)
         }
     };
 
@@ -303,18 +304,23 @@ pub async fn metadata(
             coins: coins.clone(),
             objects: objects.clone(),
             total_coin_value,
-            gas_price: 1,
-            budget,
+            gas_price,
+            budget: budget * gas_price,
         })?;
 
-    let dry_run = context.client.read_api().dry_run_transaction(data).await?;
+    let dry_run = context
+        .client
+        .read_api()
+        .dry_run_transaction_block(data)
+        .await?;
     let effects = dry_run.effects;
 
     if let SuiExecutionStatus::Failure { error } = effects.status() {
         return Err(Error::TransactionDryRunError(error.to_string()));
     }
 
-    let budget = effects.gas_used().computation_cost + effects.gas_used().storage_cost;
+    let budget =
+        effects.gas_cost_summary().computation_cost + effects.gas_cost_summary().storage_cost;
 
     Ok(ConstructionMetadataResponse {
         metadata: ConstructionMetadata {

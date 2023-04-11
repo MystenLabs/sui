@@ -12,13 +12,12 @@ use sui_config::{
 };
 use sui_types::multiaddr::Multiaddr;
 use sui_types::{
-    base_types::{ObjectID, SuiAddress},
+    base_types::SuiAddress,
     committee::ProtocolVersion,
     crypto::{
         generate_proof_of_possession, AuthorityKeyPair, KeypairTraits, NetworkKeyPair, SuiKeyPair,
     },
     message_envelope::Message,
-    object::Object,
 };
 
 use sui_keys::keypair_file::{
@@ -49,6 +48,8 @@ impl Ceremony {
 pub enum CeremonyCommand {
     Init,
 
+    ValidateState,
+
     AddValidator {
         #[clap(long)]
         name: String,
@@ -76,14 +77,7 @@ pub enum CeremonyCommand {
         project_url: String,
     },
 
-    AddGasObject {
-        #[clap(long)]
-        address: SuiAddress,
-        #[clap(long)]
-        object_id: Option<ObjectID>,
-        #[clap(long)]
-        value: u64,
-    },
+    ListValidators,
 
     BuildUnsignedCheckpoint,
 
@@ -116,6 +110,11 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             builder.save(dir)?;
         }
 
+        CeremonyCommand::ValidateState => {
+            let builder = Builder::load(&dir)?;
+            builder.validate()?;
+        }
+
         CeremonyCommand::AddValidator {
             name,
             validator_key_file,
@@ -143,8 +142,8 @@ pub fn run(cmd: Ceremony) -> Result<()> {
                     worker_key: worker_keypair.public().clone(),
                     account_address: SuiAddress::from(&account_keypair.public()),
                     network_key: network_keypair.public().clone(),
-                    gas_price: 1,
-                    commission_rate: 0,
+                    gas_price: sui_config::node::DEFAULT_VALIDATOR_GAS_PRICE,
+                    commission_rate: sui_config::node::DEFAULT_COMMISSION_RATE,
                     network_address,
                     p2p_address,
                     narwhal_primary_address,
@@ -158,18 +157,29 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             builder.save(dir)?;
         }
 
-        CeremonyCommand::AddGasObject {
-            address,
-            object_id,
-            value,
-        } => {
-            let mut builder = Builder::load(&dir)?;
+        CeremonyCommand::ListValidators => {
+            let builder = Builder::load(&dir)?;
 
-            let object_id = object_id.unwrap_or_else(ObjectID::random);
-            let object = Object::with_id_owner_gas_for_testing(object_id, address, value);
-            builder = builder.add_object(object);
+            let mut writer = csv::Writer::from_writer(std::io::stdout());
 
-            builder.save(dir)?;
+            writer.write_record(["validator-name", "account-address"])?;
+
+            let mut validators = builder
+                .validators()
+                .values()
+                .map(|v| {
+                    (
+                        v.info.name().to_lowercase(),
+                        v.info.account_address.to_string(),
+                    )
+                })
+                .collect::<Vec<_>>();
+
+            validators.sort_by_key(|v| v.0.clone());
+
+            for (name, address) in validators {
+                writer.write_record([&name, &address])?;
+            }
         }
 
         CeremonyCommand::BuildUnsignedCheckpoint => {
@@ -278,8 +288,8 @@ mod test {
                     worker_key: worker_keypair.public().clone(),
                     account_address: SuiAddress::from(account_keypair.public()),
                     network_key: network_keypair.public().clone(),
-                    gas_price: 1,
-                    commission_rate: 0,
+                    gas_price: sui_config::node::DEFAULT_VALIDATOR_GAS_PRICE,
+                    commission_rate: sui_config::node::DEFAULT_COMMISSION_RATE,
                     network_address: utils::new_tcp_network_address(),
                     p2p_address: utils::new_udp_network_address(),
                     narwhal_primary_address: utils::new_udp_network_address(),
@@ -344,6 +354,13 @@ mod test {
                 },
             };
             command.run()?;
+
+            Ceremony {
+                path: Some(dir.path().into()),
+                protocol_version: None,
+                command: CeremonyCommand::ValidateState,
+            }
+            .run()?;
         }
 
         // Build the unsigned checkpoint
@@ -364,6 +381,13 @@ mod test {
                 },
             };
             command.run()?;
+
+            Ceremony {
+                path: Some(dir.path().into()),
+                protocol_version: None,
+                command: CeremonyCommand::ValidateState,
+            }
+            .run()?;
         }
 
         // Finalize the Ceremony and build the Genesis object

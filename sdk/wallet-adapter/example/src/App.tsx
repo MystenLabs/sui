@@ -3,24 +3,15 @@
 
 import "./App.css";
 import { ConnectButton, useWalletKit } from "@mysten/wallet-kit";
-import { Transaction } from "@mysten/sui.js";
+import { TransactionBlock } from "@mysten/sui.js";
 import { useEffect } from "react";
-
-const transaction = new Transaction();
-transaction.moveCall({
-  target: `0x2::devnet_nft::mint`,
-  arguments: [
-    transaction.pure("foo"),
-    transaction.pure("bar"),
-    transaction.pure("baz"),
-  ],
-});
 
 function App() {
   const {
     currentWallet,
-    signTransaction,
-    signAndExecuteTransaction,
+    currentAccount,
+    signTransactionBlock,
+    signAndExecuteTransactionBlock,
     signMessage,
   } = useWalletKit();
 
@@ -34,7 +25,11 @@ function App() {
       <div>
         <button
           onClick={async () => {
-            console.log(await signTransaction({ transaction }));
+            const txb = new TransactionBlock();
+            const [coin] = txb.splitCoins(txb.gas, [txb.pure(1)]);
+            txb.transferObjects([coin], txb.pure(currentAccount!.address));
+
+            console.log(await signTransactionBlock({ transactionBlock: txb }));
           }}
         >
           Sign Transaction
@@ -43,9 +38,13 @@ function App() {
       <div>
         <button
           onClick={async () => {
+            const txb = new TransactionBlock();
+            const [coin] = txb.splitCoins(txb.gas, [txb.pure(1)]);
+            txb.transferObjects([coin], txb.pure(currentAccount!.address));
+
             console.log(
-              await signAndExecuteTransaction({
-                transaction,
+              await signAndExecuteTransactionBlock({
+                transactionBlock: txb,
                 options: { showEffects: true },
               })
             );

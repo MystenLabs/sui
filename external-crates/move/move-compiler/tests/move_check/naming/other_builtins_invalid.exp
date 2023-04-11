@@ -1,0 +1,45 @@
+error[E03007]: too many type arguments
+  ┌─ tests/move_check/naming/other_builtins_invalid.move:3:9
+  │
+3 │         freeze<u64, bool>(x);
+  │         ^^^^^^--------------
+  │         │
+  │         Expected 1 type argument(s) but got 2
+  │         Invalid call to builtin function: 'freeze'
+
+error[E03008]: too few type arguments
+  ┌─ tests/move_check/naming/other_builtins_invalid.move:4:9
+  │
+4 │         freeze<>(x);
+  │         ^^^^^^-----
+  │         │
+  │         Expected 1 type argument(s) but got 0
+  │         Invalid call to builtin function: 'freeze'
+
+error[E04016]: too few arguments
+  ┌─ tests/move_check/naming/other_builtins_invalid.move:5:9
+  │
+5 │         assert!();
+  │         ^^^^^^^^^
+  │         │      │
+  │         │      Found 0 argument(s) here
+  │         Invalid call of 'assert'. The call expected 2 argument(s) but got 0
+
+error[E04016]: too few arguments
+  ┌─ tests/move_check/naming/other_builtins_invalid.move:6:9
+  │
+6 │         assert!(false);
+  │         ^^^^^^^^^^^^^^
+  │         │      │
+  │         │      Found 1 argument(s) here
+  │         Invalid call of 'assert'. The call expected 2 argument(s) but got 1
+
+error[E04016]: too few arguments
+  ┌─ tests/move_check/naming/other_builtins_invalid.move:7:9
+  │
+7 │         assert!(0 != 1);
+  │         ^^^^^^^^^^^^^^^
+  │         │      │
+  │         │      Found 1 argument(s) here
+  │         Invalid call of 'assert'. The call expected 2 argument(s) but got 1
+

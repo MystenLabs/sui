@@ -32,7 +32,7 @@ impl CommitteeFixture {
             .map(|keypair| (keypair.public().into(), (keypair, 1)))
             .collect::<HashMap<_, _>>();
 
-        let committee = Committee::new(
+        let committee = Committee::new_for_testing_with_normalized_voting_power(
             epoch,
             validators
                 .iter()
@@ -78,7 +78,7 @@ impl CommitteeFixture {
             .iter()
             .map(|(name, (key, _))| {
                 let intent_msg = IntentMessage::new(
-                    Intent::default().with_scope(IntentScope::CheckpointSummary),
+                    Intent::sui_app(IntentScope::CheckpointSummary),
                     checkpoint.clone(),
                 );
                 let signature = AuthoritySignature::new_secure(&intent_msg, &checkpoint.epoch, key);

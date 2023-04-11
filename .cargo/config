@@ -9,6 +9,7 @@ xclippy = [
     "-Wclippy::disallowed_methods",
 ]
 xlint = "run --package x --bin x -- lint"
+xtest = "run --package x --bin x -- external-crates-tests"
 
 [build]
 rustflags = ["-C", "force-frame-pointers=yes", "-C", "force-unwind-tables=yes"]

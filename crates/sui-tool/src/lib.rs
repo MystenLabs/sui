@@ -300,7 +300,10 @@ pub async fn get_object(
     })
 }
 
-pub async fn get_transaction(tx_digest: TransactionDigest, genesis: PathBuf) -> Result<String> {
+pub async fn get_transaction_block(
+    tx_digest: TransactionDigest,
+    genesis: PathBuf,
+) -> Result<String> {
     let clients = make_clients(genesis)?;
     let timer = Instant::now();
     let responses = join_all(clients.iter().map(|(name, (address, client))| async {

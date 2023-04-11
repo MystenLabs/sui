@@ -1,0 +1,18 @@
+//# run
+main() {
+    let b: bool;
+label b0:
+    b = false;
+label loop:
+    jump_if_false (copy(b)) loop_b3;
+label loop_b0:
+    jump_if_false (copy(b)) loop_b2;
+label loop_b1:
+    jump loop;
+label loop_b2:
+    jump loop;
+label loop_b3:
+    jump loop_cont;
+label loop_cont:
+    return;
+}

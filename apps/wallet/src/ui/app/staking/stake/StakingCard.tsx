@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useCoinDecimals } from '@mysten/core';
+import { ArrowLeft16 } from '@mysten/icons';
 import {
     getTransactionDigest,
     SUI_TYPE_ARG,
@@ -15,6 +16,7 @@ import { toast } from 'react-hot-toast';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
 import Alert from '../../components/alert';
+import { getSignerOperationErrorMessage } from '../../helpers/errorMessages';
 import { getDelegationDataByStakeId } from '../getDelegationByStakeId';
 import { getStakeSuiBySuiId } from '../getStakeSuiBySuiId';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
@@ -28,20 +30,18 @@ import {
 } from './utils/transaction';
 import { createValidationSchema } from './utils/validation';
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
+import { Button } from '_app/shared/ButtonUI';
 import BottomMenuLayout, {
     Content,
     Menu,
 } from '_app/shared/bottom-menu-layout';
-import Button from '_app/shared/button';
 import { Collapse } from '_app/shared/collapse';
-import Icon, { SuiIcons } from '_components/icon';
+import { Text } from '_app/shared/text';
 import Loading from '_components/loading';
-import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { parseAmount } from '_helpers';
 import { useSigner, useGetCoinBalance } from '_hooks';
 import { Coin } from '_redux/slices/sui-objects/Coin';
 import { trackEvent } from '_src/shared/plausible';
-import { Text } from '_src/ui/app/shared/text';
 
 import type { FormikHelpers } from 'formik';
 
@@ -55,7 +55,7 @@ function StakingCard() {
     const coinType = SUI_TYPE_ARG;
     const accountAddress = useActiveAddress();
     const { data: suiBalance, isLoading: loadingSuiBalances } =
-        useGetCoinBalance(coinType, accountAddress);
+        useGetCoinBalance(SUI_TYPE_ARG, accountAddress);
     const coinBalance = BigInt(suiBalance?.totalBalance || 0);
     const [searchParams] = useSearchParams();
     const validatorAddress = searchParams.get('address');
@@ -131,12 +131,12 @@ function StakingCard() {
                 name: 'stake',
             });
             try {
-                const transaction = createStakeTransaction(
+                const transactionBlock = createStakeTransaction(
                     amount,
                     validatorAddress
                 );
-                return await signer.signAndExecuteTransaction({
-                    transaction,
+                return await signer.signAndExecuteTransactionBlock({
+                    transactionBlock,
                     options: {
                         showInput: true,
                         showEffects: true,
@@ -161,9 +161,9 @@ function StakingCard() {
                 name: 'stake',
             });
             try {
-                const transaction = createUnstakeTransaction(stakedSuiId);
-                return await signer.signAndExecuteTransaction({
-                    transaction,
+                const transactionBlock = createUnstakeTransaction(stakedSuiId);
+                return await signer.signAndExecuteTransactionBlock({
+                    transactionBlock,
                     options: {
                         showInput: true,
                         showEffects: true,
@@ -228,16 +228,13 @@ function StakingCard() {
                         from: 'stake',
                     }).toString()}`
                 );
-            } catch (e) {
-                const msg = (e as Error)?.message;
+            } catch (error) {
                 toast.error(
                     <div className="max-w-xs overflow-hidden flex flex-col">
                         <strong>{unstake ? 'Unstake' : 'Stake'} failed</strong>
-                        {msg ? (
-                            <small className="text-ellipsis overflow-hidden">
-                                {msg}
-                            </small>
-                        ) : null}
+                        <small className="text-ellipsis overflow-hidden">
+                            {getSignerOperationErrorMessage(error)}
+                        </small>
                     </div>
                 );
             }
@@ -292,7 +289,7 @@ function StakingCard() {
                                         coinBalance={totalTokenBalance}
                                         coinType={coinType}
                                         stakingReward={suiEarned}
-                                        epoch={system?.epoch || 0}
+                                        epoch={+(system?.epoch || 0)}
                                     />
                                 ) : (
                                     <StakeForm
@@ -343,37 +340,25 @@ function StakingCard() {
                                 className="w-full px-0 pb-0 mx-0"
                             >
                                 <Button
-                                    size="large"
-                                    mode="neutral"
-                                    href="/stake"
+                                    size="tall"
+                                    variant="secondary"
+                                    to="/stake"
                                     disabled={isSubmitting}
-                                    className="!text-steel-darker w-1/2"
-                                >
-                                    <Icon
-                                        icon={SuiIcons.ArrowLeft}
-                                        className="text-body text-gray-65 font-normal"
-                                    />
-                                    Back
-                                </Button>
+                                    before={<ArrowLeft16 />}
+                                    text="Back"
+                                />
                                 <Button
-                                    size="large"
-                                    mode="primary"
+                                    size="tall"
+                                    variant="primary"
                                     onClick={submitForm}
-                                    className="w-1/2"
                                     disabled={
                                         !isValid ||
                                         isSubmitting ||
                                         (unstake && !delegationId)
                                     }
-                                >
-                                    {isSubmitting ? (
-                                        <LoadingIndicator color="inherit" />
-                                    ) : unstake ? (
-                                        'Unstake Now'
-                                    ) : (
-                                        'Stake Now'
-                                    )}
-                                </Button>
+                                    loading={isSubmitting}
+                                    text={unstake ? 'Unstake Now' : 'Stake Now'}
+                                />
                             </Menu>
                         </BottomMenuLayout>
                     )}

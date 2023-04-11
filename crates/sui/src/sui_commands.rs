@@ -10,10 +10,14 @@ use anyhow::{anyhow, bail};
 use clap::*;
 use fastcrypto::traits::KeyPair;
 use move_package::BuildConfig;
+use sui_config::genesis_config::DEFAULT_NUMBER_OF_AUTHORITIES;
 use sui_framework_build::compiled_package::SuiPackageHooks;
 use tracing::info;
 
-use sui_config::{builder::ConfigBuilder, NetworkConfig, SUI_KEYSTORE_FILENAME};
+use sui_config::{
+    builder::ConfigBuilder, NetworkConfig, SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME,
+    SUI_KEYSTORE_FILENAME,
+};
 use sui_config::{genesis_config::GenesisConfig, SUI_GENESIS_FILENAME};
 use sui_config::{
     sui_config_dir, Config, PersistedConfig, FULL_NODE_DB_PATH, SUI_CLIENT_CONFIG,
@@ -67,6 +71,15 @@ pub enum SuiCommand {
         force: bool,
         #[clap(long = "epoch-duration-ms")]
         epoch_duration_ms: Option<u64>,
+        #[clap(
+            long,
+            value_name = "ADDR",
+            multiple_occurrences = false,
+            multiple_values = true,
+            value_delimiter = ',',
+            help = "A list of ip addresses to generate a genesis suitable for benchmarks"
+        )]
+        benchmark_ips: Option<Vec<String>>,
     },
     GenesisCeremony(Ceremony),
     /// Sui keystore tool.
@@ -137,7 +150,7 @@ pub enum SuiCommand {
 
 impl SuiCommand {
     pub async fn execute(self) -> Result<(), anyhow::Error> {
-        move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks {}));
+        move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
         match self {
             SuiCommand::Start {
                 config,
@@ -145,7 +158,7 @@ impl SuiCommand {
             } => {
                 // Auto genesis if path is none and sui directory doesn't exists.
                 if config.is_none() && !sui_config_dir()?.join(SUI_NETWORK_CONFIG).exists() {
-                    genesis(None, None, None, false, None).await?;
+                    genesis(None, None, None, false, None, None).await?;
                 }
 
                 // Load the config of the Sui authority.
@@ -209,7 +222,7 @@ impl SuiCommand {
                         println!(
                             "{} - {}",
                             validator.network_address(),
-                            validator.sui_address()
+                            validator.protocol_key_pair().public(),
                         );
                     }
                 }
@@ -221,6 +234,7 @@ impl SuiCommand {
                 from_config,
                 write_config,
                 epoch_duration_ms,
+                benchmark_ips,
             } => {
                 genesis(
                     from_config,
@@ -228,6 +242,7 @@ impl SuiCommand {
                     working_dir,
                     force,
                     epoch_duration_ms,
+                    benchmark_ips,
                 )
                 .await
             }
@@ -298,6 +313,7 @@ async fn genesis(
     working_dir: Option<PathBuf>,
     force: bool,
     epoch_duration_ms: Option<u64>,
+    benchmark_ips: Option<Vec<String>>,
 ) -> Result<(), anyhow::Error> {
     let sui_config_dir = &match working_dir {
         // if a directory is specified, it must exist (it
@@ -365,7 +381,17 @@ async fn genesis(
     let mut genesis_conf = match from_config {
         Some(path) => PersistedConfig::read(&path)?,
         None => {
-            if keystore_path.exists() {
+            if let Some(ips) = benchmark_ips {
+                // Make a keystore containing the key for the genesis gas object.
+                let path = sui_config_dir.join(SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME);
+                let mut keystore = FileBasedKeystore::new(&path)?;
+                let gas_key = GenesisConfig::benchmark_gas_key();
+                keystore.add_key(gas_key)?;
+                keystore.save()?;
+
+                // Make a new genesis config from the provided ip addresses.
+                GenesisConfig::new_for_benchmarks(&ips)
+            } else if keystore_path.exists() {
                 let existing_keys = FileBasedKeystore::new(&keystore_path)?.addresses();
                 GenesisConfig::for_local_testing_with_addresses(existing_keys)
             } else {
@@ -386,13 +412,27 @@ async fn genesis(
         genesis_conf.parameters.epoch_duration_ms = epoch_duration_ms;
     }
     let mut network_config = if let Some(validators) = validator_info {
+        if genesis_conf.committee_size != 0 && genesis_conf.committee_size != validators.len() {
+            bail!(
+                "Committee size {} is different from the number of validators {}!",
+                genesis_conf.committee_size,
+                validators.len()
+            );
+        }
         builder
             .initial_accounts_config(genesis_conf)
             .with_validators(validators)
             .build()
     } else {
         builder
-            .committee_size(NonZeroUsize::new(genesis_conf.committee_size).unwrap())
+            .committee_size(
+                NonZeroUsize::new(if genesis_conf.committee_size != 0 {
+                    genesis_conf.committee_size
+                } else {
+                    DEFAULT_NUMBER_OF_AUTHORITIES
+                })
+                .unwrap(),
+            )
             .initial_accounts_config(genesis_conf)
             .build()
     };
@@ -428,7 +468,7 @@ async fn genesis(
         .into_iter()
         .enumerate()
     {
-        let path = sui_config_dir.join(format!("validator-config-{}.yaml", i));
+        let path = sui_config_dir.join(sui_config::validator_config_file(i));
         validator.save(path)?;
     }
 
@@ -528,7 +568,7 @@ async fn prompt_if_no_config(
                 }
             };
             let (new_address, phrase, scheme) =
-                keystore.generate_and_add_new_key(key_scheme, None)?;
+                keystore.generate_and_add_new_key(key_scheme, None, None)?;
             println!(
                 "Generated new keypair for address with scheme {:?} [{new_address}]",
                 scheme.to_string()

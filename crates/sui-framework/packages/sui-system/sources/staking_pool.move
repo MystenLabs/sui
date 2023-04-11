@@ -17,6 +17,9 @@ module sui_system::staking_pool {
     friend sui_system::validator;
     friend sui_system::validator_set;
 
+    /// StakedSui objects cannot be split to below this amount.
+    const MIN_STAKING_THRESHOLD: u64 = 1_000_000_000; // 1 SUI
+
     const EInsufficientPoolTokenBalance: u64 = 0;
     const EWrongPool: u64 = 1;
     const EWithdrawAmountCannotBeZero: u64 = 2;
@@ -35,6 +38,7 @@ module sui_system::staking_pool {
     const EPoolNotPreactive: u64 = 15;
     const EActivationOfInactivePool: u64 = 16;
     const EDelegationOfZeroSui: u64 = 17;
+    const EStakedSuiBelowThreshold: u64 = 18;
 
     /// A staking pool embedded in each validator struct in the system state object.
     struct StakingPool has key, store {
@@ -78,8 +82,6 @@ module sui_system::staking_pool {
         id: UID,
         /// ID of the staking pool we are staking with.
         pool_id: ID,
-        // TODO: keeping this field here because the apps depend on it. consider removing it.
-        validator_address: address,
         /// The epoch at which the stake becomes active.
         stake_activation_epoch: u64,
         /// The staked SUI tokens.
@@ -112,7 +114,6 @@ module sui_system::staking_pool {
     public(friend) fun request_add_stake(
         pool: &mut StakingPool,
         stake: Balance<SUI>,
-        validator_address: address,
         staker: address,
         stake_activation_epoch: u64,
         ctx: &mut TxContext
@@ -123,7 +124,6 @@ module sui_system::staking_pool {
         let staked_sui = StakedSui {
             id: object::new(ctx),
             pool_id: object::id(pool),
-            validator_address,
             stake_activation_epoch,
             principal: stake,
         };
@@ -186,7 +186,6 @@ module sui_system::staking_pool {
         let StakedSui {
             id,
             pool_id: _,
-            validator_address: _,
             stake_activation_epoch: _,
             principal,
         } = staked_sui;
@@ -340,7 +339,6 @@ module sui_system::staking_pool {
         StakedSui {
             id: object::new(ctx),
             pool_id: self.pool_id,
-            validator_address: self.validator_address,
             stake_activation_epoch: self.stake_activation_epoch,
             principal: balance::split(&mut self.principal, split_amount),
         }
@@ -348,8 +346,14 @@ module sui_system::staking_pool {
 
     /// Split the given StakedSui to the two parts, one with principal `split_amount`,
     /// transfer the newly split part to the sender address.
-    public entry fun split_staked_sui(c: &mut StakedSui, split_amount: u64, ctx: &mut TxContext) {
-        transfer::transfer(split(c, split_amount, ctx), tx_context::sender(ctx));
+    public entry fun split_staked_sui(stake: &mut StakedSui, split_amount: u64, ctx: &mut TxContext) {
+        let original_amount = balance::value(&stake.principal);
+        assert!(split_amount <= original_amount, EInsufficientSuiTokenBalance);
+        let remaining_amount = original_amount - split_amount;
+        // Both resulting parts should have at least MIN_STAKING_THRESHOLD.
+        assert!(remaining_amount >= MIN_STAKING_THRESHOLD, EStakedSuiBelowThreshold);
+        assert!(split_amount >= MIN_STAKING_THRESHOLD, EStakedSuiBelowThreshold);
+        transfer::transfer(split(stake, split_amount, ctx), tx_context::sender(ctx));
     }
 
     /// Consume the staked sui `other` and add its value to `self`.
@@ -359,7 +363,6 @@ module sui_system::staking_pool {
         let StakedSui {
             id,
             pool_id: _,
-            validator_address: _,
             stake_activation_epoch: _,
             principal,
         } = other;
@@ -371,7 +374,6 @@ module sui_system::staking_pool {
     /// Returns true if all the staking parameters of the staked sui except the principal are identical
     public fun is_equal_staking_metadata(self: &StakedSui, other: &StakedSui): bool {
         (self.pool_id == other.pool_id) &&
-        (self.validator_address == other.validator_address) &&
         (self.stake_activation_epoch == other.stake_activation_epoch)
     }
 

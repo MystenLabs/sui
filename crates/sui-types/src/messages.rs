@@ -10,7 +10,7 @@ use crate::crypto::{
     DefaultHash, Ed25519SuiSignature, EmptySignInfo, Signature, Signer, SuiSignatureInner,
     ToFromBytes,
 };
-use crate::digests::{CertificateDigest, TransactionEventsDigest};
+use crate::digests::{CertificateDigest, SenderSignedDataDigest, TransactionEventsDigest};
 use crate::gas::GasCostSummary;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::messages_checkpoint::{
@@ -48,9 +48,17 @@ use strum::IntoStaticStr;
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use tap::Pipe;
 use thiserror::Error;
-use tracing::debug;
+use tracing::trace;
 
-pub const DUMMY_GAS_PRICE: u64 = 1;
+pub const TEST_ONLY_GAS_UNIT_FOR_TRANSFER: u64 = 2_000_000;
+pub const TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS: u64 = 10_000_000;
+pub const TEST_ONLY_GAS_UNIT_FOR_PUBLISH: u64 = 25_000_000;
+pub const TEST_ONLY_GAS_UNIT_FOR_STAKING: u64 = 10_000_000;
+pub const TEST_ONLY_GAS_UNIT_FOR_GENERIC: u64 = 5_000_000;
+pub const TEST_ONLY_GAS_UNIT_FOR_VALIDATOR: u64 = 25_000_000;
+pub const TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN: u64 = 1_000_000;
+
+pub const GAS_PRICE_FOR_SYSTEM_TX: u64 = 1;
 
 const BLOCKED_MOVE_FUNCTIONS: [(ObjectID, &str, &str); 0] = [];
 
@@ -63,7 +71,7 @@ pub const APPROX_SIZE_OF_EXECUTION_STATUS: usize = 120;
 // Approximate size of `EpochId` type in bytes
 pub const APPROX_SIZE_OF_EPOCH_ID: usize = 10;
 // Approximate size of `GasCostSummary` type in bytes
-pub const APPROX_SIZE_OF_GAS_COST_SUMMARY: usize = 30;
+pub const APPROX_SIZE_OF_GAS_COST_SUMMARY: usize = 40;
 // Approximate size of `Option<TransactionEventsDigest>` type in bytes
 pub const APPROX_SIZE_OF_OPT_TX_EVENTS_DIGEST: usize = 40;
 // Approximate size of `TransactionDigest` type in bytes
@@ -147,8 +155,10 @@ pub struct ChangeEpoch {
     pub storage_charge: u64,
     /// The total amount of gas charged for computation during the epoch.
     pub computation_charge: u64,
-    /// The total amount of storage rebate refunded during the epoch.
+    /// The amount of storage rebate refunded to the txn senders.
     pub storage_rebate: u64,
+    /// The non-refundable storage fee.
+    pub non_refundable_storage_fee: u64,
     /// Unix timestamp when epoch started
     pub epoch_start_timestamp_ms: u64,
     /// System packages (specifically framework and move stdlib) that are written before the new
@@ -306,6 +316,19 @@ impl From<u128> for CallArg {
     fn from(n: u128) -> Self {
         // unwrap safe because every u128 value is BCS-serializable
         CallArg::Pure(bcs::to_bytes(&n).unwrap())
+    }
+}
+
+impl From<&Vec<u8>> for CallArg {
+    fn from(v: &Vec<u8>) -> Self {
+        // unwrap safe because every vec<u8> value is BCS-serializable
+        CallArg::Pure(bcs::to_bytes(v).unwrap())
+    }
+}
+
+impl From<ObjectRef> for CallArg {
+    fn from(obj: ObjectRef) -> Self {
+        CallArg::Object(ObjectArg::ImmOrOwnedObject(obj))
     }
 }
 
@@ -506,6 +529,18 @@ impl Command {
         }
     }
 
+    fn non_system_packages_to_be_published(&self) -> Option<&Vec<Vec<u8>>> {
+        match self {
+            Command::Upgrade(v, _, _, _) => Some(v),
+            Command::Publish(v, _) => Some(v),
+            Command::MoveCall(_)
+            | Command::TransferObjects(_, _)
+            | Command::SplitCoins(_, _)
+            | Command::MergeCoins(_, _)
+            | Command::MakeMoveVec(_, _) => None,
+        }
+    }
+
     fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
         match self {
             Command::MoveCall(call) => call.validity_check(config)?,
@@ -661,6 +696,12 @@ impl ProgrammableTransaction {
             })
             .collect()
     }
+
+    pub fn non_system_packages_to_be_published(&self) -> impl Iterator<Item = &Vec<Vec<u8>>> + '_ {
+        self.commands
+            .iter()
+            .filter_map(|q| q.non_system_packages_to_be_published())
+    }
 }
 
 impl Display for Argument {
@@ -786,6 +827,18 @@ impl TransactionKind {
                 | TransactionKind::Genesis(_)
                 | TransactionKind::ConsensusCommitPrologue(_)
         )
+    }
+
+    /// If this is advance epoch transaction, returns (total gas charged, total gas rebated).
+    /// TODO: We should use GasCostSummary directly in ChangeEpoch struct, and return that
+    /// directly.
+    pub fn get_advance_epoch_tx_gas_summary(&self) -> Option<(u64, u64)> {
+        match self {
+            Self::ChangeEpoch(e) => {
+                Some((e.computation_charge + e.storage_charge, e.storage_rebate))
+            }
+            _ => None,
+        }
     }
 
     pub fn contains_shared_object(&self) -> bool {
@@ -978,34 +1031,15 @@ pub struct TransactionDataV1 {
 }
 
 impl TransactionData {
-    pub fn new_with_dummy_gas_price(
-        kind: TransactionKind,
-        sender: SuiAddress,
-        gas_payment: ObjectRef,
-        gas_budget: u64,
-    ) -> Self {
-        TransactionData::V1(TransactionDataV1 {
-            kind,
-            sender,
-            gas_data: GasData {
-                price: DUMMY_GAS_PRICE,
-                owner: sender,
-                payment: vec![gas_payment],
-                budget: gas_budget,
-            },
-            expiration: TransactionExpiration::None,
-        })
-    }
-
     pub fn new_system_transaction(kind: TransactionKind) -> Self {
-        // assert transaction kind if a system transaction?
-        // assert!(kind.is_system_tx());
+        // assert transaction kind if a system transaction
+        assert!(kind.is_system_tx());
         let sender = SuiAddress::default();
         TransactionData::V1(TransactionDataV1 {
             kind,
             sender,
             gas_data: GasData {
-                price: DUMMY_GAS_PRICE,
+                price: GAS_PRICE_FOR_SYSTEM_TX,
                 owner: sender,
                 payment: vec![(ObjectID::ZERO, SequenceNumber::default(), ObjectDigest::MIN)],
                 budget: 0,
@@ -1063,29 +1097,6 @@ impl TransactionData {
         })
     }
 
-    pub fn new_move_call_with_dummy_gas_price(
-        sender: SuiAddress,
-        package: ObjectID,
-        module: Identifier,
-        function: Identifier,
-        type_arguments: Vec<TypeTag>,
-        gas_payment: ObjectRef,
-        arguments: Vec<CallArg>,
-        gas_budget: u64,
-    ) -> anyhow::Result<Self> {
-        Self::new_move_call(
-            sender,
-            package,
-            module,
-            function,
-            type_arguments,
-            gas_payment,
-            arguments,
-            gas_budget,
-            DUMMY_GAS_PRICE,
-        )
-    }
-
     pub fn new_move_call(
         sender: SuiAddress,
         package: ObjectID,
@@ -1097,18 +1108,17 @@ impl TransactionData {
         gas_budget: u64,
         gas_price: u64,
     ) -> anyhow::Result<Self> {
-        let pt = {
-            let mut builder = ProgrammableTransactionBuilder::new();
-            builder.move_call(package, module, function, type_arguments, arguments)?;
-            builder.finish()
-        };
-        Ok(Self::new_programmable(
+        Self::new_move_call_with_gas_coins(
             sender,
+            package,
+            module,
+            function,
+            type_arguments,
             vec![gas_payment],
-            pt,
+            arguments,
             gas_budget,
             gas_price,
-        ))
+        )
     }
 
     pub fn new_move_call_with_gas_coins(
@@ -1136,23 +1146,6 @@ impl TransactionData {
         ))
     }
 
-    pub fn new_transfer_with_dummy_gas_price(
-        recipient: SuiAddress,
-        object_ref: ObjectRef,
-        sender: SuiAddress,
-        gas_payment: ObjectRef,
-        gas_budget: u64,
-    ) -> Self {
-        Self::new_transfer(
-            recipient,
-            object_ref,
-            sender,
-            gas_payment,
-            gas_budget,
-            DUMMY_GAS_PRICE,
-        )
-    }
-
     pub fn new_transfer(
         recipient: SuiAddress,
         object_ref: ObjectRef,
@@ -1169,23 +1162,6 @@ impl TransactionData {
         Self::new_programmable(sender, vec![gas_payment], pt, gas_budget, gas_price)
     }
 
-    pub fn new_transfer_sui_with_dummy_gas_price(
-        recipient: SuiAddress,
-        sender: SuiAddress,
-        amount: Option<u64>,
-        gas_payment: ObjectRef,
-        gas_budget: u64,
-    ) -> Self {
-        Self::new_transfer_sui(
-            recipient,
-            sender,
-            amount,
-            gas_payment,
-            gas_budget,
-            DUMMY_GAS_PRICE,
-        )
-    }
-
     pub fn new_transfer_sui(
         recipient: SuiAddress,
         sender: SuiAddress,
@@ -1200,25 +1176,6 @@ impl TransactionData {
             builder.finish()
         };
         Self::new_programmable(sender, vec![gas_payment], pt, gas_budget, gas_price)
-    }
-
-    pub fn new_pay_with_dummy_gas_price(
-        sender: SuiAddress,
-        coins: Vec<ObjectRef>,
-        recipients: Vec<SuiAddress>,
-        amounts: Vec<u64>,
-        gas_payment: ObjectRef,
-        gas_budget: u64,
-    ) -> anyhow::Result<Self> {
-        Self::new_pay(
-            sender,
-            coins,
-            recipients,
-            amounts,
-            gas_payment,
-            gas_budget,
-            DUMMY_GAS_PRICE,
-        )
     }
 
     pub fn new_pay(
@@ -1242,25 +1199,6 @@ impl TransactionData {
             gas_budget,
             gas_price,
         ))
-    }
-
-    pub fn new_pay_sui_with_dummy_gas_price(
-        sender: SuiAddress,
-        coins: Vec<ObjectRef>,
-        recipients: Vec<SuiAddress>,
-        amounts: Vec<u64>,
-        gas_payment: ObjectRef,
-        gas_budget: u64,
-    ) -> anyhow::Result<Self> {
-        Self::new_pay_sui(
-            sender,
-            coins,
-            recipients,
-            amounts,
-            gas_payment,
-            gas_budget,
-            DUMMY_GAS_PRICE,
-        )
     }
 
     pub fn new_pay_sui(
@@ -1298,23 +1236,6 @@ impl TransactionData {
             builder.finish()
         };
         Self::new_programmable(sender, coins, pt, gas_budget, gas_price)
-    }
-
-    pub fn new_module_with_dummy_gas_price(
-        sender: SuiAddress,
-        gas_payment: ObjectRef,
-        modules: Vec<Vec<u8>>,
-        dep_ids: Vec<ObjectID>,
-        gas_budget: u64,
-    ) -> Self {
-        Self::new_module(
-            sender,
-            gas_payment,
-            modules,
-            dep_ids,
-            gas_budget,
-            DUMMY_GAS_PRICE,
-        )
     }
 
     pub fn new_module(
@@ -1399,15 +1320,6 @@ impl TransactionData {
         ))
     }
 
-    pub fn new_programmable_with_dummy_gas_price(
-        sender: SuiAddress,
-        gas_payment: Vec<ObjectRef>,
-        pt: ProgrammableTransaction,
-        gas_budget: u64,
-    ) -> Self {
-        Self::new_programmable(sender, gas_payment, pt, gas_budget, DUMMY_GAS_PRICE)
-    }
-
     pub fn new_programmable(
         sender: SuiAddress,
         gas_payment: Vec<ObjectRef>,
@@ -1475,6 +1387,9 @@ pub trait TransactionDataAPI {
     fn is_system_tx(&self) -> bool;
     fn is_change_epoch_tx(&self) -> bool;
     fn is_genesis_tx(&self) -> bool;
+
+    /// Check if the transaction is sponsored (namely gas owner != sender)
+    fn is_sponsored_tx(&self) -> bool;
 
     #[cfg(test)]
     fn sender_mut(&mut self) -> &mut SuiAddress;
@@ -1578,6 +1493,11 @@ impl TransactionDataAPI for TransactionDataV1 {
     fn validity_check_no_gas_check(&self, config: &ProtocolConfig) -> UserInputResult {
         self.kind().validity_check(config)?;
         self.check_sponsorship()
+    }
+
+    /// Check if the transaction is sponsored (namely gas owner != sender)
+    fn is_sponsored_tx(&self) -> bool {
+        self.gas_owner() != self.sender
     }
 
     /// Check if the transaction is compliant with sponsorship.
@@ -1714,6 +1634,13 @@ impl SenderSignedData {
     pub fn tx_signatures_mut_for_testing(&mut self) -> &mut Vec<GenericSignature> {
         &mut self.inner_mut().tx_signatures
     }
+
+    pub fn full_message_digest(&self) -> SenderSignedDataDigest {
+        let mut digest = DefaultHash::default();
+        bcs::serialize_into(&mut digest, self).expect("serialization should not fail");
+        let hash = digest.finalize();
+        SenderSignedDataDigest::new(hash.into())
+    }
 }
 
 impl VersionedProtocolMessage for SenderSignedData {
@@ -1815,6 +1742,10 @@ impl<S> Envelope<SenderSignedData, S> {
     pub fn is_system_tx(&self) -> bool {
         self.data().intent_message().value.is_system_tx()
     }
+
+    pub fn is_sponsored_tx(&self) -> bool {
+        self.data().intent_message().value.is_sponsored_tx()
+    }
 }
 
 impl Transaction {
@@ -1878,6 +1809,7 @@ impl VerifiedTransaction {
         storage_charge: u64,
         computation_charge: u64,
         storage_rebate: u64,
+        non_refundable_storage_fee: u64,
         epoch_start_timestamp_ms: u64,
         system_packages: Vec<(SequenceNumber, Vec<Vec<u8>>, Vec<ObjectID>)>,
     ) -> Self {
@@ -1887,6 +1819,7 @@ impl VerifiedTransaction {
             storage_charge,
             computation_charge,
             storage_rebate,
+            non_refundable_storage_fee,
             epoch_start_timestamp_ms,
             system_packages,
         }
@@ -1920,7 +1853,7 @@ impl VerifiedTransaction {
             .pipe(|data| {
                 SenderSignedData::new_from_sender_signature(
                     data,
-                    Intent::default(),
+                    Intent::sui_transaction(),
                     Ed25519SuiSignature::from_bytes(&[0; Ed25519SuiSignature::LENGTH])
                         .unwrap()
                         .into(),
@@ -1965,10 +1898,6 @@ impl CertifiedTransaction {
         bcs::serialize_into(&mut digest, self).expect("serialization should not fail");
         let hash = digest.finalize();
         CertificateDigest::new(hash.into())
-    }
-
-    pub fn verify_sender_signatures(&self) -> SuiResult {
-        self.data().verify(None)
     }
 }
 
@@ -2172,6 +2101,12 @@ pub struct HandleCertificateResponse {
     pub events: TransactionEvents,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SubmitCertificateResponse {
+    /// If transaction is already executed, return same result as handle_certificate
+    pub executed: Option<HandleCertificateResponse>,
+}
+
 #[derive(Clone, Debug)]
 pub struct VerifiedHandleCertificateResponse {
     pub signed_effects: VerifiedSignedTransactionEffects,
@@ -2333,6 +2268,13 @@ pub enum ExecutionFailureStatus {
 
     #[error("Invalid package upgrade. {upgrade_error}")]
     PackageUpgradeError { upgrade_error: PackageUpgradeError },
+
+    // Indicates the transaction tried to write objects too large to storage
+    #[error(
+        "Written objects of {current_size} bytes too large. \
+    Limit is {max_size} bytes"
+    )]
+    WrittenObjectsTooLarge { current_size: u64, max_size: u64 },
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
 }
@@ -2370,7 +2312,7 @@ pub enum CommandArgumentError {
     SecondaryIndexOutOfBounds { result_idx: u16, secondary_idx: u16 },
     #[error(
         "Invalid usage of result {result_idx}, \
-        expected a single result but found multiple return values"
+        expected a single result but found either no return values or multiple."
     )]
     InvalidResultArity { result_idx: u16 },
     #[error(
@@ -2379,16 +2321,12 @@ pub enum CommandArgumentError {
     )]
     InvalidGasCoinUsage,
     #[error(
-        "Invalid usage of borrowed value. \
+        "Invalid usage of value. \
         Mutably borrowed values require unique usage. \
-        Immutably borrowed values cannot be taken or borrowed mutably"
+        Immutably borrowed values cannot be taken or borrowed mutably. \
+        Taken values cannot be used again."
     )]
-    InvalidUsageOfBorrowedValue,
-    #[error(
-        "Invalid usage of already taken value. \
-        There is now no value available at this location"
-    )]
-    InvalidUsageOfTakenValue,
+    InvalidValueUsage,
     #[error("Immutable and shared objects cannot be passed by-value.")]
     InvalidObjectByValue,
     #[error("Immutable objects cannot be passed by mutable reference, &mut.")]
@@ -2924,6 +2862,7 @@ impl Default for TransactionEffectsV1 {
                 computation_cost: 0,
                 storage_cost: 0,
                 storage_rebate: 0,
+                non_refundable_storage_fee: 0,
             },
             modified_at_versions: Vec::new(),
             shared_objects: Vec::new(),
@@ -3053,7 +2992,7 @@ impl InputObjects {
             })
             .collect();
 
-        debug!(
+        trace!(
             num_mutable_objects = owned_objects.len(),
             "Checked locks and found mutable objects"
         );
@@ -3108,6 +3047,10 @@ impl InputObjects {
             .filter_map(|(_, object)| object.data.try_as_move().map(MoveObject::version));
 
         SequenceNumber::lamport_increment(input_versions)
+    }
+
+    pub fn into_objects(self) -> Vec<(InputObjectKind, Object)> {
+        self.objects
     }
 
     pub fn into_object_map(self) -> BTreeMap<ObjectID, Object> {

@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type CoinStruct, SUI_TYPE_ARG, Transaction } from '@mysten/sui.js';
+import {
+    type CoinStruct,
+    SUI_TYPE_ARG,
+    TransactionBlock,
+} from '@mysten/sui.js';
 
 import { parseAmount } from '_src/ui/app/helpers';
 
@@ -22,7 +26,7 @@ export function createTokenTransferTransaction({
     coinDecimals,
     isPayAllSui,
 }: Options) {
-    const tx = new Transaction();
+    const tx = new TransactionBlock();
 
     if (isPayAllSui && coinType === SUI_TYPE_ARG) {
         tx.transferObjects([tx.gas], tx.pure(to));

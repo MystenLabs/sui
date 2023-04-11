@@ -19,8 +19,8 @@ use tokio::{
     time::{sleep, timeout},
 };
 use types::{
-    GetCertificatesResponse, MockPrimaryToPrimary, PayloadAvailabilityResponse,
-    PreSubscribedBroadcastSender, PrimaryToPrimaryServer,
+    CertificateAPI, GetCertificatesResponse, Header, HeaderAPI, MockPrimaryToPrimary,
+    PayloadAvailabilityResponse, PreSubscribedBroadcastSender, PrimaryToPrimaryServer,
 };
 
 use fastcrypto::traits::KeyPair as _;
@@ -39,7 +39,7 @@ async fn test_successful_headers_synchronization() {
     let worker_cache = fixture.worker_cache();
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
-    let name = primary.public_key();
+    let id = primary.id();
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
@@ -57,12 +57,14 @@ async fn test_successful_headers_synchronization() {
         let batch_1 = fixture_batch_with_transactions(10);
         let batch_2 = fixture_batch_with_transactions(10);
 
-        let header = author
-            .header_builder(&committee)
-            .with_payload_batch(batch_1.clone(), worker_id_0, 0)
-            .with_payload_batch(batch_2.clone(), worker_id_1, 0)
-            .build()
-            .unwrap();
+        let header = Header::V1(
+            author
+                .header_builder(&committee)
+                .with_payload_batch(batch_1.clone(), worker_id_0, 0)
+                .with_payload_batch(batch_2.clone(), worker_id_1, 0)
+                .build()
+                .unwrap(),
+        );
 
         let certificate = fixture.certificate(&header);
 
@@ -70,7 +72,7 @@ async fn test_successful_headers_synchronization() {
     }
 
     let own_address = committee
-        .primary(&name)
+        .primary_by_id(&id)
         .unwrap()
         .to_anemo_address()
         .unwrap();
@@ -83,7 +85,7 @@ async fn test_successful_headers_synchronization() {
 
     // AND create the synchronizer
     let _synchronizer_handle = BlockSynchronizer::spawn(
-        name.clone(),
+        id,
         committee.clone(),
         worker_cache.clone(),
         tx_shutdown.subscribe(),
@@ -100,7 +102,7 @@ async fn test_successful_headers_synchronization() {
     // AND let's assume that all the primaries are responding with the full set
     // of requested certificates.
     let mut primary_networks = Vec::new();
-    for primary in fixture.authorities().filter(|a| a.public_key() != name) {
+    for primary in fixture.authorities().filter(|a| a.id() != id) {
         let address = committee.primary(&primary.public_key()).unwrap();
         let certificates = certificates.clone();
         let mut mock_server = MockPrimaryToPrimary::new();
@@ -185,7 +187,7 @@ async fn test_successful_payload_synchronization() {
     let worker_cache = fixture.worker_cache();
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
-    let name = primary.public_key();
+    let id = primary.id();
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
@@ -202,12 +204,14 @@ async fn test_successful_payload_synchronization() {
         let batch_1 = fixture_batch_with_transactions(10);
         let batch_2 = fixture_batch_with_transactions(10);
 
-        let header = author
-            .header_builder(&committee)
-            .with_payload_batch(batch_1.clone(), worker_id_0, 0)
-            .with_payload_batch(batch_2.clone(), worker_id_1, 0)
-            .build()
-            .unwrap();
+        let header = Header::V1(
+            author
+                .header_builder(&committee)
+                .with_payload_batch(batch_1.clone(), worker_id_0, 0)
+                .with_payload_batch(batch_2.clone(), worker_id_1, 0)
+                .build()
+                .unwrap(),
+        );
 
         let certificate = fixture.certificate(&header);
 
@@ -215,7 +219,7 @@ async fn test_successful_payload_synchronization() {
     }
 
     let own_address = committee
-        .primary(&name)
+        .primary_by_id(&id)
         .unwrap()
         .to_anemo_address()
         .unwrap();
@@ -228,7 +232,7 @@ async fn test_successful_payload_synchronization() {
 
     // AND create the synchronizer
     let _synchronizer_handle = BlockSynchronizer::spawn(
-        name.clone(),
+        id,
         committee.clone(),
         worker_cache.clone(),
         tx_shutdown.subscribe(),
@@ -245,7 +249,7 @@ async fn test_successful_payload_synchronization() {
     // AND let's assume that all the primaries are responding with the full set
     // of requested certificates.
     let mut primary_networks = Vec::new();
-    for primary in fixture.authorities().filter(|a| a.public_key() != name) {
+    for primary in fixture.authorities().filter(|a| a.id() != id) {
         let address = committee.primary(&primary.public_key()).unwrap();
         let certificates = certificates.clone();
         let mut mock_server = MockPrimaryToPrimary::new();
@@ -367,7 +371,7 @@ async fn test_timeout_while_waiting_for_certificates() {
     let worker_cache = fixture.worker_cache();
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
-    let name = primary.public_key();
+    let id = primary.id();
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
@@ -377,18 +381,20 @@ async fn test_timeout_while_waiting_for_certificates() {
     let digests: Vec<CertificateDigest> = (0..10)
         .into_iter()
         .map(|_| {
-            let header = author
-                .header_builder(&committee)
-                .with_payload_batch(fixture_batch_with_transactions(10), 0, 0)
-                .build()
-                .unwrap();
+            let header = Header::V1(
+                author
+                    .header_builder(&committee)
+                    .with_payload_batch(fixture_batch_with_transactions(10), 0, 0)
+                    .build()
+                    .unwrap(),
+            );
 
             fixture.certificate(&header).digest()
         })
         .collect();
 
     let own_address = committee
-        .primary(&name)
+        .primary_by_id(&id)
         .unwrap()
         .to_anemo_address()
         .unwrap();
@@ -408,7 +414,7 @@ async fn test_timeout_while_waiting_for_certificates() {
         ..Default::default()
     };
     let _synchronizer_handle = BlockSynchronizer::spawn(
-        name.clone(),
+        id,
         committee.clone(),
         worker_cache.clone(),
         tx_shutdown.subscribe(),
@@ -479,18 +485,17 @@ async fn test_reply_with_certificates_already_in_storage() {
     let worker_cache = fixture.worker_cache();
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
-    let name = primary.public_key();
+    let authority_id = primary.id();
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (_, rx_block_synchronizer_commands) = test_utils::test_channel!(10);
 
     let own_address = committee
-        .primary(&name)
+        .primary_by_id(&authority_id)
         .unwrap()
         .to_anemo_address()
         .unwrap();
-
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
         .private_key(network_key)
@@ -498,7 +503,7 @@ async fn test_reply_with_certificates_already_in_storage() {
         .unwrap();
 
     let synchronizer = BlockSynchronizer {
-        name,
+        authority_id,
         committee: committee.clone(),
         worker_cache: worker_cache.clone(),
         rx_shutdown: tx_shutdown.subscribe(),
@@ -520,11 +525,13 @@ async fn test_reply_with_certificates_already_in_storage() {
     for i in 1..=8 {
         let batch = fixture_batch_with_transactions(10);
 
-        let header = author
-            .header_builder(&committee)
-            .with_payload_batch(batch.clone(), 0, 0)
-            .build()
-            .unwrap();
+        let header = Header::V1(
+            author
+                .header_builder(&committee)
+                .with_payload_batch(batch.clone(), 0, 0)
+                .build()
+                .unwrap(),
+        );
 
         let certificate = fixture.certificate(&header);
 
@@ -583,25 +590,24 @@ async fn test_reply_with_payload_already_in_storage() {
     let worker_cache = fixture.worker_cache();
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
-    let name = primary.public_key();
+    let id = primary.id();
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (_, rx_block_synchronizer_commands) = test_utils::test_channel!(10);
 
     let own_address = committee
-        .primary(&name)
+        .primary_by_id(&id)
         .unwrap()
         .to_anemo_address()
         .unwrap();
-
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
         .private_key(network_key)
         .start(anemo::Router::new())
         .unwrap();
     let synchronizer = BlockSynchronizer {
-        name,
+        authority_id: id,
         committee: committee.clone(),
         worker_cache: worker_cache.clone(),
         rx_shutdown: tx_shutdown.subscribe(),
@@ -623,11 +629,13 @@ async fn test_reply_with_payload_already_in_storage() {
     for i in 1..=8 {
         let batch = fixture_batch_with_transactions(10);
 
-        let header = author
-            .header_builder(&committee)
-            .with_payload_batch(batch.clone(), 0, 0)
-            .build()
-            .unwrap();
+        let header = Header::V1(
+            author
+                .header_builder(&committee)
+                .with_payload_batch(batch.clone(), 0, 0)
+                .build()
+                .unwrap(),
+        );
 
         let certificate = fixture.certificate(&header);
 
@@ -637,7 +645,7 @@ async fn test_reply_with_payload_already_in_storage() {
         if i > NUM_OF_CERTIFICATES_WITH_MISSING_PAYLOAD {
             certificate_store.write(certificate.clone()).unwrap();
 
-            for (digest, (worker_id, _)) in &certificate.header.payload {
+            for (digest, (worker_id, _)) in certificate.header().payload() {
                 payload_store.write(digest, worker_id).unwrap();
             }
         }
@@ -692,24 +700,23 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
 
     // AND make sure the key used for our "own" primary is the one that will
     // be used to create the headers.
-    let name = primary.public_key();
+    let authority_id = primary.id();
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (_, rx_block_synchronizer_commands) = test_utils::test_channel!(10);
 
     let own_address = committee
-        .primary(&name)
+        .primary_by_id(&authority_id)
         .unwrap()
         .to_anemo_address()
         .unwrap();
-
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
         .private_key(network_key)
         .start(anemo::Router::new())
         .unwrap();
     let synchronizer = BlockSynchronizer {
-        name: name.clone(),
+        authority_id,
         committee: committee.clone(),
         worker_cache: worker_cache.clone(),
         rx_shutdown: tx_shutdown.subscribe(),
@@ -730,11 +737,13 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
     for _ in 0..5 {
         let batch = fixture_batch_with_transactions(10);
 
-        let header = primary
-            .header_builder(&committee)
-            .with_payload_batch(batch.clone(), 0, 0)
-            .build()
-            .unwrap();
+        let header = Header::V1(
+            primary
+                .header_builder(&committee)
+                .with_payload_batch(batch.clone(), 0, 0)
+                .build()
+                .unwrap(),
+        );
 
         let certificate = fixture.certificate(&header);
 

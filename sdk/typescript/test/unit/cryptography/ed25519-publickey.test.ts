@@ -11,15 +11,15 @@ import { Ed25519PublicKey } from '../../../src';
 let TEST_CASES = new Map<string, string>([
   [
     'UdGRWooy48vGTs0HBokIis5NK+DUjiWc9ENUlcfCCBE=',
-    'd77a6cd55073e98d4029b1b0b8bd8d88f45f343dad2732fc9a7965094e635c55',
+    '0xd77a6cd55073e98d4029b1b0b8bd8d88f45f343dad2732fc9a7965094e635c55',
   ],
   [
     '0PTAfQmNiabgbak9U/stWZzKc5nsRqokda2qnV2DTfg=',
-    '7e8fd489c3d3cd9cc7cbcc577dc5d6de831e654edd9997d95c412d013e6eea23',
+    '0x7e8fd489c3d3cd9cc7cbcc577dc5d6de831e654edd9997d95c412d013e6eea23',
   ],
   [
     '6L/l0uhGt//9cf6nLQ0+24Uv2qanX/R6tn7lWUJX1Xk=',
-    '3a1b4410ebe9c3386a429c349ba7929aafab739c277f97f32622b971972a14a2',
+    '0x3a1b4410ebe9c3386a429c349ba7929aafab739c277f97f32622b971972a14a2',
   ],
 ]);
 

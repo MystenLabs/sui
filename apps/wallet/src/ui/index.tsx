@@ -2,11 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { GrowthBookProvider } from '@growthbook/growthbook-react';
-import { RpcClientContext } from '@mysten/core';
+import { PostHogAnalyticsProvider, RpcClientContext } from '@mysten/core';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { Fragment } from 'react';
+import { Fragment, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { IntlProvider } from 'react-intl';
 import { Provider } from 'react-redux';
 import { HashRouter } from 'react-router-dom';
 
@@ -46,9 +45,11 @@ function renderApp() {
     }
     const root = createRoot(rootDom);
     root.render(
-        <Provider store={store}>
-            <AppWrapper />
-        </Provider>
+        <StrictMode>
+            <Provider store={store}>
+                <AppWrapper />
+            </Provider>
+        </StrictMode>
     );
 }
 
@@ -59,8 +60,8 @@ function AppWrapper() {
 
     return (
         <GrowthBookProvider growthbook={growthbook}>
-            <HashRouter>
-                <IntlProvider locale={navigator.language}>
+            <PostHogAnalyticsProvider projectApiKey="phc_oJAUptxSr0KC1JOYN6KNbkTUZU00NDvujz7hy1MBHVe">
+                <HashRouter>
                     <SuiLedgerClientProvider>
                         {/*
                          * NOTE: We set a key here to force the entire react tree to be re-created when the network changes so that
@@ -79,8 +80,8 @@ function AppWrapper() {
                             </QueryClientProvider>
                         </Fragment>
                     </SuiLedgerClientProvider>
-                </IntlProvider>
-            </HashRouter>
+                </HashRouter>
+            </PostHogAnalyticsProvider>
         </GrowthBookProvider>
     );
 }

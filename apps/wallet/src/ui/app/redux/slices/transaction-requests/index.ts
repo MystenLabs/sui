@@ -4,7 +4,7 @@
 import {
     fromB64,
     type SignerWithProvider,
-    Transaction,
+    TransactionBlock,
     type SignedMessage,
     type SignedTransaction,
 } from '@mysten/sui.js';
@@ -14,7 +14,9 @@ import {
     createSlice,
 } from '@reduxjs/toolkit';
 
-import type { SuiTransactionResponse } from '@mysten/sui.js';
+import { getSignerOperationErrorMessage } from '_src/ui/app/helpers/errorMessages';
+
+import type { SuiTransactionBlockResponse } from '@mysten/sui.js';
 import type { PayloadAction } from '@reduxjs/toolkit';
 import type { ApprovalRequest } from '_payloads/transactions/ApprovalRequest';
 import type { RootState } from '_redux/RootReducer';
@@ -32,7 +34,7 @@ export const respondToTransactionRequest = createAsyncThunk<
     {
         txRequestID: string;
         approved: boolean;
-        txResponse: SuiTransactionResponse | null;
+        txResponse: SuiTransactionBlockResponse | null;
     },
     {
         txRequestID: string;
@@ -52,7 +54,7 @@ export const respondToTransactionRequest = createAsyncThunk<
             throw new Error(`TransactionRequest ${txRequestID} not found`);
         }
         let txSigned: SignedTransaction | undefined = undefined;
-        let txResult: SuiTransactionResponse | SignedMessage | undefined =
+        let txResult: SuiTransactionBlockResponse | SignedMessage | undefined =
             undefined;
         let txResultError: string | undefined;
         if (approved) {
@@ -62,15 +64,15 @@ export const respondToTransactionRequest = createAsyncThunk<
                         message: fromB64(txRequest.tx.message),
                     });
                 } else if (txRequest.tx.type === 'transaction') {
-                    const tx = Transaction.from(txRequest.tx.data);
+                    const tx = TransactionBlock.from(txRequest.tx.data);
                     if (txRequest.tx.justSign) {
                         // Just a signing request, do not submit
-                        txSigned = await signer.signTransaction({
-                            transaction: tx,
+                        txSigned = await signer.signTransactionBlock({
+                            transactionBlock: tx,
                         });
                     } else {
-                        txResult = await signer.signAndExecuteTransaction({
-                            transaction: tx,
+                        txResult = await signer.signAndExecuteTransactionBlock({
+                            transactionBlock: tx,
                             options: txRequest.tx.options,
                             requestType: txRequest.tx.requestType,
                         });
@@ -81,8 +83,8 @@ export const respondToTransactionRequest = createAsyncThunk<
                         `Unexpected type: ${(txRequest.tx as any).type}`
                     );
                 }
-            } catch (e) {
-                txResultError = (e as Error).message;
+            } catch (error) {
+                txResultError = getSignerOperationErrorMessage(error);
             }
         }
         background.sendTransactionRequestResponse(
