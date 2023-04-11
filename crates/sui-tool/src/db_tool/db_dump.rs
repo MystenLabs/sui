@@ -5,16 +5,16 @@ use anyhow::anyhow;
 use clap::{Parser, ValueEnum};
 use comfy_table::{Cell, ContentArrangement, Row, Table};
 use rocksdb::MultiThreaded;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::str;
 use strum_macros::EnumString;
 use sui_core::authority::authority_per_epoch_store::AuthorityEpochTables;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
-use sui_core::authority::authority_store_types::{StoreData, StoreObject};
+// use sui_core::authority::authority_store_types::{StoreData, StoreObject};
 use sui_core::epoch::committee_store::CommitteeStoreTables;
 use sui_storage::IndexStoreTables;
-use sui_types::base_types::{EpochId, ObjectID};
+use sui_types::base_types::EpochId;
 use typed_store::rocks::{default_db_options, MetricConf};
 use typed_store::traits::{Map, TableSummary};
 
@@ -147,33 +147,17 @@ pub fn print_table_metadata(
 
 pub fn duplicate_objects_summary(db_path: PathBuf) -> (usize, usize, usize, usize) {
     let perpetual_tables = AuthorityPerpetualTables::open_readonly(&db_path);
-    let iter = perpetual_tables.objects.iter();
-    let mut total_count = 0;
-    let mut duplicate_count = 0;
-    let mut total_bytes = 0;
-    let mut duplicated_bytes = 0;
+    let mut iter = perpetual_tables.indirect_move_objects.iter();
 
-    let mut object_id: ObjectID = ObjectID::random();
-    let mut data: HashMap<Vec<u8>, usize> = HashMap::new();
-
-    for (key, value) in iter {
-        if let StoreObject::Value(store_object) = value.migrate().into_inner() {
-            if let StoreData::Move(object) = store_object.data {
-                if object_id != key.0 {
-                    for (k, cnt) in data.iter() {
-                        total_bytes += k.len() * cnt;
-                        duplicated_bytes += k.len() * (cnt - 1);
-                        total_count += cnt;
-                        duplicate_count += cnt - 1;
-                    }
-                    object_id = key.0;
-                    data.clear();
-                }
-                *data.entry(object.contents().to_vec()).or_default() += 1;
-            }
+    loop {
+        let item = iter.raw_next();
+        match item {
+            None => break,
+            Some((k, v)) => eprintln!("key is {:?} value {:?}", k, v),
         }
     }
-    (total_count, duplicate_count, total_bytes, duplicated_bytes)
+
+    (0, 0, 0, 0)
 }
 
 // TODO: condense this using macro or trait dyn skills

@@ -36,6 +36,31 @@ impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iter<'a, K, V> {
             iter_bytes_sample_interval: iter_bytes_sample_interval.clone(),
         }
     }
+
+    pub fn raw_next(&mut self) -> Option<(K, Vec<u8>)> {
+        if self.db_iter.valid() {
+            let config = bincode::DefaultOptions::new()
+                .with_big_endian()
+                .with_fixint_encoding();
+            let raw_key = self
+                .db_iter
+                .key()
+                .expect("Valid iterator failed to get key");
+            let raw_value = self
+                .db_iter
+                .value()
+                .expect("Valid iterator failed to get value")
+                .to_vec();
+            let key = config.deserialize(raw_key).ok();
+            match self.direction {
+                Direction::Forward => self.db_iter.next(),
+                Direction::Reverse => self.db_iter.prev(),
+            }
+            key.map(|k| (k, raw_value))
+        } else {
+            None
+        }
+    }
 }
 
 impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iterator for Iter<'a, K, V> {
