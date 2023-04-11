@@ -1483,9 +1483,14 @@ WHERE e1.epoch = e2.epoch
         // } else {
         //     self.get_current_epoch().await?.first_checkpoint_id as i64
         // };
-        // self.partition_manager
-        //     .advance_epoch(&data.new_epoch, last_epoch_cp_id)
-        //     .await?;
+        if data.last_epoch.is_none() {
+            let last_epoch_cp_id = 0;
+            self.partition_manager
+                .advance_epoch(&data.new_epoch, last_epoch_cp_id)
+                .await?;
+        }
+        let epoch = data.new_epoch.epoch;
+        info!("Persisting epoch {}", epoch);
 
         transactional!(&self.cp, |conn| async {
             if let Some(last_epoch) = &data.last_epoch {
@@ -1538,6 +1543,7 @@ WHERE e1.epoch = e2.epoch
                 .await
         }
         .scope_boxed())?;
+        info!("Persisted epoch {}", epoch);
         Ok(())
     }
 
