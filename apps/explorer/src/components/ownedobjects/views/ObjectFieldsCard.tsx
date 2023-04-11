@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Combobox } from '@headlessui/react';
+import { useGetObject }from '@mysten/core';
 import {
     getObjectFields,
     getObjectType,
@@ -14,7 +15,6 @@ import { ReactComponent as SearchIcon } from '~/assets/SVGIcons/24px/Search.svg'
 import { getFieldTypeValue } from '~/components/ownedobjects/utils';
 import { FieldItem } from '~/components/ownedobjects/views/FieldItem';
 import { useGetNormalizedMoveStruct } from '~/hooks/useGetNormalizedMoveStruct';
-import { useGetObject } from '~/hooks/useGetObject';
 import { Banner } from '~/ui/Banner';
 import { DisclosureBox } from '~/ui/DisclosureBox';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
