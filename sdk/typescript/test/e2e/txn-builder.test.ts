@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { is } from 'superstruct';
+
 import {
   getExecutionStatusType,
   getObjectId,
@@ -15,6 +17,7 @@ import {
   SuiObjectData,
   getCreatedObjects,
   SUI_CLOCK_OBJECT_ID,
+  SuiObjectChangeCreated,
 } from '../../src';
 import {
   DEFAULT_RECIPIENT,
@@ -22,6 +25,7 @@ import {
   setup,
   TestToolbox,
   publishPackage,
+  upgradePackage,
 } from './utils/setup';
 
 describe('Transaction Builders', () => {
@@ -141,6 +145,54 @@ describe('Transaction Builders', () => {
       arguments: [tx.object(SUI_CLOCK_OBJECT_ID)],
     });
     await validateTransaction(toolbox.signer, tx);
+  });
+
+  it('Publish and Upgrade Package', async () => {
+    // Step 1. Publish the package
+    const originalPackagePath = __dirname + '/./data/serializer';
+    const { packageId, publishTxn } = await publishPackage(
+      originalPackagePath,
+      toolbox,
+    );
+
+    const capId = (
+      publishTxn.objectChanges?.find(
+        (a) =>
+          is(a, SuiObjectChangeCreated) &&
+          a.objectType.endsWith('UpgradeCap') &&
+          'Immutable' !== a.owner &&
+          'AddressOwner' in a.owner &&
+          a.owner.AddressOwner === toolbox.address(),
+      ) as SuiObjectChangeCreated
+    )?.objectId;
+
+    expect(capId).toBeTruthy();
+
+    const sharedObjectId = getObjectId(
+      getCreatedObjects(publishTxn)!.filter(
+        (o) => getSharedObjectInitialVersion(o.owner) !== undefined,
+      )[0],
+    );
+
+    // Step 2. Confirm that its functions work as expected in its
+    // first version
+    let callOrigTx = new TransactionBlock();
+    callOrigTx.moveCall({
+      target: `${packageId}::serializer_tests::value`,
+      arguments: [callOrigTx.object(sharedObjectId)],
+    });
+    callOrigTx.moveCall({
+      target: `${packageId}::serializer_tests::set_value`,
+      arguments: [callOrigTx.object(sharedObjectId)],
+    });
+    await validateTransaction(toolbox.signer, callOrigTx);
+
+    // Step 3. Publish the upgrade for the package.
+    const upgradedPackagePath = __dirname + '/./data/serializer_upgrade';
+
+    // Step 4. Make sure the behaviour of the upgrade package matches
+    // the newly introduced function
+    await upgradePackage(packageId, capId, upgradedPackagePath, toolbox);
   });
 });
 

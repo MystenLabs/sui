@@ -35,14 +35,14 @@ module serializer::serializer_tests {
     }
 
     public entry fun value(clock: &MutableShared) {
-        assert!(clock.value > 0, 1);
+        assert!(clock.value > 10, 2);
     }
 
     public entry fun set_value(clock: &mut MutableShared) {
-        clock.value = 10;
+        clock.value = 20;
     }
 
     public fun test_abort() {
-        abort 0
+        abort 1
     }
 }

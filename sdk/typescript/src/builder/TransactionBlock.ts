@@ -327,6 +327,9 @@ export class TransactionBlock {
   publish(...args: Parameters<(typeof Transactions)['Publish']>) {
     return this.add(Transactions.Publish(...args));
   }
+  upgrade(...args: Parameters<(typeof Transactions)['Upgrade']>) {
+    return this.add(Transactions.Upgrade(...args));
+  }
   moveCall(...args: Parameters<(typeof Transactions)['MoveCall']>) {
     return this.add(Transactions.MoveCall(...args));
   }
@@ -655,7 +658,7 @@ export class TransactionBlock {
         });
         if (dryRunResult.effects.status.status !== 'success') {
           throw new Error(
-            'Dry run failed, could not automatically determine a budget',
+            `Dry run failed, could not automatically determine a budget: ${dryRunResult.effects.status.error}`,
             { cause: dryRunResult },
           );
         }
