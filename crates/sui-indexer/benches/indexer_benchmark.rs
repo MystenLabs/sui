@@ -9,8 +9,10 @@ use std::time::Duration;
 
 use chrono::Utc;
 use criterion::Criterion;
+use prometheus::Registry;
 use tokio::runtime::Runtime;
 
+use sui_indexer::metrics::IndexerMetrics;
 use sui_indexer::models::checkpoints::Checkpoint;
 use sui_indexer::models::objects::{NamedBcsBytes, Object as DBObject, ObjectStatus};
 use sui_indexer::models::owners::OwnerType;
@@ -39,7 +41,10 @@ fn indexer_benchmark(c: &mut Criterion) {
     let (mut checkpoints, store) = rt.block_on(async {
         let (blocking_cp, async_cp) = new_pg_connection_pool(&db_url).await.unwrap();
         reset_database(&mut blocking_cp.get().unwrap(), true).unwrap();
-        let store = PgIndexerStore::new(async_cp, blocking_cp).await;
+        let registry = Registry::default();
+        let indexer_metrics = IndexerMetrics::new(&registry);
+
+        let store = PgIndexerStore::new(async_cp, blocking_cp, indexer_metrics).await;
 
         let checkpoints = (0..150).map(create_checkpoint).collect::<Vec<_>>();
         (checkpoints, store)

@@ -9,7 +9,6 @@ use futures::future::join_all;
 use futures::FutureExt;
 use jsonrpsee::http_client::HttpClient;
 use move_core_types::ident_str;
-use prometheus::Registry;
 use tokio::sync::{
     mpsc::{self, Receiver, Sender},
     Mutex,
@@ -32,7 +31,7 @@ use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary
 use sui_types::SUI_SYSTEM_ADDRESS;
 
 use crate::errors::IndexerError;
-use crate::metrics::IndexerCheckpointHandlerMetrics;
+use crate::metrics::IndexerMetrics;
 use crate::models::checkpoints::Checkpoint;
 use crate::models::epoch::{DBEpochInfo, SystemEpochInfoEvent};
 use crate::models::objects::{DeletedObject, Object, ObjectStatus};
@@ -58,7 +57,7 @@ pub struct CheckpointHandler<S> {
     state: S,
     http_client: HttpClient,
     event_handler: Arc<EventHandler>,
-    metrics: IndexerCheckpointHandlerMetrics,
+    metrics: IndexerMetrics,
     config: IndexerConfig,
     checkpoint_sender: Arc<Mutex<Sender<TemporaryCheckpointStore>>>,
     checkpoint_receiver: Arc<Mutex<Receiver<TemporaryCheckpointStore>>>,
@@ -77,7 +76,7 @@ where
         state: S,
         http_client: HttpClient,
         event_handler: Arc<EventHandler>,
-        prometheus_registry: &Registry,
+        metrics: IndexerMetrics,
         config: &IndexerConfig,
     ) -> Self {
         let (checkpoint_sender, checkpoint_receiver) = mpsc::channel(CHECKPOINT_QUEUE_LIMIT);
@@ -88,7 +87,7 @@ where
             state,
             http_client,
             event_handler,
-            metrics: IndexerCheckpointHandlerMetrics::new(prometheus_registry),
+            metrics,
             config: config.clone(),
             checkpoint_sender: Arc::new(Mutex::new(checkpoint_sender)),
             checkpoint_receiver: Arc::new(Mutex::new(checkpoint_receiver)),
