@@ -11,7 +11,7 @@ The sections in this guide include:
 * [View account balance](#view-your-account-balance-and-assets)
 * [Receive digital assets using Sui Wallet](#receive-digital-assets-using-sui-wallet)
 * [Send digital assets using Sui Wallet](#send-digital-assets-using-sui-wallet)
-* []
+* [Support for Sui Wallet](#support-for-sui-wallet)
 
 ## Requirements
 
