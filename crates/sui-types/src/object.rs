@@ -171,12 +171,15 @@ impl MoveObject {
     pub fn has_public_transfer(&self) -> bool {
         self.has_public_transfer
     }
+
     pub fn id(&self) -> ObjectID {
         Self::id_opt(&self.contents).unwrap()
     }
 
     pub fn id_opt(contents: &[u8]) -> Result<ObjectID, ObjectIDParseError> {
-        // TODO: Ensure safe index to to parse ObjectID. https://github.com/MystenLabs/sui/issues/6278
+        if ID_END_INDEX > contents.len() {
+            return Err(ObjectIDParseError::TryFromSliceError);
+        }
         ObjectID::try_from(&contents[0..ID_END_INDEX])
     }
 
