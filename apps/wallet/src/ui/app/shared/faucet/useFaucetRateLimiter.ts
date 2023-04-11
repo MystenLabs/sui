@@ -14,13 +14,11 @@ export function useFaucetRateLimiter() {
         const expiryTime = localStorage.getItem(
             FAUCET_RATE_LIMIT_EXPIRY_TIME_KEY
         );
-        const currTime = new Date().getTime();
-        return currTime <= Number(expiryTime);
+        return Date.now() <= Number(expiryTime);
     });
 
     const rateLimit = () => {
-        const currTime = new Date().getTime();
-        const expiryTime = currTime + rateLimitExpiryTime;
+        const expiryTime = Date.now() + rateLimitExpiryTime;
 
         localStorage.setItem(
             FAUCET_RATE_LIMIT_EXPIRY_TIME_KEY,
