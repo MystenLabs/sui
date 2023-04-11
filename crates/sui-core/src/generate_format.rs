@@ -8,7 +8,10 @@ use move_core_types::{
     vm_status::AbortLocation,
 };
 use pretty_assertions::assert_str_eq;
+use rand::rngs::StdRng;
+use rand::SeedableRng;
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
+use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
 use std::{fs::File, io::Write};
 use sui_types::{
     base_types::MoveObjectType_,
@@ -20,13 +23,14 @@ use sui_types::{
         self, MoveObjectType, ObjectDigest, ObjectID, TransactionDigest, TransactionEffectsDigest,
     },
     crypto::{
-        get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes,
-        AuthoritySignature, KeypairTraits, Signature,
+        get_key_pair, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
+        AuthorityPublicKeyBytes, AuthoritySignature, KeypairTraits, Signature, SuiKeyPair,
     },
     messages::{
         Argument, CallArg, Command, CommandArgumentError, ExecutionFailureStatus, ExecutionStatus,
         ObjectArg, ObjectInfoRequestKind, PackageUpgradeError, TransactionKind, TypeArgumentError,
     },
+    multisig::{MultiSig, MultiSigPublicKey},
     object::{Data, Owner},
     storage::DeleteKind,
 };
@@ -61,6 +65,27 @@ fn get_registry() -> Result<Registry> {
 
     let sig: Signature = Signer::sign(&s_kp, b"hello world");
     tracer.trace_value(&mut samples, &sig)?;
+
+    let kp1: SuiKeyPair =
+        SuiKeyPair::Ed25519(get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1);
+    let kp2: SuiKeyPair =
+        SuiKeyPair::Ed25519(get_key_pair_from_rng(&mut StdRng::from_seed([1; 32])).1);
+
+    let multisig_pk =
+        MultiSigPublicKey::new(vec![kp1.public(), kp2.public()], vec![1, 1], 2).unwrap();
+
+    let msg = IntentMessage::new(
+        Intent::sui_transaction(),
+        PersonalMessage {
+            message: "Message".as_bytes().to_vec(),
+        },
+    );
+
+    let sig1 = Signature::new_secure(&msg, &kp1);
+    let sig2 = Signature::new_secure(&msg, &kp1);
+
+    let multi_sig = MultiSig::combine(vec![sig1, sig2], multisig_pk).unwrap();
+    tracer.trace_value(&mut samples, &multi_sig)?;
 
     // ObjectID and SuiAddress are the same length
     let oid: ObjectID = addr.into();

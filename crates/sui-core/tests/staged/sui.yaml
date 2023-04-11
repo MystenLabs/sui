@@ -168,6 +168,14 @@ CommandArgumentError:
       InvalidObjectByValue: UNIT
     10:
       InvalidObjectByMutRef: UNIT
+CompressedSignature:
+  ENUM:
+    0:
+      Ed25519:
+        NEWTYPE:
+          TUPLEARRAY:
+            CONTENT: U8
+            SIZE: 64
 ConsensusCommitPrologue:
   STRUCT:
     - epoch: U64
@@ -454,6 +462,22 @@ MoveTypeLayout:
       u32: UNIT
     10:
       u256: UNIT
+MultiSig:
+  STRUCT:
+    - sigs:
+        SEQ:
+          TYPENAME: CompressedSignature
+    - bitmap: BYTES
+    - multisig_pk:
+        TYPENAME: MultiSigPublicKey
+MultiSigPublicKey:
+  STRUCT:
+    - pk_map:
+        SEQ:
+          TUPLE:
+            - STR
+            - U8
+    - threshold: U16
 ObjectArg:
   ENUM:
     0:
