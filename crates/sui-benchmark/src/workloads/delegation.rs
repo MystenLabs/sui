@@ -15,6 +15,7 @@ use std::sync::Arc;
 use sui_core::test_utils::make_transfer_sui_transaction;
 use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
+use sui_types::gas_coin::MIST_PER_SUI;
 use sui_types::messages::VerifiedTransaction;
 use test_utils::messages::make_staking_transaction;
 use tracing::error;
@@ -69,7 +70,7 @@ impl Payload for DelegationTestPayload {
             None => make_transfer_sui_transaction(
                 self.gas,
                 self.sender,
-                Some(1),
+                Some(MIST_PER_SUI),
                 self.sender,
                 &self.keypair,
                 self.system_state_observer
