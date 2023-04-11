@@ -1276,11 +1276,9 @@ impl<'a> DBTransaction<'a> {
         &'a self,
         db: &DBMap<K, V>,
     ) -> Iter<'a, K, V> {
-        let mut db_iter = self
+        let db_iter = self
             .transaction
             .raw_iterator_cf_opt(&db.cf(), db.opts.readopts());
-        db_iter.seek_to_first();
-
         Iter::new(
             RocksDBRawIter::OptimisticTransaction(db_iter),
             db.cf.clone(),
@@ -1575,10 +1573,9 @@ where
         } else {
             None
         };
-        let mut db_iter = self
+        let db_iter = self
             .rocksdb
             .raw_iterator_cf(&self.cf(), self.opts.readopts());
-        db_iter.seek_to_first();
         if let Some((timer, _perf_ctx)) = report_metrics {
             timer.stop_and_record();
             self.db_metrics

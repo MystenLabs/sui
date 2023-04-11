@@ -18,6 +18,7 @@ pub struct Iter<'a, K, V> {
     cf: String,
     db_metrics: Arc<DBMetrics>,
     iter_bytes_sample_interval: SamplingInterval,
+    is_initialized: bool,
 }
 
 impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iter<'a, K, V> {
@@ -34,6 +35,7 @@ impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iter<'a, K, V> {
             cf,
             db_metrics: db_metrics.clone(),
             iter_bytes_sample_interval: iter_bytes_sample_interval.clone(),
+            is_initialized: false,
         }
     }
 }
@@ -42,6 +44,12 @@ impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iterator for Iter<'a, K, V> {
     type Item = (K, V);
 
     fn next(&mut self) -> Option<Self::Item> {
+        // implicitly set iterator to the first entry in the column family if it hasn't been initialized
+        // used for backward compatibility
+        if !self.is_initialized {
+            self.db_iter.seek_to_first();
+            self.is_initialized = true;
+        }
         if self.db_iter.valid() {
             let config = bincode::DefaultOptions::new()
                 .with_big_endian()
@@ -81,6 +89,7 @@ impl<'a, K: Serialize, V> Iter<'a, K, V> {
     /// and either lands on the key or the first one greater than
     /// the key.
     pub fn skip_to(mut self, key: &K) -> Result<Self, TypedStoreError> {
+        self.is_initialized = true;
         self.db_iter.seek(be_fix_int_ser(key)?);
         Ok(self)
     }
@@ -89,12 +98,14 @@ impl<'a, K: Serialize, V> Iter<'a, K, V> {
     /// the one prior to it if it does not exist. If there is
     /// no element prior to it, it returns an empty iterator.
     pub fn skip_prior_to(mut self, key: &K) -> Result<Self, TypedStoreError> {
+        self.is_initialized = true;
         self.db_iter.seek_for_prev(be_fix_int_ser(key)?);
         Ok(self)
     }
 
     /// Seeks to the last key in the database (at this column family).
     pub fn skip_to_last(mut self) -> Self {
+        self.is_initialized = true;
         self.db_iter.seek_to_last();
         self
     }
