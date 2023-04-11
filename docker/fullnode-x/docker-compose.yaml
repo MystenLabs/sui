@@ -3,20 +3,20 @@ version: "3.9"
 services:
 
   fullnode:
-    build:
-      context: ../..
-      dockerfile: ./docker/sui-node/Dockerfile
-      args:
-        # update with git sha of whichever branch you're building on.
-        GIT_REVISION: db24658bc9
-        BUILD_DATE: today
+#    build:
+#      context: ../..
+#      dockerfile: ./docker/sui-node/Dockerfile
+#      args:
+#        # update with git sha of whichever branch you're building on.
+#        GIT_REVISION: a63f425b9999c7fdfe483598720a9effc0acdc9e
+#        BUILD_DATE: today
 
     environment:
       - LD_PRELOAD
       - RUST_JSON_LOG="true"
       - RUST_LOG="info"
       # don't use debug, it generates volumes of data.
-    image: sui-node:latest
+    image: mysten/sui-node:a63f425b9999c7fdfe483598720a9effc0acdc9e
     command: /opt/sui/entry.sh
     restart: unless-stopped
     # populate your local ./fullnode/config/ directory with fullnode.yaml and genesis.blob for the network you want to use.
@@ -30,11 +30,10 @@ services:
         protocol: udp
 
   indexer:
-    build:
-      context: ../..
-      dockerfile: ./docker/sui-indexer/Dockerfile
-    image: sui-indexer:latest
-    command: /opt/sui/indexer.sh
+#    build:
+#      context: ../..
+#      dockerfile: ./docker/sui-indexer/Dockerfile
+    image: mysten/sui-indexer:a63f425b9999c7fdfe483598720a9effc0acdc9e
     restart: unless-stopped
     volumes:
       - ./indexer:/opt/sui
@@ -43,6 +42,7 @@ services:
       - RUST_JSON_LOG="true"
       - DATABASE_URL=postgres://postgres:admin@postgres:5432/sui_indexer_testnet
       - RPC_CLIENT_URL=http://fullnode:9000
+    command: sui-indexer --db-url postgres://postgres:admin@postgres:5432/sui_indexer_testnet --rpc-client-url http://fullnode:9000
     ports:
       - target: 9000
         published: 9000
@@ -53,6 +53,9 @@ services:
       - fullnode
 
   postgres:
+    build:
+      context: .
+      dockerfile: ./Dockerfile.postgres
     image: postgres:15
     restart: unless-stopped
     environment:

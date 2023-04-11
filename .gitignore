@@ -61,3 +61,5 @@ yarn-error.log*
 # misc
 *.key
 .env
+
+docker/fullnode-x/postgres/

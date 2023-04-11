@@ -1,0 +1,27 @@
+# Update this value to the location you want Sui to store its database
+db-path: "suidb"
+
+network-address: "/dns/localhost/tcp/8080/http"
+metrics-address: "0.0.0.0:9184"
+# this address is also used for web socket connections
+json-rpc-address: "0.0.0.0:9000"
+enable-event-processing: true
+
+genesis:
+  # Update this to the location of where the genesis file is stored
+  genesis-file-location: "/opt/sui/config/genesis.blob"
+
+p2p-config:
+  listen-address: 0.0.0.0:8084
+  external-address: /ip4/162.55.84.47/udp/8084
+  seed-peers:
+    - address: /dns/ewr-tnt-ssfn-00.testnet.sui.io/udp/8084
+      peer-id: df8a8d128051c249e224f95fcc463f518a0ebed8986bbdcc11ed751181fecd38
+    - address: /dns/lax-tnt-ssfn-00.testnet.sui.io/udp/8084
+      peer-id: f9a72a0a6c17eed09c27898eab389add704777c03e135846da2428f516a0c11d
+    - address: /dns/lhr-tnt-ssfn-00.testnet.sui.io/udp/8084
+      peer-id: 9393d6056bb9c9d8475a3cf3525c747257f17c6a698a7062cbbd1875bc6ef71e
+    - address: /dns/mel-tnt-ssfn-00.testnet.sui.io/udp/8084
+      peer-id: c88742f46e66a11cb8c84aca488065661401ef66f726cb9afeb8a5786d83456e
+    - address: /dns/wave-3.testnet.n1stake.com/udp/8084
+      peer-id: 958c2d71066b428a744b8ecd238928b4bf1133d7ee5c5eb925e5a9b0effc19da
