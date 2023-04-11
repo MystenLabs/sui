@@ -23,6 +23,10 @@ use crate::authority::{
 };
 use crate::authority::{AuthorityMetrics, AuthorityStore};
 
+#[cfg(test)]
+#[path = "unit_tests/transaction_manager_tests.rs"]
+mod transaction_manager_tests;
+
 /// TransactionManager is responsible for managing object dependencies of pending transactions,
 /// and publishing a stream of certified transactions (certificates) ready to execute.
 /// It receives certificates from Narwhal, validator RPC handlers, and checkpoint executor.

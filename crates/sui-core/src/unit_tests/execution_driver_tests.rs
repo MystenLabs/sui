@@ -274,7 +274,7 @@ async fn execute_shared_on_first_three_authorities(
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
-async fn test_transaction_manager() {
+async fn test_execution_with_dependencies() {
     telemetry_subscribers::init_for_testing();
 
     // ---- Initialize a network with three accounts, each with 10 gas objects.
