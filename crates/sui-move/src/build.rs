@@ -86,6 +86,7 @@ impl Build {
                 json!({
                     "modules": pkg.get_package_base64(with_unpublished_deps),
                     "dependencies": json!(package_dependencies),
+                    "digest": pkg.get_package_digest(with_unpublished_deps),
                 })
             )
         }
