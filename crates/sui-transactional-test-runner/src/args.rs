@@ -26,6 +26,8 @@ pub struct SuiRunArgs {
     pub view_events: bool,
     #[clap(long = "view-gas-used")]
     pub view_gas_used: bool,
+    #[clap(long = "uncharged")]
+    pub uncharged: bool,
 }
 
 #[derive(Debug, clap::Parser)]

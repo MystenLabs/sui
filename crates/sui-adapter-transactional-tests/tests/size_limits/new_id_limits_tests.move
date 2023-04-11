@@ -32,16 +32,24 @@ module Test::M1 {
 }
 
 // create below create count limit should succeed
-//# run Test::M1::create_n_ids --args 1 --gas-budget 100000000000000
+//# run Test::M1::create_n_ids --args 1 --uncharged
 
 // create below create count limit should succeed
-//# run Test::M1::create_n_ids --args 256 --gas-budget 100000000000000
+//# run Test::M1::create_n_ids --args 256 --uncharged
 
 // create at create count limit should succeed
-//# run Test::M1::create_n_ids --args 2048 --gas-budget 100000000000000 --view-gas-used
+//# run Test::M1::create_n_ids --args 2048 --uncharged
 
 // create above create count limit should fail
-//# run Test::M1::create_n_ids --args 2049 --gas-budget 100000000000000
+//# run Test::M1::create_n_ids --args 2049 --uncharged
 
 // create above create count limit should fail
-//# run Test::M1::create_n_ids --args 4096 --gas-budget 100000000000000
+//# run Test::M1::create_n_ids --args 4096 --uncharged
+
+// Check if we run out of gas before hitting limits
+
+// create above create count limit should fail
+//# run Test::M1::create_n_ids --args 2049 --gas-budget 1000000000
+
+// create above create count limit should fail
+//# run Test::M1::create_n_ids --args 4096 --gas-budget 1000000000
