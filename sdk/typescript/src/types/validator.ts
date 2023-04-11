@@ -35,7 +35,7 @@ export const StakeObject = object({
   stakeActiveEpoch: EpochId,
   principal: string(),
   status: union([literal('Active'), literal('Pending'), literal('Unstaked')]),
-  estimatedReward: optional(number()),
+  estimatedReward: optional(string()),
 });
 
 export const DelegatedStake = object({

@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useRpcClient } from '@mysten/core';
-import { type SuiAddress } from '@mysten/sui.js';
+import {
+    type SuiTransactionBlockResponse,
+    type SuiAddress,
+} from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
-
-const dedupe = (arr: string[]) => Array.from(new Set(arr));
 
 export function useQueryTransactionsByAddress(address: SuiAddress | null) {
     const rpc = useRpcClient();
@@ -19,31 +20,39 @@ export function useQueryTransactionsByAddress(address: SuiAddress | null) {
                     filter: {
                         ToAddress: address!,
                     },
+                    options: {
+                        showInput: true,
+                        showEffects: true,
+                        showEvents: true,
+                    },
                 }),
                 rpc.queryTransactionBlocks({
                     filter: {
                         FromAddress: address!,
                     },
+                    options: {
+                        showInput: true,
+                        showEffects: true,
+                        showEvents: true,
+                    },
                 }),
             ]);
-            // TODO: replace this with queryTransactions
-            // It seems to be expensive to fetch all transaction data at once though
-            const resp = await rpc.multiGetTransactionBlocks({
-                digests: dedupe(
-                    [...txnIds.data, ...fromTxnIds.data].map((x) => x.digest)
-                ),
-                options: {
-                    showInput: true,
-                    showEffects: true,
-                    showEvents: true,
-                },
-            });
 
-            return resp.sort(
-                // timestamp could be null, so we need to handle
-                (a, b) =>
-                    Number(b.timestampMs || 0) - Number(a.timestampMs || 0)
-            );
+            const inserted = new Map();
+            const uniqueList: SuiTransactionBlockResponse[] = [];
+
+            [...txnIds.data, ...fromTxnIds.data]
+                .sort(
+                    (a, b) =>
+                        Number(b.timestampMs ?? 0) - Number(a.timestampMs ?? 0)
+                )
+                .forEach((txb) => {
+                    if (inserted.get(txb.digest)) return;
+                    uniqueList.push(txb);
+                    inserted.set(txb.digest, true);
+                });
+
+            return uniqueList;
         },
         { enabled: !!address, staleTime: 10 * 1000 }
     );
