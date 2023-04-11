@@ -63,8 +63,6 @@ import { RPCError } from '../utils/errors';
 import { NetworkMetrics } from '../types/metrics';
 import { EpochInfo, EpochPage } from '../types/epochs';
 
-export const TARGETED_RPC_VERSION = '0.29.0';
-
 export interface PaginationArguments<Cursor> {
   /** Optional paging cursor */
   cursor?: Cursor;

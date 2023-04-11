@@ -66,6 +66,7 @@
     }
   ],
   "devDependencies": {
+    "@iarna/toml": "^2.2.5",
     "@size-limit/preset-small-lib": "^8.2.4",
     "@types/node": "^18.15.3",
     "@types/tmp": "^0.2.3",
