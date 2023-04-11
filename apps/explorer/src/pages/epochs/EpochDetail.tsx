@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFormatCoin } from '@mysten/core';
+import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { useParams } from 'react-router-dom';
@@ -11,14 +13,28 @@ import { EpochProgress } from './stats/EpochProgress';
 import { EpochStats } from './stats/EpochStats';
 import { ValidatorStatus } from './stats/ValidatorStatus';
 
-import { SuiAmount } from '~/components/transactions/TxCardUtils';
 import { useEnhancedRpcClient } from '~/hooks/useEnhancedRpc';
 import { Banner } from '~/ui/Banner';
 import { Card } from '~/ui/Card';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
-import { Stats } from '~/ui/Stats';
+import { Stats, type StatsProps } from '~/ui/Stats';
 import { TableCard } from '~/ui/TableCard';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
+
+function SuiStats({
+    amount,
+    ...props
+}: Omit<StatsProps, 'children'> & {
+    amount: bigint | number | string | undefined | null;
+}) {
+    const [formattedAmount, symbol] = useFormatCoin(amount, SUI_TYPE_ARG);
+
+    return (
+        <Stats postfix={symbol} {...props}>
+            {formattedAmount}
+        </Stats>
+    );
+}
 
 export default function EpochDetail() {
     const { id } = useParams();
@@ -66,54 +82,48 @@ export default function EpochDetail() {
                 />
 
                 <EpochStats label="Activity">
-                    <Stats label="Gas Revenue" tooltip="Gas Revenue">
-                        <SuiAmount
-                            amount={epochData.endOfEpochInfo?.totalGasFees}
-                        />
-                    </Stats>
-                    <Stats label="Storage Revenue" tooltip="Storage Revenue">
-                        <SuiAmount
-                            amount={epochData?.endOfEpochInfo?.storageCharge}
-                        />
-                    </Stats>
-                    <Stats label="Stake Rewards" tooltip="Stake Rewards">
-                        <SuiAmount
-                            amount={
-                                epochData?.endOfEpochInfo
-                                    ?.totalStakeRewardsDistributed
-                            }
-                        />
-                    </Stats>
+                    <SuiStats
+                        label="Gas Revenue"
+                        tooltip="Gas Revenue"
+                        amount={epochData.endOfEpochInfo?.totalGasFees}
+                    />
+                    <SuiStats
+                        label="Storage Revenue"
+                        tooltip="Storage Revenue"
+                        amount={epochData?.endOfEpochInfo?.storageCharge}
+                    />
+                    <SuiStats
+                        label="Stake Rewards"
+                        tooltip="Stake Rewards"
+                        amount={
+                            epochData?.endOfEpochInfo
+                                ?.totalStakeRewardsDistributed
+                        }
+                    />
                 </EpochStats>
 
                 <EpochStats label="Rewards">
-                    <Stats label="Stake Subsidies" tooltip="Stake Subsidies">
-                        <SuiAmount
-                            amount={
-                                epochData?.endOfEpochInfo?.stakeSubsidyAmount
-                            }
-                        />
-                    </Stats>
-                    <Stats label="Total Rewards" tooltip="Total Rewards">
-                        <SuiAmount
-                            amount={
-                                epochData?.endOfEpochInfo
-                                    ?.totalStakeRewardsDistributed
-                            }
-                        />
-                    </Stats>
+                    <SuiStats
+                        label="Stake Subsidies"
+                        tooltip="Stake Subsidies"
+                        amount={epochData?.endOfEpochInfo?.stakeSubsidyAmount}
+                    />
+                    <SuiStats
+                        label="Total Rewards"
+                        tooltip="Total Rewards"
+                        amount={
+                            epochData?.endOfEpochInfo
+                                ?.totalStakeRewardsDistributed
+                        }
+                    />
 
-                    <Stats
+                    <SuiStats
                         label="Storage Fund Earnings"
                         tooltip="Storage Fund Earnings"
-                    >
-                        <SuiAmount
-                            amount={
-                                epochData?.endOfEpochInfo
-                                    ?.leftoverStorageFundInflow
-                            }
-                        />
-                    </Stats>
+                        amount={
+                            epochData?.endOfEpochInfo?.leftoverStorageFundInflow
+                        }
+                    />
                 </EpochStats>
                 {isCurrentEpoch ? (
                     <Card spacing="lg">
