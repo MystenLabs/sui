@@ -720,13 +720,10 @@ impl ReadApiServer for ReadApi {
         &self,
         // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<BigInt<u64>>,
-        limit: Option<BigInt<u64>>,
+        limit: Option<usize>,
         descending_order: bool,
     ) -> RpcResult<CheckpointPage> {
-        let limit = validate_limit(
-            limit.map(|l| *l as usize),
-            QUERY_MAX_RESULT_LIMIT_CHECKPOINTS,
-        )?;
+        let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS)?;
 
         let mut data =
             self.state
@@ -746,6 +743,15 @@ impl ReadApiServer for ReadApi {
             next_cursor,
             has_next_page,
         })
+    }
+
+    fn get_checkpoints_deprecated_limit(
+        &self,
+        cursor: Option<BigInt<u64>>,
+        limit: Option<BigInt<u64>>,
+        descending_order: bool,
+    ) -> RpcResult<CheckpointPage> {
+        self.get_checkpoints(cursor, limit.map(|l| *l as usize), descending_order)
     }
 }
 

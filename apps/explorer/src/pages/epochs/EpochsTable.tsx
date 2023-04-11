@@ -41,7 +41,7 @@ export function EpochsTable({
         ['epochs', { limit, cursor: pagination.cursor }],
         async () =>
             enhancedRpc.getEpochs({
-                limit: limit.toString(),
+                limit,
                 cursor: pagination.cursor?.toString(),
                 descendingOrder: true,
             }),
