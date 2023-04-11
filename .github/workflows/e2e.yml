@@ -81,72 +81,95 @@ jobs:
       #     retention-days: 30
 # Disable devnet tests for now
 # Run e2e test against localnet built on the devnet branch for backward compatibility check
-# local_devnet_branch:
-#   name: Local Network Built on devnet branch
-#   needs: diff
-#   # TODO: add wallet e2e to the `if` condition when available
-#   if: needs.diff.outputs.isExplorer == 'true' || needs.diff.outputs.isTypescriptSDK == 'true'
-#   runs-on: ubuntu-ghcloud
-#   steps:
-#     # checkout the devnet branch
-#     - uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
-#       with:
-#         ref: devnet
-#     - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # pin@v1
-#     - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
-#     - uses: pnpm/action-setup@c3b53f6a16e57305370b4ae5a540c2077a1d50dd # pin@v2.2.4
-#       with:
-#         version: 8
+local_devnet_branch:
+  name: Local Network Built on devnet branch
+  needs: diff
+  # TODO: add wallet e2e to the `if` condition when available
+  if: needs.diff.outputs.isExplorer == 'true' || needs.diff.outputs.isTypescriptSDK == 'true'
+  runs-on: ubuntu-ghcloud
+  steps:
+    # checkout the devnet branch
+    - uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
+      with:
+        ref: devnet
+    - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # pin@v1
+    # Disabled for now as it makes test runs take longer
+    # - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
+    - uses: pnpm/action-setup@c3b53f6a16e57305370b4ae5a540c2077a1d50dd # pin@v2.2.4
+      with:
+        version: 8
+    
+    - name: Check s3 if binaries have been uploaded already
+        continue-on-error: true
+        id: check_s3
+        run: |
+          echo "Checking if s3 binaries have been built for ${{ github.sha }}"
+          echo "s3_file_exist=$(curl -Is https://sui-releases.s3.us-east-1.amazonaws.com/${{ github.sha }}/debug/sui-test-validator | head -n 1 | grep '200 OK')" >> $GITHUB_ENV
 
-#     # checkout current branch
-#     - uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
-#       with:
-#         clean: false
+    - name: cargo build
+        if: env.s3_file_exist == '' # if empty, we have not built and uploaded this binary to s3 yet
+        run: |
+          cargo build --bin sui-test-validator --bin sui
 
-#     - name: Download sui binary from latest devnet release
-#       run: |
-#         mkdir -p $PWD/target/debug
-#         wget -O target/debug/sui https://github.com/MystenLabs/sui/releases/latest/download/sui
-#         chmod +x $PWD/target/debug/sui
+    # - name: Dowload from S3 if 
+    #     if: env.s3_file_exist == '' # if empty, we have not built and uploaded this binary to s3 yet
+    #     working-directory: ./target/release
+    #     run: |
+    #       aws s3 cp sui s3://sui-releases/${{ github.sha }}/sui
+    #       aws s3 cp sui s3://sui-releases/${{ github.sha }}/sui-test-validator
 
-#     - name: Download sui-test-validator binary from latest devnet release
-#       run: |
-#         mkdir -p $PWD/target/debug
-#         wget -O target/debug/sui-test-validator https://github.com/MystenLabs/sui/releases/latest/download/sui-test-validator
-#         chmod +x $PWD/target/debug/sui-test-validator
+    # - name: Configure AWS credentials
+    #     if: env.s3_file_exist == '' # if empty, we have not built and uploaded this binary to s3 yet
+    #     uses: aws-actions/configure-aws-credentials@67fbcbb121271f7775d2e7715933280b06314838 # pin@v1
+    #     continue-on-error: true
+    #     with:
+    #       aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+    #       aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    #       aws-region: us-west-2
+    
+    # - name: Publish to S3
+    #     if: env.s3_file_exist == '' # if empty, we have not built and uploaded this binary to s3 yet
+    #     working-directory: ./target/debug
+    #     run: |
+    #       aws s3 cp sui s3://sui-releases/${{ github.sha }}/debug/sui
+    #       aws s3 cp sui s3://sui-releases/${{ github.sha }}/debug/sui-test-validator
 
-#     - name: Install Nodejs
-#       uses: actions/setup-node@8c91899e586c5b171469028077307d293428b516 # pin@v3
-#       with:
-#         node-version: "18"
-#         cache: "pnpm"
-#     - name: Install dependencies
-#       run: pnpm install --frozen-lockfile
-#     - name: Install Playwright Browsers
-#       run: pnpm explorer playwright install --with-deps chromium
+    # checkout current branch
+    - uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
+      with:
+        clean: false
 
-#     - name: Set env
-#       run: |
-#         echo "E2E_RUN_LOCAL_NET_CMD=(RUST_LOG=\"consensus=off\" $(echo $PWD/target/debug/sui-test-validator))" >> $GITHUB_ENV
-#         echo "VITE_SUI_BIN=$PWD/target/debug/sui" >> $GITHUB_ENV
+    - name: Install Nodejs
+      uses: actions/setup-node@8c91899e586c5b171469028077307d293428b516 # pin@v3
+      with:
+        node-version: "18"
+        cache: "pnpm"
+    - name: Install dependencies
+      run: pnpm install --frozen-lockfile
+    - name: Install Playwright Browsers
+      run: pnpm explorer playwright install --with-deps chromium
 
-#     - name: Run TS SDK e2e tests
-#       if: ${{ needs.diff.outputs.isTypescriptSDK == 'true' }}
-#       run: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm sdk test:e2e'
+    - name: Set env
+      run: |
+        echo "E2E_RUN_LOCAL_NET_CMD=(RUST_LOG=\"consensus=off\" $(echo $PWD/target/debug/sui-test-validator))" >> $GITHUB_ENV
+        echo "VITE_SUI_BIN=$PWD/target/debug/sui" >> $GITHUB_ENV
 
-#     - name: Run Explorer e2e tests
-#       if: ${{ needs.diff.outputs.isExplorer == 'true' || needs.diff.outputs.isTypescriptSDK == 'true'}}
-#       run: pnpm explorer playwright test
+    - name: Run TS SDK e2e tests
+      if: ${{ needs.diff.outputs.isTypescriptSDK == 'true' }}
+      run: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm sdk test:e2e'
 
-#     # TODO: add wallet e2e when available
+    - name: Run Explorer e2e tests
+      if: ${{ needs.diff.outputs.isExplorer == 'true' || needs.diff.outputs.isTypescriptSDK == 'true'}}
+      run: pnpm explorer playwright test
 
-#     - uses: actions/upload-artifact@v3
-#       if: always()
-#       with:
-#         name: playwright-report-explorer
-#         path: apps/explorer/playwright-report/
-#         retention-days: 30
+    # TODO: add wallet e2e when available
 
+    - uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: playwright-report-explorer
+        path: apps/explorer/playwright-report/
+        retention-days: 30
 # Disable testnet test until the Testnet wave 3
 # Run e2e test against localnet built on the Testnet branch for backward compatibility check
 # local_testnet_branch:
