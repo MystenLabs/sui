@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { getTransactionSender } from '@mysten/sui.js';
+import {useState} from "react";
 
 import { ErrorBoundary } from '../../../components/error-boundary/ErrorBoundary';
 import PkgModulesWrapper from '../../../components/module/PkgModulesWrapper';
@@ -11,8 +12,10 @@ import { getOwnerStr } from '../../../utils/objectUtils';
 import { trimStdLibPrefix } from '../../../utils/stringUtils';
 import { type DataType } from '../ObjectResultType';
 
+
 import styles from './ObjectView.module.css';
 
+import {Button} from "~/ui/Button";
 import { Heading } from '~/ui/Heading';
 import { AddressLink, ObjectLink } from '~/ui/InternalLink';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
@@ -21,6 +24,8 @@ import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 const GENESIS_TX_DIGEST = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
 
 function PkgView({ data }: { data: DataType }) {
+    const [isSplitPaneHorizontal, setIsSplitPaneHorizontal] = useState(true);
+
     const { data: txnData, isLoading } = useGetTransaction(
         data.data.tx_digest!
     );
@@ -97,13 +102,17 @@ function PkgView({ data }: { data: DataType }) {
                     </TabPanels>
                 </TabGroup>
 
-                <div className="mb-3">
+                <div className="mb-3 mt-16 flex justify-between">
                     <Heading as="h2" variant="heading4/semibold">
                         Modules
                     </Heading>
+                    <div className="flex justify-end gap-5">
+                        <Button variant="outline" size="sm" onClick={() => setIsSplitPaneHorizontal(false)}><div className="uppercase">stacked</div></Button>
+                        <Button variant="outline" size="sm" onClick={() => setIsSplitPaneHorizontal(true)}><div className="uppercase">side-by-side</div></Button>
+                    </div>
                 </div>
                 <ErrorBoundary>
-                    <PkgModulesWrapper id={data.id} modules={properties} />
+                    <PkgModulesWrapper id={data.id} modules={properties} isSplitPaneHorizontal={isSplitPaneHorizontal} />
                 </ErrorBoundary>
                 <div className={styles.txsection}>
                     <h2 className={styles.header}>Transaction Blocks</h2>

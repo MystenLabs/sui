@@ -20,6 +20,7 @@ type ModuleType = [moduleName: string, code: string];
 interface Props {
     id?: string;
     modules: ModuleType[];
+    isSplitPaneHorizontal: boolean;
 }
 
 interface ModuleViewWrapperProps {
@@ -46,7 +47,7 @@ function ModuleViewWrapper({
     return <ModuleView id={id} name={name} code={code} />;
 }
 
-function PkgModuleViewWrapper({ id, modules }: Props) {
+function PkgModuleViewWrapper({ id, modules, isSplitPaneHorizontal }: Props) {
     const isMediumOrAbove = useBreakpoint('md');
 
     const modulenames = modules.map(([name]) => name);
@@ -217,7 +218,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
             {isMediumOrAbove ? (
                 <div className="w-4/5">
                     <SplitPanes
-                        direction="horizontal"
+                        direction={isSplitPaneHorizontal ? 'horizontal' : 'vertical'}
                         defaultSizes={[40, 60]}
                         panels={bytecodeContent}
                     />
