@@ -20,6 +20,7 @@ import styles from './RecentTxCard.module.css';
 
 import { AddressLink, TransactionLink } from '~/ui/InternalLink';
 
+/** @deprecated This styling is not correct, use `<Text>` to create the correctly styled components */
 export function SuiAmount({
     amount,
 }: {
