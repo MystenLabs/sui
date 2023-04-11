@@ -34,7 +34,7 @@ async fn get_gas_status(
     gas: &[ObjectRef],
     epoch_store: &AuthorityPerEpochStore,
     transaction: &TransactionData,
-) -> SuiResult<SuiGasStatus<'static>> {
+) -> SuiResult<SuiGasStatus> {
     // Get the first coin (possibly the only one) and make it "the gas coin", then
     // keep track of all others that can contribute to gas (gas smashing).
     let gas_object_ref = gas.get(0).unwrap();
@@ -58,7 +58,7 @@ pub async fn check_transaction_input(
     store: &AuthorityStore,
     epoch_store: &AuthorityPerEpochStore,
     transaction: &TransactionData,
-) -> SuiResult<(SuiGasStatus<'static>, InputObjects)> {
+) -> SuiResult<(SuiGasStatus, InputObjects)> {
     transaction.check_version_supported(epoch_store.protocol_config())?;
     transaction.validity_check(epoch_store.protocol_config())?;
     check_non_system_packages_to_be_published(transaction, epoch_store.protocol_config())?;
@@ -74,7 +74,7 @@ pub async fn check_transaction_input_with_given_gas(
     epoch_store: &AuthorityPerEpochStore,
     transaction: &TransactionData,
     gas_object: Object,
-) -> SuiResult<(SuiGasStatus<'static>, InputObjects)> {
+) -> SuiResult<(SuiGasStatus, InputObjects)> {
     transaction.check_version_supported(epoch_store.protocol_config())?;
     transaction.validity_check_no_gas_check(epoch_store.protocol_config())?;
     check_non_system_packages_to_be_published(transaction, epoch_store.protocol_config())?;
@@ -132,7 +132,7 @@ pub async fn check_certificate_input(
     store: &AuthorityStore,
     epoch_store: &AuthorityPerEpochStore,
     cert: &VerifiedExecutableTransaction,
-) -> SuiResult<(SuiGasStatus<'static>, InputObjects)> {
+) -> SuiResult<(SuiGasStatus, InputObjects)> {
     let protocol_version = epoch_store.protocol_version();
 
     // This should not happen - validators should not have signed the txn in the first place.
@@ -172,7 +172,7 @@ async fn check_gas(
     gas_budget: u64,
     gas_price: u64,
     tx_kind: &TransactionKind,
-) -> SuiResult<SuiGasStatus<'static>> {
+) -> SuiResult<SuiGasStatus> {
     let protocol_config = epoch_store.protocol_config();
     if tx_kind.is_system_tx() {
         Ok(SuiGasStatus::new_unmetered(protocol_config))

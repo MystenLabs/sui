@@ -15,10 +15,9 @@ use move_core_types::{
 use once_cell::sync::Lazy;
 use std::ops::AddAssign;
 use std::ops::{Add, Deref, Mul};
-use sui_cost_tables::{
-    bytecode_tables::{GasStatus, INITIAL_COST_SCHEDULE},
-    units_types::GasUnit,
-};
+use sui_cost_tables::bytecode_tables::{INITIAL_COST_SCHEDULE, ZERO_COST_SCHEDULE};
+use sui_cost_tables::units_types::CostTable;
+use sui_cost_tables::{bytecode_tables::GasStatus, units_types::GasUnit};
 use sui_protocol_config::*;
 
 macro_rules! ok_or_gas_balance_error {
@@ -166,6 +165,8 @@ pub struct SuiCostTable {
     /// new storage as well as rebating for deleting storage. That is, we expect users to
     /// get full refund on the object storage when it's deleted.
     storage_per_byte_cost: StorageCostPerByte,
+    /// Execution cost table to be used.
+    pub execution_cost_table: CostTable,
 }
 
 impl std::fmt::Debug for SuiCostTable {
@@ -187,6 +188,7 @@ impl SuiCostTable {
                 c.obj_access_cost_read_per_byte(),
             ),
             storage_per_byte_cost: StorageCostPerByte::new(c.obj_data_cost_refundable()),
+            execution_cost_table: INITIAL_COST_SCHEDULE.clone(),
         }
     }
 
@@ -197,6 +199,7 @@ impl SuiCostTable {
             package_publish_per_byte_cost: ComputationCostPerByte::new(0),
             object_read_per_byte_cost: ComputationCostPerByte::new(0),
             storage_per_byte_cost: StorageCostPerByte::new(0),
+            execution_cost_table: ZERO_COST_SCHEDULE.clone(),
         }
     }
 
@@ -210,8 +213,8 @@ fn to_external(internal_units: InternalGas) -> GasUnits {
 }
 
 #[derive(Debug)]
-pub struct SuiGasStatus<'a> {
-    gas_status: GasStatus<'a>,
+pub struct SuiGasStatus {
+    pub gas_status: GasStatus,
     init_budget: GasUnits,
     charge: bool,
     computation_gas_unit_price: ComputeGasPricePerUnit,
@@ -232,15 +235,15 @@ fn to_internal(external_units: GasUnits) -> InternalGas {
     GasUnits::to_unit(external_units)
 }
 
-impl<'a> SuiGasStatus<'a> {
+impl SuiGasStatus {
     fn new(
-        move_gas_status: GasStatus<'_>,
+        move_gas_status: GasStatus,
         gas_budget: u64,
         charge: bool,
         computation_gas_unit_price: GasPrice,
         storage_gas_unit_price: u64,
         cost_table: SuiCostTable,
-    ) -> SuiGasStatus<'_> {
+    ) -> SuiGasStatus {
         SuiGasStatus {
             gas_status: move_gas_status,
             init_budget: GasUnits::new(gas_budget),
@@ -259,10 +262,10 @@ impl<'a> SuiGasStatus<'a> {
         computation_gas_unit_price: u64,
         storage_gas_unit_price: u64,
         cost_table: SuiCostTable,
-    ) -> SuiGasStatus<'a> {
+    ) -> SuiGasStatus {
         let budget_in_unit = gas_budget / computation_gas_unit_price; // truncate the value and move to units
         Self::new(
-            GasStatus::new(&INITIAL_COST_SCHEDULE, GasUnits::new(budget_in_unit)),
+            GasStatus::new(cost_table.execution_cost_table.clone(), GasUnits::new(budget_in_unit)),
             budget_in_unit,
             true,
             computation_gas_unit_price.into(),
@@ -275,21 +278,22 @@ impl<'a> SuiGasStatus<'a> {
         gas_budget: u64,
         computation_gas_unit_price: u64,
         config: &ProtocolConfig,
-    ) -> SuiGasStatus<'a> {
+    ) -> SuiGasStatus {
         let storage_gas_unit_price: GasPrice = config.storage_gas_price().into();
          // truncate the value and move to units
         let budget_in_unit = gas_budget / computation_gas_unit_price;
+        let sui_cost_table = SuiCostTable::new(config);
         Self::new(
-            GasStatus::new(&INITIAL_COST_SCHEDULE, GasUnits::new(budget_in_unit)),
+            GasStatus::new(sui_cost_table.execution_cost_table.clone(), GasUnits::new(budget_in_unit)),
             budget_in_unit,
             true,
             computation_gas_unit_price.into(),
             storage_gas_unit_price.into(),
-            SuiCostTable::new(config),
+            sui_cost_table,
         )
     }
 
-    pub(crate) fn new_unmetered() -> SuiGasStatus<'a> {
+    pub(crate) fn new_unmetered() -> SuiGasStatus {
         Self::new(
             GasStatus::new_unmetered(),
             0,
@@ -352,12 +356,12 @@ impl<'a> SuiGasStatus<'a> {
     }
 }
 
-impl<'a> SuiGasStatusAPI<'a> for SuiGasStatus<'a> {
+impl SuiGasStatusAPI for SuiGasStatus {
     fn is_unmetered(&self) -> bool {
         !self.charge
     }
 
-    fn move_gas_status(&mut self) -> &mut GasStatus<'a> {
+    fn move_gas_status(&mut self) -> &mut GasStatus {
         &mut self.gas_status
     }
 
