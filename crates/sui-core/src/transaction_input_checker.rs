@@ -12,6 +12,7 @@ use sui_types::error::{UserInputError, UserInputResult};
 use sui_types::messages::{
     TransactionKind, VerifiedExecutableTransaction, VersionedProtocolMessage,
 };
+use sui_types::storage::BackingPackageStore;
 use sui_types::{
     base_types::{SequenceNumber, SuiAddress},
     error::SuiResult,
@@ -128,8 +129,9 @@ pub(crate) async fn check_dev_inspect_input(
     Ok((gas_object_ref, input_objects))
 }
 
-pub async fn check_certificate_input(
+pub async fn check_certificate_input<S: BackingPackageStore>(
     store: &AuthorityStore,
+    package_store: &std::sync::Arc<S>,
     epoch_store: &AuthorityPerEpochStore,
     cert: &VerifiedExecutableTransaction,
 ) -> SuiResult<(SuiGasStatus<'static>, InputObjects)> {
@@ -153,7 +155,7 @@ pub async fn check_certificate_input(
         // through sequencing, so we must bypass the sequence checks here.
         store.check_input_objects(&input_object_kinds, epoch_store.protocol_config())?
     } else {
-        store.check_sequenced_input_objects(cert.digest(), &input_object_kinds, epoch_store)?
+        store.check_sequenced_input_objects(cert.digest(), &input_object_kinds, epoch_store, package_store)?
     };
     let gas_status =
         get_gas_status(&input_object_data, tx_data.gas(), epoch_store, tx_data).await?;

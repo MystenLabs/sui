@@ -135,6 +135,7 @@ pub mod authority_store_pruner;
 pub mod authority_store_tables;
 pub mod authority_store_types;
 pub mod epoch_start_configuration;
+pub mod package_object_cache;
 
 pub(crate) mod authority_notify_read;
 pub(crate) mod authority_store;
@@ -955,6 +956,7 @@ impl AuthorityState {
         // check_certificate_input also checks shared object locks when loading the shared objects.
         let (gas_status, input_objects) = transaction_input_checker::check_certificate_input(
             &self.database,
+            &epoch_store.move_package_object_cache,
             epoch_store,
             certificate,
         )

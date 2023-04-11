@@ -554,11 +554,12 @@ impl AuthorityStore {
     ///
     /// Before this function is invoked, TransactionManager must ensure all depended
     /// objects are present. Thus any missing object will panic.
-    pub fn check_sequenced_input_objects(
+    pub fn check_sequenced_input_objects<S: BackingPackageStore>(
         &self,
         digest: &TransactionDigest,
         objects: &[InputObjectKind],
         epoch_store: &AuthorityPerEpochStore,
+        package_store: &Arc<S>,
     ) -> Result<Vec<Object>, SuiError> {
         let shared_locks_cell: OnceCell<HashMap<_, _>> = OnceCell::new();
 
@@ -584,7 +585,7 @@ impl AuthorityStore {
                         panic!("All dependencies of tx {:?} should have been executed now, but Shared Object id: {}, version: {} is absent", digest, *id, *version);
                     })
                 }
-                InputObjectKind::MovePackage(id) => self.get_object(id)?.unwrap_or_else(|| {
+                InputObjectKind::MovePackage(id) => package_store.get_package_object(id)?.unwrap_or_else(|| {
                     panic!("All dependencies of tx {:?} should have been executed now, but Move Package id: {} is absent", digest, id);
                 }),
                 InputObjectKind::ImmOrOwnedMoveObject(objref) => {

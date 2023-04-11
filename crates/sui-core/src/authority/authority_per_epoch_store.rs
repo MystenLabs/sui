@@ -34,6 +34,7 @@ use typed_store::rocks::{
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
+use crate::authority::package_object_cache::PackageObjectCache;
 use crate::authority::{AuthorityStore, ResolverWrapper};
 use crate::checkpoints::{
     BuilderCheckpointSummary, CheckpointCommitHeight, CheckpointServiceNotify, EpochStats,
@@ -165,6 +166,8 @@ pub struct AuthorityPerEpochStore {
 
     /// Execution state that has to restart at each epoch change
     execution_component: ExecutionComponents,
+
+    pub(crate) move_package_object_cache: Arc<PackageObjectCache<AuthorityStore>>,
 }
 
 /// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.
@@ -383,7 +386,7 @@ impl AuthorityPerEpochStore {
 
         let execution_component = ExecutionComponents::new(
             &protocol_config,
-            store,
+            store.clone(),
             cache_metrics,
             expensive_safety_check_config,
         );
@@ -409,6 +412,7 @@ impl AuthorityPerEpochStore {
             metrics,
             epoch_start_configuration,
             execution_component,
+            move_package_object_cache: PackageObjectCache::new(store),
         });
         s.update_buffer_stake_metric();
         s
@@ -1025,7 +1029,7 @@ impl AuthorityPerEpochStore {
             .override_protocol_upgrade_buffer_stake
             .get(&OVERRIDE_PROTOCOL_UPGRADE_BUFFER_STAKE_INDEX)
             .expect("force_protocol_upgrade read cannot fail")
-            .tap_some(|b| warn!("using overrided buffer stake value of {}", b))
+            .tap_some(|b| warn!("using overridden buffer stake value of {}", b))
             .unwrap_or_else(|| {
                 self.protocol_config()
                     .buffer_stake_for_protocol_upgrade_bps()
