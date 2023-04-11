@@ -883,6 +883,25 @@ async fn test_publish_transitive_happy_path() {
         .collect();
     assert!(dep_ids_in_linkage_table.contains(&runner.package.0));
     assert!(dep_ids_in_linkage_table.contains(&depender_package.0));
+
+    // Call into the root module to call base module's function (should abort due to base module's
+    // call_return_0 aborting with code 42)
+    let TransactionEffects::V1(call_effects) = runner
+        .run({
+            let mut builder = ProgrammableTransactionBuilder::new();
+            move_call! {
+                builder,
+                (root_package.0)::my_module::call_return_0()
+            };
+
+            builder.finish()
+        })
+        .await;
+
+    match call_effects.status.unwrap_err().0 {
+        ExecutionFailureStatus::MoveAbort(_, 42) => { /* nop */ }
+        err => panic!("Unexpected error: {:#?}", err),
+    };
 }
 
 #[tokio::test]
@@ -954,4 +973,20 @@ async fn test_publish_transitive_override_happy_path() {
         .collect();
     assert!(dep_ids_in_linkage_table.contains(&base_v2_package.0));
     assert!(dep_ids_in_linkage_table.contains(&depender_package.0));
+
+    // Call into the root module to call upgraded base module's function (should succeed due to base module's
+    // call_return_0 no longer aborting)
+    let TransactionEffects::V1(call_effects) = runner
+        .run({
+            let mut builder = ProgrammableTransactionBuilder::new();
+            move_call! {
+                builder,
+                (root_package.0)::my_module::call_return_0()
+            };
+
+            builder.finish()
+        })
+        .await;
+
+    assert!(call_effects.status.is_ok(), "{:#?}", call_effects.status);
 }
