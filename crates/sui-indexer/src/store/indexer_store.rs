@@ -19,6 +19,7 @@ use sui_types::object::ObjectRead;
 use sui_types::storage::ObjectStore;
 
 use crate::errors::IndexerError;
+use crate::metrics::IndexerMetrics;
 use crate::models::addresses::Address;
 use crate::models::checkpoints::Checkpoint;
 use crate::models::epoch::DBEpochInfo;
@@ -227,6 +228,8 @@ pub trait IndexerStore {
     async fn get_current_epoch(&self) -> Result<EpochInfo, IndexerError>;
 
     fn module_cache(&self) -> &Self::ModuleCache;
+
+    fn indexer_metrics(&self) -> &IndexerMetrics;
 }
 
 #[derive(Clone, Debug)]

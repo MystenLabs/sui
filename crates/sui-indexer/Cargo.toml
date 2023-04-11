@@ -10,6 +10,7 @@ edition = "2021"
 [dependencies]
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 async-trait = "0.1.61"
+axum.workspace = true
 backoff = { version = "0.4", features = ["futures", "futures-core", "pin-project-lite", "tokio", "tokio_1"] }
 bcs = "0.1.4"
 chrono = { version = "0.4.23", features = ["clock", "serde"] }
@@ -25,6 +26,7 @@ jsonrpsee = { version = "0.16.2", features = ["full"] }
 prometheus = "0.13.3"
 serde = { version = "1.0.144", features = ["derive"] }
 serde_json = "1.0.83"
+regex = "1.5"
 thiserror = "1.0.34"
 tracing = "0.1.36"
 tokio = { workspace = true, features = ["full"] }

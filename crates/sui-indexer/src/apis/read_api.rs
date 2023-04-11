@@ -133,7 +133,14 @@ where
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiObjectResponse> {
         if !self.migrated_methods.contains(&"get_object".into()) {
-            return block_on(async { self.fullnode.get_object(object_id, options).await });
+            let obj_guard = self
+                .state
+                .indexer_metrics()
+                .get_object_latency
+                .start_timer();
+            let obj_resp = block_on(async { self.fullnode.get_object(object_id, options).await });
+            obj_guard.stop_and_record();
+            return obj_resp;
         }
 
         Ok(block_on(self.get_object_internal(object_id, options))?)
@@ -144,7 +151,15 @@ where
         object_ids: Vec<ObjectID>,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiObjectResponse>> {
-        block_on(async { self.fullnode.multi_get_objects(object_ids, options).await })
+        let objs_guard = self
+            .state
+            .indexer_metrics()
+            .multi_get_objects_latency
+            .start_timer();
+        let objs_resp =
+            block_on(async { self.fullnode.multi_get_objects(object_ids, options).await });
+        objs_guard.stop_and_record();
+        objs_resp
     }
 
     async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt<u64>> {
@@ -152,7 +167,14 @@ where
             .migrated_methods
             .contains(&"get_total_transaction_blocks".to_string())
         {
-            return self.fullnode.get_total_transaction_blocks().await;
+            let total_tx_guard = self
+                .state
+                .indexer_metrics()
+                .get_total_transaction_blocks_latency
+                .start_timer();
+            let total_tx_resp = self.fullnode.get_total_transaction_blocks().await;
+            total_tx_guard.stop_and_record();
+            return total_tx_resp;
         }
         Ok(self.get_total_transaction_blocks_internal().await?.into())
     }
@@ -166,7 +188,14 @@ where
             .migrated_methods
             .contains(&"get_transaction_block".to_string())
         {
-            return self.fullnode.get_transaction_block(digest, options).await;
+            let tx_guard = self
+                .state
+                .indexer_metrics()
+                .get_transaction_block_latency
+                .start_timer();
+            let tx_resp = self.fullnode.get_transaction_block(digest, options).await;
+            tx_guard.stop_and_record();
+            return tx_resp;
         }
         Ok(self
             .get_transaction_block_internal(&digest, options)
@@ -182,7 +211,15 @@ where
             .migrated_methods
             .contains(&"multi_get_transaction_blocks".to_string())
         {
-            return block_on(self.fullnode.multi_get_transaction_blocks(digests, options));
+            let multi_tx_guard = self
+                .state
+                .indexer_metrics()
+                .multi_get_transaction_blocks_latency
+                .start_timer();
+            let multi_tx_resp =
+                block_on(self.fullnode.multi_get_transaction_blocks(digests, options));
+            multi_tx_guard.stop_and_record();
+            return multi_tx_resp;
         }
         Ok(block_on(
             self.multi_get_transaction_blocks_internal(&digests, options),
@@ -195,9 +232,17 @@ where
         version: SequenceNumber,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiPastObjectResponse> {
-        self.fullnode
+        let past_obj_guard = self
+            .state
+            .indexer_metrics()
+            .try_get_past_object_latency
+            .start_timer();
+        let past_obj_resp = self
+            .fullnode
             .try_get_past_object(object_id, version, options)
-            .await
+            .await;
+        past_obj_guard.stop_and_record();
+        past_obj_resp
     }
 
     fn try_multi_get_past_objects(
@@ -205,10 +250,17 @@ where
         past_objects: Vec<SuiGetPastObjectRequest>,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiPastObjectResponse>> {
-        block_on(
+        let multi_past_obj_guard = self
+            .state
+            .indexer_metrics()
+            .try_multi_get_past_objects_latency
+            .start_timer();
+        let multi_past_obj_resp = block_on(
             self.fullnode
                 .try_multi_get_past_objects(past_objects, options),
-        )
+        );
+        multi_past_obj_guard.stop_and_record();
+        multi_past_obj_resp
     }
 
     async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<BigInt<u64>> {
@@ -216,7 +268,14 @@ where
             .migrated_methods
             .contains(&"get_latest_checkpoint_sequence_number".to_string())
         {
-            return self.fullnode.get_latest_checkpoint_sequence_number().await;
+            let latest_cp_guard = self
+                .state
+                .indexer_metrics()
+                .get_latest_checkpoint_sequence_number_latency
+                .start_timer();
+            let latest_cp_resp = self.fullnode.get_latest_checkpoint_sequence_number().await;
+            latest_cp_guard.stop_and_record();
+            return latest_cp_resp;
         }
         Ok(self
             .get_latest_checkpoint_sequence_number_internal()
@@ -229,7 +288,14 @@ where
             .migrated_methods
             .contains(&"get_checkpoint".to_string())
         {
-            return self.fullnode.get_checkpoint(id).await;
+            let cp_guard = self
+                .state
+                .indexer_metrics()
+                .get_checkpoint_latency
+                .start_timer();
+            let cp_resp = self.fullnode.get_checkpoint(id).await;
+            cp_guard.stop_and_record();
+            return cp_resp;
         }
         Ok(self.state.get_checkpoint(id).await?)
     }
@@ -240,14 +306,28 @@ where
         limit: Option<BigInt<u64>>,
         descending_order: bool,
     ) -> RpcResult<CheckpointPage> {
-        return block_on(
+        let cps_guard = self
+            .state
+            .indexer_metrics()
+            .get_checkpoints_latency
+            .start_timer();
+        let cps_resp = block_on(
             self.fullnode
                 .get_checkpoints(cursor, limit, descending_order),
         );
+        cps_guard.stop_and_record();
+        cps_resp
     }
 
     fn get_events(&self, transaction_digest: TransactionDigest) -> RpcResult<Vec<SuiEvent>> {
-        block_on(self.fullnode.get_events(transaction_digest))
+        let events_guard = self
+            .state
+            .indexer_metrics()
+            .get_events_latency
+            .start_timer();
+        let events_resp = block_on(self.fullnode.get_events(transaction_digest));
+        events_guard.stop_and_record();
+        events_resp
     }
 }
 

@@ -9234,6 +9234,7 @@ version = "0.31.1"
 dependencies = [
  "anyhow",
  "async-trait",
+ "axum",
  "backoff",
  "bcs",
  "cached",
@@ -9252,6 +9253,7 @@ dependencies = [
  "mysten-metrics",
  "ntest",
  "prometheus",
+ "regex",
  "rustls",
  "serde 1.0.152",
  "serde_json",

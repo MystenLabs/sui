@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #![recursion_limit = "256"]
 
+use std::collections::HashMap;
 use std::env;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::str::FromStr;
@@ -9,6 +10,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use anyhow::Result;
+use axum::{extract::Extension, http::StatusCode, routing::get, Router};
 use backoff::future::retry;
 use backoff::ExponentialBackoff;
 use clap::Parser;
@@ -21,7 +23,9 @@ use diesel_async::AsyncPgConnection;
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClient, HttpClientBuilder};
-use prometheus::Registry;
+use metrics::IndexerMetrics;
+use prometheus::{Registry, TextEncoder};
+use regex::Regex;
 use rustls::client::{ServerCertVerified, ServerCertVerifier};
 use rustls::{Certificate, Error, ServerName};
 use tracing::{info, warn};
@@ -33,7 +37,7 @@ use apis::{
 };
 use errors::IndexerError;
 use handlers::checkpoint_handler::CheckpointHandler;
-use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::{spawn_monitored_task, RegistryService};
 use store::IndexerStore;
 use sui_core::event_handler::EventHandler;
 use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle, CLIENT_SDK_TYPE_HEADER};
@@ -58,6 +62,7 @@ pub type PgPoolConnection = diesel::r2d2::PooledConnection<ConnectionManager<PgC
 
 pub type AsyncPgConnectionPool = Pool<AsyncPgConnection>;
 
+const METRICS_ROUTE: &str = "/metrics";
 /// Returns all endpoints for which we have implemented on the indexer,
 /// some of them are not validated yet.
 /// NOTE: we only use this for integration testing
@@ -151,12 +156,14 @@ impl Indexer {
         config: &IndexerConfig,
         registry: &Registry,
         store: S,
+        metrics: IndexerMetrics,
     ) -> Result<(), IndexerError> {
         info!(
             "Sui indexer of version {:?} started...",
             env!("CARGO_PKG_VERSION")
         );
         let event_handler = Arc::new(EventHandler::default());
+
         if config.rpc_server_worker && config.fullnode_sync_worker {
             info!("Starting indexer with both fullnode sync and RPC server");
             let handle =
@@ -168,12 +175,13 @@ impl Indexer {
 
             backoff::future::retry(ExponentialBackoff::default(), || async {
                 let event_handler_clone = event_handler.clone();
+                let metrics_clone = metrics.clone();
                 let http_client = get_http_client(config.rpc_client_url.as_str())?;
                 let cp = CheckpointHandler::new(
                     store.clone(),
                     http_client,
                     event_handler_clone,
-                    registry,
+                    metrics_clone,
                     config,
                 );
                 cp.spawn()
@@ -194,12 +202,13 @@ impl Indexer {
             info!("Starting indexer with only fullnode sync");
             backoff::future::retry(ExponentialBackoff::default(), || async {
                 let event_handler_clone = event_handler.clone();
+                let metrics_clone = metrics.clone();
                 let http_client = get_http_client(config.rpc_client_url.as_str())?;
                 let cp = CheckpointHandler::new(
                     store.clone(),
                     http_client,
                     event_handler_clone,
-                    registry,
+                    metrics_clone,
                     config,
                 );
                 cp.spawn()
@@ -383,4 +392,54 @@ pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clo
         config.rpc_server_port,
     );
     Ok(builder.start(default_socket_addr).await?)
+}
+
+fn convert_url(url_str: &str) -> Option<String> {
+    // NOTE: unwrap here is safe because the regex is a constant.
+    let re = Regex::new(r"https?://([a-z0-9-]+\.[a-z0-9-]+\.[a-z]+)").unwrap();
+    let captures = re.captures(url_str)?;
+
+    captures.get(1).map(|m| m.as_str().to_string())
+}
+
+pub fn start_prometheus_server(
+    addr: SocketAddr,
+    fn_url: &str,
+) -> Result<(RegistryService, Registry), anyhow::Error> {
+    let converted_fn_url = convert_url(fn_url);
+    if converted_fn_url.is_none() {
+        warn!(
+            "Failed to convert full node url {} to a shorter version",
+            fn_url
+        );
+    }
+    let fn_url_str = converted_fn_url.unwrap_or_else(|| "unknown_url".to_string());
+
+    let labels = HashMap::from([("indexer_fullnode".to_string(), fn_url_str)]);
+    info!("Starting prometheus server with labels: {:?}", labels);
+    let registry = Registry::new_custom(Some("indexer".to_string()), Some(labels))?;
+    let registry_service = RegistryService::new(registry.clone());
+
+    let app = Router::new()
+        .route(METRICS_ROUTE, get(metrics))
+        .layer(Extension(registry_service.clone()));
+
+    tokio::spawn(async move {
+        axum::Server::bind(&addr)
+            .serve(app.into_make_service())
+            .await
+            .unwrap();
+    });
+    Ok((registry_service, registry))
+}
+
+async fn metrics(Extension(registry_service): Extension<RegistryService>) -> (StatusCode, String) {
+    let metrics_families = registry_service.gather_all();
+    match TextEncoder.encode_to_string(&metrics_families) {
+        Ok(metrics) => (StatusCode::OK, metrics),
+        Err(error) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("unable to encode metrics: {error}"),
+        ),
+    }
 }

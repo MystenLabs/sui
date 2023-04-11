@@ -5,10 +5,11 @@ use clap::Parser;
 use tracing::{error, info};
 
 use sui_indexer::errors::IndexerError;
+use sui_indexer::metrics::IndexerMetrics;
+use sui_indexer::start_prometheus_server;
 use sui_indexer::store::PgIndexerStore;
 use sui_indexer::utils::reset_database;
 use sui_indexer::{get_pg_pool_connection, new_pg_connection_pool, Indexer, IndexerConfig};
-use sui_node::metrics::start_prometheus_server;
 
 #[tokio::main]
 async fn main() -> Result<(), IndexerError> {
@@ -19,7 +20,7 @@ async fn main() -> Result<(), IndexerError> {
 
     let indexer_config = IndexerConfig::parse();
     info!("Parsed indexer config: {:#?}", indexer_config);
-    let registry_service = start_prometheus_server(
+    let (_registry_service, registry) = start_prometheus_server(
         // NOTE: this parses the input host addr and port number for socket addr,
         // so unwrap() is safe here.
         format!(
@@ -28,9 +29,9 @@ async fn main() -> Result<(), IndexerError> {
         )
         .parse()
         .unwrap(),
-    );
-
-    let registry = registry_service.default_registry();
+        indexer_config.rpc_client_url.as_str(),
+    )?;
+    let indexer_metrics = IndexerMetrics::new(&registry);
     let (blocking_cp, async_cp) = new_pg_connection_pool(&indexer_config.db_url)
         .await
         .map_err(|e| {
@@ -58,7 +59,7 @@ async fn main() -> Result<(), IndexerError> {
             IndexerError::PostgresResetError(db_err_msg)
         })?;
     }
-    let store = PgIndexerStore::new(async_cp, blocking_cp).await;
+    let store = PgIndexerStore::new(async_cp, blocking_cp, indexer_metrics.clone()).await;
 
-    Indexer::start(&indexer_config, &registry, store).await
+    Indexer::start(&indexer_config, &registry, store, indexer_metrics).await
 }
