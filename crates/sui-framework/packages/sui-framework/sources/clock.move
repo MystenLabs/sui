@@ -70,6 +70,12 @@ module sui::clock {
     }
 
     #[test_only]
+    /// For transactional tests (if a Clock is used as a shared object).
+    public fun share_for_testing(clock: Clock) {
+        transfer::share_object(clock)
+    }
+
+    #[test_only]
     public fun increment_for_testing(clock: &mut Clock, tick: u64) {
         clock.timestamp_ms = clock.timestamp_ms + tick;
     }
