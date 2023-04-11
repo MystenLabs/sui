@@ -2,7 +2,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::hash_map::DefaultHasher;
 use std::collections::BTreeMap;
+use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use std::{collections::HashMap, fs, pin::Pin, sync::Arc};
@@ -15,8 +17,9 @@ use fastcrypto::encoding::Encoding;
 use fastcrypto::traits::KeyPair;
 use itertools::Itertools;
 use move_binary_format::compatibility::Compatibility;
+use move_binary_format::normalized::Type;
 use move_binary_format::CompiledModule;
-use move_core_types::language_storage::ModuleId;
+use move_core_types::language_storage::{ModuleId, TypeTag};
 use parking_lot::Mutex;
 use prometheus::{
     register_histogram_with_registry, register_int_counter_vec_with_registry,
@@ -24,11 +27,14 @@ use prometheus::{
     register_int_gauge_with_registry, Histogram, IntCounter, IntCounterVec, IntGauge, IntGaugeVec,
     Registry,
 };
+use rand::distributions::Uniform;
+use rand::Rng;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use tap::TapFallible;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::oneshot;
+use tokio::task::spawn_blocking;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tracing::{debug, error, info, instrument, trace, warn, Instrument};
 
@@ -53,8 +59,9 @@ use sui_json_rpc_types::{
 };
 use sui_macros::{fail_point, fail_point_async, nondeterministic};
 use sui_protocol_config::SupportedProtocolVersions;
-use sui_storage::indexes::ObjectIndexChanges;
+use sui_storage::indexes::{ObjectIndexChanges, TotalBalance};
 use sui_storage::IndexStore;
+use sui_types::coin::Coin;
 use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::{
     default_hash, AggregateAuthoritySignature, AuthorityKeyPair, AuthoritySignInfo, NetworkKeyPair,
@@ -87,8 +94,9 @@ use sui_types::{
     fp_ensure,
     messages::*,
     object::{Object, ObjectFormatOptions, ObjectRead},
-    SUI_SYSTEM_ADDRESS,
+    parse_sui_struct_tag, SUI_SYSTEM_ADDRESS,
 };
+use typed_store::rocks::read_size_from_env;
 use typed_store::Map;
 
 use crate::authority::authority_per_epoch_store::{AuthorityPerEpochStore, CertTxGuard};
@@ -155,6 +163,9 @@ pub type VerifiedTransactionBatch = Vec<(
     Option<(EpochId, CheckpointSequenceNumber)>,
 )>;
 
+const ENV_VAR_BALANCE_CACHE_DISABLE: &str = "BALANCE_CACHE_DISABLE";
+const ENV_VAR_BALANCE_CACHE_TEST_MODE: &str = "BALANCE_CACHE_TEST_MODE";
+
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
 pub struct AuthorityMetrics {
     tx_orders: IntCounter,
@@ -192,6 +203,12 @@ pub struct AuthorityMetrics {
     post_processing_total_events_emitted: IntCounter,
     post_processing_total_tx_indexed: IntCounter,
     post_processing_total_tx_had_event_processed: IntCounter,
+    post_processing_balance_lookup_from_db: IntCounter,
+    post_processing_balance_lookup_from_total: IntCounter,
+    post_processing_all_balance_lookup_from_db: IntCounter,
+    post_processing_all_balance_lookup_from_total: IntCounter,
+    post_processing_compare_cache_with_db_match: IntCounter,
+    post_processing_compare_cache_with_db_total: IntCounter,
 
     pending_notify_read: IntGauge,
 
@@ -405,6 +422,42 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
+            post_processing_balance_lookup_from_db: register_int_counter_with_registry!(
+                "post_processing_balance_lookup_from_db",
+                "Total number of balance request served from cache",
+                registry,
+            )
+                .unwrap(),
+            post_processing_balance_lookup_from_total: register_int_counter_with_registry!(
+                "post_processing_balance_lookup_from_total",
+                "Total number of balance request served ",
+                registry,
+            )
+                .unwrap(),
+            post_processing_all_balance_lookup_from_db: register_int_counter_with_registry!(
+                "post_processing_all_balance_lookup_from_db",
+                "Total number of all balance request served from cache",
+                registry,
+            )
+                .unwrap(),
+            post_processing_all_balance_lookup_from_total: register_int_counter_with_registry!(
+                "post_processing_all_balance_lookup_from_total",
+                "Total number of all balance request served",
+                registry,
+            )
+                .unwrap(),
+            post_processing_compare_cache_with_db_match: register_int_counter_with_registry!(
+                "post_processing_compare_cache_with_db_match",
+                "Number of entries matching in cache and db",
+                registry,
+            )
+                .unwrap(),
+            post_processing_compare_cache_with_db_total: register_int_counter_with_registry!(
+                "post_processing_compare_cache_with_db_total",
+                "Number of entries total compared between cache and db",
+                registry,
+            )
+                .unwrap(),
             pending_notify_read: register_int_gauge_with_registry!(
                 "pending_notify_read",
                 "Pending notify read requests",
@@ -473,7 +526,7 @@ pub struct AuthorityState {
 
     epoch_store: ArcSwap<AuthorityPerEpochStore>,
 
-    indexes: Option<Arc<IndexStore>>,
+    pub indexes: Option<Arc<IndexStore>>,
 
     pub event_handler: Arc<EventHandler>,
     pub(crate) checkpoint_store: Arc<CheckpointStore>,
@@ -1218,7 +1271,7 @@ impl AuthorityState {
     }
 
     #[instrument(level = "debug", skip_all, err)]
-    fn index_tx(
+    async fn index_tx(
         &self,
         indexes: &IndexStore,
         digest: &TransactionDigest,
@@ -1233,31 +1286,358 @@ impl AuthorityState {
             .process_object_index(effects, epoch_store)
             .tap_err(|e| warn!("{e}"))?;
 
-        indexes.index_tx(
-            cert.data().intent_message().value.sender(),
-            cert.data()
-                .intent_message()
-                .value
-                .input_objects()?
-                .iter()
-                .map(|o| o.object_id()),
-            effects
-                .all_changed_objects()
-                .into_iter()
-                .map(|(obj_ref, owner, _kind)| (*obj_ref, *owner)),
-            cert.data()
-                .intent_message()
-                .value
-                .move_calls()
-                .into_iter()
-                .map(|(package, module, function)| {
-                    (*package, module.to_owned(), function.to_owned())
-                }),
-            events,
-            changes,
-            digest,
-            timestamp_ms,
-        )
+        indexes
+            .index_tx(
+                cert.data().intent_message().value.sender(),
+                cert.data()
+                    .intent_message()
+                    .value
+                    .input_objects()?
+                    .iter()
+                    .map(|o| o.object_id()),
+                effects
+                    .all_changed_objects()
+                    .into_iter()
+                    .map(|(obj_ref, owner, _kind)| (*obj_ref, *owner)),
+                cert.data()
+                    .intent_message()
+                    .value
+                    .move_calls()
+                    .into_iter()
+                    .map(|(package, module, function)| {
+                        (*package, module.to_owned(), function.to_owned())
+                    }),
+                events,
+                changes,
+                digest,
+                timestamp_ms,
+            )
+            .await
+    }
+
+    fn multi_get_coin_objects(
+        authority_store: &Arc<AuthorityStore>,
+        coins: &[ObjectRef],
+    ) -> SuiResult<Vec<Object>> {
+        authority_store
+            .multi_get_object_by_key(&coins.iter().map(ObjectKey::from).collect::<Vec<_>>())?
+            .into_iter()
+            .zip(coins)
+            .map(|(o, (id, version, _digest))| {
+                o.ok_or(SuiError::UserInputError {
+                    error: UserInputError::ObjectNotFound {
+                        object_id: *id,
+                        version: Some(*version),
+                    },
+                })
+            })
+            .collect::<Result<Vec<_>, SuiError>>()
+    }
+
+    fn should_log(&self, owner: &SuiAddress) -> bool {
+        let mut hasher = DefaultHasher::new();
+        owner.hash(&mut hasher);
+        hasher.finish() % 15 == 0
+    }
+
+    /// This method first gets the balance from `per_coin_type_balance` cache. On a cache miss, it
+    /// gets the balance for passed in `coin_type` from the `all_balance` cache. Only on the second
+    /// cache miss, we go to the database (expensive) and update the cache. Notice that db read is
+    /// done with `spawn_blocking` as that is expected to block
+    pub async fn get_balance(
+        &self,
+        owner: SuiAddress,
+        coin_type: TypeTag,
+    ) -> SuiResult<TotalBalance> {
+        let should_log = self.should_log(&owner);
+        let force_disable_cache =
+            read_size_from_env(ENV_VAR_BALANCE_CACHE_DISABLE).unwrap_or(0) > 0;
+        let mut rng = rand::rngs::OsRng::default();
+        let compare_cache_with_db = rng.gen_ratio(
+            read_size_from_env(ENV_VAR_BALANCE_CACHE_TEST_MODE).unwrap_or(0) as u32,
+            100,
+        );
+        //let compare_cache_with_db = should_log;
+        let cloned_coin_type = coin_type.clone();
+        let indexes = self.indexes.clone();
+        let authority_store = self.database.clone();
+        let metrics = self.metrics.clone();
+        let balance_from_db = if force_disable_cache || compare_cache_with_db {
+            Some(
+                spawn_blocking(move || {
+                    Ok::<TotalBalance, SuiError>(Self::get_balance_from_db(
+                        metrics,
+                        indexes,
+                        authority_store,
+                        owner,
+                        cloned_coin_type,
+                    )?)
+                })
+                .await
+                .unwrap()
+                .map_err(|e| {
+                    SuiError::ExecutionError(format!("Failed to read balance frm DB: {:?}", e))
+                })
+                .unwrap(),
+            )
+        } else {
+            None
+        };
+        if should_log && balance_from_db.is_some() {
+            eprintln!("Balance from db: {:?}", balance_from_db.unwrap());
+        }
+
+        if let Some(balance_from_db) = balance_from_db {
+            if force_disable_cache {
+                return Ok(balance_from_db);
+            }
+        }
+
+        self.metrics.post_processing_balance_lookup_from_total.inc();
+        let balance = self
+            .indexes
+            .as_ref()
+            .ok_or(SuiError::IndexStoreNotAvailable)?
+            .caches
+            .per_coin_type_balance
+            .get(&(owner, coin_type.clone()));
+        if let Some(balance) = balance {
+            if let Some(balance_from_db) = balance_from_db {
+                if compare_cache_with_db {
+                    self.metrics
+                        .post_processing_compare_cache_with_db_total
+                        .inc();
+                    if balance_from_db == balance {
+                        self.metrics
+                            .post_processing_compare_cache_with_db_match
+                            .inc();
+                        if should_log {
+                            error!(
+                                "Confirmed balance {:?}, {:?},{:?}, {:?}",
+                                &balance_from_db, balance, &owner, &coin_type
+                            );
+                        }
+                    } else {
+                        if should_log {
+                            error!(
+                                "balance mismatch in cache: {:?}, {:?},{:?}, {:?}",
+                                &balance_from_db, balance, &owner, &coin_type
+                            );
+                        }
+                    }
+                }
+            }
+            return Ok(balance);
+        }
+        // cache miss, check in all balance cache
+        let all_balance = self
+            .indexes
+            .as_ref()
+            .ok_or(SuiError::IndexStoreNotAvailable)?
+            .caches
+            .all_balances
+            .get(&owner.clone());
+        if let Some(all_balance) = all_balance {
+            if let Some(balance) = all_balance.get(&coin_type) {
+                if let Some(balance_from_db) = balance_from_db {
+                    if compare_cache_with_db {
+                        self.metrics
+                            .post_processing_compare_cache_with_db_total
+                            .inc();
+                        if balance_from_db == *balance {
+                            self.metrics
+                                .post_processing_compare_cache_with_db_match
+                                .inc();
+                            error!(
+                                "Confirmed balance all {:?}, {:?},{:?}, {:?}",
+                                &balance_from_db, balance, &owner, &coin_type
+                            );
+                        } else {
+                            error!(
+                                "balance mismatch in all cache: {:?}, {:?}, {:?},{:?}",
+                                &balance_from_db, balance, &owner, &coin_type
+                            );
+                        }
+                    }
+                }
+                return Ok(*balance);
+            }
+        }
+        let cc = coin_type.clone();
+        let cloned_coin_type = coin_type.clone();
+        let indexes = self.indexes.clone();
+        let authority_store = self.database.clone();
+        let metrics = self.metrics.clone();
+        let balance = self
+            .indexes
+            .as_ref()
+            .ok_or(SuiError::IndexStoreNotAvailable)?
+            .caches
+            .per_coin_type_balance
+            .get_with((owner, coin_type), async move {
+                if let Some(balance_from_db) = balance_from_db {
+                    return balance_from_db;
+                }
+                spawn_blocking(move || {
+                    Ok::<TotalBalance, SuiError>(Self::get_balance_from_db(
+                        metrics,
+                        indexes,
+                        authority_store,
+                        owner,
+                        cloned_coin_type,
+                    )?)
+                })
+                .await
+                .unwrap()
+                .map_err(|e| {
+                    SuiError::ExecutionError(format!("Failed to read balance frm DB: {:?}", e))
+                })
+                .unwrap()
+            })
+            .await;
+        if should_log {
+            error!("balance returned: {:?}, {:?}, {:?}", balance, &owner, &cc);
+        }
+        Ok(balance)
+    }
+
+    /// This method gets the balance for all coin types from the `all_balance` cache. On a cache miss,
+    /// we go to the database (expensive) and update the cache. This cache is dual purpose in the
+    /// sense that it not only serves `get_AllBalance()` calls but is also used for serving
+    /// `get_Balance()` queries. Notice that db read is performed with `spawn_blocking` as that is
+    /// expected to block
+    pub async fn get_all_balance(
+        &self,
+        owner: SuiAddress,
+    ) -> SuiResult<Arc<HashMap<TypeTag, TotalBalance>>> {
+        let force_disable_cache =
+            read_size_from_env(ENV_VAR_BALANCE_CACHE_DISABLE).unwrap_or(0) > 0;
+        let indexes = self.indexes.clone();
+        let authority_store = self.database.clone();
+        let metrics = self.metrics.clone();
+        let all_balance_from_db = if force_disable_cache {
+            Some(
+                spawn_blocking(move || {
+                    Ok::<Arc<HashMap<TypeTag, TotalBalance>>, SuiError>(
+                        Self::get_all_balances_from_db(metrics, indexes, authority_store, owner)?,
+                    )
+                })
+                .await
+                .unwrap()
+                .map_err(|e| {
+                    SuiError::ExecutionError(format!("Failed to read all balance from DB: {:?}", e))
+                })
+                .unwrap(),
+            )
+        } else {
+            None
+        };
+
+        if let Some(all_balance_from_db) = all_balance_from_db.as_ref() {
+            if force_disable_cache {
+                return Ok(all_balance_from_db.clone());
+            }
+        }
+
+        self.metrics
+            .post_processing_all_balance_lookup_from_total
+            .inc();
+        let indexes = self.indexes.clone();
+        let authority_store = self.database.clone();
+        let metrics = self.metrics.clone();
+        let all_balance = self
+            .indexes
+            .as_ref()
+            .ok_or(SuiError::IndexStoreNotAvailable)?
+            .caches
+            .all_balances
+            .get_with(owner, async move {
+                if let Some(all_balance_from_db) = all_balance_from_db {
+                    return all_balance_from_db;
+                }
+                spawn_blocking(move || {
+                    Ok::<Arc<HashMap<TypeTag, TotalBalance>>, SuiError>(
+                        Self::get_all_balances_from_db(metrics, indexes, authority_store, owner)?,
+                    )
+                })
+                .await
+                .unwrap()
+                .map_err(|e| {
+                    SuiError::ExecutionError(format!("Failed to read all balance from DB: {:?}", e))
+                })
+                .unwrap()
+            })
+            .await;
+        Ok(all_balance)
+    }
+
+    /// Read balance for a `SuiAddress` and `CoinType` from the backend database
+    pub fn get_balance_from_db(
+        metrics: Arc<AuthorityMetrics>,
+        indexes: Option<Arc<IndexStore>>,
+        authority_store: Arc<AuthorityStore>,
+        owner: SuiAddress,
+        coin_type: TypeTag,
+    ) -> SuiResult<TotalBalance> {
+        metrics.post_processing_balance_lookup_from_db.inc();
+        // let coin_type = TypeTag::Struct(Box::from(parse_sui_struct_tag(&coin_type).map_err(
+        //     |e| SuiError::BadObjectType {
+        //         error: format!("Bad coin type: {:?}", e),
+        //     },
+        // )?));
+        let coins_to_fetch = indexes
+            .ok_or(SuiError::IndexStoreNotAvailable)?
+            .get_owner_coin_iterator(owner, Some(&coin_type))?
+            .collect::<Vec<_>>();
+
+        let mut balance = 0u128;
+        let mut num_coins = 0;
+        let chunked = coins_to_fetch.chunks(100);
+        for chunk in chunked {
+            let coins = Self::multi_get_coin_objects(&authority_store, chunk)?;
+            for coin_obj in coins {
+                // unwraps safe because get_owner_coin_iterator can only return coin objects
+                let coin: Coin =
+                    bcs::from_bytes(coin_obj.data.try_as_move().unwrap().contents()).unwrap();
+                balance += coin.balance.value() as u128;
+                num_coins += 1;
+            }
+        }
+
+        Ok(TotalBalance { balance, num_coins })
+    }
+
+    /// Read all balances for a `SuiAddress` from the backend database
+    pub fn get_all_balances_from_db(
+        metrics: Arc<AuthorityMetrics>,
+        indexes: Option<Arc<IndexStore>>,
+        authority_store: Arc<AuthorityStore>,
+        owner: SuiAddress,
+    ) -> SuiResult<Arc<HashMap<TypeTag, TotalBalance>>> {
+        metrics.post_processing_all_balance_lookup_from_db.inc();
+        let mut balances: HashMap<TypeTag, TotalBalance> = HashMap::new();
+        // TODO: Add index to improve performance?
+        let coins_to_fetch = indexes
+            .ok_or(SuiError::IndexStoreNotAvailable)?
+            .get_owner_coin_iterator(owner, None)?
+            .collect::<Vec<_>>();
+
+        let chunked = coins_to_fetch.chunks(100);
+        for chunk in chunked {
+            let coin_objs = Self::multi_get_coin_objects(&authority_store, chunk)?;
+            for coin_obj in coin_objs {
+                let move_obj = coin_obj.data.try_as_move().unwrap();
+                let coin_type = move_obj.type_().type_params().first().unwrap().clone();
+                let coin: Coin = bcs::from_bytes(move_obj.contents()).unwrap();
+                let balance = balances.entry(coin_type).or_insert(TotalBalance {
+                    balance: 0,
+                    num_coins: 0,
+                });
+                balance.balance += coin.balance.value() as u128;
+                balance.num_coins += 1;
+            }
+        }
+        Ok(Arc::new(balances))
     }
 
     fn process_object_index(
@@ -1454,6 +1834,7 @@ impl AuthorityState {
                     timestamp_ms,
                     epoch_store,
                 )
+                .await
                 .tap_ok(|_| self.metrics.post_processing_total_tx_indexed.inc())
                 .tap_err(|e| error!(?tx_digest, "Post processing - Couldn't index tx: {e}"));
 
