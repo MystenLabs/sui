@@ -70,6 +70,7 @@ tempfile = "3.3.0"
 futures = "0.3.23"
 prometheus = "0.13.3"
 fs_extra = "1.2.0"
+indexmap = "1.9.2"
 
 jsonrpsee = { version = "0.16.2", features = ["jsonrpsee-core"] }
 
