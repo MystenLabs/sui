@@ -49,7 +49,7 @@ export function LabelValueItem({
     }
     return display ? (
         <div className="flex flex-row flex-nowrap gap-1">
-            <div className="flex-1 [&>div]:leading-5">
+            <div className="flex-1 overflow-hidden [&>div]:leading-5">
                 <Text
                     color="steel-dark"
                     variant="body"
