@@ -6,6 +6,7 @@ import { useState } from 'react';
 
 import { Transactions } from '../transactions';
 
+import { useBreakpoint } from '~/hooks/useBreakpoint';
 import { CheckpointsTable } from '~/pages/checkpoints/CheckpointsTable';
 import { EpochsTable } from '~/pages/epochs/EpochsTable';
 // import { PlayPause } from '~/ui/PlayPause';
@@ -31,6 +32,8 @@ export function Activity({
     initialLimit,
     disablePagination,
 }: Props) {
+    const isMediumOrAbove = useBreakpoint('md');
+
     const [selectedIndex, setSelectedIndex] = useState(
         initialTab && tabs[initialTab] ? tabs[initialTab] : 0
     );
@@ -54,7 +57,7 @@ export function Activity({
     return (
         <div>
             <TabGroup
-                size="lg"
+                size={isMediumOrAbove ? 'lg' : 'md'}
                 selectedIndex={selectedIndex}
                 onChange={setSelectedIndex}
             >

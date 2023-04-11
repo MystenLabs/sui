@@ -27,7 +27,9 @@ function StatsWrapper(props: StatsProps) {
 function FormattedStatsAmount({
     amount,
     ...props
-}: Omit<StatsProps, 'children'> & { amount?: string | number | bigint }) {
+}: Omit<StatsProps, 'children'> & {
+    amount?: string | number | bigint;
+}) {
     const [formattedAmount, postfix] = formatAmountParts(amount);
 
     return (
@@ -64,12 +66,14 @@ export function HomeMetrics() {
     );
 
     return (
-        <Card spacing="lg">
-            <Heading variant="heading4/semibold" color="steel-darker">
-                Sui Network Stats
-            </Heading>
+        <Card spacing="none">
+            <div className="pl-8 pt-8">
+                <Heading variant="heading4/semibold" color="steel-darker">
+                    Sui Network Stats
+                </Heading>
+            </div>
 
-            <div className="mt-8 space-y-7">
+            <div className="mt-8 space-y-7 pb-8">
                 <MetricGroup label="Current">
                     <StatsWrapper
                         label="TPS Now / Peak 30D"
