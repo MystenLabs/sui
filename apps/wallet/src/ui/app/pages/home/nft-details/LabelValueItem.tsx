@@ -49,7 +49,7 @@ export function LabelValueItem({
     }
     return display ? (
         <div className="flex flex-row flex-nowrap gap-1">
-            <div className="flex-1 overflow-hidden [&>div]:leading-5">
+            <div className="flex-1 overflow-hidden [&>div]:leading-4">
                 <Text
                     color="steel-dark"
                     variant="body"
@@ -61,7 +61,7 @@ export function LabelValueItem({
             </div>
             <div
                 className={cl(
-                    'max-w-[60%] break-words text-end [&>div]:leading-5',
+                    'max-w-[60%] break-words text-end [&>div]:leading-4',
                     {
                         'pr-px line-clamp-3 hover:line-clamp-none': multiline,
                     }
