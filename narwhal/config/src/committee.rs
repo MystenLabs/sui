@@ -293,8 +293,8 @@ impl Committee {
         let mut rng = StdRng::from_seed(seed_bytes);
         let choices = self
             .authorities
-            .iter()
-            .map(|(_name, authority)| (authority.clone(), authority.stake as f32))
+            .values()
+            .map(|authority| (authority.clone(), authority.stake as f32))
             .collect::<Vec<_>>();
         choices
             .choose_weighted(&mut rng, |item| item.1)
@@ -499,7 +499,6 @@ mod tests {
         let num_of_authorities = 10;
 
         let authorities = (0..num_of_authorities)
-            .into_iter()
             .map(|_i| {
                 let keypair = KeyPair::generate(&mut rng);
                 let network_keypair = NetworkKeyPair::generate(&mut rng);

@@ -655,8 +655,8 @@ fn check_compatibility<'a, S: StorageView>(
     Ok(())
 }
 
-fn fetch_package<'a, S: StorageView>(
-    context: &'a ExecutionContext<S>,
+fn fetch_package<S: StorageView>(
+    context: &ExecutionContext<S>,
     package_id: &ObjectID,
 ) -> Result<MovePackage, ExecutionError> {
     let mut fetched_packages = fetch_packages(context, vec![package_id])?;

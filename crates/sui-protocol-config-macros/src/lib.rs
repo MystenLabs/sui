@@ -7,7 +7,7 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, Data, DeriveInput, Fields, Type};
 
-/// This proc macro generates getters for protocol config fields of type Option<T>.
+/// This proc macro generates getters for protocol config fields of type `Option<T>`.
 /// Example for a field: `new_constant: Option<u64>`, we derive
 /// ```rust,ignore
 ///      pub fn new_constant(&self) -> u64 {

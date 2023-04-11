@@ -26,7 +26,6 @@ fn gen_certs(
     let (receiver, _): (_, AccountKeyPair) = get_key_pair();
 
     let senders: Vec<_> = (0..count)
-        .into_iter()
         .map(|_| get_key_pair::<AccountKeyPair>())
         .collect();
 
@@ -46,7 +45,6 @@ fn gen_ckpts(
     count: usize,
 ) -> Vec<SignedCheckpointSummary> {
     (0..count)
-        .into_iter()
         .map(|i| {
             let k = &key_pairs[i % key_pairs.len()];
             let name = k.public().into();
@@ -117,7 +115,6 @@ async fn test_async_verifier() {
     let verifier = Arc::new(SignatureVerifier::new(committee.clone(), metrics));
 
     let tasks: Vec<_> = (0..32)
-        .into_iter()
         .map(|_| {
             let verifier = verifier.clone();
             let committee = committee.clone();
