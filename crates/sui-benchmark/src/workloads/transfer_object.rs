@@ -34,6 +34,7 @@ pub struct TransferObjectTestPayload {
     transfer_to: SuiAddress,
     gas: Vec<Gas>,
     system_state_observer: Arc<SystemStateObserver>,
+    verified_tx: Option<VerifiedTransaction>,
 }
 
 impl Payload for TransferObjectTestPayload {
@@ -67,17 +68,24 @@ impl Payload for TransferObjectTestPayload {
     }
     fn make_transaction(&mut self) -> VerifiedTransaction {
         let (gas_obj, _, keypair) = self.gas.iter().find(|x| x.1 == self.transfer_from).unwrap();
-        make_transfer_object_transaction(
-            self.transfer_object,
-            *gas_obj,
-            self.transfer_from,
-            keypair,
-            self.transfer_to,
-            self.system_state_observer
-                .state
-                .borrow()
-                .reference_gas_price,
-        )
+        if self.verified_tx.is_none() {
+            let vtx = make_transfer_object_transaction(
+                self.transfer_object,
+                *gas_obj,
+                self.transfer_from,
+                keypair,
+                self.transfer_to,
+                self.system_state_observer
+                    .state
+                    .borrow()
+                    .reference_gas_price,
+            );
+            self.verified_tx = Some(vtx.clone());
+            vtx
+        } else {
+            let vtx = self.verified_tx.clone().unwrap();
+            vtx
+        }
     }
 }
 
@@ -235,6 +243,7 @@ impl Workload<dyn Payload> for TransferObjectWorkload {
                     transfer_to: to,
                     gas: g.to_vec(),
                     system_state_observer: system_state_observer.clone(),
+                    verified_tx: None,
                 })
             })
             .map(|b| Box::<dyn Payload>::from(b))
