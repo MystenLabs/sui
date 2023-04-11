@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useGetSystemState } from '@mysten/core';
 import { type SuiValidatorSummary } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
 import { StakeColumn } from './StakeColumn';
 
-import { useGetSystemObject } from '~/hooks/useGetObject';
 import { Banner } from '~/ui/Banner';
 import { ImageIcon } from '~/ui/ImageIcon';
 import { ValidatorLink } from '~/ui/InternalLink';
@@ -88,7 +88,7 @@ type TopValidatorsCardProps = {
 };
 
 export function TopValidatorsCard({ limit, showIcon }: TopValidatorsCardProps) {
-    const { data, isLoading, isSuccess, isError } = useGetSystemObject();
+    const { data, isLoading, isSuccess, isError } = useGetSystemState();
 
     const tableData = useMemo(
         () =>
