@@ -23,7 +23,8 @@ export function useGetOwnedObjects(address?: SuiAddress | null) {
                 cursor: pageParam ? pageParam.cursor : null,
             }),
         {
-            staleTime: 180000,
+            // 5 minutes of stale time for this call
+            staleTime: 300 * 1000,
             enabled: !!address,
             getNextPageParam: (lastPage) =>
                 lastPage?.hasNextPage
