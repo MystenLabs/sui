@@ -34,9 +34,9 @@ pub const VEC_SIZE: AbstractMemorySize = AbstractMemorySize::new(8);
 /// For exists checks on data that doesn't exists this is the multiplier that is used.
 pub const MIN_EXISTS_DATA_SIZE: AbstractMemorySize = AbstractMemorySize::new(100);
 
-static ZERO_COST_SCHEDULE: Lazy<CostTable> = Lazy::new(zero_cost_schedule);
+pub static ZERO_COST_SCHEDULE: Lazy<CostTable> = Lazy::new(zero_cost_schedule);
 
-pub static INITIAL_COST_SCHEDULE: Lazy<CostTable> = Lazy::new(initial_cost_schedule);
+pub static INITIAL_COST_SCHEDULE: Lazy<CostTable> = Lazy::new(initial_cost_schedule_v1);
 
 /// The Move VM implementation of state for gas metering.
 ///
@@ -46,8 +46,8 @@ pub static INITIAL_COST_SCHEDULE: Lazy<CostTable> = Lazy::new(initial_cost_sched
 /// Every client must use an instance of this type to interact with the Move VM.
 #[allow(dead_code)]
 #[derive(Debug)]
-pub struct GasStatus<'a> {
-    cost_table: &'a CostTable,
+pub struct GasStatus {
+    cost_table: CostTable,
     gas_left: InternalGas,
     gas_price: u64,
     initial_budget: InternalGas,
@@ -71,13 +71,13 @@ pub struct GasStatus<'a> {
     instructions_current_tier_mult: u64,
 }
 
-impl<'a> GasStatus<'a> {
+impl GasStatus {
     /// Initialize the gas state with metering enabled.
     ///
     /// Charge for every operation and fail when there is no more gas to pay for operations.
     /// This is the instantiation that must be used when executing a user script.
 
-    pub fn new_v2(cost_table: &'a CostTable, budget: u64, gas_price: u64) -> Self {
+    pub fn new_v2(cost_table: CostTable, budget: u64, gas_price: u64) -> Self {
         assert!(gas_price > 0, "gas price cannot be 0");
         let budget_in_unit = budget / gas_price;
         let gas_left = Self::to_internal_units(budget_in_unit);
@@ -107,7 +107,7 @@ impl<'a> GasStatus<'a> {
         }
     }
 
-    pub fn new(cost_table: &'a CostTable, gas_left: Gas) -> Self {
+    pub fn new(cost_table: CostTable, gas_left: Gas) -> Self {
         let (stack_height_current_tier_mult, stack_height_next_tier_start) =
             cost_table.stack_height_tier(0);
         let (stack_size_current_tier_mult, stack_size_next_tier_start) =
@@ -143,7 +143,7 @@ impl<'a> GasStatus<'a> {
             gas_left: InternalGas::new(0),
             gas_price: 1,
             initial_budget: InternalGas::new(0),
-            cost_table: &ZERO_COST_SCHEDULE,
+            cost_table: ZERO_COST_SCHEDULE.clone(),
             charge: false,
             stack_height_high_water_mark: 0,
             stack_height_current: 0,
@@ -286,7 +286,7 @@ impl<'a> GasStatus<'a> {
 
     /// Return the `CostTable` behind this `GasStatus`.
     pub fn cost_table(&self) -> &CostTable {
-        self.cost_table
+        &self.cost_table
     }
 
     /// Return the gas left.
@@ -385,7 +385,7 @@ fn get_simple_instruction_stack_change(
     }
 }
 
-impl<'b> GasMeter for GasStatus<'b> {
+impl GasMeter for GasStatus {
     /// Charge an instruction and fail if not enough gas units are left.
     fn charge_simple_instr(&mut self, instr: SimpleInstruction) -> PartialVMResult<()> {
         let (pops, pushes, pop_size, push_size) = get_simple_instruction_stack_change(instr);
@@ -733,7 +733,7 @@ pub fn unit_cost_schedule() -> CostTable {
     }
 }
 
-pub fn initial_cost_schedule() -> CostTable {
+pub fn initial_cost_schedule_v1() -> CostTable {
     let instruction_tiers: BTreeMap<u64, u64> = vec![
         (0, 1),
         (3000, 2),

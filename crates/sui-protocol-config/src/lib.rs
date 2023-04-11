@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 4;
+const MAX_PROTOCOL_VERSION: u64 = 5;
 
 // Record history of protocol version allocations here:
 //
@@ -21,6 +21,7 @@ const MAX_PROTOCOL_VERSION: u64 = 4;
 //            `max_size_written_objects_system_tx`
 // Version 4: New reward slashing rate. Framework changes to skip stake susbidy when the epoch
 //            length is short.
+// Version 5: New gas cost table.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -351,6 +352,9 @@ pub struct ProtocolConfig {
 
     /// Gas model version, what code we are using to charge gas
     gas_model_version: Option<u64>,
+
+    /// Which version of the cost table
+    gas_cost_table_version: Option<u64>,
 
     /// === Storage gas costs ===
 
@@ -767,6 +771,7 @@ impl ProtocolConfig {
                 obj_data_cost_refundable: Some(100),
                 obj_metadata_cost_non_refundable: Some(50),
                 gas_model_version: Some(1),
+                gas_cost_table_version: Some(1),
                 storage_rebate_rate: Some(9900),
                 storage_fund_reinvest_rate: Some(500),
                 reward_slashing_rate: Some(5000),
@@ -969,6 +974,12 @@ impl ProtocolConfig {
                 cfg.reward_slashing_rate = Some(10000);
                 // protect old and new lookup for object version
                 cfg.gas_model_version = Some(3);
+                cfg
+            }
+            5 => {
+                let mut cfg = Self::get_for_version_impl(version - 1);
+                // TODO(devx): Bump this in next PR
+                cfg.gas_cost_table_version = Some(1);
                 cfg
             }
             // Use this template when making changes:

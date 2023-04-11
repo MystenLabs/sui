@@ -13,7 +13,8 @@ use move_core_types::vm_status::StatusCode;
 use once_cell::sync::Lazy;
 use std::convert::TryFrom;
 use std::iter;
-use sui_cost_tables::bytecode_tables::{GasStatus, INITIAL_COST_SCHEDULE};
+use sui_cost_tables::bytecode_tables::{initial_cost_schedule_v1, GasStatus, ZERO_COST_SCHEDULE};
+use sui_cost_tables::units_types::CostTable;
 use sui_protocol_config::*;
 
 macro_rules! ok_or_gas_balance_error {
@@ -104,6 +105,8 @@ pub struct SuiCostTable {
     /// new storage as well as rebating for deleting storage. That is, we expect users to
     /// get full refund on the object storage when it's deleted.
     storage_per_byte_cost: u64,
+    /// Execution cost table to be used.
+    pub execution_cost_table: CostTable,
 }
 
 impl std::fmt::Debug for SuiCostTable {
@@ -121,6 +124,7 @@ impl SuiCostTable {
             package_publish_per_byte_cost: c.package_publish_cost_per_byte(),
             object_read_per_byte_cost: c.obj_access_cost_read_per_byte(),
             storage_per_byte_cost: c.obj_data_cost_refundable(),
+            execution_cost_table: cost_table_for_version(c),
         }
     }
 
@@ -131,14 +135,22 @@ impl SuiCostTable {
             package_publish_per_byte_cost: 0,
             object_read_per_byte_cost: 0,
             storage_per_byte_cost: 0,
+            execution_cost_table: ZERO_COST_SCHEDULE.clone(),
         }
     }
 }
 
+fn cost_table_for_version(config: &ProtocolConfig) -> CostTable {
+    match config.gas_cost_table_version() {
+        1 => initial_cost_schedule_v1(),
+        _ => panic!("Unknown gas cost table version"),
+    }
+}
+
 #[derive(Debug)]
-pub struct SuiGasStatus<'a> {
+pub struct SuiGasStatus {
     // GasStatus as used by the VM, that is all the VM sees
-    gas_status: GasStatus<'a>,
+    pub gas_status: GasStatus,
     // Cost table contains a set of constant/config for the gas model/charging
     cost_table: SuiCostTable,
     // Gas budget for this gas status instance.
@@ -182,16 +194,16 @@ pub struct SuiGasStatus<'a> {
     unmetered_storage_rebate: u64,
 }
 
-impl<'a> SuiGasStatus<'a> {
+impl SuiGasStatus {
     fn new(
-        move_gas_status: GasStatus<'a>,
+        move_gas_status: GasStatus,
         gas_budget: u64,
         charge: bool,
         gas_price: u64,
         storage_gas_price: u64,
         rebate_rate: u64,
         cost_table: SuiCostTable,
-    ) -> SuiGasStatus<'a> {
+    ) -> SuiGasStatus {
         SuiGasStatus {
             gas_status: move_gas_status,
             gas_budget,
@@ -211,7 +223,7 @@ impl<'a> SuiGasStatus<'a> {
         gas_budget: u64,
         gas_price: u64,
         config: &ProtocolConfig,
-    ) -> SuiGasStatus<'a> {
+    ) -> SuiGasStatus {
         let storage_gas_price = config.storage_gas_price();
         let max_computation_budget = MAX_BUCKET_COST * gas_price;
         let computation_budget = if gas_budget > max_computation_budget {
@@ -219,14 +231,19 @@ impl<'a> SuiGasStatus<'a> {
         } else {
             gas_budget
         };
+        let sui_cost_table = SuiCostTable::new(config);
         Self::new(
-            GasStatus::new_v2(&INITIAL_COST_SCHEDULE, computation_budget, gas_price),
+            GasStatus::new_v2(
+                sui_cost_table.execution_cost_table.clone(),
+                computation_budget,
+                gas_price,
+            ),
             gas_budget,
             true,
             gas_price,
             storage_gas_price,
             config.storage_rebate_rate(),
-            SuiCostTable::new(config),
+            sui_cost_table,
         )
     }
 
@@ -235,7 +252,7 @@ impl<'a> SuiGasStatus<'a> {
         gas_price: u64,
         storage_gas_price: u64,
         cost_table: SuiCostTable,
-    ) -> SuiGasStatus<'a> {
+    ) -> SuiGasStatus {
         let rebate_rate = ProtocolConfig::get_for_max_version().storage_rebate_rate();
         let max_computation_budget = MAX_BUCKET_COST;
         let computation_budget = if gas_budget > max_computation_budget {
@@ -244,7 +261,11 @@ impl<'a> SuiGasStatus<'a> {
             gas_budget
         };
         Self::new(
-            GasStatus::new_v2(&INITIAL_COST_SCHEDULE, computation_budget, gas_price),
+            GasStatus::new_v2(
+                cost_table.execution_cost_table.clone(),
+                computation_budget,
+                gas_price,
+            ),
             gas_budget,
             true,
             gas_price,
@@ -254,7 +275,7 @@ impl<'a> SuiGasStatus<'a> {
         )
     }
 
-    pub fn new_unmetered() -> SuiGasStatus<'a> {
+    pub fn new_unmetered() -> SuiGasStatus {
         Self::new(
             GasStatus::new_unmetered(),
             0,
@@ -267,12 +288,12 @@ impl<'a> SuiGasStatus<'a> {
     }
 }
 
-impl<'a> SuiGasStatusAPI<'a> for SuiGasStatus<'a> {
+impl SuiGasStatusAPI for SuiGasStatus {
     fn is_unmetered(&self) -> bool {
         !self.charge
     }
 
-    fn move_gas_status(&mut self) -> &mut GasStatus<'a> {
+    fn move_gas_status(&mut self) -> &mut GasStatus {
         &mut self.gas_status
     }
 
