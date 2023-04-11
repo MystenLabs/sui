@@ -43,18 +43,18 @@ export function DynamicFieldsCard({ id }: { id: string }) {
     const handleObserver = useCallback(
         (entries: IntersectionObserverEntry[]) => {
             const [target] = entries;
-            if (target.isIntersecting && hasNextPage) {
+            if (target.isIntersecting && hasNextPage && !isFetchingNextPage) {
                 fetchNextPage();
             }
         },
-        [fetchNextPage, hasNextPage]
+        [fetchNextPage, hasNextPage, isFetchingNextPage]
     );
 
     useEffect(() => {
         const element = observerElem.current;
+        if (!element) return;
         const option = { threshold: 0 };
         const observer = new IntersectionObserver(handleObserver, option);
-        if (!element) return;
         observer.observe(element);
         return () => observer.unobserve(element);
     }, [fetchNextPage, hasNextPage, handleObserver]);
