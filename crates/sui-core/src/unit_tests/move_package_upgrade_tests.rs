@@ -102,6 +102,35 @@ pub fn build_upgrade_test_modules_with_dep_addr(
     )
 }
 
+pub fn build_upgrade_txn(
+    current_pkg_id: ObjectID,
+    upgraded_pkg_name: &str,
+    upgrade_cap: ObjectRef,
+) -> ProgrammableTransaction {
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let (digest, modules) = build_upgrade_test_modules(upgraded_pkg_name);
+
+    // We take as input the upgrade cap
+    builder
+        .obj(ObjectArg::ImmOrOwnedObject(upgrade_cap))
+        .unwrap();
+
+    // Create the upgrade ticket
+    let upgrade_arg = builder.pure(UpgradePolicy::COMPATIBLE).unwrap();
+    let digest_arg = builder.pure(digest).unwrap();
+    let upgrade_ticket = move_call! {
+        builder,
+        (SUI_FRAMEWORK_OBJECT_ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
+    };
+    let upgrade_receipt = builder.upgrade(current_pkg_id, upgrade_ticket, vec![], modules);
+    move_call! {
+        builder,
+        (SUI_FRAMEWORK_OBJECT_ID)::package::commit_upgrade(Argument::Input(0), upgrade_receipt)
+    };
+
+    builder.finish()
+}
+
 struct UpgradeStateRunner {
     pub sender: SuiAddress,
     pub sender_key: AccountKeyPair,
@@ -753,31 +782,12 @@ async fn test_publish_override_happy_path() {
     // publish base package at version 2
     // Dependency graph: base(v1) <-- dep_on_upgrading_package
     //                   base(v2)
-    let pt1 = {
-        let mut builder = ProgrammableTransactionBuilder::new();
-        let current_package_id = runner.package.0;
-        let (digest, modules) = build_upgrade_test_modules("stage1_basic_compatibility_valid");
+    let pt1 = build_upgrade_txn(
+        runner.package.0,
+        "stage1_basic_compatibility_valid",
+        runner.upgrade_cap,
+    );
 
-        // We take as input the upgrade cap
-        builder
-            .obj(ObjectArg::ImmOrOwnedObject(runner.upgrade_cap))
-            .unwrap();
-
-        // Create the upgrade ticket
-        let upgrade_arg = builder.pure(UpgradePolicy::COMPATIBLE).unwrap();
-        let digest_arg = builder.pure(digest).unwrap();
-        let upgrade_ticket = move_call! {
-            builder,
-            (SUI_FRAMEWORK_OBJECT_ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
-        };
-        let upgrade_receipt = builder.upgrade(current_package_id, upgrade_ticket, vec![], modules);
-        move_call! {
-            builder,
-            (SUI_FRAMEWORK_OBJECT_ID)::package::commit_upgrade(Argument::Input(0), upgrade_receipt)
-        };
-
-        builder.finish()
-    };
     let TransactionEffects::V1(effects) = runner.run(pt1).await;
     assert!(effects.status.is_ok(), "{:#?}", effects.status);
 
@@ -821,4 +831,162 @@ async fn test_publish_override_happy_path() {
         .collect();
     assert!(dep_ids_in_linkage_table.contains(&dep_v2_package.0));
     assert!(dep_ids_in_linkage_table.contains(&depender_package.0));
+}
+
+#[tokio::test]
+async fn test_publish_transitive_happy_path() {
+    // publishes base package at version 1
+    let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
+
+    // publish a package that depends on the base package
+    let (_, module_bytes, dep_ids) = build_upgrade_test_modules_with_dep_addr(
+        "dep_on_upgrading_package_upgradeable",
+        [
+            ("base_addr", runner.package.0),
+            ("dep_on_upgrading_package", ObjectID::ZERO),
+        ],
+        [("package_upgrade_base", runner.package.0)],
+    );
+    // Dependency graph: base <-- dep_on_upgrading_package
+    let (depender_package, _) = runner.publish(module_bytes, dep_ids).await;
+
+    // publish a root package that depends on the dependent package and on version 1 of the base
+    // package (both dependent package and transitively dependent package depended on the same
+    // version of the base package)
+    let (_, root_module_bytes, root_dep_ids) = build_upgrade_test_modules_with_dep_addr(
+        "dep_on_upgrading_package_transitive",
+        [
+            ("base_addr", runner.package.0),
+            ("dep_on_upgrading_package", depender_package.0),
+        ],
+        [
+            ("package_upgrade_base", runner.package.0),
+            ("dep_on_upgrading_package", depender_package.0),
+        ],
+    );
+    // Dependency graph: base(v1)  <-- dep_on_upgrading_package
+    //                   base(v1)  <-- dep_on_upgrading_package <-- dep_on_upgrading_package_transitive --> base(v1)
+    let (root_package, _) = runner.publish(root_module_bytes, root_dep_ids).await;
+
+    let root_move_package = runner
+        .authority_state
+        .database
+        .get_package(&root_package.0)
+        .unwrap()
+        .unwrap();
+
+    // Make sure the linkage table points to the correct versions!
+    let dep_ids_in_linkage_table: BTreeSet<_> = root_move_package
+        .linkage_table()
+        .values()
+        .map(|up| up.upgraded_id)
+        .collect();
+    assert!(dep_ids_in_linkage_table.contains(&runner.package.0));
+    assert!(dep_ids_in_linkage_table.contains(&depender_package.0));
+
+    // Call into the root module to call base module's function (should abort due to base module's
+    // call_return_0 aborting with code 42)
+    let TransactionEffects::V1(call_effects) = runner
+        .run({
+            let mut builder = ProgrammableTransactionBuilder::new();
+            move_call! {
+                builder,
+                (root_package.0)::my_module::call_return_0()
+            };
+
+            builder.finish()
+        })
+        .await;
+
+    match call_effects.status.unwrap_err().0 {
+        ExecutionFailureStatus::MoveAbort(_, 42) => { /* nop */ }
+        err => panic!("Unexpected error: {:#?}", err),
+    };
+}
+
+#[tokio::test]
+async fn test_publish_transitive_override_happy_path() {
+    // publishes base package at version 1
+    let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
+
+    // publish a package that depends on the base package
+    let (_, module_bytes, dep_ids) = build_upgrade_test_modules_with_dep_addr(
+        "dep_on_upgrading_package_upgradeable",
+        [
+            ("base_addr", runner.package.0),
+            ("dep_on_upgrading_package", ObjectID::ZERO),
+        ],
+        [("package_upgrade_base", runner.package.0)],
+    );
+    // Dependency graph: base <-- dep_on_upgrading_package
+    let (depender_package, _) = runner.publish(module_bytes, dep_ids).await;
+
+    // publish base package at version 2
+    let pt1 = build_upgrade_txn(
+        runner.package.0,
+        "stage1_basic_compatibility_valid",
+        runner.upgrade_cap,
+    );
+
+    let TransactionEffects::V1(effects) = runner.run(pt1).await;
+    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    // Dependency graph: base(v1) <-- dep_on_upgrading_package
+    //                   base(v2)
+
+    let base_v2_package = effects
+        .created
+        .iter()
+        .find(|(_, owner)| matches!(owner, Owner::Immutable))
+        .unwrap()
+        .0;
+
+    // publish a root package that depends on the dependent package and on version 2 of the base
+    // package (overriding base package dependency of the dependent package which originally
+    // depended on base package version 1)
+    let (_, root_module_bytes, root_dep_ids) = build_upgrade_test_modules_with_dep_addr(
+        "dep_on_upgrading_package_transitive",
+        [
+            ("base_addr", runner.package.0),
+            ("dep_on_upgrading_package", depender_package.0),
+        ],
+        [
+            ("package_upgrade_base", base_v2_package.0),
+            ("dep_on_upgrading_package", depender_package.0),
+        ],
+    );
+    // Dependency graph: base(v1)  <-- dep_on_upgrading_package
+    //                   base(v2)  <-- dep_on_upgrading_package <-- dep_on_upgrading_package_transitive --> base(v2)
+    let (root_package, _) = runner.publish(root_module_bytes, root_dep_ids).await;
+
+    let root_move_package = runner
+        .authority_state
+        .database
+        .get_package(&root_package.0)
+        .unwrap()
+        .unwrap();
+
+    // Make sure the linkage table points to the correct versions!
+    let dep_ids_in_linkage_table: BTreeSet<_> = root_move_package
+        .linkage_table()
+        .values()
+        .map(|up| up.upgraded_id)
+        .collect();
+    assert!(dep_ids_in_linkage_table.contains(&base_v2_package.0));
+    assert!(dep_ids_in_linkage_table.contains(&depender_package.0));
+
+    // Call into the root module to call upgraded base module's function (should succeed due to base module's
+    // call_return_0 no longer aborting)
+    let TransactionEffects::V1(call_effects) = runner
+        .run({
+            let mut builder = ProgrammableTransactionBuilder::new();
+            move_call! {
+                builder,
+                (root_package.0)::my_module::call_return_0()
+            };
+
+            builder.finish()
+        })
+        .await;
+
+    assert!(call_effects.status.is_ok(), "{:#?}", call_effects.status);
 }

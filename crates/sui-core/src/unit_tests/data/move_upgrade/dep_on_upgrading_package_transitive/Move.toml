@@ -1,0 +1,10 @@
+[package]
+name = "dep_on_upgrading_package_transitive"
+version = "0.0.1"
+
+[dependencies]
+package_upgrade_base = { local = "../base_as_dep" }
+dep_on_upgrading_package = { local = "../dep_on_upgrading_package_upgradeable" }
+
+[addresses]
+dep_on_upgrading_package_transitive =  "0x0"
