@@ -15,7 +15,7 @@ import { roundFloat } from '../utils/roundFloat';
 // APY_e_30rollingaverage = average(APY_e,APY_e-1,…,APY_e-29);
 
 const ROLLING_AVERAGE = 30;
-const DEFAULT_APY_DECIMALS = 4;
+const DEFAULT_APY_DECIMALS = 2;
 
 // define the type parsedJson response
 type ParsedJson = {
@@ -71,7 +71,7 @@ export function useGetRollingAverageApys(numberOfValidators: number | null) {
             const { stakeSubsidyStartEpoch, epoch, activeValidators } =
                 data || {};
             // return 0 for all validators if current epoch is less than the stake subsidy start epoch
-            if (epoch < stakeSubsidyStartEpoch) {
+            if (+epoch < +stakeSubsidyStartEpoch) {
                 return activeValidators.reduce((acc, validator) => {
                     acc[validator.suiAddress] = 0;
                     return acc;
@@ -81,7 +81,7 @@ export function useGetRollingAverageApys(numberOfValidators: number | null) {
             // The rolling average epoch is the current epoch - the stake subsidy start epoch
             const avgEpochNumberAfterSubsidy = Math.max(
                 0,
-                Math.min(ROLLING_AVERAGE, epoch - stakeSubsidyStartEpoch)
+                Math.min(ROLLING_AVERAGE, +epoch - +stakeSubsidyStartEpoch)
             );
             const apyGroups: ApyGroups = {};
 
