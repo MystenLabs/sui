@@ -18,7 +18,7 @@ module deepbook::custodian {
         locked_balance: Balance<T>,
     }
 
-    struct AccountCap has key, store{ id: UID }
+    struct AccountCap<phantom BaseAsset, phantom QuoteAsset> has key, store{ id: UID }
 
     struct Custodian<phantom T> has key, store {
         id: UID,
@@ -28,11 +28,21 @@ module deepbook::custodian {
         account_balances: Table<ID, Account<T>>,
     }
 
+    public(friend) fun usr_balance<Asset>(
+        custodian: &Custodian<Asset>,
+        user: ID
+    ): (u64, u64){
+        let account_balances = table::borrow(&custodian.account_balances, user);
+        let avail_balance = balance::value(&account_balances.available_balance);
+        let locked_balance = balance::value(&account_balances.locked_balance);
+        (avail_balance, locked_balance)
+    }
+
     public(friend) fun custodian_create_account<BaseAsset, QuoteAsset>(
         base_custodian: &mut Custodian<BaseAsset>,
         quote_custodian: &mut Custodian<QuoteAsset>,
         ctx: &mut TxContext
-    ): AccountCap {
+    ): AccountCap<BaseAsset, QuoteAsset> {
         let accountCap = AccountCap { id: object::new(ctx) };
         let user = get_account_cap_id(&accountCap);
         table::add(
@@ -48,7 +58,7 @@ module deepbook::custodian {
         accountCap
     }
 
-    public(friend) fun get_account_cap_id(account_cap: &AccountCap): ID {
+    public(friend) fun get_account_cap_id<BaseAsset, QuoteAsset>(account_cap: &AccountCap<BaseAsset, QuoteAsset>): ID {
         object::uid_to_inner(&account_cap.id)
     }
 
@@ -68,14 +78,24 @@ module deepbook::custodian {
         increase_user_available_balance<T>(custodian, user, coin::into_balance(coin));
     }
 
-    public(friend) fun withdraw<T>(
-        custodian: &mut Custodian<T>,
+    public(friend) fun withdraw_base_asset<BaseAsset, QuoteAsset>(
+        custodian: &mut Custodian<BaseAsset>,
         quantity: u64,
-        account_cap: &AccountCap,
+        account_cap: &AccountCap<BaseAsset, QuoteAsset>,
         ctx: &mut TxContext
-    ): Coin<T> {
+    ): Coin<BaseAsset> {
         let user = get_account_cap_id(account_cap);
-        coin::from_balance(decrease_user_available_balance<T>(custodian, user, quantity), ctx)
+        coin::from_balance(decrease_user_available_balance<BaseAsset>(custodian, user, quantity), ctx)
+    }
+
+    public(friend) fun withdraw_quote_asset<BaseAsset, QuoteAsset>(
+        custodian: &mut Custodian<QuoteAsset>,
+        quantity: u64,
+        account_cap: &AccountCap<BaseAsset, QuoteAsset>,
+        ctx: &mut TxContext
+    ): Coin<QuoteAsset> {
+        let user = get_account_cap_id(account_cap);
+        coin::from_balance(decrease_user_available_balance<QuoteAsset>(custodian, user, quantity), ctx)
     }
 
     public(friend) fun increase_custodian_balance<T>(

@@ -240,6 +240,15 @@ module deepbook::critbit {
         }
     }
 
+    public fun find_closest_key<V: store>(_tree: & CritbitTree<V>, _key: u64): u64 {
+        if (is_empty(_tree)) {
+            return 0
+        };
+        let closest_leaf_index = get_closest_leaf_index_by_key(_tree, _key);
+        let closeset_leaf = table::borrow(&_tree.leaves, closest_leaf_index);
+        closeset_leaf.key
+    }
+
     public fun remove_leaf_by_index<V: store>(_tree: &mut CritbitTree<V>, _index: u64): V {
         let key = table::borrow(& _tree.leaves, _index).key;
         if(_tree.min_leaf == _index) {
