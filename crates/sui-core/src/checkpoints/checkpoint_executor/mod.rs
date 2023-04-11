@@ -579,7 +579,7 @@ async fn handle_execution_effects(
     // Once synced_txns have been awaited, all txns should have effects committed.
     let mut periods = 1;
     let log_timeout_sec = Duration::from_secs(local_execution_timeout_sec);
-
+    let seq_num = checkpoint.sequence_number;
     loop {
         let effects_future = authority_store.notify_read_executed_effects(all_tx_digests.clone());
 
@@ -607,6 +607,7 @@ async fn handle_execution_effects(
                 }
 
                 warn!(
+                    checkpoint_seq_num = seq_num,
                     "Transaction effects for checkpoint tx digests {:?} not present within {:?}. ",
                     missing_digests,
                     log_timeout_sec * periods,
@@ -615,22 +616,12 @@ async fn handle_execution_effects(
                 // Print out more information for the 1st pending transaction, which should have
                 // all of its input available.
                 let pending_digest = missing_digests.first().unwrap();
-                let missing_input = transaction_manager.get_missing_input(pending_digest);
-                let pending_transaction = authority_store
-                    .get_transaction_block(pending_digest)
-                    .expect("get_transaction_block cannot fail")
-                    .expect("state-sync should have ensured that the transaction exists");
-
-                warn!(
-                    "Transaction {pending_digest:?} has missing input objects {missing_input:?}\
-                     \nTransaction input: {:?}\nTransaction content: {:?}",
-                    pending_transaction
-                        .data()
-                        .intent_message()
-                        .value
-                        .input_objects(),
-                    pending_transaction,
-                );
+                if let Some(missing_input) = transaction_manager.get_missing_input(pending_digest) {
+                    warn!(
+                        checkpoint_seq_num = seq_num,
+                        "Transaction {pending_digest:?} has missing input objects {missing_input:?}",
+                    );
+                }
                 periods += 1;
             }
             Ok(Err(err)) => panic!("Failed to notify_read_executed_effects: {:?}", err),

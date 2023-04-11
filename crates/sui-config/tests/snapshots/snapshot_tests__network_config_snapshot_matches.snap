@@ -70,7 +70,7 @@ validator_configs:
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 200
-      local-execution-timeout-sec: 10
+      local-execution-timeout-sec: 30
     db-checkpoint-config:
       perform-db-checkpoints-at-epoch-end: false
     indirect-objects-threshold: 18446744073709551615
@@ -147,7 +147,7 @@ validator_configs:
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 200
-      local-execution-timeout-sec: 10
+      local-execution-timeout-sec: 30
     db-checkpoint-config:
       perform-db-checkpoints-at-epoch-end: false
     indirect-objects-threshold: 18446744073709551615
@@ -224,7 +224,7 @@ validator_configs:
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 200
-      local-execution-timeout-sec: 10
+      local-execution-timeout-sec: 30
     db-checkpoint-config:
       perform-db-checkpoints-at-epoch-end: false
     indirect-objects-threshold: 18446744073709551615
@@ -301,7 +301,7 @@ validator_configs:
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 200
-      local-execution-timeout-sec: 10
+      local-execution-timeout-sec: 30
     db-checkpoint-config:
       perform-db-checkpoints-at-epoch-end: false
     indirect-objects-threshold: 18446744073709551615
@@ -378,7 +378,7 @@ validator_configs:
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 200
-      local-execution-timeout-sec: 10
+      local-execution-timeout-sec: 30
     db-checkpoint-config:
       perform-db-checkpoints-at-epoch-end: false
     indirect-objects-threshold: 18446744073709551615
@@ -455,7 +455,7 @@ validator_configs:
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 200
-      local-execution-timeout-sec: 10
+      local-execution-timeout-sec: 30
     db-checkpoint-config:
       perform-db-checkpoints-at-epoch-end: false
     indirect-objects-threshold: 18446744073709551615
@@ -532,7 +532,7 @@ validator_configs:
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 200
-      local-execution-timeout-sec: 10
+      local-execution-timeout-sec: 30
     db-checkpoint-config:
       perform-db-checkpoints-at-epoch-end: false
     indirect-objects-threshold: 18446744073709551615
