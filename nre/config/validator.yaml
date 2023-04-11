@@ -3,8 +3,6 @@ protocol-key-pair:
   path: /opt/sui/key-pairs/protocol.key
 worker-key-pair:
   path: /opt/sui/key-pairs/worker.key
-account-key-pair:
-  path: /opt/sui/key-pairs/account.key
 network-key-pair:
   path: /opt/sui/key-pairs/network.key
 db-path: /opt/sui/db/authorities_db
