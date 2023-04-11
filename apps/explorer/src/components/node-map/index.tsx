@@ -184,7 +184,7 @@ export default function NodeMap({ minHeight }: Props) {
                     </div>
                 </div>
 
-                {tooltipOpen && tooltipData && (
+                {tooltipOpen && tooltipData && countryNodes[tooltipData] && (
                     <TooltipWithBounds
                         top={tooltipTop}
                         left={tooltipLeft}
