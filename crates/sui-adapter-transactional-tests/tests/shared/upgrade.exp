@@ -16,7 +16,7 @@ gas summary: computation_cost: 1000000, storage_cost: 7835600,  storage_rebate: 
 task 3 'view-object'. lines 44-44:
 Owner: Account Address ( A )
 Version: 2
-Contents: t::m::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,3)}}}
+Contents: t::m::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,2)}}}
 
 task 4 'run'. lines 46-46:
 Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::share_object_impl (function index 7) at offset 0, Abort Code: 0

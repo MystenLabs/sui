@@ -39,4 +39,4 @@ Version: 3
 Contents: t2::o2::Obj2 {id: sui::object::UID {id: sui::object::ID {bytes: fake(5,1)}}}
 
 task 8 'run'. lines 93-93:
-Error: Object 0x0fc121b055f0e54036dd11dbaa8f321fa539e5d843e0730f58cafe4ff4b14c52 is owned by object 0xfe8f6c41ad1373a67799336ec9c7a65dcfb9a2d076f8c3d7f9b0a5d2e1a8c92f. Objects owned by other objects cannot be used as input arguments.
+Error: Error checking transaction input objects: InvalidChildObjectArgument { child_id: 0x466fb7f9c3c2c8e5e958e3597f5b22b28656f86aa5d8092810cde4edc79d7b39, parent_id: 0x8ef41369eee2379bf085587cea4e384d7d00a6e8f975b51abd1bf014b394a87c }
