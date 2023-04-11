@@ -331,8 +331,10 @@ impl GasStatus {
     }
 
     // Charge the number of bytes with the cost per byte value
+    // As more bytes are read throughout the computation the cost per bytes is increased.
     pub fn charge_bytes(&mut self, size: usize, cost_per_byte: u64) -> PartialVMResult<()> {
-        let computation_cost = size as u64 * cost_per_byte;
+        self.increase_stack_size(size as u64)?;
+        let computation_cost = self.stack_size_current_tier_mult * size as u64 * cost_per_byte;
         self.deduct_units(computation_cost)
     }
 }
@@ -780,27 +782,78 @@ pub fn initial_cost_schedule_v1() -> CostTable {
     }
 }
 
+pub fn initial_cost_schedule_v2() -> CostTable {
+    let instruction_tiers: BTreeMap<u64, u64> = vec![
+        (0, 1),
+        (3000, 2),
+        (6000, 3),
+        (8000, 5),
+        (9000, 9),
+        (9500, 16),
+        (10000, 29),
+        (10500, 50),
+        (12000, 150),
+        (15000, 250),
+    ]
+    .into_iter()
+    .collect();
+
+    let stack_height_tiers: BTreeMap<u64, u64> = vec![
+        (0, 1),
+        (400, 2),
+        (800, 3),
+        (1200, 5),
+        (1500, 9),
+        (1800, 16),
+        (2000, 29),
+        (2200, 50),
+        (3000, 150),
+        (5000, 250),
+    ]
+    .into_iter()
+    .collect();
+
+    let stack_size_tiers: BTreeMap<u64, u64> = vec![
+        (0, 1),
+        (2000, 2),
+        (5000, 3),
+        (8000, 5),
+        (10000, 9),
+        (11000, 16),
+        (11500, 29),
+        (11500, 50),
+        (15000, 150),
+        (20000, 250),
+    ]
+    .into_iter()
+    .collect();
+
+    CostTable {
+        instruction_tiers,
+        stack_size_tiers,
+        stack_height_tiers,
+    }
+}
+
 // Convert from our representation of gas costs to the type that the MoveVM expects for unit tests.
 // We don't want our gas depending on the MoveVM test utils and we don't want to fix our
 // representation to whatever is there, so instead we perform this translation from our gas units
 // and cost schedule to the one expected by the Move unit tests.
 pub fn initial_cost_schedule_for_unit_tests() -> move_vm_test_utils::gas_schedule::CostTable {
+    let table = initial_cost_schedule_v2();
     move_vm_test_utils::gas_schedule::CostTable {
-        instruction_tiers: INITIAL_COST_SCHEDULE
+        instruction_tiers: table
             .instruction_tiers
-            .clone()
             .into_iter()
             .map(|(k, v)| (k, v))
             .collect(),
-        stack_height_tiers: INITIAL_COST_SCHEDULE
+        stack_height_tiers: table
             .stack_height_tiers
-            .clone()
             .into_iter()
             .map(|(k, v)| (k, v))
             .collect(),
-        stack_size_tiers: INITIAL_COST_SCHEDULE
+        stack_size_tiers: table
             .stack_size_tiers
-            .clone()
             .into_iter()
             .map(|(k, v)| (k, v))
             .collect(),

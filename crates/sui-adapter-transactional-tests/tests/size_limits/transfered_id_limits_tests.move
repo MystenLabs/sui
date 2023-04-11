@@ -46,3 +46,9 @@ module Test::M1 {
 
 // run above run count limit should fail
 //# run Test::M1::transfer_n_ids --args 4096 --gas-budget 100000000000000
+
+// run above run count limit should fail
+//# run Test::M1::transfer_n_ids --args 2049 --uncharged
+
+// run above run count limit should fail
+//# run Test::M1::transfer_n_ids --args 4096 --uncharged

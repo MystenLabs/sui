@@ -11,7 +11,9 @@ use crate::{
 use move_core_types::vm_status::StatusCode;
 use once_cell::sync::Lazy;
 use std::iter;
-use sui_cost_tables::bytecode_tables::{initial_cost_schedule_v1, GasStatus, ZERO_COST_SCHEDULE};
+use sui_cost_tables::bytecode_tables::{
+    initial_cost_schedule_v1, initial_cost_schedule_v2, GasStatus, ZERO_COST_SCHEDULE,
+};
 use sui_cost_tables::units_types::CostTable;
 use sui_protocol_config::*;
 
@@ -140,7 +142,8 @@ impl SuiCostTable {
 
 fn cost_table_for_version(config: &ProtocolConfig) -> CostTable {
     match config.gas_model_version() {
-        1 | 2 | 3 | 4 => initial_cost_schedule_v1(),
+        1 | 2 | 3 => initial_cost_schedule_v1(),
+        4 => initial_cost_schedule_v2(),
         _ => panic!("Unknown gas cost table version"),
     }
 }
