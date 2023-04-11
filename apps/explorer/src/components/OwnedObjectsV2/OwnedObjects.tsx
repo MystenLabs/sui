@@ -46,6 +46,7 @@ function OwnedObjects({ id }: { id: string }) {
                             </div>
                         </div>
                     )}
+
                     {(hasNextPage || data?.pages.length > 1) && (
                         <Pagination
                             onNext={() => {
@@ -53,6 +54,7 @@ function OwnedObjects({ id }: { id: string }) {
                                     return;
                                 }
 
+                                // Make sure we are at the end before fetching another page
                                 if (currentPage === data?.pages.length - 1) {
                                     fetchNextPage();
                                 }
