@@ -49,13 +49,8 @@ export function LabelValueItem({
     }
     return display ? (
         <div className="flex flex-row flex-nowrap gap-1">
-            <div className="flex-1 overflow-hidden">
-                <Text
-                    color="steel-dark"
-                    variant="body"
-                    weight="medium"
-                    truncate
-                >
+            <div className="flex-1 truncate">
+                <Text color="steel-dark" variant="p2" weight="medium" truncate>
                     {label}
                 </Text>
             </div>
@@ -76,6 +71,7 @@ export function LabelValueItem({
                     <Text
                         color="steel-darker"
                         weight="medium"
+                        variant="p2"
                         truncate={!multiline}
                     >
                         {display}
