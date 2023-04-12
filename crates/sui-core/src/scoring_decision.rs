@@ -12,7 +12,7 @@ use sui_types::base_types::AuthorityName;
 use tracing::{info, warn};
 
 // TODO: migrate these values to config
-const MAD_DIVISOR: f64 = 1.2;
+const MAD_DIVISOR: f64 = 2.1;
 const CUTOFF_VALUE: f64 = 3.0;
 
 /// Updates list of authorities that are deemed to have low reputation scores by consensus
@@ -143,6 +143,8 @@ pub fn update_low_scoring_authorities(
 #[cfg(test)]
 mod tests {
     #![allow(clippy::mutable_key_type)]
+
+    use std::collections::HashMap;
     use crate::authority::AuthorityMetrics;
     use crate::scoring_decision::update_low_scoring_authorities;
     use arc_swap::ArcSwap;
@@ -155,7 +157,6 @@ mod tests {
     use prometheus::Registry;
     use rand::rngs::{OsRng, StdRng};
     use rand::SeedableRng;
-    use std::collections::HashMap;
     use std::sync::Arc;
     use sui_types::crypto::NetworkPublicKey;
 
