@@ -341,7 +341,7 @@ impl From<MoveValue> for SuiMoveValue {
         match value {
             MoveValue::U8(value) => SuiMoveValue::Number(value.into()),
             MoveValue::U16(value) => SuiMoveValue::Number(value.into()),
-            MoveValue::U32(value) => SuiMoveValue::Number(value.into()),
+            MoveValue::U32(value) => SuiMoveValue::Number(value),
             MoveValue::U64(value) => SuiMoveValue::String(format!("{value}")),
             MoveValue::U128(value) => SuiMoveValue::String(format!("{value}")),
             MoveValue::U256(value) => SuiMoveValue::String(format!("{value}")),
