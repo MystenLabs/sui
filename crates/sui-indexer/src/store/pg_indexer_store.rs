@@ -1108,7 +1108,7 @@ impl IndexerStore for PgIndexerStore {
                     module,
                     function,
                 };
-                match m.count {
+                match m.day {
                     3 => d3.push((fun, m.count as usize)),
                     7 => d7.push((fun, m.count as usize)),
                     30 => d30.push((fun, m.count as usize)),
