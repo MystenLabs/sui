@@ -218,6 +218,14 @@ where
                 if let Ok(checkpoint) = download_result {
                     downloaded_checkpoints.push(checkpoint);
                 } else {
+                    if let Err(IndexerError::UnexpectedFullnodeResponseError(fn_e)) =
+                        download_result
+                    {
+                        warn!(
+                            "Unexpected response from fullnode for object checkpoints: {}",
+                            fn_e
+                        );
+                    }
                     break;
                 }
             }
@@ -228,6 +236,7 @@ where
             current_parallel_downloads =
                 std::cmp::min(downloaded_checkpoints.len() + 1, MAX_PARALLEL_DOWNLOADS);
             if downloaded_checkpoints.is_empty() {
+                warn!("No object checkpoints downloaded, retrying in next iteration ...");
                 continue;
             }
 
@@ -294,6 +303,14 @@ where
                 if let Ok(checkpoint) = download_result {
                     downloaded_checkpoints.push(checkpoint);
                 } else {
+                    if let Err(IndexerError::UnexpectedFullnodeResponseError(fn_e)) =
+                        download_result
+                    {
+                        warn!(
+                            "Unexpected response from fullnode for checkpoints: {}",
+                            fn_e
+                        );
+                    }
                     break;
                 }
             }
@@ -305,6 +322,7 @@ where
             current_parallel_downloads =
                 std::cmp::min(downloaded_checkpoints.len() + 1, MAX_PARALLEL_DOWNLOADS);
             if downloaded_checkpoints.is_empty() {
+                warn!("No checkpoints downloaded, retrying in next iteration ...");
                 continue;
             }
 
