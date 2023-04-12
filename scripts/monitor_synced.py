@@ -14,7 +14,9 @@ from datetime import datetime
 
 NUM_RETRIES = 5
 CHECKPOINT_STUCK_THRESHOLD_SEC = 10
-EPOCH_STUCK_THRESHOLD_SEC = 10 * 60
+START_AWAIT_TIME_SEC = 60
+EPOCH_STUCK_THRESHOLD_SEC = 20 * 60
+RETRY_BASE_TIME_SEC = 3
 
 
 class Metric(Enum):
@@ -26,20 +28,24 @@ def get_current_network_epoch(env='testnet'):
     for i in range(NUM_RETRIES):
         cmd = ['curl', '--location', '--request', 'POST', f'https://explorer-rpc.{env}.sui.io/',
                '--header', 'Content-Type: application/json', '--data-raw',
-               '{"jsonrpc":"2.0", "method":"suix_getEpochs", "params":[null, 1, true], "id":1}']
+               '{"jsonrpc":"2.0", "method":"suix_getEpochs", "params":[null, "1", true], "id":1}']
         try:
             result = subprocess.check_output(cmd, stderr=subprocess.PIPE)
         except subprocess.CalledProcessError as e:
             print(f'curl command failed with error {e.returncode}: {e.output}')
-            time.sleep(3)
+            time.sleep(RETRY_BASE_TIME_SEC * 2**i)  # exponential backoff
             continue
 
         try:
             result = json.loads(result)
+            if 'error' in result:
+                print(f'suix_getEpochs rpc request failed: {result["error"]}')
+                time.sleep(3)
+                continue
             return int(result['result']['data'][0]['epoch'])
         except (KeyError, IndexError, json.JSONDecodeError):
             print(f'suix_getEpochs rpc request failed: {result}')
-            time.sleep(3)
+            time.sleep(RETRY_BASE_TIME_SEC * 2**i)  # exponential backoff
             continue
     print(f"Failed to get current network epoch after {NUM_RETRIES} tries")
     exit(1)
@@ -47,7 +53,6 @@ def get_current_network_epoch(env='testnet'):
 
 def get_local_metric(metric: Metric):
     for i in range(NUM_RETRIES):
-        # try:
         curl = subprocess.Popen(
             ['curl', '-s', 'http://localhost:9184/metrics'], stdout=subprocess.PIPE)
         grep_1 = subprocess.Popen(
@@ -57,20 +62,29 @@ def get_local_metric(metric: Metric):
                 ['grep', '^[^#;]'], stdin=grep_1.stdout, stderr=subprocess.PIPE)
         except subprocess.CalledProcessError as e:
             print(f'curl command failed with error {e.returncode}: {e.output}')
-            time.sleep(3)
+            time.sleep(RETRY_BASE_TIME_SEC * 2**i)  # exponential backoff
             continue
 
-        # convert json result to dictionary
         try:
             return int(result.split()[1])
         except (KeyError, IndexError, json.JSONDecodeError):
             print(
                 f'Failed to get local metric {metric.value}: {result.stdout}')
-            time.sleep(3)
+            time.sleep(RETRY_BASE_TIME_SEC * 2**i)  # exponential backoff
             continue
     print(
         f"Failed to get local metric {metric.value} after {NUM_RETRIES} tries")
     exit(1)
+
+
+def await_started(start_checkpoint):
+    for i in range(START_AWAIT_TIME_SEC):
+        if get_local_metric(Metric.CHECKPOINT) != start_checkpoint:
+            print(f"sui-node started successfully after {i} seconds")
+            return
+        print("Awaiting sui-node startup...")
+        time.sleep(1)
+    print(f"sui-node failed to start after {START_AWAIT_TIME_SEC} seconds")
 
 
 def main(argv):
@@ -101,12 +115,13 @@ def main(argv):
     print(f'Locally highest executed checkpoint: {current_checkpoint}')
     start_checkpoint = current_checkpoint
 
-    # get local time so that we can measure the time since the last epoch change
+    await_started(start_checkpoint)
+
     current_time = datetime.now()
     start_time = current_time
     while current_epoch < end_epoch:
         # check that we are making progress
-        time.sleep(10)
+        time.sleep(CHECKPOINT_STUCK_THRESHOLD_SEC)
         new_checkpoint = get_local_metric(Metric.CHECKPOINT)
 
         if new_checkpoint == current_checkpoint:
@@ -121,7 +136,7 @@ def main(argv):
             print(f'New local epoch: {current_epoch}')
             current_time = datetime.now()
         else:
-            # check if we have been stuck for more than 5 minutes
+            # check if we've been stuck on the same epoch for too long
             if (datetime.now() - current_time).total_seconds() > EPOCH_STUCK_THRESHOLD_SEC:
                 print(
                     f'Epoch is stuck at {current_epoch} for over {EPOCH_STUCK_THRESHOLD_SEC} seconds')
@@ -130,7 +145,8 @@ def main(argv):
 
     elapsed_minutes = (datetime.now() - start_time).total_seconds() / 60
     print('-------------------------------')
-    print(f"Successfully synced to epoch {end_epoch} from epoch {start_epoch} ({current_checkpoint - start_checkpoint} checkpoints) in {elapsed_minutes:.2f} minutes")
+    print(
+        f"Successfully synced to epoch {end_epoch} from epoch {start_epoch} ({current_checkpoint - start_checkpoint} checkpoints) in {elapsed_minutes:.2f} minutes")
     exit(0)
 
 
