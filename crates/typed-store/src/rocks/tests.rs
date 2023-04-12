@@ -530,6 +530,59 @@ async fn test_clear() {
     assert_eq!(db.safe_iter().count(), 0);
 }
 
+#[rstest]
+#[tokio::test]
+async fn test_iter_with_bounds(#[values(true, false)] is_transactional: bool) {
+    let db = open_map(temp_dir(), None, is_transactional);
+
+    // Add [1, 50) and (50, 100) in the db
+    for i in 1..100 {
+        if i != 50 {
+            db.insert(&i, &i.to_string()).unwrap();
+        }
+    }
+
+    // Skip prior to will return an iterator starting with an "unexpected" key if the sought one is not in the table
+    let db_iter = db
+        .iter_with_bounds(Some(1), Some(100))
+        .skip_prior_to(&50)
+        .unwrap();
+
+    assert_eq!(
+        (49..50)
+            .chain(51..100)
+            .map(|i| (i, i.to_string()))
+            .collect::<Vec<_>>(),
+        db_iter.collect::<Vec<_>>()
+    );
+
+    // Same logic in the keys iterator
+    let db_iter = db.keys().skip_prior_to(&50).unwrap();
+
+    assert_eq!(
+        (49..50).chain(51..100).map(Ok).collect::<Vec<_>>(),
+        db_iter.collect::<Vec<_>>()
+    );
+
+    // Skip to a key which is not within the bounds (bound is [1, 50))
+    let db_iter = db.iter_with_bounds(Some(1), Some(50)).skip_to(&50).unwrap();
+    assert_eq!(Vec::<(i32, String)>::new(), db_iter.collect::<Vec<_>>());
+
+    // Skip to first key in the bound (bound is [1, 50))
+    let db_iter = db.iter_with_bounds(Some(1), Some(50)).skip_to(&1).unwrap();
+    assert_eq!(
+        (1..50).map(|i| (i, i.to_string())).collect::<Vec<_>>(),
+        db_iter.collect::<Vec<_>>()
+    );
+
+    // Skip to a key which is not within the bounds (bound is [1, 50))
+    let db_iter = db
+        .iter_with_bounds(Some(1), Some(50))
+        .skip_prior_to(&50)
+        .unwrap();
+    assert_eq!(vec![(49, "49".to_string())], db_iter.collect::<Vec<_>>());
+}
+
 #[tokio::test]
 async fn test_is_empty() {
     let db = DBMap::<i32, String>::open(

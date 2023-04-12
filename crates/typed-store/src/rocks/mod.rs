@@ -1589,6 +1589,48 @@ where
         )
     }
 
+    /// Returns an iterator visiting each key-value pair in the map. By proving bounds of the
+    /// scan range, RocksDB scan avoid unnecessary scans
+    fn iter_with_bounds(
+        &'a self,
+        lower_bound: Option<K>,
+        upper_bound: Option<K>,
+    ) -> Self::Iterator {
+        let report_metrics = if self.iter_latency_sample_interval.sample() {
+            let timer = self
+                .db_metrics
+                .op_metrics
+                .rocksdb_iter_latency_seconds
+                .with_label_values(&[&self.cf])
+                .start_timer();
+            Some((timer, RocksDBPerfContext::default()))
+        } else {
+            None
+        };
+        let mut readopts = ReadOptions::default();
+        if let Some(lower_bound) = lower_bound {
+            let key_buf = be_fix_int_ser(&lower_bound).unwrap();
+            readopts.set_iterate_lower_bound(key_buf);
+        }
+        if let Some(upper_bound) = upper_bound {
+            let key_buf = be_fix_int_ser(&upper_bound).unwrap();
+            readopts.set_iterate_upper_bound(key_buf);
+        }
+        let db_iter = self.rocksdb.raw_iterator_cf(&self.cf(), readopts);
+        if let Some((timer, _perf_ctx)) = report_metrics {
+            timer.stop_and_record();
+            self.db_metrics
+                .read_perf_ctx_metrics
+                .report_metrics(&self.cf);
+        }
+        Iter::new(
+            db_iter,
+            self.cf.clone(),
+            &self.db_metrics,
+            &self.iter_bytes_sample_interval,
+        )
+    }
+
     fn keys(&'a self) -> Self::Keys {
         let mut db_iter = self
             .rocksdb

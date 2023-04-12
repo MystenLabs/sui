@@ -753,10 +753,12 @@ impl IndexStore {
         cursor: Option<ObjectID>,
     ) -> SuiResult<impl Iterator<Item = DynamicFieldInfo> + '_> {
         debug!(?object, "get_dynamic_fields");
+        let iter_lower_bound = (object, ObjectID::ZERO);
+        let iter_upper_bound = (object, ObjectID::MAX);
         Ok(self
             .tables
             .dynamic_field_index
-            .iter()
+            .iter_with_bounds(Some(iter_lower_bound), Some(iter_upper_bound))
             // The object id 0 is the smallest possible
             .skip_to(&(object, cursor.unwrap_or(ObjectID::ZERO)))?
             // skip an extra b/c the cursor is exclusive
