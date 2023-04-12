@@ -35,6 +35,14 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
     const [packageId, moduleName, functionName] =
         objectType?.split('<')[0]?.split('::') || [];
 
+    const typePerameter = objectType
+        ?.slice(objectType?.indexOf('<') + 1, objectType.indexOf('>'))
+        .split(',');
+
+    // For TypeParameter index return the type string index after splitting, where the third index is the type
+    const getTypeParameter = (index: number) =>
+        typePerameter?.[index].split('::')[2] || '';
+
     // Get the normalized struct for the object
     const {
         data: normalizedStruct,
@@ -144,45 +152,52 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
                                 <div className="max-h-[600px] min-h-full overflow-auto overflow-x-clip overflow-y-scroll py-3">
                                     <VerticalList>
                                         {normalizedStruct?.fields?.map(
-                                            ({ name, type }) => (
-                                                <div
-                                                    key={name}
-                                                    className="mt-0.5 md:min-w-fit"
-                                                >
-                                                    <ListItem
-                                                        active={
-                                                            activeFieldName ===
-                                                            name
-                                                        }
-                                                        onClick={() =>
-                                                            setActiveFieldName(
-                                                                name
-                                                            )
-                                                        }
+                                            ({ name, type }) => {
+                                                // For TypeParameter index return the type string index after splitting
+                                                const typeParam =
+                                                    getFieldTypeValue(
+                                                        type
+                                                    ).displayName;
+                                                return (
+                                                    <div
+                                                        key={name}
+                                                        className="mt-0.5 md:min-w-fit"
                                                     >
-                                                        <div className="flex flex-1 justify-between gap-2 truncate">
-                                                            <Text
-                                                                variant="body/medium"
-                                                                color="steel-darker"
-                                                            >
-                                                                {name.toString()}
-                                                            </Text>
+                                                        <ListItem
+                                                            active={
+                                                                activeFieldName ===
+                                                                name
+                                                            }
+                                                            onClick={() =>
+                                                                setActiveFieldName(
+                                                                    name
+                                                                )
+                                                            }
+                                                        >
+                                                            <div className="flex flex-1 justify-between gap-2 truncate">
+                                                                <Text
+                                                                    variant="body/medium"
+                                                                    color="steel-darker"
+                                                                >
+                                                                    {name.toString()}
+                                                                </Text>
 
-                                                            <Text
-                                                                variant="p3/normal"
-                                                                color="steel"
-                                                            >
-                                                                {
-                                                                    getFieldTypeValue(
-                                                                        type
-                                                                    )
-                                                                        .displayName
-                                                                }
-                                                            </Text>
-                                                        </div>
-                                                    </ListItem>
-                                                </div>
-                                            )
+                                                                <Text
+                                                                    variant="p3/normal"
+                                                                    color="steel"
+                                                                >
+                                                                    {typeof typeParam ===
+                                                                    'number'
+                                                                        ? getTypeParameter(
+                                                                              typeParam
+                                                                          )
+                                                                        : typeParam}
+                                                                </Text>
+                                                            </div>
+                                                        </ListItem>
+                                                    </div>
+                                                );
+                                            }
                                         )}
                                     </VerticalList>
                                 </div>
