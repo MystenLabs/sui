@@ -45,20 +45,18 @@ doAll().catch((err) => console.log(err));
 
 ### Table of Contents
 
-- [ledgerjs-hw-app-sui](#ledgerjs-hw-app-sui)
-  - [Using LedgerJS for Sui](#using-ledgerjs-for-sui)
-  - [API](#api)
-    - [Table of Contents](#table-of-contents)
-    - [Parameters](#parameters)
-    - [Examples](#examples)
-    - [getPublicKey](#getpublickey)
-      - [Parameters](#parameters-1)
-      - [Examples](#examples-1)
-    - [signTransaction](#signtransaction)
-      - [Parameters](#parameters-2)
-      - [Examples](#examples-2)
-    - [getVersion](#getversion)
-      - [Examples](#examples-3)
+-   [Sui](#sui)
+    -   [Parameters](#parameters)
+    -   [Examples](#examples)
+    -   [getPublicKey](#getpublickey)
+        -   [Parameters](#parameters-1)
+        -   [Examples](#examples-1)
+    -   [signTransaction](#signtransaction)
+        -   [Parameters](#parameters-2)
+        -   [Examples](#examples-2)
+    -   [getVersion](#signtransaction)
+        -   [Parameters](#parameters-3)
+        -   [Examples](#examples-3)
 
 ### Parameters
 
