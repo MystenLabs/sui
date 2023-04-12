@@ -1496,12 +1496,15 @@ impl AuthorityPerEpochStore {
             .await?;
         batch.write()?;
         drop(lock);
-        if let Some(checkpoint) = self.handle_commit_boundary(round, timestamp)? {
-            let final_checkpoint = checkpoint.details.last_of_epoch;
-            checkpoint_service.notify_checkpoint(self, checkpoint)?;
-            if final_checkpoint {
-                tracing::info!(epoch=?self.epoch(), "Received 2f+1 EndOfPublish messages, notifying last checkpoint");
-                self.record_end_of_message_quorum_time_metric();
+
+        if !self.in_memory_checkpoint_roots {
+            if let Some(checkpoint) = self.handle_commit_boundary(round, timestamp)? {
+                let final_checkpoint = checkpoint.details.last_of_epoch;
+                checkpoint_service.notify_checkpoint(self, checkpoint)?;
+                if final_checkpoint {
+                    tracing::info!(epoch=?self.epoch(), "Received 2f+1 EndOfPublish messages, notifying last checkpoint");
+                    self.record_end_of_message_quorum_time_metric();
+                }
             }
         }
         Ok(executable_txns)

@@ -333,10 +333,6 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
                 info!(epoch=?self.epoch(), "Received 2f+1 EndOfPublish messages, notifying last checkpoint");
                 self.epoch_store.record_end_of_message_quorum_time_metric();
             }
-        } else {
-            self.epoch_store
-                .handle_commit_boundary(round, timestamp, &self.checkpoint_service)
-                .expect("Unrecoverable error in consensus handler when processing commit boundary")
         }
     }
 
