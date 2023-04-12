@@ -84,12 +84,10 @@ You can use Sui Wallet to send a digital asset from your Ledger account.
    * The amount to send.
    * Sign transaction.
    * Confirm
-1. Press both buttons while it displays Confirm to approve the transaction.
+1. Press both buttons while it displays **Confirm** to approve the transaction.
+   **Note:** Press the Right button one more time to display **Reject**, then press both buttons to reject it.
 
 Sui Wallet displays the result of the transaction.
-
-
-press both buttons to authorize the transaction **Transfer SUI**.
 
 ## Stake SUI using Sui Wallet
 
@@ -110,6 +108,7 @@ You can use Sui Wallet to stake the SUI in your Ledger account just like using a
    * **Blind sign transaction**
    * **Confirm**
 1. Press both buttons while it displays **Confirm** to confirm the stake transaction.
+   **Note:** Press the Right button one more time display **Reject**, then press both buttons to reject the transaction.
 1. The device displays **Working** and then completes the transaction. Sui Wallet displays the result of the transaction.
 
 ## Support for Sui Wallet
