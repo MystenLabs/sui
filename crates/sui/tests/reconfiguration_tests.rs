@@ -414,7 +414,6 @@ async fn test_create_advance_epoch_tx_race() {
 }
 
 #[sim_test]
-#[ignore]
 async fn test_reconfig_with_failing_validator() {
     telemetry_subscribers::init_for_testing();
     sui_protocol_config::ProtocolConfig::poison_get_for_min_version();

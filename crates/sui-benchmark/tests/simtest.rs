@@ -93,7 +93,6 @@ mod test {
         test_simulated_load(TestInitData::new(&test_cluster).await, 120).await;
     }
 
-    #[ignore = "MUSTFIX"]
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_reconfig_restarts() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();

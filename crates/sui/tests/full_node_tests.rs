@@ -648,7 +648,6 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
 
 // Test fullnode has event read jsonrpc endpoints working
 #[sim_test]
-#[ignore]
 async fn test_full_node_event_read_api_ok() {
     let mut test_cluster = TestClusterBuilder::new()
         .set_fullnode_rpc_port(50000)
@@ -940,7 +939,6 @@ async fn get_past_obj_read_from_node(
 }
 
 #[sim_test]
-#[ignore]
 async fn test_get_objects_read() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
     let mut test_cluster = TestClusterBuilder::new().build().await?;
