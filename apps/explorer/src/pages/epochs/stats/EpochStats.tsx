@@ -14,14 +14,13 @@ interface EpochStatsProps {
 export function EpochStats({ label, children }: EpochStatsProps) {
     return (
         <Card spacing="lg">
-            <div className="flex flex-col space-y-8">
+            <div className="flex flex-col gap-8">
                 {label && (
                     <Heading color="steel-darker" variant="heading4/semibold">
                         {label}
                     </Heading>
                 )}
-                {/* todo: get tooltip content, can we re-use metrics components from home */}
-                <div className="flex flex-wrap gap-6">{children}</div>
+                <div className="grid grid-cols-2 gap-8">{children}</div>
             </div>
         </Card>
     );

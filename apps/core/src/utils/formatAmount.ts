@@ -25,7 +25,7 @@ export function formatAmountParts(
     }
 
     if (bn.gte(1)) {
-        bn = bn.decimalPlaces(3, BigNumber.ROUND_DOWN);
+        bn = bn.decimalPlaces(2, BigNumber.ROUND_DOWN);
     }
 
     return [bn.toFormat(), postfix];
