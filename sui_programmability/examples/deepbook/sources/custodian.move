@@ -28,7 +28,7 @@ module deepbook::custodian {
         account_balances: Table<ID, Account<T>>,
     }
 
-    public(friend) fun usr_balance<Asset>(
+    public fun usr_balance<Asset>(
         custodian: &Custodian<Asset>,
         user: ID
     ): (u64, u64){
@@ -58,7 +58,7 @@ module deepbook::custodian {
         accountCap
     }
 
-    public(friend) fun get_account_cap_id<BaseAsset, QuoteAsset>(account_cap: &AccountCap<BaseAsset, QuoteAsset>): ID {
+    public fun get_account_cap_id<BaseAsset, QuoteAsset>(account_cap: &AccountCap<BaseAsset, QuoteAsset>): ID {
         object::uid_to_inner(&account_cap.id)
     }
 
@@ -149,14 +149,14 @@ module deepbook::custodian {
     }
 
 
-    public(friend) fun account_available_balance<T>(
+    public fun account_available_balance<T>(
         custodian: &Custodian<T>,
         user: ID,
     ): u64 {
         balance::value(&table::borrow(&custodian.account_balances, user).available_balance)
     }
 
-    public(friend) fun account_locked_balance<T>(
+    public fun account_locked_balance<T>(
         custodian: &Custodian<T>,
         user: ID,
     ): u64 {

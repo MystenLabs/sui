@@ -383,7 +383,6 @@ module deepbook::critbit {
         };
     }
     fun is_left_child<V: store>(_tree: &CritbitTree<V>, parent_index: u64, index: u64): bool {
-        assert!(parent_index < table::length(&_tree.internal_nodes), EIndexOutOfRange);
         table::borrow(&_tree.internal_nodes, parent_index).left_child == index
     }
 

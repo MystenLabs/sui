@@ -1,11 +1,10 @@
 module deepbook::clob {
-    use std::option;
-    use std::type_name::{Self};
-    use std::vector;
-    use std::string::{Self, String, from_ascii};
-    use std::bcs::{to_bytes};
     use std::ascii;
-
+    use std::bcs::to_bytes;
+    use std::option;
+    use std::string::{Self, String, from_ascii};
+    use std::type_name;
+    use std::vector;
 
     use sui::balance::{Self, Balance};
     use sui::clock::{Self, Clock};
@@ -13,7 +12,7 @@ module deepbook::clob {
     use sui::event;
     use sui::linked_table::{Self, LinkedTable};
     use sui::object::{Self, UID, ID};
-    use sui::table::{Self, Table, contains, add, borrow_mut, borrow};
+    use sui::table::{Self, Table, contains, add, borrow_mut};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
@@ -206,7 +205,7 @@ module deepbook::clob {
         let tick_and_lot = vector::empty<u8>();
         vector::append(&mut tick_and_lot, to_bytes(&tick_size));
         vector::append(&mut tick_and_lot, to_bytes(&lot_size));
-        string::append_utf8(&mut symbol,tick_and_lot);
+        string::append_utf8(&mut symbol, tick_and_lot);
         assert!(
             !table::contains(&registry.pools, symbol),
             EPoolAlreadyExist
@@ -299,9 +298,17 @@ module deepbook::clob {
         quote_coin: Coin<QuoteAsset>,
         clock: &Clock,
         ctx: &mut TxContext,
-    ): (Coin<BaseAsset>, Coin<QuoteAsset>,  u64) {
+    ): (Coin<BaseAsset>, Coin<QuoteAsset>, u64) {
         let original_val = coin::value(&quote_coin);
-        let (ret_base_coin, ret_quote_coin) = place_market_order(pool, quantity, false, base_coin, quote_coin, clock, ctx);
+        let (ret_base_coin, ret_quote_coin) = place_market_order(
+            pool,
+            quantity,
+            false,
+            base_coin,
+            quote_coin,
+            clock,
+            ctx
+        );
         let ret_val = coin::value(&ret_quote_coin);
         (ret_base_coin, ret_quote_coin, ret_val - original_val)
     }
@@ -314,7 +321,7 @@ module deepbook::clob {
         clock: &Clock,
         quote_coin: Coin<QuoteAsset>,
         ctx: &mut TxContext,
-    ): (Coin<BaseAsset>, Coin<QuoteAsset>, u64){
+    ): (Coin<BaseAsset>, Coin<QuoteAsset>, u64) {
         let (base_asset_balance, quote_asset_balance) = match_bid_with_quote_quantity(
             pool,
             quantity,
@@ -1058,14 +1065,14 @@ module deepbook::clob {
         let user = get_account_cap_id(account_cap);
         assert!(contains(&pool.usr_open_orders, user), 0);
         let usr_open_order_ids = table::borrow_mut(&mut pool.usr_open_orders, user);
-        while (!linked_table::is_empty(usr_open_order_ids)){
+        while (!linked_table::is_empty(usr_open_order_ids)) {
             let order_id = *option::borrow(linked_table::back(usr_open_order_ids));
             let order_price = *linked_table::borrow(usr_open_order_ids, order_id);
             let is_bid = order_is_bid(order_id);
             let open_orders =
                 if (is_bid) { &mut pool.bids }
                 else { &mut pool.asks };
-            let (_ ,tick_index) = critbit::find_leaf(open_orders, order_price);
+            let (_, tick_index) = critbit::find_leaf(open_orders, order_price);
             let order = remove_order<BaseAsset, QuoteAsset>(
                 open_orders,
                 usr_open_order_ids,
@@ -1127,7 +1134,8 @@ module deepbook::clob {
         let user = get_account_cap_id(account_cap);
         assert!(contains(&pool.usr_open_orders, user), 0);
         let tick_index: u64 = 0;
-        let tick_price: u64 = borrow_leaf_by_index(&pool.bids, tick_index).price;
+        let _open_orders = if (!critbit::is_empty(&pool.bids)) { &pool.bids } else { &pool.asks };
+        let tick_price: u64 = borrow_leaf_by_index(_open_orders, tick_index).price;
         let n_order = vector::length(&order_ids);
         let i_order = 0;
         let usr_open_orders = borrow_mut(&mut pool.usr_open_orders, user);
@@ -1188,18 +1196,18 @@ module deepbook::clob {
     public fun list_open_orders<BaseAsset, QuoteAsset>(
         pool: &Pool<BaseAsset, QuoteAsset>,
         account_cap: &AccountCap<BaseAsset, QuoteAsset>
-    ): vector<Order>{
+    ): vector<Order> {
         let user = get_account_cap_id(account_cap);
         let usr_open_order_ids = table::borrow(&pool.usr_open_orders, user);
         let open_orders = vector::empty<Order>();
         let order_id = linked_table::front(usr_open_order_ids);
-        while (!option::is_none(order_id)){
-            let order_price =  *linked_table::borrow(usr_open_order_ids, *option::borrow(order_id));
+        while (!option::is_none(order_id)) {
+            let order_price = *linked_table::borrow(usr_open_order_ids, *option::borrow(order_id));
             let tick_level =
                 if (order_is_bid(*option::borrow(order_id))) borrow_leaf_by_key(&pool.bids, order_price)
                 else borrow_leaf_by_key(&pool.asks, order_price);
             let order = linked_table::borrow(&tick_level.open_orders, *option::borrow(order_id));
-            vector::push_back(&mut open_orders, Order{
+            vector::push_back(&mut open_orders, Order {
                 order_id: order.order_id,
                 price: order.price,
                 quantity: order.quantity,
@@ -1216,7 +1224,7 @@ module deepbook::clob {
     public fun usr_balance<BaseAsset, QuoteAsset>(
         pool: &Pool<BaseAsset, QuoteAsset>,
         account_cap: &AccountCap<BaseAsset, QuoteAsset>
-    ): (u64, u64, u64, u64){
+    ): (u64, u64, u64, u64) {
         let user = get_account_cap_id(account_cap);
         let (base_avail, base_locked) = custodian::usr_balance(&pool.base_custodian, user);
         let (quote_avail, quote_locked) = custodian::usr_balance(&pool.quote_custodian, user);
@@ -1232,7 +1240,7 @@ module deepbook::clob {
         price_low: u64,
         price_high: u64,
         clock: &Clock
-    ): (vector<u64>, vector<u64>){
+    ): (vector<u64>, vector<u64>) {
         let (price_low_, _) = critbit::min_leaf(&pool.bids);
         if (price_low < price_low_) price_low = price_low_;
         let (price_high_, _) = critbit::max_leaf(&pool.bids);
@@ -1241,13 +1249,17 @@ module deepbook::clob {
         price_high = critbit::find_closest_key(&pool.bids, price_high);
         let price_vec = vector::empty<u64>();
         let depth_vec = vector::empty<u64>();
-        if (price_low == 0) {return (price_vec, depth_vec)};
-        while (price_low <= price_high){
-            let depth = get_level2_book_status<BaseAsset, QuoteAsset>(&pool.bids, price_low, clock::timestamp_ms(clock));
+        if (price_low == 0) { return (price_vec, depth_vec) };
+        while (price_low <= price_high) {
+            let depth = get_level2_book_status<BaseAsset, QuoteAsset>(
+                &pool.bids,
+                price_low,
+                clock::timestamp_ms(clock)
+            );
             vector::push_back(&mut price_vec, price_low);
             vector::push_back(&mut depth_vec, depth);
             let (next_price, _) = critbit::next_leaf(&pool.bids, price_low);
-            if (next_price == 0){ break }
+            if (next_price == 0) { break }
             else { price_low = next_price };
         };
         (price_vec, depth_vec)
@@ -1262,7 +1274,7 @@ module deepbook::clob {
         price_low: u64,
         price_high: u64,
         clock: &Clock
-    ): (vector<u64>, vector<u64>){
+    ): (vector<u64>, vector<u64>) {
         let (price_low_, _) = critbit::min_leaf(&pool.asks);
         if (price_low < price_low_) price_low = price_low_;
         let (price_high_, _) = critbit::max_leaf(&pool.asks);
@@ -1271,13 +1283,17 @@ module deepbook::clob {
         price_high = critbit::find_closest_key(&pool.asks, price_high);
         let price_vec = vector::empty<u64>();
         let depth_vec = vector::empty<u64>();
-        if (price_low == 0) {return (price_vec, depth_vec)};
-        while (price_low <= price_high){
-            let depth = get_level2_book_status<BaseAsset, QuoteAsset>(&pool.asks, price_low, clock::timestamp_ms(clock));
+        if (price_low == 0) { return (price_vec, depth_vec) };
+        while (price_low <= price_high) {
+            let depth = get_level2_book_status<BaseAsset, QuoteAsset>(
+                &pool.asks,
+                price_low,
+                clock::timestamp_ms(clock)
+            );
             vector::push_back(&mut price_vec, price_low);
             vector::push_back(&mut depth_vec, depth);
             let (next_price, _) = critbit::next_leaf(&pool.asks, price_low);
-            if(next_price == 0){ break }
+            if (next_price == 0) { break }
             else { price_low = next_price };
         };
         (price_vec, depth_vec)
@@ -1294,7 +1310,7 @@ module deepbook::clob {
         let depth = 0;
         let order_id = linked_table::front(tick_open_orders);
         let order: &Order;
-        while (!option::is_none(order_id)){
+        while (!option::is_none(order_id)) {
             order = linked_table::borrow(tick_open_orders, *option::borrow(order_id));
             if (order.expire_timestamp > time_stamp) depth = depth + order.quantity;
             order_id = linked_table::next(tick_open_orders, *option::borrow(order_id));
@@ -1318,8 +1334,6 @@ module deepbook::clob {
         let order = linked_table::borrow(tick_open_orders, order_id);
         order
     }
-
-
 
 
     // Note that open orders and quotes can be directly accessed by loading in the entire Pool.
@@ -1542,7 +1556,7 @@ module deepbook::clob {
         owner: ID
     ): &LinkedTable<u64, u64> {
         assert!(contains(&pool.usr_open_orders, owner), 0);
-        borrow(&pool.usr_open_orders, owner)
+        table::borrow(&pool.usr_open_orders, owner)
     }
 
     #[test_only]
@@ -1587,7 +1601,7 @@ module deepbook::clob {
             let order_id = *vector::borrow(usr_open_orders_cmp, i_order);
             i_order = i_order + 1;
             assert!(linked_table::contains(usr_open_orders, order_id), 0);
-            let price_cmp =  *vector::borrow(usr_open_orders_cmp, i_order);
+            let price_cmp = *vector::borrow(usr_open_orders_cmp, i_order);
             let price = *linked_table::borrow(usr_open_orders, order_id);
             assert!(price_cmp == price, ENotEqual);
             i_order = i_order + 1;
@@ -2496,7 +2510,8 @@ module deepbook::clob_test {
 
     #[test] fun test_deposit_withdraw() { let _ = test_deposit_withdraw_(scenario()); }
 
-    #[test] fun test_inject_and_match_taker_bid_with_quote_quantity() { let _ = test_inject_and_match_taker_bid_with_quote_quantity_(scenario()); }
+    #[test] fun test_inject_and_match_taker_bid_with_quote_quantity(
+    ) { let _ = test_inject_and_match_taker_bid_with_quote_quantity_(scenario()); }
 
     #[test] fun test_inject_and_match_taker_bid() { let _ = test_inject_and_match_taker_bid_(scenario()); }
 
@@ -2595,7 +2610,12 @@ module deepbook::clob_test {
             let pool = test::take_shared<Pool<SUI, USD>>(&mut test);
             let account_cap = test::take_from_address<AccountCap<SUI, USD>>(&test, alice);
             let clock = test::take_shared<Clock>(&mut test);
-            let (prices, depth) = clob::get_level2_book_status_bid_side(&pool, 1 * FLOAT_SCALING, 15 * FLOAT_SCALING, &clock);
+            let (prices, depth) = clob::get_level2_book_status_bid_side(
+                &pool,
+                1 * FLOAT_SCALING,
+                15 * FLOAT_SCALING,
+                &clock
+            );
             let prices_cmp = vector<u64>[2 * FLOAT_SCALING, 3 * FLOAT_SCALING, 4 * FLOAT_SCALING, 5 * FLOAT_SCALING];
             let depth_cmp = vector<u64>[1000, 1000, 1000, 1000];
             assert!(prices == prices_cmp, 0);
@@ -2653,7 +2673,12 @@ module deepbook::clob_test {
             let order = clob::get_order_status(&pool, order_id(0, false), &account_cap);
             let order_cmp = clob::test_construct_order(0, 5 * FLOAT_SCALING, 500, false, account_cap_user);
             assert!(order == &order_cmp, 0);
-            let (prices, depth) = clob::get_level2_book_status_ask_side(&pool, 1 * FLOAT_SCALING, 10 * FLOAT_SCALING, &clock);
+            let (prices, depth) = clob::get_level2_book_status_ask_side(
+                &pool,
+                1 * FLOAT_SCALING,
+                10 * FLOAT_SCALING,
+                &clock
+            );
             let prices_cmp = vector<u64>[2 * FLOAT_SCALING, 3 * FLOAT_SCALING, 4 * FLOAT_SCALING, 5 * FLOAT_SCALING];
             let depth_cmp = vector<u64>[1000, 1000, 1000, 1000];
             assert!(prices == prices_cmp, 0);
@@ -3310,10 +3335,10 @@ module deepbook::clob_test {
             custodian::assert_user_balance(base_custodian, account_cap_user, 0, 1000);
             custodian::assert_user_balance(quote_custodian, account_cap_user, 5500, 4500);
             let (base_avail, base_locked, quote_avail, quote_locked) = usr_balance(&pool, &account_cap);
-            assert!(base_avail == 0,  0);
-            assert!(base_locked == 1000,  0);
-            assert!(quote_avail == 5500,  0);
-            assert!(quote_locked == 4500,  0);
+            assert!(base_avail == 0, 0);
+            assert!(base_locked == 1000, 0);
+            assert!(quote_avail == 5500, 0);
+            assert!(quote_locked == 4500, 0);
             test::return_shared(pool);
             test::return_shared(clock);
             test::return_to_address<AccountCap<SUI, USD>>(alice, account_cap);
@@ -5135,18 +5160,16 @@ module deepbook::clob_test {
                 custodian::assert_user_balance(base_custodian, account_cap_user, 10, 0);
                 custodian::assert_user_balance(quote_custodian, account_cap_user, 100, 0);
                 let (base_avail, base_locked, quote_avail, quote_locked) = usr_balance(&pool, &account_cap);
-                assert!(base_avail == 10,  0);
-                assert!(base_locked == 0,  0);
-                assert!(quote_avail == 100,  0);
-                assert!(quote_locked == 0,  0);
-
+                assert!(base_avail == 10, 0);
+                assert!(base_locked == 0, 0);
+                assert!(quote_avail == 100, 0);
+                assert!(quote_locked == 0, 0);
             };
             test::return_shared(pool);
             test::return_to_address<AccountCap<SUI, USD>>(alice, account_cap);
         };
         end(test)
     }
-
 
 
     fun scenario(): Scenario { test::begin(@0x1) }
