@@ -62,7 +62,8 @@ export function UnderlyingObjectCard({
         ?.slice(objectType?.indexOf('<') + 1, objectType.indexOf('>'))
         .split(',');
 
-    // Split the first object type by :: and if array length is > 1 then it is a underlying object
+    // Split the first object type by :: and if array length is > 1 then it has a underlying object
+    // eg 0x1::string::String // 0x45...::my_hero::Hero // 0x1::my_hero::Hero
     const hasUnderlyingObject =
         underlyingObjectTypes?.[0].split('::').length > 1;
     return (
