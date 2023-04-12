@@ -6,35 +6,37 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 
 import type { SuiAddress } from '@mysten/sui.js';
 
-export const DEFAULT_TRANSACTIONS_LIMIT = 20;
+export const DEFAULT_TRANSACTIONS_LIMIT = 100;
 
 // Fetch all coins for an address, this will keep calling the API until all coins are fetched
-export function useGetTransactionBlocks(address: SuiAddress, isFrom?: boolean, limit = DEFAULT_TRANSACTIONS_LIMIT) {
+export function useGetTransactionBlocks(
+    address: SuiAddress,
+    isFrom?: boolean,
+    limit = DEFAULT_TRANSACTIONS_LIMIT
+) {
     const rpc = useRpcClient();
-    const filter = isFrom ? { FromAddress: address } : { ToAddress: address }
+    const filter = isFrom ? { FromAddress: address } : { ToAddress: address };
 
     return useInfiniteQuery(
-        ['get-transaction-blocks', address],
+        ['get-transaction-blocks', address, isFrom],
         async ({ pageParam }) =>
-            await rpc.queryTransactionBlocks(
-                {
-                    cursor: pageParam ? pageParam.cursor : null,
-                    filter,
-                    order: 'descending',
-                    limit,
-                    options: {
-                        showEffects: true,
-                        showBalanceChanges: true,
-                        showInput: true,
-                    },
-                }
-            ),
+            await rpc.queryTransactionBlocks({
+                cursor: pageParam ? pageParam.cursor : null,
+                filter,
+                order: 'descending',
+                limit,
+                options: {
+                    showEffects: true,
+                    showBalanceChanges: true,
+                    showInput: true,
+                },
+            }),
         {
             getNextPageParam: (lastPage) =>
                 lastPage?.hasNextPage
                     ? {
-                        cursor: lastPage.nextCursor,
-                    }
+                          cursor: lastPage.nextCursor,
+                      }
                     : false,
             enabled: !!address,
         }
