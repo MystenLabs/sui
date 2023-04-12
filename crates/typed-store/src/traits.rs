@@ -57,6 +57,10 @@ where
     /// Returns an iterator visiting each key-value pair in the map.
     fn iter(&'a self) -> Self::Iterator;
 
+    /// Returns an iterator visiting each key-value pair in the map.
+    fn iter_with_bounds(&'a self, lower_bound: Option<K>, upper_bound: Option<K>)
+        -> Self::Iterator;
+
     /// Same as `iter` but performs status check
     fn safe_iter(&'a self) -> Self::SafeIterator;
 
