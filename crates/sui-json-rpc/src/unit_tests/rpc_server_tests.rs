@@ -389,7 +389,18 @@ async fn test_get_coins() -> Result<(), anyhow::Error> {
             Some(3),
         )
         .await?;
-    assert_eq!(2, result.data.len());
+    assert_eq!(2, result.data.len(), "{:?}", result);
+    assert!(!result.has_next_page);
+
+    let result: CoinPage = http_client
+        .get_coins(
+            *address,
+            Some("0x2::sui::SUI".into()),
+            result.next_cursor,
+            None,
+        )
+        .await?;
+    assert_eq!(0, result.data.len(), "{:?}", result);
     assert!(!result.has_next_page);
 
     Ok(())
@@ -399,9 +410,9 @@ async fn test_get_coins() -> Result<(), anyhow::Error> {
 async fn test_get_balance() -> Result<(), anyhow::Error> {
     let cluster = TestClusterBuilder::new().build().await?;
     let http_client = cluster.rpc_client();
-    let address = cluster.accounts.first().unwrap();
+    let address = cluster.get_address_0();
 
-    let result: Balance = http_client.get_balance(*address, None).await?;
+    let result: Balance = http_client.get_balance(address, None).await?;
     assert_eq!("0x2::sui::SUI", result.coin_type);
     assert_eq!(
         (DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT as u64 * DEFAULT_GAS_AMOUNT) as u128,
@@ -411,7 +422,6 @@ async fn test_get_balance() -> Result<(), anyhow::Error> {
         DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT,
         result.coin_object_count
     );
-
     Ok(())
 }
 
