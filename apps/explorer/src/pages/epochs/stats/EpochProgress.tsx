@@ -46,7 +46,7 @@ export function EpochProgress({
                             {formatDate(start)}
                         </Text>
                     </div>
-                    {!inProgress && end && (
+                    {!inProgress && end ? (
                         <div>
                             <Text
                                 variant="p4/normal"
@@ -59,7 +59,7 @@ export function EpochProgress({
                                 {formatDate(end)}
                             </Text>
                         </div>
-                    )}
+                    ) : null}
                 </div>
                 {inProgress ? (
                     <div className="space-y-1.5">

@@ -30,7 +30,6 @@ export function useBoundedPaginationStack<Cursor = string>(
     const [stack, setStack] = useState<Cursor[]>(
         initialCursor ? [initialCursor] : []
     );
-
     return {
         cursor: stack.at(-1),
         props({
@@ -39,10 +38,7 @@ export function useBoundedPaginationStack<Cursor = string>(
         }: Partial<PaginationResponse<Cursor>> = {}): PaginationProps {
             return {
                 hasPrev: initialCursor ? stack.length > 1 : stack.length > 0,
-                hasNext:
-                    hasNextPage &&
-                    (!maxCursor ||
-                        (nextCursor ? nextCursor > maxCursor : true)),
+                hasNext: hasNextPage && Number(nextCursor) > Number(maxCursor),
                 onFirst() {
                     setStack(initialCursor ? [initialCursor] : []);
                 },

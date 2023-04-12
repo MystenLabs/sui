@@ -3,14 +3,16 @@
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
+import { SuiAmount } from '~/components/Table/SuiAmount';
 import { TableFooter } from '~/components/Table/TableFooter';
-import { SuiAmount, TxTableCol } from '~/components/transactions/TxCardUtils';
+import { TxTableCol } from '~/components/transactions/TxCardUtils';
 import { TxTimeType } from '~/components/tx-time/TxTimeType';
 import { useEnhancedRpcClient } from '~/hooks/useEnhancedRpc';
 import { CheckpointSequenceLink, EpochLink } from '~/ui/InternalLink';
 import { usePaginationStack } from '~/ui/Pagination';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
+import { Text } from '~/ui/Text';
 
 interface EpochsTableProps {
     initialLimit: number;
@@ -21,7 +23,6 @@ interface EpochsTableProps {
 export function EpochsTable({
     initialLimit,
     disablePagination,
-    refetchInterval,
 }: EpochsTableProps) {
     const enhancedRpc = useEnhancedRpcClient();
     const [limit, setLimit] = useState(initialLimit);
@@ -66,7 +67,9 @@ export function EpochsTable({
                           ),
                           transactions: (
                               <TxTableCol>
-                                  {epoch.epochTotalTransactions}
+                                  <Text variant="bodySmall/medium">
+                                      {epoch.epochTotalTransactions}
+                                  </Text>
                               </TxTableCol>
                           ),
                           stakeRewards: (
@@ -95,7 +98,11 @@ export function EpochsTable({
                           ),
                           storageRevenue: (
                               <TxTableCol>
-                                  {epoch.endOfEpochInfo?.storageCharge}
+                                  <SuiAmount
+                                      amount={
+                                          epoch.endOfEpochInfo?.storageCharge
+                                      }
+                                  />
                               </TxTableCol>
                           ),
                           time: (
