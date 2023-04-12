@@ -22,6 +22,16 @@ module base_addr::base {
         new: u64,
     }
 
+    struct C has key {
+        id: UID,
+        x: u64,
+    }
+
+    struct CModEvent has copy, drop {
+        old: u64,
+        new: u64,
+    }
+
     friend base_addr::friend_module;
 
     public fun return_0(): u64 { abort 42 }
@@ -49,5 +59,19 @@ module base_addr::base {
         b.x = 7;
         transfer::transfer(b, tx_context::sender(ctx))
     }
+
+    entry fun makes_c(ctx: &mut TxContext) {
+        transfer::transfer(
+            C { id: object::new(ctx), x: 42 },
+            tx_context::sender(ctx),
+        )
+    }
+
+    entry fun modifies_c(c: C, ctx: &mut TxContext) {
+        event::emit(CModEvent{ old: c.x, new: 7 });
+        c.x = 7;
+        transfer::transfer(c, tx_context::sender(ctx))
+    }
+
 
 }
