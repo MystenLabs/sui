@@ -180,6 +180,31 @@ impl MoveObject {
         ObjectID::try_from(&contents[0..ID_END_INDEX])
     }
 
+    /// Return the `value: u64` field of a `Coin<T>` type.
+    /// Useful for reading the coin without deserializing the object into a Move value
+    /// It is the caller's responsibility to check that `self` is a coin--this function
+    /// may panic or do something unexpected otherwise.
+    pub fn get_coin_value_unsafe(&self) -> u64 {
+        debug_assert!(self.type_.is_coin());
+        // 32 bytes for object ID, 8 for balance
+        debug_assert!(self.contents.len() == 40);
+
+        // unwrap safe because we checked that it is a coin
+        u64::from_le_bytes(<[u8; 8]>::try_from(&self.contents[ID_END_INDEX..]).unwrap())
+    }
+
+    /// Update the `value: u64` field of a `Coin<T>` type.
+    /// Useful for updating the coin without deserializing the object into a Move value
+    /// It is the caller's responsibility to check that `self` is a coin--this function
+    /// may panic or do something unexpected otherwise.
+    pub fn set_coin_value_unsafe(&mut self, value: u64) {
+        debug_assert!(self.type_.is_coin());
+        // 32 bytes for object ID, 8 for balance
+        debug_assert!(self.contents.len() == 40);
+
+        self.contents.splice(ID_END_INDEX.., value.to_le_bytes());
+    }
+
     pub fn is_coin(&self) -> bool {
         self.type_.is_coin()
     }
@@ -228,12 +253,6 @@ impl MoveObject {
         debug_assert_eq!(self.id(), old_id);
 
         Ok(())
-    }
-
-    /// Update a coin object without requiring the current ProtocolConfig.
-    /// Asserts that the gas object is not unexpectedly large.
-    pub fn update_coin_contents(&mut self, new_contents: Vec<u8>) {
-        self.update_contents_with_limit(new_contents, 256).unwrap()
     }
 
     /// Sets the version of this object to a new value which is assumed to be higher (and checked to
@@ -1057,4 +1076,49 @@ impl Display for PastObjectRead {
             }
         }
     }
+}
+
+#[test]
+fn test_get_coin_value_unsafe() {
+    fn test_for_value(v: u64) {
+        let g = GasCoin::new_for_testing(v).to_object(OBJECT_START_VERSION);
+        assert_eq!(g.get_coin_value_unsafe(), v);
+        assert_eq!(GasCoin::try_from(&g).unwrap().value(), v);
+    }
+
+    test_for_value(0);
+    test_for_value(1);
+    test_for_value(8);
+    test_for_value(9);
+    test_for_value(u8::MAX as u64);
+    test_for_value(u8::MAX as u64 + 1);
+    test_for_value(u16::MAX as u64);
+    test_for_value(u16::MAX as u64 + 1);
+    test_for_value(u32::MAX as u64);
+    test_for_value(u32::MAX as u64 + 1);
+    test_for_value(u64::MAX);
+}
+
+#[test]
+fn test_set_coin_value_unsafe() {
+    fn test_for_value(v: u64) {
+        let mut g = GasCoin::new_for_testing(u64::MAX).to_object(OBJECT_START_VERSION);
+        g.set_coin_value_unsafe(v);
+        assert_eq!(g.get_coin_value_unsafe(), v);
+        assert_eq!(GasCoin::try_from(&g).unwrap().value(), v);
+        assert_eq!(g.version(), OBJECT_START_VERSION);
+        assert_eq!(g.contents().len(), 40);
+    }
+
+    test_for_value(0);
+    test_for_value(1);
+    test_for_value(8);
+    test_for_value(9);
+    test_for_value(u8::MAX as u64);
+    test_for_value(u8::MAX as u64 + 1);
+    test_for_value(u16::MAX as u64);
+    test_for_value(u16::MAX as u64 + 1);
+    test_for_value(u32::MAX as u64);
+    test_for_value(u32::MAX as u64 + 1);
+    test_for_value(u64::MAX);
 }

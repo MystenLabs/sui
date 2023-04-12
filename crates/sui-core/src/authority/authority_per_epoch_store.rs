@@ -722,6 +722,17 @@ impl AuthorityPerEpochStore {
         self.tables.next_shared_object_versions.get(obj).unwrap()
     }
 
+    pub fn set_shared_object_versions_for_testing(
+        &self,
+        tx_digest: &TransactionDigest,
+        assigned_versions: &Vec<(ObjectID, SequenceNumber)>,
+    ) -> SuiResult {
+        self.tables
+            .assigned_shared_object_versions
+            .insert(tx_digest, assigned_versions)?;
+        Ok(())
+    }
+
     // For each id in objects_to_init, return the next version for that id as recorded in the
     // next_shared_object_versions table.
     //

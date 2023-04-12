@@ -18,7 +18,7 @@ export function ValidatorStatus() {
                     color: '#589AEA',
                 },
                 {
-                    value: +(data.pendingActiveValidatorsSize ?? 0),
+                    value: Number(data.pendingActiveValidatorsSize ?? 0),
                     label: 'New',
                     color: '#6FBCF0',
                 },

@@ -76,7 +76,9 @@ export function DelegationDetailCard({
         staked: stakedId,
     }).toString()}`;
 
-    const commission = validatorData ? +validatorData.commissionRate / 100 : 0;
+    const commission = validatorData
+        ? Number(validatorData.commissionRate) / 100
+        : 0;
     const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
 
     if (isLoading || loadingValidators) {

@@ -130,13 +130,13 @@ pub struct MoveObjectType(MoveObjectType_);
 /// `MoveObjectType`
 #[derive(Eq, PartialEq, PartialOrd, Ord, Debug, Clone, Deserialize, Serialize, Hash)]
 pub enum MoveObjectType_ {
-    /// A type that is not 0x2::coin::Coin<T>
+    /// A type that is not `0x2::coin::Coin<T>`
     Other(StructTag),
-    /// A SUI coin (i.e., 0x2::coin::Coin<0x2::sui::SUI>)
+    /// A SUI coin (i.e., `0x2::coin::Coin<0x2::sui::SUI>`)
     GasCoin,
-    /// A record of a staked SUI coin (i.e., 0x3::staking_pool::StakedSui)
+    /// A record of a staked SUI coin (i.e., `0x3::staking_pool::StakedSui`)
     StakedSui,
-    /// A non-SUI coin type (i.e., 0x2::coin::Coin<T> where T != 0x2::sui::SUI)
+    /// A non-SUI coin type (i.e., `0x2::coin::Coin<T> where T != 0x2::sui::SUI`)
     Coin(TypeTag),
     // NOTE: if adding a new type here, and there are existing on-chain objects of that
     // type with Other(_), that is ok, but you must hand-roll PartialEq/Eq/Ord/maybe Hash
@@ -208,7 +208,7 @@ impl MoveObjectType {
         }
     }
 
-    /// Return true if `self` is 0x2::coin::Coin<T> for some T (note: T can be SUI)
+    /// Return true if `self` is `0x2::coin::Coin<T>` for some T (note: T can be SUI)
     pub fn is_coin(&self) -> bool {
         match &self.0 {
             MoveObjectType_::GasCoin | MoveObjectType_::Coin(_) => true,
@@ -226,7 +226,7 @@ impl MoveObjectType {
         }
     }
 
-    /// Return true if `self` is 0x2::coin::Coin<t>
+    /// Return true if `self` is `0x2::coin::Coin<t>`
     pub fn is_coin_t(&self, t: &TypeTag) -> bool {
         match &self.0 {
             MoveObjectType_::GasCoin => GAS::is_gas_type(t),
@@ -399,7 +399,7 @@ impl ObjectType {
         }
     }
 
-    /// Return true if `self` is 0x2::coin::Coin<t>
+    /// Return true if `self` is `0x2::coin::Coin<t>`
     pub fn is_coin_t(&self, t: &TypeTag) -> bool {
         match self {
             ObjectType::Struct(s) => s.is_coin_t(t),
@@ -446,7 +446,7 @@ impl SuiAddress {
         AccountAddress::random().into()
     }
 
-    /// Serialize an Option<SuiAddress> in Hex.
+    /// Serialize an `Option<SuiAddress>` in Hex.
     pub fn optional_address_as_hex<S>(
         key: &Option<SuiAddress>,
         serializer: S,
@@ -457,7 +457,7 @@ impl SuiAddress {
         serializer.serialize_str(&key.map(Hex::encode).unwrap_or_default())
     }
 
-    /// Deserialize into an Option<SuiAddress>.
+    /// Deserialize into an `Option<SuiAddress>`.
     pub fn optional_address_from_hex<'de, D>(
         deserializer: D,
     ) -> Result<Option<SuiAddress>, D::Error>
@@ -860,7 +860,7 @@ impl ObjectID {
         Self(AccountAddress::new(obj_id))
     }
 
-    /// Const fn variant of <ObjectID as From<AccountAddress>>::from
+    /// Const fn variant of `<ObjectID as From<AccountAddress>>::from`
     pub const fn from_address(addr: AccountAddress) -> Self {
         Self(addr)
     }

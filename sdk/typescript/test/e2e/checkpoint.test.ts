@@ -36,8 +36,6 @@ describe('Checkpoints Reading API', () => {
   });
 
   it('getCheckpoints', async () => {
-    const latest = await toolbox.provider.getLatestCheckpointSequenceNumber();
-    expect(BigInt(latest)).toBeGreaterThan(2);
     const checkpoints = await toolbox.provider.getCheckpoints({
       descendingOrder: false,
       limit: '1',

@@ -63,8 +63,6 @@ import { RPCError } from '../utils/errors';
 import { NetworkMetrics } from '../types/metrics';
 import { EpochInfo, EpochPage } from '../types/epochs';
 
-export const TARGETED_RPC_VERSION = '0.29.0';
-
 export interface PaginationArguments<Cursor> {
   /** Optional paging cursor */
   cursor?: Cursor;
@@ -246,7 +244,7 @@ export class JsonRpcProvider {
   }
 
   /**
-   * Get the total coin balance for all coin type, owned by the address owner.
+   * Get the total coin balance for all coin types, owned by the address owner.
    */
   async getAllBalances(input: { owner: SuiAddress }): Promise<CoinBalance[]> {
     if (!input.owner || !isValidSuiAddress(normalizeSuiAddress(input.owner))) {

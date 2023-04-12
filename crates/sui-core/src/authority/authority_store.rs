@@ -38,7 +38,7 @@ use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store_types::{
     get_store_object_pair, ObjectContentDigest, StoreObject, StoreObjectPair, StoreObjectWrapper,
 };
-use crate::authority::epoch_start_configuration::EpochStartConfiguration;
+use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
 
 use super::authority_store_tables::LiveObject;
 use super::{authority_store_tables::AuthorityPerpetualTables, *};
@@ -54,6 +54,7 @@ struct AuthorityStoreMetrics {
     sui_conservation_imbalance: IntGauge,
     sui_conservation_storage_fund: IntGauge,
     sui_conservation_storage_fund_imbalance: IntGauge,
+    epoch_flags: IntGaugeVec,
 }
 
 impl AuthorityStoreMetrics {
@@ -82,6 +83,12 @@ impl AuthorityStoreMetrics {
             sui_conservation_storage_fund_imbalance: register_int_gauge_with_registry!(
                 "sui_conservation_storage_fund_imbalance",
                 "Imbalance of storage fund, computed with storage_fund_balance - total_object_storage_rebates",
+                registry,
+            ).unwrap(),
+            epoch_flags: register_int_gauge_vec_with_registry!(
+                "epoch_flags",
+                "Local flags of the currently running epoch",
+                &["flag"],
                 registry,
             ).unwrap(),
         }
@@ -137,20 +144,26 @@ impl AuthorityStore {
         registry: &Registry,
     ) -> SuiResult<Self> {
         let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(path, db_options.clone()));
-        if perpetual_tables.database_is_empty()? {
-            let epoch_start_configuration = EpochStartConfiguration::new_v1(
+        let epoch_start_configuration = if perpetual_tables.database_is_empty()? {
+            let epoch_start_configuration = EpochStartConfiguration::new(
                 genesis.sui_system_object().into_epoch_start_state(),
                 *genesis.checkpoint().digest(),
             );
             perpetual_tables
                 .set_epoch_start_configuration(&epoch_start_configuration)
                 .await?;
-        }
+            epoch_start_configuration
+        } else {
+            perpetual_tables
+                .epoch_start_configuration
+                .get(&())?
+                .expect("Epoch start configuration must be set in non-epmty DB")
+        };
         let cur_epoch = perpetual_tables.get_recovery_epoch_at_restart()?;
         let committee = committee_store
             .get_committee(&cur_epoch)?
             .expect("Committee of the current epoch must exist");
-        Self::open_inner(
+        let this = Self::open_inner(
             genesis,
             perpetual_tables,
             &committee,
@@ -158,7 +171,24 @@ impl AuthorityStore {
             enable_epoch_sui_conservation_check,
             registry,
         )
-        .await
+        .await?;
+        this.update_epoch_flags_metrics(&[], epoch_start_configuration.flags());
+        Ok(this)
+    }
+
+    pub fn update_epoch_flags_metrics(&self, old: &[EpochFlag], new: &[EpochFlag]) {
+        for flag in old {
+            self.metrics
+                .epoch_flags
+                .with_label_values(&[&flag.to_string()])
+                .set(0);
+        }
+        for flag in new {
+            self.metrics
+                .epoch_flags
+                .with_label_values(&[&flag.to_string()])
+                .set(1);
+        }
     }
 
     pub async fn open_with_committee_for_testing(
@@ -460,12 +490,15 @@ impl AuthorityStore {
         &self,
         object_keys: &[ObjectKey],
     ) -> Result<Vec<Option<Object>>, SuiError> {
-        let wrappers = self.perpetual_tables.objects.multi_get(object_keys)?;
+        let wrappers = self
+            .perpetual_tables
+            .objects
+            .multi_get(object_keys.to_vec())?;
         let mut ret = vec![];
 
-        for w in wrappers {
+        for (idx, w) in wrappers.into_iter().enumerate() {
             ret.push(
-                w.map(|object| self.perpetual_tables.object(object))
+                w.map(|object| self.perpetual_tables.object(&object_keys[idx], object))
                     .transpose()?
                     .flatten(),
             );
@@ -1265,6 +1298,7 @@ impl AuthorityStore {
                         let obj = self
                             .perpetual_tables
                             .object(
+                                &key,
                                 obj_opt
                                     .expect(&format!("Older object version not found: {:?}", key)),
                             )
@@ -1590,13 +1624,7 @@ impl ObjectStore for AuthorityStore {
         object_id: &ObjectID,
         version: VersionNumber,
     ) -> Result<Option<Object>, SuiError> {
-        Ok(self
-            .perpetual_tables
-            .objects
-            .get(&ObjectKey(*object_id, version))?
-            .map(|object| self.perpetual_tables.object(object))
-            .transpose()?
-            .flatten())
+        self.perpetual_tables.get_object_by_key(object_id, version)
     }
 }
 

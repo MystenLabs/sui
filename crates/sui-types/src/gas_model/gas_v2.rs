@@ -3,15 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::error::{UserInputError, UserInputResult};
-use crate::gas::{GasCostSummary, SuiGasStatusAPI};
+use crate::gas::{self, GasCostSummary, SuiGasStatusAPI};
 use crate::{
     error::{ExecutionError, ExecutionErrorKind},
-    gas_coin::GasCoin,
     object::{Object, Owner},
 };
 use move_core_types::vm_status::StatusCode;
 use once_cell::sync::Lazy;
-use std::convert::TryFrom;
 use std::iter;
 use sui_cost_tables::bytecode_tables::{GasStatus, INITIAL_COST_SCHEDULE};
 use sui_protocol_config::*;
@@ -443,9 +441,9 @@ pub(crate) fn check_gas_balance(
     }
 
     // 3. Gas balance (all gas coins together) is bigger or equal to budget
-    let mut gas_balance = get_gas_balance(gas_object)? as u128;
+    let mut gas_balance = gas::get_gas_balance(gas_object)? as u128;
     for extra_obj in more_gas_objs {
-        gas_balance += get_gas_balance(extra_obj)? as u128;
+        gas_balance += gas::get_gas_balance(extra_obj)? as u128;
     }
     ok_or_gas_balance_error!(gas_balance, gas_budget as u128)
 }
@@ -455,26 +453,13 @@ pub(crate) fn check_gas_balance(
 /// less than balance, and the amount is capped at the budget.
 pub fn deduct_gas(gas_object: &mut Object, charge_or_rebate: i64) {
     // The object must be a gas coin as we have checked in transaction handle phase.
-    let gas_coin = GasCoin::try_from(&*gas_object).unwrap();
-    let balance = gas_coin.value();
+    let gas_coin = gas_object.data.try_as_move_mut().unwrap();
+    let balance = gas_coin.get_coin_value_unsafe();
     let new_balance = if charge_or_rebate < 0 {
         balance + (-charge_or_rebate as u64)
     } else {
         assert!(balance >= charge_or_rebate as u64);
         balance - charge_or_rebate as u64
     };
-    let new_gas_coin = GasCoin::new(*gas_coin.id(), new_balance);
-    let move_object = gas_object.data.try_as_move_mut().unwrap();
-    // unwrap safe because GasCoin is guaranteed to serialize
-    let new_contents = bcs::to_bytes(&new_gas_coin).unwrap();
-    assert_eq!(move_object.contents().len(), new_contents.len());
-    move_object.update_coin_contents(new_contents);
-}
-
-pub fn get_gas_balance(gas_object: &Object) -> UserInputResult<u64> {
-    Ok(GasCoin::try_from(gas_object)
-        .map_err(|_e| UserInputError::InvalidGasObject {
-            object_id: gas_object.id(),
-        })?
-        .value())
+    gas_coin.set_coin_value_unsafe(new_balance)
 }

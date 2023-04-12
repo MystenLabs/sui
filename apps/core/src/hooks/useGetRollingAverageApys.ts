@@ -71,7 +71,7 @@ export function useGetRollingAverageApys(numberOfValidators: number | null) {
             const { stakeSubsidyStartEpoch, epoch, activeValidators } =
                 data || {};
             // return 0 for all validators if current epoch is less than the stake subsidy start epoch
-            if (+epoch < +stakeSubsidyStartEpoch) {
+            if (Number(epoch) < Number(stakeSubsidyStartEpoch)) {
                 return activeValidators.reduce((acc, validator) => {
                     acc[validator.suiAddress] = 0;
                     return acc;
@@ -81,7 +81,10 @@ export function useGetRollingAverageApys(numberOfValidators: number | null) {
             // The rolling average epoch is the current epoch - the stake subsidy start epoch
             const avgEpochNumberAfterSubsidy = Math.max(
                 0,
-                Math.min(ROLLING_AVERAGE, +epoch - +stakeSubsidyStartEpoch)
+                Math.min(
+                    ROLLING_AVERAGE,
+                    Number(epoch) - Number(stakeSubsidyStartEpoch)
+                )
             );
             const apyGroups: ApyGroups = {};
 

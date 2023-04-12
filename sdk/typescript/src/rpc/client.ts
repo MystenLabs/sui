@@ -12,8 +12,7 @@ import {
   Struct,
   validate,
 } from 'superstruct';
-import { pkgVersion } from '../pkg-version';
-import { TARGETED_RPC_VERSION } from '../providers/json-rpc-provider';
+import { PACKAGE_VERSION, TARGETED_RPC_VERSION } from '../version';
 import { RequestParamsLike } from 'jayson';
 import { RPCError, RPCValidationError } from '../utils/errors';
 
@@ -61,7 +60,7 @@ export class JsonRpcClient {
           headers: {
             'Content-Type': 'application/json',
             'Client-Sdk-Type': 'typescript',
-            'Client-Sdk-Version': pkgVersion,
+            'Client-Sdk-Version': PACKAGE_VERSION,
             'Client-Target-Api-Version': TARGETED_RPC_VERSION,
             ...httpHeaders,
           },

@@ -3,8 +3,6 @@ protocol-key-pair:
   path: /opt/sui/key-pairs/protocol.key
 worker-key-pair:
   path: /opt/sui/key-pairs/worker.key
-account-key-pair:
-  path: /opt/sui/key-pairs/account.key
 network-key-pair:
   path: /opt/sui/key-pairs/network.key
 db-path: /opt/sui/db/authorities_db
@@ -65,4 +63,5 @@ db-checkpoint-config:
 indirect-objects-threshold: 18446744073709551615
 metrics:
   push-interval-seconds: 60
-  push-url: https://metrics-proxy.testnet.sui.io:8443/publish/metrics
+  # push-url: https://metrics-proxy.testnet.sui.io:8443/publish/metrics
+  # push-url: https://metrics-proxy.mainnet.sui.io:8443/publish/metrics
