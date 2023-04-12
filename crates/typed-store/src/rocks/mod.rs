@@ -871,38 +871,6 @@ impl<K, V> DBMap<K, V> {
                 Self::get_int_property(rocksdb, &cf, properties::BACKGROUND_ERRORS)
                     .unwrap_or(METRICS_ERROR),
             );
-        let db_name = rocksdb.db_name();
-        if let RocksDB::DBWithThreadMode(ref rocksdb) = **rocksdb {
-            let mem_usage_stats =
-                rocksdb::perf::get_memory_usage_stats(Some(&[&rocksdb.underlying]), None);
-            db_metrics
-                .rocksdb_mem_table_usage
-                .with_label_values(&[&db_name])
-                .set(
-                    mem_usage_stats
-                        .as_ref()
-                        .map(|x| x.mem_table_total as i64)
-                        .unwrap_or(METRICS_ERROR),
-                );
-            db_metrics
-                .rocksdb_unflushed_mem_table_usage
-                .with_label_values(&[&db_name])
-                .set(
-                    mem_usage_stats
-                        .as_ref()
-                        .map(|x| x.mem_table_unflushed as i64)
-                        .unwrap_or(METRICS_ERROR),
-                );
-            db_metrics
-                .rocksdb_table_readers_usage
-                .with_label_values(&[&db_name])
-                .set(
-                    mem_usage_stats
-                        .as_ref()
-                        .map(|x| x.mem_table_readers_total as i64)
-                        .unwrap_or(METRICS_ERROR),
-                );
-        }
     }
 
     pub fn transaction(&self) -> Result<DBTransaction<'_>, TypedStoreError> {
