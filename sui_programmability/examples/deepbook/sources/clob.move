@@ -75,7 +75,7 @@ module deepbook::clob {
     const TIMESTAMP_INF: u64 = ((1u128 << 64 - 1) as u64);
     const REFERENCE_TAKER_FEE_RATE: u64 = 5000000;
     const REFERENCE_MAKER_REBATE_RATE: u64 = 2500000;
-    const FEE_AMOUNT_FOR_CREATE_POOL: u64 = 100 * 100000000;
+    const FEE_AMOUNT_FOR_CREATE_POOL: u64 = 100000000; // 0.1 sui
     const FEE_RECIPIENT: address = @0x0;
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Constants <<<<<<<<<<<<<<<<<<<<<<<<
@@ -317,7 +317,6 @@ module deepbook::clob {
     public fun swap_exact_quote_for_base<BaseAsset, QuoteAsset>(
         pool: &mut Pool<BaseAsset, QuoteAsset>,
         quantity: u64,
-        price_limit: u64,
         clock: &Clock,
         quote_coin: Coin<QuoteAsset>,
         ctx: &mut TxContext,
@@ -325,7 +324,7 @@ module deepbook::clob {
         let (base_asset_balance, quote_asset_balance) = match_bid_with_quote_quantity(
             pool,
             quantity,
-            price_limit,
+            MAX_PRICE,
             clock::timestamp_ms(clock),
             coin::into_balance(quote_coin)
         );
@@ -1352,7 +1351,7 @@ module deepbook::clob {
         {
             usd::init_test(test_scenario::ctx(scenario));
             sui::init_test(test_scenario::ctx(scenario));
-            clock::create_for_testing(test_scenario::ctx(scenario));
+            clock::share_for_testing(clock::create_for_testing(test_scenario::ctx(scenario)));
             init(test_scenario::ctx(scenario));
         };
 
