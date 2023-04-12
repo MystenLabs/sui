@@ -41,7 +41,8 @@ export function CheckpointsTable({
     );
 
     const count = useMemo(() => {
-        if (maxCursor && initialCursor) return +initialCursor - +maxCursor;
+        if (maxCursor && initialCursor)
+            return Number(initialCursor) - Number(maxCursor);
         return Number(countQuery.data ?? 0);
     }, [countQuery.data, initialCursor, maxCursor]);
 
@@ -49,8 +50,10 @@ export function CheckpointsTable({
         ['checkpoints', { limit, cursor }],
         () =>
             rpc.getCheckpoints({
-                limit: (cursor && maxCursor && +cursor - +limit < +maxCursor
-                    ? +cursor - +maxCursor
+                limit: (cursor &&
+                maxCursor &&
+                Number(cursor) - Number(limit) < Number(maxCursor)
+                    ? Number(cursor) - Number(maxCursor)
                     : limit
                 ).toString(),
                 descendingOrder: true,
@@ -85,7 +88,7 @@ export function CheckpointsTable({
                           time: (
                               <TxTableCol>
                                   <TxTimeType
-                                      timestamp={+checkpoint.timestampMs}
+                                      timestamp={Number(checkpoint.timestampMs)}
                                   />
                               </TxTableCol>
                           ),
@@ -142,7 +145,7 @@ export function CheckpointsTable({
                 />
             ) : (
                 <PlaceholderTable
-                    rowCount={+limit}
+                    rowCount={Number(limit)}
                     rowHeight="16px"
                     colHeadings={[
                         'Digest',
@@ -158,7 +161,7 @@ export function CheckpointsTable({
                     label="Checkpoints"
                     data={checkpointsData}
                     count={count}
-                    limit={+limit}
+                    limit={Number(limit)}
                     onLimitChange={setLimit}
                     pagination={pagination}
                     disablePagination={disablePagination}

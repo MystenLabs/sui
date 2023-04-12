@@ -81,7 +81,9 @@ export const genTableDataFromTxData = (
         return {
             date: (
                 <TxTableCol>
-                    <TxTimeType timestamp={+(transaction.timestampMs || 0)} />
+                    <TxTimeType
+                        timestamp={Number(transaction.timestampMs || 0)}
+                    />
                 </TxTableCol>
             ),
             digest: (

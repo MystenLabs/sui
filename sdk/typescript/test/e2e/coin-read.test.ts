@@ -57,7 +57,7 @@ describe('CoinRead API', () => {
     });
     expect(suiBalance.coinType).toEqual('0x2::sui::SUI');
     expect(suiBalance.coinObjectCount).toEqual(5);
-    expect(+suiBalance.totalBalance).toBeGreaterThan(0);
+    expect(Number(suiBalance.totalBalance)).toBeGreaterThan(0);
 
     const testBalance = await toolbox.provider.getBalance({
       owner: publishToolbox.address(),
@@ -65,7 +65,7 @@ describe('CoinRead API', () => {
     });
     expect(testBalance.coinType).toEqual(testType);
     expect(testBalance.coinObjectCount).toEqual(2);
-    expect(+testBalance.totalBalance).toEqual(11);
+    expect(Number(testBalance.totalBalance)).toEqual(11);
 
     const allBalances = await toolbox.provider.getAllBalances({
       owner: publishToolbox.address(),
@@ -77,6 +77,6 @@ describe('CoinRead API', () => {
     const testSupply = await toolbox.provider.getTotalSupply({
       coinType: testType,
     });
-    expect(+testSupply.value).toEqual(11);
+    expect(Number(testSupply.value)).toEqual(11);
   });
 });
