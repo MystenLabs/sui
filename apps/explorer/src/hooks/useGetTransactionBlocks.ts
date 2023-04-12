@@ -6,10 +6,10 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 
 import type { SuiAddress } from '@mysten/sui.js';
 
-const MAX_TRANSACTIONS_PER_REQUEST = 100;
+export const DEFAULT_TRANSACTIONS_LIMIT = 20;
 
 // Fetch all coins for an address, this will keep calling the API until all coins are fetched
-export function useGetTransactionBlocks(address: SuiAddress, isFrom?: boolean) {
+export function useGetTransactionBlocks(address: SuiAddress, isFrom?: boolean, limit = DEFAULT_TRANSACTIONS_LIMIT) {
     const rpc = useRpcClient();
     const filter = isFrom ? { FromAddress: address } : { ToAddress: address }
 
@@ -21,7 +21,7 @@ export function useGetTransactionBlocks(address: SuiAddress, isFrom?: boolean) {
                     cursor: pageParam ? pageParam.cursor : null,
                     filter,
                     order: 'descending',
-                    limit: MAX_TRANSACTIONS_PER_REQUEST,
+                    limit,
                     options: {
                         showEffects: true,
                         showBalanceChanges: true,

@@ -3,13 +3,14 @@
 
 import { useRef, useState, useEffect } from "react";
 
-import { useGetTransactionBlocks } from "~/hooks/useGetTransactionBlocks";
+import {genTableDataFromTxData} from '../transactions/TxCardUtils'
+
+import { DEFAULT_TRANSACTIONS_LIMIT, useGetTransactionBlocks } from "~/hooks/useGetTransactionBlocks";
 import { useOnScreen } from "~/hooks/useOnScreen";
 import { Button } from "~/ui/Button";
 import { Heading } from "~/ui/Heading";
 import { LoadingSpinner } from "~/ui/LoadingSpinner";
 import { TableCard } from "~/ui/TableCard";
-import {genTableDataFromTxData} from '../transactions/TxCardUtils'
 
 type TransactionBlocksProps = {
     address: string;
@@ -17,6 +18,7 @@ type TransactionBlocksProps = {
 
 function TransactionBlocks({ address }: TransactionBlocksProps) {
     const [isFrom, setIsFrom] = useState(false)
+    const [transactionsLimit, setTransactionsLimit] = useState(DEFAULT_TRANSACTIONS_LIMIT)
     const { data, isLoading, isFetching, fetchNextPage, hasNextPage } =
     useGetTransactionBlocks(address, isFrom);
     
@@ -39,10 +41,13 @@ function TransactionBlocks({ address }: TransactionBlocksProps) {
     const isSpinnerVisible = hasNextPage || isLoading || isFetching;
 
     useEffect(() => {
-        if (isIntersecting && hasNextPage && !isFetching) {
-            fetchNextPage();
+        if (isIntersecting && hasNextPage && !isFetching && !isLoading) {
+            // fetchNextPage();
         }
-    }, [isIntersecting, hasNextPage, isFetching, fetchNextPage]);
+    }, [isIntersecting, hasNextPage, isFetching, isLoading, fetchNextPage]);
+
+
+    console.log(data, isFetching);
 
     return <div>
         <div className="flex justify-between items-center border-b border-gray-45 pb-5">
@@ -55,19 +60,20 @@ function TransactionBlocks({ address }: TransactionBlocksProps) {
             </div>
             
         </div>
-        {isLoading || isFetching ? <LoadingSpinner /> : <div>
+        
         <div data-testid="tx">
-            {data?.pages.map(page => {
-                const cardData = genTableDataFromTxData(page.data)
-                return <TableCard data={cardData.data} columns={cardData.columns} />
-            })}
+            {data && data?.pages.map(page => 
+                 {  
+                    const cardData = genTableDataFromTxData(page.data)
+                    return <TableCard data={cardData.data} columns={cardData.columns} />
+                }
+            )}
         </div>
         {isSpinnerVisible && (
-                <div ref={containerRef}>
-                    <LoadingSpinner />
-                </div>
-            )}
-            </div>}
+            <div ref={containerRef}>
+                <LoadingSpinner />
+            </div>
+        )}
     </div>
 }
 
