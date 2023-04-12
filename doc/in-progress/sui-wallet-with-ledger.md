@@ -54,7 +54,7 @@ Sui Wallet displays the accounts you selected on the **Accounts** screen. The ac
 
 You can view the balance for an account in Sui Wallet on the **Coins** tab. The coins and SUI stake displayed are for only the selected account address. To view the balance for a different account address, select the account from the drop-down list near the top of the wallet.
 
-To view the coins and tokens in your account you imported from your Ledger device, select an account that displays *LEDGER* next to it. To view the NFTs for the account, click the **NFTs** tab in Sui Wallet.
+To view the coins and tokens in your account that you imported from your Ledger device, select an account that displays *LEDGER* next to it. To view the NFTs for the account, click the **NFTs** tab in Sui Wallet.
 
 ## Receive digital assets using Sui Wallet
 
