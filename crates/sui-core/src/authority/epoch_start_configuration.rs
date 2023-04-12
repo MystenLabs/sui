@@ -19,7 +19,9 @@ pub trait EpochStartConfigTrait {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub enum EpochFlag {}
+pub enum EpochFlag {
+    InMemoryCheckpointRoots,
+}
 
 /// Parameters of the epoch fixed at epoch start.
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
@@ -55,9 +57,10 @@ impl EpochStartConfiguration {
     }
 
     pub fn new_for_testing() -> Self {
-        Self::new_v1(
+        Self::new_v2(
             EpochStartSystemState::new_for_testing(),
             CheckpointDigest::default(),
+            EpochFlag::default_flags_for_new_epoch(),
         )
     }
 
@@ -98,13 +101,6 @@ impl EpochStartConfigurationV1 {
             epoch_digest,
         }
     }
-
-    pub fn new_for_testing() -> Self {
-        Self::new(
-            EpochStartSystemState::new_for_testing(),
-            CheckpointDigest::default(),
-        )
-    }
 }
 
 impl EpochStartConfigurationV2 {
@@ -118,14 +114,6 @@ impl EpochStartConfigurationV2 {
             epoch_digest,
             flags,
         }
-    }
-
-    pub fn new_for_testing() -> Self {
-        Self::new(
-            EpochStartSystemState::new_for_testing(),
-            CheckpointDigest::default(),
-            vec![],
-        )
     }
 }
 
@@ -159,16 +147,15 @@ impl EpochStartConfigTrait for EpochStartConfigurationV2 {
 
 impl EpochFlag {
     pub fn default_flags_for_new_epoch() -> Vec<Self> {
-        vec![]
+        vec![EpochFlag::InMemoryCheckpointRoots]
     }
 }
 
 impl fmt::Display for EpochFlag {
-    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Important - implementation should return low cardinality values because this is used as metric key
-        // match self {
-        //
-        // }
-        Ok(())
+        match self {
+            EpochFlag::InMemoryCheckpointRoots => write!(f, "InMemoryCheckpointRoots"),
+        }
     }
 }
