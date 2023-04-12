@@ -244,7 +244,7 @@ export class JsonRpcProvider {
   }
 
   /**
-   * Get the total coin balance for all coin type, owned by the address owner.
+   * Get the total coin balance for all coin types, owned by the address owner.
    */
   async getAllBalances(input: { owner: SuiAddress }): Promise<CoinBalance[]> {
     if (!input.owner || !isValidSuiAddress(normalizeSuiAddress(input.owner))) {
