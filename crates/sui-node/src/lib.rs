@@ -185,20 +185,18 @@ impl SuiNode {
             &genesis_committee,
             None,
         ));
-        let store = Arc::new(
-            AuthorityStore::open(
-                &config.db_path().join("store"),
-                None,
-                genesis,
-                &committee_store,
-                config.indirect_objects_threshold,
-                config
-                    .expensive_safety_check_config
-                    .enable_epoch_sui_conservation_check(),
-                &prometheus_registry,
-            )
-            .await?,
-        );
+        let store = AuthorityStore::open(
+            &config.db_path().join("store"),
+            None,
+            genesis,
+            &committee_store,
+            config.indirect_objects_threshold,
+            config
+                .expensive_safety_check_config
+                .enable_epoch_sui_conservation_check(),
+            &prometheus_registry,
+        )
+        .await?;
         let cur_epoch = store.get_recovery_epoch_at_restart()?;
         let committee = committee_store
             .get_committee(&cur_epoch)?
