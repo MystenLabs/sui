@@ -2889,11 +2889,10 @@ async fn test_authority_persist() {
     fs::create_dir(&path).unwrap();
 
     // Create an authority
-    let store = Arc::new(
+    let store =
         AuthorityStore::open_with_committee_for_testing(&path, None, &committee, &genesis, 0)
             .await
-            .unwrap(),
-    );
+            .unwrap();
     let authority = init_state(committee, authority_key, store).await;
 
     // Create an object
@@ -2915,11 +2914,10 @@ async fn test_authority_persist() {
     let seed = [1u8; 32];
     let (genesis, authority_key) = init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
     let committee = genesis.committee().unwrap();
-    let store = Arc::new(
+    let store =
         AuthorityStore::open_with_committee_for_testing(&path, None, &committee, &genesis, 0)
             .await
-            .unwrap(),
-    );
+            .unwrap();
     let authority2 = init_state(committee, authority_key, store).await;
     let obj2 = authority2.get_object(&object_id).await.unwrap().unwrap();
 

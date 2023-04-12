@@ -1048,7 +1048,7 @@ impl AuthorityPerEpochStore {
             .override_protocol_upgrade_buffer_stake
             .get(&OVERRIDE_PROTOCOL_UPGRADE_BUFFER_STAKE_INDEX)
             .expect("force_protocol_upgrade read cannot fail")
-            .tap_some(|b| warn!("using overrided buffer stake value of {}", b))
+            .tap_some(|b| warn!("using overridden buffer stake value of {}", b))
             .unwrap_or_else(|| {
                 self.protocol_config()
                     .buffer_stake_for_protocol_upgrade_bps()

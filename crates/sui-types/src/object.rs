@@ -349,6 +349,14 @@ impl MoveObject {
 
     /// Get the total amount of SUI embedded in `self`. Intended for testing purposes
     pub fn get_total_sui(&self, resolver: &impl GetModule) -> Result<u64, SuiError> {
+        if self.type_.is_gas_coin() {
+            // Fast path without deserialization.
+            return Ok(self.get_coin_value_unsafe());
+        }
+        // If this is a coin but not a SUI coin, the SUI balance must be 0.
+        if self.type_.is_coin() {
+            return Ok(0);
+        }
         let layout = self.get_layout(ObjectFormatOptions::with_types(), resolver)?;
         let move_struct = self.to_move_struct(&layout)?;
         Ok(Self::get_total_sui_in_struct(&move_struct, 0))

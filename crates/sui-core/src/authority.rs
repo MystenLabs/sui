@@ -1722,17 +1722,15 @@ impl AuthorityState {
         };
 
         // unwrap ok - for testing only.
-        let store = Arc::new(
-            AuthorityStore::open_with_committee_for_testing(
-                &path.join("store"),
-                None,
-                &genesis_committee,
-                genesis,
-                0,
-            )
-            .await
-            .unwrap(),
-        );
+        let store = AuthorityStore::open_with_committee_for_testing(
+            &path.join("store"),
+            None,
+            &genesis_committee,
+            genesis,
+            0,
+        )
+        .await
+        .unwrap();
         let registry = Registry::new();
         let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
         let signature_verifier_metrics = SignatureVerifierMetrics::new(&registry);
