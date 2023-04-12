@@ -41,14 +41,6 @@
     group: "sui"
     mode: 0600
 
-- name: Copy account.key
-  copy:
-    src: "{{ keypair_path }}account.key"
-    dest: /opt/sui/key-pairs/account.key
-    owner: "sui"
-    group: "sui"
-    mode: 0600
-
 - name: Copy network.key
   copy:
     src: "{{ keypair_path }}network.key"
