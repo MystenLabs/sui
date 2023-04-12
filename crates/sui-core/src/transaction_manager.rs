@@ -534,7 +534,7 @@ impl TransactionManager {
         inner
             .pending_certificates
             .get(digest)
-            .map(|cert| cert.acquiring_locks.keys().cloned().into_iter().collect())
+            .map(|cert| cert.acquiring_locks.keys().cloned().collect())
     }
 
     // Returns the number of transactions waiting on each object ID.

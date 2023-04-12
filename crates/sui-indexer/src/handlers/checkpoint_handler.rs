@@ -206,7 +206,6 @@ where
         loop {
             let download_futures = (next_cursor_sequence_number
                 ..next_cursor_sequence_number + current_parallel_downloads as i64)
-                .into_iter()
                 .map(|seq_num| {
                     self.download_checkpoint_data(seq_num as u64, /* skip objects */ false)
                 });
@@ -282,7 +281,6 @@ where
         loop {
             let download_futures = (next_cursor_sequence_number
                 ..next_cursor_sequence_number + current_parallel_downloads as i64)
-                .into_iter()
                 .map(|seq_num| {
                     self.download_checkpoint_data(seq_num as u64, /* skip objects */ true)
                 });

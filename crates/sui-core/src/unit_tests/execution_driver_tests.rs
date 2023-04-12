@@ -280,17 +280,13 @@ async fn test_execution_with_dependencies() {
     // ---- Initialize a network with three accounts, each with 10 gas objects.
 
     const NUM_ACCOUNTS: usize = 3;
-    let accounts: Vec<(_, AccountKeyPair)> = (0..NUM_ACCOUNTS)
-        .into_iter()
-        .map(|_| get_key_pair())
-        .collect_vec();
+    let accounts: Vec<(_, AccountKeyPair)> =
+        (0..NUM_ACCOUNTS).map(|_| get_key_pair()).collect_vec();
 
     const NUM_GAS_OBJECTS_PER_ACCOUNT: usize = 10;
     let gas_objects = (0..NUM_ACCOUNTS)
-        .into_iter()
         .map(|i| {
             (0..NUM_GAS_OBJECTS_PER_ACCOUNT)
-                .into_iter()
                 .map(|_| Object::with_owner_for_testing(accounts[i].0))
                 .collect_vec()
         })
@@ -459,7 +455,6 @@ async fn test_per_object_overload() {
     let (addr, key) = get_key_pair();
     const NUM_GAS_OBJECTS_PER_ACCOUNT: usize = 2000;
     let gas_objects = (0..NUM_GAS_OBJECTS_PER_ACCOUNT)
-        .into_iter()
         .map(|_| Object::with_owner_for_testing(addr))
         .collect_vec();
     let (aggregator, authorities, _genesis, package) =

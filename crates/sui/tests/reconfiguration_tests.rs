@@ -665,7 +665,6 @@ async fn test_inactive_validator_pool_read() {
 fn gen_keys(count: usize) -> Vec<AccountKeyPair> {
     let mut rng = StdRng::from_seed([0; 32]);
     (0..count)
-        .into_iter()
         .map(|_| get_key_pair_from_rng::<AccountKeyPair, _>(&mut rng).1)
         .collect()
 }
