@@ -47,6 +47,9 @@ pub struct Orchestrator {
     skip_testbed_configuration: bool,
     /// Whether to downloading and analyze the client and node log files.
     log_processing: bool,
+    /// Number of instances running only load generators (not nodes). If this value is set
+    /// to zero, the orchestrator runs a load generate collocated with each node.
+    dedicated_clients: usize,
 }
 
 impl Orchestrator {
@@ -74,6 +77,7 @@ impl Orchestrator {
             skip_testbed_update: false,
             skip_testbed_configuration: false,
             log_processing: false,
+            dedicated_clients: 0,
         }
     }
 
@@ -107,38 +111,70 @@ impl Orchestrator {
         self
     }
 
-    /// Select on which instances of the testbed to run the benchmarks.
+    /// Set the number of instances running exclusively load generators.
+    pub fn with_dedicated_clients(mut self, dedicated_clients: usize) -> Self {
+        self.dedicated_clients = dedicated_clients;
+        self
+    }
+
+    /// Select on which instances of the testbed to run the benchmarks. This function returns two vector
+    /// of instances; the first contains the instances on which to run the load generators and the second
+    /// contains the instances on which to run the nodes.
     pub fn select_instances(
         &self,
         parameters: &BenchmarkParameters,
-    ) -> TestbedResult<Vec<Instance>> {
+    ) -> TestbedResult<(Vec<Instance>, Vec<Instance>)> {
+        // Ensure there are enough active instances.
+        let available_instances: Vec<_> = self.instances.iter().filter(|x| x.is_active()).collect();
         ensure!(
-            self.instances.len() >= parameters.nodes,
-            TestbedError::InsufficientCapacity(parameters.nodes - self.instances.len())
+            available_instances.len() >= parameters.nodes + self.dedicated_clients,
+            TestbedError::InsufficientCapacity(
+                parameters.nodes + self.dedicated_clients - available_instances.len()
+            )
         );
 
+        // Sort the instances by region.
         let mut instances_by_regions = HashMap::new();
-        for instance in &self.instances {
-            if instance.is_active() {
-                instances_by_regions
-                    .entry(&instance.region)
-                    .or_insert_with(VecDeque::new)
-                    .push_back(instance);
-            }
+        for instance in available_instances {
+            instances_by_regions
+                .entry(&instance.region)
+                .or_insert_with(VecDeque::new)
+                .push_back(instance);
         }
 
-        let mut instances = Vec::new();
+        // Select the instances to host exclusively load generators.
+        let mut client_instances = Vec::new();
         for region in self.settings.regions.iter().cycle() {
-            if instances.len() == parameters.nodes {
+            if client_instances.len() == self.dedicated_clients {
                 break;
             }
             if let Some(regional_instances) = instances_by_regions.get_mut(region) {
                 if let Some(instance) = regional_instances.pop_front() {
-                    instances.push(instance.clone());
+                    client_instances.push(instance.clone());
                 }
             }
         }
-        Ok(instances)
+
+        // Select the instances to host the nodes.
+        let mut nodes_instances = Vec::new();
+        for region in self.settings.regions.iter().cycle() {
+            if nodes_instances.len() == parameters.nodes {
+                break;
+            }
+            if let Some(regional_instances) = instances_by_regions.get_mut(region) {
+                if let Some(instance) = regional_instances.pop_front() {
+                    nodes_instances.push(instance.clone());
+                }
+            }
+        }
+
+        // Spawn a load generate collocated with each node if there are no instances dedicated
+        // to excursively run load generators.
+        if client_instances.is_empty() {
+            client_instances = nodes_instances.clone();
+        }
+
+        Ok((client_instances, nodes_instances))
     }
 
     /// Boot one node per instance.
@@ -271,15 +307,15 @@ impl Orchestrator {
         display::action("Configuring instances");
 
         // Select instances to configure.
-        let instances = self.select_instances(parameters)?;
+        let (clients, nodes) = self.select_instances(parameters)?;
 
         // Generate the genesis configuration file and the keystore allowing access to gas objects.
-        let command = self.protocol_commands.genesis_command(instances.iter());
+        let command = self.protocol_commands.genesis_command(nodes.iter());
         let repo_name = self.settings.repository_name();
         let ssh_command =
             SshCommand::new(move |_| command.clone()).with_execute_from_path(repo_name.into());
         self.ssh_manager
-            .execute(instances.iter(), &ssh_command)
+            .execute(clients.iter().chain(nodes.iter()), &ssh_command)
             .await?;
 
         display::done();
@@ -317,10 +353,10 @@ impl Orchestrator {
         display::action("Deploying validators");
 
         // Select the instances to run.
-        let instances = self.select_instances(parameters)?;
+        let (_, nodes) = self.select_instances(parameters)?;
 
         // Boot one node per instance.
-        self.boot_nodes(instances).await?;
+        self.boot_nodes(nodes).await?;
 
         display::done();
         Ok(())
@@ -331,19 +367,20 @@ impl Orchestrator {
         display::action("Setting up load generators");
 
         // Select the instances to run.
-        let instances = self.select_instances(parameters)?;
+        let (clients, _) = self.select_instances(parameters)?;
 
         // Deploy the load generators.
         let working_dir = self.settings.working_dir.clone();
-        let committee_size = instances.len();
-        let load_share = parameters.load / committee_size;
+        let number_of_clients = clients.len();
+        let load_share = parameters.load / number_of_clients;
         let shared_counter = parameters.shared_objects_ratio;
         let transfer_objects = 100 - shared_counter;
         let command = move |i: usize| -> String {
             let mut genesis = working_dir.clone();
             genesis.push("sui_config");
             genesis.push("genesis.blob");
-            let gas_id = GenesisConfig::benchmark_gas_object_id_offsets(committee_size)[i].clone();
+            let gas_id =
+                GenesisConfig::benchmark_gas_object_id_offsets(number_of_clients)[i].clone();
             let keystore = format!(
                 "~/working_dir/sui_config/{}",
                 sui_config::SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME
@@ -372,7 +409,7 @@ impl Orchestrator {
             .with_log_file("~/client.log".into())
             .with_execute_from_path(repo.into());
         self.ssh_manager
-            .execute(instances.iter(), &ssh_command)
+            .execute(clients.iter(), &ssh_command)
             .await?;
 
         // Wait until all load generators are reachable.
@@ -382,7 +419,7 @@ impl Orchestrator {
         );
         let metrics_ssh_command = SshCommand::new(move |_| metrics_command.clone());
         self.ssh_manager
-            .wait_for_success(instances.iter(), &metrics_ssh_command)
+            .wait_for_success(clients.iter(), &metrics_ssh_command)
             .await;
 
         display::done();
@@ -400,7 +437,7 @@ impl Orchestrator {
         ));
 
         // Select the instances to run.
-        let instances = self.select_instances(parameters)?;
+        let (clients, nodes) = self.select_instances(parameters)?;
 
         // Regularly scrape the client metrics.
         let command = format!(
@@ -414,7 +451,7 @@ impl Orchestrator {
         metrics_interval.tick().await; // The first tick returns immediately.
 
         let faults_type = parameters.faults.clone();
-        let mut faults_schedule = CrashRecoverySchedule::new(faults_type, instances.clone());
+        let mut faults_schedule = CrashRecoverySchedule::new(faults_type, nodes.clone());
         let mut faults_interval = time::interval(self.crash_interval);
         faults_interval.tick().await; // The first tick returns immediately.
 
@@ -428,7 +465,7 @@ impl Orchestrator {
 
                     let stdio = self
                         .ssh_manager
-                        .execute(instances.iter(), &ssh_command)
+                        .execute(clients.iter(), &ssh_command)
                         .await?;
                     for (i, (stdout, _stderr)) in stdio.iter().enumerate() {
                         let measurement = Measurement::from_prometheus::<SuiProtocol>(stdout);
@@ -477,53 +514,61 @@ impl Orchestrator {
         &self,
         parameters: &BenchmarkParameters,
     ) -> TestbedResult<LogsAnalyzer> {
-        display::action("Downloading logs");
         // Select the instances to run.
-        let instances = self.select_instances(parameters)?;
+        let (clients, nodes) = self.select_instances(parameters)?;
+
+        // Create a log sub-directory for this run.
+        let commit = &self.settings.repository.commit;
+        let path: PathBuf = [
+            &self.settings.logs_dir,
+            &format!("logs-{commit}").into(),
+            &format!("logs-{parameters:?}").into(),
+        ]
+        .iter()
+        .collect();
+        fs::create_dir_all(&path).expect("Failed to create log directory");
 
         // NOTE: Our ssh library does not seem to be able to transfers files in parallel reliably.
         let mut log_parsers = Vec::new();
-        for (i, instance) in instances.iter().enumerate() {
-            display::status(format!("{}/{}", i + 1, instances.len()));
-            let mut log_parser = LogsAnalyzer::default();
 
-            // Connect to the instance.
+        // Download the clients log files.
+        display::action("Downloading clients logs");
+        for (i, instance) in clients.iter().enumerate() {
+            display::status(format!("{}/{}", i + 1, clients.len()));
+
             let connection = self.ssh_manager.connect(instance.ssh_address()).await?;
+            let client_log_content = connection.download("client.log")?;
 
-            // Create a log sub-directory for this run.
-            let commit = &self.settings.repository.commit;
-            let path: PathBuf = [
-                &self.settings.logs_dir,
-                &format!("logs-{commit}").into(),
-                &format!("logs-{parameters:?}").into(),
-            ]
-            .iter()
-            .collect();
-            fs::create_dir_all(&path).expect("Failed to create log directory");
+            let client_log_file = [path.clone(), format!("client-{i}.log").into()]
+                .iter()
+                .collect::<PathBuf>();
+            fs::write(&client_log_file, client_log_content.as_bytes())
+                .expect("Cannot write log file");
 
-            // Download the node log files.
+            let mut log_parser = LogsAnalyzer::default();
+            log_parser.set_client_errors(&client_log_content);
+            log_parsers.push(log_parser)
+        }
+        display::done();
+
+        display::action("Downloading nodes logs");
+        for (i, instance) in nodes.iter().enumerate() {
+            display::status(format!("{}/{}", i + 1, nodes.len()));
+
+            let connection = self.ssh_manager.connect(instance.ssh_address()).await?;
             let node_log_content = connection.download("node.log")?;
-            log_parser.set_node_errors(&node_log_content);
 
             let node_log_file = [path.clone(), format!("node-{i}.log").into()]
                 .iter()
                 .collect::<PathBuf>();
             fs::write(&node_log_file, node_log_content.as_bytes()).expect("Cannot write log file");
 
-            // Download the clients log files.
-            let client_log_content = connection.download("client.log")?;
-            log_parser.set_client_errors(&client_log_content);
-
-            let client_log_file = [path, format!("client-{i}.log").into()]
-                .iter()
-                .collect::<PathBuf>();
-            fs::write(&client_log_file, client_log_content.as_bytes())
-                .expect("Cannot write log file");
-
+            let mut log_parser = LogsAnalyzer::default();
+            log_parser.set_node_errors(&node_log_content);
             log_parsers.push(log_parser)
         }
-
         display::done();
+
         Ok(LogsAnalyzer::aggregate(log_parsers))
     }
 

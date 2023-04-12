@@ -94,7 +94,10 @@ class MeasurementId:
     def __init__(self, measurement, max_latency=None):
         self.shared_objects_ratio = measurement['parameters']['shared_objects_ratio']
         self.nodes = measurement['parameters']['nodes']
-        self.faults = measurement['parameters']['faults']
+        if 'permanent' in measurement['parameters']['faults']:
+            self.faults = measurement['parameters']['faults']['permanent']['faults']
+        else:
+            self.faults = 0
         self.duration = measurement['parameters']['duration']
         self.machine_specs = measurement['machine_specs']
         self.commit = measurement['commit']

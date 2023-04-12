@@ -102,6 +102,11 @@ pub enum Operation {
         #[clap(long, action, default_value = "false", global = true)]
         log_processing: bool,
 
+        /// The number of instances running exclusively load generators. If set to zero the
+        /// orchestrator collocates one load generator with each node.
+        #[clap(long, value_name = "INT", default_value = "0", global = true)]
+        dedicated_clients: usize,
+
         /// The timeout duration for ssh commands (in seconds).
         #[clap(long, action, value_parser = parse_duration, default_value = "30", global = true)]
         timeout: Duration,
@@ -269,6 +274,7 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
             skip_testbed_update,
             skip_testbed_configuration,
             log_processing,
+            dedicated_clients,
             timeout,
             retries,
             load_type,
@@ -327,6 +333,7 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
             .skip_testbed_updates(skip_testbed_update)
             .skip_testbed_configuration(skip_testbed_configuration)
             .with_log_processing(log_processing)
+            .with_dedicated_clients(dedicated_clients)
             .run_benchmarks(generator)
             .await
             .wrap_err("Failed to run benchmarks")?;
