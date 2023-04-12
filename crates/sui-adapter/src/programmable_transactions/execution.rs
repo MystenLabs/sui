@@ -116,7 +116,8 @@ fn execute_command<S: StorageView, Mode: ExecutionMode>(
                     "input checker ensures if args are empty, there is a type specified"
                 );
             };
-            let elem_ty = context.load_type(&tag)
+            let elem_ty = context
+                .load_type(&tag)
                 .map_err(|e| context.convert_vm_error(e))?;
             let ty = Type::Vector(Box::new(elem_ty));
             let abilities = context
@@ -140,7 +141,8 @@ fn execute_command<S: StorageView, Mode: ExecutionMode>(
             let mut arg_iter = args.into_iter().enumerate();
             let (mut used_in_non_entry_move_call, elem_ty) = match tag_opt {
                 Some(tag) => {
-                    let elem_ty = context.load_type(&tag)
+                    let elem_ty = context
+                        .load_type(&tag)
                         .map_err(|e| context.convert_vm_error(e))?;
                     (false, elem_ty)
                 }
@@ -268,7 +270,8 @@ fn execute_command<S: StorageView, Mode: ExecutionMode>(
             // Convert type arguments to `Type`s
             let mut loaded_type_arguments = Vec::with_capacity(type_arguments.len());
             for (ix, type_arg) in type_arguments.into_iter().enumerate() {
-                let ty = context.load_type(&type_arg)
+                let ty = context
+                    .load_type(&type_arg)
                     .map_err(|e| context.convert_type_argument_error(ix, e))?;
                 loaded_type_arguments.push(ty);
             }
@@ -364,7 +367,9 @@ fn execute_move_call<S: StorageView, Mode: ExecutionMode>(
         argument_updates,
         &arguments,
         used_in_non_entry_move_call,
-        mutable_reference_outputs.into_iter().map(|(i, bytes, _layout)| (i, bytes)),
+        mutable_reference_outputs
+            .into_iter()
+            .map(|(i, bytes, _layout)| (i, bytes)),
         by_mut_ref,
         return_values.into_iter().map(|(bytes, _layout)| bytes),
         return_value_kinds,
@@ -396,7 +401,9 @@ fn write_back_results<S: StorageView, Mode: ExecutionMode>(
         .zip(return_value_kinds)
         .map(|(bytes, kind)| {
             // only non entry functions have return values
-            make_value(context, kind, bytes, /* used_in_non_entry_move_call */ true)
+            make_value(
+                context, kind, bytes, /* used_in_non_entry_move_call */ true,
+            )
         })
         .collect()
 }
@@ -474,9 +481,8 @@ fn execute_move_publish<S: StorageView, Mode: ExecutionMode>(
         };
 
         context.set_linkage(package)?;
-        let res = publish_and_verify_modules(context, runtime_id, &modules).and_then(|_| {
-            init_modules::<_, Mode>(context, argument_updates, &modules)
-        });
+        let res = publish_and_verify_modules(context, runtime_id, &modules)
+            .and_then(|_| init_modules::<_, Mode>(context, argument_updates, &modules));
         context.reset_linkage();
         res?;
 
@@ -490,7 +496,6 @@ fn execute_move_publish<S: StorageView, Mode: ExecutionMode>(
         init_modules::<_, Mode>(context, argument_updates, &modules)?;
         package
     };
-
 
     context.write_package(package_obj)?;
     let values = if Mode::packages_are_predefined() {
@@ -529,12 +534,12 @@ fn execute_move_upgrade<S: StorageView, Mode: ExecutionMode>(
         "empty package is checked in transaction input checker"
     );
 
-    let upgrade_ticket_type =
-        context.load_type(&TypeTag::Struct(Box::new(UpgradeTicket::type_())))
-            .map_err(|e| context.convert_vm_error(e))?;
-    let upgrade_receipt_type =
-        context.load_type(&TypeTag::Struct(Box::new(UpgradeReceipt::type_())))
-            .map_err(|e| context.convert_vm_error(e))?;
+    let upgrade_ticket_type = context
+        .load_type(&TypeTag::Struct(Box::new(UpgradeTicket::type_())))
+        .map_err(|e| context.convert_vm_error(e))?;
+    let upgrade_receipt_type = context
+        .load_type(&TypeTag::Struct(Box::new(UpgradeReceipt::type_())))
+        .map_err(|e| context.convert_vm_error(e))?;
 
     let upgrade_ticket: UpgradeTicket = {
         let mut ticket_bytes = Vec::new();
@@ -738,8 +743,14 @@ fn vm_move_call<S: StorageView>(
     // Move VM (e.g. to account for the number of created
     // objects).
     if tx_context_kind == TxContextKind::Mutable {
-        let (_, ctx_bytes, _) = result.mutable_reference_outputs.pop().unwrap();
-        let updated_ctx: TxContext = bcs::from_bytes(&ctx_bytes).unwrap();
+        let Some((_, ctx_bytes, _)) = result.mutable_reference_outputs.pop() else {
+            invariant_violation!("Missing TxContext in reference outputs");
+        };
+        let updated_ctx: TxContext = bcs::from_bytes(&ctx_bytes).map_err(|e| {
+            ExecutionError::invariant_violation(format!(
+                "Unable to deserialize TxContext bytes. {e}"
+            ))
+        })?;
         context.tx_context.update_state(updated_ctx)?;
     }
     Ok(result)
