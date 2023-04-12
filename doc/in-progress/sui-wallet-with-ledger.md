@@ -63,7 +63,7 @@ To receive cryptocurrency or other digital assets such as NFTs in Sui Wallet, se
 Before you use an account from your Ledger device to receive an asset, confirm that the account is connected to your device.
 
 **To receive digital assets to your Ledger account using Sui Wallet** 
-1. Open Sui Wallet and click the Settings menu (the 3 bars displayed in the top-right corner).
+1. Open Sui Wallet and click the Settings menu (the three bars displayed in the top-right corner).
 1. Click **Accounts**.
 1. Click the down arrow next to the Ledger account to receive the asset, then click **Verify Ledger connection**. Make sure that the display shows **Ledger is connected** before you initiate the transaction to receive an asset.
 1. Send the digital asset to the address for the Ledger account.
