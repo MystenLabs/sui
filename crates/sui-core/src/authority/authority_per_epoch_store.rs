@@ -806,16 +806,16 @@ impl AuthorityPerEpochStore {
             let versions_to_write: Vec<_> = uninitialized_objects
                 .iter()
                 .map(|(id, initial_version)| {
-                // Note: we don't actually need to read from the transaction here, as no writer
-                // can update parent_sync_store until after get_or_init_next_object_versions
-                // completes.
-                match parent_sync_store
-                    .get_latest_parent_entry_ref(*id)
-                    .expect("read cannot fail")
-                {
-                    Some(objref) => (*id, objref.1),
+                    // Note: we don't actually need to read from the transaction here, as no writer
+                    // can update parent_sync_store until after get_or_init_next_object_versions
+                    // completes.
+                    match parent_sync_store
+                        .get_latest_parent_entry_ref(*id)
+                        .expect("read cannot fail")
+                    {
+                        Some(objref) => (*id, objref.1),
                         None => (*id, *initial_version),
-                }
+                    }
                 })
                 .collect();
 
@@ -862,7 +862,7 @@ impl AuthorityPerEpochStore {
             .collect();
 
         self.get_or_init_next_object_versions(shared_input_objects.into_iter(), parent_sync_store)
-        .await?;
+            .await?;
         self.tables
             .assigned_shared_object_versions
             .insert(tx_digest, assigned_versions)?;
@@ -1866,7 +1866,7 @@ impl AuthorityPerEpochStore {
                     commit_height: index,
                 },
             });
-            }
+        }
         self.record_checkpoint_boundary(round)?;
         Ok(checkpoint)
     }
