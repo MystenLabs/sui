@@ -330,7 +330,7 @@ async fn test_loss_of_liveness_with_recovery() {
     tokio::time::sleep(node_advance_delay).await;
     let rounds_3 = cluster.assert_progress(4, 0).await;
 
-    let round_2_max = rounds_2.values().into_iter().max().unwrap();
+    let round_2_max = rounds_2.values().max().unwrap();
     assert!(
         rounds_3.values().all(|v| v > round_2_max),
         "All the nodes should have advanced more from the previous round"

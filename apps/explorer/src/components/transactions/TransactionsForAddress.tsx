@@ -46,7 +46,10 @@ export function TransactionsForAddress({ address, type }: Props) {
             const uniqueList: SuiTransactionBlockResponse[] = [];
 
             [...results[0].data, ...results[1].data]
-                .sort((a, b) => +(b.timestampMs ?? 0) - +(a.timestampMs ?? 0))
+                .sort(
+                    (a, b) =>
+                        Number(b.timestampMs ?? 0) - Number(a.timestampMs ?? 0)
+                )
                 .forEach((txb) => {
                     if (inserted.get(txb.digest)) return;
                     uniqueList.push(txb);

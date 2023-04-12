@@ -18,7 +18,7 @@ export function UnStakeTxnCard({ event }: UnStakeTxnCardProps) {
     const principalAmount = event.parsedJson?.principal_amount || 0;
     const rewardAmount = event.parsedJson?.reward_amount || 0;
     const validatorAddress = event.parsedJson?.validator_address;
-    const totalAmount = +principalAmount + +rewardAmount;
+    const totalAmount = Number(principalAmount) + Number(rewardAmount);
     const [formatPrinciple, symbol] = useFormatCoin(
         principalAmount,
         SUI_TYPE_ARG

@@ -14,7 +14,6 @@ use serde_with::serde_as;
 use sui_protocol_config::ProtocolConfig;
 use tracing::trace;
 
-use crate::coin::Coin;
 use crate::committee::EpochId;
 use crate::messages::TransactionEvents;
 use crate::storage::ObjectStore;
@@ -463,10 +462,11 @@ impl<S> TemporaryStore<S> {
 
     pub fn smash_gas(&mut self, gas: &[ObjectRef]) -> Result<ObjectRef, ExecutionError> {
         if gas.len() > 1 {
-            let mut gas_coins: Vec<(Object, Coin)> = gas
+            // sum the value of all gas coins
+            let new_balance = gas
                 .iter()
                 .map(|obj_ref| {
-                    let obj = self.objects().get(&obj_ref.0).unwrap().clone();
+                    let obj = self.objects().get(&obj_ref.0).unwrap();
                     let Data::Move(move_obj) = &obj.data else {
                         return Err(ExecutionError::invariant_violation(
                             "Provided non-gas coin object as input for gas!"
@@ -477,30 +477,25 @@ impl<S> TemporaryStore<S> {
                             "Provided non-gas coin object as input for gas!",
                         ));
                     }
-                    let coin = Coin::from_bcs_bytes(move_obj.contents()).map_err(|_| {
-                        ExecutionError::invariant_violation(
-                            "Deserializing Gas coin should not fail!",
-                        )
-                    })?;
-                    Ok((obj, coin))
+                    Ok(move_obj.get_coin_value_unsafe())
                 })
-                .collect::<Result<_, _>>()?;
-            let (mut gas_object, mut gas_coin) = gas_coins.swap_remove(0);
-            for (other_object, other_coin) in gas_coins {
-                gas_coin.add(other_coin.balance)?;
-                self.delete_object(
-                    &other_object.id(),
-                    other_object.version(),
-                    DeleteKind::Normal,
-                )
+                .collect::<Result<Vec<u64>, ExecutionError>>()?
+                .iter()
+                .sum();
+            // unwrap safe because we checked that this exists in `self.objects()` above
+            let mut primary_gas_object = self.objects().get(&gas[0].0).unwrap().clone();
+            // delete all gas objects except the primary_gas_object
+            for (id, version, _digest) in &gas[1..] {
+                debug_assert_ne!(*id, primary_gas_object.id());
+                self.delete_object(id, *version, DeleteKind::Normal)
             }
-            let new_contents = bcs::to_bytes(&gas_coin).map_err(|_| {
-                ExecutionError::invariant_violation("Deserializing Gas coin should not fail!")
-            })?;
-            // unwrap is safe because we checked that it was a coin object above.
-            let move_obj = gas_object.data.try_as_move_mut().unwrap();
-            move_obj.update_coin_contents(new_contents);
-            self.write_object(gas_object, WriteKind::Mutate);
+            // unwrap is safe because we checked that the primary gas object was a coin object above.
+            primary_gas_object
+                .data
+                .try_as_move_mut()
+                .unwrap()
+                .set_coin_value_unsafe(new_balance);
+            self.write_object(primary_gas_object, WriteKind::Mutate);
         }
         Ok(gas[0])
     }

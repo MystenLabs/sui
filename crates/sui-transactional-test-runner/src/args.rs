@@ -22,10 +22,13 @@ pub const SUI_ARGS_LONG: &str = "sui-args";
 pub struct SuiRunArgs {
     #[clap(long = "sender")]
     pub sender: Option<String>,
-    #[clap(long = "view-events")]
-    pub view_events: bool,
-    #[clap(long = "view-gas-used")]
-    pub view_gas_used: bool,
+    #[clap(long = "gas-price")]
+    pub gas_price: Option<u64>,
+    /// If set, this will override the protocol version
+    /// specified elsewhere (e.g., in init). Use with
+    /// caution!
+    #[clap(long = "protocol-version")]
+    pub protocol_version: Option<u64>,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -34,8 +37,6 @@ pub struct SuiPublishArgs {
     pub sender: Option<String>,
     #[clap(long = "upgradeable", action = clap::ArgAction::SetTrue)]
     pub upgradeable: bool,
-    #[clap(long = "view-gas-used")]
-    pub view_gas_used: bool,
     #[clap(
         long = "dependencies",
         multiple_values(true),
@@ -48,6 +49,8 @@ pub struct SuiPublishArgs {
 pub struct SuiInitArgs {
     #[clap(long = "accounts", multiple_values(true), multiple_occurrences(false))]
     pub accounts: Option<Vec<String>>,
+    #[clap(long = "protocol_version")]
+    pub protocol_version: Option<u64>,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -66,8 +69,6 @@ pub struct TransferObjectCommand {
     pub sender: Option<String>,
     #[clap(long = "gas-budget")]
     pub gas_budget: Option<u64>,
-    #[clap(long = "view-gas-used")]
-    pub view_gas_used: bool,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -82,10 +83,8 @@ pub struct ProgrammableTransactionCommand {
     pub sender: Option<String>,
     #[clap(long = "gas-budget")]
     pub gas_budget: Option<u64>,
-    #[clap(long = "view-events")]
-    pub view_events: bool,
-    #[clap(long = "view-gas-used")]
-    pub view_gas_used: bool,
+    #[clap(long = "gas-price")]
+    pub gas_price: Option<u64>,
     #[clap(
         long = "inputs",
         parse(try_from_str = ParsedValue::parse),

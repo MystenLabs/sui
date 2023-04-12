@@ -10,6 +10,10 @@ module.exports = {
         'prettier',
     ],
     rules: {
+        'no-implicit-coercion': [
+            2,
+            { number: true, string: true, boolean: false },
+        ],
         'react/display-name': 'off',
         'import/order': [
             'warn',

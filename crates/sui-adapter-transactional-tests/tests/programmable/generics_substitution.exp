@@ -6,9 +6,11 @@ A: object(0,0)
 task 1 'publish'. lines 8-26:
 created: object(1,0)
 mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 6004000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'programmable'. lines 27-36:
 mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 3 'programmable'. lines 37-44:
 Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type

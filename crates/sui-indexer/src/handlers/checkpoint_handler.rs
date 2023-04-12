@@ -9,7 +9,6 @@ use futures::future::join_all;
 use futures::FutureExt;
 use jsonrpsee::http_client::HttpClient;
 use move_core_types::ident_str;
-use prometheus::Registry;
 use tokio::sync::{
     mpsc::{self, Receiver, Sender},
     Mutex,
@@ -32,7 +31,7 @@ use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary
 use sui_types::SUI_SYSTEM_ADDRESS;
 
 use crate::errors::IndexerError;
-use crate::metrics::IndexerCheckpointHandlerMetrics;
+use crate::metrics::IndexerMetrics;
 use crate::models::checkpoints::Checkpoint;
 use crate::models::epoch::{DBEpochInfo, SystemEpochInfoEvent};
 use crate::models::objects::{DeletedObject, Object, ObjectStatus};
@@ -58,7 +57,7 @@ pub struct CheckpointHandler<S> {
     state: S,
     http_client: HttpClient,
     event_handler: Arc<EventHandler>,
-    metrics: IndexerCheckpointHandlerMetrics,
+    metrics: IndexerMetrics,
     config: IndexerConfig,
     checkpoint_sender: Arc<Mutex<Sender<TemporaryCheckpointStore>>>,
     checkpoint_receiver: Arc<Mutex<Receiver<TemporaryCheckpointStore>>>,
@@ -77,7 +76,7 @@ where
         state: S,
         http_client: HttpClient,
         event_handler: Arc<EventHandler>,
-        prometheus_registry: &Registry,
+        metrics: IndexerMetrics,
         config: &IndexerConfig,
     ) -> Self {
         let (checkpoint_sender, checkpoint_receiver) = mpsc::channel(CHECKPOINT_QUEUE_LIMIT);
@@ -88,7 +87,7 @@ where
             state,
             http_client,
             event_handler,
-            metrics: IndexerCheckpointHandlerMetrics::new(prometheus_registry),
+            metrics,
             config: config.clone(),
             checkpoint_sender: Arc::new(Mutex::new(checkpoint_sender)),
             checkpoint_receiver: Arc::new(Mutex::new(checkpoint_receiver)),
@@ -207,7 +206,6 @@ where
         loop {
             let download_futures = (next_cursor_sequence_number
                 ..next_cursor_sequence_number + current_parallel_downloads as i64)
-                .into_iter()
                 .map(|seq_num| {
                     self.download_checkpoint_data(seq_num as u64, /* skip objects */ false)
                 });
@@ -219,6 +217,14 @@ where
                 if let Ok(checkpoint) = download_result {
                     downloaded_checkpoints.push(checkpoint);
                 } else {
+                    if let Err(IndexerError::UnexpectedFullnodeResponseError(fn_e)) =
+                        download_result
+                    {
+                        warn!(
+                            "Unexpected response from fullnode for object checkpoints: {}",
+                            fn_e
+                        );
+                    }
                     break;
                 }
             }
@@ -229,6 +235,7 @@ where
             current_parallel_downloads =
                 std::cmp::min(downloaded_checkpoints.len() + 1, MAX_PARALLEL_DOWNLOADS);
             if downloaded_checkpoints.is_empty() {
+                warn!("No object checkpoints downloaded, retrying in next iteration ...");
                 continue;
             }
 
@@ -283,7 +290,6 @@ where
         loop {
             let download_futures = (next_cursor_sequence_number
                 ..next_cursor_sequence_number + current_parallel_downloads as i64)
-                .into_iter()
                 .map(|seq_num| {
                     self.download_checkpoint_data(seq_num as u64, /* skip objects */ true)
                 });
@@ -295,6 +301,14 @@ where
                 if let Ok(checkpoint) = download_result {
                     downloaded_checkpoints.push(checkpoint);
                 } else {
+                    if let Err(IndexerError::UnexpectedFullnodeResponseError(fn_e)) =
+                        download_result
+                    {
+                        warn!(
+                            "Unexpected response from fullnode for checkpoints: {}",
+                            fn_e
+                        );
+                    }
                     break;
                 }
             }
@@ -306,6 +320,7 @@ where
             current_parallel_downloads =
                 std::cmp::min(downloaded_checkpoints.len() + 1, MAX_PARALLEL_DOWNLOADS);
             if downloaded_checkpoints.is_empty() {
+                warn!("No checkpoints downloaded, retrying in next iteration ...");
                 continue;
             }
 

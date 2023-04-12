@@ -5,6 +5,10 @@ module.exports = {
     plugins: ['header'],
     extends: ['react-app', 'prettier'],
     rules: {
+        'no-implicit-coercion': [
+            2,
+            { number: true, string: true, boolean: false },
+        ],
         'import/order': [
             'warn',
             {
