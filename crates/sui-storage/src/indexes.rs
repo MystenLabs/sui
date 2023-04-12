@@ -5,7 +5,7 @@
 //! The main user of this data is the explorer.
 
 use std::cmp::{max, min};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use anyhow::anyhow;
@@ -846,5 +846,13 @@ impl IndexStore {
 
     pub fn is_empty(&self) -> bool {
         self.tables.owner_index.is_empty()
+    }
+
+    pub fn checkpoint_db(&self, path: &Path) -> SuiResult {
+        // We are checkpointing the whole db
+        self.tables
+            .transactions_from_addr
+            .checkpoint_db(path)
+            .map_err(SuiError::StorageError)
     }
 }

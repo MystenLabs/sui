@@ -1871,10 +1871,18 @@ impl AuthorityState {
                 .db_checkpoint_config
                 .perform_db_checkpoints_at_epoch_end
             {
+                let checkpoint_indexes = self
+                    .db_checkpoint_config
+                    .perform_index_db_checkpoints_at_epoch_end
+                    .unwrap_or(false);
                 let current_epoch = cur_epoch_store.epoch();
                 let epoch_checkpoint_path =
                     checkpoint_path.join(format!("epoch_{}", current_epoch));
-                self.checkpoint_all_dbs(&epoch_checkpoint_path, cur_epoch_store)?;
+                self.checkpoint_all_dbs(
+                    &epoch_checkpoint_path,
+                    cur_epoch_store,
+                    checkpoint_indexes,
+                )?;
             }
         }
         let new_epoch = new_committee.epoch;
@@ -1935,6 +1943,7 @@ impl AuthorityState {
         &self,
         checkpoint_path: &Path,
         cur_epoch_store: &AuthorityPerEpochStore,
+        checkpoint_indexes: bool,
     ) -> SuiResult {
         let _metrics_guard = self.metrics.db_checkpoint_latency.start_timer();
         let current_epoch = cur_epoch_store.epoch();
@@ -1964,6 +1973,12 @@ impl AuthorityState {
             .checkpoint_db(&checkpoint_path_tmp.join("epochs"))?;
         self.checkpoint_store
             .checkpoint_db(&checkpoint_path_tmp.join("checkpoints"))?;
+
+        if checkpoint_indexes {
+            if let Some(indexes) = self.indexes.as_ref() {
+                indexes.checkpoint_db(&checkpoint_path_tmp.join("indexes"))?;
+            }
+        }
 
         fs::rename(checkpoint_path_tmp, checkpoint_path)
             .map_err(|e| SuiError::FileIOError(e.to_string()))?;
