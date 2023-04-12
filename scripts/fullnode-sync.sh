@@ -8,6 +8,7 @@ DEFAULT_NETWORK="testnet"
 CLEAN=0
 LOG_LEVEL="info"
 SUI_RUN_PATH="/var/lib/sui"
+VERBOSE=""
 
 function cleanup {
     echo "Performing exit cleanup..."
@@ -16,26 +17,31 @@ function cleanup {
 
 trap cleanup EXIT
 
-while getopts "hdn:e:p:" OPT; do
+while getopts "hvn:e:p:" OPT; do
     case $OPT in
         p) 
             SUI_BIN_PATH=$OPTARG ;;
-        d)
-            LOG_LEVEL="sui=debug,error" ;;
+        v)
+            LOG_LEVEL="sui=debug,error"
+            VERBOSE="--verbose" 
+            ;;
         n)
             NETWORK=$OPTARG ;;
         e)
             END_EPOCH=$OPTARG ;;
+        t)
+            EPOCH_TIMEOUT=$OPTARG ;;
         h)
-            >&2 echo "Usage: $0 [-h] [-p] [-d] [-n NETWORK] [-e END_EPOCH]"
+            >&2 echo "Usage: $0 [-h] [-p] [-v] [-n NETWORK] [-e END_EPOCH] [-t EPOCH_TIMEOUT]"
             >&2 echo ""
             >&2 echo "Options:"
             >&2 echo " -p                 Path to sui binary to run. If unspecified, will build from source."
-            >&2 echo " -d                 Run with log level DEBUG."
+            >&2 echo " -v                 Run with verbose logging."
             >&2 echo " -n NETWORK         The network to run the fullnode on."
             >&2 echo "                    (Default: ${DEFAULT_NETWORK})"
             >&2 echo " -e END_EPOCH       EpochID at which to stop syncing and declare success."
             >&2 echo "                    If unspecified, will use current epoch of NETWORK."
+            >&2 echo " -t EPOCH_TIMEOUT   Number of minutes to wait until epoch advancement before timing out."
             >&2 exit 0
             ;;
         \?)
@@ -104,7 +110,12 @@ if [[ ! -z $END_EPOCH ]]; then
     END_EPOCH_ARG="--end-epoch $END_EPOCH"
 fi
 
-./scripts/monitor_synced.py $END_EPOCH_ARG --env $NETWORK
+EPOCH_TIMEOUT_ARG=""
+if [[ ! -z $EPOCH_TIMEOUT ]]; then
+    EPOCH_TIMEOUT_ARG="--epoch-timeout $EPOCH_TIMEOUT"
+fi
+
+./scripts/monitor_synced.py $END_EPOCH_ARG $EPOCH_TIMEOUT_ARG --env $NETWORK $VERBOSE
 
 kill $SUI_NODE_PID
 exit 0
