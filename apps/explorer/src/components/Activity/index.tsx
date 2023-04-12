@@ -60,7 +60,12 @@ export function Activity({
             >
                 <div className="relative">
                     <TabList>
-                        <Tab>Transaction Blocks</Tab>
+                        <Tab>
+                            <div className="hidden xs:block">
+                                Transaction Blocks
+                            </div>
+                            <div className="xs:hidden">Txn Blocks</div>
+                        </Tab>
                         <Tab>Epochs</Tab>
                         <Tab>Checkpoints</Tab>
                     </TabList>

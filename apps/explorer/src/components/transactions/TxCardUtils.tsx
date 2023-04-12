@@ -17,24 +17,17 @@ import { TxTimeType } from '../tx-time/TxTimeType';
 
 import { AddressLink, TransactionLink } from '~/ui/InternalLink';
 
-function TxTableHeader({ label }: { label: string }) {
-    return <div className="pl-3">{label}</div>;
-}
-
 export function TxTableCol({
     isHighlightedOnHover,
-    isFirstCol,
     children,
 }: {
     isHighlightedOnHover?: boolean;
-    isFirstCol?: boolean;
     children: ReactNode;
 }) {
     return (
         <div
             className={clsx(
-                'flex h-full items-center rounded',
-                !isFirstCol && 'px-3',
+                'mr-2 flex h-full items-center rounded pl-1 pr-5',
                 isHighlightedOnHover && 'hover:bg-sui-light'
             )}
         >
@@ -52,7 +45,7 @@ export const genTableDataFromTxData = (
         const sender = getTransactionSender(transaction);
 
         return {
-            date: (
+            time: (
                 <TxTableCol>
                     <TxTimeType
                         timestamp={Number(transaction.timestampMs || 0)}
@@ -60,7 +53,7 @@ export const genTableDataFromTxData = (
                 </TxTableCol>
             ),
             digest: (
-                <TxTableCol isFirstCol isHighlightedOnHover>
+                <TxTableCol isHighlightedOnHover>
                     <TransactionLink
                         digest={transaction.digest}
                         before={
@@ -100,20 +93,20 @@ export const genTableDataFromTxData = (
             accessorKey: 'digest',
         },
         {
-            header: () => <TxTableHeader label="Sender" />,
+            header: 'Sender',
             accessorKey: 'sender',
         },
         {
-            header: () => <TxTableHeader label="Txns" />,
+            header: 'Txns',
             accessorKey: 'txns',
         },
         {
-            header: () => <TxTableHeader label="Gas" />,
+            header: 'Gas',
             accessorKey: 'gas',
         },
         {
-            header: () => <TxTableHeader label="Time" />,
-            accessorKey: 'date',
+            header: 'Time',
+            accessorKey: 'time',
         },
     ],
 });

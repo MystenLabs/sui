@@ -41,7 +41,7 @@ const tabStyles = cva(
     {
         variants: {
             size: {
-                lg: 'text-heading4 ui-selected:text-steel-darker',
+                lg: 'text-body md:text-heading4 ui-selected:text-steel-darker',
                 md: 'text-body ui-selected:text-steel-darker',
             },
         },

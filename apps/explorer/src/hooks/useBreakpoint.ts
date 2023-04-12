@@ -7,6 +7,7 @@ import { useMediaQuery } from '~/hooks/useMediaQuery';
  * values taken from tailwind.config.js
  */
 export const BREAK_POINT = {
+    xs: 390,
     sm: 640,
     md: 768,
     lg: 1024,

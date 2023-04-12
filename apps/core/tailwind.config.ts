@@ -76,6 +76,9 @@ export default {
         },
 
         extend: {
+            screens: {
+                xs: '390px',
+            },
             colors: {
                 'gradient-blue-start': '#589AEA',
                 'gradient-blue-end': '#4C75A6',

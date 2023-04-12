@@ -79,6 +79,7 @@ export function Transactions({
         <div>
             {recentTx ? (
                 <TableCard
+                    noFullWidth
                     refetching={transactionQuery.isPreviousData}
                     data={recentTx.data}
                     columns={recentTx.columns}
