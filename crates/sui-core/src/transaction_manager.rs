@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    cmp::max,
     collections::{BTreeMap, BTreeSet, HashMap},
     sync::Arc,
 };
@@ -26,6 +27,9 @@ use crate::authority::{AuthorityMetrics, AuthorityStore};
 #[cfg(test)]
 #[path = "unit_tests/transaction_manager_tests.rs"]
 mod transaction_manager_tests;
+
+/// Minimum capacity of HashMaps used in TransactionManager.
+const MIN_HASHMAP_CAPACITY: usize = 1000;
 
 /// TransactionManager is responsible for managing object dependencies of pending transactions,
 /// and publishing a stream of certified transactions (certificates) ready to execute.
@@ -108,7 +112,60 @@ impl Inner {
     fn new(epoch: EpochId) -> Inner {
         Inner {
             epoch,
-            ..Default::default()
+            lock_waiters: HashMap::with_capacity(MIN_HASHMAP_CAPACITY),
+            input_objects: HashMap::with_capacity(MIN_HASHMAP_CAPACITY),
+            pending_certificates: HashMap::with_capacity(MIN_HASHMAP_CAPACITY),
+            executing_certificates: HashMap::with_capacity(MIN_HASHMAP_CAPACITY),
+        }
+    }
+
+    /// After reaching 3/4 load in hashmaps, increase capacity to decrease load to 1/2.
+    fn maybe_reserve_capacity(&mut self) {
+        if self.lock_waiters.len() > self.lock_waiters.capacity() * 3 / 4 {
+            self.lock_waiters.reserve(self.lock_waiters.capacity() / 2);
+        }
+        if self.input_objects.len() > self.input_objects.capacity() * 3 / 4 {
+            self.input_objects.reserve(self.input_objects.capacity() / 2);
+        }
+        if self.pending_certificates.len() > self.pending_certificates.capacity() * 3 / 4 {
+            self.pending_certificates
+                .reserve(self.pending_certificates.capacity() / 2);
+        }
+        if self.executing_certificates.len() > self.executing_certificates.capacity() * 3 / 4 {
+            self.executing_certificates
+                .reserve(self.executing_certificates.capacity() / 2);
+        }
+    }
+
+    /// After reaching 1/4 load in hashmaps, decrease capacity to increase load to 1/2.
+    fn maybe_shrink_capacity(&mut self) {
+        if self.lock_waiters.len() > MIN_HASHMAP_CAPACITY
+            && self.lock_waiters.len() < self.lock_waiters.capacity() / 4
+        {
+            self.lock_waiters
+                .shrink_to(max(self.lock_waiters.capacity() / 2, MIN_HASHMAP_CAPACITY))
+        }
+        if self.input_objects.len() > MIN_HASHMAP_CAPACITY
+            && self.input_objects.len() < self.input_objects.capacity() / 4
+        {
+            self.input_objects
+                .shrink_to(max(self.input_objects.capacity() / 2, MIN_HASHMAP_CAPACITY))
+        }
+        if self.pending_certificates.len() > MIN_HASHMAP_CAPACITY
+            && self.pending_certificates.len() < self.pending_certificates.capacity() / 4
+        {
+            self.pending_certificates.shrink_to(max(
+                self.pending_certificates.capacity() / 2,
+                MIN_HASHMAP_CAPACITY,
+            ))
+        }
+        if self.executing_certificates.len() > MIN_HASHMAP_CAPACITY
+            && self.executing_certificates.len() < self.executing_certificates.capacity() / 4
+        {
+            self.executing_certificates.shrink_to(max(
+                self.executing_certificates.capacity() / 2,
+                MIN_HASHMAP_CAPACITY,
+            ))
         }
     }
 }
@@ -328,6 +385,8 @@ impl TransactionManager {
                 .inc();
         }
 
+        inner.maybe_reserve_capacity();
+
         self.metrics
             .transaction_manager_num_missing_objects
             .set(inner.lock_waiters.len() as i64);
@@ -417,6 +476,8 @@ impl TransactionManager {
             self.lock_acquired(&mut inner, digests, input_key);
         }
 
+        inner.maybe_shrink_capacity();
+
         self.metrics
             .transaction_manager_num_missing_objects
             .set(inner.lock_waiters.len() as i64);
@@ -461,6 +522,7 @@ impl TransactionManager {
                     self.lock_acquired(&mut inner, lock_queue.default_waiters, *key);
                 }
             }
+            inner.maybe_shrink_capacity();
             self.metrics
                 .transaction_manager_num_executing_certificates
                 .set(inner.executing_certificates.len() as i64);
