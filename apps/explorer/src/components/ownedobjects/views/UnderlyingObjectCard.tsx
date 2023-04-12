@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useGetDynamicFieldObject } from '@mysten/core';
-import { getObjectDisplay } from '@mysten/sui.js';
+import { getObjectDisplay, getObjectFields, getObjectId } from '@mysten/sui.js';
 
+import { SyntaxHighlighter } from '~/components/SyntaxHighlighter';
 import DisplayBox from '~/components/displaybox/DisplayBox';
+import { Banner } from '~/ui/Banner';
 import { ObjectLink } from '~/ui/InternalLink';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Text } from '~/ui/Text';
@@ -34,36 +36,68 @@ export function UnderlyingObjectCard({
 
     if (isLoading) {
         return (
-            <div className="mt-3 pt-3">
+            <div className="mt-3 flex w-full justify-center pt-3">
                 <LoadingSpinner text="Loading data" />
             </div>
         );
     }
 
     if (isError || data.error || (isFetched && !data)) {
-        return null;
+        return (
+            <Banner variant="error" spacing="lg" fullWidth>
+                Failed to get field data for :{parentId}
+            </Banner>
+        );
     }
     const display = getObjectDisplay(data);
     const imgUrl = parseImageURL(display.data);
     const objectType = parseObjectType(data);
     const caption = extractName(display.data) || trimStdLibPrefix(objectType);
+    // For
+    const underlyingObjectTypes =
+        typeof name.value === 'object'
+            ? objectType
+                  ?.slice(objectType?.indexOf('<') + 1, objectType.indexOf('>'))
+                  .split(',')
+            : [];
+    const fieldsData = getObjectFields(data!);
 
-    return imgUrl ? (
-        <div className="mt-3 pt-3">
-            <Text variant="body/medium" color="steel-dark">
-                Underlying Object
-            </Text>
-            <div className="item-center mt-5 flex justify-start gap-1">
-                <div className="w-16">
-                    <DisplayBox display={imgUrl} caption={caption} />
-                </div>
-                <div className="flex flex-col items-start justify-center gap-1 break-all">
-                    <ObjectLink objectId={parentId} />
+    return (
+        <>
+            <SyntaxHighlighter
+                code={JSON.stringify(fieldsData, null, 2)}
+                language="json"
+            />
+
+            {underlyingObjectTypes.length > 0 ? (
+                <div className="mt-3 pt-3">
                     <Text variant="body/medium" color="steel-dark">
-                        {caption}
+                        Underlying Object
                     </Text>
+                    <div className="item-center mt-5 flex justify-start gap-1">
+                        {imgUrl ? (
+                            <div className="w-16">
+                                <DisplayBox
+                                    display={imgUrl}
+                                    caption={caption}
+                                />
+                            </div>
+                        ) : null}
+                        <div className="flex flex-col items-start justify-center gap-1 break-all">
+                            <ObjectLink objectId={getObjectId(data)} />
+                            {underlyingObjectTypes.map((type) => (
+                                <Text
+                                    variant="body/medium"
+                                    color="steel-dark"
+                                    key={type}
+                                >
+                                    {type}
+                                </Text>
+                            ))}
+                        </div>
+                    </div>
                 </div>
-            </div>
-        </div>
-    ) : null;
+            ) : null}
+        </>
+    );
 }

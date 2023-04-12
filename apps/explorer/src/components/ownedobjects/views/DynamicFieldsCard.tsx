@@ -7,11 +7,10 @@ import { useRef, useCallback, useEffect } from 'react';
 
 import { UnderlyingObjectCard } from './UnderlyingObjectCard';
 
-import { SyntaxHighlighter } from '~/components/SyntaxHighlighter';
 import { DisclosureBox } from '~/ui/DisclosureBox';
-import { ObjectLink } from '~/ui/InternalLink';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
+import { Text } from '~/ui/Text';
 
 const MAX_PAGE_SIZE = 20;
 
@@ -83,29 +82,35 @@ export function DynamicFieldsCard({ id }: { id: string }) {
                                 data.map((result) => (
                                     <DisclosureBox
                                         title={
-                                            <div className="min-w-fit max-w-[60%] truncate break-words text-body font-medium leading-relaxed text-steel-dark">
-                                                {result.name?.value.toString()}:
+                                            <div className="max-w-[60%] truncate break-words text-body font-medium leading-relaxed text-steel-dark">
+                                                {`${
+                                                    typeof result.name.value ===
+                                                    'object'
+                                                        ? 'ObjectZ'
+                                                        : result.name.type
+                                                }`}
+                                                :
                                             </div>
                                         }
                                         preview={
                                             <div className="flex items-center gap-1 break-all">
-                                                <ObjectLink
-                                                    objectId={result.objectId}
-                                                />
+                                                <Text
+                                                    variant="body/medium"
+                                                    color="steel-darker"
+                                                >
+                                                    {`${
+                                                        typeof result.name
+                                                            .value === 'object'
+                                                            ? 'Click to view'
+                                                            : result.name.value
+                                                    }`}
+                                                </Text>
                                             </div>
                                         }
                                         variant="outline"
                                         key={result.objectId}
                                     >
                                         <div className="flex flex-col divide-y divide-gray-45">
-                                            <SyntaxHighlighter
-                                                code={JSON.stringify(
-                                                    result,
-                                                    null,
-                                                    2
-                                                )}
-                                                language="json"
-                                            />
                                             <UnderlyingObjectCard
                                                 parentId={id}
                                                 name={result.name}
