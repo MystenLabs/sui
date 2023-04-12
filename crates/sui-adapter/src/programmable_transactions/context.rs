@@ -898,8 +898,8 @@ fn package_for_linkage<S: StorageView>(
 
 /// Load `type_tag` to get a `Type` in the provided `session`.  `session`'s linkage context may be
 /// reset after this operation, because during the operation, it may change when loading a struct.
-pub fn load_type<'vm, 'state, S: StorageView>(
-    session: &mut Session<'state, 'vm, LinkageView<'state, S>>,
+pub fn load_type<'state, S: StorageView>(
+    session: &mut Session<'state, '_, LinkageView<'state, S>>,
     type_tag: &TypeTag,
 ) -> VMResult<Type> {
     use move_binary_format::errors::PartialVMError;

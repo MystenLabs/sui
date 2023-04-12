@@ -93,7 +93,6 @@ impl JsonRpcServerBuilder {
             Ok(value) => {
                 let allow_hosts = value
                     .split(',')
-                    .into_iter()
                     .map(HeaderValue::from_str)
                     .collect::<Result<Vec<_>, _>>()?;
                 AllowOrigin::list(allow_hosts)

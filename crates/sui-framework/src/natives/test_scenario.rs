@@ -303,12 +303,7 @@ pub fn ids_for_address(
         .address_inventories
         .get(&account)
         .and_then(|inv| inv.get(&specified_ty))
-        .map(|s| {
-            s.keys()
-                .map(|id| pack_id(*id))
-                .into_iter()
-                .collect::<Vec<Value>>()
-        })
+        .map(|s| s.keys().map(|id| pack_id(*id)).collect::<Vec<Value>>())
         .unwrap_or_default();
     let ids_vector = Value::vector_for_testing_only(ids);
     Ok(NativeResult::ok(legacy_test_cost(), smallvec![ids_vector]))
