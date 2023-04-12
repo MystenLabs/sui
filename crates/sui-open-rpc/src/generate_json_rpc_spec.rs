@@ -8,7 +8,8 @@ use pretty_assertions::assert_str_eq;
 use std::fs::File;
 use std::io::Write;
 use sui_core::SUI_CORE_VERSION;
-use sui_json_rpc::api::ExtendedApiOpenRpc;
+//temporarily remove api ref content for indexer methods
+//use sui_json_rpc::api::ExtendedApiOpenRpc;
 use sui_json_rpc::api::IndexerApiOpenRpc;
 use sui_json_rpc::api::MoveUtilsOpenRpc;
 use sui_json_rpc::coin_api::CoinReadApi;
@@ -51,7 +52,8 @@ async fn main() {
     open_rpc.add_module(TransactionExecutionApi::rpc_doc_module());
     open_rpc.add_module(TransactionBuilderApi::rpc_doc_module());
     open_rpc.add_module(GovernanceReadApi::rpc_doc_module());
-    open_rpc.add_module(ExtendedApiOpenRpc::module_doc());
+    //temporarily remove api ref content for indexer methods
+    //open_rpc.add_module(ExtendedApiOpenRpc::module_doc());
     open_rpc.add_module(MoveUtilsOpenRpc::module_doc());
 
     open_rpc.add_examples(RpcExampleProvider::new().examples());

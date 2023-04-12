@@ -1353,23 +1353,6 @@
       }
     },
     {
-      "name": "suix_getCurrentEpoch",
-      "tags": [
-        {
-          "name": "Extended API"
-        }
-      ],
-      "description": "Return current epoch info",
-      "params": [],
-      "result": {
-        "name": "EpochInfo",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/EpochInfo"
-        }
-      }
-    },
-    {
       "name": "suix_getDynamicFieldObject",
       "tags": [
         {
@@ -1446,45 +1429,6 @@
       }
     },
     {
-      "name": "suix_getEpochs",
-      "tags": [
-        {
-          "name": "Extended API"
-        }
-      ],
-      "description": "Return a list of epoch info",
-      "params": [
-        {
-          "name": "cursor",
-          "description": "optional paging cursor",
-          "schema": {
-            "$ref": "#/components/schemas/BigInt_for_uint64"
-          }
-        },
-        {
-          "name": "limit",
-          "description": "maximum number of items per page",
-          "schema": {
-            "$ref": "#/components/schemas/BigInt_for_uint64"
-          }
-        },
-        {
-          "name": "descending_order",
-          "description": "flag to return results in descending order",
-          "schema": {
-            "type": "boolean"
-          }
-        }
-      ],
-      "result": {
-        "name": "EpochPage",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/Page_for_EpochInfo_and_BigInt_for_uint64"
-        }
-      }
-    },
-    {
       "name": "suix_getLatestSuiSystemState",
       "tags": [
         {
@@ -1498,40 +1442,6 @@
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/SuiSystemStateSummary"
-        }
-      }
-    },
-    {
-      "name": "suix_getMoveCallMetrics",
-      "tags": [
-        {
-          "name": "Extended API"
-        }
-      ],
-      "description": "Return Network metrics",
-      "params": [],
-      "result": {
-        "name": "MoveCallMetrics",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/MoveCallMetrics"
-        }
-      }
-    },
-    {
-      "name": "suix_getNetworkMetrics",
-      "tags": [
-        {
-          "name": "Extended API"
-        }
-      ],
-      "description": "Return Network metrics",
-      "params": [],
-      "result": {
-        "name": "NetworkMetrics",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/NetworkMetrics"
         }
       }
     },
@@ -1732,46 +1642,6 @@
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/Page_for_Event_and_EventID"
-        }
-      }
-    },
-    {
-      "name": "suix_queryObjects",
-      "tags": [
-        {
-          "name": "Extended API"
-        }
-      ],
-      "description": "Return the list of queried objects. Note that this is an enhanced full node only api.",
-      "params": [
-        {
-          "name": "query",
-          "description": "the objects query criteria.",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ObjectResponseQuery"
-          }
-        },
-        {
-          "name": "cursor",
-          "description": "An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.",
-          "schema": {
-            "$ref": "#/components/schemas/CheckpointedObjectID"
-          }
-        },
-        {
-          "name": "limit",
-          "description": "Max number of items returned per page, default to [QUERY_MAX_RESULT_LIMIT_OBJECTS] if not specified.",
-          "schema": {
-            "$ref": "#/components/schemas/BigInt_for_uint64"
-          }
-        }
-      ],
-      "result": {
-        "name": "QueryObjectsPage",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/Page_for_SuiObjectResponse_and_CheckpointedObjectID"
         }
       }
     },
@@ -2790,9 +2660,6 @@
         "description": "Base64 encoding",
         "type": "string"
       },
-      "BigInt_for_uint": {
-        "type": "string"
-      },
       "BigInt_for_uint128": {
         "type": "string"
       },
@@ -2940,27 +2807,6 @@
             "$ref": "#/components/schemas/CheckpointDigest"
           }
         ]
-      },
-      "CheckpointedObjectID": {
-        "type": "object",
-        "required": [
-          "objectId"
-        ],
-        "properties": {
-          "atCheckpoint": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/BigInt_for_uint64"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "objectId": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        }
       },
       "Coin": {
         "type": "object",
@@ -3381,126 +3227,6 @@
                 "$ref": "#/components/schemas/ProtocolVersion"
               }
             ]
-          }
-        }
-      },
-      "EndOfEpochInfo": {
-        "type": "object",
-        "required": [
-          "epochEndTimestamp",
-          "lastCheckpointId",
-          "leftoverStorageFundInflow",
-          "protocolVersion",
-          "referenceGasPrice",
-          "stakeSubsidyAmount",
-          "storageCharge",
-          "storageFundBalance",
-          "storageFundReinvestment",
-          "storageRebate",
-          "totalGasFees",
-          "totalStake",
-          "totalStakeRewardsDistributed"
-        ],
-        "properties": {
-          "epochEndTimestamp": {
-            "$ref": "#/components/schemas/BigInt_for_uint64"
-          },
-          "lastCheckpointId": {
-            "$ref": "#/components/schemas/BigInt_for_uint64"
-          },
-          "leftoverStorageFundInflow": {
-            "$ref": "#/components/schemas/BigInt_for_uint64"
-          },
-          "protocolVersion": {
-            "description": "existing fields from `SystemEpochInfo`",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/BigInt_for_uint64"
-              }
-            ]
-          },
-          "referenceGasPrice": {
-            "$ref": "#/components/schemas/BigInt_for_uint64"
-          },
-          "stakeSubsidyAmount": {
-            "$ref": "#/components/schemas/BigInt_for_uint64"
-          },
-          "storageCharge": {
-            "$ref": "#/components/schemas/BigInt_for_uint64"
-          },
-          "storageFundBalance": {
-            "$ref": "#/components/schemas/BigInt_for_uint64"
-          },
-          "storageFundReinvestment": {
-            "$ref": "#/components/schemas/BigInt_for_uint64"
-          },
-          "storageRebate": {
-            "$ref": "#/components/schemas/BigInt_for_uint64"
-          },
-          "totalGasFees": {
-            "$ref": "#/components/schemas/BigInt_for_uint64"
-          },
-          "totalStake": {
-            "$ref": "#/components/schemas/BigInt_for_uint64"
-          },
-          "totalStakeRewardsDistributed": {
-            "$ref": "#/components/schemas/BigInt_for_uint64"
-          }
-        }
-      },
-      "EpochInfo": {
-        "type": "object",
-        "required": [
-          "epoch",
-          "epochStartTimestamp",
-          "epochTotalTransactions",
-          "firstCheckpointId",
-          "validators"
-        ],
-        "properties": {
-          "endOfEpochInfo": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/EndOfEpochInfo"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "epoch": {
-            "description": "epoch number",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/BigInt_for_uint64"
-              }
-            ]
-          },
-          "epochStartTimestamp": {
-            "$ref": "#/components/schemas/BigInt_for_uint64"
-          },
-          "epochTotalTransactions": {
-            "description": "count of tx in epoch",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/BigInt_for_uint64"
-              }
-            ]
-          },
-          "firstCheckpointId": {
-            "description": "first, last checkpoint sequence numbers",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/BigInt_for_uint64"
-              }
-            ]
-          },
-          "validators": {
-            "description": "list of validators included in epoch",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SuiValidatorSummary"
-            }
           }
         }
       },
@@ -4033,64 +3759,6 @@
           }
         ]
       },
-      "MoveCallMetrics": {
-        "type": "object",
-        "required": [
-          "rank30Days",
-          "rank3Days",
-          "rank7Days"
-        ],
-        "properties": {
-          "rank30Days": {
-            "type": "array",
-            "items": {
-              "type": "array",
-              "items": [
-                {
-                  "$ref": "#/components/schemas/MoveFunctionName"
-                },
-                {
-                  "$ref": "#/components/schemas/BigInt_for_uint"
-                }
-              ],
-              "maxItems": 2,
-              "minItems": 2
-            }
-          },
-          "rank3Days": {
-            "type": "array",
-            "items": {
-              "type": "array",
-              "items": [
-                {
-                  "$ref": "#/components/schemas/MoveFunctionName"
-                },
-                {
-                  "$ref": "#/components/schemas/BigInt_for_uint"
-                }
-              ],
-              "maxItems": 2,
-              "minItems": 2
-            }
-          },
-          "rank7Days": {
-            "type": "array",
-            "items": {
-              "type": "array",
-              "items": [
-                {
-                  "$ref": "#/components/schemas/MoveFunctionName"
-                },
-                {
-                  "$ref": "#/components/schemas/BigInt_for_uint"
-                }
-              ],
-              "maxItems": 2,
-              "minItems": 2
-            }
-          }
-        }
-      },
       "MoveCallParams": {
         "type": "object",
         "required": [
@@ -4145,25 +3813,6 @@
             "additionalProperties": false
           }
         ]
-      },
-      "MoveFunctionName": {
-        "type": "object",
-        "required": [
-          "function",
-          "module",
-          "package"
-        ],
-        "properties": {
-          "function": {
-            "type": "string"
-          },
-          "module": {
-            "type": "string"
-          },
-          "package": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        }
       },
       "MovePackage": {
         "type": "object",
@@ -4323,70 +3972,6 @@
             "type": "integer",
             "format": "uint16",
             "minimum": 0.0
-          }
-        }
-      },
-      "NetworkMetrics": {
-        "type": "object",
-        "required": [
-          "currentCheckpoint",
-          "currentEpoch",
-          "currentTps",
-          "totalAddresses",
-          "totalObjects",
-          "totalPackages",
-          "tps30Days"
-        ],
-        "properties": {
-          "currentCheckpoint": {
-            "description": "Current checkpoint number",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/BigInt_for_uint64"
-              }
-            ]
-          },
-          "currentEpoch": {
-            "description": "Current epoch number",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/BigInt_for_uint64"
-              }
-            ]
-          },
-          "currentTps": {
-            "description": "Current TPS - Transaction Blocks per Second.",
-            "type": "number",
-            "format": "double"
-          },
-          "totalAddresses": {
-            "description": "Total number of addresses seen in the network",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/BigInt_for_uint64"
-              }
-            ]
-          },
-          "totalObjects": {
-            "description": "Total number of live objects in the network",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/BigInt_for_uint64"
-              }
-            ]
-          },
-          "totalPackages": {
-            "description": "Total number of packages published in the network",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/BigInt_for_uint64"
-              }
-            ]
-          },
-          "tps30Days": {
-            "description": "Peak TPS in the past 30 days",
-            "type": "number",
-            "format": "double"
           }
         }
       },
@@ -5211,35 +4796,6 @@
           }
         }
       },
-      "Page_for_EpochInfo_and_BigInt_for_uint64": {
-        "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor` if `next_cursor` is `Some`, otherwise it will start from the first item.",
-        "type": "object",
-        "required": [
-          "data",
-          "hasNextPage"
-        ],
-        "properties": {
-          "data": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/EpochInfo"
-            }
-          },
-          "hasNextPage": {
-            "type": "boolean"
-          },
-          "nextCursor": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/BigInt_for_uint64"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        }
-      },
       "Page_for_Event_and_EventID": {
         "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor` if `next_cursor` is `Some`, otherwise it will start from the first item.",
         "type": "object",
@@ -5261,35 +4817,6 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/EventID"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        }
-      },
-      "Page_for_SuiObjectResponse_and_CheckpointedObjectID": {
-        "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor` if `next_cursor` is `Some`, otherwise it will start from the first item.",
-        "type": "object",
-        "required": [
-          "data",
-          "hasNextPage"
-        ],
-        "properties": {
-          "data": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SuiObjectResponse"
-            }
-          },
-          "hasNextPage": {
-            "type": "boolean"
-          },
-          "nextCursor": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CheckpointedObjectID"
               },
               {
                 "type": "null"
@@ -5511,7 +5038,9 @@
         "$ref": "#/components/schemas/Base64"
       },
       "SequenceNumber": {
-        "$ref": "#/components/schemas/BigInt_for_uint64"
+        "type": "integer",
+        "format": "uint64",
+        "minimum": 0.0
       },
       "Signature": {
         "oneOf": [
