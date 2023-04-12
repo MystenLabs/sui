@@ -414,7 +414,6 @@ async fn test_create_advance_epoch_tx_race() {
 }
 
 #[sim_test]
-#[ignore]
 async fn test_reconfig_with_failing_validator() {
     telemetry_subscribers::init_for_testing();
     sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
@@ -490,7 +489,6 @@ async fn test_validator_resign_effects() {
 }
 
 #[sim_test]
-#[ignore]
 async fn test_validator_candidate_pool_read() {
     let new_validator_key = gen_keys(5).pop().unwrap();
     let new_validator_address: SuiAddress = new_validator_key.public().into();
