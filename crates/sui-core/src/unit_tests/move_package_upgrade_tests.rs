@@ -642,7 +642,8 @@ async fn test_upgrade_ticket_doesnt_match() {
 
 #[tokio::test]
 async fn upgrade_missing_deps() {
-    let effects = test_multiple_upgrades(true).await;
+    let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
+    let (_, effects) = test_multiple_upgrades(&mut runner, true).await;
     assert!(matches!(
         effects.status.unwrap_err().0,
         ExecutionFailureStatus::PackageUpgradeError {
@@ -653,13 +654,15 @@ async fn upgrade_missing_deps() {
 
 #[tokio::test]
 async fn test_multiple_upgrades_valid() {
-    let effects = test_multiple_upgrades(false).await;
+    let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
+    let (_, effects) = test_multiple_upgrades(&mut runner, false).await;
     assert!(effects.status.is_ok(), "{:#?}", effects.status);
 }
 
-async fn test_multiple_upgrades(use_empty_deps: bool) -> TransactionEffectsV1 {
-    let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
-
+async fn test_multiple_upgrades(
+    runner: &mut UpgradeStateRunner,
+    use_empty_deps: bool,
+) -> (ObjectID, TransactionEffectsV1) {
     let (digest, modules) = build_upgrade_test_modules("stage1_basic_compatibility_valid");
     let effects = runner
         .upgrade(UpgradePolicy::COMPATIBLE, digest, modules, vec![])
@@ -667,9 +670,17 @@ async fn test_multiple_upgrades(use_empty_deps: bool) -> TransactionEffectsV1 {
 
     assert!(effects.status.is_ok(), "{:#?}", effects.status);
 
+    let package_v2 = effects
+        .created
+        .iter()
+        .find(|(_, owner)| matches!(owner, Owner::Immutable))
+        .unwrap()
+        .0
+         .0;
+
     // Second upgrade: May also adds a dep on the sui framework and stdlib.
     let (digest, modules) = build_upgrade_test_modules("stage2_basic_compatibility_valid");
-    runner
+    let effects = runner
         .upgrade(
             UpgradePolicy::COMPATIBLE,
             digest,
@@ -680,7 +691,8 @@ async fn test_multiple_upgrades(use_empty_deps: bool) -> TransactionEffectsV1 {
                 vec![SUI_FRAMEWORK_OBJECT_ID, MOVE_STDLIB_OBJECT_ID]
             },
         )
-        .await
+        .await;
+    (package_v2, effects)
 }
 
 #[tokio::test]
@@ -989,4 +1001,116 @@ async fn test_publish_transitive_override_happy_path() {
         .await;
 
     assert!(call_effects.status.is_ok(), "{:#?}", call_effects.status);
+}
+
+#[tokio::test]
+async fn test_upgraded_types_in_one_txn() {
+    let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
+
+    // First upgrade (version 2) introduces a new type, B.
+    let (digest, modules) = build_upgrade_test_modules("makes_new_object");
+    let effects = runner
+        .upgrade(
+            UpgradePolicy::COMPATIBLE,
+            digest,
+            modules,
+            vec![SUI_FRAMEWORK_OBJECT_ID, MOVE_STDLIB_OBJECT_ID],
+        )
+        .await;
+
+    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    let package_v2 = runner.package.0;
+
+    // Second upgrade (version 3) introduces a new type, C.
+    let (digest, modules) = build_upgrade_test_modules("makes_another_object");
+    let effects = runner
+        .upgrade(
+            UpgradePolicy::COMPATIBLE,
+            digest,
+            modules,
+            vec![SUI_FRAMEWORK_OBJECT_ID, MOVE_STDLIB_OBJECT_ID],
+        )
+        .await;
+
+    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    let package_v3 = runner.package.0;
+
+    // Create an instance of the type introduced at version 2 using function from version 2.
+    let TransactionEffects::V1(effects) = runner
+        .run({
+            let mut builder = ProgrammableTransactionBuilder::new();
+            move_call! { builder, (package_v2)::base::makes_b() };
+            builder.finish()
+        })
+        .await;
+
+    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    let created_b = effects
+        .created
+        .iter()
+        .find_map(|(b, owner)| matches!(owner, Owner::AddressOwner(_)).then_some(b))
+        .unwrap();
+
+    // Create an instance of the type introduced at version 3 using function from version 3.
+    let TransactionEffects::V1(effects) = runner
+        .run({
+            let mut builder = ProgrammableTransactionBuilder::new();
+            move_call! { builder, (package_v3)::base::makes_c() };
+            builder.finish()
+        })
+        .await;
+
+    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    let created_c = effects
+        .created
+        .iter()
+        .find_map(|(c, owner)| matches!(owner, Owner::AddressOwner(_)).then_some(c))
+        .unwrap();
+
+    // modify objects created of types introduced at versions 2 and 3 and emit events using types
+    // introduced at versions 2 and 3 (using functions from version 3)
+    let TransactionEffects::V1(effects) = runner
+        .run({
+            let mut builder = ProgrammableTransactionBuilder::new();
+            let b = builder
+                .obj(ObjectArg::ImmOrOwnedObject(*created_b))
+                .unwrap();
+            move_call! { builder, (package_v3)::base::modifies_b(b) };
+            let c = builder
+                .obj(ObjectArg::ImmOrOwnedObject(*created_c))
+                .unwrap();
+            move_call! { builder, (package_v3)::base::modifies_c(c) };
+            builder.finish()
+        })
+        .await;
+
+    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+}
+
+#[tokio::test]
+async fn test_different_versions_across_calls() {
+    // create 3 versions of the same package, all containing the return_0 function
+    let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
+    let (package_v2, effects) = test_multiple_upgrades(&mut runner, false).await;
+    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+
+    let package_v3 = effects
+        .created
+        .iter()
+        .find(|(_, owner)| matches!(owner, Owner::Immutable))
+        .unwrap()
+        .0
+         .0;
+
+    // call the same function twice within the same block but from two different module versions
+    let TransactionEffects::V1(effects) = runner
+        .run({
+            let mut builder = ProgrammableTransactionBuilder::new();
+            move_call! { builder, (package_v2)::base::return_0() };
+            move_call! { builder, (package_v3)::base::return_0() };
+            builder.finish()
+        })
+        .await;
+
+    assert!(effects.status.is_ok(), "{:#?}", effects.status);
 }
