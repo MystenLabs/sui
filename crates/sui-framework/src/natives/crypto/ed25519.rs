@@ -33,7 +33,9 @@ pub struct Ed25519VerifyCostParams {
  * Implementation of the Move native function `ed25519::ed25519_verify(signature: &vector<u8>, public_key: &vector<u8>, msg: &vector<u8>): bool;`
  *   gas cost: ed25519_ed25519_verify_cost_base                          | base cost for function call and fixed opers
  *              + ed25519_ed25519_verify_msg_cost_per_byte * msg.len()   | cost depends on length of message
- *              + ed25519_ed25519_verify_msg_cost_per_block * block_size | cost depends on number of blocks in message
+ *              + ed25519_ed25519_verify_msg_cost_per_block * num_blocks(msg) | cost depends on number of blocks in message
+ * Note: each block is of size `ED25519_BLOCK_SIZE` bytes, and we round up.
+ *       `signature` and `public_key` are fixed size, so their costs are included in the base cost.
  **************************************************************************************************/
 pub fn ed25519_verify(
     context: &mut NativeContext,
