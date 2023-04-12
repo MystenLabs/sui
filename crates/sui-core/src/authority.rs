@@ -63,7 +63,7 @@ use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType, Field};
 use sui_types::error::{ExecutionError, UserInputError};
 use sui_types::event::{Event, EventID};
-use sui_types::gas::{GasCostSummary, SuiGasStatus};
+use sui_types::gas::{GasCostSummary, SuiGasStatus, write_gas_stats};
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
     CheckpointCommitment, CheckpointContents, CheckpointContentsDigest, CheckpointDigest,
@@ -955,7 +955,7 @@ impl AuthorityState {
         TransactionEffects,
         Option<ExecutionError>,
     )> {
-        let _metrics_guard = self.metrics.prepare_certificate_latency.start_timer();
+        let metrics_guard = self.metrics.prepare_certificate_latency.start_timer();
 
         // check_certificate_input also checks shared object locks when loading the shared objects.
         let (gas_status, input_objects) = transaction_input_checker::check_certificate_input(
@@ -996,6 +996,32 @@ impl AuthorityState {
                 self.expensive_safety_check_config
                     .enable_deep_per_tx_sui_conservation_check(),
             );
+
+        let time = (metrics_guard.stop_and_record() * 1_000_000_000.0).round() as u64;
+        let shared = effects.shared_objects().len();
+        let created = effects.created().len();
+        let mutated = effects.mutated().len();
+        let unwrapped = effects.unwrapped().len();
+        let deleted = effects.deleted().len();
+        let unwrapped_deleted = effects.unwrapped_then_deleted().len();
+        let wrapped = effects.wrapped().len();
+        write_gas_stats(
+            format!(
+                "{}: time = {}, shared = {}, created = {}, \
+                    mutated = {}, unwrapped: {}, deleted = {}, \
+                    unwrapped_deleted = {}, wrapped = {}",
+                *certificate.digest(),
+                time,
+                shared,
+                created,
+                mutated,
+                unwrapped,
+                deleted,
+                unwrapped_deleted,
+                wrapped,
+            )
+            .as_str(),
+        );
 
         Ok((inner_temp_store, effects, execution_error_opt.err()))
     }
@@ -1191,7 +1217,8 @@ impl AuthorityState {
             transaction_digest,
             protocol_config,
         );
-        let gas_status = SuiGasStatus::new_with_budget(max_tx_gas, gas_price, protocol_config);
+        let gas_status =
+            SuiGasStatus::new_with_budget(max_tx_gas, gas_price, protocol_config, None);
         let move_vm = Arc::new(
             adapter::new_move_vm(
                 epoch_store.native_functions().clone(),

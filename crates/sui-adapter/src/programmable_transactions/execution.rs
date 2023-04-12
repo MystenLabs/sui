@@ -880,7 +880,7 @@ struct LoadedFunctionInfo {
     signature: LoadedFunctionInstantiation,
     /// Object or type information for the return values
     return_value_kinds: Vec<ValueKind>,
-    /// Definitio index of the function
+    /// Definition index of the function
     index: FunctionDefinitionIndex,
     /// The length of the function used for setting error information, or 0 if native
     last_instr: CodeOffset,

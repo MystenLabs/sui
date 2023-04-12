@@ -7,7 +7,7 @@ use std::collections::{BTreeMap, HashSet};
 use sui_adapter::adapter::run_metered_move_bytecode_verifier;
 use sui_macros::checked_arithmetic;
 use sui_protocol_config::ProtocolConfig;
-use sui_types::base_types::ObjectRef;
+use sui_types::base_types::{ObjectRef, TransactionDigest};
 use sui_types::error::{UserInputError, UserInputResult};
 use sui_types::messages::{
     TransactionKind, VerifiedExecutableTransaction, VersionedProtocolMessage,
@@ -34,6 +34,7 @@ async fn get_gas_status(
     gas: &[ObjectRef],
     epoch_store: &AuthorityPerEpochStore,
     transaction: &TransactionData,
+    tx_digest: Option<TransactionDigest>,
 ) -> SuiResult<SuiGasStatus<'static>> {
     // Get the first coin (possibly the only one) and make it "the gas coin", then
     // keep track of all others that can contribute to gas (gas smashing).
@@ -49,6 +50,7 @@ async fn get_gas_status(
         transaction.gas_budget(),
         transaction.gas_price(),
         transaction.kind(),
+        tx_digest,
     )
     .await
 }
@@ -64,7 +66,8 @@ pub async fn check_transaction_input(
     check_non_system_packages_to_be_published(transaction, epoch_store.protocol_config())?;
     let input_objects = transaction.input_objects()?;
     let objects = store.check_input_objects(&input_objects, epoch_store.protocol_config())?;
-    let gas_status = get_gas_status(&objects, transaction.gas(), epoch_store, transaction).await?;
+    let gas_status =
+        get_gas_status(&objects, transaction.gas(), epoch_store, transaction, None).await?;
     let input_objects = check_objects(transaction, input_objects, objects)?;
     Ok((gas_status, input_objects))
 }
@@ -85,7 +88,8 @@ pub async fn check_transaction_input_with_given_gas(
     input_objects.push(InputObjectKind::ImmOrOwnedMoveObject(gas_object_ref));
     objects.push(gas_object);
 
-    let gas_status = get_gas_status(&objects, &[gas_object_ref], epoch_store, transaction).await?;
+    let gas_status =
+        get_gas_status(&objects, &[gas_object_ref], epoch_store, transaction, None).await?;
     let input_objects = check_objects(transaction, input_objects, objects)?;
     Ok((gas_status, input_objects))
 }
@@ -155,8 +159,14 @@ pub async fn check_certificate_input(
     } else {
         store.check_sequenced_input_objects(cert.digest(), &input_object_kinds, epoch_store)?
     };
-    let gas_status =
-        get_gas_status(&input_object_data, tx_data.gas(), epoch_store, tx_data).await?;
+    let gas_status = get_gas_status(
+        &input_object_data,
+        tx_data.gas(),
+        epoch_store,
+        tx_data,
+        Some(*cert.digest()),
+    )
+    .await?;
     let input_objects = check_objects(tx_data, input_object_kinds, input_object_data)?;
     Ok((gas_status, input_objects))
 }
@@ -172,6 +182,7 @@ async fn check_gas(
     gas_budget: u64,
     gas_price: u64,
     tx_kind: &TransactionKind,
+    tx_digest: Option<TransactionDigest>,
 ) -> SuiResult<SuiGasStatus<'static>> {
     let protocol_config = epoch_store.protocol_config();
     if tx_kind.is_system_tx() {
@@ -212,6 +223,7 @@ async fn check_gas(
             gas_budget,
             gas_price,
             protocol_config,
+            tx_digest,
         ))
     }
 }

@@ -5,6 +5,7 @@
 use crate::sui_serde::BigInt;
 use crate::sui_serde::Readable;
 use crate::{
+    base_types::TransactionDigest,
     error::{ExecutionError, UserInputError, UserInputResult},
     gas_model::gas_v1::{self, SuiCostTable as SuiCostTableV1, SuiGasStatus as SuiGasStatusV1},
     gas_model::gas_v2::{self, SuiCostTable as SuiCostTableV2, SuiGasStatus as SuiGasStatusV2},
@@ -13,13 +14,34 @@ use crate::{
 };
 use enum_dispatch::enum_dispatch;
 use itertools::MultiUnzip;
+use once_cell::sync::Lazy;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use sui_cost_tables::bytecode_tables::GasStatus;
 use sui_protocol_config::ProtocolConfig;
+use tracing::error;
 
 sui_macros::checked_arithmetic! {
+
+static LOGGING_FILE: Lazy<std::sync::Mutex<std::fs::File>> = Lazy::new(|| {
+    std::sync::Mutex::new(
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .append(true)
+            .open("/Users/dariorussi/tmp/track_gas/stats")
+            .unwrap(),
+    )
+});
+
+pub fn write_gas_stats(stats: &str) {
+    use std::io::Write;
+    let f = &mut *LOGGING_FILE.lock().unwrap();
+    if writeln!(f, "{}", stats).is_err() {
+        error!("cannot write to gas stats tracking file");
+    }
+}
 
 #[enum_dispatch]
 pub trait SuiGasStatusAPI<'a> {
@@ -52,17 +74,18 @@ pub enum SuiGasStatus<'a> {
 }
 
 impl<'a> SuiGasStatus<'a> {
-    pub fn new_with_budget(gas_budget: u64, gas_price: u64, config: &ProtocolConfig) -> Self {
+    pub fn new_with_budget(
+        gas_budget: u64,
+        gas_price: u64,
+        config: &ProtocolConfig,
+        tx_digest: Option<TransactionDigest>,
+    ) -> Self {
         match config.gas_model_version() {
             1 => Self::V1(SuiGasStatusV1::new_with_budget(
-                gas_budget,
-                gas_price,
-                config,
+                gas_budget, gas_price, config,
             )),
             2 | 3 => Self::V2(SuiGasStatusV2::new_with_budget(
-                gas_budget,
-                gas_price,
-                config,
+                gas_budget, gas_price, config, tx_digest,
             )),
             _ => panic!("unknown gas model version"),
         }
@@ -135,12 +158,9 @@ impl SuiCostTable {
                 gas_price,
                 cost_table,
             ),
-            Self::V2(cost_table) => gas_v2::check_gas_balance(
-                gas_object,
-                more_gas_objs,
-                gas_budget,
-                cost_table,
-            ),
+            Self::V2(cost_table) => {
+                gas_v2::check_gas_balance(gas_object, more_gas_objs, gas_budget, cost_table)
+            }
         }
     }
 
@@ -215,7 +235,12 @@ pub struct GasCostSummary {
 }
 
 impl GasCostSummary {
-    pub fn new(computation_cost: u64, storage_cost: u64, storage_rebate: u64, non_refundable_storage_fee: u64) -> GasCostSummary {
+    pub fn new(
+        computation_cost: u64,
+        storage_cost: u64,
+        storage_rebate: u64,
+        non_refundable_storage_fee: u64,
+    ) -> GasCostSummary {
         GasCostSummary {
             computation_cost,
             storage_cost,
@@ -319,7 +344,7 @@ pub fn get_gas_balance(gas_object: &Object) -> UserInputResult<u64> {
         if !move_obj.type_().is_gas_coin() {
             return Err(UserInputError::InvalidGasObject {
                 object_id: gas_object.id(),
-            })
+            });
         }
         Ok(move_obj.get_coin_value_unsafe())
     } else {

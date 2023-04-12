@@ -277,7 +277,7 @@ impl<'a> SuiGasStatus<'a> {
         config: &ProtocolConfig,
     ) -> SuiGasStatus<'a> {
         let storage_gas_unit_price: GasPrice = config.storage_gas_price().into();
-         // truncate the value and move to units
+        // truncate the value and move to units
         let budget_in_unit = gas_budget / computation_gas_unit_price;
         Self::new(
             GasStatus::new(&INITIAL_COST_SCHEDULE, GasUnits::new(budget_in_unit)),
