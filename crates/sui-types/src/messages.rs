@@ -928,10 +928,8 @@ impl TransactionKind {
     /// number of commands, or 0 if it is a system transaction
     pub fn num_commands(&self) -> usize {
         match self {
-            TransactionKind::ChangeEpoch(_)
-            | TransactionKind::Genesis(_)
-            | TransactionKind::ConsensusCommitPrologue(_) => 0,
             TransactionKind::ProgrammableTransaction(pt) => pt.commands.len(),
+            _ => 0,
         }
     }
 }
