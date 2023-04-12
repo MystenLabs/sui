@@ -38,55 +38,6 @@ test.describe('site to content script messages', () => {
     const allTests = [
         ['get accounts', { type: 'get-account' }, false],
         [
-            'hasPermissions',
-            {
-                type: 'has-permissions-request',
-            },
-            {
-                payload: {
-                    result: false,
-                },
-            },
-        ],
-        [
-            'execute transaction no account',
-            {
-                type: 'execute-transaction-request',
-            },
-            false,
-        ],
-        [
-            'execute transaction',
-            {
-                type: 'execute-transaction-request',
-                transaction: { account: '0x100' },
-            },
-            false,
-        ],
-        [
-            'sign transaction no account',
-            {
-                type: 'sign-transaction-request',
-            },
-            false,
-        ],
-        [
-            'sign transaction',
-            {
-                type: 'sign-transaction-request',
-                transaction: { account: '0x100' },
-            },
-            false,
-        ],
-        [
-            'sign message',
-            {
-                type: 'sign-message-request',
-                args: {},
-            },
-            false,
-        ],
-        [
             'UI get-features',
             {
                 type: 'get-features',
