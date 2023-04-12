@@ -17,6 +17,9 @@ pub enum IndexerError {
     #[error("Indexer failed to deserialize event from events table with error: `{0}`")]
     EventDeserializationError(String),
 
+    #[error("Fullnode returns unexpected responses, which may block indexers from proceeding, with error: `{0}`")]
+    UnexpectedFullnodeResponseError(String),
+
     #[error("Indexer failed to read fullnode with error: `{0}`")]
     FullNodeReadingError(String),
 
