@@ -9,8 +9,11 @@
 
 use base_types::{SequenceNumber, SuiAddress};
 use messages::{CallArg, ObjectArg};
+use move_core_types::account_address::AccountAddress;
 pub use move_core_types::language_storage::TypeTag;
-use move_core_types::{account_address::AccountAddress, language_storage::StructTag};
+pub use move_core_types::parser::{
+    parse_struct_tag as parse_sui_struct_tag, parse_type_tag as parse_sui_type_tag,
+};
 use object::OBJECT_START_VERSION;
 
 use base_types::ObjectID;
@@ -107,25 +110,6 @@ const fn address_from_single_byte(b: u8) -> AccountAddress {
 
 pub fn sui_framework_address_concat_string(suffix: &str) -> String {
     format!("{}{suffix}", SUI_FRAMEWORK_ADDRESS.to_hex_literal())
-}
-
-pub fn parse_sui_struct_tag(s: &str) -> anyhow::Result<StructTag> {
-    use move_command_line_common::types::ParsedStructType;
-    ParsedStructType::parse(s)?.into_struct_tag(&resolve_address)
-}
-
-pub fn parse_sui_type_tag(s: &str) -> anyhow::Result<TypeTag> {
-    use move_command_line_common::types::ParsedType;
-    ParsedType::parse(s)?.into_type_tag(&resolve_address)
-}
-
-fn resolve_address(addr: &str) -> Option<AccountAddress> {
-    match addr {
-        "std" => Some(MOVE_STDLIB_ADDRESS),
-        "sui" => Some(SUI_FRAMEWORK_ADDRESS),
-        "sui_system" => Some(SUI_SYSTEM_ADDRESS),
-        _ => None,
-    }
 }
 
 pub trait MoveTypeTagTrait {
