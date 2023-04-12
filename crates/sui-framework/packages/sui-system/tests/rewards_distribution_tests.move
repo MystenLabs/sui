@@ -308,6 +308,46 @@ module sui_system::rewards_distribution_tests {
     }
 
     #[test]
+    fun test_everyone_slashed() {
+        // This test is to make sure that if everyone is slashed, our protocol works as expected without aborting
+        // and all rewards go to the storage fund.
+        set_up_sui_system_state();
+        let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
+        let scenario = &mut scenario_val;
+
+        report_validator(VALIDATOR_ADDR_1, VALIDATOR_ADDR_4, scenario);
+        report_validator(VALIDATOR_ADDR_2, VALIDATOR_ADDR_4, scenario);
+        report_validator(VALIDATOR_ADDR_3, VALIDATOR_ADDR_4, scenario);
+        report_validator(VALIDATOR_ADDR_1, VALIDATOR_ADDR_3, scenario);
+        report_validator(VALIDATOR_ADDR_2, VALIDATOR_ADDR_3, scenario);
+        report_validator(VALIDATOR_ADDR_4, VALIDATOR_ADDR_3, scenario);
+        report_validator(VALIDATOR_ADDR_1, VALIDATOR_ADDR_2, scenario);
+        report_validator(VALIDATOR_ADDR_3, VALIDATOR_ADDR_2, scenario);
+        report_validator(VALIDATOR_ADDR_4, VALIDATOR_ADDR_2, scenario);
+        report_validator(VALIDATOR_ADDR_2, VALIDATOR_ADDR_1, scenario);
+        report_validator(VALIDATOR_ADDR_3, VALIDATOR_ADDR_1, scenario);
+        report_validator(VALIDATOR_ADDR_4, VALIDATOR_ADDR_1, scenario);
+
+        advance_epoch_with_reward_amounts_and_slashing_rates(
+            1000, 3000, 10_000, scenario
+        );
+
+        // All validators should have 0 rewards added so their stake stays the same.
+        assert_validator_self_stake_amounts(validator_addrs(), vector[100 * MIST_PER_SUI, 200 * MIST_PER_SUI, 300 * MIST_PER_SUI, 400 * MIST_PER_SUI], scenario);
+
+        test_scenario::next_tx(scenario, @0x0);
+        // Storage fund balance should increase by 4000 SUI.
+        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+        assert_eq(sui_system::get_storage_fund_total_balance(&mut system_state), 4000 * MIST_PER_SUI);
+
+        // The entire 1000 SUI of storage rewards should go to the object rebate portion of the storage fund.
+        assert_eq(sui_system::get_storage_fund_object_rebates(&mut system_state), 1000 * MIST_PER_SUI);
+
+        test_scenario::return_shared(system_state);
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
     fun test_mul_rewards_withdraws_at_same_epoch() {
         set_up_sui_system_state();
         let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
