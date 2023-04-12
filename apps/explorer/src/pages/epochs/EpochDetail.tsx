@@ -31,7 +31,7 @@ function SuiStats({
 
     return (
         <Stats postfix={symbol} {...props}>
-            {formattedAmount}
+            {formattedAmount || '--'}
         </Stats>
     );
 }
