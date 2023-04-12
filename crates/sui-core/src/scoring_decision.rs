@@ -4,16 +4,18 @@
 use crate::authority::AuthorityMetrics;
 use crate::math::median;
 use arc_swap::ArcSwap;
+use fastcrypto::traits::ToFromBytes;
 use narwhal_config::{Committee, Stake};
+use narwhal_crypto::PublicKey;
 use narwhal_types::ReputationScores;
 use std::collections::HashMap;
 use std::sync::Arc;
 use sui_types::base_types::AuthorityName;
-use tracing::{info, warn};
+use tracing::info;
 
 // TODO: migrate these values to config
-const MAD_DIVISOR: f64 = 1.2;
-const CUTOFF_VALUE: f64 = 3.0;
+const MAD_DIVISOR: f64 = 2.3;
+const CUTOFF_VALUE: f64 = 2.5;
 
 /// Updates list of authorities that are deemed to have low reputation scores by consensus
 /// these may be lagging behind the network, byzantine, or not reliably participating for any reason.
@@ -100,13 +102,13 @@ pub fn update_low_scoring_authorities(
     // adjusted median absolute deviation
     let mad = median(&abs_deviations) / MAD_DIVISOR;
     let mut low_scoring = vec![];
-    let mut rest = vec![];
-    for (i, (a, (score, stake))) in scores_per_authority.iter().enumerate() {
+    for (i, (a, (score, _stake))) in scores_per_authority.iter().enumerate() {
         let temp = deviations[i] / mad;
-        if temp < -CUTOFF_VALUE {
+
+        // We expect the methodology to include the zero scoring validators, but we explicitly
+        // include them to make sure, as we know for sure that those have no contribution.
+        if *score == 0 || temp < -CUTOFF_VALUE {
             low_scoring.push((a, *score));
-        } else {
-            rest.push((a, *stake));
         }
     }
 
@@ -118,23 +120,29 @@ pub fn update_low_scoring_authorities(
 
     info!("{:?} low scoring authorities calculated", len_low_scoring);
 
+    // sort the low scoring authorities in asc order
+    low_scoring.sort_by_key(|(_, score)| *score);
+
+    // take low scoring authorities while we haven't reached validity threshold (f+1)
+    let mut total_stake = 0;
     for (authority, score) in low_scoring {
-        final_low_scoring_map.insert(*authority, score);
+        total_stake += committee
+            .authority_by_key(&PublicKey::from_bytes(authority.as_ref()).unwrap())
+            .unwrap()
+            .stake();
+
+        let included = if !committee.reached_validity(total_stake) {
+            final_low_scoring_map.insert(*authority, score);
+            true
+        } else {
+            false
+        };
         if let Some(hostname) = authority_names_to_hostnames.get(authority) {
-            info!("low scoring authority {} has score {}", hostname, score);
+            info!(
+                "low scoring authority {} has score {}, included: {}",
+                hostname, score, included
+            );
         }
-    }
-
-    // make sure the rest have at least quorum
-    let remaining_stake = rest.into_iter().map(|(_, stake)| stake).sum::<Stake>();
-    let quorum_threshold = committee.quorum_threshold();
-    if remaining_stake < quorum_threshold {
-        warn!(
-            "too many low reputation-scoring authorities, temporarily disabling scoring mechanism"
-        );
-
-        low_scoring_authorities.swap(Arc::new(HashMap::new()));
-        return;
     }
 
     low_scoring_authorities.swap(Arc::new(final_low_scoring_map));
@@ -143,6 +151,7 @@ pub fn update_low_scoring_authorities(
 #[cfg(test)]
 mod tests {
     #![allow(clippy::mutable_key_type)]
+
     use crate::authority::AuthorityMetrics;
     use crate::scoring_decision::update_low_scoring_authorities;
     use arc_swap::ArcSwap;
@@ -155,7 +164,7 @@ mod tests {
     use prometheus::Registry;
     use rand::rngs::{OsRng, StdRng};
     use rand::SeedableRng;
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
     use std::sync::Arc;
     use sui_types::crypto::NetworkPublicKey;
 
@@ -239,7 +248,7 @@ mod tests {
             peer_id_map.clone(),
             &metrics,
         );
-        assert_eq!(low_scoring.load().len(), 0);
+        assert_eq!(low_scoring.load().len(), 1);
 
         // this set of scores has a high performing outlier, we don't exclude it
         let mut scores = HashMap::new();
@@ -259,7 +268,8 @@ mod tests {
             peer_id_map.clone(),
             &metrics,
         );
-        assert_eq!(low_scoring.load().len(), 0);
+
+        assert_eq!(low_scoring.load().len(), 1);
 
         // if more than the quorum is a low outlier, we don't exclude any authority
         let mut scores = HashMap::new();
@@ -279,7 +289,7 @@ mod tests {
             peer_id_map.clone(),
             &metrics,
         );
-        assert_eq!(low_scoring.load().len(), 0);
+        assert_eq!(low_scoring.load().len(), 1);
 
         // test with large cluster
         let num_nodes = 50;
@@ -312,7 +322,8 @@ mod tests {
             peer_id_map.clone(),
             &metrics,
         );
-        assert_eq!(low_scoring.load().len(), 0);
+
+        assert_eq!(low_scoring.load().len(), 10);
 
         // the outlier
         scores.insert(authorities[final_idx].id(), 40_u64);
@@ -335,7 +346,7 @@ mod tests {
                 .unwrap(),
             40_u64
         );
-        assert_eq!(low_scoring.load().len(), 1);
+        assert_eq!(low_scoring.load().len(), 6);
     }
 
     #[test]
@@ -391,6 +402,54 @@ mod tests {
             0_u64
         );
         assert_eq!(low_scoring.load().len(), 2);
+    }
+
+    #[test]
+    pub fn test_limit_low_scoring_to_validity_threshold() {
+        let committee = generate_committee(10);
+        let mut authorities = committee.authorities();
+        let a1 = authorities.next().unwrap();
+        let a2 = authorities.next().unwrap();
+        let a3 = authorities.next().unwrap();
+        let a4 = authorities.next().unwrap();
+        let a5 = authorities.next().unwrap();
+        let a6 = authorities.next().unwrap();
+        let a7 = authorities.next().unwrap();
+        let a8 = authorities.next().unwrap();
+        let a9 = authorities.next().unwrap();
+        let a10 = authorities.next().unwrap();
+
+        let low_scoring = Arc::new(ArcSwap::from_pointee(HashMap::new()));
+
+        low_scoring.swap(Arc::new(HashMap::new()));
+
+        let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
+
+        // there is a low outlier in the non zero scores, exclude it as well as down nodes
+        let mut scores = HashMap::new();
+        scores.insert(a1.id(), 350_u64);
+        scores.insert(a2.id(), 390_u64);
+        scores.insert(a3.id(), 350_u64);
+        scores.insert(a4.id(), 20_u64);
+        scores.insert(a5.id(), 10_u64);
+        scores.insert(a6.id(), 0_u64);
+        scores.insert(a7.id(), 0_u64);
+        scores.insert(a8.id(), 0_u64);
+        scores.insert(a9.id(), 0_u64);
+        scores.insert(a10.id(), 0_u64);
+        let reputation_scores = ReputationScores {
+            scores_per_authority: scores,
+            final_of_schedule: true,
+        };
+
+        update_low_scoring_authorities(
+            low_scoring.clone(),
+            &committee,
+            reputation_scores,
+            HashMap::new(),
+            &metrics,
+        );
+        assert_eq!(low_scoring.load().len(), 3);
     }
 
     /// Generate a random committee for the given size. It's important to create the Authorities
@@ -460,6 +519,154 @@ mod tests {
             &metrics,
         );
 
-        assert_eq!(low_scoring.load().len(), 3);
+        assert_eq!(low_scoring.load().len(), 10);
+    }
+
+    /// A test to use when need to tune the score parameters based on some score data retrieved by
+    /// and external environment (ex devnet, testnet etc). A CSV file where the first line is the
+    /// header with the host names, and every other line the scores for each authority on the
+    /// instance of time. The method prints a matrix of the pruned hosts for each score "round"
+    /// and the corresponding score. When a node has not been pruned for a round then the corresponding
+    /// score will appear as "--".
+    #[test]
+    #[ignore]
+    pub fn test_update_low_scoring_authorities_with_score_data() {
+        use std::collections::{BTreeMap, HashMap};
+
+        // read the file
+        let (authority_host_names, all_authority_scores) =
+            read_scores_csv("/Users/akichidis/Downloads/Avg score per host-data-as-joinbyfield-2023-04-14 17_11_40.csv");
+
+        let mut authority_names_to_hostnames = HashMap::new();
+
+        // construct the committee
+        let low_scoring = Arc::new(ArcSwap::from_pointee(HashMap::new()));
+        let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
+        let committee = generate_committee(authority_host_names.len());
+        let mut authorities = committee.authorities();
+
+        // associate authorities to host names
+        for name in authority_host_names.iter().take(committee.size()) {
+            let authority = authorities.next().unwrap();
+            authority_names_to_hostnames.insert(authority.protocol_key().into(), name.clone());
+        }
+
+        let mut low_scoring_authorities_per_round: BTreeMap<String, BTreeMap<usize, Option<u64>>> =
+            BTreeMap::new();
+
+        // Now iterate over the scores
+        for (index, authority_scores) in all_authority_scores.iter().enumerate() {
+            let mut scores = HashMap::new();
+            let mut authorities = committee.authorities();
+
+            // create the scores map and just map them to some authorities
+            for score in authority_scores.iter().take(committee.size()) {
+                let authority = authorities.next().unwrap();
+                scores.insert(authority.id(), *score);
+            }
+
+            let reputation_scores = ReputationScores {
+                scores_per_authority: scores,
+                final_of_schedule: true,
+            };
+
+            update_low_scoring_authorities(
+                low_scoring.clone(),
+                &committee,
+                reputation_scores,
+                authority_names_to_hostnames.clone(),
+                &metrics,
+            );
+
+            // snapshot the low scoring authorities
+            for (name, host_name) in &authority_names_to_hostnames {
+                if let Some(score) = low_scoring.load().get(name) {
+                    low_scoring_authorities_per_round
+                        .entry(host_name.clone())
+                        .or_default()
+                        .insert(index, Some(*score));
+                } else {
+                    // it's not a low scoring authority
+                    low_scoring_authorities_per_round
+                        .entry(host_name.clone())
+                        .or_default()
+                        .insert(index, None);
+                }
+            }
+        }
+
+        // Now print the authorities per "round"
+        let mut total_low_scoring_authorities_per_round: BTreeMap<usize, usize> = BTreeMap::new();
+        for (host_name, scores_per_round) in low_scoring_authorities_per_round {
+            // quickly check if this host has been marked ever as low scoring - otherwise skip
+            if scores_per_round.iter().any(|(_, value)| value.is_some()) {
+                print!("{:30}", host_name);
+
+                for (index, score) in scores_per_round {
+                    if let Some(score) = score {
+                        print!("{score:0>2}\t");
+                        total_low_scoring_authorities_per_round
+                            .entry(index)
+                            .and_modify(|e| *e += 1)
+                            .or_insert(1);
+                    } else {
+                        total_low_scoring_authorities_per_round
+                            .entry(index)
+                            .or_insert(0);
+                        print!("--\t");
+                    }
+                }
+                println!();
+            }
+        }
+
+        // print the total low scoring authorities
+        println!("---------------");
+        print!("{:30}", "Total");
+        for (_index, total) in total_low_scoring_authorities_per_round {
+            print!("{total:0>2}\t");
+        }
+    }
+
+    fn read_scores_csv(path: &str) -> (Vec<String>, Vec<Vec<u64>>) {
+        use std::fs::File;
+        use std::io::BufRead;
+        use std::io::BufReader;
+
+        let file = File::open(path).unwrap();
+        let reader = BufReader::new(file);
+
+        let mut headers = Vec::new();
+        let mut scores = Vec::new();
+        let mut scores_set: HashSet<u64> = HashSet::new();
+
+        for line in reader.lines() {
+            if headers.is_empty() {
+                headers = line
+                    .unwrap()
+                    .split(',')
+                    .skip(1)
+                    .map(|s| s.to_string())
+                    .collect();
+            } else {
+                let l = line.unwrap();
+
+                let s: Vec<u64> = l
+                    .split(',')
+                    .skip(1)
+                    .map(|s| s.parse::<f64>().unwrap() as u64)
+                    .collect();
+
+                if s.is_empty() {
+                    continue;
+                }
+
+                if scores_set.insert(s.iter().sum()) {
+                    scores.push(s);
+                }
+            }
+        }
+
+        (headers, scores)
     }
 }
