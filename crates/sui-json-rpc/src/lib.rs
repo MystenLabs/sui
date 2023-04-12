@@ -23,6 +23,7 @@ use sui_open_rpc::{Module, Project};
 use crate::error::Error;
 use crate::metrics::MetricsLogger;
 use crate::routing_layer::RoutingLayer;
+use crate::tracing_layer::TraceIdLayer;
 
 pub mod api;
 mod balance_changes;
@@ -35,6 +36,7 @@ pub mod move_utils;
 mod object_changes;
 pub mod read_api;
 mod routing_layer;
+mod tracing_layer;
 pub mod transaction_builder_api;
 pub mod transaction_execution_api;
 
@@ -148,7 +150,8 @@ impl JsonRpcServerBuilder {
 
         let middleware = tower::ServiceBuilder::new()
             .layer(cors)
-            .layer(routing_layer);
+            .layer(routing_layer)
+            .layer(TraceIdLayer);
 
         let server = ServerBuilder::default()
             .batch_requests_supported(false)
