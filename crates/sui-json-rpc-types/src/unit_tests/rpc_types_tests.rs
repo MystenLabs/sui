@@ -116,7 +116,7 @@ fn test_move_value_to_url() {
 #[test]
 fn test_serde() {
     let test_values = [
-        SuiMoveValue::Number(u64::MAX),
+        SuiMoveValue::Number(u32::MAX),
         SuiMoveValue::UID {
             id: ObjectID::random(),
         },
