@@ -6,7 +6,7 @@ use crate::authority::{AuthorityState, EffectsNotifyRead};
 use crate::authority_aggregator::authority_aggregator_tests::{
     create_object_move_transaction, do_cert, do_transaction, extract_cert, get_latest_ref,
 };
-use crate::authority_server::{ValidatorService, MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH};
+use crate::authority_server::{ValidatorService, MAX_PER_OBJECT_QUEUE_LENGTH};
 use crate::safe_client::SafeClient;
 use crate::test_authority_clients::LocalAuthorityClient;
 use crate::test_utils::{init_local_authorities, make_transfer_object_move_transaction};
@@ -520,7 +520,7 @@ async fn test_per_object_overload() {
     // Sign and try execute 1000 txns on the first three authorities. And enqueue them on the last authority.
     // First shared counter txn has input object available on authority 3. So to overload authority 3, 1 more
     // txn is needed.
-    let num_txns = MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH + 1;
+    let num_txns = MAX_PER_OBJECT_QUEUE_LENGTH + 1;
     for gas_object in gas_objects.iter().take(num_txns) {
         let gas_ref = get_latest_ref(authority_clients[0], gas_object.id()).await;
         let shared_txn = make_counter_increment_transaction(
