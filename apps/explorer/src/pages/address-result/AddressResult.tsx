@@ -8,8 +8,10 @@ import { TransactionsForAddress } from '../../components/transactions/Transactio
 
 import OwnedCoins from '~/components/OwnedCoins/OwnedCoins';
 import OwnedObjects from '~/components/OwnedObjectsV2/OwnedObjects';
+import TransactionBlocks from '~/components/TransactionBlocks/TransactionBlocks';
 import { Heading } from '~/ui/Heading';
 import { PageHeader } from '~/ui/PageHeader';
+
 
 function AddressResult() {
     const { id: addressID } = useParams();
@@ -32,7 +34,9 @@ function AddressResult() {
             </div>
 
             <div>
-                <div className="border-b border-gray-45 pb-5">
+                <TransactionBlocks address={addressID!} />
+
+                {/* <div className="border-b border-gray-45 pb-5">
                     <Heading color="gray-90" variant="heading4/semibold">
                         Transaction Blocks
                     </Heading>
@@ -44,7 +48,7 @@ function AddressResult() {
                             type="address"
                         />
                     </div>
-                </ErrorBoundary>
+                </ErrorBoundary> */}
             </div>
         </div>
     );
