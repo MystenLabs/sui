@@ -64,10 +64,10 @@ fi
 if [[ ! -f "${SUI_RUN_PATH}/fullnode.yaml" ]]; then
     echo "Generating fullnode.yaml at ${SUI_RUN_PATH}/fullnode.yaml"
     cp crates/sui-config/data/fullnode-template.yaml ${SUI_RUN_PATH}/fullnode.yaml
-    sed -i '' "s|genesis.blob|${SUI_RUN_PATH}/genesis.blob|g" ${SUI_RUN_PATH}/fullnode.yaml
-    sed -i '' "s|suidb|${SUI_RUN_PATH}/suidb|g" ${SUI_RUN_PATH}/fullnode.yaml
+    sed -i "s|genesis.blob|${SUI_RUN_PATH}/genesis.blob|g" ${SUI_RUN_PATH}/fullnode.yaml
+    sed -i "s|suidb|${SUI_RUN_PATH}/suidb|g" ${SUI_RUN_PATH}/fullnode.yaml
 
-    if [[ ! $NETWORK == "devnet" ]]; then
+    if [[ $NETWORK != "devnet" ]]; then
         cat >> "$SUI_RUN_PATH/fullnode.yaml" <<- EOM
 
 p2p-config:
@@ -108,3 +108,4 @@ fi
 
 kill $SUI_NODE_PID
 exit 0
+

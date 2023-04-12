@@ -7,6 +7,12 @@ on:
   schedule:
     - cron: "0 9 * * *" # UTC timing is every day at 1am PST
   workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        required: false
+        description: "Run with debug-level logging"
+        default: false
 
 jobs:
   genesis-sync-test:
@@ -53,11 +59,11 @@ jobs:
 
       - name: Build sui-node
         run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 30 ssh ubuntu@fullnode-compat-test-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && cargo build --release --bin sui-node"
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 30 ssh ubuntu@fullnode-compat-test-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && CARGO_INCREMENTAL=0 cargo build --release --bin sui-node"
 
       - name: Run sync script
         run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 30 ssh ubuntu@fullnode-compat-test-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && CARGO_TERM_COLOR=always ./scripts/fullnode-sync.sh -p ./target/release/sui-node -n testnet"
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 30 ssh ubuntu@fullnode-compat-test-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && CARGO_TERM_COLOR=always ./scripts/fullnode-sync.sh -p ./target/release/sui-node -n testnet ${{ github.event.inputs.debug && '-d' || '' }}"
 
   notify:
     name: Notify
@@ -121,7 +127,7 @@ jobs:
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "To debug failures: `tsh ssh ubuntu@simtest-01` and look in the `/home/ubuntu/compatibility_check_logs/{date}` folder for test results"
+                    "text": "To debug failures: See run logs (rerun with `debug` enabled if necessary); `tsh ssh ubuntu@fullnode-compat-test-01` if needed"
                   }
                 }
               ]
