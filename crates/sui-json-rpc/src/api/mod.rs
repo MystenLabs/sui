@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
+use mysten_metrics::histogram::Histogram;
 
 pub use coin::CoinReadApiClient;
 pub use coin::CoinReadApiOpenRpc;
@@ -62,5 +63,124 @@ pub fn validate_limit(limit: Option<usize>, max: usize) -> Result<usize, anyhow:
         Some(0) => Err(anyhow!("Page size limit cannot be smaller than 1")),
         Some(l) => Ok(l),
         None => Ok(max),
+    }
+}
+
+#[derive(Clone)]
+pub struct JsonRpcMetrics {
+    pub get_objects_limit: Histogram,
+    pub get_objects_result_size: Histogram,
+    pub get_tx_blocks_limit: Histogram,
+    pub get_tx_blocks_result_size: Histogram,
+    pub get_checkpoints_limit: Histogram,
+    pub get_checkpoints_result_size: Histogram,
+    pub get_owned_objects_limit: Histogram,
+    pub get_owned_objects_result_size: Histogram,
+    pub get_coins_limit: Histogram,
+    pub get_coins_result_size: Histogram,
+    pub get_dynamic_fields_limit: Histogram,
+    pub get_dynamic_fields_result_size: Histogram,
+    pub query_tx_blocks_limit: Histogram,
+    pub query_tx_blocks_result_size: Histogram,
+    pub query_events_limit: Histogram,
+    pub query_events_result_size: Histogram,
+
+    pub get_stake_sui_result_size: Histogram,
+}
+
+impl JsonRpcMetrics {
+    pub fn new(registry: &prometheus::Registry) -> Self {
+        Self {
+            get_objects_limit: Histogram::new_in_registry(
+                "json_rpc_get_objects_limit",
+                "The input limit for multi_get_objects, after applying the cap",
+                registry,
+            ),
+            get_objects_result_size: Histogram::new_in_registry(
+                "json_rpc_get_objects_result_size",
+                "The return size for multi_get_objects",
+                registry,
+            ),
+            get_tx_blocks_limit: Histogram::new_in_registry(
+                "json_rpc_get_tx_blocks_limit",
+                "The input limit for get_tx_blocks, after applying the cap",
+                registry,
+            ),
+            get_tx_blocks_result_size: Histogram::new_in_registry(
+                "json_rpc_get_tx_blocks_result_size",
+                "The return size for get_tx_blocks",
+                registry,
+            ),
+            get_checkpoints_limit: Histogram::new_in_registry(
+                "json_rpc_get_checkpoints_limit",
+                "The input limit for get_checkpoints, after applying the cap",
+                registry,
+            ),
+            get_checkpoints_result_size: Histogram::new_in_registry(
+                "json_rpc_get_checkpoints_result_size",
+                "The return size for get_checkpoints",
+                registry,
+            ),
+            get_owned_objects_limit: Histogram::new_in_registry(
+                "json_rpc_get_owned_objects_limit",
+                "The input limit for get_owned_objects, after applying the cap",
+                registry,
+            ),
+            get_owned_objects_result_size: Histogram::new_in_registry(
+                "json_rpc_get_owned_objects_result_size",
+                "The return size for get_owned_objects",
+                registry,
+            ),
+            get_coins_limit: Histogram::new_in_registry(
+                "json_rpc_get_coins_limit",
+                "The input limit for get_coins, after applying the cap",
+                registry,
+            ),
+            get_coins_result_size: Histogram::new_in_registry(
+                "json_rpc_get_coins_result_size",
+                "The return size for get_coins",
+                registry,
+            ),
+            get_dynamic_fields_limit: Histogram::new_in_registry(
+                "json_rpc_get_dynamic_fields_limit",
+                "The input limit for get_dynamic_fields, after applying the cap",
+                registry,
+            ),
+            get_dynamic_fields_result_size: Histogram::new_in_registry(
+                "json_rpc_get_dynamic_fields_result_size",
+                "The return size for get_dynamic_fields",
+                registry,
+            ),
+            query_tx_blocks_limit: Histogram::new_in_registry(
+                "json_rpc_query_tx_blocks_limit",
+                "The input limit for query_tx_blocks, after applying the cap",
+                registry,
+            ),
+            query_tx_blocks_result_size: Histogram::new_in_registry(
+                "json_rpc_query_tx_blocks_result_size",
+                "The return size for query_tx_blocks",
+                registry,
+            ),
+            query_events_limit: Histogram::new_in_registry(
+                "json_rpc_query_events_limit",
+                "The input limit for query_events, after applying the cap",
+                registry,
+            ),
+            query_events_result_size: Histogram::new_in_registry(
+                "json_rpc_query_events_result_size",
+                "The return size for query_events",
+                registry,
+            ),
+            get_stake_sui_result_size: Histogram::new_in_registry(
+                "json_rpc_get_stake_sui_result_size",
+                "The return size for get_stake_sui",
+                registry,
+            ),
+        }
+    }
+
+    pub fn new_for_tests() -> Self {
+        let registry = prometheus::Registry::new();
+        Self::new(&registry)
     }
 }

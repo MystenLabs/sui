@@ -27,7 +27,8 @@ use sui_types::dynamic_field::DynamicFieldName;
 use sui_types::event::EventID;
 
 use crate::api::{
-    cap_page_limit, validate_limit, IndexerApiServer, ReadApiServer, QUERY_MAX_RESULT_LIMIT_OBJECTS,
+    cap_page_limit, validate_limit, IndexerApiServer, JsonRpcMetrics, ReadApiServer,
+    QUERY_MAX_RESULT_LIMIT_OBJECTS,
 };
 use crate::SuiRpcModule;
 
@@ -53,11 +54,16 @@ where
 pub struct IndexerApi<R> {
     state: Arc<AuthorityState>,
     read_api: R,
+    pub metrics: Arc<JsonRpcMetrics>,
 }
 
 impl<R: ReadApiServer> IndexerApi<R> {
-    pub fn new(state: Arc<AuthorityState>, read_api: R) -> Self {
-        Self { state, read_api }
+    pub fn new(state: Arc<AuthorityState>, read_api: R, metrics: Arc<JsonRpcMetrics>) -> Self {
+        Self {
+            state,
+            read_api,
+            metrics,
+        }
     }
 }
 
@@ -71,6 +77,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         limit: Option<usize>,
     ) -> RpcResult<ObjectsPage> {
         let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_OBJECTS)?;
+        self.metrics.get_owned_objects_limit.report(limit as u64);
         let SuiObjectResponseQuery { filter, options } = query.unwrap_or_default();
         let options = options.unwrap_or_default();
         let mut objects = self
@@ -97,6 +104,9 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 .collect::<Result<Vec<SuiObjectResponse>, _>>()?,
         };
 
+        self.metrics
+            .get_owned_objects_result_size
+            .report(data.len() as u64);
         Ok(Page {
             data,
             next_cursor,
@@ -113,6 +123,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         descending_order: Option<bool>,
     ) -> RpcResult<TransactionBlocksPage> {
         let limit = cap_page_limit(limit);
+        self.metrics.query_tx_blocks_limit.report(limit as u64);
         let descending = descending_order.unwrap_or_default();
         let opts = query.options.unwrap_or_default();
 
@@ -136,6 +147,9 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 .multi_get_transaction_blocks(digests, Some(opts))?
         };
 
+        self.metrics
+            .query_tx_blocks_result_size
+            .report(data.len() as u64);
         Ok(Page {
             data,
             next_cursor,
@@ -159,6 +173,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         );
         let descending = descending_order.unwrap_or_default();
         let limit = cap_page_limit(limit);
+        self.metrics.query_events_limit.report(limit as u64);
         // Retrieve 1 extra item for next cursor
         let mut data = self
             .state
@@ -166,6 +181,9 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         let has_next_page = data.len() > limit;
         data.truncate(limit);
         let next_cursor = data.last().map_or(cursor, |e| Some(e.id.clone()));
+        self.metrics
+            .query_events_result_size
+            .report(data.len() as u64);
         Ok(EventPage {
             data,
             next_cursor,
@@ -186,6 +204,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         limit: Option<usize>,
     ) -> RpcResult<DynamicFieldPage> {
         let limit = cap_page_limit(limit);
+        self.metrics.get_dynamic_fields_limit.report(limit as u64);
         let mut data = self
             .state
             .get_dynamic_fields(parent_object_id, cursor, limit + 1)
@@ -193,6 +212,9 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         let has_next_page = data.len() > limit;
         data.truncate(limit);
         let next_cursor = data.last().cloned().map_or(cursor, |c| Some(c.object_id));
+        self.metrics
+            .get_dynamic_fields_result_size
+            .report(data.len() as u64);
         Ok(DynamicFieldPage {
             data,
             next_cursor,
