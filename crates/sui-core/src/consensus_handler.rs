@@ -300,8 +300,6 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             .epoch_store
             .process_consensus_transactions_and_commit_boundary(
                 verified_transactions,
-                round,
-                timestamp,
                 &self.checkpoint_service,
                 &self.parent_sync_store,
             )
