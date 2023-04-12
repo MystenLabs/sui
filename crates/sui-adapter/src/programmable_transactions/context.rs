@@ -476,7 +476,7 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
             storage_id,
             new_modules,
             self.tx_context.digest(),
-            self.protocol_config.max_move_package_size(),
+            self.protocol_config,
             dependencies,
         )
     }

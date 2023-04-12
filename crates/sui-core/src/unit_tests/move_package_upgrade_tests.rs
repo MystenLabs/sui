@@ -519,6 +519,40 @@ async fn test_upgrade_package_invalid_compatibility() {
 }
 
 #[tokio::test]
+async fn test_upgrade_package_missing_type() {
+    let mut runner = UpgradeStateRunner::new("move_upgrade/missing_type_v1").await;
+
+    let (digest, modules) = build_upgrade_test_modules("missing_type_v2");
+    let effects = runner
+        .upgrade(UpgradePolicy::COMPATIBLE, digest, modules, vec![])
+        .await;
+
+    assert!(matches!(
+        effects.status.unwrap_err().0,
+        ExecutionFailureStatus::PackageUpgradeError {
+            upgrade_error: PackageUpgradeError::IncompatibleUpgrade
+        }
+    ));
+}
+
+#[tokio::test]
+async fn test_upgrade_package_missing_type_module_removal() {
+    let mut runner = UpgradeStateRunner::new("move_upgrade/missing_type_v1").await;
+
+    let (digest, modules) = build_upgrade_test_modules("missing_type_v2_module_removed");
+    let effects = runner
+        .upgrade(UpgradePolicy::COMPATIBLE, digest, modules, vec![])
+        .await;
+
+    assert!(matches!(
+        effects.status.unwrap_err().0,
+        ExecutionFailureStatus::PackageUpgradeError {
+            upgrade_error: PackageUpgradeError::IncompatibleUpgrade
+        }
+    ));
+}
+
+#[tokio::test]
 async fn test_upgrade_package_additive_mode() {
     let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
 

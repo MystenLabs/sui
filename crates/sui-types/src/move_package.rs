@@ -6,6 +6,7 @@ use crate::{
     crypto::DefaultHash,
     error::{ExecutionError, ExecutionErrorKind, SuiError, SuiResult},
     id::{ID, UID},
+    messages::PackageUpgradeError,
     object::OBJECT_START_VERSION,
     SUI_FRAMEWORK_ADDRESS,
 };
@@ -33,6 +34,7 @@ use serde_json::Value;
 use serde_with::serde_as;
 use serde_with::Bytes;
 use std::collections::{BTreeMap, BTreeSet};
+use sui_protocol_config::ProtocolConfig;
 
 // TODO: robust MovePackage tests
 // #[cfg(test)]
@@ -278,14 +280,15 @@ impl MovePackage {
         &self,
         storage_id: ObjectID,
         modules: &[CompiledModule],
-        max_move_package_size: u64,
+        protocol_config: &ProtocolConfig,
         transitive_dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
         let module = modules
             .first()
             .expect("Tried to build a Move package from an empty iterator of Compiled modules");
         let runtime_id = ObjectID::from(*module.address());
-        let type_origin_table = build_upgraded_type_origin_table(self, modules, storage_id)?;
+        let type_origin_table =
+            build_upgraded_type_origin_table(self, modules, storage_id, protocol_config)?;
         let mut new_version = self.version();
         new_version.increment();
         Self::from_module_iter_with_type_origin_table(
@@ -293,7 +296,7 @@ impl MovePackage {
             runtime_id,
             new_version,
             modules,
-            max_move_package_size,
+            protocol_config.max_move_package_size(),
             type_origin_table,
             transitive_dependencies,
         )
@@ -683,6 +686,7 @@ fn build_upgraded_type_origin_table(
     predecessor: &MovePackage,
     modules: &[CompiledModule],
     storage_id: ObjectID,
+    protocol_config: &ProtocolConfig,
 ) -> Result<Vec<TypeOrigin>, ExecutionError> {
     let mut new_table = vec![];
     let mut existing_table = predecessor.type_origin_map();
@@ -704,9 +708,17 @@ fn build_upgraded_type_origin_table(
     }
 
     if !existing_table.is_empty() {
-        Err(ExecutionError::invariant_violation(
-            "Package upgrade missing type from previous version.",
-        ))
+        if protocol_config.missing_type_is_compatibility_error() {
+            Err(ExecutionError::from_kind(
+                ExecutionErrorKind::PackageUpgradeError {
+                    upgrade_error: PackageUpgradeError::IncompatibleUpgrade,
+                },
+            ))
+        } else {
+            Err(ExecutionError::invariant_violation(
+                "Package upgrade missing type from previous version.",
+            ))
+        }
     } else {
         Ok(new_table)
     }
