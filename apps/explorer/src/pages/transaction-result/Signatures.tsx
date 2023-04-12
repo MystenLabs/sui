@@ -4,12 +4,8 @@
 import {
     toB64,
     fromSerializedSignature,
-    getGasData,
-    getTransactionSender,
-    getTransactionSignature,
     normalizeSuiAddress,
     type SuiAddress,
-    type SuiTransactionBlockResponse,
     type SignaturePubkeyPair,
 } from '@mysten/sui.js';
 
@@ -63,32 +59,22 @@ function getSignatureFromAddress(
 }
 
 interface Props {
-    transaction: SuiTransactionBlockResponse;
+    sender: string;
+    gasOwner: string;
+    signatures: string[];
 }
 
-export function Signatures({ transaction }: Props) {
-    const sender = getTransactionSender(transaction);
-    const gasData = getGasData(transaction);
-    const transactionSignatures = getTransactionSignature(transaction);
-
-    if (!transactionSignatures) return null;
-
-    const isSponsoredTransaction = gasData?.owner !== sender;
-
-    const deserializedTransactionSignatures = transactionSignatures.map(
-        (signature) => fromSerializedSignature(signature)
+export function Signatures({ sender, gasOwner, signatures }: Props) {
+    const isSponsoredTransaction = gasOwner !== sender;
+    const deserializedTransactionSignatures = signatures.map((signature) =>
+        fromSerializedSignature(signature)
     );
-
     const userSignature = getSignatureFromAddress(
         deserializedTransactionSignatures,
-        sender!
+        sender
     );
-
     const sponsorSignature = isSponsoredTransaction
-        ? getSignatureFromAddress(
-              deserializedTransactionSignatures,
-              gasData!.owner
-          )
+        ? getSignatureFromAddress(deserializedTransactionSignatures, gasOwner)
         : null;
 
     return (

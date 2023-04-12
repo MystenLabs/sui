@@ -14,6 +14,7 @@ import {
     type ProgrammableTransaction,
     SUI_TYPE_ARG,
     type SuiTransactionBlockResponse,
+    getTransactionSignature,
 } from '@mysten/sui.js';
 import clsx from 'clsx';
 import { useState } from 'react';
@@ -116,7 +117,7 @@ export function TransactionView({
 }: {
     transaction: SuiTransactionBlockResponse;
 }) {
-    const sender = getTransactionSender(transaction)!;
+    const sender = getTransactionSender(transaction);
     const gasUsed = transaction?.effects!.gasUsed;
 
     const [gasFeesExpanded, setGasFeesExpanded] = useState(false);
@@ -155,20 +156,22 @@ export function TransactionView({
     // MUSTFIX(chris): re-enable event display
     // const hasEvents = txEventData && txEventData.length > 0;
     const hasEvents = false;
+    const transactionSignatures = getTransactionSignature(transaction);
+    const hasTransactionSignatures =
+        transactionSignatures && transactionSignatures.length > 0;
 
     const txError = getExecutionStatusError(transaction);
 
-    const gasData = getGasData(transaction)!;
-    const gasPrice = gasData.price || 1;
-    const gasPayment = gasData.payment;
-    const gasBudget = gasData.budget;
-    const gasOwner = gasData.owner;
-    const isSponsoredTransaction = gasOwner !== sender;
+    const gasData = getGasData(transaction);
+    const isSponsoredTransaction = !!gasData && gasData.owner !== sender;
 
     const timestamp = transaction.timestampMs;
-    const transactionKindName = getTransactionKindName(
-        getTransactionKind(transaction)!
-    );
+    const transactionKind = getTransactionKind(transaction);
+    const transactionKindName = transactionKind
+        ? getTransactionKindName(transactionKind)
+        : undefined;
+    const isProgrammableTransaction =
+        transactionKindName === 'ProgrammableTransaction';
 
     return (
         <div className={clsx(styles.txdetailsbg)}>
@@ -177,9 +180,9 @@ export function TransactionView({
                     type="Transaction"
                     title={getTransactionDigest(transaction)}
                     subtitle={
-                        transactionKindName !== 'ProgrammableTransaction'
-                            ? transactionKindName
-                            : undefined
+                        isProgrammableTransaction
+                            ? undefined
+                            : transactionKindName
                     }
                     status={getExecutionStatusType(transaction)}
                 />
@@ -193,7 +196,7 @@ export function TransactionView({
                 <TabList>
                     <Tab>Details</Tab>
                     {hasEvents && <Tab>Events</Tab>}
-                    <Tab>Signatures</Tab>
+                    {hasTransactionSignatures && <Tab>Signatures</Tab>}
                 </TabList>
                 <TabPanels>
                     <TabPanel>
@@ -230,13 +233,17 @@ export function TransactionView({
                                 {isSponsoredTransaction && (
                                     <div className="mt-10">
                                         <SponsorTransactionAddress
-                                            sponsor={gasOwner}
+                                            sponsor={gasData.owner}
                                         />
                                     </div>
                                 )}
-                                <div className="mt-10">
-                                    <SenderTransactionAddress sender={sender} />
-                                </div>
+                                {sender && (
+                                    <div className="mt-10">
+                                        <SenderTransactionAddress
+                                            sender={sender}
+                                        />
+                                    </div>
+                                )}
                                 {balanceChanges.length > 0 && (
                                     <div className="mt-10">
                                         <RecipientTransactionAddresses
@@ -260,7 +267,7 @@ export function TransactionView({
                             </section>
                         </div>
 
-                        {transactionKindName === 'ProgrammableTransaction' && (
+                        {isProgrammableTransaction && (
                             <ProgrammableTransactionView
                                 transaction={
                                     transaction.transaction!.data
@@ -276,9 +283,7 @@ export function TransactionView({
                                     <DescriptionItem title="Checkpoint Seq. Number">
                                         <CheckpointSequenceLink
                                             noTruncate
-                                            sequence={String(
-                                                transaction.checkpoint
-                                            )}
+                                            sequence={transaction.checkpoint}
                                         />
                                     </DescriptionItem>
                                 </div>
@@ -295,24 +300,32 @@ export function TransactionView({
                             >
                                 Gas & Storage Fees
                             </TableHeader>
-
                             <DescriptionList>
-                                <DescriptionItem title="Gas Payment">
-                                    <ObjectLink
-                                        // TODO: support multiple gas coins
-                                        objectId={gasPayment[0].objectId}
-                                    />
-                                </DescriptionItem>
-
-                                <DescriptionItem title="Gas Budget">
-                                    <GasAmount amount={BigInt(gasBudget)} />
-                                </DescriptionItem>
+                                {gasData && (
+                                    <>
+                                        <DescriptionItem title="Gas Payment">
+                                            <ObjectLink
+                                                // TODO: support multiple gas coins
+                                                objectId={
+                                                    gasData.payment[0].objectId
+                                                }
+                                            />
+                                        </DescriptionItem>
+                                        <DescriptionItem title="Gas Budget">
+                                            <GasAmount
+                                                amount={BigInt(gasData.budget)}
+                                            />
+                                        </DescriptionItem>
+                                    </>
+                                )}
 
                                 {gasFeesExpanded && (
                                     <>
                                         <DescriptionItem title="Gas Price">
                                             <GasAmount
-                                                amount={BigInt(gasPrice)}
+                                                amount={BigInt(
+                                                    gasData?.price || 1
+                                                )}
                                             />
                                         </DescriptionItem>
                                         <DescriptionItem title="Computation Fee">
@@ -394,9 +407,15 @@ export function TransactionView({
                             </div>
                         </TabPanel>
                     )} */}
-                    <TabPanel>
-                        <Signatures transaction={transaction} />
-                    </TabPanel>
+                    {hasTransactionSignatures && sender && gasData && (
+                        <TabPanel>
+                            <Signatures
+                                signatures={transactionSignatures}
+                                sender={sender}
+                                gasOwner={gasData.owner}
+                            />
+                        </TabPanel>
+                    )}
                 </TabPanels>
             </TabGroup>
         </div>
