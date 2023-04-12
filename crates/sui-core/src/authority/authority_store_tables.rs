@@ -18,7 +18,7 @@ use typed_store::rocks::{
 use typed_store::traits::{Map, TableSummary, TypedStoreDebug};
 
 use crate::authority::authority_store_types::{
-    MigratedStoreObjectPair, ObjectContentDigest, StoreData, StoreMoveObjectWrapper, StoreObject,
+    try_construct_object, ObjectContentDigest, StoreData, StoreMoveObjectWrapper, StoreObject,
     StoreObjectValue, StoreObjectWrapper,
 };
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
@@ -152,10 +152,14 @@ impl AuthorityPerpetualTables {
         };
         iter.reverse()
             .next()
-            .and_then(|(_, o)| self.object(o).ok().flatten())
+            .and_then(|(key, o)| self.object(&key, o).ok().flatten())
     }
 
-    fn construct_object(&self, store_object: StoreObjectValue) -> Result<Object, SuiError> {
+    fn construct_object(
+        &self,
+        object_key: &ObjectKey,
+        store_object: StoreObjectValue,
+    ) -> Result<Object, SuiError> {
         let indirect_object = match store_object.data {
             StoreData::IndirectObject(ref metadata) => self
                 .indirect_move_objects
@@ -163,15 +167,18 @@ impl AuthorityPerpetualTables {
                 .map(|o| o.migrate().into_inner()),
             _ => None,
         };
-        let object = MigratedStoreObjectPair(store_object, indirect_object).try_into()?;
-        Ok(object)
+        try_construct_object(object_key, store_object, indirect_object)
     }
 
     // Constructs `sui_types::object::Object` from `StoreObjectWrapper`.
     // Returns `None` if object was deleted/wrapped
-    pub fn object(&self, store_object: StoreObjectWrapper) -> Result<Option<Object>, SuiError> {
+    pub fn object(
+        &self,
+        object_key: &ObjectKey,
+        store_object: StoreObjectWrapper,
+    ) -> Result<Option<Object>, SuiError> {
         let StoreObject::Value(store_object) = store_object.migrate().into_inner() else {return Ok(None)};
-        Ok(Some(self.construct_object(store_object)?))
+        Ok(Some(self.construct_object(object_key, store_object)?))
     }
 
     pub fn object_reference(
@@ -180,7 +187,9 @@ impl AuthorityPerpetualTables {
         store_object: StoreObjectWrapper,
     ) -> Result<ObjectRef, SuiError> {
         let obj_ref = match store_object.migrate().into_inner() {
-            StoreObject::Value(object) => self.construct_object(object)?.compute_object_reference(),
+            StoreObject::Value(object) => self
+                .construct_object(object_key, object)?
+                .compute_object_reference(),
             StoreObject::Deleted => (
                 object_key.0,
                 object_key.1,
@@ -300,7 +309,9 @@ impl ObjectStore for AuthorityPerpetualTables {
             .next();
 
         match obj_entry {
-            Some((ObjectKey(obj_id, _), obj)) if obj_id == *object_id => Ok(self.object(obj)?),
+            Some((ObjectKey(obj_id, version), obj)) if obj_id == *object_id => {
+                Ok(self.object(&ObjectKey(obj_id, version), obj)?)
+            }
             _ => Ok(None),
         }
     }
@@ -310,12 +321,12 @@ impl ObjectStore for AuthorityPerpetualTables {
         object_id: &ObjectID,
         version: VersionNumber,
     ) -> Result<Option<Object>, SuiError> {
-        let key = ObjectKey(*object_id, version);
-        let obj_entry = self.objects.get(&key);
-        match obj_entry {
-            Ok(Some(wrapper)) => self.object(wrapper),
-            _ => Ok(None),
-        }
+        Ok(self
+            .objects
+            .get(&ObjectKey(*object_id, version))?
+            .map(|object| self.object(&ObjectKey(*object_id, version), object))
+            .transpose()?
+            .flatten())
     }
 }
 
@@ -355,7 +366,7 @@ fn store_object_wrapper_to_live_object(
     match store_object.migrate().into_inner() {
         StoreObject::Value(object) => {
             let object = tables
-                .construct_object(object)
+                .construct_object(&object_key, object)
                 .expect("Constructing object from store cannot fail");
             Some(LiveObject::Normal(object))
         }
