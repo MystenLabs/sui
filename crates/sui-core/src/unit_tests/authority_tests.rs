@@ -1673,7 +1673,7 @@ pub async fn send_and_confirm_transaction_(
     // for testing and regression detection
     let state_acc = StateAccumulator::new(authority.database.clone());
     let mut state = state_acc.accumulate_live_object_set();
-    let result = authority.try_execute_for_test(&certificate).await?;
+    let (result, _execution_error_opt) = authority.try_execute_for_test(&certificate).await?;
     let state_after = state_acc.accumulate_live_object_set();
     let effects_acc = state_acc.accumulate_effects(
         vec![result.inner().data().clone()],
@@ -3505,6 +3505,7 @@ async fn create_and_retrieve_df_info(function: &IdentStr) -> (SuiAddress, Vec<Dy
         .try_execute_for_test(&add_cert)
         .await
         .unwrap()
+        .0
         .into_message();
 
     assert!(add_effects.status().is_ok(), "{:?}", add_effects.status());
@@ -4821,7 +4822,8 @@ async fn test_consensus_message_processed() {
 
         // on authority1, we always sequence via consensus
         send_consensus(&authority1, &certificate).await;
-        let effects1 = authority1.try_execute_for_test(&certificate).await.unwrap();
+        let (effects1, _execution_error_opt) =
+            authority1.try_execute_for_test(&certificate).await.unwrap();
 
         // now, on authority2, we send 0 or 1 consensus messages, then we either sequence and execute via
         // effects or via handle_certificate, then send 0 or 1 consensus messages.
@@ -4835,6 +4837,7 @@ async fn test_consensus_message_processed() {
                 .try_execute_for_test(&certificate)
                 .await
                 .unwrap()
+                .0
                 .into_message()
         } else {
             let epoch_store = authority2.epoch_store_for_testing();
