@@ -25,17 +25,18 @@ use sui_types::object::{Object, Owner};
 use sui_types::parse_sui_struct_tag;
 use sui_types::storage::ObjectKey;
 
-use crate::api::{cap_page_limit, CoinReadApiServer};
+use crate::api::{cap_page_limit, CoinReadApiServer, JsonRpcMetrics};
 use crate::error::Error;
 use crate::SuiRpcModule;
 
 pub struct CoinReadApi {
     state: Arc<AuthorityState>,
+    pub metrics: Arc<JsonRpcMetrics>,
 }
 
 impl CoinReadApi {
-    pub fn new(state: Arc<AuthorityState>) -> Self {
-        Self { state }
+    pub fn new(state: Arc<AuthorityState>, metrics: Arc<JsonRpcMetrics>) -> Self {
+        Self { state, metrics }
     }
 
     fn multi_get_coin(&self, coins: &[ObjectKey]) -> Result<Vec<Result<SuiCoin, Error>>, Error> {
@@ -96,6 +97,7 @@ impl CoinReadApi {
     ) -> Result<CoinPage, Error> {
         // TODO: Add index to improve performance?
         let limit = cap_page_limit(limit);
+        self.metrics.get_coins_limit.report(limit as u64);
         let mut coins = self
             .get_owner_coin_iterator(owner, &coin_type)?
             .skip_while(|o| matches!(&cursor, Some(cursor) if cursor != &o.0))
@@ -113,6 +115,7 @@ impl CoinReadApi {
             .into_iter()
             .collect::<Result<Vec<_>, _>>()?;
 
+        self.metrics.get_coins_result_size.report(data.len() as u64);
         Ok(CoinPage {
             data,
             next_cursor,
