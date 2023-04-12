@@ -30,7 +30,7 @@ export function EpochsTable({
         ['epochs', 'current'],
         async () => enhancedRpc.getCurrentEpoch(),
         {
-            select: (epoch) => epoch.epoch + 1,
+            select: (epoch) => Number(epoch.epoch) + 1,
         }
     );
 
