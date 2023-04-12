@@ -61,7 +61,7 @@ use sui_types::crypto::{
 };
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType, Field};
-use sui_types::error::UserInputError;
+use sui_types::error::{ExecutionError, UserInputError};
 use sui_types::event::{Event, EventID};
 use sui_types::gas::{GasCostSummary, SuiGasStatus};
 use sui_types::message_envelope::Message;
@@ -738,7 +738,7 @@ impl AuthorityState {
         &self,
         certificate: &VerifiedExecutableTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<TransactionEffects> {
+    ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
         let _metrics_guard = self.metrics.internal_execution_latency.start_timer();
         let tx_digest = *certificate.digest();
         debug!("execute_certificate_internal");
@@ -759,15 +759,16 @@ impl AuthorityState {
     pub async fn try_execute_for_test(
         &self,
         certificate: &VerifiedCertificate,
-    ) -> SuiResult<VerifiedSignedTransactionEffects> {
+    ) -> SuiResult<(VerifiedSignedTransactionEffects, Option<ExecutionError>)> {
         let epoch_store = self.epoch_store_for_testing();
-        let effects = self
+        let (effects, execution_error_opt) = self
             .try_execute_immediately(
                 &VerifiedExecutableTransaction::new_from_certificate(certificate.clone()),
                 &epoch_store,
             )
             .await?;
-        self.sign_effects(effects, &epoch_store)
+        let signed_effects = self.sign_effects(effects, &epoch_store)?;
+        Ok((signed_effects, execution_error_opt))
     }
 
     pub async fn notify_read_effects(
@@ -794,13 +795,13 @@ impl AuthorityState {
         tx_guard: CertTxGuard,
         certificate: &VerifiedExecutableTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<TransactionEffects> {
+    ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
         let digest = *certificate.digest();
         // The cert could have been processed by a concurrent attempt of the same cert, so check if
         // the effects have already been written.
         if let Some(effects) = self.database.get_executed_effects(&digest)? {
             tx_guard.release();
-            return Ok(effects);
+            return Ok((effects, None));
         }
         let execution_guard = self
             .database
@@ -832,7 +833,7 @@ impl AuthorityState {
         // non-transient (transaction input is invalid, move vm errors). However, all errors from
         // this function occur before we have written anything to the db, so we commit the tx
         // guard and rely on the client to retry the tx (if it was transient).
-        let (inner_temporary_store, effects) = match self
+        let (inner_temporary_store, effects, execution_error_opt) = match self
             .prepare_certificate(&execution_guard, certificate, epoch_store)
             .await
         {
@@ -855,7 +856,7 @@ impl AuthorityState {
             epoch_store,
         )
         .await?;
-        Ok(effects)
+        Ok((effects, execution_error_opt))
     }
 
     async fn commit_cert_and_notify(
@@ -949,7 +950,11 @@ impl AuthorityState {
         _execution_guard: &ExecutionLockReadGuard<'_>,
         certificate: &VerifiedExecutableTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<(InnerTemporaryStore, TransactionEffects)> {
+    ) -> SuiResult<(
+        InnerTemporaryStore,
+        TransactionEffects,
+        Option<ExecutionError>,
+    )> {
         let _metrics_guard = self.metrics.prepare_certificate_latency.start_timer();
 
         // check_certificate_input also checks shared object locks when loading the shared objects.
@@ -973,7 +978,7 @@ impl AuthorityState {
         );
         let transaction_data = &certificate.data().intent_message().value;
         let (kind, signer, gas) = transaction_data.execution_parts();
-        let (inner_temp_store, effects, _execution_error) =
+        let (inner_temp_store, effects, execution_error_opt) =
             execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
                 shared_object_refs,
                 temporary_store,
@@ -992,7 +997,7 @@ impl AuthorityState {
                     .enable_deep_per_tx_sui_conservation_check(),
             );
 
-        Ok((inner_temp_store, effects))
+        Ok((inner_temp_store, effects, execution_error_opt.err()))
     }
 
     /// Notifies TransactionManager about an executed certificate.
@@ -3312,7 +3317,7 @@ impl AuthorityState {
             .database
             .execution_lock_for_executable_transaction(&executable_tx)
             .await?;
-        let (temporary_store, effects) = self
+        let (temporary_store, effects, _execution_error_opt) = self
             .prepare_certificate(&execution_guard, &executable_tx, epoch_store)
             .await?;
         let system_obj = temporary_store
