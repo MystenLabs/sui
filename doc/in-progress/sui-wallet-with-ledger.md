@@ -73,7 +73,7 @@ Before you use an account from your Ledger device to receive an asset, confirm t
 You can use Sui Wallet to send a digital asset from your Ledger account.
 
 **To send digital assets from your Ledger account using Sui Wallet** 
-1. Open Sui Wallet and click the Settings menu (the 3 bars displayed in the top-right corner).
+1. Open Sui Wallet and click the Settings menu (the three bars displayed in the top-right corner).
 1. Click **Accounts**.
 1. Click the down arrow next to the Ledger account to receive the asset, then click **Verify Ledger connection**. Make sure that the display shows **Ledger is connected** before you initiate the transaction to send an asset.
 1. Click the **Coins** tab in Sui Wallet, then click **Send**.
