@@ -21,7 +21,7 @@ on:
 
 jobs:
   genesis-sync-test:
-    timeout-minutes: 360
+    timeout-minutes: 480
     permissions:
       # The "id-token: write" permission is required or Machine ID will not be
       # able to authenticate with the cluster.
@@ -69,7 +69,7 @@ jobs:
 
       - name: Run sync script
         run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 360 ssh ubuntu@fullnode-compat-test-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && CARGO_TERM_COLOR=always ./scripts/fullnode-sync.sh -p ./target/release/sui-node -n testnet ${{ github.event.inputs.verbose == true && '-v' || '' }}"
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 480 ssh ubuntu@fullnode-compat-test-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && CARGO_TERM_COLOR=always ./scripts/fullnode-sync.sh -p ./target/release/sui-node -n testnet ${{ github.event.inputs.verbose == true && '-v' || '' }}"
 
   notify:
     name: Notify
@@ -133,7 +133,7 @@ jobs:
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "To debug failures: See run logs; Rerun with `verbose` logging enabled, `clean` disabled in order to sync from last place); `tsh ssh ubuntu@fullnode-compat-test-01` if needed"
+                    "text": "To debug failures: See run logs; Rerun with `verbose` logging enabled, `clean` disabled in order to sync from last place); `tsh ssh ubuntu@fullnode-compat-test-01` if needed. \nMetrics can be viewed at https://metrics.sui.io/d/_nu1mWC7zx/sui-fullnode?orgId=1&refresh=1m&var-Environment=mysten-metrics-internal&var-network=testnet&var-host=fullnode-compat-test-01"
                   }
                 }
               ]
