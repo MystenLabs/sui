@@ -22,7 +22,7 @@ import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
 const GENESIS_TX_DIGEST = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
 
-const splitPanelsOrientation = [
+const splitPanelsOrientation: { label: string; value: Direction }[] = [
     { label: 'STACKED', value: 'vertical' },
     { label: 'SIDE-BY-SIDE', value: 'horizontal' },
 ];
@@ -139,7 +139,7 @@ function PkgView({ data }: { data: DataType }) {
                                     id={data.id}
                                     modules={properties}
                                     splitPanelOrientation={
-                                        selectedSplitPanelOrientation as Direction
+                                        selectedSplitPanelOrientation
                                     }
                                 />
                             </ErrorBoundary>

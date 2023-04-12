@@ -10,7 +10,7 @@ import {
     PanelResizeHandle,
 } from 'react-resizable-panels';
 
-export interface SplitPaneProps extends PanelGroupProps {
+export interface SplitPanesProps extends PanelGroupProps {
     panels: ReactNode[];
     defaultSizes?: number[];
 }
@@ -38,18 +38,14 @@ export function SplitPanes({
     panels,
     defaultSizes = [],
     ...props
-}: SplitPaneProps) {
+}: SplitPanesProps) {
     const { direction } = props;
 
     return (
         <PanelGroup {...props}>
             {panels.map((panel, index) => (
                 <Fragment key={index}>
-                    <Panel
-                        collapsible
-                        order={index}
-                        defaultSize={defaultSizes[index]}
-                    >
+                    <Panel order={index} defaultSize={defaultSizes[index]}>
                         {panel}
                     </Panel>
                     {index < panels.length - 1 && (
