@@ -49,19 +49,22 @@ export function UnderlyingObjectCard({
             </Banner>
         );
     }
+
+    const fieldsData = getObjectFields(data);
     const display = getObjectDisplay(data);
     const imgUrl = parseImageURL(display.data);
+
     const objectType = parseObjectType(data);
     const caption = extractName(display.data) || trimStdLibPrefix(objectType);
-    // For
-    const underlyingObjectTypes =
-        typeof name.value === 'object'
-            ? objectType
-                  ?.slice(objectType?.indexOf('<') + 1, objectType.indexOf('>'))
-                  .split(',')
-            : [];
-    const fieldsData = getObjectFields(data!);
 
+    // Get content inside <> and split by , to get underlying object types
+    const underlyingObjectTypes = objectType
+        ?.slice(objectType?.indexOf('<') + 1, objectType.indexOf('>'))
+        .split(',');
+
+    // Split the first object type by :: and if array length is > 1 then it is a underlying object
+    const hasUnderlyingObject =
+        underlyingObjectTypes?.[0].split('::').length > 1;
     return (
         <>
             <SyntaxHighlighter
@@ -69,7 +72,7 @@ export function UnderlyingObjectCard({
                 language="json"
             />
 
-            {underlyingObjectTypes.length > 0 ? (
+            {hasUnderlyingObject ? (
                 <div className="mt-3 pt-3">
                     <Text variant="body/medium" color="steel-dark">
                         Underlying Object
