@@ -12,7 +12,7 @@ import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { Text } from '~/ui/Text';
 
-const MAX_PAGE_SIZE = 20;
+const MAX_PAGE_SIZE = 10;
 
 export function DynamicFieldsCard({ id }: { id: string }) {
     const rpc = useRpcClient();
@@ -79,6 +79,7 @@ export function DynamicFieldsCard({ id }: { id: string }) {
                     <TabPanel>
                         <div className="mt-4 flex max-h-[600px] flex-col gap-5 overflow-auto overflow-x-scroll">
                             {data.pages.map(({ data }) =>
+                                // Show the field name and type is it is not an object
                                 data.map((result) => (
                                     <DisclosureBox
                                         title={
@@ -86,25 +87,23 @@ export function DynamicFieldsCard({ id }: { id: string }) {
                                                 {`${
                                                     typeof result.name.value ===
                                                     'object'
-                                                        ? 'ObjectZ'
-                                                        : result.name.type
+                                                        ? 'Click to view'
+                                                        : result.name.value +
+                                                          ':'
                                                 }`}
-                                                :
                                             </div>
                                         }
                                         preview={
                                             <div className="flex items-center gap-1 break-all">
-                                                <Text
-                                                    variant="body/medium"
-                                                    color="steel-darker"
-                                                >
-                                                    {`${
-                                                        typeof result.name
-                                                            .value === 'object'
-                                                            ? 'Click to view'
-                                                            : result.name.value
-                                                    }`}
-                                                </Text>
+                                                {typeof result.name.value !==
+                                                    'object' && (
+                                                    <Text
+                                                        variant="body/medium"
+                                                        color="steel-darker"
+                                                    >
+                                                        {result.name.type}
+                                                    </Text>
+                                                )}
                                             </div>
                                         }
                                         variant="outline"
