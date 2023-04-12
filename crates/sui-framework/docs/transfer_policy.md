@@ -690,7 +690,7 @@ Remove the Rule from the <code><a href="transfer_policy.md#0x2_transfer_policy_T
 
 ## Function `uid`
 
-Allows reading custom attachements to the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code> if there are any.
+Allows reading custom attachments to the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code> if there are any.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_uid">uid</a>&lt;T&gt;(self: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;): &<a href="object.md#0x2_object_UID">object::UID</a>
@@ -713,7 +713,7 @@ Allows reading custom attachements to the <code><a href="transfer_policy.md#0x2_
 
 ## Function `uid_mut_as_owner`
 
-Get a mutable reference to the <code>self.id</code> to enable custom attachements
+Get a mutable reference to the <code>self.id</code> to enable custom attachments
 to the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code>.
 
 

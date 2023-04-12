@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -16,7 +15,7 @@ use sui_json_rpc_types::{Balance, Coin as SuiCoin};
 use sui_json_rpc_types::{CoinPage, SuiCoinMetadata};
 use sui_open_rpc::Module;
 use sui_types::balance::Supply;
-use sui_types::base_types::{MoveObjectType, ObjectID, ObjectRef, ObjectType, SuiAddress};
+use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::coin::{Coin, CoinMetadata, TreasuryCap};
 use sui_types::error::{SuiError, UserInputError};
 use sui_types::gas_coin::GAS;
@@ -89,7 +88,7 @@ impl CoinReadApi {
     async fn get_coins_internal(
         &self,
         owner: SuiAddress,
-        coin_type: Option<StructTag>,
+        coin_type: Option<&TypeTag>,
         // exclusive cursor if `Some`, otherwise start from the beginning
         cursor: Option<ObjectID>,
         limit: Option<usize>,
@@ -97,7 +96,7 @@ impl CoinReadApi {
         // TODO: Add index to improve performance?
         let limit = cap_page_limit(limit);
         let mut coins = self
-            .get_owner_coin_iterator(owner, &coin_type)?
+            .get_owner_coin_iterator(owner, coin_type)?
             .skip_while(|o| matches!(&cursor, Some(cursor) if cursor != &o.0))
             // skip an extra b/c the cursor is exclusive
             .skip(usize::from(cursor.is_some()))
@@ -123,13 +122,19 @@ impl CoinReadApi {
     fn get_owner_coin_iterator<'a>(
         &'a self,
         owner: SuiAddress,
-        coin_type: &'a Option<StructTag>,
+        coin_type: Option<&'a TypeTag>,
     ) -> Result<impl Iterator<Item = ObjectRef> + '_, Error> {
         Ok(self
             .state
             .get_owner_objects_iterator(owner, None, None)?
-            .filter(move |o| matches!(&o.type_, ObjectType::Struct(type_) if is_coin_type(type_, coin_type)))
-            .map(|info|(info.object_id, info.version, info.digest)))
+            .filter(move |o| {
+                if let Some(coin_type) = coin_type {
+                    o.type_.is_coin_t(coin_type)
+                } else {
+                    o.type_.is_coin()
+                }
+            })
+            .map(|info| (info.object_id, info.version, info.digest)))
     }
 
     async fn find_package_object(
@@ -189,12 +194,12 @@ impl CoinReadApiServer for CoinReadApi {
         cursor: Option<ObjectID>,
         limit: Option<usize>,
     ) -> RpcResult<CoinPage> {
-        let coin_type = Some(match coin_type {
+        let coin_type = TypeTag::Struct(Box::new(match coin_type {
             Some(c) => parse_sui_struct_tag(&c)?,
             None => GAS::type_(),
-        });
+        }));
         Ok(self
-            .get_coins_internal(owner, coin_type, cursor, limit)
+            .get_coins_internal(owner, Some(&coin_type), cursor, limit)
             .await?)
     }
 
@@ -208,60 +213,53 @@ impl CoinReadApiServer for CoinReadApi {
         Ok(self.get_coins_internal(owner, None, cursor, limit).await?)
     }
 
-    fn get_balance(&self, owner: SuiAddress, coin_type: Option<String>) -> RpcResult<Balance> {
-        let coin_type = Some(match coin_type {
+    async fn get_balance(
+        &self,
+        owner: SuiAddress,
+        coin_type: Option<String>,
+    ) -> RpcResult<Balance> {
+        let coin_type = TypeTag::Struct(Box::new(match coin_type {
             Some(c) => parse_sui_struct_tag(&c)?,
             None => GAS::type_(),
-        });
-
-        // TODO: Add index to improve performance?
-        let coins = self.get_owner_coin_iterator(owner, &coin_type)?;
-        let mut total_balance = 0u128;
-        let mut locked_balance = HashMap::new();
-        let mut coin_object_count = 0;
-        let coins = coins.map(ObjectKey::from).collect::<Vec<_>>();
-
-        for coin in self.multi_get_coin(&coins)? {
-            let coin = coin?;
-            if let Some(lock) = coin.locked_until_epoch {
-                *locked_balance.entry(lock).or_default() += coin.balance as u128
-            } else {
-                total_balance += coin.balance as u128;
-            }
-            coin_object_count += 1;
-        }
-
+        }));
+        let balance = self
+            .state
+            .get_balance(owner, coin_type.clone())
+            .await
+            .map_err(|e: SuiError| {
+                debug!(?owner, "Failed to get balance with error: {:?}", e);
+                Error::from(e)
+            })?;
         Ok(Balance {
-            coin_type: coin_type.unwrap().to_string(),
-            coin_object_count,
-            total_balance,
-            locked_balance,
+            coin_type: coin_type.to_string(),
+            coin_object_count: balance.num_coins,
+            total_balance: balance.balance,
+            // note: LockedCoin is deprecated
+            locked_balance: Default::default(),
         })
     }
 
-    fn get_all_balances(&self, owner: SuiAddress) -> RpcResult<Vec<Balance>> {
-        let coins = self
-            .get_owner_coin_iterator(owner, &None)?
-            .map(ObjectKey::from)
-            .collect::<Vec<_>>();
-        let mut balances: HashMap<String, Balance> = HashMap::new();
-
-        for coin in self.multi_get_coin(&coins)? {
-            let coin = coin?;
-            let balance = balances.entry(coin.coin_type.clone()).or_insert(Balance {
-                coin_type: coin.coin_type,
-                coin_object_count: 0,
-                total_balance: 0,
-                locked_balance: Default::default(),
-            });
-            if let Some(lock) = coin.locked_until_epoch {
-                *balance.locked_balance.entry(lock).or_default() += coin.balance as u128
-            } else {
-                balance.total_balance += coin.balance as u128;
-            }
-            balance.coin_object_count += 1;
-        }
-        Ok(balances.into_values().collect())
+    async fn get_all_balances(&self, owner: SuiAddress) -> RpcResult<Vec<Balance>> {
+        let all_balance = self
+            .state
+            .get_all_balance(owner)
+            .await
+            .map_err(|e: SuiError| {
+                debug!(?owner, "Failed to get all balance with error: {:?}", e);
+                Error::from(e)
+            })?;
+        Ok(all_balance
+            .iter()
+            .map(|(coin_type, balance)| {
+                Balance {
+                    coin_type: coin_type.to_string(),
+                    coin_object_count: balance.num_coins,
+                    total_balance: balance.balance,
+                    // note: LockedCoin is deprecated
+                    locked_balance: Default::default(),
+                }
+            })
+            .collect())
     }
 
     async fn get_coin_metadata(&self, coin_type: String) -> RpcResult<SuiCoinMetadata> {
@@ -313,15 +311,4 @@ impl CoinReadApiServer for CoinReadApi {
             treasury_cap.total_supply
         })
     }
-}
-
-fn is_coin_type(type_: &MoveObjectType, coin_type: &Option<StructTag>) -> bool {
-    if type_.is_coin() {
-        return if let Some(coin_type) = coin_type {
-            matches!(type_.type_params().first(), Some(TypeTag::Struct(type_)) if type_.to_canonical_string() == coin_type.to_canonical_string())
-        } else {
-            true
-        };
-    }
-    false
 }

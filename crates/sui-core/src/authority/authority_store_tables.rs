@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::authority::authority_store::LockDetailsWrapper;
-use rocksdb::Options;
+use rocksdb::{Cache, Options};
 use std::path::Path;
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::SequenceNumber;
@@ -404,8 +404,14 @@ fn owned_object_transaction_locks_table_default_config() -> DBOptions {
 }
 
 fn objects_table_default_config() -> DBOptions {
+    let mut options = optimized_for_high_throughput_options(
+        read_size_from_env(ENV_VAR_OBJECTS_BLOCK_CACHE_SIZE).unwrap_or(50 * 1024),
+        true,
+    )
+    .options;
+    options.set_row_cache(&Cache::new_lru_cache(10 * 1024 * 1024 * 1024).unwrap());
     DBOptions {
-        options: with_disabled_block_cache().options,
+        options,
         rw_options: ReadWriteOptions {
             ignore_range_deletions: true,
         },

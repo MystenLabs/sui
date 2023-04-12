@@ -13,6 +13,7 @@ use std::collections::HashMap;
 use std::{sync::Arc, time::Duration};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_storage::mutex_table::RwLockTable;
+use sui_types::base_types::SequenceNumber;
 use sui_types::messages::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::{
@@ -62,6 +63,12 @@ enum DeletionMethod {
 }
 
 impl AuthorityStorePruner {
+    pub async fn compact(perpetual_db: &Arc<AuthorityPerpetualTables>) -> anyhow::Result<()> {
+        let start = ObjectKey(ObjectID::ZERO, SequenceNumber::MIN);
+        let end = ObjectKey(ObjectID::MAX, SequenceNumber::MAX);
+        perpetual_db.objects.compact_range(&start, &end)?;
+        Ok(())
+    }
     /// prunes old versions of objects based on transaction effects
     async fn prune_effects(
         transaction_effects: Vec<TransactionEffects>,
@@ -137,7 +144,7 @@ impl AuthorityStorePruner {
     }
 
     /// Prunes old object versions based on effects from all checkpoints from epochs eligible for pruning
-    async fn prune_objects_for_eligible_epochs(
+    pub async fn prune_objects_for_eligible_epochs(
         perpetual_db: &Arc<AuthorityPerpetualTables>,
         checkpoint_store: &Arc<CheckpointStore>,
         objects_lock_table: &Arc<RwLockTable<ObjectContentDigest>>,

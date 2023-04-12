@@ -16,9 +16,11 @@ tracing = "0.1.36"
 anyhow = "1.0.64"
 tempfile = "3.3.0"
 tap = "1.0.1"
+moka = { version = "0.10.2", features = ["future"]}
 object_store = { version = "=0.5.4", features = ["aws", "aws_profile", "gcp", "azure"] }
 backoff = "0.4.0"
 bytes = "1.4.0"
+bcs = "0.1.4"
 
 sui-simulator = { path = "../sui-simulator" }
 sui-types = { path = "../sui-types" }
