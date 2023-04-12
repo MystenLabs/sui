@@ -33,7 +33,7 @@ use typed_store::rocks::{
 };
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 
-use crate::authority::epoch_start_configuration::EpochStartConfiguration;
+use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
 use crate::authority::{AuthorityStore, ResolverWrapper};
 use crate::checkpoints::{
     BuilderCheckpointSummary, CheckpointCommitHeight, CheckpointServiceNotify, EpochStats,
@@ -165,6 +165,8 @@ pub struct AuthorityPerEpochStore {
 
     /// Execution state that has to restart at each epoch change
     execution_component: ExecutionComponents,
+    /// Fast cache for EpochFlag::InMemoryCheckpointRoots
+    pub(crate) in_memory_checkpoint_roots: bool,
 }
 
 /// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.
@@ -219,6 +221,7 @@ pub struct AuthorityEpochTables {
     /// Map stores pending transactions that this authority submitted to consensus
     pending_consensus_transactions: DBMap<ConsensusTransactionKey, ConsensusTransaction>,
 
+    // todo - this table will be deleted after switch to EpochFlag::InMemoryCheckpointRoots
     /// This is an inverse index for consensus_message_processed - it allows to select
     /// all transactions at the specific consensus range
     ///
@@ -232,6 +235,7 @@ pub struct AuthorityEpochTables {
     /// every message output by consensus (and in the right order).
     last_consensus_index: DBMap<u64, ExecutionIndicesWithHash>,
 
+    // todo - this table will be deleted after switch to EpochFlag::InMemoryCheckpointRoots
     /// This table lists all checkpoint boundaries in the consensus sequence
     ///
     /// The key in this table is incremental index and value is corresponding narwhal
@@ -274,7 +278,7 @@ pub struct AuthorityEpochTables {
     /// user signature for this transaction here. This will be included in the checkpoint later.
     user_signatures_for_checkpoints: DBMap<TransactionDigest, Vec<GenericSignature>>,
 
-    /// This table is not ued
+    /// This table is not used
     #[allow(dead_code)]
     builder_checkpoint_summary: DBMap<CheckpointSequenceNumber, CheckpointSummary>,
     /// Maps sequence number to checkpoint summary, used by CheckpointBuilder to build checkpoint within epoch
@@ -389,6 +393,13 @@ impl AuthorityPerEpochStore {
         );
         let signature_verifier =
             SignatureVerifier::new(committee.clone(), signature_verifier_metrics);
+        let in_memory_checkpoint_roots = epoch_start_configuration
+            .flags()
+            .contains(&EpochFlag::InMemoryCheckpointRoots);
+        info!(
+            "in_memory_checkpoint_roots = {}",
+            in_memory_checkpoint_roots
+        );
         let s = Arc::new(Self {
             committee,
             protocol_config,
@@ -409,6 +420,7 @@ impl AuthorityPerEpochStore {
             metrics,
             epoch_start_configuration,
             execution_component,
+            in_memory_checkpoint_roots,
         });
         s.update_buffer_stake_metric();
         s
@@ -1304,11 +1316,13 @@ impl AuthorityPerEpochStore {
         certificate: &VerifiedExecutableTransaction,
         consensus_index: ExecutionIndicesWithHash,
     ) -> SuiResult {
-        let transaction_digest = *certificate.digest();
-        batch.insert_batch(
-            &self.tables.consensus_message_order,
-            [(consensus_index.index, transaction_digest)],
-        )?;
+        if !self.in_memory_checkpoint_roots {
+            let transaction_digest = *certificate.digest();
+            batch.insert_batch(
+                &self.tables.consensus_message_order,
+                [(consensus_index.index, transaction_digest)],
+            )?;
+        }
         batch.insert_batch(
             &self.tables.pending_execution,
             [(*certificate.digest(), certificate.clone().serializable())],
@@ -1899,7 +1913,7 @@ impl AuthorityPerEpochStore {
         }
     }
 
-    fn record_end_of_message_quorum_time_metric(&self) {
+    pub fn record_end_of_message_quorum_time_metric(&self) {
         if let Some(epoch_close_time) = *self.epoch_close_time.read() {
             self.metrics
                 .epoch_end_of_publish_quorum_time_since_epoch_close_ms
