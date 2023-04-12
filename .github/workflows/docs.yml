@@ -26,6 +26,6 @@ jobs:
     steps:
       - uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
       - name: Spell Check Docs
-        uses: crate-ci/typos@1d8996e20538a68f390ac049102ff99b33273525 # pin@master
+        uses: crate-ci/typos@8a6fc1895dcf125d23c0eba65ff38e4f3ad3c0d7 # pin@master
         with:
           files: ./doc ./*.md
