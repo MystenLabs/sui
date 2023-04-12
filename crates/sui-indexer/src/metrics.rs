@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use prometheus::{
-    register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
-    Registry,
+    register_histogram_with_registry, register_int_counter_with_registry,
+    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
 };
 
 /// Prometheus metrics for sui-indexer.
@@ -21,6 +21,9 @@ pub struct IndexerMetrics {
     pub total_transaction_committed: IntCounter,
     pub total_object_change_committed: IntCounter,
     pub total_epoch_committed: IntCounter,
+    pub latest_fullnode_checkpoint_sequence_number: IntGauge,
+    pub latest_indexer_checkpoint_sequence_number: IntGauge,
+    pub latest_indexer_object_checkpoint_sequence_number: IntGauge,
     // checkpoint E2E latency is:
     // fullnode_download_latency + checkpoint_index_latency + db_commit_latency
     pub fullnode_checkpoint_wait_and_download_latency: Histogram,
@@ -93,6 +96,24 @@ impl IndexerMetrics {
             total_epoch_committed: register_int_counter_with_registry!(
                 "total_epoch_committed",
                 "Total number of epoch committed",
+                registry,
+            )
+            .unwrap(),
+            latest_fullnode_checkpoint_sequence_number: register_int_gauge_with_registry!(
+                "latest_fullnode_checkpoint_sequence_number",
+                "Latest checkpoint sequence number from the Full Node",
+                registry,
+            )
+            .unwrap(),
+            latest_indexer_checkpoint_sequence_number: register_int_gauge_with_registry!(
+                "latest_indexer_checkpoint_sequence_number",
+                "Latest checkpoint sequence number from the Indexer",
+                registry,
+            )
+            .unwrap(),
+            latest_indexer_object_checkpoint_sequence_number: register_int_gauge_with_registry!(
+                "latest_indexer_object_checkpoint_sequence_number",
+                "Latest object checkpoint sequence number from the Indexer",
                 registry,
             )
             .unwrap(),
