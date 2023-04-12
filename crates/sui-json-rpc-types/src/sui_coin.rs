@@ -20,7 +20,7 @@ use sui_types::sui_serde::SequenceNumber as AsSequenceNumber;
 pub type CoinPage = Page<Coin, ObjectID>;
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Balance {
     pub coin_type: String,
@@ -35,7 +35,7 @@ pub struct Balance {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Coin {
     pub coin_type: String,

@@ -52,7 +52,7 @@ use sui_json_rpc_types::{
 };
 use sui_macros::{fail_point, fail_point_async, nondeterministic};
 use sui_protocol_config::SupportedProtocolVersions;
-use sui_storage::indexes::ObjectIndexChanges;
+use sui_storage::indexes::{CoinInfo, ObjectIndexChanges};
 use sui_storage::IndexStore;
 use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::{
@@ -77,7 +77,9 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemS
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 pub use sui_types::temporary_store::TemporaryStore;
-use sui_types::temporary_store::{InnerTemporaryStore, TemporaryModuleResolver};
+use sui_types::temporary_store::{
+    InnerTemporaryStore, ObjectMap, TemporaryModuleResolver, TxCoins, WrittenObjects,
+};
 use sui_types::{
     base_types::*,
     committee::Committee,
@@ -880,7 +882,8 @@ impl AuthorityState {
 
         let events = inner_temporary_store.events.clone();
 
-        self.commit_certificate(inner_temporary_store, certificate, effects, epoch_store)
+        let tx_coins = self
+            .commit_certificate(inner_temporary_store, certificate, effects, epoch_store)
             .await?;
 
         // Notifies transaction manager about available input objects. This allows the transaction
@@ -900,7 +903,7 @@ impl AuthorityState {
 
         // index certificate
         let _ = self
-            .post_process_one_tx(certificate, effects, &events, epoch_store)
+            .post_process_one_tx(certificate, effects, &events, epoch_store, tx_coins)
             .await
             .tap_err(|e| error!("tx post processing failed: {e}"));
 
@@ -1244,6 +1247,7 @@ impl AuthorityState {
         events: &TransactionEvents,
         timestamp_ms: u64,
         epoch_store: &Arc<AuthorityPerEpochStore>,
+        tx_coins: Option<TxCoins>,
     ) -> SuiResult<u64> {
         let changes = self
             .process_object_index(effects, epoch_store)
@@ -1273,6 +1277,7 @@ impl AuthorityState {
             changes,
             digest,
             timestamp_ms,
+            tx_coins,
         )
     }
 
@@ -1451,6 +1456,7 @@ impl AuthorityState {
         effects: &TransactionEffects,
         events: &TransactionEvents,
         epoch_store: &Arc<AuthorityPerEpochStore>,
+        tx_coins: Option<TxCoins>,
     ) -> SuiResult {
         if self.indexes.is_none() {
             return Ok(());
@@ -1469,6 +1475,7 @@ impl AuthorityState {
                     events,
                     timestamp_ms,
                     epoch_store,
+                    tx_coins,
                 )
                 .tap_ok(|_| self.metrics.post_processing_total_tx_indexed.inc())
                 .tap_err(|e| error!(?tx_digest, "Post processing - Couldn't index tx: {e}"));
@@ -1988,10 +1995,7 @@ impl AuthorityState {
         self.epoch_store_for_testing().committee().clone()
     }
 
-    pub(crate) async fn get_object(
-        &self,
-        object_id: &ObjectID,
-    ) -> Result<Option<Object>, SuiError> {
+    pub async fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
         self.database.get_object(object_id)
     }
 
@@ -2209,6 +2213,33 @@ impl AuthorityState {
     ) -> SuiResult<Vec<ObjectInfo>> {
         if let Some(indexes) = &self.indexes {
             indexes.get_owner_objects(owner, cursor, limit, filter)
+        } else {
+            Err(SuiError::IndexStoreNotAvailable)
+        }
+    }
+
+    pub fn get_owned_coins_iterator(
+        &self,
+        owner: SuiAddress,
+        coin_type_tag: Option<String>,
+    ) -> SuiResult<impl Iterator<Item = (String, ObjectID, CoinInfo)> + '_> {
+        if let Some(indexes) = &self.indexes {
+            indexes.get_owned_coins_iterator(owner, coin_type_tag)
+        } else {
+            Err(SuiError::IndexStoreNotAvailable)
+        }
+    }
+
+    pub fn get_owned_coins_iterator_with_cursor(
+        &self,
+        owner: SuiAddress,
+        // If `Some`, the query will start from the next item after the specified cursor
+        cursor: (String, ObjectID),
+        limit: usize,
+        one_coin_type_only: bool,
+    ) -> SuiResult<impl Iterator<Item = (String, ObjectID, CoinInfo)> + '_> {
+        if let Some(indexes) = &self.indexes {
+            indexes.get_owned_coins_iterator_with_cursor(owner, cursor, limit, one_coin_type_only)
         } else {
             Err(SuiError::IndexStoreNotAvailable)
         }
@@ -2850,6 +2881,40 @@ impl AuthorityState {
         Ok(())
     }
 
+    // Returns coin objects for indexing for fullnode if indexing is enabled.
+    fn get_tx_coins_for_indexing(
+        &self,
+        inner_temporary_store: &InnerTemporaryStore,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> Option<TxCoins> {
+        if self.indexes.is_none() || self.is_validator(epoch_store) {
+            return None;
+        }
+        let written_coin_objects = inner_temporary_store
+            .written
+            .iter()
+            .filter_map(|(k, v)| {
+                if v.1.is_coin() {
+                    Some((*k, v.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect::<WrittenObjects>();
+        let input_coin_objects = inner_temporary_store
+            .objects
+            .iter()
+            .filter_map(|(k, v)| {
+                if v.is_coin() {
+                    Some((*k, v.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect::<ObjectMap>();
+        Some((input_coin_objects, written_coin_objects))
+    }
+
     /// Commit effects of transaction execution to data store.
     #[instrument(level = "trace", skip_all)]
     pub(crate) async fn commit_certificate(
@@ -2858,7 +2923,7 @@ impl AuthorityState {
         certificate: &VerifiedExecutableTransaction,
         effects: &TransactionEffects,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult {
+    ) -> SuiResult<Option<TxCoins>> {
         let _metrics_guard = self.metrics.commit_certificate_latency.start_timer();
 
         let tx_digest = certificate.digest();
@@ -2874,6 +2939,9 @@ impl AuthorityState {
         } else {
             None
         };
+
+        // Returns coin objects for indexing for fullnode if indexing is enabled.
+        let tx_coins = self.get_tx_coins_for_indexing(&inner_temporary_store, epoch_store);
 
         // The insertion to epoch_store is not atomic with the insertion to the perpetual store. This is OK because
         // we insert to the epoch store first. And during lookups we always look up in the perpetual store first.
@@ -2902,7 +2970,7 @@ impl AuthorityState {
             .pending_notify_read
             .set(self.database.executed_effects_notify_read.num_pending() as i64);
 
-        Ok(())
+        Ok(tx_coins)
     }
 
     /// Get the TransactionEnvelope that currently locks the given object, if any.

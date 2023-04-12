@@ -17,6 +17,7 @@ use serde_with::serde_as;
 use serde_with::Bytes;
 
 use crate::base_types::{MoveObjectType, ObjectIDParseError};
+use crate::coin::Coin;
 use crate::crypto::{default_hash, deterministic_random_account_key};
 use crate::error::{ExecutionError, ExecutionErrorKind, UserInputError, UserInputResult};
 use crate::error::{SuiError, SuiResult};
@@ -689,6 +690,30 @@ impl Object {
         ObjectDigest::new(default_hash(self))
     }
 
+    pub fn is_coin(&self) -> bool {
+        if let Some(move_object) = self.data.try_as_move() {
+            move_object.type_().is_coin()
+        } else {
+            false
+        }
+    }
+
+    pub fn as_coin_maybe(&self) -> Option<Coin> {
+        if let Some(move_object) = self.data.try_as_move() {
+            let coin: Coin = bcs::from_bytes(move_object.contents()).ok()?;
+            Some(coin)
+        } else {
+            None
+        }
+    }
+
+    pub fn coin_type_maybe(&self) -> Option<TypeTag> {
+        if let Some(move_object) = self.data.try_as_move() {
+            move_object.type_().coin_type_maybe()
+        } else {
+            None
+        }
+    }
     /// Approximate size of the object in bytes. This is used for gas metering.
     /// This will be slgihtly different from the serialized size, but
     /// we also don't want to serialize the object just to get the size.
