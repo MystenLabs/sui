@@ -415,7 +415,6 @@ async fn test_create_advance_epoch_tx_race() {
 
 #[sim_test]
 async fn test_reconfig_with_failing_validator() {
-    telemetry_subscribers::init_for_testing();
     sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
 
     let test_cluster = Arc::new(
@@ -437,7 +436,10 @@ async fn test_reconfig_with_failing_validator() {
         .map(|v| v.parse().unwrap())
         .unwrap_or(4);
 
-    test_cluster.wait_for_epoch(Some(target_epoch)).await;
+    // A longer timeout is required, as restarts can cause reconfiguration to take longer.
+    test_cluster
+        .wait_for_epoch_with_timeout(Some(target_epoch), Duration::from_secs(90))
+        .await;
 }
 
 #[sim_test]
