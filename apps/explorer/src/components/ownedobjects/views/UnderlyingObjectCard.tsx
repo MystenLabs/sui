@@ -44,12 +44,7 @@ export function UnderlyingObjectCard({
         );
     }
 
-    if (
-        isError ||
-        data.error ||
-        (isFetched && !data) ||
-        (!loadingNormalizedStruct && !normalizedStruct)
-    ) {
+    if (isError || data.error || (isFetched && !data)) {
         return (
             <Banner variant="error" spacing="lg" fullWidth>
                 Failed to get field data for :{parentId}
@@ -58,15 +53,20 @@ export function UnderlyingObjectCard({
     }
 
     const fieldsData = getObjectFields(data);
-    return fieldsData ? (
+    // Return null if there are no fields
+    if (!fieldsData || !normalizedStruct?.fields) {
+        return null;
+    }
+    return (
         <FieldItem
             value={
+                // show name if it is a struct
                 typeof fieldsData?.name === 'object'
                     ? { name: fieldsData.name, value: fieldsData.value }
-                    : // add the struct type to the value
-                      fieldsData?.value
+                    : fieldsData?.value
             }
-            type={normalizedStruct?.fields[2].type}
+            // add the struct type to the value
+            type={normalizedStruct.fields[2].type}
         />
-    ) : null;
+    );
 }
