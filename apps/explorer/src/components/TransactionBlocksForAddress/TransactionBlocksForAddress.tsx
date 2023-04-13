@@ -45,7 +45,7 @@ function TransactionBlocksForAddress({
     };
 
     return (
-        <div>
+        <div data-testid="tx">
             <div className="flex items-center justify-between border-b border-gray-45 pb-5">
                 <Heading color="gray-90" variant="heading4/semibold">
                     Transaction Blocks
