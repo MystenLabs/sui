@@ -39,7 +39,6 @@ const config: PlaywrightTestConfig = {
         /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
         trace: 'on-first-retry',
     },
-
     /* Configure projects for major browsers */
     projects: [
         {
@@ -50,6 +49,12 @@ const config: PlaywrightTestConfig = {
             },
         },
     ],
+    webServer: {
+        command: 'pnpm vite ./tests/demo-app/ --port 5181',
+        port: 5181,
+        timeout: 30 * 1000,
+        reuseExistingServer: !process.env.CI,
+    },
 };
 
 export default config;

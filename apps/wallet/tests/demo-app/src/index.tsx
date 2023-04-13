@@ -2,20 +2,39 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { TransactionBlock } from '@mysten/sui.js';
-import {
-    type ReadonlyWalletAccount,
-    WalletAccount,
-    getWallets,
-} from '@mysten/wallet-standard';
+import { ReadonlyWalletAccount, getWallets } from '@mysten/wallet-standard';
 import { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 
 import { type SuiWallet } from '_src/dapp-interface/WalletStandardInterface';
 
+function getDemoTransaction(address: string) {
+    const txb = new TransactionBlock();
+    const [coin] = txb.splitCoins(txb.gas, [txb.pure(1)]);
+    txb.transferObjects([coin], txb.pure(address));
+    return txb;
+}
+
+function getAccount(account: ReadonlyWalletAccount, useWrongAccount: boolean) {
+    if (useWrongAccount && account) {
+        const newAccount = new ReadonlyWalletAccount({
+            address: '0x00000001',
+            chains: account.chains,
+            features: account.features,
+            publicKey: account.publicKey,
+            icon: account.icon,
+            label: account.label,
+        });
+        return newAccount;
+    }
+    return account;
+}
+
 function App() {
     const [suiWallet, setSuiWallet] = useState<SuiWallet | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [accounts, setAccounts] = useState<ReadonlyWalletAccount[]>([]);
+    const [useWrongAccounts, setUseWrongAccounts] = useState(false);
 
     useEffect(() => {
         const walletsApi = getWallets();
@@ -57,7 +76,9 @@ function App() {
             {accounts.length ? (
                 <ul>
                     {accounts.map((anAccount) => (
-                        <li key={anAccount.address}>{anAccount.address}</li>
+                        <li key={anAccount.address} className="account">
+                            {anAccount.address}
+                        </li>
                     ))}
                 </ul>
             ) : (
@@ -69,16 +90,24 @@ function App() {
                     Connect
                 </button>
             )}
+            <label>
+                <input
+                    type="checkbox"
+                    checked={useWrongAccounts}
+                    onChange={() => setUseWrongAccounts((v) => !v)}
+                />
+                Use wrong account
+            </label>
             <button
                 onClick={async () => {
                     setError(null);
-                    const txb = new TransactionBlock();
+                    const txb = getDemoTransaction(accounts[0]?.address);
                     try {
                         await suiWallet.features[
                             'sui:signAndExecuteTransactionBlock'
                         ].signAndExecuteTransactionBlock({
                             transactionBlock: txb,
-                            account: {} as ReadonlyWalletAccount,
+                            account: getAccount(accounts[0], useWrongAccounts),
                             chain: 'sui:unknown',
                         });
                     } catch (e) {
@@ -86,60 +115,18 @@ function App() {
                     }
                 }}
             >
-                Sent transaction no account
+                Send transaction
             </button>
             <button
                 onClick={async () => {
                     setError(null);
-                    const txb = new TransactionBlock();
-                    try {
-                        await suiWallet.features[
-                            'sui:signAndExecuteTransactionBlock'
-                        ].signAndExecuteTransactionBlock({
-                            transactionBlock: txb,
-                            account: {
-                                address: '12345',
-                            } as ReadonlyWalletAccount,
-                            chain: 'sui:unknown',
-                        });
-                    } catch (e) {
-                        setError((e as Error).message);
-                    }
-                }}
-            >
-                Sent transaction
-            </button>
-            <button
-                onClick={async () => {
-                    setError(null);
-                    const txb = new TransactionBlock();
+                    const txb = getDemoTransaction(accounts[0]?.address);
                     try {
                         await suiWallet.features[
                             'sui:signTransactionBlock'
                         ].signTransactionBlock({
                             transactionBlock: txb,
-                            account: {} as ReadonlyWalletAccount,
-                            chain: 'sui:unknown',
-                        });
-                    } catch (e) {
-                        setError((e as Error).message);
-                    }
-                }}
-            >
-                Sign transaction no account
-            </button>
-            <button
-                onClick={async () => {
-                    setError(null);
-                    const txb = new TransactionBlock();
-                    try {
-                        await suiWallet.features[
-                            'sui:signTransactionBlock'
-                        ].signTransactionBlock({
-                            transactionBlock: txb,
-                            account: {
-                                address: '12345',
-                            } as ReadonlyWalletAccount,
+                            account: getAccount(accounts[0], useWrongAccounts),
                             chain: 'sui:unknown',
                         });
                     } catch (e) {
@@ -155,28 +142,10 @@ function App() {
                     try {
                         await suiWallet.features['sui:signMessage'].signMessage(
                             {
-                                account: {} as ReadonlyWalletAccount,
-                                message: new TextEncoder().encode(
-                                    'Test message'
+                                account: getAccount(
+                                    accounts[0],
+                                    useWrongAccounts
                                 ),
-                            }
-                        );
-                    } catch (e) {
-                        setError((e as Error).message);
-                    }
-                }}
-            >
-                Sign message no account
-            </button>
-            <button
-                onClick={async () => {
-                    setError(null);
-                    try {
-                        await suiWallet.features['sui:signMessage'].signMessage(
-                            {
-                                account: {
-                                    address: '12345',
-                                } as ReadonlyWalletAccount,
                                 message: new TextEncoder().encode(
                                     'Test message'
                                 ),
