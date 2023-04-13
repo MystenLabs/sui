@@ -7,13 +7,12 @@
     rust_2021_compatibility
 )]
 
+use base_types::ObjectID;
 use base_types::{SequenceNumber, SuiAddress};
 use messages::{CallArg, ObjectArg};
 use move_core_types::{account_address::AccountAddress, language_storage::StructTag};
-pub use move_core_types::{identifier::Identifier, language_storage::TypeTag};
+pub use move_core_types::{identifier::Identifier, language_storage::TypeTag, *};
 use object::OBJECT_START_VERSION;
-
-use base_types::ObjectID;
 
 pub use mysten_network::multiaddr;
 
