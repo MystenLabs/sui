@@ -11,18 +11,15 @@ export const DEFAULT_TRANSACTIONS_LIMIT = 20;
 // Fetch transaction blocks for an address, w/ toggle for to/from filter
 export function useGetTransactionBlocks(
     address: SuiAddress,
-    isFrom?: boolean,
     limit = DEFAULT_TRANSACTIONS_LIMIT
 ) {
     const rpc = useRpcClient();
-    const filter = isFrom ? { FromAddress: address } : { ToAddress: address };
 
     return useInfiniteQuery(
-        ['get-transaction-blocks', address, isFrom],
+        ['get-transaction-blocks', address],
         async ({ pageParam }) =>
             await rpc.queryTransactionBlocks({
                 cursor: pageParam ? pageParam.cursor : null,
-                filter,
                 order: 'descending',
                 limit,
                 options: {

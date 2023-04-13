@@ -14,31 +14,14 @@ import {
 import { Heading } from '~/ui/Heading';
 import { Pagination } from '~/ui/Pagination';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
-import { RadioGroup, RadioOption } from '~/ui/Radio';
 import { TableCard } from '~/ui/TableCard';
-
-type CurrentPageState = {
-    from: number;
-    to: number;
-};
-
-enum TRANSACTION_FILTERS {
-    FROM = 'from',
-    TO = 'to',
-}
 
 type TransactionBlocksProps = {
     address: string;
 };
 
 function TransactionBlocks({ address }: TransactionBlocksProps) {
-    const [filterValue, setFilterValue] = useState<TRANSACTION_FILTERS>(
-        TRANSACTION_FILTERS.FROM
-    );
-    const [currentPage, setCurrentPage] = useState<CurrentPageState>({
-        from: 0,
-        to: 0,
-    });
+    const [currentPage, setCurrentPage] = useState(0);
     const {
         data,
         isLoading,
@@ -46,46 +29,26 @@ function TransactionBlocks({ address }: TransactionBlocksProps) {
         isFetchingNextPage,
         fetchNextPage,
         hasNextPage,
-    } = useGetTransactionBlocks(
-        address,
-        filterValue === TRANSACTION_FILTERS.FROM
-    );
+    } = useGetTransactionBlocks(address);
 
     const generateTableCard = (
-        currentPage: CurrentPageState,
-        filterValue: TRANSACTION_FILTERS,
+        currentPage: number,
         data?: InfiniteData<PaginatedTransactionResponse>
     ) => {
         if (!data) {
             return;
         }
-        const cardData = genTableDataFromTxData(
-            data?.pages[currentPage[filterValue]].data
-        );
+        const cardData = genTableDataFromTxData(data?.pages[currentPage].data);
         return <TableCard data={cardData.data} columns={cardData.columns} />;
     };
 
+    console.log(data);
     return (
         <div>
             <div className="flex items-center justify-between border-b border-gray-45 pb-5">
                 <Heading color="gray-90" variant="heading4/semibold">
                     Transaction Blocks
                 </Heading>
-                <RadioGroup
-                    className="flex"
-                    ariaLabel="transaction filter"
-                    value={filterValue}
-                    onChange={setFilterValue}
-                >
-                    <RadioOption
-                        value={TRANSACTION_FILTERS.TO}
-                        label="To Address"
-                    />
-                    <RadioOption
-                        value={TRANSACTION_FILTERS.FROM}
-                        label="From Address"
-                    />
-                </RadioGroup>
             </div>
 
             <div className="flex flex-col space-y-5 pt-5 text-left xl:pr-10">
@@ -103,9 +66,7 @@ function TransactionBlocks({ address }: TransactionBlocksProps) {
                         colWidths={['30%', '30%', '10%', '20%', '10%']}
                     />
                 ) : (
-                    <div>
-                        {generateTableCard(currentPage, filterValue, data)}
-                    </div>
+                    <div>{generateTableCard(currentPage, data)}</div>
                 )}
 
                 {(hasNextPage || (data && data?.pages.length > 1)) && (
@@ -118,32 +79,18 @@ function TransactionBlocks({ address }: TransactionBlocksProps) {
                             // Make sure we are at the end before fetching another page
                             if (
                                 data &&
-                                currentPage[filterValue] ===
-                                    data?.pages.length - 1 &&
+                                currentPage === data?.pages.length - 1 &&
                                 !isLoading &&
                                 !isFetching
                             ) {
                                 fetchNextPage();
                             }
-                            setCurrentPage({
-                                ...currentPage,
-                                [filterValue]: currentPage[filterValue] + 1,
-                            });
+                            setCurrentPage(currentPage + 1);
                         }}
                         hasNext={Boolean(hasNextPage)}
-                        hasPrev={currentPage[filterValue] !== 0}
-                        onPrev={() =>
-                            setCurrentPage({
-                                ...currentPage,
-                                [filterValue]: currentPage[filterValue] - 1,
-                            })
-                        }
-                        onFirst={() =>
-                            setCurrentPage({
-                                ...currentPage,
-                                [filterValue]: 1,
-                            })
-                        }
+                        hasPrev={currentPage !== 0}
+                        onPrev={() => setCurrentPage(currentPage - 1)}
+                        onFirst={() => setCurrentPage(1)}
                     />
                 )}
             </div>
