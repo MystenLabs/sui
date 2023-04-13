@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use self::db_dump::{dump_table, duplicate_objects_summary, list_tables, table_summary, StoreName};
-use crate::db_tool::db_dump::print_table_metadata;
+use crate::db_tool::db_dump::{compact, print_table_metadata};
 use clap::Parser;
 use std::path::{Path, PathBuf};
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
@@ -21,6 +21,7 @@ pub enum DbToolCommand {
     DuplicatesSummary,
     ResetDB,
     ListDBMetadata(Options),
+    Compact,
 }
 
 #[derive(Parser)]
@@ -66,6 +67,7 @@ pub fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> anyhow::
         DbToolCommand::ListDBMetadata(d) => {
             print_table_metadata(d.store_name, d.epoch, db_path, &d.table_name)
         }
+        DbToolCommand::Compact => compact(db_path),
     }
 }
 
