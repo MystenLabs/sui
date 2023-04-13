@@ -144,16 +144,29 @@ impl SuiJsonValue {
             if let Some(s) = try_parse_string(layout, bytes) {
                 json!(s)
             } else {
-                let move_value = bcs::from_bytes_seed(layout, bytes)?;
-                move_value_to_json(&move_value).unwrap_or_else(|| {
-                    // fallback to array[u8] if fail to convert to json.
-                    JsonValue::Array(
-                        bytes
-                            .iter()
-                            .map(|b| JsonValue::Number(Number::from(*b)))
-                            .collect(),
-                    )
-                })
+                let result = bcs::from_bytes_seed(layout, bytes).map_or_else(
+                    |_| {
+                        // fallback to array[u8] if fail to convert to json.
+                        JsonValue::Array(
+                            bytes
+                                .iter()
+                                .map(|b| JsonValue::Number(Number::from(*b)))
+                                .collect(),
+                        )
+                    },
+                    |move_value| {
+                        move_value_to_json(&move_value).unwrap_or_else(|| {
+                            // fallback to array[u8] if fail to convert to json.
+                            JsonValue::Array(
+                                bytes
+                                    .iter()
+                                    .map(|b| JsonValue::Number(Number::from(*b)))
+                                    .collect(),
+                            )
+                        })
+                    },
+                );
+                result
             }
         } else {
             json!(bytes)
