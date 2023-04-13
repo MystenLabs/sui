@@ -59,8 +59,8 @@
     "@size-limit/preset-small-lib": "^8.2.4",
     "size-limit": "^8.2.4",
     "tsup": "^6.7.0",
-    "typescript": "^4.9.4",
-    "vitest": "^0.29.8"
+    "typescript": "^5.0.4",
+    "vitest": "^0.30.1"
   },
   "dependencies": {
     "bs58": "^5.0.0"

@@ -142,10 +142,11 @@ export function StakeCard({
         ? StakeState.EARNING
         : StakeState.WARM_UP;
 
-    const rewards = isEarnedRewards && estimatedReward ? estimatedReward : 0;
+    const rewards =
+        isEarnedRewards && estimatedReward ? BigInt(estimatedReward) : 0n;
     const [principalStaked, symbol] = useFormatCoin(principal, SUI_TYPE_ARG);
     const [rewardsStaked] = useFormatCoin(rewards, SUI_TYPE_ARG);
-    const isEarning = delegationState === StakeState.EARNING && rewards > 0;
+    const isEarning = delegationState === StakeState.EARNING && rewards > 0n;
 
     // Applicable only for warm up
     const epochBeforeRewards =
