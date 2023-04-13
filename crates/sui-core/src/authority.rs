@@ -133,6 +133,7 @@ pub mod authority_per_epoch_store_pruner;
 pub mod authority_store_pruner;
 pub mod authority_store_tables;
 pub mod authority_store_types;
+pub mod authority_test_utils;
 pub mod epoch_start_configuration;
 pub mod test_authority_builder;
 
