@@ -45,6 +45,7 @@ use tokio::{
     time::timeout,
 };
 use tokio_stream::StreamExt;
+
 use tracing::{debug, error, info, instrument, trace, warn};
 use typed_store::Map;
 
@@ -55,6 +56,38 @@ use crate::transaction_manager::TransactionManager;
 use crate::{authority::EffectsNotifyRead, checkpoints::CheckpointStore};
 
 use self::metrics::CheckpointExecutorMetrics;
+
+// A struct that logs when it is created and when it is dropped, in order to log the time that a
+// scope is active
+struct ScopeLogger {
+    name: &'static str,
+    start_time: Instant,
+    count: Option<usize>,
+}
+
+impl ScopeLogger {
+    fn new(name: &'static str) -> Self {
+        let start_time = Instant::now();
+        debug!("Entering scope {}", name);
+        Self {
+            name,
+            start_time,
+            count: None,
+        }
+    }
+}
+
+impl Drop for ScopeLogger {
+    fn drop(&mut self) {
+        let duration = self.start_time.elapsed();
+        debug!(
+            "Leaving scope {} after {:?} (per element time: {:?})",
+            self.name,
+            duration,
+            self.count.map(|c| duration / (c as u32))
+        );
+    }
+}
 
 mod metrics;
 #[cfg(test)]
@@ -332,6 +365,7 @@ impl CheckpointExecutor {
         epoch_store: Arc<AuthorityPerEpochStore>,
         pending: &mut CheckpointExecutionBuffer,
     ) -> SuiResult {
+        let mut logger = ScopeLogger::new("execute_checkpoint");
         let checkpoint_sequence = *checkpoint.sequence_number();
         debug!(
             "Scheduling checkpoint {:?} for execution",
@@ -352,6 +386,7 @@ impl CheckpointExecutor {
         );
 
         let tx_count = execution_digests.len();
+        logger.count = Some(tx_count);
         debug!(
             epoch=?epoch_store.epoch(),
             checkpoint_sequence=?checkpoint.sequence_number(),
@@ -383,6 +418,8 @@ impl CheckpointExecutor {
         checkpoint: VerifiedCheckpoint,
         pending: &mut CheckpointExecutionBuffer,
     ) -> SuiResult {
+        let mut logger = ScopeLogger::new("execute_transactions");
+        logger.count = Some(execution_digests.len());
         let effects_digests = execution_digests.iter().map(|digest| digest.effects);
 
         let digest_to_effects: HashMap<TransactionDigest, TransactionEffects> = self
@@ -782,6 +819,7 @@ fn get_unexecuted_transactions(
     let all_tx_digests: Vec<TransactionDigest> =
         execution_digests.iter().map(|tx| tx.transaction).collect();
 
+    /*
     let executed_effects = authority_store
         .multi_get_executed_effects(&all_tx_digests)
         .expect("failed to read executed_effects from store");
@@ -801,10 +839,11 @@ fn get_unexecuted_transactions(
             }
         })
         .collect();
+    */
 
     // read remaining unexecuted transactions from store
     let executable_txns: Vec<_> = authority_store
-        .multi_get_transaction_blocks(&unexecuted_txns)
+        .multi_get_transaction_blocks(&all_tx_digests)
         .expect("Failed to get checkpoint txes from store")
         .into_iter()
         .enumerate()
@@ -812,7 +851,7 @@ fn get_unexecuted_transactions(
             let tx = tx.unwrap_or_else(||
                 panic!(
                     "state-sync should have ensured that transaction with digest {:?} exists for checkpoint: {checkpoint:?}",
-                    unexecuted_txns[i]
+                    all_tx_digests[i]
                 )
             );
             // change epoch tx is handled specially in check_epoch_last_checkpoint
