@@ -11084,12 +11084,18 @@ dependencies = [
 name = "transaction-fuzzer"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "async-trait",
+ "futures",
+ "indexmap",
  "move-core-types",
  "once_cell",
+ "prometheus",
  "proptest",
  "proptest-derive",
  "rand 0.8.5",
  "sui-core",
+ "sui-node",
  "sui-protocol-config",
  "sui-types",
  "test-utils",

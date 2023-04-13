@@ -3,6 +3,7 @@
 
 pub mod account_universe;
 mod executor;
+pub mod transaction_fuzzer;
 
 use proptest::collection::vec;
 use sui_protocol_config::ProtocolConfig;

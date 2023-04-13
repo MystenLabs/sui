@@ -15,13 +15,18 @@ rand = "0.8.5"
 move-core-types.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tracing = "0.1.36"
+async-trait = "0.1.61"
+prometheus = "0.13.3"
+anyhow = { version = "1.0.64", features = ["backtrace"] }
 
 test-utils = { path = "../test-utils" }
 once_cell = "1.16"
 sui-core = { path = "../sui-core" }
 sui-protocol-config = { path = "../sui-protocol-config" }
 sui-types = { path = "../sui-types", features = ["fuzzing"] }
-
+indexmap = "1.9.2"
+futures = "0.3.23"
+sui-node = { path = "../sui-node" }
 
 [dev-dependencies]
 sui-core = { path = "../sui-core", features = ["test-utils"] }

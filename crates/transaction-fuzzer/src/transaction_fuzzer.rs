@@ -22,7 +22,6 @@ use sui_node::SuiNodeHandle;
 
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
-    crypto::{get_key_pair, AccountKeyPair},
     messages::{
         Argument, CertifiedTransactionEffects, Command, ObjectArg, ProgrammableTransaction,
         TransactionData, TransactionEffects, TransactionEffectsAPI, VerifiedTransaction,
@@ -42,10 +41,20 @@ use test_utils::authority::test_authority_configs_with_objects;
 use tokio::time::timeout;
 use tracing::{info, warn};
 
-const MAX_DELEGATION_AMOUNT: u64 = 10_000_000_000;
-const MIN_DELEGATION_AMOUNT: u64 = 1_000_000_000;
-const MAX_GAS: u64 = 100_000_000;
+pub mod account_info;
+pub mod add_stake;
+pub mod utils;
+pub mod withdraw_stake;
+use account_info::*;
 
+pub const MAX_DELEGATION_AMOUNT: u64 = 1_000_000 * MIST_PER_SUI;
+pub const MIN_DELEGATION_AMOUNT: u64 = MIST_PER_SUI;
+pub const MAX_GAS: u64 = 100_000_000;
+pub const MIST_PER_SUI: u64 = 1_000_000_000;
+// Each account gets 20 million SUI
+pub const INITIAL_MINT_AMOUNT: u64 = 20_000_000 * MIST_PER_SUI;
+
+#[macro_export]
 macro_rules! move_call {
     {$builder:expr, ($addr:expr)::$module_name:ident::$func:ident($($args:expr),* $(,)?)} => {
         $builder.programmable_move_call(
@@ -58,31 +67,43 @@ macro_rules! move_call {
     }
 }
 
-trait GenStateChange {
-    type StateChange: StatePredicate;
-    fn create(&self, runner: &mut StressTestRunner) -> Self::StateChange;
+pub trait GenStateChange {
+    fn create(&self, runner: &mut FuzzTestRunner) -> Option<Box<dyn StatePredicate>>;
 }
 
 #[async_trait]
-trait StatePredicate {
-    async fn run(&mut self, runner: &mut StressTestRunner) -> Result<TransactionEffects>;
+pub trait StatePredicate {
+    async fn run(&mut self, runner: &mut FuzzTestRunner) -> Result<TransactionEffects>;
     async fn pre_epoch_post_condition(
         &mut self,
-        runner: &StressTestRunner,
+        runner: &mut FuzzTestRunner,
         effects: &TransactionEffects,
     );
-    async fn post_epoch_post_condition(
+    async fn post_epoch_post_condition(&mut self, runner: &mut FuzzTestRunner);
+}
+
+#[async_trait]
+impl<T: StatePredicate + std::marker::Send> StatePredicate for Box<T> {
+    async fn run(&mut self, runner: &mut FuzzTestRunner) -> Result<TransactionEffects> {
+        self.run(runner).await
+    }
+    async fn pre_epoch_post_condition(
         &mut self,
-        runner: &StressTestRunner,
+        runner: &mut FuzzTestRunner,
         effects: &TransactionEffects,
-    );
+    ) {
+        self.pre_epoch_post_condition(runner, effects).await
+    }
+    async fn post_epoch_post_condition(&mut self, runner: &mut FuzzTestRunner) {
+        self.post_epoch_post_condition(runner).await
+    }
 }
 
 #[allow(dead_code)]
-struct StressTestRunner {
+pub struct FuzzTestRunner {
     pub post_epoch_predicates: Vec<Box<dyn StatePredicate + Send + Sync>>,
     pub nodes: Vec<SuiNodeHandle>,
-    pub accounts: IndexMap<SuiAddress, (AccountKeyPair, ObjectID)>,
+    pub accounts: IndexMap<SuiAddress, AccountInfo>,
     pub active_validators: BTreeSet<SuiAddress>,
     pub preactive_validators: BTreeMap<SuiAddress, u64>,
     pub removed_validators: BTreeSet<SuiAddress>,
@@ -90,21 +111,23 @@ struct StressTestRunner {
     pub delegation_withdraws_this_epoch: u64,
     pub delegations: BTreeMap<ObjectID, SuiAddress>,
     pub reports: BTreeMap<SuiAddress, BTreeSet<SuiAddress>>,
+    pub pre_reconfiguration_states: BTreeMap<u64, SuiSystemStateSummary>,
     pub rng: StdRng,
 }
 
-impl StressTestRunner {
+impl FuzzTestRunner {
     pub async fn new() -> Self {
-        // let authority_state = init_state().await;
         let mut accounts = IndexMap::new();
         let mut objects = vec![];
         for _ in 0..100 {
-            let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-            let gas_object_id = ObjectID::random();
-            let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
+            let account = AccountInfo::new();
+            let gas_object = Object::with_id_owner_gas_for_testing(
+                account.gas_object_id,
+                account.addr,
+                INITIAL_MINT_AMOUNT,
+            );
             objects.push(gas_object);
-            // authority_state.insert_genesis_object(gas_object).await;
-            accounts.insert(sender, (sender_key, gas_object_id));
+            accounts.insert(account.addr, account);
         }
         let (net_config, _) = test_authority_configs_with_objects(objects);
         let nodes = spawn_test_authorities(&net_config).await;
@@ -120,6 +143,7 @@ impl StressTestRunner {
             delegations: BTreeMap::new(),
             reports: BTreeMap::new(),
             rng: StdRng::from_seed([0; 32]),
+            pre_reconfiguration_states: BTreeMap::new(),
         }
     }
 
@@ -214,30 +238,66 @@ impl StressTestRunner {
         info!("reconfiguration complete after {:?}", start.elapsed());
     }
 
-    pub async fn run(
+    pub async fn object_reference_for_id(&self, object_id: ObjectID) -> ObjectRef {
+        self.db()
+            .await
+            .get_object(&object_id)
+            .unwrap()
+            .unwrap()
+            .compute_object_reference()
+    }
+
+    pub async fn sign_and_run_txn(
         &mut self,
         sender: SuiAddress,
         pt: ProgrammableTransaction,
     ) -> TransactionEffects {
-        let (sender_key, gas_object_id) = self.accounts.get(&sender).unwrap();
-        let (gas_object_ref, rgp) = self.nodes[0].with(|node| {
+        let account = self.accounts.get(&sender).unwrap();
+        let (gas_object_ref, rgp) = self.gas_ref_and_rgp_for(sender).await;
+        let signed_txn = to_sender_signed_transaction(
+            TransactionData::new_programmable(sender, vec![gas_object_ref], pt, MAX_GAS, rgp),
+            &account.key,
+        );
+        let effects = self.execute_transaction_block(signed_txn).await.unwrap();
+        effects.into_data()
+    }
+
+    pub async fn gas_ref_and_rgp_for(&self, address: SuiAddress) -> (ObjectRef, u64) {
+        let account = self.accounts.get(&address).unwrap();
+        self.nodes[0].with(|node| {
             let gas_object = node
                 .state()
                 .db()
-                .get_object(gas_object_id)
+                .get_object(&account.gas_object_id)
                 .unwrap()
                 .unwrap();
             let rgp = node.reference_gas_price_for_testing().unwrap();
             (gas_object.compute_object_reference(), rgp)
-        });
-        let signed_txn = to_sender_signed_transaction(
-            TransactionData::new_programmable(sender, vec![gas_object_ref], pt, MAX_GAS, rgp),
-            sender_key,
-        );
+        })
+    }
 
-        let effects = self.execute_transaction_block(signed_txn).await.unwrap();
-        assert!(effects.status().is_ok());
+    pub async fn execute_transaction(
+        &mut self,
+        transaction: VerifiedTransaction,
+    ) -> TransactionEffects {
+        let effects = self.execute_transaction_block(transaction).await.unwrap();
         effects.into_data()
+    }
+
+    pub fn select_next_operation(
+        &mut self,
+        operations: &[Box<dyn GenStateChange>],
+    ) -> Box<dyn StatePredicate> {
+        const TRY_DIFFERENT_THRESHOLD: u64 = 5;
+        loop {
+            let index = self.rng.gen_range(0..operations.len());
+            let gen = &operations[index];
+            for _ in 0..TRY_DIFFERENT_THRESHOLD {
+                if let Some(task) = gen.create(self) {
+                    return task;
+                }
+            }
+        }
     }
 
     // Useful for debugging and the like
@@ -295,9 +355,16 @@ impl StressTestRunner {
         Self::trigger_reconfiguration(&self.nodes).await;
         let post_state_summary = self.system_state();
         info!(
-            "Changing epoch form {} to {}",
+            "Changing epoch from {} to {}",
             pre_state_summary.epoch, post_state_summary.epoch
         );
+        self.pre_reconfiguration_states
+            .insert(pre_state_summary.epoch, pre_state_summary);
+        // Clear out the post conditions and execute them
+        let posts = std::mem::take(&mut self.post_epoch_predicates);
+        for mut post in posts.into_iter() {
+            post.post_epoch_post_condition(self).await;
+        }
     }
 
     pub async fn get_created_object_of_type_name(
@@ -343,107 +410,5 @@ impl StressTestRunner {
             .collect();
         assert!(found.len() <= 1, "Multiple objects of type {name} found");
         found.get(0).cloned()
-    }
-}
-
-mod add_stake {
-    use super::*;
-
-    pub struct RequestAddStakeGen;
-
-    pub struct RequestAddStake {
-        sender: SuiAddress,
-        stake_amount: u64,
-        staked_with: SuiAddress,
-    }
-
-    impl GenStateChange for RequestAddStakeGen {
-        type StateChange = RequestAddStake;
-
-        fn create(&self, runner: &mut StressTestRunner) -> Self::StateChange {
-            let stake_amount = runner
-                .rng
-                .gen_range(MIN_DELEGATION_AMOUNT..=MAX_DELEGATION_AMOUNT);
-            let staked_with = runner.pick_random_active_validator().sui_address;
-            let sender = runner.pick_random_sender();
-            RequestAddStake {
-                sender,
-                stake_amount,
-                staked_with,
-            }
-        }
-    }
-
-    #[async_trait]
-    impl StatePredicate for RequestAddStake {
-        async fn run(&mut self, runner: &mut StressTestRunner) -> Result<TransactionEffects> {
-            let pt = {
-                let mut builder = ProgrammableTransactionBuilder::new();
-                builder
-                    .obj(ObjectArg::SharedObject {
-                        id: SUI_SYSTEM_STATE_OBJECT_ID,
-                        initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-                        mutable: true,
-                    })
-                    .unwrap();
-                builder.pure(self.staked_with).unwrap();
-                let coin = StressTestRunner::split_off(&mut builder, self.stake_amount);
-                move_call! {
-                    builder,
-                    (SUI_SYSTEM_OBJECT_ID)::sui_system::request_add_stake(Argument::Input(0), coin, Argument::Input(1))
-                };
-                builder.finish()
-            };
-            let effects = runner.run(self.sender, pt).await;
-
-            Ok(effects)
-        }
-
-        async fn pre_epoch_post_condition(
-            &mut self,
-            runner: &StressTestRunner,
-            effects: &TransactionEffects,
-        ) {
-            // Assert that a `StakedSui` object matching the amount delegated is created.
-            // Assert that this staked sui
-            let object = runner
-                .get_created_object_of_type_name(effects, "StakedSui")
-                .await
-                .unwrap();
-            let staked_amount =
-                object.get_total_sui(&runner.db().await).unwrap() - object.storage_rebate;
-            assert_eq!(staked_amount, self.stake_amount);
-            assert_eq!(object.owner.get_owner_address().unwrap(), self.sender);
-            runner.display_effects(effects);
-        }
-
-        async fn post_epoch_post_condition(
-            &mut self,
-            _runner: &StressTestRunner,
-            _effects: &TransactionEffects,
-        ) {
-            todo!()
-        }
-    }
-}
-
-#[tokio::test]
-async fn fuzz_dynamic_committee() {
-    let num_operations = 10;
-
-    // Add more actions here as we create them
-    let actions = vec![Box::new(add_stake::RequestAddStakeGen)];
-
-    let mut runner = StressTestRunner::new().await;
-
-    for i in 0..num_operations {
-        if i == 5 {
-            runner.change_epoch().await;
-            continue;
-        }
-        let index = runner.rng.gen_range(0..actions.len());
-        let mut task = actions[index].create(&mut runner);
-        let effects = task.run(&mut runner).await.unwrap();
-        task.pre_epoch_post_condition(&runner, &effects).await;
     }
 }
