@@ -54,6 +54,7 @@ validator_configs:
           report_batch_rate_limit: ~
           request_batch_rate_limit: ~
     enable-event-processing: false
+    enable-index-processing: true
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -132,6 +133,7 @@ validator_configs:
           report_batch_rate_limit: ~
           request_batch_rate_limit: ~
     enable-event-processing: false
+    enable-index-processing: true
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -210,6 +212,7 @@ validator_configs:
           report_batch_rate_limit: ~
           request_batch_rate_limit: ~
     enable-event-processing: false
+    enable-index-processing: true
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -288,6 +291,7 @@ validator_configs:
           report_batch_rate_limit: ~
           request_batch_rate_limit: ~
     enable-event-processing: false
+    enable-index-processing: true
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -366,6 +370,7 @@ validator_configs:
           report_batch_rate_limit: ~
           request_batch_rate_limit: ~
     enable-event-processing: false
+    enable-index-processing: true
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -444,6 +449,7 @@ validator_configs:
           report_batch_rate_limit: ~
           request_batch_rate_limit: ~
     enable-event-processing: false
+    enable-index-processing: true
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -522,6 +528,7 @@ validator_configs:
           report_batch_rate_limit: ~
           request_batch_rate_limit: ~
     enable-event-processing: false
+    enable-index-processing: true
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:

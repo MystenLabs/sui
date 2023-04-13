@@ -244,10 +244,10 @@ impl SuiNode {
             checkpoint_store.clone(),
         );
 
-        let index_store = if is_validator {
-            None
-        } else {
+        let index_store = if is_full_node && config.enable_index_processing {
             Some(Arc::new(IndexStore::new(config.db_path().join("indexes"))))
+        } else {
+            None
         };
 
         // Create network

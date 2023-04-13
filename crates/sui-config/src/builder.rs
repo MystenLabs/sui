@@ -3,8 +3,8 @@
 
 use crate::genesis::{TokenAllocation, TokenDistributionScheduleBuilder};
 use crate::node::{
-    default_end_of_epoch_broadcast_channel_capacity, AuthorityKeyPairWithPath, DBCheckpointConfig,
-    KeyPairWithPath,
+    default_enable_index_processing, default_end_of_epoch_broadcast_channel_capacity,
+    AuthorityKeyPairWithPath, DBCheckpointConfig, KeyPairWithPath,
 };
 use crate::{
     genesis,
@@ -500,6 +500,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     json_rpc_address: utils::available_local_socket_address(),
                     consensus_config: Some(consensus_config),
                     enable_event_processing: false,
+                    enable_index_processing: default_enable_index_processing(),
                     genesis: crate::node::Genesis::new(genesis.clone()),
                     grpc_load_shed: initial_accounts_config.grpc_load_shed,
                     grpc_concurrency_limit: initial_accounts_config.grpc_concurrency_limit,
