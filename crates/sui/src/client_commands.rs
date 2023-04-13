@@ -1753,6 +1753,34 @@ impl SuiClientCommandResult {
             info!("{line}")
         }
     }
+
+    pub fn tx_block_response(&self) -> Option<&SuiTransactionBlockResponse> {
+        use SuiClientCommandResult::*;
+        match self {
+            Upgrade(b)
+            | Publish(b)
+            | TransactionBlock(b)
+            | Call(b)
+            | Transfer(_, b)
+            | TransferSui(b)
+            | Pay(b)
+            | PaySui(b)
+            | PayAllSui(b)
+            | SplitCoin(b)
+            | MergeCoin(b)
+            | ExecuteSignedTx(b) => Some(b),
+            _ => None,
+        }
+    }
+
+    pub fn objects_response(&self) -> Option<Vec<SuiObjectResponse>> {
+        use SuiClientCommandResult::*;
+        match self {
+            Object(o) | RawObject(o) => Some(vec![o.clone()]),
+            Objects(o) => Some(o.clone()),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Serialize)]
