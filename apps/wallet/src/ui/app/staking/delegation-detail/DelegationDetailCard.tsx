@@ -76,11 +76,14 @@ export function DelegationDetailCard({
         staked: stakedId,
     }).toString()}`;
 
-    const inActiveValidator = !system?.activeValidators?.find(
+    // check if the validator is in the active validator list, if not, is inactive validator
+    const isValidatorInactive = !system?.activeValidators?.find(
         ({ stakingPoolId }) => stakingPoolId === validatorData?.stakingPoolId
     );
 
-    const commission = validatorData ? Number(validatorData.commissionRate) / 100 : 0;
+    const commission = validatorData
+        ? Number(validatorData.commissionRate) / 100
+        : 0;
     const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
 
     if (isLoading || loadingValidators) {
@@ -108,7 +111,7 @@ export function DelegationDetailCard({
             <BottomMenuLayout>
                 <Content>
                     <div className="justify-center w-full flex flex-col items-center">
-                        {inActiveValidator ? (
+                        {isValidatorInactive ? (
                             <Alert className="mb-3">
                                 Unstake SUI from this inactive validator and
                                 stake on an active validator to start earning
@@ -207,7 +210,7 @@ export function DelegationDetailCard({
                             </Card>
                         </div>
                         <div className="flex gap-2.5 w-full my-3.75">
-                            {!inActiveValidator ? (
+                            {!isValidatorInactive ? (
                                 <Button
                                     size="tall"
                                     variant="outline"
