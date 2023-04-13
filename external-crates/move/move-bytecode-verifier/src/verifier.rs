@@ -13,10 +13,9 @@ use crate::{
 };
 use move_binary_format::{
     check_bounds::BoundsChecker,
-    errors::{Location, PartialVMError, VMResult},
+    errors::{Location, VMResult},
     file_format::{CompiledModule, CompiledScript},
 };
-use move_core_types::{state::VMState, vm_status::StatusCode};
 use std::time::Instant;
 
 pub const MAX_CONSTANT_VECTOR_LEN: u64 = 1024 * 1024;
@@ -88,37 +87,23 @@ pub fn verify_module_with_config_for_test(
 }
 
 pub fn verify_module_with_config(config: &VerifierConfig, module: &CompiledModule) -> VMResult<()> {
-    let prev_state = move_core_types::state::set_state(VMState::VERIFIER);
-    let result = std::panic::catch_unwind(|| {
-        BoundsChecker::verify_module(module).map_err(|e| {
-            // We can't point the error at the module, because if bounds-checking
-            // failed, we cannot safely index into module's handle to itself.
-            e.finish(Location::Undefined)
-        })?;
-        LimitsVerifier::verify_module(config, module)?;
-        DuplicationChecker::verify_module(module)?;
-        SignatureChecker::verify_module(module)?;
-        InstructionConsistency::verify_module(module)?;
-        constants::verify_module(module)?;
-        friends::verify_module(module)?;
-        ability_field_requirements::verify_module(module)?;
-        RecursiveStructDefChecker::verify_module(module)?;
-        InstantiationLoopChecker::verify_module(module)?;
-        CodeUnitVerifier::verify_module(config, module)?;
+    BoundsChecker::verify_module(module).map_err(|e| {
+        // We can't point the error at the module, because if bounds-checking
+        // failed, we cannot safely index into module's handle to itself.
+        e.finish(Location::Undefined)
+    })?;
+    LimitsVerifier::verify_module(config, module)?;
+    DuplicationChecker::verify_module(module)?;
+    SignatureChecker::verify_module(module)?;
+    InstructionConsistency::verify_module(module)?;
+    constants::verify_module(module)?;
+    friends::verify_module(module)?;
+    ability_field_requirements::verify_module(module)?;
+    RecursiveStructDefChecker::verify_module(module)?;
+    InstantiationLoopChecker::verify_module(module)?;
+    CodeUnitVerifier::verify_module(config, module)?;
 
-        // Add the failpoint injection to test the catch_unwind behavior.
-        fail::fail_point!("verifier-failpoint-panic");
-
-        script_signature::verify_module(module, no_additional_script_signature_checks)
-    })
-    .unwrap_or_else(|_| {
-        Err(
-            PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION)
-                .finish(Location::Undefined),
-        )
-    });
-    move_core_types::state::set_state(prev_state);
-    result
+    script_signature::verify_module(module, no_additional_script_signature_checks)
 }
 
 /// Helper for a "canonical" verification of a script.
@@ -136,26 +121,14 @@ pub fn verify_script(script: &CompiledScript) -> VMResult<()> {
 }
 
 pub fn verify_script_with_config(config: &VerifierConfig, script: &CompiledScript) -> VMResult<()> {
-    let prev_state = move_core_types::state::set_state(VMState::VERIFIER);
-    let result = std::panic::catch_unwind(|| {
-        BoundsChecker::verify_script(script).map_err(|e| e.finish(Location::Script))?;
-        LimitsVerifier::verify_script(config, script)?;
-        DuplicationChecker::verify_script(script)?;
-        SignatureChecker::verify_script(script)?;
-        InstructionConsistency::verify_script(script)?;
-        constants::verify_script(script)?;
-        CodeUnitVerifier::verify_script(config, script)?;
-        script_signature::verify_script(script, no_additional_script_signature_checks)
-    })
-    .unwrap_or_else(|_| {
-        Err(
-            PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION)
-                .finish(Location::Undefined),
-        )
-    });
-    move_core_types::state::set_state(prev_state);
-
-    result
+    BoundsChecker::verify_script(script).map_err(|e| e.finish(Location::Script))?;
+    LimitsVerifier::verify_script(config, script)?;
+    DuplicationChecker::verify_script(script)?;
+    SignatureChecker::verify_script(script)?;
+    InstructionConsistency::verify_script(script)?;
+    constants::verify_script(script)?;
+    CodeUnitVerifier::verify_script(config, script)?;
+    script_signature::verify_script(script, no_additional_script_signature_checks)
 }
 
 impl Default for VerifierConfig {
