@@ -378,6 +378,10 @@ impl ReadApi {
         self.metrics
             .get_tx_blocks_result_size
             .report(result.len() as u64);
+
+        self.metrics
+            .get_tx_blocks_result_size_total
+            .inc_by(result.len() as u64);
         Ok(result)
     }
 }
@@ -459,6 +463,9 @@ impl ReadApiServer for ReadApi {
             self.metrics
                 .get_objects_result_size
                 .report(objects.len() as u64);
+            self.metrics
+                .get_objects_result_size_total
+                .inc_by(objects.len() as u64);
             Ok(objects)
         } else {
             Err(anyhow!(UserInputError::SizeLimitExceeded {
@@ -759,6 +766,10 @@ impl ReadApiServer for ReadApi {
         self.metrics
             .get_checkpoints_result_size
             .report(data.len() as u64);
+        self.metrics
+            .get_checkpoints_result_size_total
+            .inc_by(data.len() as u64);
+
         Ok(CheckpointPage {
             data,
             next_cursor,

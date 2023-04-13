@@ -69,6 +69,9 @@ impl CoinReadApi {
         data.truncate(limit);
 
         self.metrics.get_coins_result_size.report(data.len() as u64);
+        self.metrics
+            .get_coins_result_size_total
+            .inc_by(data.len() as u64);
         let next_cursor = data.last().map(|coin| coin.coin_object_id);
         Ok(CoinPage {
             data,

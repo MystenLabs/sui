@@ -107,6 +107,9 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         self.metrics
             .get_owned_objects_result_size
             .report(data.len() as u64);
+        self.metrics
+            .get_owned_objects_result_size_total
+            .inc_by(data.len() as u64);
         Ok(Page {
             data,
             next_cursor,
@@ -150,6 +153,9 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         self.metrics
             .query_tx_blocks_result_size
             .report(data.len() as u64);
+        self.metrics
+            .query_tx_blocks_result_size_total
+            .inc_by(data.len() as u64);
         Ok(Page {
             data,
             next_cursor,
@@ -184,6 +190,9 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         self.metrics
             .query_events_result_size
             .report(data.len() as u64);
+        self.metrics
+            .query_events_result_size_total
+            .inc_by(data.len() as u64);
         Ok(EventPage {
             data,
             next_cursor,
@@ -215,6 +224,9 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         self.metrics
             .get_dynamic_fields_result_size
             .report(data.len() as u64);
+        self.metrics
+            .get_dynamic_fields_result_size_total
+            .inc_by(data.len() as u64);
         Ok(DynamicFieldPage {
             data,
             next_cursor,
