@@ -1,10 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useGetDynamicFieldObject } from '@mysten/core';
-import { getObjectFields } from '@mysten/sui.js';
+import {
+    useGetDynamicFieldObject,
+    useGetNormalizedMoveStruct,
+} from '@mysten/core';
+import { getObjectFields, getObjectType } from '@mysten/sui.js';
 
-import { SyntaxHighlighter } from '~/components/SyntaxHighlighter';
+import { FieldItem } from '~/components/ownedobjects/views/FieldItem';
 import { Banner } from '~/ui/Banner';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 
@@ -24,8 +27,16 @@ export function UnderlyingObjectCard({
         parentId,
         name
     );
+    const objectType = data ? getObjectType(data!) : null;
+    // Get the packageId, moduleName, functionName from the objectType
+    const [packageId, moduleName, functionName] =
+        objectType?.split('<')[0]?.split('::') || [];
 
-    if (isLoading) {
+    // Get the normalized struct for the object
+    const { data: normalizedStruct, isLoading: loadingNormalizedStruct } =
+        useGetNormalizedMoveStruct(packageId, moduleName, functionName);
+
+    if (isLoading || loadingNormalizedStruct) {
         return (
             <div className="mt-3 flex w-full justify-center pt-3">
                 <LoadingSpinner text="Loading data" />
@@ -33,7 +44,12 @@ export function UnderlyingObjectCard({
         );
     }
 
-    if (isError || data.error || (isFetched && !data)) {
+    if (
+        isError ||
+        data.error ||
+        (isFetched && !data) ||
+        (!loadingNormalizedStruct && !normalizedStruct)
+    ) {
         return (
             <Banner variant="error" spacing="lg" fullWidth>
                 Failed to get field data for :{parentId}
@@ -43,15 +59,14 @@ export function UnderlyingObjectCard({
 
     const fieldsData = getObjectFields(data);
     return fieldsData ? (
-        <SyntaxHighlighter
-            code={JSON.stringify(
+        <FieldItem
+            value={
                 typeof fieldsData?.name === 'object'
                     ? { name: fieldsData.name, value: fieldsData.value }
-                    : fieldsData?.value,
-                null,
-                2
-            )}
-            language="json"
+                    : // add the struct type to the value
+                      fieldsData?.value
+            }
+            type={normalizedStruct?.fields[2].type}
         />
     ) : null;
 }

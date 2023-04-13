@@ -3,11 +3,7 @@
 
 import { Combobox } from '@headlessui/react';
 import { useGetObject, useGetNormalizedMoveStruct } from '@mysten/core';
-import {
-    getObjectFields,
-    getObjectType,
-    normalizeSuiObjectId,
-} from '@mysten/sui.js';
+import { getObjectFields, getObjectType } from '@mysten/sui.js';
 import clsx from 'clsx';
 import { useState } from 'react';
 
@@ -35,6 +31,7 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
     const [packageId, moduleName, functionName] =
         objectType?.split('<')[0]?.split('::') || [];
 
+    // Get content inside <> and split by , to get underlying object types
     const typePerameter = objectType
         ?.slice(objectType?.indexOf('<') + 1, objectType.indexOf('>'))
         .split(',');
@@ -48,11 +45,7 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
         data: normalizedStruct,
         isLoading: loadingNormalizedStruct,
         isError: errorNormalizedMoveStruct,
-    } = useGetNormalizedMoveStruct(
-        normalizeSuiObjectId(packageId),
-        moduleName,
-        functionName
-    );
+    } = useGetNormalizedMoveStruct(packageId, moduleName, functionName);
 
     if (isLoading || loadingNormalizedStruct) {
         return (
