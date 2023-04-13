@@ -277,6 +277,7 @@ pub struct ExpensiveSafetyCheckConfig {
     /// If enabled, we will check that the total SUI in all input objects of a tx
     /// (both the Move part and the storage rebate) matches the total SUI in all
     /// output objects of the tx + gas fees
+    #[serde(default)]
     enable_deep_per_tx_sui_conservation_check: bool,
 
     /// Disable epoch SUI conservation check even when we are running in debug mode.
