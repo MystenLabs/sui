@@ -748,7 +748,6 @@ async fn test_interleaved_upgrades() {
         let mut builder = ProgrammableTransactionBuilder::new();
         let current_package_id = depender_package.0;
         // Now recompile the depending package with the upgraded dependency
-        // Currently doesn't work -- need to wait for linkage table to be added to the loader.
         let (digest, modules, dep_ids) = build_upgrade_test_modules_with_dep_addr(
             "dep_on_upgrading_package",
             [("base_addr", runner.package.0)],
@@ -1136,7 +1135,7 @@ async fn test_conflicting_versions_across_calls() {
     // publishes base package at version 1
     let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
 
-    // publish a depender package at version 1 that depends on the base package at version 1
+    // publish a dependent package at version 1 that depends on the base package at version 1
     let (_, module_bytes, dep_ids) = build_upgrade_test_modules_with_dep_addr(
         "dep_on_upgrading_package_upgradeable",
         [
@@ -1164,12 +1163,11 @@ async fn test_conflicting_versions_across_calls() {
         .unwrap()
         .0;
 
-    // publish a depender package at version 2 that depends on the base package at version 2
+    // publish a dependent package at version 2 that depends on the base package at version 2
     let pt2 = {
         let mut builder = ProgrammableTransactionBuilder::new();
         let current_package_id = depender_package.0;
         // Now recompile the depending package with the upgraded dependency
-        // Currently doesn't work -- need to wait for linkage table to be added to the loader.
         let (digest, modules, dep_ids) = build_upgrade_test_modules_with_dep_addr(
             "dep_on_upgrading_package_upgradeable",
             [
