@@ -4405,6 +4405,27 @@ pub async fn execute_programmable_transaction(
     .await
 }
 
+pub async fn execute_programmable_transaction_with_shared(
+    authority: &AuthorityState,
+    gas_object_id: &ObjectID,
+    sender: &SuiAddress,
+    sender_key: &AccountKeyPair,
+    pt: ProgrammableTransaction,
+    gas_unit: u64,
+) -> SuiResult<TransactionEffects> {
+    execute_programmable_transaction_(
+        authority,
+        None,
+        gas_object_id,
+        sender,
+        sender_key,
+        pt,
+        /* with_shared */ true,
+        gas_unit,
+    )
+    .await
+}
+
 async fn execute_programmable_transaction_(
     authority: &AuthorityState,
     fullnode: Option<&AuthorityState>,

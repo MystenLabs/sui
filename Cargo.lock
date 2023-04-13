@@ -8815,6 +8815,7 @@ dependencies = [
  "fs_extra",
  "futures",
  "git-version",
+ "indexmap",
  "inquire",
  "jemalloc-ctl",
  "jsonrpsee",
