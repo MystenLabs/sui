@@ -16,7 +16,7 @@ use sui_types::{
 };
 use sui_types::{base_types::TransactionDigest, error::SuiResult};
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::{debug, error, trace, warn};
+use tracing::{error, trace, warn};
 
 use crate::authority::{
     authority_per_epoch_store::AuthorityPerEpochStore,
@@ -172,7 +172,7 @@ impl Inner {
             } else {
                 // TODO: we should start logging this at a higher level after some period of
                 // time has elapsed.
-                debug!(tx_digest = ?digest,acquiring = ?pending_cert.acquiring_locks, "Certificate acquiring locks");
+                trace!(tx_digest = ?digest,acquiring = ?pending_cert.acquiring_locks, "Certificate acquiring locks");
             }
         }
 
