@@ -241,7 +241,8 @@ impl<C> SafeClient<C> {
                         );
                         let ct_bytes = bcs::to_bytes(&ct);
                         ct.verify_signature(&committee).tap_err(|e| {
-                            debug!(?digest, ?ct, ?ct_bytes, "Received invalid tx cert {}", e)
+                            // This may not deserve an Error level log, but it's useful for debugging for now.
+                            error!(?digest, ?ct, ?ct_bytes, "Received invalid tx cert {}", e)
                         })?;
                         let ct = VerifiedCertificate::new_from_verified(ct);
                         Ok(PlainTransactionInfoResponse::ExecutedWithCert(
