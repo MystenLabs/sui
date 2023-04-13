@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    cmp::max,
     collections::{BTreeMap, BTreeSet, HashMap},
     sync::Arc,
 };
@@ -15,7 +16,7 @@ use sui_types::{
 };
 use sui_types::{base_types::TransactionDigest, error::SuiResult};
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::{debug, error, trace, warn};
+use tracing::{error, trace, warn};
 
 use crate::authority::{
     authority_per_epoch_store::AuthorityPerEpochStore,
@@ -26,6 +27,9 @@ use crate::authority::{AuthorityMetrics, AuthorityStore};
 #[cfg(test)]
 #[path = "unit_tests/transaction_manager_tests.rs"]
 mod transaction_manager_tests;
+
+/// Minimum capacity of HashMaps used in TransactionManager.
+const MIN_HASHMAP_CAPACITY: usize = 1000;
 
 /// TransactionManager is responsible for managing object dependencies of pending transactions,
 /// and publishing a stream of certified transactions (certificates) ready to execute.
@@ -55,7 +59,7 @@ struct PendingCertificate {
 }
 
 /// LockQueue is a queue of transactions waiting or holding a lock on an object.
-#[derive(Default)]
+#[derive(Debug, Default)]
 struct LockQueue {
     // Transactions waiting for read-only lock.
     readonly_waiters: BTreeSet<TransactionDigest>,
@@ -71,8 +75,8 @@ struct LockQueue {
 }
 
 impl LockQueue {
-    fn has_no_readonly(&self) -> bool {
-        self.readonly_waiters.is_empty() && self.readonly_holders.is_empty()
+    fn has_readonly(&self) -> bool {
+        !(self.readonly_waiters.is_empty() && self.readonly_holders.is_empty())
     }
 
     fn is_empty(&self) -> bool {
@@ -108,8 +112,86 @@ impl Inner {
     fn new(epoch: EpochId) -> Inner {
         Inner {
             epoch,
-            ..Default::default()
+            lock_waiters: HashMap::with_capacity(MIN_HASHMAP_CAPACITY),
+            input_objects: HashMap::with_capacity(MIN_HASHMAP_CAPACITY),
+            pending_certificates: HashMap::with_capacity(MIN_HASHMAP_CAPACITY),
+            executing_certificates: HashMap::with_capacity(MIN_HASHMAP_CAPACITY),
         }
+    }
+
+    // Checks if there is any transaction waiting on the lock of input_key, and try to
+    // update transactions that can acquire the lock.
+    // Must ensure input_key is available in storage before calling this function.
+    fn try_acquire_lock(&mut self, input_key: InputKey) -> Vec<PendingCertificate> {
+        let mut ready_certificates = Vec::new();
+
+        let Some(lock_queue) = self.lock_waiters.get_mut(&input_key) else {
+            // No transaction is waiting on the object yet.
+            return ready_certificates;
+        };
+
+        // Waiters can acquire lock in either readonly or default mode.
+        let mut digests = BTreeSet::new();
+        if !lock_queue.readonly_waiters.is_empty() {
+            std::mem::swap(&mut digests, &mut lock_queue.readonly_waiters);
+            lock_queue.readonly_holders.extend(digests.iter().cloned());
+        } else if lock_queue.readonly_holders.is_empty() {
+            // Only try to acquire default lock if there is no readonly lock waiter / holder.
+            std::mem::swap(&mut digests, &mut lock_queue.default_waiters);
+        };
+        if lock_queue.is_empty() {
+            self.lock_waiters.remove(&input_key);
+        }
+        if digests.is_empty() {
+            return ready_certificates;
+        }
+
+        let input_count = self.input_objects.get_mut(&input_key.0).unwrap_or_else(|| {
+            panic!(
+                "# of transactions waiting on object {:?} cannot be 0",
+                input_key.0
+            )
+        });
+        *input_count -= digests.len();
+        if *input_count == 0 {
+            self.input_objects.remove(&input_key.0);
+        }
+
+        for digest in digests {
+            // Pending certificate must exist.
+            let pending_cert = self.pending_certificates.get_mut(&digest).unwrap();
+            let lock_mode = pending_cert.acquiring_locks.remove(&input_key).unwrap();
+            assert!(pending_cert
+                .acquired_locks
+                .insert(input_key, lock_mode)
+                .is_none());
+            // When a certificate has all locks acquired, it is ready to execute.
+            if pending_cert.acquiring_locks.is_empty() {
+                let pending_cert = self.pending_certificates.remove(&digest).unwrap();
+                ready_certificates.push(pending_cert);
+            } else {
+                // TODO: we should start logging this at a higher level after some period of
+                // time has elapsed.
+                trace!(tx_digest = ?digest,acquiring = ?pending_cert.acquiring_locks, "Certificate acquiring locks");
+            }
+        }
+
+        ready_certificates
+    }
+
+    fn maybe_reserve_capacity(&mut self) {
+        self.lock_waiters.maybe_reserve_capacity();
+        self.input_objects.maybe_reserve_capacity();
+        self.pending_certificates.maybe_reserve_capacity();
+        self.executing_certificates.maybe_reserve_capacity();
+    }
+
+    /// After reaching 1/4 load in hashmaps, decrease capacity to increase load to 1/2.
+    fn maybe_shrink_capacity(&mut self) {
+        self.lock_waiters.maybe_shrink_capacity();
+        self.input_objects.maybe_shrink_capacity();
+        self.pending_certificates.maybe_shrink_capacity();
+        self.executing_certificates.maybe_shrink_capacity();
     }
 }
 
@@ -262,10 +344,10 @@ impl TransactionManager {
             for (key, lock_mode) in acquiring_locks {
                 // The transaction needs to wait to acquire locks in two cases:
                 let mut acquire = false;
-                let lock_queue = inner.lock_waiters.entry(key).or_default();
                 if !object_availability[&key] {
                     // 1. The input object is not yet available.
                     acquire = true;
+                    let lock_queue = inner.lock_waiters.entry(key).or_default();
                     match lock_mode {
                         LockMode::Default => {
                             // If the transaction is acquiring the object in Default mode, it must
@@ -281,14 +363,19 @@ impl TransactionManager {
                         LockMode::Default => {
                             // 2. The input object is currently locked in ReadOnly mode, and this
                             // transaction is acquiring it in Default mode.
-                            if !lock_queue.has_no_readonly() {
-                                acquire = true;
-                                assert!(lock_queue.default_waiters.insert(digest));
+                            if let Some(lock_queue) = inner.lock_waiters.get_mut(&key) {
+                                // If there are any ReadOnly locks, the transaction must wait for
+                                // them to be released.
+                                if lock_queue.has_readonly() {
+                                    acquire = true;
+                                    assert!(lock_queue.default_waiters.insert(digest));
+                                }
                             }
                         }
                         LockMode::ReadOnly => {
                             // Acquired readonly locks need to be tracked until the transaction has
                             // finished execution.
+                            let lock_queue = inner.lock_waiters.entry(key).or_default();
                             assert!(lock_queue.readonly_holders.insert(digest));
                         }
                     }
@@ -335,6 +422,8 @@ impl TransactionManager {
             .transaction_manager_num_pending_certificates
             .set(inner.pending_certificates.len() as i64);
 
+        inner.maybe_reserve_capacity();
+
         // Unnecessary to keep holding the lock while re-checking input object existence.
         drop(inner);
 
@@ -377,6 +466,8 @@ impl TransactionManager {
     }
 
     /// Notifies TransactionManager that the given objects are available in the objects table.
+    /// Useful when transactions associated with the objects are not known, e.g. after checking
+    /// object availability from storage, or for testing.
     pub(crate) fn objects_available(
         &self,
         input_keys: Vec<InputKey>,
@@ -384,6 +475,16 @@ impl TransactionManager {
     ) {
         let mut inner = self.inner.write();
         let _scope = monitored_scope("TransactionManager::objects_available::wlock");
+        self.objects_available_locked(&mut inner, epoch_store, input_keys);
+        inner.maybe_shrink_capacity();
+    }
+
+    fn objects_available_locked(
+        &self,
+        inner: &mut Inner,
+        epoch_store: &AuthorityPerEpochStore,
+        input_keys: Vec<InputKey>,
+    ) {
         if inner.epoch != epoch_store.epoch() {
             warn!(
                 "Ignoring objects committed from wrong epoch. Expected={} Actual={} \
@@ -396,25 +497,9 @@ impl TransactionManager {
         }
 
         for input_key in input_keys {
-            let Some(lock_queue) = inner.lock_waiters.get_mut(&input_key) else {
-                // No transaction is waiting on the object yet.
-                continue;
-            };
-
-            // Waiters can acquire lock in eitehr readonly or default mode.
-            let mut digests = BTreeSet::new();
-            if !lock_queue.readonly_waiters.is_empty() {
-                std::mem::swap(&mut digests, &mut lock_queue.readonly_waiters);
-                lock_queue.readonly_holders.extend(digests.iter().cloned());
-            } else if lock_queue.readonly_holders.is_empty() {
-                // Only acquire default lock if there is no readonly lock waiter / holder.
-                std::mem::swap(&mut digests, &mut lock_queue.default_waiters);
-            };
-            if lock_queue.is_empty() {
-                inner.lock_waiters.remove(&input_key);
+            for ready_cert in inner.try_acquire_lock(input_key) {
+                self.certificate_ready(inner, ready_cert);
             }
-
-            self.lock_acquired(&mut inner, digests, input_key);
         }
 
         self.metrics
@@ -428,43 +513,50 @@ impl TransactionManager {
             .set(inner.executing_certificates.len() as i64);
     }
 
-    /// Notifies TransactionManager about a certificate that has been executed.
-    pub(crate) fn certificate_executed(
+    /// Notifies TransactionManager about a transaction that has been committed.
+    pub(crate) fn notify_commit(
         &self,
         digest: &TransactionDigest,
+        output_object_keys: Vec<InputKey>,
         epoch_store: &AuthorityPerEpochStore,
     ) {
         {
             let mut inner = self.inner.write();
-            let _scope = monitored_scope("TransactionManager::certificate_executed::wlock");
+            let _scope = monitored_scope("TransactionManager::notify_commit::wlock");
+
             if inner.epoch != epoch_store.epoch() {
                 warn!("Ignoring committed certificate from wrong epoch. Expected={} Actual={} CertificateDigest={:?}", inner.epoch, epoch_store.epoch(), digest);
                 return;
             }
             let Some(acquired_locks) = inner.executing_certificates.remove(digest) else {
-                panic!("Certificate {:?} not found in executing certificates", digest);
+                trace!("{:?} not found in executing certificates, likely because it is a system transaction", digest);
+                return;
             };
-            for (key, lock_mode) in &acquired_locks {
-                if lock_mode == &LockMode::Default {
+            for (key, lock_mode) in acquired_locks {
+                if lock_mode == LockMode::Default {
                     // Holders of default locks are not tracked.
                     continue;
                 }
-                assert_eq!(lock_mode, &LockMode::ReadOnly);
-                let lock_queue = inner.lock_waiters.get_mut(key).unwrap();
+                assert_eq!(lock_mode, LockMode::ReadOnly);
+                let lock_queue = inner.lock_waiters.get_mut(&key).unwrap();
                 assert!(
                     lock_queue.readonly_holders.remove(digest),
                     "Certificate {:?} not found among readonly lock holders",
                     digest
                 );
-                if lock_queue.has_no_readonly() {
-                    let lock_queue = inner.lock_waiters.remove(key).unwrap();
-                    self.lock_acquired(&mut inner, lock_queue.default_waiters, *key);
+                for ready_cert in inner.try_acquire_lock(key) {
+                    self.certificate_ready(&mut inner, ready_cert);
                 }
             }
             self.metrics
                 .transaction_manager_num_executing_certificates
                 .set(inner.executing_certificates.len() as i64);
+
+            self.objects_available_locked(&mut inner, epoch_store, output_object_keys);
+
+            inner.maybe_shrink_capacity();
         }
+
         let _ = epoch_store.remove_pending_execution(digest);
     }
 
@@ -491,43 +583,6 @@ impl TransactionManager {
         self.metrics.execution_driver_dispatch_queue.inc();
     }
 
-    // Updates transactions to acquire lock with input_key.
-    fn lock_acquired(
-        &self,
-        inner: &mut Inner,
-        digests: BTreeSet<TransactionDigest>,
-        input_key: InputKey,
-    ) {
-        if digests.is_empty() {
-            return;
-        }
-
-        let input_count = inner.input_objects.get_mut(&input_key.0).unwrap();
-        *input_count -= digests.len();
-        if *input_count == 0 {
-            inner.input_objects.remove(&input_key.0);
-        }
-
-        for digest in digests {
-            // Pending certificate must exist.
-            let pending_cert = inner.pending_certificates.get_mut(&digest).unwrap();
-            let lock_mode = pending_cert.acquiring_locks.remove(&input_key).unwrap();
-            assert!(pending_cert
-                .acquired_locks
-                .insert(input_key, lock_mode)
-                .is_none());
-            // When a certificate has all locks acquired, it is ready to execute.
-            if pending_cert.acquiring_locks.is_empty() {
-                let pending_cert = inner.pending_certificates.remove(&digest).unwrap();
-                self.certificate_ready(inner, pending_cert);
-            } else {
-                // TODO: we should start logging this at a higher level after some period of
-                // time has elapsed.
-                debug!(tx_digest = ?digest,acquiring = ?pending_cert.acquiring_locks, "Certificate acquiring locks");
-            }
-        }
-    }
-
     /// Gets the missing input object keys for the given transaction.
     pub(crate) fn get_missing_input(&self, digest: &TransactionDigest) -> Option<Vec<InputKey>> {
         let inner = self.inner.read();
@@ -550,8 +605,8 @@ impl TransactionManager {
             .collect()
     }
 
-    // Returns the number of certificates pending execution or being executed by the execution driver right now.
-    pub(crate) fn execution_queue_len(&self) -> usize {
+    // Returns the number of transactions pending or being executed right now.
+    pub(crate) fn inflight_queue_len(&self) -> usize {
         let inner = self.inner.read();
         inner.pending_certificates.len() + inner.executing_certificates.len()
     }
@@ -561,5 +616,55 @@ impl TransactionManager {
     pub(crate) fn reconfigure(&self, new_epoch: EpochId) {
         let mut inner = self.inner.write();
         *inner = Inner::new(new_epoch);
+    }
+
+    // Verify TM has no pending item for tests.
+    #[cfg(test)]
+    fn check_empty_for_testing(&self) {
+        let inner = self.inner.read();
+        assert!(
+            inner.lock_waiters.is_empty(),
+            "Lock waiters: {:?}",
+            inner.lock_waiters
+        );
+        assert!(
+            inner.input_objects.is_empty(),
+            "Input objects: {:?}",
+            inner.input_objects
+        );
+        assert!(
+            inner.pending_certificates.is_empty(),
+            "Pending certificates: {:?}",
+            inner.pending_certificates
+        );
+        assert!(
+            inner.executing_certificates.is_empty(),
+            "Executing certificates: {:?}",
+            inner.executing_certificates
+        );
+    }
+}
+
+trait ResizableHashMap<K, V> {
+    fn maybe_reserve_capacity(&mut self);
+    fn maybe_shrink_capacity(&mut self);
+}
+
+impl<K, V> ResizableHashMap<K, V> for HashMap<K, V>
+where
+    K: std::cmp::Eq + std::hash::Hash,
+{
+    /// After reaching 3/4 load in hashmaps, increase capacity to decrease load to 1/2.
+    fn maybe_reserve_capacity(&mut self) {
+        if self.len() > self.capacity() * 3 / 4 {
+            self.reserve(self.capacity() / 2);
+        }
+    }
+
+    /// After reaching 1/4 load in hashmaps, decrease capacity to increase load to 1/2.
+    fn maybe_shrink_capacity(&mut self) {
+        if self.len() > MIN_HASHMAP_CAPACITY && self.len() < self.capacity() / 4 {
+            self.shrink_to(max(self.capacity() / 2, MIN_HASHMAP_CAPACITY))
+        }
     }
 }

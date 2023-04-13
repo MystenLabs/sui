@@ -103,15 +103,10 @@ pub async fn execution_process(
                     break;
                 }
             }
-
-            // Remove the certificate that finished execution from the pending_certificates table.
-            authority.certificate_executed(&digest, &epoch_store);
-
             authority
                 .metrics
                 .execution_driver_executed_transactions
                 .inc();
-
         }.instrument(error_span!("execution_driver", tx_digest = ?digest)));
     }
 }
