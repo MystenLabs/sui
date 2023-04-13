@@ -417,7 +417,7 @@ pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clo
     builder.register_module(MoveUtilsApi::new(http_client))?;
     let default_socket_addr = SocketAddr::new(
         // unwrap() here is safe b/c the address is a static config.
-        IpAddr::V4(Ipv4Addr::from_str(config.rpc_server_url.as_str()).unwrap()),
+        config.rpc_server_url.as_str().parse().unwrap(),
         config.rpc_server_port,
     );
     Ok(builder.start(default_socket_addr).await?)
