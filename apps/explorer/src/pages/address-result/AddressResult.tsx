@@ -7,7 +7,7 @@ import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 
 import OwnedCoins from '~/components/OwnedCoins/OwnedCoins';
 import OwnedObjects from '~/components/OwnedObjectsV2/OwnedObjects';
-import TransactionBlocks from '~/components/TransactionBlocks/TransactionBlocks';
+import TransactionBlocksForAddress from '~/components/TransactionBlocksForAddress/TransactionBlocksForAddress';
 import { Heading } from '~/ui/Heading';
 import { PageHeader } from '~/ui/PageHeader';
 
@@ -33,7 +33,7 @@ function AddressResult() {
 
             <div>
                 <ErrorBoundary>
-                    <TransactionBlocks address={addressID!} />
+                    <TransactionBlocksForAddress address={addressID!} />
                 </ErrorBoundary>
             </div>
         </div>
