@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useRpcClient, convertNumberToDate } from '@mysten/core';
+import { useRpcClient } from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 
@@ -62,9 +62,19 @@ export default function CheckpointDetail() {
                                         color="steel-darker"
                                     >
                                         {data.timestampMs
-                                            ? convertNumberToDate(
-                                                  Number(data.timestampMs ?? 0)
-                                              )
+                                            ? new Date(
+                                                  Number(data.timestampMs)
+                                              ).toLocaleString(undefined, {
+                                                  month: 'short',
+                                                  day: 'numeric',
+                                                  year: 'numeric',
+                                                  hour: 'numeric',
+                                                  minute: '2-digit',
+                                                  second: '2-digit',
+                                                  hour12: false,
+                                                  timeZone: 'UTC',
+                                                  timeZoneName: 'short',
+                                              })
                                             : '--'}
                                     </Text>
                                 </DescriptionItem>

@@ -27,7 +27,7 @@ export function EpochProgress({
 
     return (
         <Card bg={inProgress ? 'highlight' : 'default'} spacing="lg">
-            <div className="flex flex-col space-y-16">
+            <div className="flex min-w-[136px] flex-col space-y-16">
                 <div className="space-y-4">
                     <Heading color="steel-darker" variant="heading3/semibold">
                         {inProgress
