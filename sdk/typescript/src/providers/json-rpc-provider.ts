@@ -80,18 +80,6 @@ export interface OrderArguments {
  */
 export type RpcProviderOptions = {
   /**
-   * Default to `true`. If set to `false`, the rpc
-   * client will throw an error if the responses from the RPC server do not
-   * conform to the schema defined in the TypeScript SDK. If set to `true`, the
-   * rpc client will log the mismatch as a warning message instead of throwing an
-   * error. The mismatches often happen when the SDK is in a different version than
-   * the RPC server. Skipping the validation can maximize
-   * the version compatibility of the SDK, as not all the schema
-   * changes in the RPC response will affect the caller, but the caller needs to
-   * understand that the data may not match the TypeSrcript definitions.
-   */
-  skipDataValidation?: boolean;
-  /**
    * Configuration options for the websocket connection
    * TODO: Move to connection.
    */
@@ -109,7 +97,6 @@ export type RpcProviderOptions = {
 };
 
 const DEFAULT_OPTIONS: RpcProviderOptions = {
-  skipDataValidation: true,
   socketOptions: DEFAULT_CLIENT_OPTIONS,
   versionCacheTimeoutInSeconds: 600,
 };
@@ -140,11 +127,7 @@ export class JsonRpcProvider {
 
     this.wsClient =
       opts.websocketClient ??
-      new WebsocketClient(
-        this.connection.websocket,
-        opts.skipDataValidation!,
-        opts.socketOptions,
-      );
+      new WebsocketClient(this.connection.websocket, opts.socketOptions);
   }
 
   async getRpcApiVersion(): Promise<RpcApiVersion | undefined> {
@@ -156,12 +139,7 @@ export class JsonRpcProvider {
       return this.rpcApiVersion;
     }
     try {
-      const resp = await this.client.requestWithType(
-        'rpc.discover',
-        [],
-        any(),
-        this.options.skipDataValidation,
-      );
+      const resp = await this.client.requestWithType('rpc.discover', [], any());
       this.rpcApiVersion = parseVersionFromString(resp.info.version);
       this.cacheExpiry =
         // Date.now() is in milliseconds, but the timeout is in seconds
@@ -200,7 +178,6 @@ export class JsonRpcProvider {
       'suix_getCoins',
       [input.owner, input.coinType, input.cursor, input.limit],
       PaginatedCoins,
-      this.options.skipDataValidation,
     );
   }
 
@@ -220,7 +197,6 @@ export class JsonRpcProvider {
       'suix_getAllCoins',
       [input.owner, input.cursor, input.limit],
       PaginatedCoins,
-      this.options.skipDataValidation,
     );
   }
 
@@ -239,7 +215,6 @@ export class JsonRpcProvider {
       'suix_getBalance',
       [input.owner, input.coinType],
       CoinBalance,
-      this.options.skipDataValidation,
     );
   }
 
@@ -254,7 +229,6 @@ export class JsonRpcProvider {
       'suix_getAllBalances',
       [input.owner],
       array(CoinBalance),
-      this.options.skipDataValidation,
     );
   }
 
@@ -266,7 +240,6 @@ export class JsonRpcProvider {
       'suix_getCoinMetadata',
       [input.coinType],
       CoinMetadataStruct,
-      this.options.skipDataValidation,
     );
   }
 
@@ -278,7 +251,6 @@ export class JsonRpcProvider {
       'suix_getTotalSupply',
       [input.coinType],
       CoinSupply,
-      this.options.skipDataValidation,
     );
   }
 
@@ -312,7 +284,6 @@ export class JsonRpcProvider {
       'sui_getMoveFunctionArgTypes',
       [input.package, input.module, input.function],
       SuiMoveFunctionArgTypes,
-      this.options.skipDataValidation,
     );
   }
 
@@ -327,7 +298,6 @@ export class JsonRpcProvider {
       'sui_getNormalizedMoveModulesByPackage',
       [input.package],
       SuiMoveNormalizedModules,
-      this.options.skipDataValidation,
     );
   }
 
@@ -342,7 +312,6 @@ export class JsonRpcProvider {
       'sui_getNormalizedMoveModule',
       [input.package, input.module],
       SuiMoveNormalizedModule,
-      this.options.skipDataValidation,
     );
   }
 
@@ -358,7 +327,6 @@ export class JsonRpcProvider {
       'sui_getNormalizedMoveFunction',
       [input.package, input.module, input.function],
       SuiMoveNormalizedFunction,
-      this.options.skipDataValidation,
     );
   }
 
@@ -374,7 +342,6 @@ export class JsonRpcProvider {
       'sui_getNormalizedMoveStruct',
       [input.package, input.module, input.struct],
       SuiMoveNormalizedStruct,
-      this.options.skipDataValidation,
     );
   }
 
@@ -403,7 +370,6 @@ export class JsonRpcProvider {
         input.limit,
       ],
       PaginatedObjectsResponse,
-      this.options.skipDataValidation,
     );
   }
 
@@ -421,7 +387,6 @@ export class JsonRpcProvider {
       'sui_getObject',
       [input.id, input.options],
       SuiObjectResponse,
-      this.options.skipDataValidation,
     );
   }
 
@@ -446,7 +411,6 @@ export class JsonRpcProvider {
       'sui_multiGetObjects',
       [input.ids, input.options],
       array(SuiObjectResponse),
-      this.options.skipDataValidation,
     );
   }
 
@@ -470,7 +434,6 @@ export class JsonRpcProvider {
         (input.order || 'descending') === 'descending',
       ],
       PaginatedTransactionResponse,
-      this.options.skipDataValidation,
     );
   }
 
@@ -485,7 +448,6 @@ export class JsonRpcProvider {
       'sui_getTransactionBlock',
       [input.digest, input.options],
       SuiTransactionBlockResponse,
-      this.options.skipDataValidation,
     );
   }
 
@@ -508,7 +470,6 @@ export class JsonRpcProvider {
       'sui_multiGetTransactionBlocks',
       [input.digests, input.options],
       array(SuiTransactionBlockResponse),
-      this.options.skipDataValidation,
     );
   }
 
@@ -529,7 +490,6 @@ export class JsonRpcProvider {
         input.requestType,
       ],
       SuiTransactionBlockResponse,
-      this.options.skipDataValidation,
     );
   }
 
@@ -542,7 +502,6 @@ export class JsonRpcProvider {
       'sui_getTotalTransactionBlocks',
       [],
       string(),
-      this.options.skipDataValidation,
     );
     return BigInt(resp);
   }
@@ -555,7 +514,6 @@ export class JsonRpcProvider {
       'suix_getReferenceGasPrice',
       [],
       string(),
-      this.options.skipDataValidation,
     );
     return BigInt(resp);
   }
@@ -571,7 +529,6 @@ export class JsonRpcProvider {
       'suix_getStakes',
       [input.owner],
       array(DelegatedStake),
-      this.options.skipDataValidation,
     );
   }
 
@@ -590,7 +547,6 @@ export class JsonRpcProvider {
       'suix_getStakesByIds',
       [input.stakedSuiIds],
       array(DelegatedStake),
-      this.options.skipDataValidation,
     );
   }
 
@@ -602,7 +558,6 @@ export class JsonRpcProvider {
       'suix_getLatestSuiSystemState',
       [],
       SuiSystemStateSummary,
-      this.options.skipDataValidation,
     );
   }
 
@@ -625,7 +580,6 @@ export class JsonRpcProvider {
         (input.order || 'descending') === 'descending',
       ],
       PaginatedEvents,
-      this.options.skipDataValidation,
     );
   }
 
@@ -685,7 +639,6 @@ export class JsonRpcProvider {
       'sui_devInspectTransactionBlock',
       [input.sender, devInspectTxBytes, input.gasPrice, input.epoch],
       DevInspectResults,
-      this.options.skipDataValidation,
     );
   }
 
@@ -703,7 +656,6 @@ export class JsonRpcProvider {
           : toB64(input.transactionBlock),
       ],
       DryRunTransactionBlockResponse,
-      this.options.skipDataValidation,
     );
   }
 
@@ -726,7 +678,6 @@ export class JsonRpcProvider {
       'suix_getDynamicFields',
       [input.parentId, input.cursor, input.limit],
       DynamicFieldPage,
-      this.options.skipDataValidation,
     );
   }
 
@@ -743,7 +694,6 @@ export class JsonRpcProvider {
       'suix_getDynamicFieldObject',
       [input.parentId, input.name],
       SuiObjectResponse,
-      this.options.skipDataValidation,
     );
   }
 
@@ -755,7 +705,6 @@ export class JsonRpcProvider {
       'sui_getLatestCheckpointSequenceNumber',
       [],
       string(),
-      this.options.skipDataValidation,
     );
     return String(resp);
   }
@@ -771,7 +720,6 @@ export class JsonRpcProvider {
       'sui_getCheckpoint',
       [input.id],
       Checkpoint,
-      this.options.skipDataValidation,
     );
   }
 
@@ -793,7 +741,6 @@ export class JsonRpcProvider {
       'sui_getCheckpoints',
       [input.cursor, input.limit, input.descendingOrder],
       CheckpointPage,
-      this.options.skipDataValidation,
     );
     return resp;
   }
@@ -817,7 +764,6 @@ export class JsonRpcProvider {
       'suix_getNetworkMetrics',
       [],
       NetworkMetrics,
-      this.options.skipDataValidation,
     );
   }
   /**
@@ -832,7 +778,6 @@ export class JsonRpcProvider {
       'suix_getEpochs',
       [input?.cursor, input?.limit, input?.descendingOrder],
       EpochPage,
-      this.options.skipDataValidation,
     );
   }
   /**
@@ -843,7 +788,6 @@ export class JsonRpcProvider {
       'suix_getCurrentEpoch',
       [],
       EpochInfo,
-      this.options.skipDataValidation,
     );
   }
 }
