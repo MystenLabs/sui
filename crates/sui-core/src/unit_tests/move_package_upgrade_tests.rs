@@ -23,6 +23,7 @@ use sui_types::{
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::PathBuf,
+    str::FromStr,
     sync::Arc,
 };
 
@@ -781,7 +782,6 @@ async fn test_interleaved_upgrades() {
         let mut builder = ProgrammableTransactionBuilder::new();
         let current_package_id = depender_package.0;
         // Now recompile the depending package with the upgraded dependency
-        // Currently doesn't work -- need to wait for linkage table to be added to the loader.
         let (digest, modules, dep_ids) = build_upgrade_test_modules_with_dep_addr(
             "dep_on_upgrading_package",
             [("base_addr", runner.package.0)],
@@ -1119,6 +1119,21 @@ async fn test_upgraded_types_in_one_txn() {
         .await;
 
     assert!(effects.status.is_ok(), "{:#?}", effects.status);
+
+    // verify that the types of events match
+    let e1_type = StructTag::from_str(&format!("{package_v2}::base::BModEvent")).unwrap();
+    let e2_type = StructTag::from_str(&format!("{package_v3}::base::CModEvent")).unwrap();
+
+    let event_digest = effects.events_digest.unwrap();
+    let mut events = runner
+        .authority_state
+        .get_transaction_events(&event_digest)
+        .unwrap()
+        .data;
+    events.sort_by(|a, b| a.type_.name.as_str().cmp(b.type_.name.as_str()));
+    assert!(events.len() == 2);
+    assert_eq!(events[0].type_, e1_type);
+    assert_eq!(events[1].type_, e2_type);
 }
 
 #[tokio::test]
@@ -1147,4 +1162,108 @@ async fn test_different_versions_across_calls() {
         .await;
 
     assert!(effects.status.is_ok(), "{:#?}", effects.status);
+}
+
+#[tokio::test]
+async fn test_conflicting_versions_across_calls() {
+    // publishes base package at version 1
+    let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
+
+    // publish a dependent package at version 1 that depends on the base package at version 1
+    let (_, module_bytes, dep_ids) = build_upgrade_test_modules_with_dep_addr(
+        "dep_on_upgrading_package_upgradeable",
+        [
+            ("base_addr", runner.package.0),
+            ("dep_on_upgrading_package", ObjectID::ZERO),
+        ],
+        [("package_upgrade_base", runner.package.0)],
+    );
+    let (depender_package, depender_cap) = runner.publish(module_bytes, dep_ids).await;
+
+    // publish base package at version 2
+    let pt1 = build_upgrade_txn(
+        runner.package.0,
+        "stage1_basic_compatibility_valid",
+        runner.upgrade_cap,
+    );
+
+    let TransactionEffects::V1(effects) = runner.run(pt1).await;
+    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+
+    let base_v2_package = effects
+        .created
+        .iter()
+        .find(|(_, owner)| matches!(owner, Owner::Immutable))
+        .unwrap()
+        .0;
+
+    // publish a dependent package at version 2 that depends on the base package at version 2
+    let pt2 = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        let current_package_id = depender_package.0;
+        // Now recompile the depending package with the upgraded dependency
+        let (digest, modules, dep_ids) = build_upgrade_test_modules_with_dep_addr(
+            "dep_on_upgrading_package_upgradeable",
+            [
+                ("base_addr", runner.package.0),
+                ("dep_on_upgrading_package", ObjectID::ZERO),
+            ],
+            [("package_upgrade_base", base_v2_package.0)],
+        );
+
+        // We take as input the upgrade cap
+        builder
+            .obj(ObjectArg::ImmOrOwnedObject(depender_cap))
+            .unwrap();
+
+        // Create the upgrade ticket
+        let upgrade_arg = builder.pure(UpgradePolicy::COMPATIBLE).unwrap();
+        let digest_arg = builder.pure(digest).unwrap();
+        let upgrade_ticket = move_call! {
+            builder,
+            (SUI_FRAMEWORK_OBJECT_ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
+        };
+        let upgrade_receipt = builder.upgrade(current_package_id, upgrade_ticket, dep_ids, modules);
+        move_call! {
+            builder,
+            (SUI_FRAMEWORK_OBJECT_ID)::package::commit_upgrade(Argument::Input(0), upgrade_receipt)
+        };
+
+        builder.finish()
+    };
+
+    let TransactionEffects::V1(effects) = runner.run(pt2).await;
+    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+
+    let dependent_v2_package = effects
+        .created
+        .iter()
+        .find(|(_, owner)| matches!(owner, Owner::Immutable))
+        .unwrap()
+        .0;
+
+    // call the same function twice within the same block but from two different module versions
+    // that differ only by having different dependencies
+    let TransactionEffects::V1(effects) = runner
+        .run({
+            let mut builder = ProgrammableTransactionBuilder::new();
+            // call from upgraded package - should succeed
+            move_call! { builder, (dependent_v2_package.0)::my_module::call_return_0() };
+            // call from original package - should abort (check later that the second command
+            // aborts)
+            move_call! { builder, (depender_package.0)::my_module::call_return_0() };
+            builder.finish()
+        })
+        .await;
+
+    let call_error = effects.status.unwrap_err();
+
+    // verify that execution aborts
+    match call_error.0 {
+        ExecutionFailureStatus::MoveAbort(_, 42) => { /* nop */ }
+        err => panic!("Unexpected error: {:#?}", err),
+    };
+
+    // verify that execution aborts in the second (counting from 0) command
+    assert_eq!(call_error.1, Some(1));
 }
