@@ -98,7 +98,7 @@ use self::metrics::Metrics;
 #[derive(Clone, Debug)]
 pub struct Handle {
     sender: mpsc::Sender<StateSyncMessage>,
-    checkpoint_event_sender: broadcast::Sender<VerifiedCheckpoint>,
+    checkpoint_event_sender: broadcast::Sender<(VerifiedCheckpoint, Option<FullCheckpointContents>)>,
 }
 
 impl Handle {
@@ -118,7 +118,7 @@ impl Handle {
     }
 
     /// Subscribe to the stream of checkpoints that have been fully synchronized and downloaded.
-    pub fn subscribe_to_synced_checkpoints(&self) -> broadcast::Receiver<VerifiedCheckpoint> {
+    pub fn subscribe_to_synced_checkpoints(&self) -> broadcast::Receiver<(VerifiedCheckpoint, Option<FullCheckpointContents>)> {
         self.checkpoint_event_sender.subscribe()
     }
 }
@@ -263,7 +263,7 @@ struct StateSyncEventLoop<S> {
 
     store: S,
     peer_heights: Arc<RwLock<PeerHeights>>,
-    checkpoint_event_sender: broadcast::Sender<VerifiedCheckpoint>,
+    checkpoint_event_sender: broadcast::Sender<(VerifiedCheckpoint, Option<FullCheckpointContents>)>,
     network: anemo::Network,
     metrics: Metrics,
 }
@@ -413,7 +413,7 @@ where
                 .set_highest_synced_checkpoint(*checkpoint.sequence_number());
 
             // We don't care if no one is listening as this is a broadcast channel
-            let _ = self.checkpoint_event_sender.send(checkpoint.clone());
+            let _ = self.checkpoint_event_sender.send((checkpoint.clone(), None));
 
             self.spawn_notify_peers_of_checkpoint(checkpoint);
         } else {
@@ -446,7 +446,7 @@ where
                     .set_highest_synced_checkpoint(*checkpoint.sequence_number());
 
                 // We don't care if no one is listening as this is a broadcast channel
-                let _ = self.checkpoint_event_sender.send(checkpoint.clone());
+                let _ = self.checkpoint_event_sender.send((checkpoint.clone(), None));
             }
         }
     }
@@ -975,7 +975,7 @@ async fn sync_checkpoint_contents<S>(
     store: S,
     peer_heights: Arc<RwLock<PeerHeights>>,
     sender: mpsc::WeakSender<StateSyncMessage>,
-    checkpoint_event_sender: broadcast::Sender<VerifiedCheckpoint>,
+    checkpoint_event_sender: broadcast::Sender<(VerifiedCheckpoint, Option<FullCheckpointContents>)>,
     metrics: Metrics,
     checkpoint_content_download_concurrency: usize,
     timeout: Duration,
@@ -1013,7 +1013,7 @@ async fn sync_checkpoint_contents<S>(
 
     while let Some(maybe_checkpoint) = checkpoint_contents_stream.next().await {
         match maybe_checkpoint {
-            Ok((checkpoint, num_txns)) => {
+            Ok((checkpoint, contents, num_txns)) => {
                 // if this fails, there is a bug in checkpoint construction (or the chain is
                 // corrupted)
                 assert_eq!(
@@ -1026,7 +1026,7 @@ async fn sync_checkpoint_contents<S>(
                     .expect("store operation should not fail");
                 metrics.set_highest_synced_checkpoint(*checkpoint.sequence_number());
                 // We don't care if no one is listening as this is a broadcast channel
-                let _ = checkpoint_event_sender.send(checkpoint.clone());
+                let _ = checkpoint_event_sender.send((checkpoint.clone(), Some(contents)));
                 highest_synced = checkpoint;
             }
             Err(err) => {
@@ -1049,7 +1049,7 @@ async fn sync_one_checkpoint_contents<S>(
     peer_heights: Arc<RwLock<PeerHeights>>,
     timeout: Duration,
     checkpoint: VerifiedCheckpoint,
-) -> Result<(VerifiedCheckpoint, u64)>
+) -> Result<(VerifiedCheckpoint, FullCheckpointContents, u64)>
 where
     S: WriteStore + Clone,
     <S as ReadStore>::Error: std::error::Error,
@@ -1074,7 +1074,7 @@ where
 
     let num_txns = contents.size() as u64;
 
-    Ok((checkpoint, num_txns))
+    Ok((checkpoint, contents, num_txns))
 }
 
 async fn get_full_checkpoint_contents<S>(

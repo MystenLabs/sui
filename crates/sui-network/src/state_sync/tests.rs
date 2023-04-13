@@ -312,11 +312,11 @@ async fn sync_with_checkpoints_being_inserted() {
 
     timeout(Duration::from_secs(1), async {
         assert_eq!(
-            subscriber_1.recv().await.unwrap().data(),
+            subscriber_1.recv().await.unwrap().0.data(),
             ordered_checkpoints[1].data(),
         );
         assert_eq!(
-            subscriber_2.recv().await.unwrap().data(),
+            subscriber_2.recv().await.unwrap().0.data(),
             ordered_checkpoints[1].data()
         );
     })
@@ -330,8 +330,8 @@ async fn sync_with_checkpoints_being_inserted() {
 
     timeout(Duration::from_secs(1), async {
         for checkpoint in &ordered_checkpoints[2..] {
-            assert_eq!(subscriber_1.recv().await.unwrap().data(), checkpoint.data());
-            assert_eq!(subscriber_2.recv().await.unwrap().data(), checkpoint.data());
+            assert_eq!(subscriber_1.recv().await.unwrap().0.data(), checkpoint.data());
+            assert_eq!(subscriber_2.recv().await.unwrap().0.data(), checkpoint.data());
         }
     })
     .await

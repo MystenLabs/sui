@@ -422,21 +422,26 @@ impl CheckpointExecutor {
         logger.count = Some(execution_digests.len());
         let effects_digests = execution_digests.iter().map(|digest| digest.effects);
 
-        let digest_to_effects: HashMap<TransactionDigest, TransactionEffects> = self
-            .authority_store
-            .perpetual_tables
-            .effects
-            .multi_get(effects_digests)?
-            .into_iter()
-            .map(|fx| {
-                if fx.is_none() {
-                    panic!("Transaction effects do not exist in effects table");
-                }
-                let fx = fx.unwrap();
-                (*fx.transaction_digest(), fx)
-            })
-            .collect();
+        let digest_to_effects: HashMap<TransactionDigest, TransactionEffects> = {
+            let mut logger = ScopeLogger::new("digest_to_effects");
+            logger.count = Some(execution_digests.len());
+            self.authority_store
+                .perpetual_tables
+                .effects
+                .multi_get(effects_digests)?
+                .into_iter()
+                .map(|fx| {
+                    if fx.is_none() {
+                        panic!("Transaction effects do not exist in effects table");
+                    }
+                    let fx = fx.unwrap();
+                    (*fx.transaction_digest(), fx)
+                })
+                .collect()
+        };
 
+        let mut shared_object_logger = ScopeLogger::new("shared_objects");
+        shared_object_logger.count = Some(execution_digests.len());
         for tx in &executable_txns {
             if tx.contains_shared_object() {
                 epoch_store
@@ -448,6 +453,7 @@ impl CheckpointExecutor {
                     .await?;
             }
         }
+        drop(shared_object_logger);
 
         self.tx_manager
             .enqueue(executable_txns.clone(), &epoch_store)?;

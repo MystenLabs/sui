@@ -8,7 +8,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 use sui_config::p2p::StateSyncConfig;
-use sui_types::{messages_checkpoint::VerifiedCheckpoint, storage::ReadStore};
+use sui_types::{messages_checkpoint::{VerifiedCheckpoint, FullCheckpointContents}, storage::ReadStore};
 use tap::Pipe;
 use tokio::{
     sync::{broadcast, mpsc},
@@ -150,7 +150,7 @@ pub struct UnstartedStateSync<S> {
     pub(super) mailbox: mpsc::Receiver<StateSyncMessage>,
     pub(super) store: S,
     pub(super) peer_heights: Arc<RwLock<PeerHeights>>,
-    pub(super) checkpoint_event_sender: broadcast::Sender<VerifiedCheckpoint>,
+    pub(super) checkpoint_event_sender: broadcast::Sender<(VerifiedCheckpoint, Option<FullCheckpointContents>)>,
     pub(super) metrics: Metrics,
 }
 
