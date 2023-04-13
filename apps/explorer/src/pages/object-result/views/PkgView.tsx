@@ -148,7 +148,6 @@ function PkgView({ data }: { data: DataType }) {
                 </TabGroup>
 
                 <div className={styles.txsection}>
-                    <h2 className={styles.header}>Transaction Blocks</h2>
                     <ErrorBoundary>
                         <TransactionsForAddress
                             address={viewedData.id}
