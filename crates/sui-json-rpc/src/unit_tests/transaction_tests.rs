@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::Path;
-
 use sui_config::SUI_KEYSTORE_FILENAME;
-use sui_framework_build::compiled_package::BuildConfig;
 use sui_json_rpc_types::SuiTransactionBlockResponseQuery;
 use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiObjectResponseQuery, SuiTransactionBlockResponse,
@@ -12,8 +9,6 @@ use sui_json_rpc_types::{
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_macros::sim_test;
-use sui_sdk::SuiClient;
-use sui_transaction_builder::TransactionBuilder;
 use sui_types::messages::{ExecuteTransactionRequestType, SenderSignedData};
 use sui_types::query::TransactionFilter;
 use sui_types::utils::to_sender_signed_transaction;
