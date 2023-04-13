@@ -104,7 +104,10 @@ pub fn update_low_scoring_authorities(
     let mut low_scoring = vec![];
     for (i, (a, (score, _stake))) in scores_per_authority.iter().enumerate() {
         let temp = deviations[i] / mad;
-        if temp < -CUTOFF_VALUE {
+
+        // We expect the methodology to include the zero scoring validators, but we explicitly
+        // include them to make sure, as we know for sure that those have no contribution.
+        if *score == 0 || temp < -CUTOFF_VALUE {
             low_scoring.push((a, *score));
         }
     }
@@ -245,7 +248,7 @@ mod tests {
             peer_id_map.clone(),
             &metrics,
         );
-        assert_eq!(low_scoring.load().len(), 0);
+        assert_eq!(low_scoring.load().len(), 1);
 
         // this set of scores has a high performing outlier, we don't exclude it
         let mut scores = HashMap::new();
@@ -286,7 +289,7 @@ mod tests {
             peer_id_map.clone(),
             &metrics,
         );
-        assert_eq!(low_scoring.load().len(), 0);
+        assert_eq!(low_scoring.load().len(), 1);
 
         // test with large cluster
         let num_nodes = 50;
@@ -320,7 +323,7 @@ mod tests {
             &metrics,
         );
 
-        assert_eq!(low_scoring.load().len(), 5);
+        assert_eq!(low_scoring.load().len(), 10);
 
         // the outlier
         scores.insert(authorities[final_idx].id(), 40_u64);
@@ -468,7 +471,7 @@ mod tests {
             &metrics,
         );
 
-        assert_eq!(low_scoring.load().len(), 3);
+        assert_eq!(low_scoring.load().len(), 10);
     }
 
     /// A test to use when need to tune the score parameters based on some score data retrieved by
