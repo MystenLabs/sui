@@ -6,7 +6,7 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 
 import type { SuiAddress } from '@mysten/sui.js';
 
-export const DEFAULT_TRANSACTIONS_LIMIT = 100;
+export const DEFAULT_TRANSACTIONS_LIMIT = 20;
 
 // Fetch transaction blocks for an address, w/ toggle for to/from filter
 export function useGetTransactionBlocks(
