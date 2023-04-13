@@ -10,6 +10,7 @@ use sui_types::{
     base_types::ObjectID,
     digests::TransactionDigest,
     error::{ExecutionErrorKind, SuiError},
+    messages::PackageUpgradeError,
     move_package::{MovePackage, TypeOrigin, UpgradeInfo},
     object::{Data, Object, OBJECT_START_VERSION},
 };
@@ -102,7 +103,12 @@ fn test_upgraded() {
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let c_new = c_pkg
-        .new_upgraded(c_id2, &build_test_modules("Cv2"), u64::MAX, [])
+        .new_upgraded(
+            c_id2,
+            &build_test_modules("Cv2"),
+            &ProtocolConfig::get_for_max_version(),
+            [],
+        )
         .unwrap();
 
     let mut expected_version = OBJECT_START_VERSION;
@@ -125,7 +131,12 @@ fn test_depending_on_upgrade() {
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let c_new = c_pkg
-        .new_upgraded(c_id2, &build_test_modules("Cv2"), u64::MAX, [])
+        .new_upgraded(
+            c_id2,
+            &build_test_modules("Cv2"),
+            &ProtocolConfig::get_for_max_version(),
+            [],
+        )
         .unwrap();
 
     let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, [&c_new]).unwrap();
@@ -145,14 +156,24 @@ fn test_upgrade_upgrades_linkage() {
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let c_new = c_pkg
-        .new_upgraded(c_id2, &build_test_modules("Cv2"), u64::MAX, [])
+        .new_upgraded(
+            c_id2,
+            &build_test_modules("Cv2"),
+            &ProtocolConfig::get_for_max_version(),
+            [],
+        )
         .unwrap();
 
     let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, [&c_pkg]).unwrap();
 
     let b_id2 = ObjectID::from_single_byte(0xb2);
     let b_new = b_pkg
-        .new_upgraded(b_id2, &build_test_modules("B"), u64::MAX, [&c_new])
+        .new_upgraded(
+            b_id2,
+            &build_test_modules("B"),
+            &ProtocolConfig::get_for_max_version(),
+            [&c_new],
+        )
         .unwrap();
 
     assert_eq!(
@@ -177,14 +198,24 @@ fn test_upgrade_linkage_digest_to_new_dep() {
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let c_new = c_pkg
-        .new_upgraded(c_id2, &build_test_modules("Cv2"), u64::MAX, [])
+        .new_upgraded(
+            c_id2,
+            &build_test_modules("Cv2"),
+            &ProtocolConfig::get_for_max_version(),
+            [],
+        )
         .unwrap();
 
     let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, [&c_pkg]).unwrap();
 
     let b_id2 = ObjectID::from_single_byte(0xb2);
     let b_new = b_pkg
-        .new_upgraded(b_id2, &build_test_modules("B"), u64::MAX, [&c_new])
+        .new_upgraded(
+            b_id2,
+            &build_test_modules("B"),
+            &ProtocolConfig::get_for_max_version(),
+            [&c_new],
+        )
         .unwrap();
 
     assert_eq!(
@@ -219,14 +250,24 @@ fn test_upgrade_downngrades_linkage() {
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let c_new = c_pkg
-        .new_upgraded(c_id2, &build_test_modules("Cv2"), u64::MAX, [])
+        .new_upgraded(
+            c_id2,
+            &build_test_modules("Cv2"),
+            &ProtocolConfig::get_for_max_version(),
+            [],
+        )
         .unwrap();
 
     let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, [&c_new]).unwrap();
 
     let b_id2 = ObjectID::from_single_byte(0xb2);
     let b_new = b_pkg
-        .new_upgraded(b_id2, &build_test_modules("B"), u64::MAX, [&c_pkg])
+        .new_upgraded(
+            b_id2,
+            &build_test_modules("B"),
+            &ProtocolConfig::get_for_max_version(),
+            [&c_pkg],
+        )
         .unwrap();
 
     assert_eq!(
@@ -251,7 +292,12 @@ fn test_transitively_depending_on_upgrade() {
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let c_new = c_pkg
-        .new_upgraded(c_id2, &build_test_modules("Cv2"), u64::MAX, [])
+        .new_upgraded(
+            c_id2,
+            &build_test_modules("Cv2"),
+            &ProtocolConfig::get_for_max_version(),
+            [],
+        )
         .unwrap();
 
     let b_id1 = ObjectID::from_single_byte(0xb1);
@@ -275,7 +321,12 @@ fn package_digest_changes_with_dep_upgrades_and_in_sync_with_move_package_digest
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let c_v2 = c_v1
-        .new_upgraded(c_id2, &build_test_modules("Cv2"), u64::MAX, [])
+        .new_upgraded(
+            c_id2,
+            &build_test_modules("Cv2"),
+            &ProtocolConfig::get_for_max_version(),
+            [],
+        )
         .unwrap();
 
     let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, [&c_v1]).unwrap();
@@ -327,7 +378,12 @@ fn test_fail_on_transitive_dependency_downgrade() {
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let c_new = c_pkg
-        .new_upgraded(c_id2, &build_test_modules("Cv2"), u64::MAX, [])
+        .new_upgraded(
+            c_id2,
+            &build_test_modules("Cv2"),
+            &ProtocolConfig::get_for_max_version(),
+            [],
+        )
         .unwrap();
 
     let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, [&c_new]).unwrap();
@@ -347,9 +403,30 @@ fn test_fail_on_upgrade_missing_type() {
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let err = c_pkg
-        .new_upgraded(c_id2, &build_test_modules("Cv1"), u64::MAX, [])
+        .new_upgraded(
+            c_id2,
+            &build_test_modules("Cv1"),
+            &ProtocolConfig::get_for_max_version(),
+            [],
+        )
         .unwrap_err();
 
+    assert_eq!(
+        err.kind(),
+        &ExecutionErrorKind::PackageUpgradeError {
+            upgrade_error: PackageUpgradeError::IncompatibleUpgrade
+        }
+    );
+
+    // At versions before version 5 this was an invariant violation
+    let err = c_pkg
+        .new_upgraded(
+            c_id2,
+            &build_test_modules("Cv1"),
+            &ProtocolConfig::get_for_version(4.into()),
+            [],
+        )
+        .unwrap_err();
     assert_eq!(err.kind(), &ExecutionErrorKind::InvariantViolation);
 }
 

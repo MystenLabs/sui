@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 4;
+const MAX_PROTOCOL_VERSION: u64 = 5;
 
 // Record history of protocol version allocations here:
 //
@@ -21,6 +21,7 @@ const MAX_PROTOCOL_VERSION: u64 = 4;
 //            `max_size_written_objects_system_tx`
 // Version 4: New reward slashing rate. Framework changes to skip stake susbidy when the epoch
 //            length is short.
+// Version 5: Package upgrade compatibility error fix.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -130,6 +131,10 @@ struct FeatureFlags {
     // object runtime.
     #[serde(skip_serializing_if = "is_false")]
     loaded_child_objects_fixed: bool,
+    // If true, treat missing types in the upgraded modules when creating an upgraded package as a
+    // compatibility error.
+    #[serde(skip_serializing_if = "is_false")]
+    missing_type_is_compatibility_error: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -595,6 +600,10 @@ impl ProtocolConfig {
     pub fn loaded_child_objects_fixed(&self) -> bool {
         self.feature_flags.loaded_child_objects_fixed
     }
+
+    pub fn missing_type_is_compatibility_error(&self) -> bool {
+        self.feature_flags.missing_type_is_compatibility_error
+    }
 }
 
 // Special getters
@@ -969,6 +978,11 @@ impl ProtocolConfig {
                 cfg.reward_slashing_rate = Some(10000);
                 // protect old and new lookup for object version
                 cfg.gas_model_version = Some(3);
+                cfg
+            }
+            5 => {
+                let mut cfg = Self::get_for_version_impl(version - 1);
+                cfg.feature_flags.missing_type_is_compatibility_error = true;
                 cfg
             }
             // Use this template when making changes:

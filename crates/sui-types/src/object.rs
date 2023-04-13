@@ -618,14 +618,14 @@ impl Object {
         new_package_id: ObjectID,
         modules: &[CompiledModule],
         previous_transaction: TransactionDigest,
-        max_move_package_size: u64,
+        protocol_config: &ProtocolConfig,
         dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
         Ok(Self::new_package_from_data(
             Data::Package(previous_package.new_upgraded(
                 new_package_id,
                 modules,
-                max_move_package_size,
+                protocol_config,
                 dependencies,
             )?),
             previous_transaction,
