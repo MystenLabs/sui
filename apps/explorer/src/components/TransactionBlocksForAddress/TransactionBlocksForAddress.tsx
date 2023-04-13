@@ -16,11 +16,11 @@ import { Pagination } from '~/ui/Pagination';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
 
-type TransactionBlocksProps = {
+type TransactionBlocksForAddressProps = {
     address: string;
 };
 
-function TransactionBlocks({ address }: TransactionBlocksProps) {
+function TransactionBlocksForAddress({ address }: TransactionBlocksForAddressProps) {
     const [currentPage, setCurrentPage] = useState(0);
     const {
         data,
@@ -98,4 +98,4 @@ function TransactionBlocks({ address }: TransactionBlocksProps) {
     );
 }
 
-export default TransactionBlocks;
+export default TransactionBlocksForAddress;
