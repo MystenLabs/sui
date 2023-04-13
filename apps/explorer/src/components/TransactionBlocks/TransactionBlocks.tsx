@@ -53,7 +53,7 @@ function TransactionBlocks({ address }: TransactionBlocksProps) {
 
     const generateTableCard = (
         currentPage: CurrentPageState,
-        filterValue: "to" | "from",
+        filterValue: TRANSACTION_FILTERS,
         data?: InfiniteData<PaginatedTransactionResponse>
     ) => {
         if (!data) {
