@@ -165,6 +165,7 @@ export function ValidatorStats({
                                     <DelegationAmount
                                         amount={validatorData.nextEpochGasPrice}
                                         isStats
+                                        inMIST
                                     />
                                 </Stats>
                             </div>
