@@ -316,7 +316,7 @@ impl ReadApi {
                         anyhow!("unable to derive balance changes because effect is empty")
                     })?,
                     input_objects,
-                    Vec::new(),
+                    None,
                 ));
             }
             let results = join_all(futures).await;
@@ -628,14 +628,10 @@ impl ReadApiServer for ReadApi {
         let object_cache = ObjectProviderCache::new(self.state.clone());
         if opts.show_balance_changes {
             if let Some(effects) = &temp_response.effects {
-                let balance_changes = get_balance_changes_from_effect(
-                    &object_cache,
-                    effects,
-                    input_objects,
-                    Vec::new(),
-                )
-                .await
-                .map_err(Error::SuiError)?;
+                let balance_changes =
+                    get_balance_changes_from_effect(&object_cache, effects, input_objects, None)
+                        .await
+                        .map_err(Error::SuiError)?;
                 temp_response.balance_changes = Some(balance_changes);
             }
         }
