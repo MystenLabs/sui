@@ -17,7 +17,7 @@ import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { RadioGroup, RadioOption } from '~/ui/Radio';
 import { TableCard } from '~/ui/TableCard';
 
-type CurrentPageFilter = {
+type CurrentPageState = {
     from: number;
     to: number;
 };
@@ -35,7 +35,7 @@ function TransactionBlocks({ address }: TransactionBlocksProps) {
     const [filterValue, setFilterValue] = useState<TRANSACTION_FILTERS>(
         TRANSACTION_FILTERS.FROM
     );
-    const [currentPage, setCurrentPage] = useState<CurrentPageFilter>({
+    const [currentPage, setCurrentPage] = useState<CurrentPageState>({
         from: 0,
         to: 0,
     });
@@ -52,8 +52,8 @@ function TransactionBlocks({ address }: TransactionBlocksProps) {
     );
 
     const generateTableCard = (
-        currentPage: CurrentPageFilter,
-        filterValue: TRANSACTION_FILTERS,
+        currentPage: CurrentPageState,
+        filterValue: "to" | "from",
         data?: InfiniteData<PaginatedTransactionResponse>
     ) => {
         if (!data) {
