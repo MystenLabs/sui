@@ -27,6 +27,8 @@ macro_rules! ok_or_gas_balance_error {
     };
 }
 
+sui_macros::checked_arithmetic! {
+
 /// A bucket defines a range of units that will be priced the same.
 /// After execution a call to `GasStatus::bucketize` will round the computation
 /// cost to `cost` for the bucket ([`min`, `max`]) the gas used falls into.
@@ -462,4 +464,6 @@ pub fn deduct_gas(gas_object: &mut Object, charge_or_rebate: i64) {
         balance - charge_or_rebate as u64
     };
     gas_coin.set_coin_value_unsafe(new_balance)
+}
+
 }
