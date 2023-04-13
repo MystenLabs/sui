@@ -586,6 +586,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "async_dag"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee969c97ca53fbacc55cecc0278004144bfa236efc6633dab8b999f8fcce1d1a"
+dependencies = [
+ "daggy",
+ "dyn-clone",
+ "futures",
+ "seq-macro",
+]
+
+[[package]]
 name = "async_once"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2271,6 +2283,15 @@ dependencies = [
  "proc-macro2 1.0.54",
  "quote 1.0.26",
  "syn 1.0.107",
+]
+
+[[package]]
+name = "daggy"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "91a9304e55e9d601a39ae4deaba85406d5c0980e106f65afcf0460e9af1e7602"
+dependencies = [
+ "petgraph 0.6.2",
 ]
 
 [[package]]
@@ -8140,6 +8161,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f638d531eccd6e23b980caf34876660d38e265409d8e99b397ab71eb3612fad0"
 
 [[package]]
+name = "seq-macro"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6b44e8fc93a14e66336d230954dda83d18b4605ccace8fe09bc7514a71ad0bc"
+
+[[package]]
 name = "serde"
 version = "0.8.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8995,6 +9022,7 @@ dependencies = [
  "anyhow",
  "arc-swap",
  "async-trait",
+ "async_dag",
  "bcs",
  "bytes",
  "chrono",

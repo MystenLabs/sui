@@ -183,6 +183,20 @@ impl CheckpointStore {
             .map(|(_, v)| v.into())
     }
 
+    pub fn multi_get_checkpoint_by_sequence_number_range(
+        &self,
+        start: CheckpointSequenceNumber,
+        end: CheckpointSequenceNumber,
+    ) -> Result<Vec<VerifiedCheckpoint>, TypedStoreError> {
+        Ok(self
+            .certified_checkpoints
+            .iter()
+            .skip_to(&start)?
+            .take_while(|(seq, _)| seq <= &end)
+            .map(|(_, checkpoint)| checkpoint.into())
+            .collect())
+    }
+
     pub fn multi_get_checkpoint_by_sequence_number(
         &self,
         sequence_numbers: &[CheckpointSequenceNumber],
@@ -270,6 +284,13 @@ impl CheckpointStore {
         digest: &CheckpointContentsDigest,
     ) -> Result<Option<CheckpointContents>, TypedStoreError> {
         self.checkpoint_content.get(digest)
+    }
+
+    pub fn multi_get_checkpoint_contents<'a>(
+        &self,
+        digests: impl Iterator<Item = &'a CheckpointContentsDigest>,
+    ) -> Result<Vec<Option<CheckpointContents>>, TypedStoreError> {
+        self.checkpoint_content.multi_get(digests)
     }
 
     pub fn insert_certified_checkpoint(

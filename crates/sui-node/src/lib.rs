@@ -44,6 +44,7 @@ use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_server::ValidatorService;
 use sui_core::checkpoints::checkpoint_executor;
+use sui_core::checkpoints::checkpoint_executor::fast_catchup::catch_up;
 use sui_core::checkpoints::{
     CheckpointMetrics, CheckpointService, CheckpointStore, SendCheckpointToStateSync,
     SubmitCheckpointToConsensus,
@@ -268,6 +269,27 @@ impl SuiNode {
             epoch_store.epoch_start_state(),
         )
         .expect("Initial trusted peers must be set");
+
+        let mut epoch = 0;
+        let mut cur_checkpoint = 0;
+        loop {
+            info!("Processing epoch {}", epoch);
+            let Ok(Some(epoch_last_checkpoint)) = checkpoint_store.get_epoch_last_checkpoint(epoch) else {
+                break;
+            };
+            catch_up(
+                &checkpoint_store,
+                &store,
+                cur_checkpoint,
+                epoch_last_checkpoint.sequence_number,
+            )
+            .await
+            .unwrap();
+            epoch += 1;
+            cur_checkpoint = epoch_last_checkpoint.sequence_number + 1;
+        }
+        // Random panic to make it stop here.
+        assert_eq!(epoch, 123);
 
         let db_checkpoint_config = if config.db_checkpoint_config.checkpoint_path.is_none() {
             DBCheckpointConfig {

@@ -56,6 +56,7 @@ use crate::{authority::EffectsNotifyRead, checkpoints::CheckpointStore};
 
 use self::metrics::CheckpointExecutorMetrics;
 
+pub mod fast_catchup;
 mod metrics;
 #[cfg(test)]
 pub(crate) mod tests;

@@ -46,6 +46,7 @@ sui-config = { path = "../sui-config" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 sui-protocol-config = { path = "../sui-protocol-config" }
 lru = "0.10"
+async_dag = "0.1.2"
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
