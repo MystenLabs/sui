@@ -218,6 +218,14 @@ where
                 if let Ok(checkpoint) = download_result {
                     downloaded_checkpoints.push(checkpoint);
                 } else {
+                    if let Err(IndexerError::UnexpectedFullnodeResponseError(fn_e)) =
+                        download_result
+                    {
+                        warn!(
+                            "Unexpected response from fullnode for object checkpoints: {}",
+                            fn_e
+                        );
+                    }
                     break;
                 }
             }
@@ -228,6 +236,7 @@ where
             current_parallel_downloads =
                 std::cmp::min(downloaded_checkpoints.len() + 1, MAX_PARALLEL_DOWNLOADS);
             if downloaded_checkpoints.is_empty() {
+                warn!("No object checkpoints downloaded, retrying in next iteration ...");
                 continue;
             }
 
@@ -294,6 +303,14 @@ where
                 if let Ok(checkpoint) = download_result {
                     downloaded_checkpoints.push(checkpoint);
                 } else {
+                    if let Err(IndexerError::UnexpectedFullnodeResponseError(fn_e)) =
+                        download_result
+                    {
+                        warn!(
+                            "Unexpected response from fullnode for checkpoints: {}",
+                            fn_e
+                        );
+                    }
                     break;
                 }
             }
@@ -305,6 +322,7 @@ where
             current_parallel_downloads =
                 std::cmp::min(downloaded_checkpoints.len() + 1, MAX_PARALLEL_DOWNLOADS);
             if downloaded_checkpoints.is_empty() {
+                warn!("No checkpoints downloaded, retrying in next iteration ...");
                 continue;
             }
 
@@ -515,6 +533,9 @@ where
                         .await;
                 }
                 checkpoint_tx_db_guard.stop_and_record();
+                self.metrics
+                    .latest_indexer_checkpoint_sequence_number
+                    .set(checkpoint_seq);
 
                 self.metrics.total_checkpoint_committed.inc();
                 let tx_count = transactions.len();
@@ -590,6 +611,9 @@ where
                 self.metrics
                     .total_object_change_committed
                     .inc_by(tx_object_changes.len() as u64);
+                self.metrics
+                    .latest_indexer_object_checkpoint_sequence_number
+                    .set(checkpoint_seq);
             } else {
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             }
@@ -637,6 +661,20 @@ where
         seq: CheckpointSequenceNumber,
         skip_object: bool,
     ) -> Result<CheckpointData, IndexerError> {
+        let latest_fn_checkpoint_seq = self
+            .http_client
+            .get_latest_checkpoint_sequence_number()
+            .await
+            .map_err(|e| {
+                IndexerError::FullNodeReadingError(format!(
+                    "Failed to get latest checkpoint sequence number and error {:?}",
+                    e
+                ))
+            })?;
+        self.metrics
+            .latest_fullnode_checkpoint_sequence_number
+            .set((*latest_fn_checkpoint_seq) as i64);
+
         let mut checkpoint = self
             .http_client
             .get_checkpoint(seq.into())
