@@ -443,6 +443,10 @@ impl FullCheckpointContents {
         self.transactions.iter()
     }
 
+    pub fn into_iter(self) -> impl Iterator<Item = ExecutionData> {
+        self.transactions.into_iter()
+    }
+
     /// Verifies that this checkpoint's digest matches the given digest, and that all internal
     /// Transaction and TransactionEffects digests are consistent.
     pub fn verify_digests(&self, digest: CheckpointContentsDigest) -> Result<()> {

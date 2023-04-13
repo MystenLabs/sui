@@ -19,7 +19,7 @@
 //! end of epoch. This allows us to use it as a signal for reconfig.
 
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     sync::Arc,
     time::{Duration, Instant, SystemTime},
 };
@@ -27,17 +27,18 @@ use std::{
 use futures::stream::FuturesOrdered;
 use itertools::izip;
 use mysten_metrics::{spawn_monitored_task, MonitoredFutureExt};
+use parking_lot::Mutex;
 use prometheus::Registry;
 use sui_config::node::CheckpointExecutorConfig;
 use sui_macros::{fail_point, fail_point_async};
-use sui_types::message_envelope::Message;
-use sui_types::messages::VerifiedExecutableTransaction;
+use sui_types::messages::{VerifiedExecutableTransaction, VerifiedTransaction};
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest, TransactionEffectsDigest},
     messages::{TransactionEffects, TransactionEffectsAPI},
     messages_checkpoint::{CheckpointSequenceNumber, VerifiedCheckpoint},
 };
 use sui_types::{error::SuiResult, messages::TransactionDataAPI};
+use sui_types::{message_envelope::Message, messages_checkpoint::FullCheckpointContents};
 use tap::{TapFallible, TapOptional};
 use tokio::{
     sync::broadcast::{self, error::RecvError},
@@ -96,7 +97,8 @@ pub(crate) mod tests;
 type CheckpointExecutionBuffer = FuturesOrdered<JoinHandle<VerifiedCheckpoint>>;
 
 pub struct CheckpointExecutor {
-    mailbox: broadcast::Receiver<VerifiedCheckpoint>,
+    mailbox: broadcast::Receiver<(VerifiedCheckpoint, Option<FullCheckpointContents>)>,
+    contents_cache: Arc<Mutex<BTreeMap<CheckpointSequenceNumber, FullCheckpointContents>>>,
     checkpoint_store: Arc<CheckpointStore>,
     authority_store: Arc<AuthorityStore>,
     tx_manager: Arc<TransactionManager>,
@@ -107,7 +109,7 @@ pub struct CheckpointExecutor {
 
 impl CheckpointExecutor {
     pub fn new(
-        mailbox: broadcast::Receiver<VerifiedCheckpoint>,
+        mailbox: broadcast::Receiver<(VerifiedCheckpoint, Option<FullCheckpointContents>)>,
         checkpoint_store: Arc<CheckpointStore>,
         authority_store: Arc<AuthorityStore>,
         tx_manager: Arc<TransactionManager>,
@@ -117,6 +119,7 @@ impl CheckpointExecutor {
     ) -> Self {
         Self {
             mailbox,
+            contents_cache: Default::default(),
             checkpoint_store,
             authority_store,
             tx_manager,
@@ -127,7 +130,7 @@ impl CheckpointExecutor {
     }
 
     pub fn new_for_tests(
-        mailbox: broadcast::Receiver<VerifiedCheckpoint>,
+        mailbox: broadcast::Receiver<(VerifiedCheckpoint, Option<FullCheckpointContents>)>,
         checkpoint_store: Arc<CheckpointStore>,
         authority_store: Arc<AuthorityStore>,
         tx_manager: Arc<TransactionManager>,
@@ -135,6 +138,7 @@ impl CheckpointExecutor {
     ) -> Self {
         Self {
             mailbox,
+            contents_cache: Default::default(),
             checkpoint_store,
             authority_store,
             tx_manager,
@@ -223,11 +227,14 @@ impl CheckpointExecutor {
                 }
                 // Check for newly synced checkpoints from StateSync.
                 received = self.mailbox.recv() => match received {
-                    Ok(checkpoint) => {
+                    Ok((checkpoint, contents)) => {
                         debug!(
                             sequence_number = ?checkpoint.sequence_number,
                             "received checkpoint summary from state sync"
                         );
+                        if let Some(contents) = contents {
+                            self.contents_cache.lock().insert(checkpoint.sequence_number, contents);
+                        }
                         SystemTime::now().duration_since(checkpoint.timestamp())
                             .map(|latency|
                                 self.metrics.checkpoint_contents_age_ms.report(latency.as_millis() as u64)
@@ -383,6 +390,7 @@ impl CheckpointExecutor {
             self.authority_store.clone(),
             self.checkpoint_store.clone(),
             epoch_store.clone(),
+            self.contents_cache.clone(),
         );
 
         let tx_count = execution_digests.len();
@@ -786,6 +794,7 @@ fn get_unexecuted_transactions(
     authority_store: Arc<AuthorityStore>,
     checkpoint_store: Arc<CheckpointStore>,
     epoch_store: Arc<AuthorityPerEpochStore>,
+    contents_cache: Arc<Mutex<BTreeMap<CheckpointSequenceNumber, FullCheckpointContents>>>,
 ) -> (
     Vec<ExecutionDigests>,
     Vec<TransactionDigest>,
@@ -825,7 +834,6 @@ fn get_unexecuted_transactions(
     let all_tx_digests: Vec<TransactionDigest> =
         execution_digests.iter().map(|tx| tx.transaction).collect();
 
-    /*
     let executed_effects = authority_store
         .multi_get_executed_effects(&all_tx_digests)
         .expect("failed to read executed_effects from store");
@@ -845,11 +853,28 @@ fn get_unexecuted_transactions(
             }
         })
         .collect();
-    */
 
-    // read remaining unexecuted transactions from store
-    let executable_txns: Vec<_> = authority_store
-        .multi_get_transaction_blocks(&all_tx_digests)
+    let executable_txns: Vec<_> = if let Some(full_contents) =
+        contents_cache.lock().remove(&checkpoint.sequence_number)
+    {
+        debug!(
+            "skipping db for checkpoint {}",
+            checkpoint.sequence_number()
+        );
+        izip!(full_contents.into_iter(), all_tx_digests.iter())
+            .map(|(execution_data, digest)| {
+                let txn = execution_data.transaction;
+                assert_eq!(txn.digest(), digest);
+                VerifiedExecutableTransaction::new_from_checkpoint(
+                    VerifiedTransaction::new_unchecked(txn),
+                    epoch_store.epoch(),
+                    checkpoint.sequence_number,
+                )
+            })
+            .collect()
+    } else {
+        authority_store
+        .multi_get_transaction_blocks(&unexecuted_txns)
         .expect("Failed to get checkpoint txes from store")
         .into_iter()
         .enumerate()
@@ -857,7 +882,7 @@ fn get_unexecuted_transactions(
             let tx = tx.unwrap_or_else(||
                 panic!(
                     "state-sync should have ensured that transaction with digest {:?} exists for checkpoint: {checkpoint:?}",
-                    all_tx_digests[i]
+                    unexecuted_txns[i]
                 )
             );
             // change epoch tx is handled specially in check_epoch_last_checkpoint
@@ -868,7 +893,8 @@ fn get_unexecuted_transactions(
                 *checkpoint_sequence,
             )
         })
-        .collect();
+        .collect()
+    };
 
     (execution_digests, all_tx_digests, executable_txns)
 }
