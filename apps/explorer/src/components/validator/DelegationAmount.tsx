@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFormatCoin } from '@mysten/core';
+import { useFormatCoin, formatBalance, CoinFormat } from '@mysten/core';
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
 
 import { Heading } from '~/ui/Heading';
@@ -19,7 +19,9 @@ export function DelegationAmount({
     inMIST = false,
 }: DelegationAmountProps) {
     const [formattedAmount, symbol] = useFormatCoin(amount, SUI_TYPE_ARG);
-    const delegationAmount = inMIST ? amount.toLocaleString() : formattedAmount;
+    const delegationAmount = inMIST
+        ? formatBalance(amount, 0, CoinFormat.FULL)
+        : formattedAmount;
     const delegationSymbol = inMIST ? 'MIST' : symbol;
     return isStats ? (
         <div className="flex items-end gap-1.5 break-all">
