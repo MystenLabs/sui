@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use hyper::{header::HeaderValue, Request, Response};
+use hyper::{Request, Response};
 use std::task::{Context, Poll};
 use tower::Layer;
 use tower::Service;
@@ -43,13 +43,10 @@ where
         self.inner.poll_ready(cx)
     }
 
-    fn call(&mut self, mut req: Request<ReqBody>) -> Self::Future {
+    fn call(&mut self, req: Request<ReqBody>) -> Self::Future {
         let trace_id = Uuid::new_v4();
-        req.headers_mut().insert(
-            "x-trace-id",
-            HeaderValue::from_str(&trace_id.to_string()).unwrap(),
-        );
-
+        let span = tracing::info_span!("jsonrpc_request", trace_id = %trace_id);
+        let _enter = span.enter();
         self.inner.call(req)
     }
 }

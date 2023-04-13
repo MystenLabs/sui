@@ -152,6 +152,7 @@ impl JsonRpcServerBuilder {
             .layer(cors)
             .layer(routing_layer)
             .layer(TraceIdLayer);
+        // .service(TraceIdMiddleware::new(self.module));
 
         let server = ServerBuilder::default()
             .batch_requests_supported(false)

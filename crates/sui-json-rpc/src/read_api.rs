@@ -16,7 +16,7 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::StructTag;
 use move_core_types::value::{MoveStruct, MoveStructLayout, MoveValue};
 use tap::TapFallible;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 
 use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_core::authority::AuthorityState;
@@ -566,6 +566,8 @@ impl ReadApiServer for ReadApi {
         digest: TransactionDigest,
         opts: Option<SuiTransactionBlockResponseOptions>,
     ) -> RpcResult<SuiTransactionBlockResponse> {
+        // TODO: just to test logging
+        info!(tx_digest=?digest, "Get transaction block");
         let opts = opts.unwrap_or_default();
         let mut temp_response = IntermediateTransactionResponse::new(digest);
 
