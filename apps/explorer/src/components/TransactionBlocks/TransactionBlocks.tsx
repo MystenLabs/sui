@@ -103,7 +103,7 @@ function TransactionBlocks({ address }: TransactionBlocksProps) {
                         colWidths={['30%', '30%', '10%', '20%', '10%']}
                     />
                 ) : (
-                    <div data-testid="tx">
+                    <div>
                         {generateTableCard(currentPage, filterValue, data)}
                     </div>
                 )}
