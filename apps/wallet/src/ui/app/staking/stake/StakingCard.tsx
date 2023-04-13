@@ -84,7 +84,7 @@ function StakingCard() {
         [coinType]
     );
 
-    const suiEarned = stakeData?.estimatedReward || 0;
+    const suiEarned = stakeData?.estimatedReward || '0';
 
     const [coinDecimals] = useCoinDecimals(coinType);
     // set minimum stake amount to 1 SUI
