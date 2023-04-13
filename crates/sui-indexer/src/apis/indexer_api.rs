@@ -385,7 +385,7 @@ where
         limit: Option<usize>,
         descending_order: Option<bool>,
     ) -> RpcResult<EventPage> {
-        if self.migrated_methods.contains(&"query_events".to_string()) {
+        if !self.migrated_methods.contains(&"query_events".to_string()) {
             let query_events_guard = self
                 .state
                 .indexer_metrics()
