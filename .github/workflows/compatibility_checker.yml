@@ -5,7 +5,7 @@ concurrency:
 
 on:
   schedule:
-    - cron: "0 9 * * *" # UTC timing is every day at 1am PST
+    - cron: "0 6 * * *" # UTC timing is every day at 10pm PST
   workflow_dispatch:
     inputs:
       verbose:
@@ -13,15 +13,15 @@ on:
         required: false
         description: "Run with verbose logging"
         default: false
-      clean:
+      preserve-state:
         type: boolean
         required: false
-        description: "Run from clean database state"
+        description: "Preserve database state of previous run"
         default: true
 
 jobs:
   genesis-sync-test:
-    timeout-minutes: 480
+    timeout-minutes: 720
     permissions:
       # The "id-token: write" permission is required or Machine ID will not be
       # able to authenticate with the cluster.
@@ -44,7 +44,7 @@ jobs:
           token: fullnode-compat-test
           # Specify the length of time that the generated credentials should be
           # valid for. This is optional and defaults to "1h"
-          certificate-ttl: 6h
+          certificate-ttl: 12h
 
       # Cargo clean and git restore on any left over files from git checkout
       - name: Environment clean
@@ -53,7 +53,7 @@ jobs:
 
       # Wipe database from previous runs
       - name: Wipe SuiDB
-        if: ${{ github.event.inputs.clean == true }}
+        if: ${{ github.event.inputs.preserve-state == false }}
         run: |
           tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@fullnode-compat-test-01 "sudo rm -rf /var/lib/sui/suidb || true"
 
@@ -69,7 +69,7 @@ jobs:
 
       - name: Run sync script
         run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 480 ssh ubuntu@fullnode-compat-test-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && CARGO_TERM_COLOR=always ./scripts/fullnode-sync.sh -p ./target/release/sui-node -n testnet ${{ github.event.inputs.verbose == true && '-v' || '' }}"
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 720 ssh ubuntu@fullnode-compat-test-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && CARGO_TERM_COLOR=always ./scripts/fullnode-sync.sh -p ./target/release/sui-node -n testnet ${{ github.event.inputs.verbose == true && '-v' || '' }}"
 
   notify:
     name: Notify
