@@ -26,7 +26,7 @@ use move_command_line_common::{
 use move_compiler::{
     compiled_unit::AnnotatedCompiledUnit,
     diagnostics::{Diagnostics, FilesSourceText},
-    shared::NumericalAddress,
+    shared::{NumberFormat, NumericalAddress},
     FullyCompiledProgram,
 };
 use move_core_types::{
@@ -221,7 +221,7 @@ pub trait MoveTestAdapter<'a>: Sized {
                 let state = self.compiled_state();
                 let (modules, warnings_opt) = match syntax {
                     SyntaxChoice::Source => {
-                        let (units, warnings_opt) = compile_source_units(state, data.path())?;
+                        let (units, warnings_opt) = compile_source_units(state, data.path(), None)?;
                         let modules = units
                             .into_iter()
                             .map(|unit| match unit {
@@ -283,7 +283,8 @@ pub trait MoveTestAdapter<'a>: Sized {
                 let state = self.compiled_state();
                 let (script, warning_opt) = match syntax {
                     SyntaxChoice::Source => {
-                        let (mut units, warning_opt) = compile_source_units(state, data.path())?;
+                        let (mut units, warning_opt) =
+                            compile_source_units(state, data.path(), None)?;
                         let len = units.len();
                         if len != 1 {
                             panic!("Invalid input. Expected 1 compiled unit but got {}", len)
@@ -540,6 +541,7 @@ impl<'a> CompiledState<'a> {
 pub fn compile_source_units(
     state: &CompiledState,
     file_name: impl AsRef<Path>,
+    package_name: Option<String>,
 ) -> Result<(Vec<AnnotatedCompiledUnit>, Option<String>)> {
     fn rendered_diags(files: &FilesSourceText, diags: Diagnostics) -> Option<String> {
         if diags.is_empty() {
@@ -555,10 +557,20 @@ pub fn compile_source_units(
     }
 
     use move_compiler::PASS_COMPILATION;
+    let mut named_address_mapping = state.named_address_mapping.clone();
+    if let Some(package_name) = package_name {
+        // When a package_name is specified, create a fresh mapping for it by
+        // zero-ing the address for an existing mapping. Required for upgrading
+        // (i.e, re-publishing) an existing named package.
+        named_address_mapping.insert(
+            package_name,
+            NumericalAddress::new(AccountAddress::ZERO.into_bytes(), NumberFormat::Hex),
+        );
+    };
     let (mut files, comments_and_compiler_res) = move_compiler::Compiler::from_files(
         vec![file_name.as_ref().to_str().unwrap().to_owned()],
         state.source_files().cloned().collect::<Vec<_>>(),
-        state.named_address_mapping.clone(),
+        named_address_mapping,
     )
     .set_pre_compiled_lib_opt(state.pre_compiled_deps)
     .set_flags(move_compiler::Flags::empty().set_sources_shadow_deps(true))
