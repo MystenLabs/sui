@@ -404,6 +404,54 @@ mod tests {
         assert_eq!(low_scoring.load().len(), 2);
     }
 
+    #[test]
+    pub fn test_limit_low_scoring_to_validity_threshold() {
+        let committee = generate_committee(10);
+        let mut authorities = committee.authorities();
+        let a1 = authorities.next().unwrap();
+        let a2 = authorities.next().unwrap();
+        let a3 = authorities.next().unwrap();
+        let a4 = authorities.next().unwrap();
+        let a5 = authorities.next().unwrap();
+        let a6 = authorities.next().unwrap();
+        let a7 = authorities.next().unwrap();
+        let a8 = authorities.next().unwrap();
+        let a9 = authorities.next().unwrap();
+        let a10 = authorities.next().unwrap();
+
+        let low_scoring = Arc::new(ArcSwap::from_pointee(HashMap::new()));
+
+        low_scoring.swap(Arc::new(HashMap::new()));
+
+        let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
+
+        // there is a low outlier in the non zero scores, exclude it as well as down nodes
+        let mut scores = HashMap::new();
+        scores.insert(a1.id(), 350_u64);
+        scores.insert(a2.id(), 390_u64);
+        scores.insert(a3.id(), 350_u64);
+        scores.insert(a4.id(), 20_u64);
+        scores.insert(a5.id(), 10_u64);
+        scores.insert(a6.id(), 0_u64);
+        scores.insert(a7.id(), 0_u64);
+        scores.insert(a8.id(), 0_u64);
+        scores.insert(a9.id(), 0_u64);
+        scores.insert(a10.id(), 0_u64);
+        let reputation_scores = ReputationScores {
+            scores_per_authority: scores,
+            final_of_schedule: true,
+        };
+
+        update_low_scoring_authorities(
+            low_scoring.clone(),
+            &committee,
+            reputation_scores,
+            HashMap::new(),
+            &metrics,
+        );
+        assert_eq!(low_scoring.load().len(), 3);
+    }
+
     /// Generate a random committee for the given size. It's important to create the Authorities
     /// via the committee to ensure than an AuthorityIdentifier will be assigned, as this is dynamically
     /// calculated during committee creation.
