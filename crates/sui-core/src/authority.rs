@@ -870,6 +870,7 @@ impl AuthorityState {
     ) -> SuiResult {
         let input_object_count = inner_temporary_store.objects.len();
         let shared_object_count = effects.shared_objects().len();
+        let digest = *certificate.digest();
 
         // If commit_certificate returns an error, tx_guard will be dropped and the certificate
         // will be persisted in the log for later recovery.
@@ -884,20 +885,18 @@ impl AuthorityState {
         self.commit_certificate(inner_temporary_store, certificate, effects, epoch_store)
             .await?;
 
-        // Notifies transaction manager about available input objects. This allows the transaction
-        // manager to schedule ready transactions.
-        //
-        // REQUIRED: this must be called after commit_certificate() (above), to ensure
-        // TransactionManager can receive the notifications for objects that it did not find
-        // in the objects table.
-        //
-        // REQUIRED: this must be called before tx_guard.commit_tx() (below), to ensure
-        // TransactionManager can get the notifications after the node crashes and restarts.
-        self.transaction_manager
-            .objects_available(output_keys, epoch_store);
-
         // commit_certificate finished, the tx is fully committed to the store.
         tx_guard.commit_tx();
+
+        // Notifies transaction manager about transaction and output objects committed.
+        // This provides necessary information to transaction manager to start executing
+        // additional ready transactions.
+        //
+        // REQUIRED: this must be called after commit_certificate() (above), which writes output
+        // objects into storage. Otherwise, the transaction manager may schedule a transaction
+        // before the output objects are actually available.
+        self.transaction_manager
+            .notify_commit(&digest, output_keys, epoch_store);
 
         // index certificate
         let _ = self
@@ -998,16 +997,6 @@ impl AuthorityState {
             );
 
         Ok((inner_temp_store, effects, execution_error_opt.err()))
-    }
-
-    /// Notifies TransactionManager about an executed certificate.
-    pub fn certificate_executed(
-        &self,
-        digest: &TransactionDigest,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) {
-        self.transaction_manager
-            .certificate_executed(digest, epoch_store)
     }
 
     pub async fn dry_exec_transaction(

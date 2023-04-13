@@ -31,13 +31,13 @@ use crate::{
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
 };
 
-// Reject a transaction if the number of certificates pending execution is above this threshold.
+// Reject a transaction if transaction manager queue length is above this threshold.
 // 20000 = 10k TPS * 2s resident time in transaction manager.
-pub(crate) const MAX_EXECUTION_QUEUE_LENGTH: usize = 20_000;
+pub(crate) const MAX_TM_QUEUE_LENGTH: usize = 20_000;
 
 // Reject a transaction if the number of pending transactions depending on the object
 // is above the threshold.
-pub(crate) const MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH: usize = 1000;
+pub(crate) const MAX_PER_OBJECT_QUEUE_LENGTH: usize = 1000;
 
 #[cfg(test)]
 #[path = "unit_tests/server_tests.rs"]
@@ -256,11 +256,11 @@ impl ValidatorService {
         msg: &SenderSignedData,
     ) -> SuiResult<()> {
         // Too many transactions are pending execution.
-        let execution_queue_len = state.transaction_manager().execution_queue_len();
-        if execution_queue_len >= MAX_EXECUTION_QUEUE_LENGTH {
+        let inflight_queue_len = state.transaction_manager().inflight_queue_len();
+        if inflight_queue_len >= MAX_TM_QUEUE_LENGTH {
             return Err(SuiError::TooManyTransactionsPendingExecution {
-                queue_len: execution_queue_len,
-                threshold: MAX_EXECUTION_QUEUE_LENGTH,
+                queue_len: inflight_queue_len,
+                threshold: MAX_TM_QUEUE_LENGTH,
             });
         }
 
@@ -275,11 +275,11 @@ impl ValidatorService {
                 .collect(),
         ) {
             // When this occurs, most likely transactions piled up on a shared object.
-            if queue_len >= MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH {
+            if queue_len >= MAX_PER_OBJECT_QUEUE_LENGTH {
                 return Err(SuiError::TooManyTransactionsPendingOnObject {
                     object_id,
                     queue_len,
-                    threshold: MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH,
+                    threshold: MAX_PER_OBJECT_QUEUE_LENGTH,
                 });
             }
         }
