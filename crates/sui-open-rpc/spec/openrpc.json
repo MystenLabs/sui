@@ -3863,7 +3863,9 @@
       "MoveValue": {
         "anyOf": [
           {
-            "$ref": "#/components/schemas/BigInt_for_uint64"
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0.0
           },
           {
             "type": "boolean"
