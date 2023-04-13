@@ -8,8 +8,9 @@ import clsx from 'clsx';
 import { useState } from 'react';
 
 import { ReactComponent as SearchIcon } from '~/assets/SVGIcons/24px/Search.svg';
-import { getFieldTypeValue } from '~/components/ownedobjects/utils';
-import { FieldItem } from '~/components/ownedobjects/views/FieldItem';
+import { getFieldTypeValue } from '~/components/owned-objects/utils';
+import { FieldItem } from '~/components/owned-objects/views/FieldItem';
+import { ScrollToViewCard } from '~/components/owned-objects/views/ScrollToViewCard';
 import { Banner } from '~/ui/Banner';
 import { DisclosureBox } from '~/ui/DisclosureBox';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
@@ -45,7 +46,16 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
         data: normalizedStruct,
         isLoading: loadingNormalizedStruct,
         isError: errorNormalizedMoveStruct,
-    } = useGetNormalizedMoveStruct(packageId, moduleName, functionName);
+    } = useGetNormalizedMoveStruct({
+        packageId,
+        module: moduleName,
+        struct: functionName,
+        onSuccess: (data) => {
+            if (data?.fields && activeFieldName === '') {
+                setActiveFieldName(data.fields[0].name);
+            }
+        },
+    });
 
     if (isLoading || loadingNormalizedStruct) {
         return (
@@ -61,6 +71,8 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
             </Banner>
         );
     }
+
+    // Set the active field name to the first field in the struct on load
 
     const fieldsData = getObjectFields(data!);
 
@@ -200,7 +212,12 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
                                 <div className="flex max-h-[600px] flex-col gap-5 overflow-x-scroll pb-5">
                                     {normalizedStruct?.fields.map(
                                         ({ name, type }) => (
-                                            <div key={name}>
+                                            <ScrollToViewCard
+                                                key={name}
+                                                inView={
+                                                    name === activeFieldName
+                                                }
+                                            >
                                                 <DisclosureBox
                                                     title={
                                                         <div className="min-w-fit max-w-[60%] truncate break-words text-body font-medium leading-relaxed text-steel-dark">
@@ -239,7 +256,7 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
                                                         type={type}
                                                     />
                                                 </DisclosureBox>
-                                            </div>
+                                            </ScrollToViewCard>
                                         )
                                     )}
                                 </div>
