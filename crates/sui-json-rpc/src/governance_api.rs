@@ -50,6 +50,9 @@ impl GovernanceReadApi {
         self.metrics
             .get_stake_sui_result_size
             .report(result.len() as u64);
+        self.metrics
+            .get_stake_sui_result_size_total
+            .inc_by(result.len() as u64);
         Ok(result)
     }
 
