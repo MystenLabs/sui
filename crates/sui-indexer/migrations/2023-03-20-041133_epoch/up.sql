@@ -80,6 +80,7 @@ CREATE MATERIALIZED VIEW epoch_move_call_metrics AS
         FROM epochs
         WHERE epoch_start_timestamp > ((EXTRACT(EPOCH FROM CURRENT_TIMESTAMP - '3 days'::INTERVAL)) * 1000)::BIGINT)
  GROUP BY move_package, move_module, move_function
+ ORDER BY count DESC
  LIMIT 10)
 UNION ALL
 (SELECT 7::BIGINT AS day, move_package, move_module, move_function, COUNT(*) AS count
@@ -89,6 +90,7 @@ UNION ALL
         FROM epochs
         WHERE epoch_start_timestamp > ((EXTRACT(EPOCH FROM CURRENT_TIMESTAMP - '7 days'::INTERVAL)) * 1000)::BIGINT)
  GROUP BY move_package, move_module, move_function
+ ORDER BY count DESC
  LIMIT 10)
 UNION ALL
 (SELECT 30::BIGINT AS day, move_package, move_module, move_function, COUNT(*) AS count
@@ -98,4 +100,5 @@ UNION ALL
         FROM epochs
         WHERE epoch_start_timestamp > ((EXTRACT(EPOCH FROM CURRENT_TIMESTAMP - '30 days'::INTERVAL)) * 1000)::BIGINT)
  GROUP BY move_package, move_module, move_function
+ ORDER BY count DESC
  LIMIT 10);
