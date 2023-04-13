@@ -11,10 +11,10 @@ import {
     DEFAULT_TRANSACTIONS_LIMIT,
     useGetTransactionBlocks,
 } from '~/hooks/useGetTransactionBlocks';
-import { Button } from '~/ui/Button';
 import { Heading } from '~/ui/Heading';
 import { Pagination } from '~/ui/Pagination';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
+import { RadioGroup, RadioOption } from '~/ui/Radio';
 import { TableCard } from '~/ui/TableCard';
 
 type TransactionBlocksProps = {
@@ -22,7 +22,7 @@ type TransactionBlocksProps = {
 };
 
 function TransactionBlocks({ address }: TransactionBlocksProps) {
-    const [isFrom, setIsFrom] = useState(false);
+    const [filterValue, setFilterValue] = useState('from');
     const [currentPage, setCurrentPage] = useState(0);
     const {
         data,
@@ -31,10 +31,10 @@ function TransactionBlocks({ address }: TransactionBlocksProps) {
         isFetchingNextPage,
         fetchNextPage,
         hasNextPage,
-    } = useGetTransactionBlocks(address, isFrom);
+    } = useGetTransactionBlocks(address, filterValue === 'from');
 
-    const toggleIsFrom = () => {
-        setIsFrom(!isFrom);
+    const setFilter = (value: string) => {
+        setFilterValue(value);
     };
 
     const generateTableCard = (
@@ -54,22 +54,15 @@ function TransactionBlocks({ address }: TransactionBlocksProps) {
                 <Heading color="gray-90" variant="heading4/semibold">
                     Transaction Blocks
                 </Heading>
-                <div className="flex gap-2">
-                    <Button
-                        disabled={isFrom}
-                        onClick={toggleIsFrom}
-                        variant="outline"
-                    >
-                        TO ADDRESS
-                    </Button>
-                    <Button
-                        disabled={!isFrom}
-                        onClick={toggleIsFrom}
-                        variant="outline"
-                    >
-                        FROM ADDRESS
-                    </Button>
-                </div>
+                <RadioGroup
+                    className="flex"
+                    ariaLabel="transaction filter"
+                    value={filterValue}
+                    onChange={setFilter}
+                >
+                    <RadioOption value="to" label="To Address" />
+                    <RadioOption value="from" label="From Address" />
+                </RadioGroup>
             </div>
 
             <div className="flex flex-col space-y-5 pt-5 text-left xl:pr-10">
