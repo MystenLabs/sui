@@ -35,7 +35,11 @@ export function UnderlyingObjectCard({
 
     // Get the normalized struct for the object
     const { data: normalizedStruct, isLoading: loadingNormalizedStruct } =
-        useGetNormalizedMoveStruct(packageId, moduleName, functionName);
+        useGetNormalizedMoveStruct({
+            packageId,
+            module: moduleName,
+            struct: functionName,
+        });
 
     if (isLoading || loadingNormalizedStruct) {
         return (
