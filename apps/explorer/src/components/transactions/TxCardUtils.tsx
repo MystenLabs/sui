@@ -1,47 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFormatCoin } from '@mysten/core';
 import { X12, Dot12 } from '@mysten/icons';
 import {
     getExecutionStatusType,
     getTotalGasUsed,
     getTransactionSender,
     type JsonRpcProvider,
-    SUI_TYPE_ARG,
     type SuiTransactionBlockResponse,
 } from '@mysten/sui.js';
 import clsx from 'clsx';
 import { type ReactNode } from 'react';
 
+import { SuiAmount } from '../Table/SuiAmount';
 import { TxTimeType } from '../tx-time/TxTimeType';
 
-import styles from './RecentTxCard.module.css';
-
 import { AddressLink, TransactionLink } from '~/ui/InternalLink';
-
-export function SuiAmount({
-    amount,
-}: {
-    amount: bigint | number | string | undefined | null;
-}) {
-    const [formattedAmount, coinType] = useFormatCoin(amount, SUI_TYPE_ARG);
-
-    if (amount) {
-        const SuiSuffix = <abbr className={styles.suisuffix}>{coinType}</abbr>;
-
-        return (
-            <section>
-                <span className={styles.suiamount}>
-                    {formattedAmount}
-                    {SuiSuffix}
-                </span>
-            </section>
-        );
-    }
-
-    return <span className={styles.suiamount}>--</span>;
-}
 
 function TxTableHeader({ label }: { label: string }) {
     return <div className="pl-3">{label}</div>;
@@ -80,7 +54,9 @@ export const genTableDataFromTxData = (
         return {
             date: (
                 <TxTableCol>
-                    <TxTimeType timestamp={+(transaction.timestampMs || 0)} />
+                    <TxTimeType
+                        timestamp={Number(transaction.timestampMs || 0)}
+                    />
                 </TxTableCol>
             ),
             digest: (

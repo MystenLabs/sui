@@ -7,6 +7,7 @@ import {
     type ApyByValidator,
     useGetValidatorsEvents,
     formatPercentageDisplay,
+    useGetSystemState,
 } from '@mysten/core';
 import { type SuiEvent, type SuiValidatorSummary } from '@mysten/sui.js';
 import { lazy, Suspense, useMemo } from 'react';
@@ -14,7 +15,6 @@ import { lazy, Suspense, useMemo } from 'react';
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
 import { StakeColumn } from '~/components/top-validators-card/StakeColumn';
 import { DelegationAmount } from '~/components/validator/DelegationAmount';
-import { useGetSystemObject } from '~/hooks/useGetObject';
 import { Banner } from '~/ui/Banner';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
@@ -66,12 +66,13 @@ export function validatorsTableData(
                     // show the rolling average apy even if its zero, otherwise show -- for no data
                     apy: rollingAverageApys?.[validator.suiAddress] ?? null,
                     nextEpochGasPrice: validator.nextEpochGasPrice,
-                    commission: +validator.commissionRate / 100,
+                    commission: Number(validator.commissionRate) / 100,
                     img: img,
                     address: validator.suiAddress,
-                    lastReward: +event?.pool_staking_reward || 0,
+                    lastReward: Number(event?.pool_staking_reward) || 0,
                     atRisk: isAtRisk
-                        ? VALIDATOR_LOW_STAKE_GRACE_PERIOD - +atRiskValidator[1]
+                        ? VALIDATOR_LOW_STAKE_GRACE_PERIOD -
+                          Number(atRiskValidator[1])
                         : null,
                 };
             }),
@@ -210,7 +211,7 @@ export function validatorsTableData(
 }
 
 function ValidatorPageResult() {
-    const { data, isLoading, isSuccess, isError } = useGetSystemObject();
+    const { data, isLoading, isSuccess, isError } = useGetSystemState();
 
     const numberOfValidators = data?.activeValidators.length || 0;
 
@@ -231,7 +232,7 @@ function ValidatorPageResult() {
         const validators = data.activeValidators;
 
         return validators.reduce(
-            (acc, cur) => acc + +cur.stakingPoolSuiBalance,
+            (acc, cur) => acc + Number(cur.stakingPoolSuiBalance),
             0
         );
     }, [data]);
@@ -252,7 +253,7 @@ function ValidatorPageResult() {
         let totalRewards = 0;
 
         validatorEvents.forEach(({ parsedJson }) => {
-            totalRewards += +parsedJson!.pool_staking_reward;
+            totalRewards += Number(parsedJson!.pool_staking_reward);
         });
 
         return totalRewards;

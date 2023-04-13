@@ -4,12 +4,15 @@ init:
 A: object(0,0)
 
 task 1 'publish'. lines 8-23:
+events: Event { package_id: test, transaction_module: Identifier("fake"), sender: A, type_: StructTag { address: sui, module: Identifier("coin"), name: Identifier("CurrencyCreated"), type_params: [Struct(StructTag { address: test, module: Identifier("fake"), name: Identifier("FAKE"), type_params: [] })] }, contents: [2] }
 created: object(1,0), object(1,1), object(1,2)
 mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 11164400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'programmable'. lines 25-27:
 created: object(2,0)
 mutated: object(0,0), object(1,2)
+gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
 
 task 3 'programmable'. lines 29-30:
 Error: Transaction Effects Status: Insufficient coin balance for operation.
@@ -17,4 +20,4 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 
 task 4 'programmable'. lines 32-33:
 Error: Transaction Effects Status: Insufficient coin balance for operation.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InsufficientCoinBalance, source: Some("balance: 199999999832042 required: 18446744073709551615"), command: Some(0) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InsufficientCoinBalance, source: Some("balance: 199999984463192 required: 18446744073709551615"), command: Some(0) } }

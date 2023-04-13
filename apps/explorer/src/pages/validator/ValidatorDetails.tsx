@@ -1,14 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useGetRollingAverageApys, useGetValidatorsEvents } from '@mysten/core';
+import {
+    useGetRollingAverageApys,
+    useGetValidatorsEvents,
+    useGetSystemState,
+} from '@mysten/core';
 import { type SuiSystemStateSummary } from '@mysten/sui.js';
 import React, { useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 
 import { ValidatorMeta } from '~/components/validator/ValidatorMeta';
 import { ValidatorStats } from '~/components/validator/ValidatorStats';
-import { useGetSystemObject } from '~/hooks/useGetObject';
 import { Banner } from '~/ui/Banner';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Text } from '~/ui/Text';
@@ -23,12 +26,12 @@ const getAtRiskRemainingEpochs = (
     const atRisk = data.atRiskValidators.find(
         ([address]) => address === validatorId
     );
-    return atRisk ? VALIDATOR_LOW_STAKE_GRACE_PERIOD - +atRisk[1] : null;
+    return atRisk ? VALIDATOR_LOW_STAKE_GRACE_PERIOD - Number(atRisk[1]) : null;
 };
 
 function ValidatorDetails() {
     const { id } = useParams();
-    const { data, isLoading } = useGetSystemObject();
+    const { data, isLoading } = useGetSystemState();
 
     const validatorData = useMemo(() => {
         if (!data) return null;
@@ -53,7 +56,7 @@ function ValidatorDetails() {
             validatorEvents,
             id
         )?.pool_staking_reward;
-        return +rewards || 0;
+        return Number(rewards) || 0;
     }, [id, validatorEvents]);
 
     if (isLoading || validatorsEventsLoading || validatorsApysLoading) {

@@ -3,7 +3,7 @@
 
 import { type Meta, type StoryObj } from '@storybook/react';
 
-import { SplitPanes, type SplitPaneProps } from '../SplitPanes';
+import { SplitPanes, type SplitPanesProps } from '../SplitPanes';
 
 export default {
     component: SplitPanes,
@@ -25,7 +25,7 @@ const panels = [
     </div>,
 ];
 
-const SplitPanesStory: StoryObj<SplitPaneProps> = {
+const SplitPanesStory: StoryObj<SplitPanesProps> = {
     render: (props) => (
         <div className="h-[500px] w-[1000px]">
             <SplitPanes {...props} panels={panels} />
@@ -33,7 +33,7 @@ const SplitPanesStory: StoryObj<SplitPaneProps> = {
     ),
 };
 
-export const HorizontalSplitPanes: StoryObj<SplitPaneProps> = {
+export const HorizontalSplitPanes: StoryObj<SplitPanesProps> = {
     ...SplitPanesStory,
     args: {
         direction: 'horizontal',
@@ -41,14 +41,14 @@ export const HorizontalSplitPanes: StoryObj<SplitPaneProps> = {
     },
 };
 
-export const VerticalSplitPanes: StoryObj<SplitPaneProps> = {
+export const VerticalSplitPanes: StoryObj<SplitPanesProps> = {
     ...SplitPanesStory,
     args: {
         direction: 'vertical',
     },
 };
 
-export const SplitPanesWithStateSaveOnRefresh: StoryObj<SplitPaneProps> = {
+export const SplitPanesWithStateSaveOnRefresh: StoryObj<SplitPanesProps> = {
     ...SplitPanesStory,
     args: {
         direction: 'horizontal',

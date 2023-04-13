@@ -1,0 +1,26 @@
+[package]
+name = "sui-upgrade-compatibility-transactional-tests"
+version = "0.1.0"
+authors = ["Mysten Labs <eng@mystenlabs.com>"]
+description = "Transactional tests for package upgrade compatibility checking"
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dev-dependencies]
+anyhow = { version = "1.0.64", features = ["backtrace"] }
+datatest-stable = "0.1.2"
+insta = { version = "1.21.1", features = ["redactions", "json"] }
+move-compiler.workspace = true
+move-package.workspace = true
+move-binary-format.workspace = true
+move-command-line-common.workspace = true
+sui-framework-build = { path = "../sui-framework-build/" }
+
+[[test]]
+name = "tests"
+harness = false
+
+[dependencies]
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+

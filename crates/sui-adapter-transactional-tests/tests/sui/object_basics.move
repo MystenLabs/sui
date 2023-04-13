@@ -79,6 +79,6 @@ module test::object_basics {
 
 //# run test::object_basics::create --sender B --args 20 @B
 
-//# run test::object_basics::update --sender B --args object(2,0) object(6,0) --view-events
+//# run test::object_basics::update --sender B --args object(2,0) object(6,0)
 
 //# run test::object_basics::delete --sender B --args object(2,0)

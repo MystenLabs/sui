@@ -770,12 +770,7 @@ impl Builder {
         let committee = Self::committee(&objects);
 
         let checkpoint = {
-            let signatures = self
-                .signatures
-                .clone()
-                .into_iter()
-                .map(|(_, s)| s)
-                .collect();
+            let signatures = self.signatures.clone().into_values().collect();
 
             CertifiedCheckpointSummary::new(checkpoint, signatures, &committee).unwrap()
         };
@@ -1390,6 +1385,7 @@ fn create_genesis_transaction(
                 SuiGasStatus::new_unmetered(protocol_config),
                 epoch_data,
                 protocol_config,
+                false, // enable_expensive_checks
             );
         assert!(inner_temp_store.objects.is_empty());
         assert!(inner_temp_store.mutable_inputs.is_empty());
@@ -1716,7 +1712,7 @@ impl TokenDistributionSchedule {
     ///
     /// The file is encoded such that the final entry in the CSV file is used to denote the
     /// allocation to the stake subsidy fund. It must be in the following format:
-    /// '0x0000000000000000000000000000000000000000000000000000000000000000,<amount to stake subsidy fund>,'
+    /// `0x0000000000000000000000000000000000000000000000000000000000000000,<amount to stake subsidy fund>,`
     ///
     /// All entries in a token distribution schedule must add up to 10B Sui.
     pub fn from_csv<R: std::io::Read>(reader: R) -> Result<Self> {
@@ -1950,6 +1946,7 @@ mod test {
                 SuiGasStatus::new_unmetered(&protocol_config),
                 &EpochData::new_test(),
                 &protocol_config,
+                false, // enable_expensive_checks
             );
 
         assert_eq!(effects, genesis.effects);

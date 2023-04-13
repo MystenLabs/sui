@@ -10,6 +10,7 @@ use sui_json_rpc_types::SuiTransactionBlockResponse;
 use crate::errors::IndexerError;
 use crate::store::PgIndexerStore;
 use crate::utils::reset_database;
+use crate::IndexerMetrics;
 use crate::{new_pg_connection_pool, Indexer, IndexerConfig};
 
 /// Spawns an indexer thread with provided Postgres DB url
@@ -27,11 +28,15 @@ pub async fn start_test_indexer(
             true,
         )?;
     }
-    let store = PgIndexerStore::new(async_pool, blocking_pool).await;
 
     let registry = Registry::default();
+    let indexer_metrics = IndexerMetrics::new(&registry);
+
+    let store = PgIndexerStore::new(async_pool, blocking_pool, indexer_metrics.clone()).await;
     let store_clone = store.clone();
-    let handle = tokio::spawn(async move { Indexer::start(&config, &registry, store_clone).await });
+    let handle = tokio::spawn(async move {
+        Indexer::start(&config, &registry, store_clone, indexer_metrics).await
+    });
     Ok((store, handle))
 }
 

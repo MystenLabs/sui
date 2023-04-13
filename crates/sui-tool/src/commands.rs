@@ -79,6 +79,7 @@ pub enum ToolCommand {
         concise_no_header: bool,
     },
 
+    /// Fetch the effects association with transaction `digest`
     #[clap(name = "fetch-transaction")]
     FetchTransaction {
         #[clap(long = "genesis")]
@@ -86,6 +87,10 @@ pub enum ToolCommand {
 
         #[clap(long, help = "The transaction ID to fetch")]
         digest: TransactionDigest,
+
+        /// If true, show the input transaction as well as the effects
+        #[clap(long = "show-tx")]
+        show_input_tx: bool,
     },
 
     /// Tool to read validator & node db.
@@ -224,8 +229,15 @@ impl ToolCommand {
                     }
                 }
             }
-            ToolCommand::FetchTransaction { genesis, digest } => {
-                print!("{}", get_transaction_block(digest, genesis).await?);
+            ToolCommand::FetchTransaction {
+                genesis,
+                digest,
+                show_input_tx,
+            } => {
+                print!(
+                    "{}",
+                    get_transaction_block(digest, genesis, show_input_tx).await?
+                );
             }
             ToolCommand::DbTool { db_path, cmd } => {
                 let path = PathBuf::from(db_path);

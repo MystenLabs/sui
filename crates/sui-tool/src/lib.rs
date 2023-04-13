@@ -303,6 +303,7 @@ pub async fn get_object(
 pub async fn get_transaction_block(
     tx_digest: TransactionDigest,
     genesis: PathBuf,
+    show_input_tx: bool,
 ) -> Result<String> {
     let clients = make_clients(genesis)?;
     let timer = Instant::now();
@@ -337,21 +338,26 @@ pub async fn get_transaction_block(
         .group_by(|(_, r)| {
             r.2.as_ref().map(|ok_result| match &ok_result.status {
                 TransactionStatus::Signed(_) => None,
-                TransactionStatus::Executed(_, effects, _) => {
-                    Some((effects.data(), effects.digest()))
-                }
+                TransactionStatus::Executed(_, effects, _) => Some((
+                    ok_result.transaction.transaction_data(),
+                    effects.data(),
+                    effects.digest(),
+                )),
             })
         });
     let mut s = String::new();
     for (i, (key, group)) in responses.into_iter().enumerate() {
         match key {
-            Ok(Some((effects, effects_digest))) => {
+            Ok(Some((tx, effects, effects_digest))) => {
                 writeln!(
                     &mut s,
                     "#{:<2} tx_digest: {:<68?} effects_digest: {:?}",
                     i, tx_digest, effects_digest,
                 )?;
                 writeln!(&mut s, "{:#?}", effects)?;
+                if show_input_tx {
+                    writeln!(&mut s, "{:#?}", tx)?;
+                }
             }
             Ok(None) => {
                 writeln!(

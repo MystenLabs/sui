@@ -108,6 +108,7 @@ members = [
     "crates/sui-transaction-builder",
     "crates/sui-transactional-test-runner",
     "crates/sui-types",
+    "crates/sui-upgrade-compatibility-transactional-tests",
     "crates/sui-verifier",
     "crates/sui-verifier-transactional-tests",
     "crates/telemetry-subscribers",

@@ -344,7 +344,6 @@ impl CompiledPackage {
         self.dependency_ids
             .published
             .values()
-            .into_iter()
             .map(|object_id| object_id.to_hex_uncompressed())
             .collect()
     }

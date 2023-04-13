@@ -6,6 +6,7 @@ A: object(0,0), B: object(0,1), C: object(0,2)
 task 1 'programmable'. lines 8-10:
 created: object(1,0)
 mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'view-object'. lines 12-12:
 Owner: Account Address ( B )
@@ -15,6 +16,7 @@ Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object:
 task 3 'run'. lines 14-14:
 created: object(3,0)
 mutated: object(0,1), object(1,0)
+gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
 
 task 4 'view-object'. lines 16-16:
 Owner: Account Address ( B )

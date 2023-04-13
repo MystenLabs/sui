@@ -2,6 +2,7 @@ processed 5 tasks
 
 task 1 'consensus-commit-prologue'. lines 6-6:
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000006
+gas summary: computation_cost: 0, storage_cost: 0,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'view-object'. lines 8-8:
 Owner: Shared
@@ -10,6 +11,7 @@ Contents: sui::clock::Clock {id: sui::object::UID {id: sui::object::ID {bytes: 0
 
 task 3 'consensus-commit-prologue'. lines 10-10:
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000006
+gas summary: computation_cost: 0, storage_cost: 0,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 4 'view-object'. lines 12-12:
 Owner: Shared

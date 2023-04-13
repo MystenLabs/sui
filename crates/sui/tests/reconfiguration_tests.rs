@@ -414,9 +414,7 @@ async fn test_create_advance_epoch_tx_race() {
 }
 
 #[sim_test]
-#[ignore]
 async fn test_reconfig_with_failing_validator() {
-    telemetry_subscribers::init_for_testing();
     sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
 
     let test_cluster = Arc::new(
@@ -438,7 +436,10 @@ async fn test_reconfig_with_failing_validator() {
         .map(|v| v.parse().unwrap())
         .unwrap_or(4);
 
-    test_cluster.wait_for_epoch(Some(target_epoch)).await;
+    // A longer timeout is required, as restarts can cause reconfiguration to take longer.
+    test_cluster
+        .wait_for_epoch_with_timeout(Some(target_epoch), Duration::from_secs(90))
+        .await;
 }
 
 #[sim_test]
@@ -490,7 +491,6 @@ async fn test_validator_resign_effects() {
 }
 
 #[sim_test]
-#[ignore]
 async fn test_validator_candidate_pool_read() {
     let new_validator_key = gen_keys(5).pop().unwrap();
     let new_validator_address: SuiAddress = new_validator_key.public().into();
@@ -547,6 +547,10 @@ async fn test_validator_candidate_pool_read() {
         &new_validator_key,
     )
     .await;
+
+    // Trigger reconfiguration so that the candidate adding txn is executed on all authorities.
+    trigger_reconfiguration(&authorities).await;
+
     // Check that the candidate can be found in the candidate table now.
     authorities[0].with(|node| {
         let system_state = node
@@ -662,7 +666,6 @@ async fn test_inactive_validator_pool_read() {
 fn gen_keys(count: usize) -> Vec<AccountKeyPair> {
     let mut rng = StdRng::from_seed([0; 32]);
     (0..count)
-        .into_iter()
         .map(|_| get_key_pair_from_rng::<AccountKeyPair, _>(&mut rng).1)
         .collect()
 }

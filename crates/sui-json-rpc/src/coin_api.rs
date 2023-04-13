@@ -16,8 +16,8 @@ use sui_json_rpc_types::{Balance, Coin as SuiCoin};
 use sui_json_rpc_types::{CoinPage, SuiCoinMetadata};
 use sui_open_rpc::Module;
 use sui_types::balance::Supply;
-use sui_types::base_types::{MoveObjectType, ObjectID, ObjectRef, SuiAddress};
-use sui_types::coin::{Coin, CoinMetadata, TreasuryCap};
+use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
+use sui_types::coin::{CoinMetadata, TreasuryCap};
 use sui_types::error::{SuiError, UserInputError};
 use sui_types::gas_coin::GAS;
 use sui_types::messages::TransactionEffectsAPI;
@@ -88,11 +88,7 @@ impl CoinReadApi {
                             .unwrap()
                             .to_string()
                     });
-                    let balance = {
-                        let coin: Coin = bcs::from_bytes(move_object.contents())?;
-                        coin.balance.value()
-                    };
-
+                    let balance = move_object.get_coin_value_unsafe();
                     Ok(SuiCoin {
                         coin_type,
                         coin_object_id: *id,
@@ -257,9 +253,7 @@ impl CoinReadApiServer for CoinReadApi {
 
         for coin_obj in coins {
             // unwraps safe because get_owner_coin_iterator can only return coin objects
-            let coin: Coin =
-                bcs::from_bytes(coin_obj.data.try_as_move().unwrap().contents()).unwrap();
-            total_balance += coin.balance.value() as u128;
+            total_balance += coin_obj.data.try_as_move().unwrap().get_coin_value_unsafe() as u128;
             coin_object_count += 1;
         }
 
@@ -273,7 +267,7 @@ impl CoinReadApiServer for CoinReadApi {
     }
 
     fn get_all_balances(&self, owner: SuiAddress) -> RpcResult<Vec<Balance>> {
-        let mut balances: HashMap<MoveObjectType, Balance> = HashMap::new();
+        let mut balances: HashMap<TypeTag, Balance> = HashMap::new();
         // TODO: Add index to improve performance?
         let coin_objs = self.multi_get_coin_objects(
             &self
@@ -281,11 +275,10 @@ impl CoinReadApiServer for CoinReadApi {
                 .collect::<Vec<_>>(),
         )?;
         for coin_obj in coin_objs {
-            // unwraps safe because get_owner_coin_iterator can only return coin objects
+            // unwrap safe because get_owner_coin_iterator can only return coin objects
             let move_obj = coin_obj.data.try_as_move().unwrap();
-            let coin_type = move_obj.type_();
-            let coin: Coin = bcs::from_bytes(move_obj.contents()).unwrap();
-
+            // unwrap safe because each coin object has one type param
+            let coin_type = move_obj.type_().type_params().first().unwrap().clone();
             let balance = balances.entry(coin_type.clone()).or_insert(Balance {
                 coin_type: coin_type.to_string(),
                 coin_object_count: 0,
@@ -293,7 +286,7 @@ impl CoinReadApiServer for CoinReadApi {
                 // note: LockedCoin is deprecated
                 locked_balance: Default::default(),
             });
-            balance.total_balance += coin.balance.value() as u128;
+            balance.total_balance += move_obj.get_coin_value_unsafe() as u128;
             balance.coin_object_count += 1;
         }
         Ok(balances.into_values().collect())
@@ -301,19 +294,6 @@ impl CoinReadApiServer for CoinReadApi {
 
     async fn get_coin_metadata(&self, coin_type: String) -> RpcResult<SuiCoinMetadata> {
         let coin_struct = parse_sui_struct_tag(&coin_type)?;
-        if GAS::is_gas(&coin_struct) {
-            // TODO: We need to special case for `CoinMetadata<0x2::sui::SUI> because `get_transaction`
-            // will fail for genesis transaction. However, instead of hardcoding the values here, We
-            // can store the object id for `CoinMetadata<0x2::sui::SUI>` in the Sui System object
-            return Ok(SuiCoinMetadata {
-                id: None,
-                decimals: 9,
-                symbol: "SUI".to_string(),
-                name: "Sui".to_string(),
-                description: "".to_string(),
-                icon_url: None,
-            });
-        }
 
         let metadata_object = self
             .find_package_object(

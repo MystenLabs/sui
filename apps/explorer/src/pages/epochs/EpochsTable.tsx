@@ -3,14 +3,16 @@
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
+import { SuiAmount } from '~/components/Table/SuiAmount';
 import { TableFooter } from '~/components/Table/TableFooter';
-import { SuiAmount, TxTableCol } from '~/components/transactions/TxCardUtils';
+import { TxTableCol } from '~/components/transactions/TxCardUtils';
 import { TxTimeType } from '~/components/tx-time/TxTimeType';
 import { useEnhancedRpcClient } from '~/hooks/useEnhancedRpc';
 import { CheckpointSequenceLink, EpochLink } from '~/ui/InternalLink';
 import { usePaginationStack } from '~/ui/Pagination';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
+import { Text } from '~/ui/Text';
 
 interface EpochsTableProps {
     initialLimit: number;
@@ -21,7 +23,6 @@ interface EpochsTableProps {
 export function EpochsTable({
     initialLimit,
     disablePagination,
-    refetchInterval,
 }: EpochsTableProps) {
     const enhancedRpc = useEnhancedRpcClient();
     const [limit, setLimit] = useState(initialLimit);
@@ -30,7 +31,7 @@ export function EpochsTable({
         ['epochs', 'current'],
         async () => enhancedRpc.getCurrentEpoch(),
         {
-            select: (epoch) => epoch.epoch + 1,
+            select: (epoch) => Number(epoch.epoch) + 1,
         }
     );
 
@@ -66,7 +67,9 @@ export function EpochsTable({
                           ),
                           transactions: (
                               <TxTableCol>
-                                  {epoch.epochTotalTransactions}
+                                  <Text variant="bodySmall/medium">
+                                      {epoch.epochTotalTransactions}
+                                  </Text>
                               </TxTableCol>
                           ),
                           stakeRewards: (
@@ -95,18 +98,20 @@ export function EpochsTable({
                           ),
                           storageRevenue: (
                               <TxTableCol>
-                                  {epoch.endOfEpochInfo?.storageCharge}
+                                  <SuiAmount
+                                      amount={
+                                          epoch.endOfEpochInfo?.storageCharge
+                                      }
+                                  />
                               </TxTableCol>
                           ),
                           time: (
                               <TxTableCol>
                                   <TxTimeType
-                                      timestamp={
-                                          +(
-                                              epoch.endOfEpochInfo
-                                                  ?.epochEndTimestamp ?? 0
-                                          )
-                                      }
+                                      timestamp={Number(
+                                          epoch.endOfEpochInfo
+                                              ?.epochEndTimestamp ?? 0
+                                      )}
                                   />
                               </TxTableCol>
                           ),
@@ -180,7 +185,7 @@ export function EpochsTable({
                     href="/recent?tab=epochs"
                     label="Epochs"
                     data={epochsData}
-                    count={+(countQuery.data ?? 0)}
+                    count={Number(countQuery.data ?? 0)}
                     limit={limit}
                     onLimitChange={setLimit}
                     pagination={pagination}

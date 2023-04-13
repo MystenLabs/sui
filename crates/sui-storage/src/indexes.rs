@@ -5,7 +5,7 @@
 //! The main user of this data is the explorer.
 
 use std::cmp::{max, min};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use anyhow::anyhow;
@@ -753,10 +753,12 @@ impl IndexStore {
         cursor: Option<ObjectID>,
     ) -> SuiResult<impl Iterator<Item = DynamicFieldInfo> + '_> {
         debug!(?object, "get_dynamic_fields");
+        let iter_lower_bound = (object, ObjectID::ZERO);
+        let iter_upper_bound = (object, ObjectID::MAX);
         Ok(self
             .tables
             .dynamic_field_index
-            .iter()
+            .iter_with_bounds(Some(iter_lower_bound), Some(iter_upper_bound))
             // The object id 0 is the smallest possible
             .skip_to(&(object, cursor.unwrap_or(ObjectID::ZERO)))?
             // skip an extra b/c the cursor is exclusive
@@ -844,5 +846,13 @@ impl IndexStore {
 
     pub fn is_empty(&self) -> bool {
         self.tables.owner_index.is_empty()
+    }
+
+    pub fn checkpoint_db(&self, path: &Path) -> SuiResult {
+        // We are checkpointing the whole db
+        self.tables
+            .transactions_from_addr
+            .checkpoint_db(path)
+            .map_err(SuiError::StorageError)
     }
 }

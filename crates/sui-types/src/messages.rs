@@ -925,13 +925,11 @@ impl TransactionKind {
         Ok(())
     }
 
-    /// number of commands, or 1 if it is a system transaction
+    /// number of commands, or 0 if it is a system transaction
     pub fn num_commands(&self) -> usize {
         match self {
-            TransactionKind::ChangeEpoch(_)
-            | TransactionKind::Genesis(_)
-            | TransactionKind::ConsensusCommitPrologue(_) => 1,
             TransactionKind::ProgrammableTransaction(pt) => pt.commands.len(),
+            _ => 0,
         }
     }
 }
@@ -1031,7 +1029,7 @@ pub struct TransactionDataV1 {
 }
 
 impl TransactionData {
-    pub fn new_system_transaction(kind: TransactionKind) -> Self {
+    fn new_system_transaction(kind: TransactionKind) -> Self {
         // assert transaction kind if a system transaction
         assert!(kind.is_system_tx());
         let sender = SuiAddress::default();

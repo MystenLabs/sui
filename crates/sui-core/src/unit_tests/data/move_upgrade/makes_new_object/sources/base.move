@@ -5,6 +5,7 @@ module base_addr::base {
     use sui::object::{Self, UID};
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
+    use sui::event;
 
     struct A<T> {
         f1: bool,
@@ -14,6 +15,11 @@ module base_addr::base {
     struct B has key {
         id: UID,
         x: u64,
+    }
+
+    struct BModEvent has copy, drop {
+        old: u64,
+        new: u64,
     }
 
     friend base_addr::friend_module;
@@ -37,4 +43,11 @@ module base_addr::base {
         let B { id, x: _ }  = b;
         object::delete(id);
     }
+
+    entry fun modifies_b(b: B, ctx: &mut TxContext) {
+        event::emit(BModEvent{ old: b.x, new: 7 });
+        b.x = 7;
+        transfer::transfer(b, tx_context::sender(ctx))
+    }
+
 }

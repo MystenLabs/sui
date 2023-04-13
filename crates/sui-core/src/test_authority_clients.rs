@@ -147,7 +147,7 @@ impl LocalAuthorityClient {
                 Ok(Some(effects)) => effects,
                 _ => {
                     let certificate = certificate.verify(epoch_store.committee())?;
-                    state.try_execute_for_test(&certificate).await?
+                    state.try_execute_for_test(&certificate).await?.0
                 }
             }
             .into_inner();

@@ -109,9 +109,9 @@ pub async fn multi_get_full_transactions(
         .map(CheckpointTransactionBlockResponse::try_from)
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| {
-            IndexerError::FullNodeReadingError(format!(
-                "Unexpected None value in SuiTransactionBlockFullResponse of digests {:?} with error {:?}",
-                digests, e
+            IndexerError::UnexpectedFullnodeResponseError(format!(
+                "Unexpected None value in SuiTransactionBlockFullResponse with error {:?}",
+                e
             ))
         })?;
     Ok(sui_full_transactions)

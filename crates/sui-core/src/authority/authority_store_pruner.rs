@@ -244,12 +244,13 @@ impl AuthorityStorePruner {
             "Starting object pruning service with num_epochs_to_retain={}",
             config.num_epochs_to_retain
         );
-        let tick_duration = if config.num_epochs_to_retain > 0 {
-            Duration::from_millis(epoch_duration_ms / 2)
-        } else {
-            Duration::from_secs(config.pruning_run_delay_seconds.unwrap_or(60))
-        };
-
+        let tick_duration = Duration::from_secs(config.pruning_run_delay_seconds.unwrap_or(
+            if config.num_epochs_to_retain > 0 {
+                epoch_duration_ms / 2
+            } else {
+                60
+            },
+        ));
         let pruning_initial_delay = min(tick_duration, Duration::from_secs(300));
         let mut prune_interval =
             tokio::time::interval_at(Instant::now() + pruning_initial_delay, tick_duration);
@@ -538,7 +539,7 @@ mod tests {
     async fn test_db_size_after_compaction() -> Result<(), anyhow::Error> {
         let primary_path = tempfile::tempdir()?.into_path();
         let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&primary_path, None));
-        let total_unique_object_ids = 100_000;
+        let total_unique_object_ids = 200_000;
         let num_versions_per_object = 10;
         let ids = ObjectID::in_range(ObjectID::ZERO, total_unique_object_ids)?;
         let mut to_delete = vec![];

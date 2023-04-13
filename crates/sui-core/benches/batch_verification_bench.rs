@@ -24,7 +24,6 @@ fn gen_certs(
     let (receiver, _): (_, AccountKeyPair) = get_key_pair();
 
     let senders: Vec<_> = (0..count)
-        .into_iter()
         .map(|_| get_key_pair::<AccountKeyPair>())
         .collect();
 
@@ -80,7 +79,6 @@ fn async_verifier_bench(c: &mut Criterion) {
 
                     b.iter(|| {
                         let handles: Vec<_> = (0..(num_threads * over_subscription))
-                            .into_iter()
                             .map(|_| {
                                 let batch_verifier = batch_verifier.clone();
                                 let certs = certs.clone();

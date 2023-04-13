@@ -44,7 +44,7 @@ jobs:
           git remote set-url origin https://x-access-token:${{ secrets.AUTOMERGE_TOKEN }}@github.com/${{ github.repository }}
           git commit -am "chore(deps): cargo hakari"
           git push
-      - uses: ahmadnassri/action-dependabot-auto-merge@7dbc44641f77fb62b23158c1294b5b757d6091a5 # pin@v2.6
+      - uses: ahmadnassri/action-dependabot-auto-merge@45fc124d949b19b6b8bf6645b6c9d55f4f9ac61a # pin@v2.6
         with:
           github-token: ${{ secrets.AUTOMERGE_TOKEN }}
           command: 'squash and merge'

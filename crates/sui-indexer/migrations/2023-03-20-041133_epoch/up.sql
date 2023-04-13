@@ -1,9 +1,11 @@
-CREATE MATERIALIZED VIEW epoch_network_metrics AS
-SELECT (SELECT MAX(t1.count)::float8 / 10
-        FROM (SELECT SUM(total_transactions) count
-              FROM checkpoints
-              WHERE timestamp_ms / 10000 > (EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - '30 days'::INTERVAL)) / 10)::BIGINT
-              GROUP BY (timestamp_ms / 10000)) t1) AS tps_30_days;
+CREATE MATERIALIZED VIEW epoch_network_metrics as
+SELECT MAX(tps_30_days) as tps_30_days
+FROM (SELECT (((SUM(total_transactions) OVER w) - (FIRST_VALUE(total_transactions) OVER w))::float8 /
+              ((MAX(timestamp_ms) OVER w - MIN(timestamp_ms) OVER w)) *
+              1000) AS tps_30_days
+      FROM checkpoints
+      WHERE timestamp_ms / 1000 > (EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - '30 days'::INTERVAL)))::BIGINT
+      WINDOW w AS (ORDER BY timestamp_ms ROWS BETWEEN 14 PRECEDING AND 15 FOLLOWING)) t1;
 
 CREATE TABLE epochs
 (
@@ -80,6 +82,7 @@ CREATE MATERIALIZED VIEW epoch_move_call_metrics AS
         FROM epochs
         WHERE epoch_start_timestamp > ((EXTRACT(EPOCH FROM CURRENT_TIMESTAMP - '3 days'::INTERVAL)) * 1000)::BIGINT)
  GROUP BY move_package, move_module, move_function
+ ORDER BY count DESC
  LIMIT 10)
 UNION ALL
 (SELECT 7::BIGINT AS day, move_package, move_module, move_function, COUNT(*) AS count
@@ -89,6 +92,7 @@ UNION ALL
         FROM epochs
         WHERE epoch_start_timestamp > ((EXTRACT(EPOCH FROM CURRENT_TIMESTAMP - '7 days'::INTERVAL)) * 1000)::BIGINT)
  GROUP BY move_package, move_module, move_function
+ ORDER BY count DESC
  LIMIT 10)
 UNION ALL
 (SELECT 30::BIGINT AS day, move_package, move_module, move_function, COUNT(*) AS count
@@ -98,4 +102,5 @@ UNION ALL
         FROM epochs
         WHERE epoch_start_timestamp > ((EXTRACT(EPOCH FROM CURRENT_TIMESTAMP - '30 days'::INTERVAL)) * 1000)::BIGINT)
  GROUP BY move_package, move_module, move_function
+ ORDER BY count DESC
  LIMIT 10);

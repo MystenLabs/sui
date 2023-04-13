@@ -10,11 +10,10 @@ import { Heading } from '~/ui/Heading';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Pagination } from '~/ui/Pagination';
 
-export const OBJECTS_PER_PAGE: number = 6;
-
-function OwnedObjects({ id }: { id: string }): JSX.Element {
-    const [currentSlice, setCurrentSlice] = useState(1);
-    const { data, isLoading, isError } = useGetOwnedObjects(id);
+function OwnedObjects({ id }: { id: string }) {
+    const [currentPage, setCurrentPage] = useState(0);
+    const { data, isLoading, isError, hasNextPage, fetchNextPage, isFetching } =
+        useGetOwnedObjects(id);
 
     if (isError) {
         return (
@@ -23,6 +22,7 @@ function OwnedObjects({ id }: { id: string }): JSX.Element {
             </div>
         );
     }
+
     return (
         <div className="pl-7.5">
             {isLoading ? (
@@ -32,32 +32,38 @@ function OwnedObjects({ id }: { id: string }): JSX.Element {
                     <Heading color="gray-90" variant="heading4/semibold">
                         NFTs
                     </Heading>
-
-                    <div className="flex max-h-80 flex-col overflow-auto">
-                        <div className="flex flex-wrap">
-                            {data.data
-                                .slice(
-                                    (currentSlice - 1) * OBJECTS_PER_PAGE,
-                                    currentSlice * OBJECTS_PER_PAGE
-                                )
-                                .map((obj) => (
+                    {isLoading || isFetching ? (
+                        <LoadingSpinner />
+                    ) : (
+                        <div className="flex max-h-80 flex-col overflow-auto">
+                            <div className="flex flex-wrap">
+                                {data?.pages[currentPage]?.data.map((obj) => (
                                     <OwnedObject
                                         obj={obj}
                                         key={obj?.data?.objectId}
                                     />
                                 ))}
+                            </div>
                         </div>
-                    </div>
-                    {data.data.length > OBJECTS_PER_PAGE && (
+                    )}
+
+                    {(hasNextPage || data?.pages.length > 1) && (
                         <Pagination
-                            onNext={() => setCurrentSlice(currentSlice + 1)}
-                            hasNext={
-                                currentSlice !==
-                                Math.ceil(data.data.length / OBJECTS_PER_PAGE)
-                            }
-                            hasPrev={currentSlice !== 1}
-                            onPrev={() => setCurrentSlice(currentSlice - 1)}
-                            onFirst={() => setCurrentSlice(1)}
+                            onNext={() => {
+                                if (isLoading || isFetching) {
+                                    return;
+                                }
+
+                                // Make sure we are at the end before fetching another page
+                                if (currentPage === data?.pages.length - 1) {
+                                    fetchNextPage();
+                                }
+                                setCurrentPage(currentPage + 1);
+                            }}
+                            hasNext={Boolean(hasNextPage)}
+                            hasPrev={currentPage !== 0}
+                            onPrev={() => setCurrentPage(currentPage - 1)}
+                            onFirst={() => setCurrentPage(1)}
                         />
                     )}
                 </div>

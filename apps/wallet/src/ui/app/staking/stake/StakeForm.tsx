@@ -142,7 +142,7 @@ function StakeForm({
                             color="steel-darker"
                         >
                             {epoch
-                                ? `Epoch #${+startEarningRewardsEpoch}`
+                                ? `Epoch #${Number(startEarningRewardsEpoch)}`
                                 : '--'}
                         </Text>
                     )}

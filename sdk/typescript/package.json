@@ -2,7 +2,7 @@
   "name": "@mysten/sui.js",
   "author": "Mysten Labs <build@mystenlabs.com>",
   "description": "Sui TypeScript API(Work in Progress)",
-  "version": "0.32.0",
+  "version": "0.32.1",
   "license": "Apache-2.0",
   "files": [
     "dist",
@@ -66,6 +66,7 @@
     }
   ],
   "devDependencies": {
+    "@iarna/toml": "^2.2.5",
     "@size-limit/preset-small-lib": "^8.2.4",
     "@types/node": "^18.15.3",
     "@types/tmp": "^0.2.3",

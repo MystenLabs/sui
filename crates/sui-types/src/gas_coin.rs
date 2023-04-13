@@ -104,6 +104,11 @@ impl GasCoin {
     pub fn layout() -> MoveStructLayout {
         Coin::layout(TypeTag::Struct(Box::new(GAS::type_())))
     }
+
+    #[cfg(test)]
+    pub fn new_for_testing(value: u64) -> Self {
+        Self::new(ObjectID::random(), value)
+    }
 }
 
 impl TryFrom<&MoveObject> for GasCoin {

@@ -124,11 +124,13 @@ export function HomeMetrics() {
                         tooltip="Total transaction blocks counter"
                         amount={transactionCount}
                     />
-                    <FormattedStatsAmount
+                    {/* 
+                        TODO: enable when indexer is healthy
+                        <FormattedStatsAmount
                         label="Addresses"
                         tooltip="Addresses that have participated in at least one transaction since network genesis"
                         amount={networkMetrics?.totalAddresses}
-                    />
+                    /> */}
                 </MetricGroup>
             </div>
         </Card>

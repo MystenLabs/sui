@@ -20,6 +20,7 @@ use rocksdb::{
     WriteBatch, WriteBatchWithTransaction, WriteOptions,
 };
 use serde::{de::DeserializeOwned, Serialize};
+use std::collections::HashSet;
 use std::{
     borrow::Borrow,
     collections::BTreeMap,
@@ -871,38 +872,6 @@ impl<K, V> DBMap<K, V> {
                 Self::get_int_property(rocksdb, &cf, properties::BACKGROUND_ERRORS)
                     .unwrap_or(METRICS_ERROR),
             );
-        let db_name = rocksdb.db_name();
-        if let RocksDB::DBWithThreadMode(ref rocksdb) = **rocksdb {
-            let mem_usage_stats =
-                rocksdb::perf::get_memory_usage_stats(Some(&[&rocksdb.underlying]), None);
-            db_metrics
-                .rocksdb_mem_table_usage
-                .with_label_values(&[&db_name])
-                .set(
-                    mem_usage_stats
-                        .as_ref()
-                        .map(|x| x.mem_table_total as i64)
-                        .unwrap_or(METRICS_ERROR),
-                );
-            db_metrics
-                .rocksdb_unflushed_mem_table_usage
-                .with_label_values(&[&db_name])
-                .set(
-                    mem_usage_stats
-                        .as_ref()
-                        .map(|x| x.mem_table_unflushed as i64)
-                        .unwrap_or(METRICS_ERROR),
-                );
-            db_metrics
-                .rocksdb_table_readers_usage
-                .with_label_values(&[&db_name])
-                .set(
-                    mem_usage_stats
-                        .as_ref()
-                        .map(|x| x.mem_table_readers_total as i64)
-                        .unwrap_or(METRICS_ERROR),
-                );
-        }
     }
 
     pub fn transaction(&self) -> Result<DBTransaction<'_>, TypedStoreError> {
@@ -1276,11 +1245,9 @@ impl<'a> DBTransaction<'a> {
         &'a self,
         db: &DBMap<K, V>,
     ) -> Iter<'a, K, V> {
-        let mut db_iter = self
+        let db_iter = self
             .transaction
             .raw_iterator_cf_opt(&db.cf(), db.opts.readopts());
-        db_iter.seek_to_first();
-
         Iter::new(
             RocksDBRawIter::OptimisticTransaction(db_iter),
             db.cf.clone(),
@@ -1575,10 +1542,9 @@ where
         } else {
             None
         };
-        let mut db_iter = self
+        let db_iter = self
             .rocksdb
             .raw_iterator_cf(&self.cf(), self.opts.readopts());
-        db_iter.seek_to_first();
         if let Some((timer, _perf_ctx)) = report_metrics {
             timer.stop_and_record();
             self.db_metrics
@@ -1616,6 +1582,48 @@ where
                 .report_metrics(&self.cf);
         }
         SafeIter::new(
+            db_iter,
+            self.cf.clone(),
+            &self.db_metrics,
+            &self.iter_bytes_sample_interval,
+        )
+    }
+
+    /// Returns an iterator visiting each key-value pair in the map. By proving bounds of the
+    /// scan range, RocksDB scan avoid unnecessary scans
+    fn iter_with_bounds(
+        &'a self,
+        lower_bound: Option<K>,
+        upper_bound: Option<K>,
+    ) -> Self::Iterator {
+        let report_metrics = if self.iter_latency_sample_interval.sample() {
+            let timer = self
+                .db_metrics
+                .op_metrics
+                .rocksdb_iter_latency_seconds
+                .with_label_values(&[&self.cf])
+                .start_timer();
+            Some((timer, RocksDBPerfContext::default()))
+        } else {
+            None
+        };
+        let mut readopts = ReadOptions::default();
+        if let Some(lower_bound) = lower_bound {
+            let key_buf = be_fix_int_ser(&lower_bound).unwrap();
+            readopts.set_iterate_lower_bound(key_buf);
+        }
+        if let Some(upper_bound) = upper_bound {
+            let key_buf = be_fix_int_ser(&upper_bound).unwrap();
+            readopts.set_iterate_upper_bound(key_buf);
+        }
+        let db_iter = self.rocksdb.raw_iterator_cf(&self.cf(), readopts);
+        if let Some((timer, _perf_ctx)) = report_metrics {
+            timer.stop_and_record();
+            self.db_metrics
+                .read_perf_ctx_metrics
+                .report_metrics(&self.cf);
+        }
+        Iter::new(
             db_iter,
             self.cf.clone(),
             &self.db_metrics,
@@ -1955,26 +1963,9 @@ pub fn open_cf<P: AsRef<Path>>(
     )
 }
 
-fn prepare_db_options<P: AsRef<Path>>(
-    path: &P,
-    db_options: Option<rocksdb::Options>,
-    opt_cfs: &[(&str, &rocksdb::Options)],
-) -> rocksdb::Options {
+fn prepare_db_options(db_options: Option<rocksdb::Options>) -> rocksdb::Options {
     // Customize database options
     let mut options = db_options.unwrap_or_else(|| default_db_options().options);
-    let mut opt_cfs: std::collections::HashMap<_, _> = opt_cfs.iter().cloned().collect();
-    let cfs = rocksdb::DBWithThreadMode::<MultiThreaded>::list_cf(&options, path)
-        .ok()
-        .unwrap_or_default();
-
-    let default_db_options = default_db_options();
-    // Add CFs not explicitly listed
-    for cf_key in cfs.iter() {
-        if !opt_cfs.contains_key(&cf_key[..]) {
-            opt_cfs.insert(cf_key, &default_db_options.options);
-        }
-    }
-
     options.create_if_missing(true);
     options.create_missing_column_families(true);
     options
@@ -1996,15 +1987,16 @@ pub fn open_cf_opts<P: AsRef<Path>>(
     // resolves the issue.
     //
     // This is a no-op in non-simulator builds.
+
+    let cfs = populate_missing_cfs(opt_cfs, path)?;
     nondeterministic!({
-        let options = prepare_db_options(&path, db_options, opt_cfs);
+        let options = prepare_db_options(db_options);
         let rocksdb = {
             rocksdb::DBWithThreadMode::<MultiThreaded>::open_cf_descriptors(
                 &options,
                 path,
-                opt_cfs
-                    .iter()
-                    .map(|(name, opts)| ColumnFamilyDescriptor::new(*name, (*opts).clone())),
+                cfs.into_iter()
+                    .map(|(name, opts)| ColumnFamilyDescriptor::new(name, opts)),
             )?
         };
         Ok(Arc::new(RocksDB::DBWithThreadMode(
@@ -2026,15 +2018,15 @@ pub fn open_cf_opts_transactional<P: AsRef<Path>>(
     opt_cfs: &[(&str, &rocksdb::Options)],
 ) -> Result<Arc<RocksDB>, TypedStoreError> {
     let path = path.as_ref();
+    let cfs = populate_missing_cfs(opt_cfs, path)?;
     // See comment above for explanation of why nondeterministic is necessary here.
     nondeterministic!({
-        let options = prepare_db_options(&path, db_options, opt_cfs);
+        let options = prepare_db_options(db_options);
         let rocksdb = rocksdb::OptimisticTransactionDB::<MultiThreaded>::open_cf_descriptors(
             &options,
             path,
-            opt_cfs
-                .iter()
-                .map(|(name, opts)| ColumnFamilyDescriptor::new(*name, (*opts).clone())),
+            cfs.into_iter()
+                .map(|(name, opts)| ColumnFamilyDescriptor::new(name, opts)),
         )?;
         Ok(Arc::new(RocksDB::OptimisticTransactionDB(
             OptimisticTransactionDBWrapper {
@@ -2162,4 +2154,28 @@ pub enum RocksDBAccessType {
 
 pub fn safe_drop_db(path: PathBuf) -> Result<(), rocksdb::Error> {
     rocksdb::DB::destroy(&rocksdb::Options::default(), path)
+}
+
+fn populate_missing_cfs(
+    input_cfs: &[(&str, &rocksdb::Options)],
+    path: &Path,
+) -> Result<Vec<(String, rocksdb::Options)>, rocksdb::Error> {
+    let mut cfs = vec![];
+    let input_cf_index: HashSet<_> = input_cfs.iter().map(|(name, _)| *name).collect();
+    let existing_cfs =
+        rocksdb::DBWithThreadMode::<MultiThreaded>::list_cf(&rocksdb::Options::default(), path)
+            .ok()
+            .unwrap_or_default();
+
+    for cf_name in existing_cfs {
+        if !input_cf_index.contains(&cf_name[..]) {
+            cfs.push((cf_name, rocksdb::Options::default()));
+        }
+    }
+    cfs.extend(
+        input_cfs
+            .iter()
+            .map(|(name, opts)| (name.to_string(), (*opts).clone())),
+    );
+    Ok(cfs)
 }
