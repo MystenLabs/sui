@@ -8,7 +8,7 @@ import type { SuiAddress } from '@mysten/sui.js';
 
 export const DEFAULT_TRANSACTIONS_LIMIT = 100;
 
-// Fetch all coins for an address, this will keep calling the API until all coins are fetched
+// Fetch transaction blocks for an address, w/ toggle for to/from filter
 export function useGetTransactionBlocks(
     address: SuiAddress,
     isFrom?: boolean,
