@@ -147,11 +147,7 @@ impl Env {
             LocalValidatorAggregatorProxy::from_genesis(&config.genesis, registry, None).await,
         );
         let keypair = Arc::new(keypair);
-        let primary_gas = (
-            primary_gas.compute_object_reference(),
-            address,
-            keypair.clone(),
-        );
+        let primary_gas = (primary_gas.compute_object_reference(), address, keypair);
         Ok(BenchmarkSetup {
             server_handle: join_handle,
             shutdown_notifier: sender,
