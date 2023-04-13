@@ -20,7 +20,9 @@ type TransactionBlocksForAddressProps = {
     address: string;
 };
 
-function TransactionBlocksForAddress({ address }: TransactionBlocksForAddressProps) {
+function TransactionBlocksForAddress({
+    address,
+}: TransactionBlocksForAddressProps) {
     const [currentPage, setCurrentPage] = useState(0);
     const {
         data,
