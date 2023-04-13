@@ -2956,6 +2956,7 @@ impl InputObjectKind {
     }
 }
 
+#[derive(Clone)]
 pub struct InputObjects {
     objects: Vec<(InputObjectKind, Object)>,
 }

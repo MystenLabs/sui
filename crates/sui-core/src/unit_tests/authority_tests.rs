@@ -26,7 +26,6 @@ use rand::{
     Rng, SeedableRng,
 };
 use serde_json::json;
-use sui_types::gas::SuiCostTable;
 
 use sui_json_rpc_types::{
     SuiArgument, SuiExecutionResult, SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTypeTag,
@@ -36,6 +35,7 @@ use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::epoch_data::EpochData;
 use sui_types::error::UserInputError;
+use sui_types::gas::SuiCostTable;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::Data;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
@@ -217,7 +217,7 @@ async fn test_dry_run_transaction_block() {
 
     let transaction_digest = *transaction.digest();
 
-    let (response, _, _) = fullnode
+    let (response, _, _, _) = fullnode
         .dry_exec_transaction(
             transaction.data().intent_message().value.clone(),
             transaction_digest,
@@ -251,7 +251,7 @@ async fn test_dry_run_transaction_block() {
         txn_data.gas_budget(),
         txn_data.gas_price(),
     );
-    let (response, _, _) = fullnode
+    let (response, _, _, _) = fullnode
         .dry_exec_transaction(txn_data, transaction_digest)
         .await
         .unwrap();
@@ -282,7 +282,7 @@ async fn test_dry_run_no_gas_big_transfer() {
 
     let signed = to_sender_signed_transaction(data, &sender_key);
 
-    let (dry_run_res, _, _) = fullnode
+    let (dry_run_res, _, _, _) = fullnode
         .dry_exec_transaction(
             signed.data().intent_message().value.clone(),
             *signed.digest(),
@@ -5231,7 +5231,7 @@ async fn test_for_inc_201_dry_run() {
     let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![], 50_000_000, 1);
 
     let signed = to_sender_signed_transaction(txn_data, &sender_key);
-    let (DryRunTransactionBlockResponse { events, .. }, _, _) = fullnode
+    let (DryRunTransactionBlockResponse { events, .. }, _, _, _) = fullnode
         .dry_exec_transaction(
             signed.data().intent_message().value.clone(),
             *signed.digest(),

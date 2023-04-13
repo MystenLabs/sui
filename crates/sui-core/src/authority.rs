@@ -1019,6 +1019,7 @@ impl AuthorityState {
             DryRunTransactionBlockResponse,
             BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
             TransactionEffects,
+            Option<ObjectID>,
         ),
         anyhow::Error,
     > {
@@ -1037,7 +1038,7 @@ impl AuthorityState {
 
         // make a gas object if one was not provided
         let mut gas_object_refs = transaction.gas().to_vec();
-        let (gas_status, input_objects) = if transaction.gas().is_empty() {
+        let ((gas_status, input_objects), mock_gas) = if transaction.gas().is_empty() {
             let sender = transaction.sender();
             // use a 100M sui coin
             const MIST_TO_SUI: u64 = 1_000_000_000;
@@ -1051,20 +1052,26 @@ impl AuthorityState {
             );
             let gas_object_ref = gas_object.compute_object_reference();
             gas_object_refs = vec![gas_object_ref];
-            transaction_input_checker::check_transaction_input_with_given_gas(
-                &self.database,
-                epoch_store.as_ref(),
-                &transaction,
-                gas_object,
+            (
+                transaction_input_checker::check_transaction_input_with_given_gas(
+                    &self.database,
+                    epoch_store.as_ref(),
+                    &transaction,
+                    gas_object,
+                )
+                .await?,
+                Some(gas_object_id),
             )
-            .await?
         } else {
-            transaction_input_checker::check_transaction_input(
-                &self.database,
-                epoch_store.as_ref(),
-                &transaction,
+            (
+                transaction_input_checker::check_transaction_input(
+                    &self.database,
+                    epoch_store.as_ref(),
+                    &transaction,
+                )
+                .await?,
+                None,
             )
-            .await?
         };
 
         let shared_object_refs = input_objects.filter_shared_objects();
@@ -1128,6 +1135,7 @@ impl AuthorityState {
             },
             inner_temp_store.written,
             effects,
+            mock_gas,
         ))
     }
 

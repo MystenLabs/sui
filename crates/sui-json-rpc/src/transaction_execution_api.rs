@@ -130,6 +130,7 @@ impl TransactionExecutionApi {
                             &object_cache,
                             &effects.effects,
                             input_objs,
+                            None,
                         )
                         .await?,
                     )
@@ -175,14 +176,18 @@ impl TransactionExecutionApi {
         let (txn_data, txn_digest) = get_transaction_data_and_digest(tx_bytes)?;
         let input_objs = txn_data.input_objects()?;
         let sender = txn_data.sender();
-        let (resp, written_objects, transaction_effects) = self
+        let (resp, written_objects, transaction_effects, mock_gas) = self
             .state
             .dry_exec_transaction(txn_data.clone(), txn_digest)
             .await?;
         let object_cache = ObjectProviderCache::new_with_cache(self.state.clone(), written_objects);
-        let balance_changes =
-            get_balance_changes_from_effect(&object_cache, &transaction_effects, input_objs)
-                .await?;
+        let balance_changes = get_balance_changes_from_effect(
+            &object_cache,
+            &transaction_effects,
+            input_objs,
+            mock_gas,
+        )
+        .await?;
         let object_changes = get_object_changes(
             &object_cache,
             sender,
