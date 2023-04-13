@@ -10,7 +10,7 @@ import {
     PanelResizeHandle,
 } from 'react-resizable-panels';
 
-export interface SplitPaneProps extends PanelGroupProps {
+export interface SplitPanesProps extends PanelGroupProps {
     panels: ReactNode[];
     defaultSizes?: number[];
 }
@@ -20,13 +20,13 @@ function ResizeHandle({ isHorizontal }: { isHorizontal: boolean }) {
 
     return (
         <PanelResizeHandle
-            className={clsx(isHorizontal ? 'px-2' : 'py-2')}
+            className={clsx('group', isHorizontal ? 'px-2' : 'py-2')}
             onDragging={setIsDragging}
         >
             <div
                 data-is-dragging={isDragging}
                 className={clsx(
-                    'bg-gray-45 hover:bg-sui data-[is-dragging=true]:bg-hero',
+                    'bg-gray-45 group-hover:bg-sui data-[is-dragging=true]:bg-hero',
                     isHorizontal ? 'h-full w-px' : 'h-px'
                 )}
             />
@@ -38,7 +38,7 @@ export function SplitPanes({
     panels,
     defaultSizes = [],
     ...props
-}: SplitPaneProps) {
+}: SplitPanesProps) {
     const { direction } = props;
 
     return (
