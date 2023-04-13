@@ -186,6 +186,12 @@ async fn check_gas(
             }
             .into());
         }
+        if gas_price >= protocol_config.max_gas_price() {
+            return Err(UserInputError::GasPriceTooHigh {
+                max_gas_price: protocol_config.max_gas_price(),
+            }
+            .into());
+        }
 
         // load all gas coins
         let objects: BTreeMap<_, _> = objects.iter().map(|o| (o.id(), o)).collect();

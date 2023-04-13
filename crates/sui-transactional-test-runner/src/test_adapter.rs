@@ -822,7 +822,7 @@ impl<'a> SuiTestAdapter<'a> {
             |sender, gas| TransactionData::new_programmable(sender, vec![gas], pt, gas_budget, 1);
 
         let transaction = self.sign_txn(Some(sender), data);
-        let summary = self.execute_txn(transaction, gas_budget)?;
+        let summary = self.execute_txn(transaction, gas_budget, false)?;
         let created_package = summary
             .created
             .iter()

@@ -9,7 +9,6 @@ use crate::{
     object::{Object, Owner},
 };
 use move_core_types::vm_status::StatusCode;
-use once_cell::sync::Lazy;
 use std::iter;
 use sui_cost_tables::bytecode_tables::{
     initial_cost_schedule_v1, initial_cost_schedule_v2, GasStatus, ZERO_COST_SCHEDULE,
@@ -29,6 +28,8 @@ macro_rules! ok_or_gas_balance_error {
         }
     };
 }
+
+sui_macros::checked_arithmetic! {
 
 /// A bucket defines a range of units that will be priced the same.
 /// After execution a call to `GasStatus::bucketize` will round the computation
@@ -50,20 +51,23 @@ impl ComputationBucket {
     }
 }
 
-pub(crate) fn get_bucket_cost(table: &[ComputationBucket], computation_cost: u64) -> u64 {
+fn get_bucket_cost(table: &[ComputationBucket], computation_cost: u64) -> u64 {
     for bucket in table {
         if bucket.max >= computation_cost {
             return bucket.cost;
         }
     }
-    MAX_BUCKET_COST
+    match table.last() {
+        // maybe not a literal here could be better?
+        None => 5_000_000,
+        Some(bucket) => bucket.cost,
+    }
 }
 
-// for a RPG of 1000 this amounts to about 5 SUI
-pub(crate) const MAX_BUCKET_COST: u64 = 5_000_000;
-
 // define the bucket table for computation charging
-pub(crate) static COMPUTATION_BUCKETS: Lazy<Vec<ComputationBucket>> = Lazy::new(|| {
+// If versioning defines multiple functions and
+fn computation_bucket(max_bucket_cost: u64) -> Vec<ComputationBucket> {
+    assert!(max_bucket_cost >= 5_000_000);
     vec![
         ComputationBucket::simple(0, 1_000),
         ComputationBucket::simple(1_000, 5_000),
@@ -72,9 +76,9 @@ pub(crate) static COMPUTATION_BUCKETS: Lazy<Vec<ComputationBucket>> = Lazy::new(
         ComputationBucket::simple(20_000, 50_000),
         ComputationBucket::simple(50_000, 200_000),
         ComputationBucket::simple(200_000, 1_000_000),
-        ComputationBucket::simple(1_000_000, MAX_BUCKET_COST),
+        ComputationBucket::simple(1_000_000, max_bucket_cost),
     ]
-});
+}
 
 /// Portion of the storage rebate that gets passed on to the transaction sender. The remainder
 /// will be burned, then re-minted + added to the storage fund at the next epoch change
@@ -107,6 +111,8 @@ pub struct SuiCostTable {
     storage_per_byte_cost: u64,
     /// Execution cost table to be used.
     pub execution_cost_table: CostTable,
+    /// Computation buckets to cost transaction in price groups
+    computation_bucket: Vec<ComputationBucket>,
 }
 
 impl std::fmt::Debug for SuiCostTable {
@@ -125,6 +131,7 @@ impl SuiCostTable {
             object_read_per_byte_cost: c.obj_access_cost_read_per_byte(),
             storage_per_byte_cost: c.obj_data_cost_refundable(),
             execution_cost_table: cost_table_for_version(c),
+            computation_bucket: computation_bucket(c.max_gas_computation_bucket()),
         }
     }
 
@@ -136,6 +143,8 @@ impl SuiCostTable {
             object_read_per_byte_cost: 0,
             storage_per_byte_cost: 0,
             execution_cost_table: ZERO_COST_SCHEDULE.clone(),
+            // should not matter
+            computation_bucket: computation_bucket(5_000_000),
         }
     }
 }
@@ -226,7 +235,7 @@ impl SuiGasStatus {
         config: &ProtocolConfig,
     ) -> SuiGasStatus {
         let storage_gas_price = config.storage_gas_price();
-        let max_computation_budget = MAX_BUCKET_COST * gas_price;
+        let max_computation_budget = config.max_gas_computation_bucket() * gas_price;
         let computation_budget = if gas_budget > max_computation_budget {
             max_computation_budget
         } else {
@@ -255,7 +264,7 @@ impl SuiGasStatus {
         cost_table: SuiCostTable,
     ) -> SuiGasStatus {
         let rebate_rate = ProtocolConfig::get_for_max_version().storage_rebate_rate();
-        let max_computation_budget = MAX_BUCKET_COST;
+        let max_computation_budget = 5_000_000; // fixed number for now
         let computation_budget = if gas_budget > max_computation_budget {
             max_computation_budget
         } else {
@@ -300,7 +309,7 @@ impl SuiGasStatusAPI for SuiGasStatus {
 
     fn bucketize_computation(&mut self) -> Result<(), ExecutionError> {
         let gas_used = self.gas_status.gas_used_pre_gas_price();
-        let bucket_cost = get_bucket_cost(&COMPUTATION_BUCKETS, gas_used);
+        let bucket_cost = get_bucket_cost(&self.cost_table.computation_bucket, gas_used);
         // charge extra on top of `computation_cost` to make the total computation
         // cost a bucket value
         let gas_used = bucket_cost * self.gas_price;
@@ -486,4 +495,6 @@ pub fn deduct_gas(gas_object: &mut Object, charge_or_rebate: i64) {
         balance - charge_or_rebate as u64
     };
     gas_coin.set_coin_value_unsafe(new_balance)
+}
+
 }
