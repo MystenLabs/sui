@@ -50,7 +50,7 @@ const config: PlaywrightTestConfig = {
         },
     ],
     webServer: {
-        command: 'pnpm vite ./tests/demo-app/ --port 5181',
+        command: 'pnpm demoApp:dev --port 5181',
         port: 5181,
         timeout: 30 * 1000,
         reuseExistingServer: !process.env.CI,

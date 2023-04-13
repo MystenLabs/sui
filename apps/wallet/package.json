@@ -25,7 +25,8 @@
         "pack:zip": "web-ext build --source-dir ./dist --overwrite-dest",
         "storybook": "storybook dev -p 6007",
         "build-storybook": "storybook build",
-        "preview-storybook": "pnpm dlx serve ./storybook-static -l 6007"
+        "preview-storybook": "pnpm dlx serve ./storybook-static -l 6007",
+        "demoApp:dev": "pnpm vite -c ./tests/demo-app/vite.config.ts ./tests/demo-app/"
     },
     "repository": {
         "type": "git",
