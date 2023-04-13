@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { formatAmountParts, useRpcClient } from '@mysten/core';
+import {
+    formatAmountParts,
+    useGetSystemState,
+    useRpcClient,
+} from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
 
 import { MetricGroup } from './MetricGroup';
@@ -44,6 +48,8 @@ export function HomeMetrics() {
     const { data: gasData } = useQuery(['home', 'reference-gas-price'], () =>
         rpc.getReferenceGasPrice()
     );
+
+    const { data: systemState } = useGetSystemState();
 
     const { data: transactionCount } = useQuery(
         ['home', 'transaction-count'],
@@ -90,10 +96,8 @@ export function HomeMetrics() {
                         {gasData ? gasData.toLocaleString() : null}
                     </StatsWrapper>
                     <StatsWrapper label="Epoch" tooltip="The current epoch">
-                        {networkMetrics?.currentEpoch
-                            ? BigInt(
-                                  networkMetrics?.currentEpoch
-                              ).toLocaleString()
+                        {systemState?.epoch
+                            ? BigInt(systemState?.epoch).toLocaleString()
                             : null}
                     </StatsWrapper>
                     <StatsWrapper
@@ -124,7 +128,7 @@ export function HomeMetrics() {
                         tooltip="Total transaction blocks counter"
                         amount={transactionCount}
                     />
-                    {/* 
+                    {/*
                         TODO: enable when indexer is healthy
                         <FormattedStatsAmount
                         label="Addresses"
