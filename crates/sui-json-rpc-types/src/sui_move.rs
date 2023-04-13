@@ -287,6 +287,7 @@ pub enum MoveFunctionArgType {
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
 #[serde(untagged, rename = "MoveValue")]
 pub enum SuiMoveValue {
+    // u64 and u128 are converted to String to avoid overflow
     Number(u32),
     Bool(bool),
     Address(SuiAddress),
