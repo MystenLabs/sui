@@ -513,6 +513,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     db_checkpoint_config: self.db_checkpoint_config.clone(),
                     indirect_objects_threshold: usize::MAX,
                     expensive_safety_check_config: Default::default(),
+                    name_service_resolver_object_id: None,
                 }
             })
             .collect();

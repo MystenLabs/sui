@@ -1744,6 +1744,72 @@
       ]
     },
     {
+      "name": "suix_resolveNameServiceAddress",
+      "tags": [
+        {
+          "name": "Extended API"
+        }
+      ],
+      "description": "Return the resolved address given resolver and name",
+      "params": [
+        {
+          "name": "name",
+          "description": "The name to resolve",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "result": {
+        "name": "SuiAddress",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/SuiAddress"
+        }
+      }
+    },
+    {
+      "name": "suix_resolveNameServiceNames",
+      "tags": [
+        {
+          "name": "Extended API"
+        }
+      ],
+      "description": "Return the resolved names given address, if multiple names are resolved, the first one is the primary name.",
+      "params": [
+        {
+          "name": "address",
+          "description": "The address to resolve",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "cursor",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "limit",
+          "schema": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "Page<String,ObjectID>",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Page_for_String_and_ObjectID"
+        }
+      }
+    },
+    {
       "name": "suix_subscribeEvent",
       "tags": [
         {
@@ -4819,6 +4885,35 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/EventID"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "Page_for_String_and_ObjectID": {
+        "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor` if `next_cursor` is `Some`, otherwise it will start from the first item.",
+        "type": "object",
+        "required": [
+          "data",
+          "hasNextPage"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "hasNextPage": {
+            "type": "boolean"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObjectID"
               },
               {
                 "type": "null"

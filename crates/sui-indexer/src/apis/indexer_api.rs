@@ -448,6 +448,21 @@ where
         spawn_subscription(sink, self.event_handler.subscribe(filter));
         Ok(())
     }
+
+    async fn resolve_name_service_address(&self, _name: String) -> RpcResult<SuiAddress> {
+        // TODO(gegaowp): implement name service resolver in indexer
+        todo!()
+    }
+
+    async fn resolve_name_service_names(
+        &self,
+        _address: SuiAddress,
+        _cursor: Option<ObjectID>,
+        _limit: Option<usize>,
+    ) -> RpcResult<Page<String, ObjectID>> {
+        // TODO(gegaowp): implement name service resolver in indexer
+        todo!()
+    }
 }
 
 impl<S> SuiRpcModule for IndexerApi<S>

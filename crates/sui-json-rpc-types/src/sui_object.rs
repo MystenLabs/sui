@@ -812,6 +812,32 @@ impl Display for SuiParsedData {
     }
 }
 
+impl SuiParsedData {
+    pub fn try_from_object_read(object_read: ObjectRead) -> Result<Self, anyhow::Error> {
+        match object_read {
+            ObjectRead::NotExists(id) => Err(anyhow::anyhow!("Object {} does not exist", id)),
+            ObjectRead::Exists(_object_ref, o, layout) => {
+                let data = match o.data {
+                    Data::Move(m) => {
+                        let layout = layout.ok_or_else(|| {
+                            anyhow!("Layout is required to convert Move object to json")
+                        })?;
+                        SuiParsedData::try_from_object(m, layout)?
+                    }
+                    Data::Package(p) => SuiParsedData::try_from_package(p)?,
+                };
+                Ok(data)
+            }
+            ObjectRead::Deleted((object_id, version, digest)) => Err(anyhow::anyhow!(
+                "Object {} was deleted at version {} with digest {}",
+                object_id,
+                version,
+                digest
+            )),
+        }
+    }
+}
+
 pub trait SuiMoveObject: Sized {
     fn try_from_layout(object: MoveObject, layout: MoveStructLayout)
         -> Result<Self, anyhow::Error>;
@@ -862,6 +888,24 @@ impl SuiMoveObject for SuiParsedMoveObject {
 
     fn type_(&self) -> &StructTag {
         &self.type_
+    }
+}
+
+impl SuiParsedMoveObject {
+    pub fn try_from_object_read(object_read: ObjectRead) -> Result<Self, anyhow::Error> {
+        let parsed_data = SuiParsedData::try_from_object_read(object_read)?;
+        match parsed_data {
+            SuiParsedData::MoveObject(o) => Ok(o),
+            SuiParsedData::Package(_) => Err(anyhow::anyhow!("Object is not a Move object")),
+        }
+    }
+
+    pub fn read_dynamic_field_value(&self, field_name: &str) -> Option<SuiMoveValue> {
+        match &self.fields {
+            SuiMoveStruct::WithFields(fields) => fields.get(field_name).cloned(),
+            SuiMoveStruct::WithTypes { fields, .. } => fields.get(field_name).cloned(),
+            _ => None,
+        }
     }
 }
 

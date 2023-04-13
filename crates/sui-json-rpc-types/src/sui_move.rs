@@ -421,6 +421,14 @@ impl SuiMoveStruct {
             }
         }
     }
+
+    pub fn read_dynamic_field_value(&self, field_name: &str) -> Option<SuiMoveValue> {
+        match self {
+            SuiMoveStruct::WithFields(fields) => fields.get(field_name).cloned(),
+            SuiMoveStruct::WithTypes { type_: _, fields } => fields.get(field_name).cloned(),
+            _ => None,
+        }
+    }
 }
 
 impl Display for SuiMoveStruct {

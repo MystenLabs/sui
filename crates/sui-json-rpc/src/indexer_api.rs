@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::anyhow;
@@ -13,12 +14,13 @@ use jsonrpsee::{RpcModule, SubscriptionSink};
 use serde::Serialize;
 use tracing::{debug, warn};
 
+use move_core_types::language_storage::TypeTag;
 use mysten_metrics::spawn_monitored_task;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
-    DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page, SuiObjectDataOptions,
-    SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockResponse,
-    SuiTransactionBlockResponseQuery, TransactionBlocksPage,
+    DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page, SuiMoveValue,
+    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiParsedMoveObject,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseQuery, TransactionBlocksPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SuiAddress};
@@ -30,6 +32,13 @@ use crate::api::{
     cap_page_limit, validate_limit, IndexerApiServer, ReadApiServer, QUERY_MAX_RESULT_LIMIT_OBJECTS,
 };
 use crate::SuiRpcModule;
+
+const NAME_SERVICE_LOOKUP_KEY: &str = "records";
+const NAME_SERVICE_REVERSE_LOOKUP_KEY: &str = "reverse";
+const NAME_SERVICE_VALUE: &str = "value";
+const NAME_SERVICE_ID: &str = "id";
+const NAME_SERVICE_MARKER: &str = "marker";
+const STRING_TYPE_TAG: &str = "0x1::string::String";
 
 pub fn spawn_subscription<S, T>(mut sink: SubscriptionSink, rx: S)
 where
@@ -53,11 +62,16 @@ where
 pub struct IndexerApi<R> {
     state: Arc<AuthorityState>,
     read_api: R,
+    ns_resolver_id: Option<ObjectID>,
 }
 
 impl<R: ReadApiServer> IndexerApi<R> {
-    pub fn new(state: Arc<AuthorityState>, read_api: R) -> Self {
-        Self { state, read_api }
+    pub fn new(state: Arc<AuthorityState>, read_api: R, ns_resolver_id: Option<ObjectID>) -> Self {
+        Self {
+            state,
+            read_api,
+            ns_resolver_id,
+        }
     }
 }
 
@@ -216,6 +230,112 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         self.read_api
             .get_object(id, Some(SuiObjectDataOptions::full_content()))
     }
+
+    async fn resolve_name_service_address(&self, name: String) -> RpcResult<SuiAddress> {
+        let dynmaic_field_table_object_id =
+            self.get_name_service_dynamic_field_table_object_id(/* reverse_lookup */ false)?;
+        // NOTE: 0x1::string::String is the type tag of fields in dynmaic_field_table
+        let ns_type_tag = TypeTag::from_str(STRING_TYPE_TAG)?;
+        let ns_dynamic_field_name = DynamicFieldName {
+            type_: ns_type_tag,
+            value: name.clone().into(),
+        };
+        // record of the input `name`
+        let record_object_id = self
+            .state
+            .get_dynamic_field_object_id(dynmaic_field_table_object_id, &ns_dynamic_field_name)
+            .map_err(|e| {
+                anyhow!(
+                    "Read name service dynamic field table failed with error: {:?}",
+                    e
+                )
+            })?
+            .ok_or_else(|| anyhow!("Record not found for name: {:?}", name,))?;
+        let record_object_read = self.state.get_object_read(&record_object_id).map_err(|e| {
+            warn!(
+                "Failed to get object read of name: {:?} with error: {:?}",
+                record_object_id, e
+            );
+            anyhow!("{e}")
+        })?;
+        let record_parsed_move_object =
+            SuiParsedMoveObject::try_from_object_read(record_object_read)?;
+        // NOTE: "value" is the field name to get the address info
+        let address_info_move_value = record_parsed_move_object
+            .read_dynamic_field_value(NAME_SERVICE_VALUE)
+            .ok_or_else(|| anyhow!("Cannot find value field in record Move struct"))?;
+        let address_info_move_struct = match address_info_move_value {
+            SuiMoveValue::Struct(a) => Ok(a),
+            _ => Err(anyhow!("value field is not found.")),
+        }?;
+        // NOTE: "marker" is the field name to get the address
+        let address_str_move_value = address_info_move_struct
+            .read_dynamic_field_value(NAME_SERVICE_MARKER)
+            .ok_or_else(|| {
+                anyhow!(
+                    "Cannot find marker field in address info Move struct: {:?}",
+                    address_info_move_struct
+                )
+            })?;
+        let addr = match address_str_move_value {
+            SuiMoveValue::Address(addr) => Ok(addr),
+            _ => Err(anyhow!(
+                "No SuiAddress found in: {:?}",
+                address_str_move_value
+            )),
+        }?;
+        Ok(addr)
+    }
+
+    async fn resolve_name_service_names(
+        &self,
+        address: SuiAddress,
+        _cursor: Option<ObjectID>,
+        _limit: Option<usize>,
+    ) -> RpcResult<Page<String, ObjectID>> {
+        let dynmaic_field_table_object_id =
+            self.get_name_service_dynamic_field_table_object_id(/* reverse_lookup */ true)?;
+        let addr_type_tag = TypeTag::Address;
+        let ns_dynamic_field_name = DynamicFieldName {
+            type_: addr_type_tag,
+            value: address.to_string().into(),
+        };
+
+        let addr_object_id = self
+            .state
+            .get_dynamic_field_object_id(dynmaic_field_table_object_id, &ns_dynamic_field_name)
+            .map_err(|e| {
+                anyhow!(
+                    "Read name service reverse dynamic field table failed with error: {:?}",
+                    e
+                )
+            })?
+            .ok_or_else(|| anyhow!("Record not found for address: {:?}", address))?;
+        let addr_object_read = self.state.get_object_read(&addr_object_id).map_err(|e| {
+            warn!(
+                "Failed to get object read of address {:?} with error: {:?}",
+                addr_object_id, e
+            );
+            anyhow!("{e}")
+        })?;
+        let addr_parsed_move_object = SuiParsedMoveObject::try_from_object_read(addr_object_read)?;
+        let address_info_move_value = addr_parsed_move_object
+            .read_dynamic_field_value(NAME_SERVICE_VALUE)
+            .ok_or_else(|| anyhow!("Cannot find value field in record Move struct"))?;
+
+        let primary_name = match address_info_move_value {
+            SuiMoveValue::String(s) => Ok(s),
+            _ => Err(anyhow!(
+                "No string field for primary name is found in {:?}",
+                address_info_move_value
+            )),
+        }?;
+        Ok(Page {
+            data: vec![primary_name],
+            next_cursor: Some(addr_object_id),
+            has_next_page: false,
+        })
+    }
 }
 
 impl<R: ReadApiServer> SuiRpcModule for IndexerApi<R> {
@@ -225,5 +345,58 @@ impl<R: ReadApiServer> SuiRpcModule for IndexerApi<R> {
 
     fn rpc_doc_module() -> Module {
         crate::api::IndexerApiOpenRpc::module_doc()
+    }
+}
+
+impl<R: ReadApiServer> IndexerApi<R> {
+    fn get_name_service_dynamic_field_table_object_id(
+        &self,
+        reverse_lookup: bool,
+    ) -> RpcResult<ObjectID> {
+        if let Some(resolver_id) = self.ns_resolver_id {
+            let resolver_object_read = self.state.get_object_read(&resolver_id).map_err(|e| {
+                warn!(
+                    "Failed to get object read of resolver {:?} with error: {:?}",
+                    resolver_id, e
+                );
+                anyhow!("{e}")
+            })?;
+
+            let resolved_parsed_move_object =
+                SuiParsedMoveObject::try_from_object_read(resolver_object_read)?;
+            // NOTE: "records" is the field name to get forward lookup table,
+            // "reverse" is the field name to get reverse lookup table.
+            let dynamic_field_table_key = if reverse_lookup {
+                NAME_SERVICE_REVERSE_LOOKUP_KEY
+            } else {
+                NAME_SERVICE_LOOKUP_KEY
+            };
+            let records_value = resolved_parsed_move_object
+                .read_dynamic_field_value(dynamic_field_table_key)
+                .ok_or_else(|| anyhow!("Cannot find records field in resolved object"))?;
+            let records_move_struct = match records_value {
+                SuiMoveValue::Struct(s) => Ok(s),
+                _ => Err(anyhow!(
+                    "{} field is not a Move struct",
+                    dynamic_field_table_key
+                )),
+            }?;
+
+            let dynmaic_field_table_object_id_struct = records_move_struct
+                .read_dynamic_field_value(NAME_SERVICE_ID)
+                .ok_or_else(|| {
+                    anyhow!(
+                        "Cannot find id field in {} Move struct",
+                        dynamic_field_table_key
+                    )
+                })?;
+            let dynmaic_field_table_object_id = match dynmaic_field_table_object_id_struct {
+                SuiMoveValue::UID { id } => Ok(id),
+                _ => Err(anyhow!("id field is not a UID")),
+            }?;
+            Ok(dynmaic_field_table_object_id)
+        } else {
+            Err(anyhow!("Name service resolver is not set"))?
+        }
     }
 }

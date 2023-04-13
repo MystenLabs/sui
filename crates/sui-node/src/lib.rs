@@ -1139,7 +1139,11 @@ pub async fn build_server(
         ))?;
     }
 
-    server.register_module(IndexerApi::new(state.clone(), ReadApi::new(state.clone())))?;
+    server.register_module(IndexerApi::new(
+        state.clone(),
+        ReadApi::new(state.clone()),
+        config.name_service_resolver_object_id,
+    ))?;
     server.register_module(MoveUtils::new(state.clone()))?;
 
     let rpc_server_handle = server.start(config.json_rpc_address).await?;
