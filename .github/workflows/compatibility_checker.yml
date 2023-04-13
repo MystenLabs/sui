@@ -17,7 +17,7 @@ on:
         type: boolean
         required: false
         description: "Preserve database state of previous run"
-        default: true
+        default: false
 
 jobs:
   genesis-sync-test:

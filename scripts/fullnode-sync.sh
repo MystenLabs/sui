@@ -72,6 +72,7 @@ if [[ ! -f "${SUI_RUN_PATH}/fullnode.yaml" ]]; then
     cp crates/sui-config/data/fullnode-template.yaml ${SUI_RUN_PATH}/fullnode.yaml
     sed -i "s|genesis.blob|${SUI_RUN_PATH}/genesis.blob|g" ${SUI_RUN_PATH}/fullnode.yaml
     sed -i "s|suidb|${SUI_RUN_PATH}/suidb|g" ${SUI_RUN_PATH}/fullnode.yaml
+    sed -i "s|num-epochs-to-retain: 1|num-epochs-to-retain: 18446744073709551615|g" ${SUI_RUN_PATH}/fullnode.yaml
 
     if [[ $NETWORK != "devnet" ]]; then
         cat >> "$SUI_RUN_PATH/fullnode.yaml" <<- EOM
