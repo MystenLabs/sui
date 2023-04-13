@@ -8825,6 +8825,7 @@ dependencies = [
  "git-version",
  "indexmap",
  "inquire",
+ "insta",
  "jemalloc-ctl",
  "jsonrpsee",
  "move-binary-format",

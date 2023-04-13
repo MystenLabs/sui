@@ -651,7 +651,14 @@ impl SuiClientCommands {
                     .read_api()
                     .get_transaction_with_options(
                         digest,
-                        SuiTransactionBlockResponseOptions::full_content(),
+                        SuiTransactionBlockResponseOptions {
+                            show_input: true,
+                            show_raw_input: false,
+                            show_effects: true,
+                            show_events: true,
+                            show_object_changes: true,
+                            show_balance_changes: false,
+                        },
                     )
                     .await?;
                 SuiClientCommandResult::TransactionBlock(tx_read)
@@ -1751,6 +1758,34 @@ impl SuiClientCommandResult {
             // Logs write to a file on the side.  Print to stdout and also log to file, for tests to pass.
             println!("{line}");
             info!("{line}")
+        }
+    }
+
+    pub fn tx_block_response(&self) -> Option<&SuiTransactionBlockResponse> {
+        use SuiClientCommandResult::*;
+        match self {
+            Upgrade(b)
+            | Publish(b)
+            | TransactionBlock(b)
+            | Call(b)
+            | Transfer(_, b)
+            | TransferSui(b)
+            | Pay(b)
+            | PaySui(b)
+            | PayAllSui(b)
+            | SplitCoin(b)
+            | MergeCoin(b)
+            | ExecuteSignedTx(b) => Some(b),
+            _ => None,
+        }
+    }
+
+    pub fn objects_response(&self) -> Option<Vec<SuiObjectResponse>> {
+        use SuiClientCommandResult::*;
+        match self {
+            Object(o) | RawObject(o) => Some(vec![o.clone()]),
+            Objects(o) => Some(o.clone()),
+            _ => None,
         }
     }
 }
