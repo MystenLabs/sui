@@ -51,10 +51,6 @@ function TransactionBlocks({ address }: TransactionBlocksProps) {
         filterValue === TRANSACTION_FILTERS.FROM
     );
 
-    const setFilter = (value: TRANSACTION_FILTERS) => {
-        setFilterValue(value);
-    };
-
     const generateTableCard = (
         currentPage: CurrentPageFilter,
         filterValue: TRANSACTION_FILTERS,
@@ -79,10 +75,16 @@ function TransactionBlocks({ address }: TransactionBlocksProps) {
                     className="flex"
                     ariaLabel="transaction filter"
                     value={filterValue}
-                    onChange={setFilter}
+                    onChange={setFilterValue}
                 >
-                    <RadioOption value="to" label="To Address" />
-                    <RadioOption value="from" label="From Address" />
+                    <RadioOption
+                        value={TRANSACTION_FILTERS.TO}
+                        label="To Address"
+                    />
+                    <RadioOption
+                        value={TRANSACTION_FILTERS.FROM}
+                        label="From Address"
+                    />
                 </RadioGroup>
             </div>
 
