@@ -9,7 +9,7 @@ import type { SuiAddress } from '@mysten/sui.js';
 export const DEFAULT_TRANSACTIONS_LIMIT = 20;
 
 // Fetch transaction blocks for an address, w/ toggle for to/from filter
-export function useGetTransactionBlocks(
+export function useGetTransactionBlocksForAddress(
     address: SuiAddress,
     limit = DEFAULT_TRANSACTIONS_LIMIT
 ) {

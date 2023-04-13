@@ -9,8 +9,8 @@ import { genTableDataFromTxData } from '../transactions/TxCardUtils';
 
 import {
     DEFAULT_TRANSACTIONS_LIMIT,
-    useGetTransactionBlocks,
-} from '~/hooks/useGetTransactionBlocks';
+    useGetTransactionBlocksForAddress,
+} from '~/hooks/useGetTransactionBlocksForAddress';
 import { Heading } from '~/ui/Heading';
 import { Pagination } from '~/ui/Pagination';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
@@ -29,7 +29,7 @@ function TransactionBlocks({ address }: TransactionBlocksProps) {
         isFetchingNextPage,
         fetchNextPage,
         hasNextPage,
-    } = useGetTransactionBlocks(address);
+    } = useGetTransactionBlocksForAddress(address);
 
     const generateTableCard = (
         currentPage: number,
