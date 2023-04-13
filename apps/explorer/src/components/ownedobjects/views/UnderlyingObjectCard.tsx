@@ -7,7 +7,8 @@ import {
 } from '@mysten/core';
 import { getObjectFields, getObjectType } from '@mysten/sui.js';
 
-import { FieldItem } from '~/components/ownedobjects/views/FieldItem';
+import { FieldItem } from './FieldItem';
+
 import { Banner } from '~/ui/Banner';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 
