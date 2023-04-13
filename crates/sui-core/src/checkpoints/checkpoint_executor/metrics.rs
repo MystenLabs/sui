@@ -13,6 +13,9 @@ pub struct CheckpointExecutorMetrics {
     pub last_executed_checkpoint: IntGauge,
     pub checkpoint_exec_errors: IntCounter,
     pub checkpoint_exec_epoch: IntGauge,
+    pub checkpoint_exec_inflight: IntGauge,
+    pub checkpoint_exec_latency_us: Histogram,
+    pub checkpoint_prepare_latency_us: Histogram,
     pub checkpoint_transaction_count: Histogram,
     pub checkpoint_contents_age_ms: Histogram,
     pub accumulator_inconsistent_state: IntGauge,
@@ -45,6 +48,22 @@ impl CheckpointExecutorMetrics {
                 registry
             )
             .unwrap(),
+            checkpoint_exec_inflight: register_int_gauge_with_registry!(
+                "checkpoint_exec_inflight",
+                "Current number of inflight checkpoints being executed",
+                registry
+            )
+            .unwrap(),
+            checkpoint_exec_latency_us: Histogram::new_in_registry(
+                "checkpoint_exec_latency_us",
+                "Latency of executing a checkpoint from enqueue to all effects available, in microseconds",
+                registry,
+            ),
+            checkpoint_prepare_latency_us: Histogram::new_in_registry(
+                "checkpoint_prepare_latency_us",
+                "Latency of preparing a checkpoint to enqueue for execution, in microseconds",
+                registry,
+            ),
             checkpoint_transaction_count: Histogram::new_in_registry(
                 "checkpoint_transaction_count",
                 "Number of transactions in the checkpoint",
