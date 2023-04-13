@@ -67,7 +67,10 @@ export function UnderlyingObjectCard({
                     : fieldsData?.value
             }
             // add the struct type to the value
-            type={normalizedStruct.fields[2].type}
+            type={
+                normalizedStruct?.fields.find((field) => field.name === 'value')
+                    ?.type || ''
+            }
         />
     );
 }

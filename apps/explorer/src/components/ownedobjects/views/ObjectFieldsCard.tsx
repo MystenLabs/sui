@@ -38,7 +38,7 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
 
     // For TypeParameter index return the type string index after splitting, where the third index is the type
     const getTypeParameter = (index: number) =>
-        typePerameter?.[index].split('::')[2] || '';
+        typePerameter?.[index].split('::').pop() || '';
 
     // Get the normalized struct for the object
     const {
