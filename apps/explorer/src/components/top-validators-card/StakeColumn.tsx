@@ -9,9 +9,14 @@ import { Text } from '~/ui/Text';
 type StakeColumnProps = {
     stake: bigint | number | string;
     hideCoinSymbol?: boolean;
+    inMIST?: boolean;
 };
 
-export function StakeColumn({ stake, hideCoinSymbol }: StakeColumnProps) {
+export function StakeColumn({
+    stake,
+    hideCoinSymbol,
+    inMIST = false,
+}: StakeColumnProps) {
     const [amount, symbol] = useFormatCoin(
         stake,
         SUI_TYPE_ARG,
@@ -20,11 +25,11 @@ export function StakeColumn({ stake, hideCoinSymbol }: StakeColumnProps) {
     return (
         <div className="flex items-end gap-0.5">
             <Text variant="bodySmall/medium" color="steel-darker">
-                {amount}
+                {inMIST ? stake.toLocaleString() : amount}
             </Text>
             {!hideCoinSymbol && (
                 <Text variant="captionSmall/medium" color="steel-dark">
-                    {symbol}
+                    {inMIST ? 'MIST' : symbol}
                 </Text>
             )}
         </div>
