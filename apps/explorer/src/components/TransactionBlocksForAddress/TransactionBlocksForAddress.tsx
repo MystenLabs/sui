@@ -44,7 +44,6 @@ function TransactionBlocksForAddress({
         return <TableCard data={cardData.data} columns={cardData.columns} />;
     };
 
-    console.log(data);
     return (
         <div>
             <div className="flex items-center justify-between border-b border-gray-45 pb-5">
