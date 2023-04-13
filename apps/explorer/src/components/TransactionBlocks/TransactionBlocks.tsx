@@ -17,13 +17,28 @@ import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { RadioGroup, RadioOption } from '~/ui/Radio';
 import { TableCard } from '~/ui/TableCard';
 
+type CurrentPageFilter = {
+    from: number;
+    to: number;
+};
+
+enum TRANSACTION_FILTERS {
+    FROM = 'from',
+    TO = 'to',
+}
+
 type TransactionBlocksProps = {
     address: string;
 };
 
 function TransactionBlocks({ address }: TransactionBlocksProps) {
-    const [filterValue, setFilterValue] = useState('from');
-    const [currentPage, setCurrentPage] = useState(0);
+    const [filterValue, setFilterValue] = useState<TRANSACTION_FILTERS>(
+        TRANSACTION_FILTERS.FROM
+    );
+    const [currentPage, setCurrentPage] = useState<CurrentPageFilter>({
+        from: 0,
+        to: 0,
+    });
     const {
         data,
         isLoading,
@@ -31,20 +46,26 @@ function TransactionBlocks({ address }: TransactionBlocksProps) {
         isFetchingNextPage,
         fetchNextPage,
         hasNextPage,
-    } = useGetTransactionBlocks(address, filterValue === 'from');
+    } = useGetTransactionBlocks(
+        address,
+        filterValue === TRANSACTION_FILTERS.FROM
+    );
 
-    const setFilter = (value: string) => {
+    const setFilter = (value: TRANSACTION_FILTERS) => {
         setFilterValue(value);
     };
 
     const generateTableCard = (
-        currentPage: number,
+        currentPage: CurrentPageFilter,
+        filterValue: TRANSACTION_FILTERS,
         data?: InfiniteData<PaginatedTransactionResponse>
     ) => {
         if (!data) {
             return;
         }
-        const cardData = genTableDataFromTxData(data?.pages[currentPage].data);
+        const cardData = genTableDataFromTxData(
+            data?.pages[currentPage[filterValue]].data
+        );
         return <TableCard data={cardData.data} columns={cardData.columns} />;
     };
 
@@ -81,7 +102,7 @@ function TransactionBlocks({ address }: TransactionBlocksProps) {
                     />
                 ) : (
                     <div data-testid="tx">
-                        {generateTableCard(currentPage, data)}
+                        {generateTableCard(currentPage, filterValue, data)}
                     </div>
                 )}
 
@@ -95,18 +116,32 @@ function TransactionBlocks({ address }: TransactionBlocksProps) {
                             // Make sure we are at the end before fetching another page
                             if (
                                 data &&
-                                currentPage === data?.pages.length - 1 &&
+                                currentPage[filterValue] ===
+                                    data?.pages.length - 1 &&
                                 !isLoading &&
                                 !isFetching
                             ) {
                                 fetchNextPage();
                             }
-                            setCurrentPage(currentPage + 1);
+                            setCurrentPage({
+                                ...currentPage,
+                                [filterValue]: currentPage[filterValue] + 1,
+                            });
                         }}
                         hasNext={Boolean(hasNextPage)}
-                        hasPrev={currentPage !== 0}
-                        onPrev={() => setCurrentPage(currentPage - 1)}
-                        onFirst={() => setCurrentPage(1)}
+                        hasPrev={currentPage[filterValue] !== 0}
+                        onPrev={() =>
+                            setCurrentPage({
+                                ...currentPage,
+                                [filterValue]: currentPage[filterValue] - 1,
+                            })
+                        }
+                        onFirst={() =>
+                            setCurrentPage({
+                                ...currentPage,
+                                [filterValue]: 1,
+                            })
+                        }
                     />
                 )}
             </div>
