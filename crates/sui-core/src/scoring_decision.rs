@@ -4,16 +4,18 @@
 use crate::authority::AuthorityMetrics;
 use crate::math::median;
 use arc_swap::ArcSwap;
+use fastcrypto::traits::ToFromBytes;
 use narwhal_config::{Committee, Stake};
+use narwhal_crypto::PublicKey;
 use narwhal_types::ReputationScores;
 use std::collections::HashMap;
 use std::sync::Arc;
 use sui_types::base_types::AuthorityName;
-use tracing::{info, warn};
+use tracing::info;
 
 // TODO: migrate these values to config
-const MAD_DIVISOR: f64 = 2.1;
-const CUTOFF_VALUE: f64 = 3.0;
+const MAD_DIVISOR: f64 = 2.0;
+const CUTOFF_VALUE: f64 = 2.5;
 
 /// Updates list of authorities that are deemed to have low reputation scores by consensus
 /// these may be lagging behind the network, byzantine, or not reliably participating for any reason.
@@ -100,13 +102,10 @@ pub fn update_low_scoring_authorities(
     // adjusted median absolute deviation
     let mad = median(&abs_deviations) / MAD_DIVISOR;
     let mut low_scoring = vec![];
-    let mut rest = vec![];
-    for (i, (a, (score, stake))) in scores_per_authority.iter().enumerate() {
+    for (i, (a, (score, _stake))) in scores_per_authority.iter().enumerate() {
         let temp = deviations[i] / mad;
         if temp < -CUTOFF_VALUE {
             low_scoring.push((a, *score));
-        } else {
-            rest.push((a, *stake));
         }
     }
 
@@ -118,23 +117,29 @@ pub fn update_low_scoring_authorities(
 
     info!("{:?} low scoring authorities calculated", len_low_scoring);
 
+    // sort the low scoring authorities in asc order
+    low_scoring.sort_by_key(|(_, score)| *score);
+
+    // take low scoring authorities while we haven't reached validity threshold (f+1)
+    let mut total_stake = 0;
     for (authority, score) in low_scoring {
-        final_low_scoring_map.insert(*authority, score);
+        total_stake += committee
+            .authority_by_key(&PublicKey::from_bytes(authority.as_ref()).unwrap())
+            .unwrap()
+            .stake();
+
+        let included = if !committee.reached_validity(total_stake) {
+            final_low_scoring_map.insert(*authority, score);
+            true
+        } else {
+            false
+        };
         if let Some(hostname) = authority_names_to_hostnames.get(authority) {
-            info!("low scoring authority {} has score {}", hostname, score);
+            info!(
+                "low scoring authority {} has score {}, included: {}",
+                hostname, score, included
+            );
         }
-    }
-
-    // make sure the rest have at least quorum
-    let remaining_stake = rest.into_iter().map(|(_, stake)| stake).sum::<Stake>();
-    let quorum_threshold = committee.quorum_threshold();
-    if remaining_stake < quorum_threshold {
-        warn!(
-            "too many low reputation-scoring authorities, temporarily disabling scoring mechanism"
-        );
-
-        low_scoring_authorities.swap(Arc::new(HashMap::new()));
-        return;
     }
 
     low_scoring_authorities.swap(Arc::new(final_low_scoring_map));
@@ -260,7 +265,8 @@ mod tests {
             peer_id_map.clone(),
             &metrics,
         );
-        assert_eq!(low_scoring.load().len(), 0);
+
+        assert_eq!(low_scoring.load().len(), 1);
 
         // if more than the quorum is a low outlier, we don't exclude any authority
         let mut scores = HashMap::new();
@@ -313,7 +319,8 @@ mod tests {
             peer_id_map.clone(),
             &metrics,
         );
-        assert_eq!(low_scoring.load().len(), 0);
+
+        assert_eq!(low_scoring.load().len(), 5);
 
         // the outlier
         scores.insert(authorities[final_idx].id(), 40_u64);
@@ -336,7 +343,7 @@ mod tests {
                 .unwrap(),
             40_u64
         );
-        assert_eq!(low_scoring.load().len(), 1);
+        assert_eq!(low_scoring.load().len(), 6);
     }
 
     #[test]
@@ -477,7 +484,7 @@ mod tests {
 
         // read the file
         let (authority_host_names, all_authority_scores) =
-            read_scores_csv("authority_scores.csv");
+            read_scores_csv("/Users/akichidis/Downloads/authority_scores_private_testnet.csv");
 
         let mut authority_names_to_hostnames = HashMap::new();
 
