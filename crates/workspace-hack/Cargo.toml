@@ -81,8 +81,7 @@ bitcoin-private = { version = "0.1" }
 bitcoin_hashes = { version = "0.12", default-features = false }
 bitflags = { version = "1" }
 bitmaps = { version = "2" }
-bitvec-56bd22fc3884b12 = { package = "bitvec", version = "0.20", default-features = false, features = ["std"] }
-bitvec-cdcf2f9584511fe6 = { package = "bitvec", version = "0.19", default-features = false, features = ["std"] }
+bitvec = { version = "0.20", default-features = false, features = ["std"] }
 blake2 = { version = "0.10" }
 blake3 = { version = "1" }
 block-buffer-274715c4dabd11b0 = { package = "block-buffer", version = "0.9", default-features = false, features = ["block-padding"] }
@@ -188,7 +187,7 @@ dirs-sys-next = { version = "0.1", default-features = false }
 dissimilar = { version = "1", default-features = false }
 doc-comment = { version = "0.3", default-features = false }
 downcast = { version = "0.11" }
-duration-str = { version = "0.4" }
+duration-str = { version = "0.5" }
 dyn-clone = { version = "1", default-features = false }
 ecdsa-582f2526e08bb6a0 = { package = "ecdsa", version = "0.14", default-features = false, features = ["der", "sign", "verify"] }
 ecdsa-986da7b5efc2b80e = { package = "ecdsa", version = "0.16", features = ["pkcs8", "signing", "std", "verifying"] }
@@ -381,7 +380,6 @@ nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da
 nibble_vec = { version = "0.1", default-features = false }
 no-std-compat = { version = "0.4", default-features = false, features = ["alloc", "std"] }
 nom-15128469a54ed75a = { package = "nom", version = "7" }
-nom-a490c3000a992113 = { package = "nom", version = "6" }
 nom-cdf1610d3e1514e9 = { package = "nom", version = "5" }
 nonzero_ext = { version = "0.3" }
 normalize-line-endings = { version = "0.3", default-features = false }
@@ -464,8 +462,7 @@ quinn-proto = { version = "0.9" }
 quinn-udp = { version = "0.3", default-features = false }
 quote-dff4ba8e3ae991db = { package = "quote", version = "1" }
 r2d2 = { version = "0.8", default-features = false }
-radium-3b31131e45eafb45 = { package = "radium", version = "0.6", default-features = false }
-radium-d8f496e17d97b5cb = { package = "radium", version = "0.5", default-features = false }
+radium = { version = "0.6", default-features = false }
 radix_trie = { version = "0.2", default-features = false }
 rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["small_rng"] }
 rand-ca01ad9e24f5d932 = { package = "rand", version = "0.7" }
@@ -749,8 +746,7 @@ bitcoin-private = { version = "0.1" }
 bitcoin_hashes = { version = "0.12", default-features = false }
 bitflags = { version = "1" }
 bitmaps = { version = "2" }
-bitvec-56bd22fc3884b12 = { package = "bitvec", version = "0.20", default-features = false, features = ["std"] }
-bitvec-cdcf2f9584511fe6 = { package = "bitvec", version = "0.19", default-features = false, features = ["std"] }
+bitvec = { version = "0.20", default-features = false, features = ["std"] }
 blake2 = { version = "0.10" }
 blake3 = { version = "1" }
 block-buffer-274715c4dabd11b0 = { package = "block-buffer", version = "0.9", default-features = false, features = ["block-padding"] }
@@ -878,7 +874,7 @@ displaydoc = { version = "0.2" }
 dissimilar = { version = "1", default-features = false }
 doc-comment = { version = "0.3", default-features = false }
 downcast = { version = "0.11" }
-duration-str = { version = "0.4" }
+duration-str = { version = "0.5" }
 dyn-clone = { version = "1", default-features = false }
 ecdsa-582f2526e08bb6a0 = { package = "ecdsa", version = "0.14", default-features = false, features = ["der", "sign", "verify"] }
 ecdsa-986da7b5efc2b80e = { package = "ecdsa", version = "0.16", features = ["pkcs8", "signing", "std", "verifying"] }
@@ -1090,7 +1086,6 @@ nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da
 nibble_vec = { version = "0.1", default-features = false }
 no-std-compat = { version = "0.4", default-features = false, features = ["alloc", "std"] }
 nom-15128469a54ed75a = { package = "nom", version = "7" }
-nom-a490c3000a992113 = { package = "nom", version = "6" }
 nom-cdf1610d3e1514e9 = { package = "nom", version = "5" }
 nonzero_ext = { version = "0.3" }
 normalize-line-endings = { version = "0.3", default-features = false }
@@ -1198,8 +1193,7 @@ quinn-udp = { version = "0.3", default-features = false }
 quote-3b31131e45eafb45 = { package = "quote", version = "0.6" }
 quote-dff4ba8e3ae991db = { package = "quote", version = "1" }
 r2d2 = { version = "0.8", default-features = false }
-radium-3b31131e45eafb45 = { package = "radium", version = "0.6", default-features = false }
-radium-d8f496e17d97b5cb = { package = "radium", version = "0.5", default-features = false }
+radium = { version = "0.6", default-features = false }
 radix_trie = { version = "0.2", default-features = false }
 rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["small_rng"] }
 rand-ca01ad9e24f5d932 = { package = "rand", version = "0.7" }
