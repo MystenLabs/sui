@@ -130,7 +130,7 @@ impl Inner {
             return ready_certificates;
         };
 
-        // Waiters can acquire lock in eitehr readonly or default mode.
+        // Waiters can acquire lock in either readonly or default mode.
         let mut digests = BTreeSet::new();
         if !lock_queue.readonly_waiters.is_empty() {
             std::mem::swap(&mut digests, &mut lock_queue.readonly_waiters);
@@ -146,7 +146,12 @@ impl Inner {
             return ready_certificates;
         }
 
-        let input_count = self.input_objects.get_mut(&input_key.0).unwrap();
+        let input_count = self.input_objects.get_mut(&input_key.0).unwrap_or_else(|| {
+            panic!(
+                "# of transactions waiting on object {:?} cannot be 0",
+                input_key.0
+            )
+        });
         *input_count -= digests.len();
         if *input_count == 0 {
             self.input_objects.remove(&input_key.0);
@@ -174,55 +179,19 @@ impl Inner {
         ready_certificates
     }
 
-    /// After reaching 3/4 load in hashmaps, increase capacity to decrease load to 1/2.
     fn maybe_reserve_capacity(&mut self) {
-        if self.lock_waiters.len() > self.lock_waiters.capacity() * 3 / 4 {
-            self.lock_waiters.reserve(self.lock_waiters.capacity() / 2);
-        }
-        if self.input_objects.len() > self.input_objects.capacity() * 3 / 4 {
-            self.input_objects
-                .reserve(self.input_objects.capacity() / 2);
-        }
-        if self.pending_certificates.len() > self.pending_certificates.capacity() * 3 / 4 {
-            self.pending_certificates
-                .reserve(self.pending_certificates.capacity() / 2);
-        }
-        if self.executing_certificates.len() > self.executing_certificates.capacity() * 3 / 4 {
-            self.executing_certificates
-                .reserve(self.executing_certificates.capacity() / 2);
-        }
+        self.lock_waiters.maybe_reserve_capacity();
+        self.input_objects.maybe_reserve_capacity();
+        self.pending_certificates.maybe_reserve_capacity();
+        self.executing_certificates.maybe_reserve_capacity();
     }
 
     /// After reaching 1/4 load in hashmaps, decrease capacity to increase load to 1/2.
     fn maybe_shrink_capacity(&mut self) {
-        if self.lock_waiters.len() > MIN_HASHMAP_CAPACITY
-            && self.lock_waiters.len() < self.lock_waiters.capacity() / 4
-        {
-            self.lock_waiters
-                .shrink_to(max(self.lock_waiters.capacity() / 2, MIN_HASHMAP_CAPACITY))
-        }
-        if self.input_objects.len() > MIN_HASHMAP_CAPACITY
-            && self.input_objects.len() < self.input_objects.capacity() / 4
-        {
-            self.input_objects
-                .shrink_to(max(self.input_objects.capacity() / 2, MIN_HASHMAP_CAPACITY))
-        }
-        if self.pending_certificates.len() > MIN_HASHMAP_CAPACITY
-            && self.pending_certificates.len() < self.pending_certificates.capacity() / 4
-        {
-            self.pending_certificates.shrink_to(max(
-                self.pending_certificates.capacity() / 2,
-                MIN_HASHMAP_CAPACITY,
-            ))
-        }
-        if self.executing_certificates.len() > MIN_HASHMAP_CAPACITY
-            && self.executing_certificates.len() < self.executing_certificates.capacity() / 4
-        {
-            self.executing_certificates.shrink_to(max(
-                self.executing_certificates.capacity() / 2,
-                MIN_HASHMAP_CAPACITY,
-            ))
-        }
+        self.lock_waiters.maybe_shrink_capacity();
+        self.input_objects.maybe_shrink_capacity();
+        self.pending_certificates.maybe_shrink_capacity();
+        self.executing_certificates.maybe_shrink_capacity();
     }
 }
 
@@ -673,5 +642,29 @@ impl TransactionManager {
             "Executing certificates: {:?}",
             inner.executing_certificates
         );
+    }
+}
+
+trait ResizableHashMap<K, V> {
+    fn maybe_reserve_capacity(&mut self);
+    fn maybe_shrink_capacity(&mut self);
+}
+
+impl<K, V> ResizableHashMap<K, V> for HashMap<K, V>
+where
+    K: std::cmp::Eq + std::hash::Hash,
+{
+    /// After reaching 3/4 load in hashmaps, increase capacity to decrease load to 1/2.
+    fn maybe_reserve_capacity(&mut self) {
+        if self.len() > self.capacity() * 3 / 4 {
+            self.reserve(self.capacity() / 2);
+        }
+    }
+
+    /// After reaching 1/4 load in hashmaps, decrease capacity to increase load to 1/2.
+    fn maybe_shrink_capacity(&mut self) {
+        if self.len() > MIN_HASHMAP_CAPACITY && self.len() < self.capacity() / 4 {
+            self.shrink_to(max(self.capacity() / 2, MIN_HASHMAP_CAPACITY))
+        }
     }
 }
