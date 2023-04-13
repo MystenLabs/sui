@@ -366,16 +366,16 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             dependencies,
         } = extra;
 
-        let [(named_addr_opt, module)] = &modules[..] else {
-            bail!("Multiple package publish not supported in sui adapter");
-        };
-
-        let module_name = module.self_id().name().to_string();
-        let module_bytes = {
-            let mut buf = vec![];
-            module.serialize(&mut buf).unwrap();
-            buf
-        };
+        let named_addr_opt = modules.first().unwrap().0;
+        let first_module_name = modules.first().unwrap().1.self_id().name().to_string();
+        let modules_bytes = modules
+            .iter()
+            .map(|(_, module)| {
+                let mut module_bytes = vec![];
+                module.serialize(&mut module_bytes).unwrap();
+                Ok(module_bytes)
+            })
+            .collect::<anyhow::Result<_>>()?;
         let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
         let mut dependencies: Vec<_> = dependencies
             .into_iter()
@@ -394,10 +394,10 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         let data = |sender, gas| {
             let mut builder = ProgrammableTransactionBuilder::new();
             if upgradeable {
-                let cap = builder.publish_upgradeable(vec![module_bytes], dependencies);
+                let cap = builder.publish_upgradeable(modules_bytes, dependencies);
                 builder.transfer_arg(sender, cap);
             } else {
-                builder.publish_immutable(vec![module_bytes], dependencies);
+                builder.publish_immutable(modules_bytes, dependencies);
             };
             let pt = builder.finish();
             TransactionData::new_programmable(sender, vec![gas], pt, gas_budget, gas_price)
@@ -409,7 +409,11 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             .iter()
             .find_map(|id| {
                 let package = self.storage.get_object(id).unwrap().data.try_as_package()?;
-                if package.serialized_module_map().get(&module_name).is_some() {
+                if package
+                    .serialized_module_map()
+                    .get(&first_module_name)
+                    .is_some()
+                {
                     Some(*id)
                 } else {
                     None
@@ -432,7 +436,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             }
         }
         let output = self.object_summary_output(&summary);
-        let published_module_bytes = self
+        let published_modules = self
             .storage
             .get_object(&created_package)
             .unwrap()
@@ -440,11 +444,15 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             .try_as_package()
             .unwrap()
             .serialized_module_map()
-            .get(&module_name)
-            .unwrap()
-            .clone();
-        let published_module = CompiledModule::deserialize(&published_module_bytes).unwrap();
-        Ok((output, vec![(*named_addr_opt, published_module)]))
+            .iter()
+            .map(|(_, published_module_bytes)| {
+                (
+                    named_addr_opt,
+                    CompiledModule::deserialize(published_module_bytes).unwrap(),
+                )
+            })
+            .collect();
+        Ok((output, published_modules))
     }
 
     fn call_function(
