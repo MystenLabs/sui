@@ -10,12 +10,9 @@ use narwhal_crypto::PublicKey;
 use narwhal_types::ReputationScores;
 use std::collections::HashMap;
 use std::sync::Arc;
+use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::AuthorityName;
-use tracing::info;
-
-// TODO: migrate these values to config
-const MAD_DIVISOR: f64 = 2.3;
-const CUTOFF_VALUE: f64 = 2.5;
+use tracing::{info, warn};
 
 /// Updates list of authorities that are deemed to have low reputation scores by consensus
 /// these may be lagging behind the network, byzantine, or not reliably participating for any reason.
@@ -50,6 +47,44 @@ pub fn update_low_scoring_authorities(
     reputation_scores: ReputationScores,
     authority_names_to_hostnames: HashMap<AuthorityName, String>,
     metrics: &Arc<AuthorityMetrics>,
+    protocol_config: &ProtocolConfig,
+) {
+    if protocol_config.scoring_decision_with_no_disable() {
+        update_low_scoring_authorities_with_no_disable_mechanism(
+            low_scoring_authorities,
+            committee,
+            reputation_scores,
+            authority_names_to_hostnames,
+            metrics,
+            2.3,
+            2.5,
+        );
+    } else {
+        // TODO remove this after the protocol version upgrade to 5
+        static MAD_DIVISOR: f64 = 1.2;
+        static CUTOFF_VALUE: f64 = 3.0;
+
+        update_low_scoring_authorities_with_previous_disable_mechanism(
+            low_scoring_authorities,
+            committee,
+            reputation_scores,
+            authority_names_to_hostnames,
+            metrics,
+            MAD_DIVISOR,
+            CUTOFF_VALUE,
+        );
+    }
+}
+
+// TODO: remove after validators have upgraded to protocol version 5.
+fn update_low_scoring_authorities_with_previous_disable_mechanism(
+    low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
+    committee: &Committee,
+    reputation_scores: ReputationScores,
+    authority_names_to_hostnames: HashMap<AuthorityName, String>,
+    metrics: &Arc<AuthorityMetrics>,
+    mad_divisor: f64,
+    cut_off_value: f64,
 ) {
     if !reputation_scores.final_of_schedule {
         return;
@@ -100,14 +135,114 @@ pub fn update_low_scoring_authorities(
     }
 
     // adjusted median absolute deviation
-    let mad = median(&abs_deviations) / MAD_DIVISOR;
+    let mad = median(&abs_deviations) / mad_divisor;
+    let mut low_scoring = vec![];
+    let mut rest = vec![];
+    for (i, (a, (score, stake))) in scores_per_authority.iter().enumerate() {
+        let temp = deviations[i] / mad;
+        if temp < -cut_off_value {
+            low_scoring.push((a, *score));
+        } else {
+            rest.push((a, *stake));
+        }
+    }
+
+    // report new scores
+    let len_low_scoring = low_scoring.len();
+    metrics
+        .consensus_handler_num_low_scoring_authorities
+        .set(len_low_scoring as i64);
+
+    info!("{:?} low scoring authorities calculated", len_low_scoring);
+
+    for (authority, score) in low_scoring {
+        final_low_scoring_map.insert(*authority, score);
+        if let Some(hostname) = authority_names_to_hostnames.get(authority) {
+            info!("low scoring authority {} has score {}", hostname, score);
+        }
+    }
+
+    // make sure the rest have at least quorum
+    let remaining_stake = rest.into_iter().map(|(_, stake)| stake).sum::<Stake>();
+    let quorum_threshold = committee.quorum_threshold();
+    if remaining_stake < quorum_threshold {
+        warn!(
+            "too many low reputation-scoring authorities, temporarily disabling scoring mechanism"
+        );
+
+        low_scoring_authorities.swap(Arc::new(HashMap::new()));
+        return;
+    }
+
+    low_scoring_authorities.swap(Arc::new(final_low_scoring_map));
+}
+
+fn update_low_scoring_authorities_with_no_disable_mechanism(
+    low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
+    committee: &Committee,
+    reputation_scores: ReputationScores,
+    authority_names_to_hostnames: HashMap<AuthorityName, String>,
+    metrics: &Arc<AuthorityMetrics>,
+    mad_divisor: f64,
+    cut_off_value: f64,
+) {
+    if !reputation_scores.final_of_schedule {
+        return;
+    }
+
+    // Convert the narwhal authority ids to the corresponding AuthorityName in SUI
+    // Also capture the stake so can calculate later is strong quorum is reached for the non-low scoring authorities.
+    let scores_per_authority: HashMap<AuthorityName, (u64, Stake)> = reputation_scores
+        .scores_per_authority
+        .into_iter()
+        .map(|(authority_id, score)| {
+            let authority = committee.authority(&authority_id).unwrap();
+            let name: AuthorityName = authority.protocol_key().into();
+
+            // report the scores
+            if let Some(hostname) = authority_names_to_hostnames.get(&name) {
+                info!("authority {} has score {}", hostname, score);
+
+                metrics
+                    .consensus_handler_scores
+                    .with_label_values(&[&format!("{:?}", hostname)])
+                    .set(score as i64);
+            }
+
+            (name, (score, authority.stake()))
+        })
+        .collect();
+
+    let mut final_low_scoring_map = HashMap::new();
+
+    let mut score_list = vec![];
+    let mut nonzero_scores = vec![];
+    for (score, _stake) in scores_per_authority.values() {
+        score_list.push(*score as f64);
+        if score != &0_u64 {
+            nonzero_scores.push(*score as f64);
+        }
+    }
+
+    let median_value = median(&nonzero_scores);
+    let mut deviations = vec![];
+    let mut abs_deviations = vec![];
+    for (i, _) in score_list.clone().iter().enumerate() {
+        deviations.push(score_list[i] - median_value);
+        if score_list[i] != 0.0 {
+            abs_deviations.push((score_list[i] - median_value).abs());
+        }
+    }
+
+    // adjusted median absolute deviation
+    let mad = median(&abs_deviations) / mad_divisor;
     let mut low_scoring = vec![];
     for (i, (a, (score, _stake))) in scores_per_authority.iter().enumerate() {
         let temp = deviations[i] / mad;
 
         // We expect the methodology to include the zero scoring validators, but we explicitly
         // include them to make sure, as we know for sure that those have no contribution.
-        if *score == 0 || temp < -CUTOFF_VALUE {
+        if *score == 0 || temp < -cut_off_value {
             low_scoring.push((a, *score));
         }
     }
@@ -119,6 +254,9 @@ pub fn update_low_scoring_authorities(
         .set(len_low_scoring as i64);
 
     info!("{:?} low scoring authorities calculated", len_low_scoring);
+
+    // Do not disable the scoring mechanism when more than f validators are excluded. Just keep
+    // marking low scoring authorities up to f.
 
     // sort the low scoring authorities in asc order
     low_scoring.sort_by_key(|(_, score)| *score);
@@ -151,7 +289,6 @@ pub fn update_low_scoring_authorities(
 #[cfg(test)]
 mod tests {
     #![allow(clippy::mutable_key_type)]
-
     use crate::authority::AuthorityMetrics;
     use crate::scoring_decision::update_low_scoring_authorities;
     use arc_swap::ArcSwap;
@@ -166,7 +303,16 @@ mod tests {
     use rand::SeedableRng;
     use std::collections::{HashMap, HashSet};
     use std::sync::Arc;
+    use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
     use sui_types::crypto::NetworkPublicKey;
+
+    fn protocol_v4() -> ProtocolConfig {
+        ProtocolConfig::get_for_version(ProtocolVersion::new(4))
+    }
+
+    fn protocol_v5() -> ProtocolConfig {
+        ProtocolConfig::get_for_version(ProtocolVersion::new(5))
+    }
 
     #[test]
     pub fn test_update_low_scoring_authorities() {
@@ -198,6 +344,7 @@ mod tests {
             reputation_scores_1,
             peer_id_map.clone(),
             &metrics,
+            &protocol_v4(),
         );
 
         assert_eq!(
@@ -223,6 +370,7 @@ mod tests {
             reputation_scores,
             peer_id_map.clone(),
             &metrics,
+            &protocol_v4(),
         );
         assert_eq!(
             *low_scoring.load().get(&a4.protocol_key().into()).unwrap(),
@@ -244,9 +392,21 @@ mod tests {
         update_low_scoring_authorities(
             low_scoring.clone(),
             &committee,
+            reputation_scores.clone(),
+            peer_id_map.clone(),
+            &metrics,
+            &protocol_v4(),
+        );
+        assert_eq!(low_scoring.load().len(), 0);
+
+        // When with protocol 5
+        update_low_scoring_authorities(
+            low_scoring.clone(),
+            &committee,
             reputation_scores,
             peer_id_map.clone(),
             &metrics,
+            &protocol_v5(),
         );
         assert_eq!(low_scoring.load().len(), 1);
 
@@ -264,9 +424,22 @@ mod tests {
         update_low_scoring_authorities(
             low_scoring.clone(),
             &committee,
-            reputation_scores,
+            reputation_scores.clone(),
             peer_id_map.clone(),
             &metrics,
+            &protocol_v4(),
+        );
+
+        assert_eq!(low_scoring.load().len(), 0);
+
+        // when with protocol 5
+        update_low_scoring_authorities(
+            low_scoring.clone(),
+            &committee,
+            reputation_scores.clone(),
+            peer_id_map.clone(),
+            &metrics,
+            &protocol_v5(),
         );
 
         assert_eq!(low_scoring.load().len(), 1);
@@ -285,9 +458,21 @@ mod tests {
         update_low_scoring_authorities(
             low_scoring.clone(),
             &committee,
+            reputation_scores.clone(),
+            peer_id_map.clone(),
+            &metrics,
+            &protocol_v4(),
+        );
+        assert_eq!(low_scoring.load().len(), 0);
+
+        // When protocol v5
+        update_low_scoring_authorities(
+            low_scoring.clone(),
+            &committee,
             reputation_scores,
             peer_id_map.clone(),
             &metrics,
+            &protocol_v5(),
         );
         assert_eq!(low_scoring.load().len(), 1);
 
@@ -318,9 +503,22 @@ mod tests {
         update_low_scoring_authorities(
             low_scoring.clone(),
             &committee,
+            reputation_scores.clone(),
+            peer_id_map.clone(),
+            &metrics,
+            &protocol_v4(),
+        );
+
+        assert_eq!(low_scoring.load().len(), 0);
+
+        // When protocol v5
+        update_low_scoring_authorities(
+            low_scoring.clone(),
+            &committee,
             reputation_scores,
             peer_id_map.clone(),
             &metrics,
+            &protocol_v5(),
         );
 
         assert_eq!(low_scoring.load().len(), 10);
@@ -334,9 +532,10 @@ mod tests {
         update_low_scoring_authorities(
             low_scoring.clone(),
             &committee,
-            reputation_scores,
-            peer_id_map,
+            reputation_scores.clone(),
+            peer_id_map.clone(),
             &metrics,
+            &protocol_v4(),
         );
 
         assert_eq!(
@@ -346,7 +545,25 @@ mod tests {
                 .unwrap(),
             40_u64
         );
-        assert_eq!(low_scoring.load().len(), 6);
+
+        // When protocol 5
+        update_low_scoring_authorities(
+            low_scoring.clone(),
+            &committee,
+            reputation_scores.clone(),
+            peer_id_map,
+            &metrics,
+            &protocol_v4(),
+        );
+
+        assert_eq!(
+            *low_scoring
+                .load()
+                .get(&authorities[final_idx].protocol_key().into())
+                .unwrap(),
+            40_u64
+        );
+        assert_eq!(low_scoring.load().len(), 1);
     }
 
     #[test]
@@ -389,9 +606,29 @@ mod tests {
         update_low_scoring_authorities(
             low_scoring.clone(),
             &committee,
+            reputation_scores.clone(),
+            HashMap::new(),
+            &metrics,
+            &protocol_v4(),
+        );
+        assert_eq!(
+            *low_scoring.load().get(&a4.protocol_key().into()).unwrap(),
+            50_u64
+        );
+        assert_eq!(
+            *low_scoring.load().get(&a5.protocol_key().into()).unwrap(),
+            0_u64
+        );
+        assert_eq!(low_scoring.load().len(), 2);
+
+        // When protocol v5
+        update_low_scoring_authorities(
+            low_scoring.clone(),
+            &committee,
             reputation_scores,
             HashMap::new(),
             &metrics,
+            &protocol_v4(),
         );
         assert_eq!(
             *low_scoring.load().get(&a4.protocol_key().into()).unwrap(),
@@ -445,9 +682,21 @@ mod tests {
         update_low_scoring_authorities(
             low_scoring.clone(),
             &committee,
+            reputation_scores.clone(),
+            HashMap::new(),
+            &metrics,
+            &protocol_v4(),
+        );
+        assert_eq!(low_scoring.load().len(), 0);
+
+        // When protocol v5
+        update_low_scoring_authorities(
+            low_scoring.clone(),
+            &committee,
             reputation_scores,
             HashMap::new(),
             &metrics,
+            &protocol_v5(),
         );
         assert_eq!(low_scoring.load().len(), 3);
     }
@@ -514,12 +763,25 @@ mod tests {
         update_low_scoring_authorities(
             low_scoring.clone(),
             &committee,
+            reputation_scores.clone(),
+            peer_id_map.clone(),
+            &metrics,
+            &protocol_v4(),
+        );
+
+        assert_eq!(low_scoring.load().len(), 3);
+
+        // When protocol v5
+        update_low_scoring_authorities(
+            low_scoring.clone(),
+            &committee,
             reputation_scores,
             peer_id_map,
             &metrics,
+            &protocol_v5(),
         );
 
-        assert_eq!(low_scoring.load().len(), 10);
+        assert_eq!(low_scoring.load().len(), 12);
     }
 
     /// A test to use when need to tune the score parameters based on some score data retrieved by
@@ -535,7 +797,7 @@ mod tests {
 
         // read the file
         let (authority_host_names, all_authority_scores) =
-            read_scores_csv("/Users/akichidis/Downloads/Avg score per host-data-as-joinbyfield-2023-04-14 17_11_40.csv");
+            read_scores_csv("/Users/akichidis/Downloads/Avg score per host-data-as-joinbyfield-2023-04-14 20_24_09.csv");
 
         let mut authority_names_to_hostnames = HashMap::new();
 
@@ -576,6 +838,7 @@ mod tests {
                 reputation_scores,
                 authority_names_to_hostnames.clone(),
                 &metrics,
+                &protocol_v5(),
             );
 
             // snapshot the low scoring authorities
