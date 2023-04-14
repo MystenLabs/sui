@@ -677,6 +677,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 sender,
                 gas_budget,
                 syntax,
+                policy,
             }) => {
                 let syntax = syntax.unwrap_or_else(|| self.default_syntax());
                 let data = data.ok_or_else(|| {
@@ -722,6 +723,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     dependencies,
                     sender,
                     gas_budget,
+                    policy,
                 )?;
                 match syntax {
                     SyntaxChoice::Source => {
@@ -761,6 +763,7 @@ impl<'a> SuiTestAdapter<'a> {
         dependencies: Vec<String>,
         sender: String,
         gas_budget: Option<u64>,
+        policy: Option<String>,
     ) -> anyhow::Result<Option<String>> {
         let modules_bytes = modules
             .iter()
@@ -787,7 +790,13 @@ impl<'a> SuiTestAdapter<'a> {
         let mut builder = ProgrammableTransactionBuilder::new();
 
         SuiValue::Object(upgrade_capability).into_argument(&mut builder, self)?; // Argument::Input(0)
-        let upgrade_arg = builder.pure(UpgradePolicy::COMPATIBLE).unwrap();
+        let policy = policy.map(|x| Ok(match x.as_str() {
+            "compatible" => UpgradePolicy::COMPATIBLE,
+            "additive" => UpgradePolicy::ADDITIVE,
+            "dep_only" => UpgradePolicy::DEP_ONLY,
+            _ => bail!("Invalid upgrade policy {x}. Policy must be one of 'compatible', 'additive', and 'dep_only'")
+        })).unwrap_or(Ok(UpgradePolicy::COMPATIBLE))?;
+        let upgrade_arg = builder.pure(policy).unwrap();
         let digest: Vec<u8> =
             MovePackage::compute_digest_for_modules_and_deps(&modules_bytes, &dependencies).into();
         let digest_arg = builder.pure(digest).unwrap();

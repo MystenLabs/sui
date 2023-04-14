@@ -114,6 +114,8 @@ pub struct UpgradePackageCommand {
     pub gas_budget: Option<u64>,
     #[clap(long = "syntax")]
     pub syntax: Option<SyntaxChoice>,
+    #[clap(long = "policy")]
+    pub policy: Option<String>,
 }
 
 #[derive(Debug, clap::Parser)]
