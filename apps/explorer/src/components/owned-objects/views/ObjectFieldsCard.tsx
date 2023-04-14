@@ -143,7 +143,7 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
                                         ))}
                                     </Combobox.Options>
                                 </Combobox>
-                                <div className="max-h-600 min-h-full overflow-y-auto overflow-x-clip py-3">
+                                <div className="max-h-600 overflow-y-auto overflow-x-clip py-3">
                                     <VerticalList>
                                         {normalizedStruct?.fields?.map(
                                             ({ name, type }) => (
