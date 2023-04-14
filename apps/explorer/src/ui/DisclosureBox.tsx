@@ -42,7 +42,7 @@ export function DisclosureBox({
                     <>
                         <Disclosure.Button
                             as="div"
-                            className="flex cursor-pointer flex-nowrap items-center px-5 py-3.75"
+                            className="flex cursor-pointer flex-nowrap items-center gap-1 px-5 py-3.75"
                         >
                             <div className="flex w-11/12 flex-1 gap-1 text-body font-semibold text-gray-90">
                                 {title}
