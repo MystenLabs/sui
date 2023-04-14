@@ -32,11 +32,6 @@ function AddressResult() {
             </div>
 
             <div>
-                <div className="border-b border-gray-45 pb-5">
-                    <Heading color="gray-90" variant="heading4/semibold">
-                        Transaction Blocks
-                    </Heading>
-                </div>
                 <ErrorBoundary>
                     <div className="mt-2">
                         <TransactionsForAddress
