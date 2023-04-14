@@ -1552,14 +1552,17 @@ impl<'a> VerificationObligation<'a> {
         )
         .map_err(|e| {
             let error_message = format!(
-                "Failed to batch verify aggregated auth sig {} pks: {:?} messages: {:?} sigs: {:?}",
-                e, &self.public_keys, &self.messages, &self.signatures
+                "Failed to batch verify aggregated auth sig: {}. pks: {:?}, messages: {:?}, sigs: {:?}",
+                e,
+                &self.public_keys,
+                self.messages.iter().map(|m| Base64::encode(m)).collect::<Vec<String>>(),
+                &self.signatures.iter().map(|s| Base64::encode(s.as_ref())).collect::<Vec<String>>()
             );
 
             let chunk_size = 2048;
 
-            // This error message may be very long, so we print out the error in chunks of 2048
-            // characters to avoid hitting the max log line length
+            // This error message may be very long, so we print out the error in chunks of to avoid
+            // hitting a max log line length on the system.
             for (i, chunk) in error_message
                 .as_bytes()
                 .chunks(chunk_size)
