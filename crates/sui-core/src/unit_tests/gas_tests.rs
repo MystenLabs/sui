@@ -515,6 +515,7 @@ async fn test_transfer_sui_insufficient_gas() {
     let gas_object_ref = gas_object.compute_object_reference();
     let authority_state = TestAuthorityBuilder::new().build().await;
     authority_state.insert_genesis_object(gas_object).await;
+    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
 
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
@@ -522,7 +523,7 @@ async fn test_transfer_sui_insufficient_gas() {
         builder.finish()
     };
     let kind = TransactionKind::ProgrammableTransaction(pt);
-    let data = TransactionData::new(kind, sender, gas_object_ref, *MIN_GAS_BUDGET, 1);
+    let data = TransactionData::new(kind, sender, gas_object_ref, *MIN_GAS_BUDGET, rgp);
     let tx = to_sender_signed_transaction(data, &sender_key);
 
     let effects = send_and_confirm_transaction(&authority_state, tx)
@@ -586,7 +587,7 @@ async fn test_invalid_gas_owners() {
             sender,
             vec![good_gas_object, bad_gas_object],
             *MAX_GAS_BUDGET,
-            1,
+            1000,
         );
         let tx = to_sender_signed_transaction(data, sender_key);
 

@@ -65,7 +65,7 @@ async fn test_batch_transaction_ok() -> anyhow::Result<()> {
             .unwrap()
             .compute_object_reference()],
         builder.finish(),
-        rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * 10,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
         rgp,
     );
 
