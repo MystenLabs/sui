@@ -318,9 +318,7 @@ impl<S> IndexerApiServer for IndexerApi<S>
 where
     S: IndexerStore + Sync + Send + 'static,
 {
-    // TODO: remove this after `futures::executor::block_on` is removed. @Ge @Chris
-    #[allow(clippy::disallowed_methods)]
-    fn get_owned_objects(
+    async fn get_owned_objects(
         &self,
         address: SuiAddress,
         query: Option<SuiObjectResponseQuery>,
@@ -343,11 +341,12 @@ where
             owned_obj_guard.stop_and_record();
             return owned_obj_resp;
         }
-        block_on(self.get_owned_objects_internal(address, query, cursor, limit))
+        self.get_owned_objects_internal(address, query, cursor, limit)
+            .await
     }
     // TODO: remove this after `futures::executor::block_on` is removed. @Ge @Chris
     #[allow(clippy::disallowed_methods)]
-    fn query_transaction_blocks(
+    async fn query_transaction_blocks(
         &self,
         query: SuiTransactionBlockResponseQuery,
         cursor: Option<TransactionDigest>,
@@ -372,17 +371,12 @@ where
             query_tx_guard.stop_and_record();
             return query_tx_resp;
         }
-        Ok(block_on(self.query_transaction_blocks_internal(
-            query,
-            cursor,
-            limit,
-            descending_order,
-        ))?)
+        Ok(self
+            .query_transaction_blocks_internal(query, cursor, limit, descending_order)
+            .await?)
     }
 
-    // TODO: remove this after `futures::executor::block_on` is removed. @Ge @Chris
-    #[allow(clippy::disallowed_methods)]
-    fn query_events(
+    async fn query_events(
         &self,
         query: EventFilter,
         // exclusive cursor if `Some`, otherwise start from the beginning
@@ -404,17 +398,12 @@ where
             query_events_guard.stop_and_record();
             return query_events_resp;
         }
-        Ok(block_on(self.query_events_internal(
-            query,
-            cursor,
-            limit,
-            descending_order,
-        ))?)
+        Ok(self
+            .query_events_internal(query, cursor, limit, descending_order)
+            .await?)
     }
 
-    // TODO: remove this after `futures::executor::block_on` is removed. @Ge @Chris
-    #[allow(clippy::disallowed_methods)]
-    fn get_dynamic_fields(
+    async fn get_dynamic_fields(
         &self,
         parent_object_id: ObjectID,
         cursor: Option<ObjectID>,
@@ -433,9 +422,7 @@ where
         df_resp
     }
 
-    // TODO: remove this after `futures::executor::block_on` is removed. @Ge @Chris
-    #[allow(clippy::disallowed_methods)]
-    fn get_dynamic_field_object(
+    async fn get_dynamic_field_object(
         &self,
         parent_object_id: ObjectID,
         name: DynamicFieldName,
