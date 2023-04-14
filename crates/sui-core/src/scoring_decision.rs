@@ -164,7 +164,7 @@ mod tests {
     use prometheus::Registry;
     use rand::rngs::{OsRng, StdRng};
     use rand::SeedableRng;
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
     use std::sync::Arc;
     use sui_types::crypto::NetworkPublicKey;
 
@@ -535,7 +535,7 @@ mod tests {
 
         // read the file
         let (authority_host_names, all_authority_scores) =
-            read_scores_csv("/Users/akichidis/Downloads/authority_scores_private_testnet.csv");
+            read_scores_csv("/Users/akichidis/Downloads/Score per host change-data-as-joinbyfield-2023-04-13 23_38_34.csv");
 
         let mut authority_names_to_hostnames = HashMap::new();
 
@@ -638,17 +638,32 @@ mod tests {
 
         let mut headers = Vec::new();
         let mut scores = Vec::new();
+        let mut scores_set: HashSet<u64> = HashSet::new();
 
         for line in reader.lines() {
             if headers.is_empty() {
-                headers = line.unwrap().split(',').map(|s| s.to_string()).collect();
-            } else {
-                let s = line
+                headers = line
                     .unwrap()
                     .split(',')
-                    .map(|s| s.parse::<u64>().unwrap())
+                    .skip(1)
+                    .map(|s| s.to_string())
                     .collect();
-                scores.push(s);
+            } else {
+                let l = line.unwrap();
+
+                let s: Vec<u64> = l
+                    .split(',')
+                    .skip(1)
+                    .map(|s| s.parse::<f64>().unwrap() as u64)
+                    .collect();
+
+                if s.is_empty() {
+                    continue;
+                }
+
+                if scores_set.insert(s.iter().sum()) {
+                    scores.push(s);
+                }
             }
         }
 
