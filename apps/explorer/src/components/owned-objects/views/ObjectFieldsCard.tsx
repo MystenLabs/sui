@@ -143,7 +143,7 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
                                         ))}
                                     </Combobox.Options>
                                 </Combobox>
-                                <div className="max-h-600 min-h-full overflow-auto overflow-x-clip overflow-y-scroll py-3">
+                                <div className="max-h-600 min-h-full overflow-y-auto overflow-x-clip py-3">
                                     <VerticalList>
                                         {normalizedStruct?.fields?.map(
                                             ({ name, type }) => (
@@ -193,7 +193,7 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
                             </div>
 
                             <div className="grow overflow-auto border-gray-45 pt-1 md:w-3/5 md:border-l md:pl-7">
-                                <div className="flex max-h-[600px] flex-col gap-5 overflow-x-scroll pb-5">
+                                <div className="flex max-h-600 flex-col gap-5 overflow-y-auto pb-5">
                                     {normalizedStruct?.fields.map(
                                         ({ name, type }) => (
                                             <ScrollToViewCard

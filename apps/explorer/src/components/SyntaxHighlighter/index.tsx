@@ -22,7 +22,7 @@ export function SyntaxHighlighter({ code, language }: Props) {
             >
                 {({ style, tokens, getLineProps, getTokenProps }) => (
                     <pre
-                        className="bg-transparent !p-0 font-medium"
+                        className="overflow-auto bg-transparent !p-0 font-medium"
                         style={style}
                     >
                         {tokens.map((line, i) => (

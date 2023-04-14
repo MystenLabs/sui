@@ -49,7 +49,7 @@ export function DisclosureBox({
                                 {preview && !open ? preview : null}
                             </div>
 
-                            <ChevronRight12 className="text-caption text-steel ui-open:rotate-90" />
+                            <ChevronRight12 className="ml-1 text-caption text-steel ui-open:rotate-90" />
                         </Disclosure.Button>
                         <Disclosure.Panel className="px-5 pb-3.75">
                             {children}
