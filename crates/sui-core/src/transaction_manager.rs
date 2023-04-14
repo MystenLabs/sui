@@ -7,15 +7,16 @@ use std::{
     sync::Arc,
 };
 
+use lru::LruCache;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
+use sui_types::{base_types::TransactionDigest, error::SuiResult};
 use sui_types::{
-    base_types::ObjectID,
+    base_types::{ObjectID, SequenceNumber},
     committee::EpochId,
     digests::TransactionEffectsDigest,
     messages::{TransactionDataAPI, VerifiedCertificate, VerifiedExecutableTransaction},
 };
-use sui_types::{base_types::TransactionDigest, error::SuiResult};
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{error, trace, warn};
 
@@ -93,7 +94,50 @@ impl LockQueue {
     }
 }
 
-#[derive(Default)]
+struct AvailableObjectsCache {
+    cache: LruCache<ObjectID, Option<SequenceNumber>>,
+    metrics: Arc<AuthorityMetrics>,
+}
+
+impl AvailableObjectsCache {
+    fn new(metrics: Arc<AuthorityMetrics>) -> Self {
+        Self {
+            cache: LruCache::new(100000.try_into().unwrap()),
+            metrics,
+        }
+    }
+
+    // returns true if a prior object was evicted
+    fn insert(&mut self, object: &InputKey) {
+        if let Some((previous_id, previous_version)) = self.cache.push(object.0, object.1) {
+            if previous_id == object.0 {
+                if let Some(previous_version) = previous_version {
+                    if previous_version > object.1.unwrap_or(SequenceNumber::MIN) {
+                        // do not allow highest known version to decrease
+                        self.cache.put(object.0, Some(previous_version));
+                    }
+                }
+            } else {
+                self.metrics
+                    .transaction_manager_object_cache_evictions
+                    .inc();
+            }
+        }
+    }
+
+    fn is_object_available(&mut self, object: &InputKey) -> bool {
+        match (self.cache.get(&object.0), object.1) {
+            (Some(Some(current)), Some(requested)) => *current >= requested,
+            (Some(_), None) => true,
+            (Some(None), Some(requested)) => {
+                warn!(?requested, "requested specific version for versionless key");
+                false
+            }
+            _ => false,
+        }
+    }
+}
+
 struct Inner {
     // Current epoch of TransactionManager.
     epoch: EpochId,
@@ -106,6 +150,11 @@ struct Inner {
     // Used for throttling signing and submitting transactions depending on hot objects.
     input_objects: HashMap<ObjectID, usize>,
 
+    // Maps object IDs to the highest observed sequence number of the object. When the value is
+    // None, indicates that the object is immutable, corresponding to an InputKey with no sequence
+    // number.
+    available_objects_cache: AvailableObjectsCache,
+
     // A transaction enqueued to TransactionManager must be in either pending_certificates or
     // executing_certificates.
 
@@ -116,9 +165,10 @@ struct Inner {
 }
 
 impl Inner {
-    fn new(epoch: EpochId) -> Inner {
+    fn new(epoch: EpochId, metrics: Arc<AuthorityMetrics>) -> Inner {
         Inner {
             epoch,
+            available_objects_cache: AvailableObjectsCache::new(metrics),
             lock_waiters: HashMap::with_capacity(MIN_HASHMAP_CAPACITY),
             input_objects: HashMap::with_capacity(MIN_HASHMAP_CAPACITY),
             pending_certificates: HashMap::with_capacity(MIN_HASHMAP_CAPACITY),
@@ -132,7 +182,16 @@ impl Inner {
     fn try_acquire_lock(&mut self, input_key: InputKey) -> Vec<PendingCertificate> {
         let mut ready_certificates = Vec::new();
 
+        if input_key.1.is_none() {
+            // Packages get cached unconditionally, since they may be consumed by many txns.
+            self.available_objects_cache.insert(&input_key);
+        }
+
         let Some(lock_queue) = self.lock_waiters.get_mut(&input_key) else {
+            // Only cache objects when they are not yet being waited upon, since most objects
+            // can only be awaited once. This reduces unnecessary cache evictions.
+            self.available_objects_cache.insert(&input_key);
+
             // No transaction is waiting on the object yet.
             return ready_certificates;
         };
@@ -218,8 +277,8 @@ impl TransactionManager {
     ) -> TransactionManager {
         let transaction_manager = TransactionManager {
             authority_store,
-            metrics,
-            inner: RwLock::new(Inner::new(epoch_store.epoch())),
+            metrics: metrics.clone(),
+            inner: RwLock::new(Inner::new(epoch_store.epoch(), metrics)),
             tx_ready_certificates,
         };
         transaction_manager
@@ -299,7 +358,30 @@ impl TransactionManager {
                 error!("Duplicated input objects: {:?}", input_object_kinds);
             }
 
-            for key in input_object_locks.keys() {
+            // It would be nice to factor this into a input_object_exists function, which handles
+            // reading the db in case of a cache miss, but we need to keep the critical section as
+            // short as possible.
+            let cache_miss_keys = {
+                let mut inner = self.inner.write();
+                input_object_locks
+                    .keys()
+                    .filter(|key| {
+                        if object_availability.contains_key(key) {
+                            false
+                        } else if inner.available_objects_cache.is_object_available(key) {
+                            self.metrics.transaction_manager_object_cache_hits.inc();
+                            object_availability.insert(**key, true);
+                            false
+                        } else {
+                            self.metrics.transaction_manager_object_cache_misses.inc();
+                            true
+                        }
+                    })
+                    .cloned()
+                    .collect::<Vec<_>>()
+            };
+
+            for key in &cache_miss_keys {
                 // Checking object availability without holding TM lock to reduce contention.
                 // But input objects can become available before TM lock is acquired.
                 // So missing objects' availability are checked again after releasing the TM lock.
@@ -459,9 +541,6 @@ impl TransactionManager {
 
         inner.maybe_reserve_capacity();
 
-        // Unnecessary to keep holding the lock while re-checking input object existence.
-        drop(inner);
-
         // An object will not remain forever as a missing input in TransactionManager,
         // if the object is or later becomes available in storage, because:
         // 1. At this point the object either exists in storage or not.
@@ -475,24 +554,44 @@ impl TransactionManager {
         // have become available between the initial availability check and here.
         // In the likely common case, all objects in object_availability are available and no
         // additional check is needed here.
-        let additional_available_objects: Vec<_> = object_availability
+
+        let keys_to_recheck: Vec<_> = object_availability
             .iter()
             .filter_map(|(key, available)| {
                 // Previously available object does not need to be rechecked.
                 if *available {
-                    return None;
-                }
-                if self
-                    .authority_store
-                    .input_object_exists(key)
-                    .expect("Checking object existence cannot fail!")
-                {
-                    Some(*key)
-                } else {
                     None
+                } else {
+                    Some(*key)
                 }
             })
             .collect();
+
+        let (cache_hits, cache_misses): (Vec<_>, Vec<_>) = keys_to_recheck
+            .into_iter()
+            .partition(|key| inner.available_objects_cache.is_object_available(key));
+
+        self.metrics
+            .transaction_manager_object_cache_hits
+            .inc_by(cache_hits.len() as u64);
+        self.metrics
+            .transaction_manager_object_cache_misses
+            .inc_by(cache_misses.len() as u64);
+
+        // Unnecessary to keep holding the lock while re-checking input object existence.
+        drop(inner);
+
+        let mut additional_available_objects: Vec<_> = cache_misses
+            .into_iter()
+            .filter(|key| {
+                self.authority_store
+                    .input_object_exists(key)
+                    .expect("Checking object existence cannot fail!")
+            })
+            .collect();
+
+        additional_available_objects.extend(cache_hits);
+
         if !additional_available_objects.is_empty() {
             self.objects_available(additional_available_objects, epoch_store);
         }
@@ -653,7 +752,7 @@ impl TransactionManager {
     // because they are no longer relevant and may be incorrect in the new epoch.
     pub(crate) fn reconfigure(&self, new_epoch: EpochId) {
         let mut inner = self.inner.write();
-        *inner = Inner::new(new_epoch);
+        *inner = Inner::new(new_epoch, self.metrics.clone());
     }
 
     // Verify TM has no pending item for tests.
