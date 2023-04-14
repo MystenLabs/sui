@@ -1409,8 +1409,12 @@ where
             validity_threshold = validity,
             ?timeout_after_quorum,
             ?cert_ref,
-            ?cert_bytes,
             "Broadcasting certificate to authorities"
+        );
+        debug!(
+            ?tx_digest,
+            ?cert_bytes,
+            "Broadcasting certificate (serialized) to authorities"
         );
         self.quorum_map_then_reduce_with_timeout(
             state,
