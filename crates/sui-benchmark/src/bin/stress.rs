@@ -113,7 +113,7 @@ async fn main() -> Result<()> {
     barrier.wait().await;
 
     // sleep with a random delay to avoid conflicts.
-    const STAGGER_INTERVAL: Duration = Duration::from_secs(60);
+    const STAGGER_INTERVAL: Duration = Duration::from_secs(10);
     const STAGGER_MAX_JITTER_MS: u64 = 1000;
     if opts.staggered_start_max_multiplier > 0 {
         let delay = STAGGER_INTERVAL
