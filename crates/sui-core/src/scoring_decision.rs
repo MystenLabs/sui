@@ -56,8 +56,8 @@ pub fn update_low_scoring_authorities(
             reputation_scores,
             authority_names_to_hostnames,
             metrics,
-            2.3,
-            2.5,
+            protocol_config.scoring_decision_mad_divisor(),
+            protocol_config.scoring_decision_cutoff_value(),
         );
     } else {
         // TODO remove this after the protocol version upgrade to 5
@@ -436,7 +436,7 @@ mod tests {
         update_low_scoring_authorities(
             low_scoring.clone(),
             &committee,
-            reputation_scores.clone(),
+            reputation_scores,
             peer_id_map.clone(),
             &metrics,
             &protocol_v5(),
@@ -550,7 +550,7 @@ mod tests {
         update_low_scoring_authorities(
             low_scoring.clone(),
             &committee,
-            reputation_scores.clone(),
+            reputation_scores,
             peer_id_map,
             &metrics,
             &protocol_v4(),
@@ -787,7 +787,11 @@ mod tests {
     /// A test to use when need to tune the score parameters based on some score data retrieved by
     /// and external environment (ex devnet, testnet etc). A CSV file where the first line is the
     /// header with the host names, and every other line the scores for each authority on the
-    /// instance of time. The method prints a matrix of the pruned hosts for each score "round"
+    /// instance of time. Example:
+    /// "validator-0","validator-10","validator-11",...
+    /// 184,185,144,...
+    ///
+    /// The method prints a matrix of the pruned hosts for each score "round"
     /// and the corresponding score. When a node has not been pruned for a round then the corresponding
     /// score will appear as "--".
     #[test]
@@ -796,8 +800,7 @@ mod tests {
         use std::collections::{BTreeMap, HashMap};
 
         // read the file
-        let (authority_host_names, all_authority_scores) =
-            read_scores_csv("/Users/akichidis/Downloads/Avg score per host-data-as-joinbyfield-2023-04-14 20_24_09.csv");
+        let (authority_host_names, all_authority_scores) = read_scores_csv("example.csv");
 
         let mut authority_names_to_hostnames = HashMap::new();
 
@@ -905,18 +908,12 @@ mod tests {
 
         for line in reader.lines() {
             if headers.is_empty() {
-                headers = line
-                    .unwrap()
-                    .split(',')
-                    .skip(1)
-                    .map(|s| s.to_string())
-                    .collect();
+                headers = line.unwrap().split(',').map(|s| s.to_string()).collect();
             } else {
                 let l = line.unwrap();
 
                 let s: Vec<u64> = l
                     .split(',')
-                    .skip(1)
                     .map(|s| s.parse::<f64>().unwrap() as u64)
                     .collect();
 
