@@ -36,6 +36,9 @@ pub trait Faucet {
     ) -> Result<FaucetReceipt, FaucetError>;
 }
 
+pub const DEFAULT_AMOUNT: u64 = 200_000_000;
+pub const DEFAULT_NUM_OF_COINS: usize = 5;
+
 #[derive(Parser, Clone)]
 #[clap(
     name = "Sui Faucet",
@@ -49,10 +52,10 @@ pub struct FaucetConfig {
     #[clap(long, default_value = "127.0.0.1")]
     pub host_ip: Ipv4Addr,
 
-    #[clap(long, default_value_t = 200_000_000)]
+    #[clap(long, default_value_t = DEFAULT_AMOUNT)]
     pub amount: u64,
 
-    #[clap(long, default_value_t = 5)]
+    #[clap(long, default_value_t = DEFAULT_NUM_OF_COINS)]
     pub num_coins: usize,
 
     #[clap(long, default_value_t = 10)]

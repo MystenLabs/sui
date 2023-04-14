@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::Neg;
 use std::sync::Arc;
 
@@ -56,6 +56,11 @@ pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
             InputObjectKind::MovePackage(_) | InputObjectKind::SharedMoveObject { .. } => None,
         })
         .collect::<HashMap<ObjectID, ObjectDigest>>();
+    let unwrapped_then_deleted = effects
+        .unwrapped_then_deleted()
+        .iter()
+        .map(|e| e.0)
+        .collect::<HashSet<_>>();
     get_balance_changes(
         object_provider,
         &effects
@@ -63,6 +68,10 @@ pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
             .iter()
             .filter_map(|(id, version)| {
                 if matches!(mocked_coin, Some(coin) if *id == coin) {
+                    return None;
+                }
+                // We won't be able to get dynamic object from object provider today
+                if unwrapped_then_deleted.contains(id) {
                     return None;
                 }
                 Some((*id, *version, input_objs_to_digest.get(id).cloned()))
