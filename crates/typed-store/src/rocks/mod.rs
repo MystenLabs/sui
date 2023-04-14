@@ -42,12 +42,12 @@ use sui_macros::{fail_point, nondeterministic};
 // Write buffer size per RocksDB instance can be set via the env var below.
 // If the env var is not set, use the default value in MiB.
 const ENV_VAR_DB_WRITE_BUFFER_SIZE: &str = "MYSTEN_DB_WRITE_BUFFER_SIZE_MB";
-const DEFAULT_DB_WRITE_BUFFER_SIZE: usize = 1024;
+const DEFAULT_DB_WRITE_BUFFER_SIZE: usize = 0;
 
 // Write ahead log size per RocksDB instance can be set via the env var below.
 // If the env var is not set, use the default value in MiB.
 const ENV_VAR_DB_WAL_SIZE: &str = "MYSTEN_DB_WAL_SIZE_MB";
-const DEFAULT_DB_WAL_SIZE: usize = 1024;
+const DEFAULT_DB_WAL_SIZE: usize = 10 * 1024;
 
 const ENV_VAR_L0_NUM_FILES_COMPACTION_TRIGGER: &str = "L0_NUM_FILES_COMPACTION_TRIGGER";
 const ENV_VAR_MAX_BACKGROUND_JOBS: &str = "MAX_BACKGROUND_JOBS";
@@ -1825,8 +1825,12 @@ pub fn base_db_options() -> DBOptions {
     }
 
     // The table cache is locked for updates and this determines the number
-    // of shards, ie 2^6. Increase in case of lock contentions.
+    // of shards, ie 2^10. Increase in case of lock contentions.
     opt.set_table_cache_num_shard_bits(10);
+
+    // Allow buffering 512MiB of writes before flushing to disk.
+    opt.set_write_buffer_size(128 * 1024 * 1024);
+    opt.set_max_write_buffer_number(4);
 
     opt.set_min_level_to_compress(2);
     opt.set_compression_type(rocksdb::DBCompressionType::Lz4);
@@ -1902,7 +1906,7 @@ pub fn optimized_for_high_throughput_options(
     let mut db_options = default_db_options();
     db_options.options.set_write_buffer_size(128 * 1024 * 1024);
     db_options.options.set_min_write_buffer_number_to_merge(2);
-    db_options.options.set_max_write_buffer_number(6);
+    db_options.options.set_max_write_buffer_number(8);
     db_options
         .options
         .set_level_zero_file_num_compaction_trigger(
@@ -1911,12 +1915,6 @@ pub fn optimized_for_high_throughput_options(
                 .try_into()
                 .unwrap(),
         );
-    db_options
-        .options
-        .set_target_file_size_base(64 * 1024 * 1024);
-    db_options
-        .options
-        .set_max_bytes_for_level_base(512 * 1024 * 1024);
 
     db_options.options.set_max_background_jobs(
         read_size_from_env(ENV_VAR_MAX_BACKGROUND_JOBS)
