@@ -39,7 +39,6 @@ enum FILTER_VALUES {
 
 type TransactionBlocksForAddressActionType = {
     type: PAGE_ACTIONS;
-    isObject: boolean;
     filterValue: FILTER_VALUES;
 };
 
@@ -130,20 +129,22 @@ function TransactionBlocksForAddress({
                     Transaction Blocks
                 </Heading>
 
-                <RadioGroup
-                    className="flex"
-                    ariaLabel="transaction filter"
-                    value={filterValue}
-                    onChange={setFilterValue}
-                >
-                    {FILTER_OPTIONS.map((filter) => (
-                        <RadioOption
-                            key={filter.value}
-                            value={filter.value}
-                            label={filter.label}
-                        />
-                    ))}
-                </RadioGroup>
+                {isObject && (
+                    <RadioGroup
+                        className="flex"
+                        ariaLabel="transaction filter"
+                        value={filterValue}
+                        onChange={setFilterValue}
+                    >
+                        {FILTER_OPTIONS.map((filter) => (
+                            <RadioOption
+                                key={filter.value}
+                                value={filter.value}
+                                label={filter.label}
+                            />
+                        ))}
+                    </RadioGroup>
+                )}
             </div>
 
             <div className="flex flex-col space-y-5 pt-5 text-left xl:pr-10">
@@ -185,7 +186,7 @@ function TransactionBlocksForAddress({
                             }
                             dispatch({
                                 type: PAGE_ACTIONS.NEXT,
-                                isObject,
+
                                 filterValue,
                             });
                             // setCurrentPage(currentPage + 1);
@@ -195,14 +196,13 @@ function TransactionBlocksForAddress({
                         onPrev={() =>
                             dispatch({
                                 type: PAGE_ACTIONS.PREV,
-                                isObject,
+
                                 filterValue,
                             })
                         }
                         onFirst={() =>
                             dispatch({
                                 type: PAGE_ACTIONS.FIRST,
-                                isObject,
                                 filterValue,
                             })
                         }
