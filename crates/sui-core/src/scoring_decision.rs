@@ -249,10 +249,6 @@ fn update_low_scoring_authorities_with_no_disable_mechanism(
 
     // report new scores
     let len_low_scoring = low_scoring.len();
-    metrics
-        .consensus_handler_num_low_scoring_authorities
-        .set(len_low_scoring as i64);
-
     info!("{:?} low scoring authorities calculated", len_low_scoring);
 
     // Do not disable the scoring mechanism when more than f validators are excluded. Just keep
@@ -282,6 +278,11 @@ fn update_low_scoring_authorities_with_no_disable_mechanism(
             );
         }
     }
+
+    // Report the actual flagged final low scoring authorities
+    metrics
+        .consensus_handler_num_low_scoring_authorities
+        .set(final_low_scoring_map.len() as i64);
 
     low_scoring_authorities.swap(Arc::new(final_low_scoring_map));
 }
