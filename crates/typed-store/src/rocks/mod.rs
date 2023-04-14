@@ -1892,7 +1892,7 @@ pub fn optimized_for_high_throughput_options(
     optimize_for_point_lookup: bool,
 ) -> DBOptions {
     let mut db_options = default_db_options();
-    db_options.options.set_write_buffer_size(128 * 1024 * 1024);
+    db_options.options.set_write_buffer_size(512 * 1024 * 1024);
     db_options.options.set_min_write_buffer_number_to_merge(2);
     db_options.options.set_max_write_buffer_number(6);
     db_options
@@ -1905,10 +1905,10 @@ pub fn optimized_for_high_throughput_options(
         );
     db_options
         .options
-        .set_target_file_size_base(64 * 1024 * 1024);
+        .set_target_file_size_base(512 * 1024 * 1024);
     db_options
         .options
-        .set_max_bytes_for_level_base(512 * 1024 * 1024);
+        .set_max_bytes_for_level_base(2 * 1024 * 1024 * 1024);
 
     db_options.options.set_max_background_jobs(
         read_size_from_env(ENV_VAR_MAX_BACKGROUND_JOBS)
