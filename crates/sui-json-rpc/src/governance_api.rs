@@ -28,24 +28,32 @@ use sui_types::sui_system_state::{
     get_validator_from_table, sui_system_state_summary::get_validator_by_pool_id, SuiSystemState,
 };
 
-use crate::api::GovernanceReadApiServer;
+use crate::api::{GovernanceReadApiServer, JsonRpcMetrics};
 use crate::error::Error;
 use crate::SuiRpcModule;
 
 pub struct GovernanceReadApi {
     state: Arc<AuthorityState>,
+    pub metrics: Arc<JsonRpcMetrics>,
 }
 
 impl GovernanceReadApi {
-    pub fn new(state: Arc<AuthorityState>) -> Self {
-        Self { state }
+    pub fn new(state: Arc<AuthorityState>, metrics: Arc<JsonRpcMetrics>) -> Self {
+        Self { state, metrics }
     }
 
     async fn get_staked_sui(&self, owner: SuiAddress) -> Result<Vec<StakedSui>, Error> {
-        Ok(self
+        let result = self
             .state
             .get_move_objects(owner, MoveObjectType::staked_sui())
-            .await?)
+            .await?;
+        self.metrics
+            .get_stake_sui_result_size
+            .report(result.len() as u64);
+        self.metrics
+            .get_stake_sui_result_size_total
+            .inc_by(result.len() as u64);
+        Ok(result)
     }
 
     async fn get_stakes_by_ids(

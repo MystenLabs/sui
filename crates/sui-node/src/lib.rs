@@ -20,6 +20,7 @@ use arc_swap::ArcSwap;
 use futures::TryFutureExt;
 use prometheus::Registry;
 use sui_core::consensus_adapter::LazyNarwhalClient;
+use sui_json_rpc::api::JsonRpcMetrics;
 use sui_types::sui_system_state::SuiSystemState;
 use tap::tap::TapFallible;
 use tokio::sync::broadcast;
@@ -1126,11 +1127,11 @@ pub async fn build_server(
     }
 
     let mut server = JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry);
-
-    server.register_module(ReadApi::new(state.clone()))?;
-    server.register_module(CoinReadApi::new(state.clone()))?;
+    let metrics = Arc::new(JsonRpcMetrics::new(prometheus_registry));
+    server.register_module(ReadApi::new(state.clone(), metrics.clone()))?;
+    server.register_module(CoinReadApi::new(state.clone(), metrics.clone()))?;
     server.register_module(TransactionBuilderApi::new(state.clone()))?;
-    server.register_module(GovernanceReadApi::new(state.clone()))?;
+    server.register_module(GovernanceReadApi::new(state.clone(), metrics.clone()))?;
 
     if let Some(transaction_orchestrator) = transaction_orchestrator {
         server.register_module(TransactionExecutionApi::new(
@@ -1141,8 +1142,9 @@ pub async fn build_server(
 
     server.register_module(IndexerApi::new(
         state.clone(),
-        ReadApi::new(state.clone()),
+        ReadApi::new(state.clone(), metrics.clone()),
         config.name_service_resolver_object_id,
+        metrics.clone(),
     ))?;
     server.register_module(MoveUtils::new(state.clone()))?;
 

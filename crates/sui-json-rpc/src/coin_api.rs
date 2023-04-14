@@ -25,17 +25,18 @@ use sui_types::messages::TransactionEffectsAPI;
 use sui_types::object::{Object, Owner};
 use sui_types::parse_sui_struct_tag;
 
-use crate::api::{cap_page_limit, CoinReadApiServer};
+use crate::api::{cap_page_limit, CoinReadApiServer, JsonRpcMetrics};
 use crate::error::Error;
 use crate::SuiRpcModule;
 
 pub struct CoinReadApi {
     state: Arc<AuthorityState>,
+    pub metrics: Arc<JsonRpcMetrics>,
 }
 
 impl CoinReadApi {
-    pub fn new(state: Arc<AuthorityState>) -> Self {
-        Self { state }
+    pub fn new(state: Arc<AuthorityState>, metrics: Arc<JsonRpcMetrics>) -> Self {
+        Self { state, metrics }
     }
 
     fn get_coins_iterator(
@@ -46,6 +47,7 @@ impl CoinReadApi {
         one_coin_type_only: bool,
     ) -> anyhow::Result<CoinPage> {
         let limit = cap_page_limit(limit);
+        self.metrics.get_coins_limit.report(limit as u64);
         let coins = self
             .state
             .get_owned_coins_iterator_with_cursor(owner, cursor, limit + 1, one_coin_type_only)?
@@ -66,6 +68,10 @@ impl CoinReadApi {
         let has_next_page = data.len() > limit;
         data.truncate(limit);
 
+        self.metrics.get_coins_result_size.report(data.len() as u64);
+        self.metrics
+            .get_coins_result_size_total
+            .inc_by(data.len() as u64);
         let next_cursor = data.last().map(|coin| coin.coin_object_id);
         Ok(CoinPage {
             data,

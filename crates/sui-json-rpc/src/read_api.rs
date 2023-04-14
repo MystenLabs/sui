@@ -45,6 +45,7 @@ use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, Object, ObjectRead, PastObjectRead};
 use sui_types::sui_serde::BigInt;
 
+use crate::api::JsonRpcMetrics;
 use crate::api::{validate_limit, ReadApiServer};
 use crate::api::{QUERY_MAX_RESULT_LIMIT, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS};
 use crate::error::Error;
@@ -59,6 +60,7 @@ const MAX_DISPLAY_NESTED_LEVEL: usize = 10;
 #[derive(Clone)]
 pub struct ReadApi {
     pub state: Arc<AuthorityState>,
+    pub metrics: Arc<JsonRpcMetrics>,
 }
 
 // Internal data structure to make it easy to work with data returned from
@@ -91,8 +93,8 @@ impl IntermediateTransactionResponse {
 }
 
 impl ReadApi {
-    pub fn new(state: Arc<AuthorityState>) -> Self {
-        Self { state }
+    pub fn new(state: Arc<AuthorityState>, metrics: Arc<JsonRpcMetrics>) -> Self {
+        Self { state, metrics }
     }
 
     fn get_checkpoint_internal(&self, id: CheckpointId) -> Result<Checkpoint, Error> {
@@ -142,6 +144,9 @@ impl ReadApi {
             })
             .into());
         }
+        self.metrics
+            .get_tx_blocks_limit
+            .report(digests.len() as u64);
 
         let opts = opts.unwrap_or_default();
 
@@ -367,10 +372,18 @@ impl ReadApi {
         }
 
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
-        Ok(temp_response
+        let result = temp_response
             .into_iter()
             .map(|c| convert_to_response(c.1, &opts, epoch_store.module_cache()))
-            .collect::<Vec<_>>())
+            .collect::<Vec<_>>();
+        self.metrics
+            .get_tx_blocks_result_size
+            .report(result.len() as u64);
+
+        self.metrics
+            .get_tx_blocks_result_size_total
+            .inc_by(result.len() as u64);
+        Ok(result)
     }
 }
 
@@ -426,6 +439,9 @@ impl ReadApiServer for ReadApi {
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiObjectResponse>> {
         if object_ids.len() <= QUERY_MAX_RESULT_LIMIT {
+            self.metrics
+                .get_objects_limit
+                .report(object_ids.len() as u64);
             let mut results = vec![];
             for object_id in object_ids {
                 results.push(self.get_object(object_id, options.clone()));
@@ -445,6 +461,12 @@ impl ReadApiServer for ReadApi {
                 Error::UnexpectedError(format!("Failed to fetch objects with error: {}", err))
             })?;
 
+            self.metrics
+                .get_objects_result_size
+                .report(objects.len() as u64);
+            self.metrics
+                .get_objects_result_size_total
+                .inc_by(objects.len() as u64);
             Ok(objects)
         } else {
             Err(anyhow!(UserInputError::SizeLimitExceeded {
@@ -728,6 +750,7 @@ impl ReadApiServer for ReadApi {
             QUERY_MAX_RESULT_LIMIT_CHECKPOINTS,
         )?;
 
+        self.metrics.get_checkpoints_limit.report(limit as u64);
         let mut data =
             self.state
                 .get_checkpoints(cursor.map(|s| *s), limit as u64 + 1, descending_order)?;
@@ -740,6 +763,13 @@ impl ReadApiServer for ReadApi {
         } else {
             None
         };
+
+        self.metrics
+            .get_checkpoints_result_size
+            .report(data.len() as u64);
+        self.metrics
+            .get_checkpoints_result_size_total
+            .inc_by(data.len() as u64);
 
         Ok(CheckpointPage {
             data,
