@@ -91,7 +91,7 @@ export function getFieldTypeValue(
     }
 
     return {
-        displayName:`${normalizedType.name} ${typeParam}`,
+        displayName: `${normalizedType.name} ${typeParam}`,
         normalizedType: `${address}::${module}::${name}`,
     };
 }
