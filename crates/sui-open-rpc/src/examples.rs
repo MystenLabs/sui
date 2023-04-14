@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 use std::ops::Range;
 use std::str::FromStr;
+use std::collections::HashMap;
 
 use fastcrypto::traits::EncodeDecodeBase64;
 use move_core_types::identifier::Identifier;
@@ -18,14 +19,14 @@ use sui_json::SuiJsonValue;
 use sui_json_rpc::error::Error;
 use sui_json_rpc_types::SuiTypeTag;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, EventPage, MoveCallParams, ObjectChange, OwnedObjectRef,
+    Balance, Checkpoint, CheckpointId, EventPage, MoveCallParams, ObjectChange, OwnedObjectRef,
     RPCTransactionRequestParams, SuiData, SuiEvent, SuiExecutionStatus, SuiObjectData,
     SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectRef, SuiObjectResponse,
     SuiObjectResponseQuery, SuiParsedData, SuiPastObjectResponse, SuiTransactionBlock,
     SuiTransactionBlockData, SuiTransactionBlockEffects, SuiTransactionBlockEffectsV1,
     SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
     SuiTransactionBlockResponseQuery, TransactionBlockBytes, TransactionBlocksPage,
-    TransferObjectParams,
+    TransferObjectParams, SuiCommittee, Coin, CoinPage,
 };
 use sui_open_rpc::ExamplePairing;
 use sui_types::base_types::random_object_ref;
@@ -33,11 +34,13 @@ use sui_types::base_types::{
     MoveObjectType, ObjectDigest, ObjectID, ObjectType, SequenceNumber, SuiAddress,
     TransactionDigest,
 };
+use sui_types::committee::{Committee};
 use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AggregateAuthoritySignature};
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::event::EventID;
 use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
+use sui_types::id::UID;
 use sui_types::messages::ObjectArg;
 use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_TRANSFER;
 use sui_types::messages::{CallArg, ExecuteTransactionRequestType, TransactionData};
@@ -48,6 +51,7 @@ use sui_types::query::TransactionFilter;
 use sui_types::signature::GenericSignature;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{parse_sui_struct_tag, SUI_FRAMEWORK_OBJECT_ID};
+use sui_types::coin::CoinMetadata;
 
 struct Examples {
     function_name: String,
@@ -86,6 +90,13 @@ impl RpcExampleProvider {
             self.get_events(),
             self.execute_transaction_example(),
             self.get_checkpoint_example(),
+            self.get_checkpoints(),
+            self.sui_get_committee_info(), 
+            self.sui_get_reference_gas_price(),
+            self.suix_get_all_balances(),
+            self.suix_get_all_coins(),
+            self.suix_get_balance(),
+            self.suix_get_coin_metadata(),
         ]
         .into_iter()
         .map(|example| (example.function_name, example.examples))
@@ -181,7 +192,7 @@ impl RpcExampleProvider {
         Examples::new(
             "sui_executeTransactionBlock",
             vec![ExamplePairing::new(
-                "Execute an transaction with serialized signatures",
+                "Execute a transaction with serialized signatures.",
                 vec![
                     ("tx_bytes", json!(tx_bytes.tx_bytes)),
                     (
@@ -234,7 +245,7 @@ impl RpcExampleProvider {
         Examples::new(
             "sui_getObject",
             vec![ExamplePairing::new(
-                "Get Object data",
+                "Get Object data for the ID in the request.",
                 vec![
                     ("object_id", json!(object_id)),
                     ("options", json!(SuiObjectDataOptions::full_content())),
@@ -273,7 +284,7 @@ impl RpcExampleProvider {
         Examples::new(
             "sui_tryGetPastObject",
             vec![ExamplePairing::new(
-                "Get Past Object data",
+                "Get Past Object data.",
                 vec![
                     ("object_id", json!(object_id)),
                     ("version", json!(4)),
@@ -302,8 +313,48 @@ impl RpcExampleProvider {
         Examples::new(
             "sui_getCheckpoint",
             vec![ExamplePairing::new(
-                "Get checkpoint",
+                "Get checkpoint information for the checkpoint ID in the request.",
                 vec![("id", json!(CheckpointId::SequenceNumber(1000)))],
+                json!(result),
+            )],
+        )
+    }
+
+    fn get_checkpoints(&mut self) -> Examples {
+        
+        let limit = 3;
+        let descending_order = true;
+        let result = (0..4)
+        .map(|_| Checkpoint {
+            epoch: 5000,
+            sequence_number: self.rng.gen_range(1004..1843),
+            digest: CheckpointDigest::new(self.rng.gen()),
+            network_total_transactions: 792385,
+            previous_digest: Some(CheckpointDigest::new(self.rng.gen())),
+            epoch_rolling_gas_cost_summary: Default::default(),
+            timestamp_ms: 1676911928,
+            end_of_epoch_data: None,
+            transactions: vec![TransactionDigest::new(self.rng.gen())],
+            checkpoint_commitments: vec![],
+            validator_signature: AggregateAuthoritySignature::default(),
+        })
+        .collect::<Vec<_>>();
+
+        Examples::new(
+            "sui_getCheckpoints",
+            vec![ExamplePairing::new(
+                "Get information for all checkpoints.",
+                vec![(
+                        "cursor", json!(ObjectID::new(self.rng.gen())),
+                    ),
+                    (
+                        "limit", json!(limit),
+                    ),
+                    (
+                        "descending_order",
+                        json!(descending_order),
+                    ),
+                    ],
                 json!(result),
             )],
         )
@@ -329,7 +380,7 @@ impl RpcExampleProvider {
         Examples::new(
             "sui_getOwnedObjects",
             vec![ExamplePairing::new(
-                "Get objects owned by an address",
+                "Get objects owned by the address in the request.",
                 vec![
                     ("address", json!(owner)),
                     (
@@ -359,9 +410,9 @@ impl RpcExampleProvider {
         Examples::new(
             "sui_getTotalTransactionBlocks",
             vec![ExamplePairing::new(
-                "Get total number of transactions",
+                "Get total number of transactions on the network.",
                 vec![],
-                json!(100),
+                json!("2451485"),
             )],
         )
     }
@@ -371,7 +422,7 @@ impl RpcExampleProvider {
         Examples::new(
             "sui_getTransactionBlock",
             vec![ExamplePairing::new(
-                "Return the transaction response object for specified transaction digest",
+                "Return the transaction response object for specified transaction digest.",
                 vec![
                     ("digest", json!(result.digest)),
                     (
@@ -405,7 +456,7 @@ impl RpcExampleProvider {
         Examples::new(
             "suix_queryTransactionBlocks",
             vec![ExamplePairing::new(
-                "Return the transaction digest for specified query criteria",
+                "Return the transaction digest for specified query criteria.",
                 vec![
                     (
                         "query",
@@ -568,10 +619,147 @@ impl RpcExampleProvider {
         Examples::new(
             "sui_getEvents",
             vec![ExamplePairing::new(
-                "Return the Events emitted by a transaction",
+                "Return the events the transaction in the request emits.",
                 vec![("transaction_digest", json!(result.digest))],
                 json!(page),
             )],
         )
     }
+
+    fn sui_get_committee_info(&mut self) -> Examples {
+        let epoch = 5000;
+        let committee = json!(Committee::new_simple_test_committee_of_size(4));
+        let vals = json!(committee[0]["voting_rights"]);
+        let suicomm = SuiCommittee {
+            epoch: epoch,
+            validators: serde_json::from_value(vals).unwrap(),
+        };
+        
+        Examples::new(
+            "suix_getCommitteeInfo",
+            vec![ExamplePairing::new(
+                "Get committee information for epoch 5000.",
+                vec![ ("epoch", serde_json::Value::String(epoch.to_string())), ],
+                json!(suicomm),
+            )],
+        ) 
+    }
+
+    fn sui_get_reference_gas_price(&mut self) -> Examples {
+        let result = 1000;
+        
+        Examples::new(
+            "suix_getReferenceGasPrice",
+            vec![ExamplePairing::new(
+                "Get reference gas price information for the network.",
+                vec![],
+                json!(result),
+            )],
+        ) 
+    }
+
+    fn suix_get_all_balances(&mut self) -> Examples {
+        let address = SuiAddress::from(ObjectID::new(self.rng.gen()));
+
+        let result = Balance {
+            coin_type: "0x2::sui::SUI".to_string(),
+            coin_object_count: 15,
+            total_balance: 3000000000,
+            locked_balance: HashMap::new(),
+        };
+        
+        //println!("{}", serde_json::to_string_pretty(&y).unwrap());
+        Examples::new(
+            "suix_getAllBalances",
+            vec![ExamplePairing::new(
+                "Get all balances for the address in the request.",
+                vec![("owner", json!(address))],
+                json!(vec![result]),
+            )]
+        )
+    }
+
+    fn suix_get_all_coins(&mut self) -> Examples {
+        let limit = 3;
+        let owner = SuiAddress::from(ObjectID::new(self.rng.gen()));
+        let cursor = ObjectID::new(self.rng.gen());
+        let next = ObjectID::new(self.rng.gen());
+        let coins = (0..3)
+        .map(|_| Coin {
+            coin_type: "0x2::sui::SUI".to_string(),
+            coin_object_id: ObjectID::new(self.rng.gen()),
+            version: SequenceNumber::from_u64(103626),
+            digest: ObjectDigest::new(self.rng.gen()),
+            balance: 200000000,
+            locked_until_epoch: None,
+            previous_transaction: TransactionDigest::new(self.rng.gen()),
+
+        }).collect::<Vec<_>>();
+        let page = CoinPage {
+            data: coins,
+            next_cursor: Some(next),
+            has_next_page: true,
+        };
+
+        Examples::new(
+            "suix_getAllCoins",
+            vec![ExamplePairing::new(
+                "Get all coins for the address in the request body. Begin listing the coins that are after the provided `cursor` value and return only the `limit` amount of results per page.",
+                vec![
+                        ("owner", json!(owner)), 
+                        ("cursor", json!(cursor)), 
+                        ("limit", json!(limit))
+                    ],
+                json!(page),
+            )]
+        )
+    }
+
+    fn suix_get_balance(&mut self) -> Examples {
+        let owner = SuiAddress::from(ObjectID::new(self.rng.gen()));
+        let coin_type = "0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC".to_string();
+        let result = Balance {
+            coin_type: coin_type.clone(),
+            coin_object_count: 15,
+            total_balance: 15,
+            locked_balance: HashMap::new(),
+        };
+
+        Examples::new(
+            "suix_getBalance",
+            vec![ExamplePairing::new(
+                "Get the balance of the specified type of coin for the address in the request.",
+                vec![
+                    ("owner", json!(owner)),
+                    ("coin_type", json!(coin_type)),
+                ],
+                json!(result),
+            )]
+        )
+    }
+
+    fn suix_get_coin_metadata(&mut self) -> Examples {
+        let id = UID::new(ObjectID::new(self.rng.gen()));
+
+        let result = CoinMetadata {
+            decimals: 9,
+            name: "Usdc".to_string(),
+            symbol: "USDC".to_string(),
+            description: "Stable coin.".to_string(),
+            icon_url: None,
+            id: id,
+        };
+
+        Examples::new(
+            "suix_getCoinMetadata",
+            vec![ExamplePairing::new(
+                "Get the metadata for the coin type in the request.",
+                vec![
+                    ("coin_type", serde_json::Value::String("0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC".to_string())),
+                ],
+                json!(result),
+            )]
+        )
+    }
+
 }

@@ -139,7 +139,7 @@
       },
       "examples": [
         {
-          "name": "Execute an transaction with serialized signatures",
+          "name": "Execute a transaction with serialized signatures.",
           "params": [
             {
               "name": "tx_bytes",
@@ -316,7 +316,7 @@
       },
       "examples": [
         {
-          "name": "Get checkpoint",
+          "name": "Get checkpoint information for the checkpoint ID in the request.",
           "params": [
             {
               "name": "id",
@@ -386,7 +386,107 @@
         "schema": {
           "$ref": "#/components/schemas/Page_for_Checkpoint_and_BigInt_for_uint64"
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Get information for all checkpoints.",
+          "params": [
+            {
+              "name": "cursor",
+              "value": "0xd270f1bdfb076e697da3d7064ffd121168fea245f41987bb8ed5999079e1d0bc"
+            },
+            {
+              "name": "limit",
+              "value": 3
+            },
+            {
+              "name": "descending_order",
+              "value": true
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": [
+              {
+                "epoch": "5000",
+                "sequenceNumber": "1630",
+                "digest": "3HTXZkNMk9KDN6KDgFRV22XdybMjCp78biyxZAaZS3j3",
+                "networkTotalTransactions": "792385",
+                "previousDigest": "4TYz6xto2J1EVoTfLr23EMeyLApUke4e3wrhzW8F2QV6",
+                "epochRollingGasCostSummary": {
+                  "computationCost": "0",
+                  "storageCost": "0",
+                  "storageRebate": "0",
+                  "nonRefundableStorageFee": "0"
+                },
+                "timestampMs": "1676911928",
+                "transactions": [
+                  "FeGrSvZY1KJ9wHeu3AN2sDJ6cbLJfLBnaxMfN4eG7hoV"
+                ],
+                "checkpointCommitments": [],
+                "validatorSignature": "wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+              },
+              {
+                "epoch": "5000",
+                "sequenceNumber": "1780",
+                "digest": "EwXDWF3maqrCmDTyEzLx8nujypiMVbtte6b8p1cwghEs",
+                "networkTotalTransactions": "792385",
+                "previousDigest": "5hpfpUwk6ZZ6nuqQk9ufShuiXWH3rZfvWak2nNs6xbN8",
+                "epochRollingGasCostSummary": {
+                  "computationCost": "0",
+                  "storageCost": "0",
+                  "storageRebate": "0",
+                  "nonRefundableStorageFee": "0"
+                },
+                "timestampMs": "1676911928",
+                "transactions": [
+                  "5t9yC8kJYbNh7sXr2yhrZFJghcMidouJSuzvAcgjh79T"
+                ],
+                "checkpointCommitments": [],
+                "validatorSignature": "wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+              },
+              {
+                "epoch": "5000",
+                "sequenceNumber": "1623",
+                "digest": "Bx14BddQdtLEAxLHhZ9sthKKBLwvTbsLW2W7LYoiBcRy",
+                "networkTotalTransactions": "792385",
+                "previousDigest": "DUWZ7c6k9bDm3SWojGSDsNiYypk3rSezQRwHYBESqbii",
+                "epochRollingGasCostSummary": {
+                  "computationCost": "0",
+                  "storageCost": "0",
+                  "storageRebate": "0",
+                  "nonRefundableStorageFee": "0"
+                },
+                "timestampMs": "1676911928",
+                "transactions": [
+                  "Gk8keCc1Q3A5Y5HGFK7nNwtahuqwC1iKvzDotR1UQGY2"
+                ],
+                "checkpointCommitments": [],
+                "validatorSignature": "wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+              },
+              {
+                "epoch": "5000",
+                "sequenceNumber": "1683",
+                "digest": "9zA7Q9Ka1ykvYjSQGhQCdCf32FZkcWNWx7L22JczXGsk",
+                "networkTotalTransactions": "792385",
+                "previousDigest": "8BLFxLTjWZ2KqaGc3FjR1o9aL6kbyYrmhuNfJLU1ehYt",
+                "epochRollingGasCostSummary": {
+                  "computationCost": "0",
+                  "storageCost": "0",
+                  "storageRebate": "0",
+                  "nonRefundableStorageFee": "0"
+                },
+                "timestampMs": "1676911928",
+                "transactions": [
+                  "7RudGLkQDBNJyqrptkrNU66Zd3pvq8MHVAHYz9WpBm59"
+                ],
+                "checkpointCommitments": [],
+                "validatorSignature": "wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "name": "sui_getEvents",
@@ -418,7 +518,7 @@
       },
       "examples": [
         {
-          "name": "Return the Events emitted by a transaction",
+          "name": "Return the events the transaction in the request emits.",
           "params": [
             {
               "name": "transaction_digest",
@@ -685,7 +785,7 @@
       },
       "examples": [
         {
-          "name": "Get Object data",
+          "name": "Get Object data for the ID in the request.",
           "params": [
             {
               "name": "object_id",
@@ -752,11 +852,11 @@
       },
       "examples": [
         {
-          "name": "Get total number of transactions",
+          "name": "Get total number of transactions on the network.",
           "params": [],
           "result": {
             "name": "Result",
-            "value": 100
+            "value": "2451485"
           }
         }
       ]
@@ -795,7 +895,7 @@
       },
       "examples": [
         {
-          "name": "Return the transaction response object for specified transaction digest",
+          "name": "Return the transaction response object for specified transaction digest.",
           "params": [
             {
               "name": "digest",
@@ -1055,7 +1155,7 @@
       },
       "examples": [
         {
-          "name": "Get Past Object data",
+          "name": "Get Past Object data.",
           "params": [
             {
               "name": "object_id",
@@ -1175,7 +1275,29 @@
             "$ref": "#/components/schemas/Balance"
           }
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Get all balances for the address in the request.",
+          "params": [
+            {
+              "name": "owner",
+              "value": "0x50201d79d05c061f8dde264724ab51a21c752e81c51b206357d828266c36b538"
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": [
+              {
+                "coinType": "0x2::sui::SUI",
+                "coinObjectCount": 15,
+                "totalBalance": "3000000000",
+                "lockedBalance": {}
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "name": "suix_getAllCoins",
@@ -1217,7 +1339,62 @@
         "schema": {
           "$ref": "#/components/schemas/Page_for_Coin_and_ObjectID"
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Get all coins for the address in the request body. Begin listing the coins that are after the provided `cursor` value and return only the `limit` amount of results per page.",
+          "params": [
+            {
+              "name": "owner",
+              "value": "0x65bb5fe48a1f388f5a97d0d8dfe64f09f709f06c320889949230e672044bb2b0"
+            },
+            {
+              "name": "cursor",
+              "value": "0x954ae5935392c72fa08e0e5dfd566e977968fa81937919da0294cbba1d4980fb"
+            },
+            {
+              "name": "limit",
+              "value": 3
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": {
+              "data": [
+                {
+                  "coinType": "0x2::sui::SUI",
+                  "coinObjectId": "0xe79595034b7c56ae03d69bab88bbb0917cfa772baf3e837891413e94b1915b08",
+                  "version": "103626",
+                  "digest": "HunuJWKu7azBfS47rJTq9FHTMvUDNVo2SK4hQeh5brXp",
+                  "balance": "200000000",
+                  "lockedUntilEpoch": null,
+                  "previousTransaction": "38fLUfuigyzLPEDrsmRhcQmhKtbEUohuFBP9NDcWBmFz"
+                },
+                {
+                  "coinType": "0x2::sui::SUI",
+                  "coinObjectId": "0xe66b092d67b54aea5028bed04c46a29bd0ebfd9819a093759afc2c4425b5db66",
+                  "version": "103626",
+                  "digest": "B2R45Az1xc7HzPmkjJJ3pFnJhybVRnRBs8WgvsWiq21E",
+                  "balance": "200000000",
+                  "lockedUntilEpoch": null,
+                  "previousTransaction": "5SUhkJqXnuuJkptZAaxg1NQmQwcVVnfaC6Xm5cuyByLv"
+                },
+                {
+                  "coinType": "0x2::sui::SUI",
+                  "coinObjectId": "0x2564cd31a71cf9833609b111436d8f0f47b7f8b9927ec3f8975a1dcbf9b25564",
+                  "version": "103626",
+                  "digest": "A2WijvcHmav1whqCo7QCnfStfRyaDEruRZWUb1XvNJMu",
+                  "balance": "200000000",
+                  "lockedUntilEpoch": null,
+                  "previousTransaction": "Ao1QyN9UTmYzb2ead3D5xhSBk7TvACRvmnJW8gRbwP99"
+                }
+              ],
+              "nextCursor": "0xaf0a4dbfbcc39033d817566297f9de95703e326f7b6c5bb06e2f69ccf4411308",
+              "hasNextPage": true
+            }
+          }
+        }
+      ]
     },
     {
       "name": "suix_getBalance",
@@ -1250,7 +1427,31 @@
         "schema": {
           "$ref": "#/components/schemas/Balance"
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Get the balance of the specified type of coin for the address in the request.",
+          "params": [
+            {
+              "name": "owner",
+              "value": "0x62944303fab7b475b723f72ea7072ddb502e90be432231b6dee1af33100f0e6f"
+            },
+            {
+              "name": "coin_type",
+              "value": "0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC"
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": {
+              "coinType": "0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC",
+              "coinObjectCount": 15,
+              "totalBalance": "15",
+              "lockedBalance": {}
+            }
+          }
+        }
+      ]
     },
     {
       "name": "suix_getCoinMetadata",
@@ -1276,7 +1477,31 @@
         "schema": {
           "$ref": "#/components/schemas/SuiCoinMetadata"
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Get the metadata for the coin type in the request.",
+          "params": [
+            {
+              "name": "coin_type",
+              "value": "0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC"
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": {
+              "id": {
+                "id": "0x7e769678d059761bff8a8f3944642e4c33a6e4fb0b55f8face36fadaa22f2a0d"
+              },
+              "decimals": 9,
+              "name": "Usdc",
+              "symbol": "USDC",
+              "description": "Stable coin.",
+              "icon_url": null
+            }
+          }
+        }
+      ]
     },
     {
       "name": "suix_getCoins",
@@ -1349,6 +1574,58 @@
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/CommitteeInfo"
+        }
+      },
+      "examples": [
+        {
+          "name": "Get committee information for epoch 5000.",
+          "params": [
+            {
+              "name": "epoch",
+              "value": "5000"
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": {
+              "epoch": "5000",
+              "validators": [
+                [
+                  "jc/20VUECmVvSBmxMRG1LFdGqGunLzlfuv4uw4R9HoFA5iSnUf32tfIFC8cgXPnTAATJCwx0Cv/TJs5nPMKyOi0k1T4q/rKG38Zo/UBgCJ1tKxe3md02+Q0zLlSnozjU",
+                  "2500"
+                ],
+                [
+                  "mfJe9h+AMrkUY2RgmCxcxvE07x3a52ZX8sv+wev8jQlzdAgN9vzw3Li8Sw2OCvXYDrv/K0xZn1T0LWMS38MUJ2B4wcw0fru+xRmL4lhRPzhrkw0CwnSagD4jMJVevRoQ",
+                  "2500"
+                ],
+                [
+                  "rd7vlNiYyI5A297/kcXxBfnPLHR/tvK8N+wD1ske2y4aV4z1RL6LCTHiXyQ9WbDDDZihbOO6HWzx1/UEJpkusK2zE0sFW+gUDS218l+wDYP45CIr8B/WrJOh/0152ljy",
+                  "2500"
+                ],
+                [
+                  "s/1e+1yHJAOkrRPxGZUTYG0jNUqEUkmuoVdWTCP/PBXGyeZSty10DoysuTy8wGhrDsDMDBx2C/tCtDZRn8WoBUt2UzqXqfI5h9CX75ax8lJrsgc/oQp3GZQXcjR+8nT0",
+                  "2500"
+                ]
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "suix_getCurrentEpoch",
+      "tags": [
+        {
+          "name": "Extended API"
+        }
+      ],
+      "description": "Return current epoch info",
+      "params": [],
+      "result": {
+        "name": "EpochInfo",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/EpochInfo"
         }
       }
     },
@@ -1429,6 +1706,45 @@
       }
     },
     {
+      "name": "suix_getEpochs",
+      "tags": [
+        {
+          "name": "Extended API"
+        }
+      ],
+      "description": "Return a list of epoch info",
+      "params": [
+        {
+          "name": "cursor",
+          "description": "optional paging cursor",
+          "schema": {
+            "$ref": "#/components/schemas/BigInt_for_uint64"
+          }
+        },
+        {
+          "name": "limit",
+          "description": "maximum number of items per page",
+          "schema": {
+            "$ref": "#/components/schemas/BigInt_for_uint64"
+          }
+        },
+        {
+          "name": "descending_order",
+          "description": "flag to return results in descending order",
+          "schema": {
+            "type": "boolean"
+          }
+        }
+      ],
+      "result": {
+        "name": "EpochPage",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Page_for_EpochInfo_and_BigInt_for_uint64"
+        }
+      }
+    },
+    {
       "name": "suix_getLatestSuiSystemState",
       "tags": [
         {
@@ -1442,6 +1758,40 @@
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/SuiSystemStateSummary"
+        }
+      }
+    },
+    {
+      "name": "suix_getMoveCallMetrics",
+      "tags": [
+        {
+          "name": "Extended API"
+        }
+      ],
+      "description": "Return Network metrics",
+      "params": [],
+      "result": {
+        "name": "MoveCallMetrics",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/MoveCallMetrics"
+        }
+      }
+    },
+    {
+      "name": "suix_getNetworkMetrics",
+      "tags": [
+        {
+          "name": "Extended API"
+        }
+      ],
+      "description": "Return Network metrics",
+      "params": [],
+      "result": {
+        "name": "NetworkMetrics",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/NetworkMetrics"
         }
       }
     },
@@ -1509,7 +1859,17 @@
         "schema": {
           "$ref": "#/components/schemas/BigInt_for_uint64"
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Get reference gas price information for the network.",
+          "params": [],
+          "result": {
+            "name": "Result",
+            "value": 1000
+          }
+        }
+      ]
     },
     {
       "name": "suix_getStakes",
@@ -1646,6 +2006,46 @@
       }
     },
     {
+      "name": "suix_queryObjects",
+      "tags": [
+        {
+          "name": "Extended API"
+        }
+      ],
+      "description": "Return the list of queried objects. Note that this is an enhanced full node only api.",
+      "params": [
+        {
+          "name": "query",
+          "description": "the objects query criteria.",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectResponseQuery"
+          }
+        },
+        {
+          "name": "cursor",
+          "description": "An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.",
+          "schema": {
+            "$ref": "#/components/schemas/CheckpointedObjectID"
+          }
+        },
+        {
+          "name": "limit",
+          "description": "Max number of items returned per page, default to [QUERY_MAX_RESULT_LIMIT_OBJECTS] if not specified.",
+          "schema": {
+            "$ref": "#/components/schemas/BigInt_for_uint64"
+          }
+        }
+      ],
+      "result": {
+        "name": "QueryObjectsPage",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Page_for_SuiObjectResponse_and_CheckpointedObjectID"
+        }
+      }
+    },
+    {
       "name": "suix_queryTransactionBlocks",
       "tags": [
         {
@@ -1695,7 +2095,7 @@
       },
       "examples": [
         {
-          "name": "Return the transaction digest for specified query criteria",
+          "name": "Return the transaction digest for specified query criteria.",
           "params": [
             {
               "name": "query",
@@ -1742,72 +2142,6 @@
           }
         }
       ]
-    },
-    {
-      "name": "suix_resolveNameServiceAddress",
-      "tags": [
-        {
-          "name": "Extended API"
-        }
-      ],
-      "description": "Return the resolved address given resolver and name",
-      "params": [
-        {
-          "name": "name",
-          "description": "The name to resolve",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
-      "result": {
-        "name": "SuiAddress",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/SuiAddress"
-        }
-      }
-    },
-    {
-      "name": "suix_resolveNameServiceNames",
-      "tags": [
-        {
-          "name": "Extended API"
-        }
-      ],
-      "description": "Return the resolved names given address, if multiple names are resolved, the first one is the primary name.",
-      "params": [
-        {
-          "name": "address",
-          "description": "The address to resolve",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        },
-        {
-          "name": "cursor",
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        },
-        {
-          "name": "limit",
-          "schema": {
-            "type": "integer",
-            "format": "uint",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "Page<String,ObjectID>",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/Page_for_String_and_ObjectID"
-        }
-      }
     },
     {
       "name": "suix_subscribeEvent",
@@ -2726,6 +3060,9 @@
         "description": "Base64 encoding",
         "type": "string"
       },
+      "BigInt_for_uint": {
+        "type": "string"
+      },
       "BigInt_for_uint128": {
         "type": "string"
       },
@@ -2873,6 +3210,27 @@
             "$ref": "#/components/schemas/CheckpointDigest"
           }
         ]
+      },
+      "CheckpointedObjectID": {
+        "type": "object",
+        "required": [
+          "objectId"
+        ],
+        "properties": {
+          "atCheckpoint": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "objectId": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        }
       },
       "Coin": {
         "type": "object",
@@ -3293,6 +3651,126 @@
                 "$ref": "#/components/schemas/ProtocolVersion"
               }
             ]
+          }
+        }
+      },
+      "EndOfEpochInfo": {
+        "type": "object",
+        "required": [
+          "epochEndTimestamp",
+          "lastCheckpointId",
+          "leftoverStorageFundInflow",
+          "protocolVersion",
+          "referenceGasPrice",
+          "stakeSubsidyAmount",
+          "storageCharge",
+          "storageFundBalance",
+          "storageFundReinvestment",
+          "storageRebate",
+          "totalGasFees",
+          "totalStake",
+          "totalStakeRewardsDistributed"
+        ],
+        "properties": {
+          "epochEndTimestamp": {
+            "$ref": "#/components/schemas/BigInt_for_uint64"
+          },
+          "lastCheckpointId": {
+            "$ref": "#/components/schemas/BigInt_for_uint64"
+          },
+          "leftoverStorageFundInflow": {
+            "$ref": "#/components/schemas/BigInt_for_uint64"
+          },
+          "protocolVersion": {
+            "description": "existing fields from `SystemEpochInfo`",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              }
+            ]
+          },
+          "referenceGasPrice": {
+            "$ref": "#/components/schemas/BigInt_for_uint64"
+          },
+          "stakeSubsidyAmount": {
+            "$ref": "#/components/schemas/BigInt_for_uint64"
+          },
+          "storageCharge": {
+            "$ref": "#/components/schemas/BigInt_for_uint64"
+          },
+          "storageFundBalance": {
+            "$ref": "#/components/schemas/BigInt_for_uint64"
+          },
+          "storageFundReinvestment": {
+            "$ref": "#/components/schemas/BigInt_for_uint64"
+          },
+          "storageRebate": {
+            "$ref": "#/components/schemas/BigInt_for_uint64"
+          },
+          "totalGasFees": {
+            "$ref": "#/components/schemas/BigInt_for_uint64"
+          },
+          "totalStake": {
+            "$ref": "#/components/schemas/BigInt_for_uint64"
+          },
+          "totalStakeRewardsDistributed": {
+            "$ref": "#/components/schemas/BigInt_for_uint64"
+          }
+        }
+      },
+      "EpochInfo": {
+        "type": "object",
+        "required": [
+          "epoch",
+          "epochStartTimestamp",
+          "epochTotalTransactions",
+          "firstCheckpointId",
+          "validators"
+        ],
+        "properties": {
+          "endOfEpochInfo": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EndOfEpochInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "epoch": {
+            "description": "epoch number",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              }
+            ]
+          },
+          "epochStartTimestamp": {
+            "$ref": "#/components/schemas/BigInt_for_uint64"
+          },
+          "epochTotalTransactions": {
+            "description": "count of tx in epoch",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              }
+            ]
+          },
+          "firstCheckpointId": {
+            "description": "first, last checkpoint sequence numbers",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              }
+            ]
+          },
+          "validators": {
+            "description": "list of validators included in epoch",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuiValidatorSummary"
+            }
           }
         }
       },
@@ -3825,6 +4303,64 @@
           }
         ]
       },
+      "MoveCallMetrics": {
+        "type": "object",
+        "required": [
+          "rank30Days",
+          "rank3Days",
+          "rank7Days"
+        ],
+        "properties": {
+          "rank30Days": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": [
+                {
+                  "$ref": "#/components/schemas/MoveFunctionName"
+                },
+                {
+                  "$ref": "#/components/schemas/BigInt_for_uint"
+                }
+              ],
+              "maxItems": 2,
+              "minItems": 2
+            }
+          },
+          "rank3Days": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": [
+                {
+                  "$ref": "#/components/schemas/MoveFunctionName"
+                },
+                {
+                  "$ref": "#/components/schemas/BigInt_for_uint"
+                }
+              ],
+              "maxItems": 2,
+              "minItems": 2
+            }
+          },
+          "rank7Days": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": [
+                {
+                  "$ref": "#/components/schemas/MoveFunctionName"
+                },
+                {
+                  "$ref": "#/components/schemas/BigInt_for_uint"
+                }
+              ],
+              "maxItems": 2,
+              "minItems": 2
+            }
+          }
+        }
+      },
       "MoveCallParams": {
         "type": "object",
         "required": [
@@ -3880,6 +4416,25 @@
           }
         ]
       },
+      "MoveFunctionName": {
+        "type": "object",
+        "required": [
+          "function",
+          "module",
+          "package"
+        ],
+        "properties": {
+          "function": {
+            "type": "string"
+          },
+          "module": {
+            "type": "string"
+          },
+          "package": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        }
+      },
       "MovePackage": {
         "type": "object",
         "required": [
@@ -3929,9 +4484,7 @@
       "MoveValue": {
         "anyOf": [
           {
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 0.0
+            "$ref": "#/components/schemas/BigInt_for_uint64"
           },
           {
             "type": "boolean"
@@ -4040,6 +4593,70 @@
             "type": "integer",
             "format": "uint16",
             "minimum": 0.0
+          }
+        }
+      },
+      "NetworkMetrics": {
+        "type": "object",
+        "required": [
+          "currentCheckpoint",
+          "currentEpoch",
+          "currentTps",
+          "totalAddresses",
+          "totalObjects",
+          "totalPackages",
+          "tps30Days"
+        ],
+        "properties": {
+          "currentCheckpoint": {
+            "description": "Current checkpoint number",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              }
+            ]
+          },
+          "currentEpoch": {
+            "description": "Current epoch number",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              }
+            ]
+          },
+          "currentTps": {
+            "description": "Current TPS - Transaction Blocks per Second.",
+            "type": "number",
+            "format": "double"
+          },
+          "totalAddresses": {
+            "description": "Total number of addresses seen in the network",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              }
+            ]
+          },
+          "totalObjects": {
+            "description": "Total number of live objects in the network",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              }
+            ]
+          },
+          "totalPackages": {
+            "description": "Total number of packages published in the network",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              }
+            ]
+          },
+          "tps30Days": {
+            "description": "Peak TPS in the past 30 days",
+            "type": "number",
+            "format": "double"
           }
         }
       },
@@ -4864,6 +5481,35 @@
           }
         }
       },
+      "Page_for_EpochInfo_and_BigInt_for_uint64": {
+        "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor` if `next_cursor` is `Some`, otherwise it will start from the first item.",
+        "type": "object",
+        "required": [
+          "data",
+          "hasNextPage"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EpochInfo"
+            }
+          },
+          "hasNextPage": {
+            "type": "boolean"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
       "Page_for_Event_and_EventID": {
         "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor` if `next_cursor` is `Some`, otherwise it will start from the first item.",
         "type": "object",
@@ -4893,7 +5539,7 @@
           }
         }
       },
-      "Page_for_String_and_ObjectID": {
+      "Page_for_SuiObjectResponse_and_CheckpointedObjectID": {
         "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor` if `next_cursor` is `Some`, otherwise it will start from the first item.",
         "type": "object",
         "required": [
@@ -4904,7 +5550,7 @@
           "data": {
             "type": "array",
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/SuiObjectResponse"
             }
           },
           "hasNextPage": {
@@ -4913,7 +5559,7 @@
           "nextCursor": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/ObjectID"
+                "$ref": "#/components/schemas/CheckpointedObjectID"
               },
               {
                 "type": "null"
@@ -5135,9 +5781,7 @@
         "$ref": "#/components/schemas/Base64"
       },
       "SequenceNumber": {
-        "type": "integer",
-        "format": "uint64",
-        "minimum": 0.0
+        "$ref": "#/components/schemas/BigInt_for_uint64"
       },
       "Signature": {
         "oneOf": [
