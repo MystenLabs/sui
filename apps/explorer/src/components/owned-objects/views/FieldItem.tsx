@@ -16,7 +16,7 @@ interface FieldItemProps {
     truncate?: boolean;
 }
 
-const TYPE_ADDRESS = 'address';
+const TYPE_ADDRESS = 'Address';
 const TYPE_URL = '0x2::url::Url';
 const TYPE_OBJECT_ID = ['0x2::object::UID', '0x2::object::ID'];
 
@@ -36,9 +36,9 @@ export function FieldItem({
         );
     }
 
-    const { displayName, normalizedType } = getFieldTypeValue(type, objectType);
+    const { normalizedType } = getFieldTypeValue(type, objectType);
 
-    if (displayName.toLowerCase() === TYPE_ADDRESS) {
+    if (normalizedType === TYPE_ADDRESS) {
         return (
             <div className="break-all">
                 <AddressLink
@@ -49,7 +49,10 @@ export function FieldItem({
         );
     }
 
-    if (normalizedType && TYPE_OBJECT_ID.includes(normalizedType)) {
+    if (
+        normalizedType === 'string' &&
+        TYPE_OBJECT_ID.includes(normalizedType)
+    ) {
         return (
             <div className="break-all">
                 <ObjectLink

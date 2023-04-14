@@ -65,11 +65,10 @@ export function getFieldTypeValue(
     objectType: string
 ) {
     const normalizedType = extractSerializationType(type);
-
     if (typeof normalizedType === 'string') {
         return {
             displayName: normalizedType,
-            normalizedType: null,
+            normalizedType: normalizedType,
         };
     }
     // For TypeParameter index return the type string index after splitting, where the third index is the type
@@ -81,7 +80,7 @@ export function getFieldTypeValue(
         return {
             displayName:
                 typeParameter?.[normalizedType]?.split('::').pop() || '',
-            normalizedType: null,
+            normalizedType: normalizedType,
         };
     }
 
