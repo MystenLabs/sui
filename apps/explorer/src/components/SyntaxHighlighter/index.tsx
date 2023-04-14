@@ -13,44 +13,42 @@ interface Props {
 
 export function SyntaxHighlighter({ code, language }: Props) {
     return (
-        <section className="px-0">
-            <div className="overflow-auto whitespace-pre p-2 pl-0 pr-0 font-mono text-sm">
-                <Highlight
-                    {...defaultProps}
-                    code={code}
-                    language={language}
-                    theme={undefined}
-                >
-                    {({ style, tokens, getLineProps, getTokenProps }) => (
-                        <pre
-                            className="bg-transparent !p-0 font-medium"
-                            style={style}
-                        >
-                            {tokens.map((line, i) => (
-                                <div
-                                    {...getLineProps({ line, key: i })}
-                                    key={i}
-                                    className="table-row"
-                                >
-                                    <div className="table-cell select-none pr-4 text-left opacity-50">
-                                        {i + 1}
-                                    </div>
-
-                                    {line.map((token, key) => (
-                                        <span
-                                            {...getTokenProps({
-                                                token,
-                                                key,
-                                            })}
-                                            key={key}
-                                        />
-                                    ))}
+        <div className="overflow-auto whitespace-pre font-mono text-sm">
+            <Highlight
+                {...defaultProps}
+                code={code}
+                language={language}
+                theme={undefined}
+            >
+                {({ style, tokens, getLineProps, getTokenProps }) => (
+                    <pre
+                        className="bg-transparent !p-0 font-medium"
+                        style={style}
+                    >
+                        {tokens.map((line, i) => (
+                            <div
+                                {...getLineProps({ line, key: i })}
+                                key={i}
+                                className="table-row"
+                            >
+                                <div className="table-cell select-none pr-4 text-left opacity-50">
+                                    {i + 1}
                                 </div>
-                            ))}
-                        </pre>
-                    )}
-                </Highlight>
-            </div>
-        </section>
+
+                                {line.map((token, key) => (
+                                    <span
+                                        {...getTokenProps({
+                                            token,
+                                            key,
+                                        })}
+                                        key={key}
+                                    />
+                                ))}
+                            </div>
+                        ))}
+                    </pre>
+                )}
+            </Highlight>
+        </div>
     );
 }

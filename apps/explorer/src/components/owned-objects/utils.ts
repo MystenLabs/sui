@@ -13,6 +13,16 @@ type TypeReference =
     | string
     | number;
 
+// Get content inside <> and split by , to get underlying object types
+export function getContentInsideBrackets(input: string) {
+    return input?.slice(input?.indexOf('<') + 1, input?.lastIndexOf('>'));
+}
+
+function splitByCommaExcludingBrackets(input: string) {
+    const regex = /,(?![^<>]*>)/;
+    return input.split(regex).map((part) => part.trim());
+}
+
 export function extractSerializationType(
     type: SuiMoveNormalizedType
 ): TypeReference {
@@ -50,14 +60,27 @@ export function extractSerializationType(
     return type;
 }
 
-export function getFieldTypeValue(type: SuiMoveNormalizedType) {
+export function getFieldTypeValue(
+    type: SuiMoveNormalizedType,
+    objectType: string
+) {
     const normalizedType = extractSerializationType(type);
-    if (
-        typeof normalizedType === 'string' ||
-        typeof normalizedType === 'number'
-    ) {
+
+    if (typeof normalizedType === 'string') {
         return {
             displayName: normalizedType,
+            normalizedType: null,
+        };
+    }
+    // For TypeParameter index return the type string index after splitting, where the third index is the type
+    if (typeof normalizedType === 'number') {
+        const typeParameter = splitByCommaExcludingBrackets(
+            getContentInsideBrackets(objectType)
+        );
+
+        return {
+            displayName:
+                typeParameter?.[normalizedType]?.split('::').pop() || '',
             normalizedType: null,
         };
     }

@@ -146,6 +146,7 @@ export default {
                 50: '12.5rem',
                 verticalListShort: '13.0625rem',
                 verticalListLong: '35.6875rem',
+                600: '37.5rem',
             },
             height: {
                 header: '68px',

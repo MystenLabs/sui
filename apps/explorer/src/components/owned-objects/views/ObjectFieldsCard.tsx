@@ -32,15 +32,6 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
     const [packageId, moduleName, functionName] =
         objectType?.split('<')[0]?.split('::') || [];
 
-    // Get content inside <> and split by , to get underlying object types
-    const typePerameter = objectType
-        ?.slice(objectType?.indexOf('<') + 1, objectType.indexOf('>'))
-        .split(',');
-
-    // For TypeParameter index return the type string index after splitting, where the third index is the type
-    const getTypeParameter = (index: number) =>
-        typePerameter?.[index].split('::').pop() || '';
-
     // Get the normalized struct for the object
     const {
         data: normalizedStruct,
@@ -72,8 +63,6 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
         );
     }
 
-    // Set the active field name to the first field in the struct on load
-
     const fieldsData = getObjectFields(data!);
 
     const filteredFieldNames =
@@ -84,7 +73,7 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
               );
 
     // Return null if there are no fields
-    if (!fieldsData || !normalizedStruct?.fields) {
+    if (!fieldsData || !normalizedStruct?.fields || !objectType) {
         return null;
     }
 
@@ -154,14 +143,15 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
                                         ))}
                                     </Combobox.Options>
                                 </Combobox>
-                                <div className="max-h-[600px] min-h-full overflow-auto overflow-x-clip overflow-y-scroll py-3">
+                                <div className="max-h-600 min-h-full overflow-auto overflow-x-clip overflow-y-scroll py-3">
                                     <VerticalList>
                                         {normalizedStruct?.fields?.map(
                                             ({ name, type }) => {
                                                 // For TypeParameter index return the type string index after splitting
                                                 const typeParam =
                                                     getFieldTypeValue(
-                                                        type
+                                                        type,
+                                                        objectType
                                                     ).displayName;
                                                 return (
                                                     <div
@@ -183,20 +173,16 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
                                                                 <Text
                                                                     variant="body/medium"
                                                                     color="steel-darker"
+                                                                    truncate
                                                                 >
-                                                                    {name.toString()}
+                                                                    {name}
                                                                 </Text>
 
                                                                 <Text
                                                                     variant="p3/normal"
                                                                     color="steel"
                                                                 >
-                                                                    {typeof typeParam ===
-                                                                    'number'
-                                                                        ? getTypeParameter(
-                                                                              typeParam
-                                                                          )
-                                                                        : typeParam}
+                                                                    {typeParam}
                                                                 </Text>
                                                             </div>
                                                         </ListItem>
@@ -245,6 +231,9 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
                                                                     }
                                                                     truncate
                                                                     type={type}
+                                                                    objectType={
+                                                                        objectType
+                                                                    }
                                                                 />
                                                             )}
                                                         </div>
@@ -253,6 +242,7 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
                                                 >
                                                     <FieldItem
                                                         value={fieldsData[name]}
+                                                        objectType={objectType}
                                                         type={type}
                                                     />
                                                 </DisclosureBox>

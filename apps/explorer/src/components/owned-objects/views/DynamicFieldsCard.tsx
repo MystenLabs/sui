@@ -1,62 +1,36 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useRpcClient } from '@mysten/core';
-import { useInfiniteQuery } from '@tanstack/react-query';
-import { useRef, useCallback, useEffect } from 'react';
+import { useGetDynamicFields } from '@mysten/core';
+import { formatAddress } from '@mysten/sui.js';
+import { useRef, useEffect } from 'react';
 
 import { UnderlyingObjectCard } from './UnderlyingObjectCard';
 
+import { useOnScreen } from '~/hooks/useOnScreen';
 import { DisclosureBox } from '~/ui/DisclosureBox';
 import { ObjectLink } from '~/ui/InternalLink';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
-const MAX_PAGE_SIZE = 20;
-
 export function DynamicFieldsCard({ id }: { id: string }) {
-    const rpc = useRpcClient();
     const {
         data,
         isInitialLoading,
         isFetchingNextPage,
         hasNextPage,
         fetchNextPage,
-    } = useInfiniteQuery(
-        ['dynamic-fields', id],
-        ({ pageParam = null }) =>
-            rpc.getDynamicFields({
-                parentId: id,
-                cursor: pageParam,
-                limit: MAX_PAGE_SIZE,
-            }),
-        {
-            enabled: !!id,
-            getNextPageParam: ({ nextCursor, hasNextPage }) =>
-                hasNextPage ? nextCursor : null,
-        }
-    );
+    } = useGetDynamicFields(id);
 
     const observerElem = useRef<HTMLDivElement | null>(null);
-
-    const handleObserver = useCallback(
-        (entries: IntersectionObserverEntry[]) => {
-            const [target] = entries;
-            if (target.isIntersecting && hasNextPage && !isFetchingNextPage) {
-                fetchNextPage();
-            }
-        },
-        [fetchNextPage, hasNextPage, isFetchingNextPage]
-    );
+    const { isIntersecting } = useOnScreen(observerElem);
+    const isSpinnerVisible = isFetchingNextPage && hasNextPage;
 
     useEffect(() => {
-        const element = observerElem.current;
-        if (!element) return;
-        const option = { threshold: 0 };
-        const observer = new IntersectionObserver(handleObserver, option);
-        observer.observe(element);
-        return () => observer.unobserve(element);
-    }, [fetchNextPage, hasNextPage, handleObserver]);
+        if (isIntersecting && hasNextPage && !isFetchingNextPage) {
+            fetchNextPage();
+        }
+    }, [isIntersecting, fetchNextPage, hasNextPage, isFetchingNextPage]);
 
     if (isInitialLoading) {
         return (
@@ -77,7 +51,7 @@ export function DynamicFieldsCard({ id }: { id: string }) {
                 </TabList>
                 <TabPanels>
                     <TabPanel>
-                        <div className="mt-4 flex max-h-[600px] flex-col gap-5 overflow-auto overflow-x-scroll">
+                        <div className="mt-4 flex max-h-600 flex-col gap-5 overflow-auto overflow-x-scroll">
                             {data.pages.map(({ data }) =>
                                 // Show the field name and type is it is not an object
                                 data.map((result) => (
@@ -88,10 +62,19 @@ export function DynamicFieldsCard({ id }: { id: string }) {
                                                 'object' ? (
                                                     <div className="block w-8/12 truncate break-words">
                                                         Struct{' '}
-                                                        {result.objectType}
+                                                        {formatAddress(
+                                                            result.objectType
+                                                        )}
                                                     </div>
                                                 ) : (
-                                                    result.name?.value.toString()
+                                                    <div className="block w-8/12 truncate break-words">
+                                                        {result.name?.value
+                                                            ? String(
+                                                                  result.name
+                                                                      .value
+                                                              )
+                                                            : null}
+                                                    </div>
                                                 )}
                                                 <ObjectLink
                                                     objectId={result.objectId}
@@ -112,7 +95,7 @@ export function DynamicFieldsCard({ id }: { id: string }) {
                             )}
 
                             <div ref={observerElem}>
-                                {isFetchingNextPage && hasNextPage ? (
+                                {isSpinnerVisible ? (
                                     <div className="mt-1 flex w-full justify-center">
                                         <LoadingSpinner text="Loading data" />
                                     </div>
