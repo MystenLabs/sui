@@ -265,7 +265,8 @@ async fn touch_gas_coins(
         .unwrap()
         .unwrap()
         .compute_object_reference();
-    let data = TransactionData::new(kind, sender, gas_object_ref, 100_000_000, 1);
+    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
+    let data = TransactionData::new(kind, sender, gas_object_ref, 100_000_000, rgp);
     let tx = to_sender_signed_transaction(data, sender_key);
 
     send_and_confirm_transaction(authority_state, tx)
@@ -340,7 +341,7 @@ async fn test_oog_computation_oog_storage() -> SuiResult {
 // - computation ok, OOG for storage, minimal storage ok
 #[tokio::test]
 async fn test_computation_ok_oog_storage_minimal_ok() -> SuiResult {
-    const GAS_PRICE: u64 = 30;
+    const GAS_PRICE: u64 = 1000;
     const BUDGET: u64 = 1_100_000;
     let (sender, sender_key) = get_key_pair();
     check_oog_transaction(
@@ -372,7 +373,7 @@ async fn test_computation_ok_oog_storage_minimal_ok() -> SuiResult {
 // - computation ok, OOG for storage, OOG for minimal storage (e.g. computation is entire budget)
 #[tokio::test]
 async fn test_computation_ok_oog_storage() -> SuiResult {
-    const GAS_PRICE: u64 = 30;
+    const GAS_PRICE: u64 = 1000;
     const BUDGET: u64 = 35_000;
     let (sender, sender_key) = get_key_pair();
     check_oog_transaction(
