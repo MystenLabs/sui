@@ -4,10 +4,10 @@
 import { useParams } from 'react-router-dom';
 
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
+import { TransactionsForAddress } from '../../components/transactions/TransactionsForAddress';
 
 import OwnedCoins from '~/components/OwnedCoins/OwnedCoins';
 import OwnedObjects from '~/components/OwnedObjectsV2/OwnedObjects';
-import TransactionBlocksForAddress from '~/components/TransactionBlocksForAddress/TransactionBlocksForAddress';
 import { Heading } from '~/ui/Heading';
 import { PageHeader } from '~/ui/PageHeader';
 
@@ -32,8 +32,18 @@ function AddressResult() {
             </div>
 
             <div>
+                <div className="border-b border-gray-45 pb-5">
+                    <Heading color="gray-90" variant="heading4/semibold">
+                        Transaction Blocks
+                    </Heading>
+                </div>
                 <ErrorBoundary>
-                    <TransactionBlocksForAddress address={addressID!} />
+                    <div className="mt-2">
+                        <TransactionsForAddress
+                            address={addressID!}
+                            type="address"
+                        />
+                    </div>
                 </ErrorBoundary>
             </div>
         </div>
