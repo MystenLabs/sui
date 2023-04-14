@@ -84,7 +84,7 @@ function GasAmount({
 
     return (
         <div className="flex h-full items-center gap-1">
-            <div className="flex items-baseline gap-0.5 text-gray-90">
+            <div className="flex items-baseline gap-1 text-steel-darker">
                 <Text variant="body/medium">{formattedAmount}</Text>
                 <Text variant="subtitleSmall/medium">{symbol}</Text>
             </div>
