@@ -13,13 +13,16 @@ are live in production:
   on the change or stop using the package if they disagree.
 - The key may get lost.
 
-Ideally when a package goes live it is made **immutable**.  This is
-done by using `sui::package::make_immutable` to burn its `UpgradeCap`,
-and prevents any further changes, but the reality is that in many
-cases package creators may want to retain an ability to upgrade their
-package in future to fix bugs, or add new features.  In those cases,
-some safety and security can be maintained for the package creator and
-users through **custom upgrade policies**.
+This security risk can be eliminated by making a package **immutable**
+when it goes live (using `sui::package::make_immutable` to burn its
+`UpgradeCap`) but this prevents future bugfixes and new features being
+added, which may not be practical.
+
+**Custom upgrade policies** maintain safety and security for the 
+package creator and its users while preserving the ability to make 
+changes to live packages.  They protect `UpgradeCap` access behind
+arbitrary Move code and allow upgrades to be authorized on a case-by-
+-case basis by issuing `UpgradeTicket`s.
 
 ## Overview
 
@@ -27,7 +30,7 @@ Package upgrades must occur end-to-end in a single transaction block
 and are composed of three commands:
 
 1. **Authorization:** Get permission from the `UpgradeCap` to perform
-   the upgrade, creating an `UpgradeTicket`
+   the upgrade, creating an `UpgradeTicket`.
 2. **Execution:** Consume the `UpgradeTicket` and verify the package
    bytecode and compatibility against the previous version, and create
    the on-chain object representing the upgraded package. Return an
@@ -79,7 +82,7 @@ module sui::package {
 
 The `UpgradeCap` is the central type responsible for coordinating
 package upgrades.  It is created during package publishing and updated
-during upgrades.  The owner of this object has permissions to:
+during upgrades.  The owner of this object has permission to:
 
 - Change the compatibility requirements for future upgrades.
 - Authorize future upgrades.
@@ -266,7 +269,8 @@ module policy::day_of_week {
     fun week_day(ctx: &TxContext): u8 {
         let days_since_unix_epoch = 
             tx_context::epoch_timestamp_ms(clock) / MS_IN_DAY;
-        // The unix epoch (1st Jan 1970 was a Thursday)
+        // The unix epoch (1st Jan 1970) was a Thursday so shift days
+        // since the epoch by 3 so that 0 = Monday.
         ((days_since_unix_epoch + 3) % 7 as u8)
     }
 }
