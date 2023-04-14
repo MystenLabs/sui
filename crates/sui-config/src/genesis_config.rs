@@ -364,7 +364,7 @@ impl GenesisConfig {
 
         // Generate one genesis gas object per validator (this seems a good rule of thumb to produce
         // enough gas objects for most types of benchmarks).
-        let genesis_gas_objects = Self::benchmark_gas_object_id_offsets(ips.len())
+        let genesis_gas_objects = Self::benchmark_gas_object_id_offsets(ips.len() * 2)
             .into_iter()
             .map(|id| ObjectConfigRange {
                 offset: id,
