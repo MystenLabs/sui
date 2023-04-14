@@ -58,7 +58,7 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
     if (isError || errorNormalizedMoveStruct) {
         return (
             <Banner variant="error" spacing="lg" fullWidth>
-                Failed to get field data for :{id}
+                Failed to get field data for {id}
             </Banner>
         );
     }
@@ -146,49 +146,47 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
                                 <div className="max-h-600 min-h-full overflow-auto overflow-x-clip overflow-y-scroll py-3">
                                     <VerticalList>
                                         {normalizedStruct?.fields?.map(
-                                            ({ name, type }) => {
-                                                // For TypeParameter index return the type string index after splitting
-                                                const typeParam =
-                                                    getFieldTypeValue(
-                                                        type,
-                                                        objectType
-                                                    ).displayName;
-                                                return (
-                                                    <div
-                                                        key={name}
-                                                        className="mt-0.5 md:min-w-fit"
-                                                    >
-                                                        <ListItem
-                                                            active={
-                                                                activeFieldName ===
+                                            ({ name, type }) => (
+                                                <div
+                                                    key={name}
+                                                    className="mt-0.5 md:min-w-fit"
+                                                >
+                                                    <ListItem
+                                                        active={
+                                                            activeFieldName ===
+                                                            name
+                                                        }
+                                                        onClick={() =>
+                                                            setActiveFieldName(
                                                                 name
-                                                            }
-                                                            onClick={() =>
-                                                                setActiveFieldName(
-                                                                    name
-                                                                )
-                                                            }
-                                                        >
-                                                            <div className="flex flex-1 justify-between gap-2 truncate">
-                                                                <Text
-                                                                    variant="body/medium"
-                                                                    color="steel-darker"
-                                                                    truncate
-                                                                >
-                                                                    {name}
-                                                                </Text>
+                                                            )
+                                                        }
+                                                    >
+                                                        <div className="flex flex-1 justify-between gap-2 truncate">
+                                                            <Text
+                                                                variant="body/medium"
+                                                                color="steel-darker"
+                                                                truncate
+                                                            >
+                                                                {name}
+                                                            </Text>
 
-                                                                <Text
-                                                                    variant="p3/normal"
-                                                                    color="steel"
-                                                                >
-                                                                    {typeParam}
-                                                                </Text>
-                                                            </div>
-                                                        </ListItem>
-                                                    </div>
-                                                );
-                                            }
+                                                            <Text
+                                                                variant="p3/normal"
+                                                                color="steel"
+                                                            >
+                                                                {
+                                                                    getFieldTypeValue(
+                                                                        type,
+                                                                        objectType
+                                                                    )
+                                                                        .displayName
+                                                                }
+                                                            </Text>
+                                                        </div>
+                                                    </ListItem>
+                                                </div>
+                                            )
                                         )}
                                     </VerticalList>
                                 </div>

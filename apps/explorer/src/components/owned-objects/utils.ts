@@ -14,7 +14,7 @@ type TypeReference =
     | number;
 
 // Get content inside <> and split by , to get underlying object types
-export function getContentInsideBrackets(input: string) {
+function getContentInsideBrackets(input: string) {
     return input?.slice(input?.indexOf('<') + 1, input?.lastIndexOf('>'));
 }
 

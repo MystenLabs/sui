@@ -52,7 +52,7 @@ export function UnderlyingObjectCard({
     if (isError || data.error || (isFetched && !data)) {
         return (
             <Banner variant="error" spacing="lg" fullWidth>
-                Failed to get field data for: {parentId}
+                Failed to get field data for {parentId}
             </Banner>
         );
     }
