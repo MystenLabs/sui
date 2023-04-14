@@ -26,9 +26,8 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::TransactionEvents;
 use sui_types::object::Owner;
 use sui_types::query::TransactionFilter;
-use typed_store::rocks::{default_db_options, point_lookup_db_options, DBBatch, DBMap, MetricConf};
 use typed_store::rocks::{
-    optimized_for_high_throughput_options, read_size_from_env, DBOptions, ReadWriteOptions,
+    default_db_options, read_size_from_env, DBBatch, DBMap, DBOptions, MetricConf, ReadWriteOptions,
 };
 use typed_store::traits::Map;
 use typed_store::traits::{TableSummary, TypedStoreDebug};
@@ -156,7 +155,7 @@ fn transactions_by_move_function_table_default_config() -> DBOptions {
     default_db_options()
 }
 fn timestamps_table_default_config() -> DBOptions {
-    point_lookup_db_options()
+    default_db_options().optimize_for_point_lookup(64)
 }
 fn owner_index_table_default_config() -> DBOptions {
     default_db_options()
@@ -169,11 +168,11 @@ fn index_table_default_config() -> DBOptions {
 }
 fn coin_index_table_default_config() -> DBOptions {
     DBOptions {
-        options: optimized_for_high_throughput_options(
-            read_size_from_env(ENV_VAR_COIN_INDEX_BLOCK_CACHE_SIZE_MB).unwrap_or(5 * 1024),
-            false,
-        )
-        .options,
+        options: default_db_options()
+            .optimize_for_read(
+                read_size_from_env(ENV_VAR_COIN_INDEX_BLOCK_CACHE_SIZE_MB).unwrap_or(5 * 1024),
+            )
+            .options,
         rw_options: ReadWriteOptions {
             ignore_range_deletions: true,
         },

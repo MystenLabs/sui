@@ -29,7 +29,7 @@ use sui_types::messages::{
 use sui_types::signature::GenericSignature;
 use tracing::{debug, error, info, trace, warn};
 use typed_store::rocks::{
-    point_lookup_db_options, DBBatch, DBMap, DBOptions, MetricConf, TypedStoreError,
+    default_db_options, DBBatch, DBMap, DBOptions, MetricConf, TypedStoreError,
 };
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 
@@ -1984,7 +1984,9 @@ impl AuthorityPerEpochStore {
 }
 
 fn transactions_table_default_config() -> DBOptions {
-    point_lookup_db_options()
+    default_db_options()
+        .optimize_for_point_lookup(128)
+        .optimize_for_write_throughput(8)
 }
 
 impl ExecutionComponents {

@@ -9,7 +9,7 @@ use std::sync::Arc;
 use sui_types::base_types::ObjectID;
 use sui_types::committee::{Committee, EpochId};
 use sui_types::error::{SuiError, SuiResult};
-use typed_store::rocks::{point_lookup_db_options, DBMap, DBOptions, MetricConf};
+use typed_store::rocks::{default_db_options, DBMap, DBOptions, MetricConf};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 
 use typed_store::Map;
@@ -31,7 +31,7 @@ pub struct CommitteeStoreTables {
 
 // These functions are used to initialize the DB tables
 fn committee_table_default_config() -> DBOptions {
-    point_lookup_db_options()
+    default_db_options().optimize_for_point_lookup(64)
 }
 
 impl CommitteeStore {

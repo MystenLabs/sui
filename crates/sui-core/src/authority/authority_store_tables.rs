@@ -12,8 +12,7 @@ use sui_types::storage::ObjectStore;
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::util::{empty_compaction_filter, reference_count_merge_operator};
 use typed_store::rocks::{
-    optimized_for_high_throughput_options, read_size_from_env, DBBatch, DBMap, DBOptions,
-    MetricConf, ReadWriteOptions,
+    default_db_options, read_size_from_env, DBBatch, DBMap, DBOptions, MetricConf, ReadWriteOptions,
 };
 use typed_store::traits::{Map, TableSummary, TypedStoreDebug};
 
@@ -28,8 +27,8 @@ const ENV_VAR_OBJECTS_BLOCK_CACHE_SIZE: &str = "OBJECTS_BLOCK_CACHE_MB";
 const ENV_VAR_LOCKS_BLOCK_CACHE_SIZE: &str = "LOCKS_BLOCK_CACHE_MB";
 const ENV_VAR_TRANSACTIONS_BLOCK_CACHE_SIZE: &str = "TRANSACTIONS_BLOCK_CACHE_MB";
 const ENV_VAR_EFFECTS_BLOCK_CACHE_SIZE: &str = "EFFECTS_BLOCK_CACHE_MB";
-const ENV_VAR_INDIRECT_OBJECTS_BLOCK_CACHE_SIZE: &str = "INDIRECT_OBJECTS_BLOCK_CACHE_MB";
 const ENV_VAR_EVENTS_BLOCK_CACHE_SIZE: &str = "EVENTS_BLOCK_CACHE_MB";
+const ENV_VAR_INDIRECT_OBJECTS_BLOCK_CACHE_SIZE: &str = "INDIRECT_OBJECTS_BLOCK_CACHE_MB";
 
 /// AuthorityPerpetualTables contains data that must be preserved from one epoch to the next.
 #[derive(DBMapUtils)]
@@ -408,19 +407,19 @@ impl Iterator for LiveSetIter<'_> {
 
 // These functions are used to initialize the DB tables
 fn owned_object_transaction_locks_table_default_config() -> DBOptions {
-    optimized_for_high_throughput_options(
-        read_size_from_env(ENV_VAR_LOCKS_BLOCK_CACHE_SIZE).unwrap_or(1024),
-        false,
-    )
+    default_db_options()
+        .optimize_for_write_throughput(8)
+        .optimize_for_read(read_size_from_env(ENV_VAR_LOCKS_BLOCK_CACHE_SIZE).unwrap_or(1024))
 }
 
 fn objects_table_default_config() -> DBOptions {
     DBOptions {
-        options: optimized_for_high_throughput_options(
-            read_size_from_env(ENV_VAR_OBJECTS_BLOCK_CACHE_SIZE).unwrap_or(5 * 1024),
-            false,
-        )
-        .options,
+        options: default_db_options()
+            .optimize_for_write_throughput(8)
+            .optimize_for_read(
+                read_size_from_env(ENV_VAR_OBJECTS_BLOCK_CACHE_SIZE).unwrap_or(5 * 1024),
+            )
+            .options,
         rw_options: ReadWriteOptions {
             ignore_range_deletions: true,
         },
@@ -428,31 +427,33 @@ fn objects_table_default_config() -> DBOptions {
 }
 
 fn transactions_table_default_config() -> DBOptions {
-    optimized_for_high_throughput_options(
-        read_size_from_env(ENV_VAR_TRANSACTIONS_BLOCK_CACHE_SIZE).unwrap_or(512),
-        true,
-    )
+    default_db_options()
+        .optimize_for_write_throughput(8)
+        .optimize_for_point_lookup(
+            read_size_from_env(ENV_VAR_TRANSACTIONS_BLOCK_CACHE_SIZE).unwrap_or(512),
+        )
 }
 
 fn effects_table_default_config() -> DBOptions {
-    optimized_for_high_throughput_options(
-        read_size_from_env(ENV_VAR_EFFECTS_BLOCK_CACHE_SIZE).unwrap_or(1024),
-        true,
-    )
+    default_db_options()
+        .optimize_for_write_throughput(8)
+        .optimize_for_point_lookup(
+            read_size_from_env(ENV_VAR_EFFECTS_BLOCK_CACHE_SIZE).unwrap_or(1024),
+        )
 }
 
 fn events_table_default_config() -> DBOptions {
-    optimized_for_high_throughput_options(
-        read_size_from_env(ENV_VAR_EVENTS_BLOCK_CACHE_SIZE).unwrap_or(1024),
-        false,
-    )
+    default_db_options()
+        .optimize_for_write_throughput(8)
+        .optimize_for_read(read_size_from_env(ENV_VAR_EVENTS_BLOCK_CACHE_SIZE).unwrap_or(1024))
 }
 
 fn indirect_move_objects_table_default_config() -> DBOptions {
-    let mut options = optimized_for_high_throughput_options(
-        read_size_from_env(ENV_VAR_INDIRECT_OBJECTS_BLOCK_CACHE_SIZE).unwrap_or(512),
-        true,
-    );
+    let mut options = default_db_options()
+        .optimize_for_write_throughput(8)
+        .optimize_for_point_lookup(
+            read_size_from_env(ENV_VAR_INDIRECT_OBJECTS_BLOCK_CACHE_SIZE).unwrap_or(512),
+        );
     options.options.set_merge_operator(
         "refcount operator",
         reference_count_merge_operator,

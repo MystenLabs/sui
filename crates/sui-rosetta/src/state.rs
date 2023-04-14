@@ -22,7 +22,7 @@ use sui_sdk::SuiClient;
 use sui_types::base_types::{EpochId, SuiAddress};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tracing::{debug, error, info, warn};
-use typed_store::rocks::{point_lookup_db_options, DBMap, DBOptions, MetricConf};
+use typed_store::rocks::{default_db_options, DBMap, DBOptions, MetricConf};
 use typed_store::traits::TableSummary;
 use typed_store::traits::TypedStoreDebug;
 use typed_store::Map;
@@ -349,5 +349,5 @@ impl CheckpointIndexStore {
 }
 
 fn default_config() -> DBOptions {
-    point_lookup_db_options()
+    default_db_options().optimize_for_point_lookup(64)
 }

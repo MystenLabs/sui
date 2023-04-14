@@ -13,7 +13,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use store::metrics::SamplingInterval;
 use store::reopen;
-use store::rocks::DBMap;
+use store::rocks::{default_db_options, DBMap};
 use store::rocks::{open_cf, MetricConf, ReadWriteOptions};
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, CommittedSubDagShell, ConsensusCommit,
@@ -59,11 +59,12 @@ impl NodeStorage {
         store_path: Path,
         certificate_store_cache_metrics: Option<CertificateStoreCacheMetrics>,
     ) -> Self {
+        let db_options = default_db_options().optimize_for_write_throughput(8);
         let mut metrics_conf = MetricConf::with_db_name("consensus_epoch");
         metrics_conf.read_sample_interval = SamplingInterval::new(Duration::from_secs(60), 0);
         let rocksdb = open_cf(
             store_path,
-            None,
+            Some(db_options.options),
             metrics_conf,
             &[
                 Self::LAST_PROPOSED_CF,

@@ -17,7 +17,7 @@ use rocksdb::{checkpoint::Checkpoint, BlockBasedOptions, Cache, LiveFile};
 use rocksdb::{
     properties, AsColumnFamilyRef, CStrLike, ColumnFamilyDescriptor, DBWithThreadMode, Error,
     ErrorKind, IteratorMode, MultiThreaded, OptimisticTransactionOptions, ReadOptions, Transaction,
-    WriteBatch, WriteBatchWithTransaction, WriteOptions,
+    UniversalCompactOptions, WriteBatch, WriteBatchWithTransaction, WriteOptions,
 };
 use serde::{de::DeserializeOwned, Serialize};
 use std::collections::HashSet;
@@ -42,14 +42,16 @@ use sui_macros::{fail_point, nondeterministic};
 // Write buffer size per RocksDB instance can be set via the env var below.
 // If the env var is not set, use the default value in MiB.
 const ENV_VAR_DB_WRITE_BUFFER_SIZE: &str = "MYSTEN_DB_WRITE_BUFFER_SIZE_MB";
-const DEFAULT_DB_WRITE_BUFFER_SIZE: usize = 1024;
+const DEFAULT_DB_WRITE_BUFFER_SIZE: usize = 0;
 
 // Write ahead log size per RocksDB instance can be set via the env var below.
 // If the env var is not set, use the default value in MiB.
 const ENV_VAR_DB_WAL_SIZE: &str = "MYSTEN_DB_WAL_SIZE_MB";
-const DEFAULT_DB_WAL_SIZE: usize = 1024;
+const DEFAULT_DB_WAL_SIZE: usize = 4 * 1024;
 
 const ENV_VAR_L0_NUM_FILES_COMPACTION_TRIGGER: &str = "L0_NUM_FILES_COMPACTION_TRIGGER";
+const DEFAULT_L0_NUM_FILES_COMPACTION_TRIGGER: usize = 8;
+
 const ENV_VAR_MAX_BACKGROUND_JOBS: &str = "MAX_BACKGROUND_JOBS";
 
 #[cfg(test)]
@@ -1813,6 +1815,43 @@ pub struct DBOptions {
     pub rw_options: ReadWriteOptions,
 }
 
+impl DBOptions {
+    // Optimize tables where no scans are performed.
+    pub fn optimize_for_point_lookup(mut self, block_cache_size_mb: usize) -> DBOptions {
+        self.options
+            .optimize_for_point_lookup(block_cache_size_mb as u64);
+        self
+    }
+
+    // Optimize tables with a mix of lookup and scan workloads.
+    pub fn optimize_for_read(mut self, block_cache_size_mb: usize) -> DBOptions {
+        let mut block_options = BlockBasedOptions::default();
+        block_options
+            .set_block_cache(&Cache::new_lru_cache(block_cache_size_mb * 1024 * 1024).unwrap());
+        // Set a bloomfilter with 1% false positive rate.
+        block_options.set_bloom_filter(10.0, false);
+        self.options.set_block_based_table_factory(&block_options);
+        self
+    }
+
+    // Optmize tables receiving significant insertions.
+    pub fn optimize_for_write_throughput(mut self, db_max_total_wal_gb: u64) -> DBOptions {
+        self.options
+            .set_max_total_wal_size(db_max_total_wal_gb * 1024 * 1024 * 1024);
+        self.options.set_max_write_buffer_number(8);
+        self
+    }
+
+    // Optimize tables receiving significant deletions.
+    // Revisit when intra-epoch pruning is enabled.
+    pub fn optimize_for_pruning(mut self) -> DBOptions {
+        self.options.set_min_write_buffer_number_to_merge(2);
+        self.options.set_target_file_size_base(64 * 1024 * 1024);
+        self.options.set_max_bytes_for_level_base(512 * 1024 * 1024);
+        self
+    }
+}
+
 /// Base options to be used across all rocksdb instances.
 pub fn base_db_options() -> DBOptions {
     let mut opt = rocksdb::Options::default();
@@ -1825,13 +1864,39 @@ pub fn base_db_options() -> DBOptions {
     }
 
     // The table cache is locked for updates and this determines the number
-    // of shards, ie 2^6. Increase in case of lock contentions.
+    // of shards, ie 2^10. Increase in case of lock contentions.
     opt.set_table_cache_num_shard_bits(10);
 
+    // Allow buffering 1GiB of writes before flushing to disk.
+    opt.set_write_buffer_size(256 * 1024 * 1024);
+    opt.set_max_write_buffer_number(4);
+
+    opt.set_universal_compaction_options(&UniversalCompactOptions::default());
+    // Compaction trigger for universal compaction. Default to 8.
+    opt.set_level_zero_file_num_compaction_trigger(
+        read_size_from_env(ENV_VAR_L0_NUM_FILES_COMPACTION_TRIGGER)
+            .unwrap_or(DEFAULT_L0_NUM_FILES_COMPACTION_TRIGGER)
+            .try_into()
+            .unwrap(),
+    );
+    opt.set_num_levels(8);
+    // ~512MiB per sst file.
+    opt.set_target_file_size_base(512 * 1024 * 1024);
+    // Level 1 is ~16GiB.
+    opt.set_max_bytes_for_level_base(16 * 1024 * 1024 * 1024);
+    opt.set_level_zero_slowdown_writes_trigger(40);
+    opt.set_level_zero_stop_writes_trigger(60);
     opt.set_min_level_to_compress(2);
     opt.set_compression_type(rocksdb::DBCompressionType::Lz4);
     opt.set_bottommost_compression_type(rocksdb::DBCompressionType::Zstd);
     opt.set_bottommost_zstd_max_train_bytes(1024 * 1024, true);
+
+    opt.set_max_background_jobs(
+        read_size_from_env(ENV_VAR_MAX_BACKGROUND_JOBS)
+            .unwrap_or(2)
+            .try_into()
+            .unwrap(),
+    );
 
     // Sui uses multiple RocksDB in a node, so total sizes of write buffers and WAL can be higher
     // than the limits below.
@@ -1883,66 +1948,6 @@ pub fn default_db_options() -> DBOptions {
     opt.options.set_memtable_prefix_bloom_ratio(0.02);
 
     opt
-}
-
-/// Creates a default RocksDB option, optimized for point lookup.
-pub fn point_lookup_db_options() -> DBOptions {
-    let mut db_options = default_db_options();
-    db_options
-        .options
-        .optimize_for_point_lookup(64 /* 64MB (default is 8) */);
-    db_options
-}
-
-/// Use it only for tables which observe high write rate and grow quickly in size
-pub fn optimized_for_high_throughput_options(
-    block_cache_size_mb: usize,
-    optimize_for_point_lookup: bool,
-) -> DBOptions {
-    let mut db_options = default_db_options();
-    db_options.options.set_write_buffer_size(128 * 1024 * 1024);
-    db_options.options.set_min_write_buffer_number_to_merge(2);
-    db_options.options.set_max_write_buffer_number(6);
-    db_options
-        .options
-        .set_level_zero_file_num_compaction_trigger(
-            read_size_from_env(ENV_VAR_L0_NUM_FILES_COMPACTION_TRIGGER)
-                .unwrap_or(4)
-                .try_into()
-                .unwrap(),
-        );
-    db_options
-        .options
-        .set_target_file_size_base(64 * 1024 * 1024);
-    db_options
-        .options
-        .set_max_bytes_for_level_base(512 * 1024 * 1024);
-
-    db_options.options.set_max_background_jobs(
-        read_size_from_env(ENV_VAR_MAX_BACKGROUND_JOBS)
-            .unwrap_or(2)
-            .try_into()
-            .unwrap(),
-    );
-
-    if optimize_for_point_lookup {
-        db_options
-            .options
-            .optimize_for_point_lookup(block_cache_size_mb as u64);
-    } else {
-        let mut block_options = BlockBasedOptions::default();
-        block_options
-            .set_block_cache(&Cache::new_lru_cache(block_cache_size_mb * 1024 * 1024).unwrap());
-        // Set a bloomfilter with 1% false positive rate.
-        block_options.set_bloom_filter(10.0, false);
-
-        // From https://github.com/EighteenZi/rocksdb_wiki/blob/master/Block-Cache.md#caching-index-and-filter-blocks
-        block_options.set_pin_l0_filter_and_index_blocks_in_cache(true);
-        db_options
-            .options
-            .set_block_based_table_factory(&block_options);
-    }
-    db_options
 }
 
 /// Opens a database with options, and a number of column families that are created if they do not exist.
