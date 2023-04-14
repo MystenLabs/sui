@@ -149,7 +149,7 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
                                             ({ name, type }) => (
                                                 <div
                                                     key={name}
-                                                    className="mt-0.5 md:min-w-fit"
+                                                    className="mt-0.5"
                                                 >
                                                     <ListItem
                                                         active={
@@ -162,7 +162,7 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
                                                             )
                                                         }
                                                     >
-                                                        <div className="flex flex-1 justify-between gap-2 truncate">
+                                                        <div className="flex w-full flex-1 justify-between gap-2 truncate">
                                                             <Text
                                                                 variant="body/medium"
                                                                 color="steel-darker"
@@ -174,6 +174,7 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
                                                             <Text
                                                                 variant="p3/normal"
                                                                 color="steel"
+                                                                truncate
                                                             >
                                                                 {
                                                                     getFieldTypeValue(
