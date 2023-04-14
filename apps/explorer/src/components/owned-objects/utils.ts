@@ -89,8 +89,9 @@ export function getFieldTypeValue(
             )
             .join(', ');
     }
+
     return {
-        displayName: normalizedType.name + (typeParam ? `<${typeParam}>` : ''),
+        displayName:`${normalizedType.name} ${typeParam}`,
         normalizedType: `${address}::${module}::${name}`,
     };
 }
