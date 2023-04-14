@@ -42,14 +42,14 @@ export function DisclosureBox({
                     <>
                         <Disclosure.Button
                             as="div"
-                            className="flex cursor-pointer flex-nowrap items-center px-5 py-3.75"
+                            className="flex cursor-pointer flex-nowrap items-center gap-1 px-5 py-3.75"
                         >
                             <div className="flex w-11/12 flex-1 gap-1 text-body font-semibold text-gray-90">
                                 {title}
                                 {preview && !open ? preview : null}
                             </div>
 
-                            <ChevronRight12 className="ml-1 text-caption text-steel ui-open:rotate-90" />
+                            <ChevronRight12 className="text-caption text-steel ui-open:rotate-90" />
                         </Disclosure.Button>
                         <Disclosure.Panel className="px-5 pb-3.75">
                             {children}
