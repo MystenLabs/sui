@@ -1,14 +1,55 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::PathBuf;
+use std::{
+    fmt::{Debug, Display},
+    path::PathBuf,
+    str::FromStr,
+};
 
+use serde::{Deserialize, Serialize};
 use sui_config::genesis_config::{GenesisConfig, ValidatorGenesisInfo};
 use sui_types::multiaddr::Multiaddr;
 
-use crate::{benchmark::BenchmarkParameters, client::Instance, settings::Settings};
+use crate::{
+    benchmark::{BenchmarkParameters, BenchmarkType},
+    client::Instance,
+    settings::Settings,
+};
 
 use super::{ProtocolCommands, ProtocolMetrics};
+
+/// The type of benchmarks supported by Sui.
+#[derive(Serialize, Deserialize, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SuiBenchmarkType {
+    /// Percentage of shared vs owned objects; 0 means only owned objects and 100 means
+    /// only shared objects.
+    shared_objects_ratio: u16,
+}
+
+impl Debug for SuiBenchmarkType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.shared_objects_ratio)
+    }
+}
+
+impl Display for SuiBenchmarkType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}% shared objects", self.shared_objects_ratio)
+    }
+}
+
+impl FromStr for SuiBenchmarkType {
+    type Err = std::num::ParseIntError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self {
+            shared_objects_ratio: s.parse::<u16>()?.min(100),
+        })
+    }
+}
+
+impl BenchmarkType for SuiBenchmarkType {}
 
 /// All configurations information to run a sui client or validator.
 pub struct SuiProtocol {
@@ -16,7 +57,7 @@ pub struct SuiProtocol {
     working_dir: PathBuf,
 }
 
-impl ProtocolCommands for SuiProtocol {
+impl ProtocolCommands<SuiBenchmarkType> for SuiProtocol {
     fn protocol_dependencies(&self) -> Vec<&'static str> {
         vec![
             // Install typical sui dependencies.
@@ -63,7 +104,7 @@ impl ProtocolCommands for SuiProtocol {
     fn node_command<I>(
         &self,
         instances: I,
-        _parameters: &BenchmarkParameters,
+        _parameters: &BenchmarkParameters<SuiBenchmarkType>,
     ) -> Vec<(Instance, String)>
     where
         I: IntoIterator<Item = Instance>,
@@ -98,7 +139,7 @@ impl ProtocolCommands for SuiProtocol {
     fn client_command<I>(
         &self,
         instances: I,
-        parameters: &BenchmarkParameters,
+        parameters: &BenchmarkParameters<SuiBenchmarkType>,
     ) -> Vec<(Instance, String)>
     where
         I: IntoIterator<Item = Instance>,
@@ -116,7 +157,7 @@ impl ProtocolCommands for SuiProtocol {
         let clients: Vec<_> = instances.into_iter().collect();
         let committee_size = parameters.nodes;
         let load_share = parameters.load / clients.len();
-        let shared_counter = parameters.shared_objects_ratio;
+        let shared_counter = parameters.benchmark_type.shared_objects_ratio;
         let transfer_objects = 100 - shared_counter;
         let metrics_port = Self::CLIENT_METRICS_PORT;
 

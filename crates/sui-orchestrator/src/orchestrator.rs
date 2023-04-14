@@ -4,6 +4,7 @@
 use std::{
     collections::{HashMap, VecDeque},
     fs::{self},
+    marker::PhantomData,
     path::PathBuf,
     time::Duration,
 };
@@ -11,7 +12,7 @@ use std::{
 use tokio::time::{self, Instant};
 
 use crate::{
-    benchmark::{BenchmarkParameters, BenchmarkParametersGenerator},
+    benchmark::{BenchmarkParameters, BenchmarkParametersGenerator, BenchmarkType},
     client::Instance,
     display, ensure,
     error::{TestbedError, TestbedResult},
@@ -24,11 +25,13 @@ use crate::{
 };
 
 /// An orchestrator to run benchmarks on a testbed.
-pub struct Orchestrator<P> {
+pub struct Orchestrator<P, T> {
     /// The testbed's settings.
     settings: Settings,
     /// The state of the testbed (reflecting accurately the state of the machines).
     instances: Vec<Instance>,
+    /// The type of the benchmark parameters.
+    benchmark_type: PhantomData<T>,
     /// Provider-specific commands to install on the instance.
     instance_setup_commands: Vec<String>,
     /// Protocol-specific commands generator to generate the protocol configuration files,
@@ -51,7 +54,7 @@ pub struct Orchestrator<P> {
     dedicated_clients: usize,
 }
 
-impl<P> Orchestrator<P> {
+impl<P, T> Orchestrator<P, T> {
     /// The default interval between measurements collection.
     const DEFAULT_SCRAPE_INTERVAL: Duration = Duration::from_secs(15);
     /// The default interval to crash nodes.
@@ -68,6 +71,7 @@ impl<P> Orchestrator<P> {
         Self {
             settings,
             instances,
+            benchmark_type: PhantomData,
             instance_setup_commands,
             protocol_commands,
             ssh_manager,
@@ -121,7 +125,7 @@ impl<P> Orchestrator<P> {
     /// contains the instances on which to run the nodes.
     pub fn select_instances(
         &self,
-        parameters: &BenchmarkParameters,
+        parameters: &BenchmarkParameters<T>,
     ) -> TestbedResult<(Vec<Instance>, Vec<Instance>)> {
         // Ensure there are enough active instances.
         let available_instances: Vec<_> = self.instances.iter().filter(|x| x.is_active()).collect();
@@ -177,12 +181,12 @@ impl<P> Orchestrator<P> {
     }
 }
 
-impl<P: ProtocolCommands + ProtocolMetrics> Orchestrator<P> {
+impl<P: ProtocolCommands<T> + ProtocolMetrics, T: BenchmarkType> Orchestrator<P, T> {
     /// Boot one node per instance.
     async fn boot_nodes(
         &self,
         instances: Vec<Instance>,
-        parameters: &BenchmarkParameters,
+        parameters: &BenchmarkParameters<T>,
     ) -> TestbedResult<()> {
         // Run one node per instance.
         let targets = self
@@ -296,7 +300,7 @@ impl<P: ProtocolCommands + ProtocolMetrics> Orchestrator<P> {
     }
 
     /// Configure the instances with the appropriate configuration files.
-    pub async fn configure(&self, parameters: &BenchmarkParameters) -> TestbedResult<()> {
+    pub async fn configure(&self, parameters: &BenchmarkParameters<T>) -> TestbedResult<()> {
         display::action("Configuring instances");
 
         // Select instances to configure.
@@ -306,7 +310,7 @@ impl<P: ProtocolCommands + ProtocolMetrics> Orchestrator<P> {
         let command = self.protocol_commands.genesis_command(nodes.iter());
         let repo_name = self.settings.repository_name();
         let context = CommandContext::new().with_execute_from_path(repo_name.into());
-        let all = clients.into_iter().chain(nodes.into_iter());
+        let all = clients.into_iter().chain(nodes);
         self.ssh_manager.execute(all, command, context).await?;
 
         display::done();
@@ -337,7 +341,7 @@ impl<P: ProtocolCommands + ProtocolMetrics> Orchestrator<P> {
     }
 
     /// Deploy the nodes.
-    pub async fn run_nodes(&self, parameters: &BenchmarkParameters) -> TestbedResult<()> {
+    pub async fn run_nodes(&self, parameters: &BenchmarkParameters<T>) -> TestbedResult<()> {
         display::action("Deploying validators");
 
         // Select the instances to run.
@@ -351,7 +355,7 @@ impl<P: ProtocolCommands + ProtocolMetrics> Orchestrator<P> {
     }
 
     /// Deploy the load generators.
-    pub async fn run_clients(&self, parameters: &BenchmarkParameters) -> TestbedResult<()> {
+    pub async fn run_clients(&self, parameters: &BenchmarkParameters<T>) -> TestbedResult<()> {
         display::action("Setting up load generators");
 
         // Select the instances to run.
@@ -382,8 +386,8 @@ impl<P: ProtocolCommands + ProtocolMetrics> Orchestrator<P> {
     /// Collect metrics from the load generators.
     pub async fn run(
         &self,
-        parameters: &BenchmarkParameters,
-    ) -> TestbedResult<MeasurementsCollection> {
+        parameters: &BenchmarkParameters<T>,
+    ) -> TestbedResult<MeasurementsCollection<T>> {
         display::action(format!(
             "Scraping metrics (at least {}s)",
             parameters.duration.as_secs()
@@ -458,7 +462,7 @@ impl<P: ProtocolCommands + ProtocolMetrics> Orchestrator<P> {
     /// Download the log files from the nodes and clients.
     pub async fn download_logs(
         &self,
-        parameters: &BenchmarkParameters,
+        parameters: &BenchmarkParameters<T>,
     ) -> TestbedResult<LogsAnalyzer> {
         // Select the instances to run.
         let (clients, nodes) = self.select_instances(parameters)?;
@@ -521,7 +525,7 @@ impl<P: ProtocolCommands + ProtocolMetrics> Orchestrator<P> {
     /// Run all the benchmarks specified by the benchmark generator.
     pub async fn run_benchmarks(
         &mut self,
-        mut generator: BenchmarkParametersGenerator,
+        mut generator: BenchmarkParametersGenerator<T>,
     ) -> TestbedResult<()> {
         display::header("Preparing testbed");
         display::config("Commit", format!("'{}'", &self.settings.repository.commit));
@@ -541,8 +545,7 @@ impl<P: ProtocolCommands + ProtocolMetrics> Orchestrator<P> {
         let mut latest_committee_size = 0;
         while let Some(parameters) = generator.next() {
             display::header(format!("Starting benchmark {i}"));
-            let ratio = &parameters.shared_objects_ratio;
-            display::config("Load type", format!("{ratio}% shared objects"));
+            display::config("Benchmark type", &parameters.benchmark_type);
             display::config("Parameters", &parameters);
             display::newline();
 

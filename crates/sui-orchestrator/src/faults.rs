@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt::{Debug, Display};
+use std::{
+    fmt::{Debug, Display},
+    time::Duration,
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -12,7 +15,10 @@ pub enum FaultsType {
     /// Permanently crash the maximum number of nodes from the beginning.
     Permanent { faults: usize },
     /// Progressively crash and recover nodes.
-    CrashRecovery { max_faults: usize },
+    CrashRecovery {
+        max_faults: usize,
+        interval: Duration,
+    },
 }
 
 impl Default for FaultsType {
@@ -25,7 +31,10 @@ impl Debug for FaultsType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Permanent { faults } => write!(f, "{faults}"),
-            Self::CrashRecovery { max_faults } => write!(f, "{max_faults}cr"),
+            Self::CrashRecovery {
+                max_faults,
+                interval,
+            } => write!(f, "{max_faults}-{}cr", interval.as_secs()),
         }
     }
 }
@@ -40,7 +49,10 @@ impl Display for FaultsType {
                     write!(f, "{faults} crashed")
                 }
             }
-            Self::CrashRecovery { max_faults } => write!(f, "{max_faults} crash-recovery"),
+            Self::CrashRecovery {
+                max_faults,
+                interval,
+            } => write!(f, "{max_faults} crash-recovery, {}s", interval.as_secs()),
         }
     }
 }
@@ -119,7 +131,7 @@ impl CrashRecoverySchedule {
             }
 
             // Periodically crash and recover nodes.
-            FaultsType::CrashRecovery { max_faults } => {
+            FaultsType::CrashRecovery { max_faults, .. } => {
                 let min_faults = max_faults / 3;
 
                 // Recover all nodes if we already crashed them all.
@@ -149,6 +161,8 @@ impl CrashRecoverySchedule {
 
 #[cfg(test)]
 mod faults_tests {
+    use std::time::Duration;
+
     use crate::client::Instance;
 
     use super::{CrashRecoverySchedule, FaultsType};
@@ -156,11 +170,17 @@ mod faults_tests {
     #[test]
     fn crash_recovery_1_fault() {
         let max_faults = 1;
+        let interval = Duration::from_secs(60);
         let faulty = (0..max_faults)
             .map(|i| Instance::new_for_test(i.to_string()))
             .collect();
-        let mut schedule =
-            CrashRecoverySchedule::new(FaultsType::CrashRecovery { max_faults }, faulty);
+        let mut schedule = CrashRecoverySchedule::new(
+            FaultsType::CrashRecovery {
+                max_faults,
+                interval,
+            },
+            faulty,
+        );
 
         let action = schedule.update();
         assert_eq!(action.boot.len(), 0);
@@ -182,11 +202,17 @@ mod faults_tests {
     #[test]
     fn crash_recovery_2_faults() {
         let max_faults = 2;
+        let interval = Duration::from_secs(60);
         let faulty = (0..max_faults)
             .map(|i| Instance::new_for_test(i.to_string()))
             .collect();
-        let mut schedule =
-            CrashRecoverySchedule::new(FaultsType::CrashRecovery { max_faults }, faulty);
+        let mut schedule = CrashRecoverySchedule::new(
+            FaultsType::CrashRecovery {
+                max_faults,
+                interval,
+            },
+            faulty,
+        );
 
         let action = schedule.update();
         assert_eq!(action.boot.len(), 0);
@@ -207,6 +233,7 @@ mod faults_tests {
 
     #[test]
     fn crash_recovery() {
+        let interval = Duration::from_secs(60);
         for i in 3..33 {
             let max_faults = i;
             let min_faults = max_faults / 3;
@@ -214,8 +241,13 @@ mod faults_tests {
             let instances = (0..max_faults)
                 .map(|i| Instance::new_for_test(i.to_string()))
                 .collect();
-            let mut schedule =
-                CrashRecoverySchedule::new(FaultsType::CrashRecovery { max_faults }, instances);
+            let mut schedule = CrashRecoverySchedule::new(
+                FaultsType::CrashRecovery {
+                    max_faults,
+                    interval,
+                },
+                instances,
+            );
 
             let action = schedule.update();
             assert_eq!(action.boot.len(), 0);

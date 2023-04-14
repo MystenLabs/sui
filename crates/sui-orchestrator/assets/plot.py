@@ -108,7 +108,7 @@ class PlotParameters:
 
 class MeasurementId:
     def __init__(self, measurement, max_latency=None):
-        self.shared_objects_ratio = measurement['parameters']['shared_objects_ratio']
+        self.shared_objects_ratio = measurement['parameters']['benchmark_type']['shared_objects_ratio']
         self.nodes = measurement['parameters']['nodes']
         if 'permanent' in measurement['parameters']['faults']:
             self.faults = measurement['parameters']['faults']['permanent']['faults']

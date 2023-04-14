@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
+use std::{str::FromStr, time::Duration};
 
 use crate::{
     benchmark::{BenchmarkParametersGenerator, LoadType},
@@ -16,7 +16,7 @@ use crate::{
 use clap::Parser;
 use color_eyre::eyre::{Context, Result};
 use faults::FaultsType;
-use protocol::sui::SuiProtocol;
+use protocol::sui::{SuiBenchmarkType, SuiProtocol};
 
 mod benchmark;
 mod client;
@@ -63,8 +63,8 @@ pub enum Operation {
     Benchmark {
         /// Percentage of shared vs owned objects; 0 means only owned objects and 100 means
         /// only shared objects.
-        #[clap(long, value_name = "INT", default_value = "0", global = true)]
-        shared_objects_ratio: u16,
+        #[clap(long, default_value = "0", global = true)]
+        benchmark_type: String,
 
         /// The committee size to deploy.
         #[clap(long, value_name = "INT")]
@@ -264,7 +264,7 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
 
         // Run benchmarks.
         Operation::Benchmark {
-            shared_objects_ratio,
+            benchmark_type,
             committee,
             faults,
             crash_recovery,
@@ -294,8 +294,8 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
                 .wrap_err("Failed to load testbed setup commands")?;
 
             let protocol_commands = SuiProtocol::new(&settings);
+            let sui_benchmark_type = SuiBenchmarkType::from_str(&benchmark_type)?;
 
-            let shared_objects_ratio = shared_objects_ratio.min(100);
             let load = match load_type {
                 Load::FixedLoad { loads } => {
                     let loads = if loads.is_empty() { vec![200] } else { loads };
@@ -313,13 +313,16 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
             let fault_type = if !crash_recovery || faults == 0 {
                 FaultsType::Permanent { faults }
             } else {
-                FaultsType::CrashRecovery { max_faults: faults }
+                FaultsType::CrashRecovery {
+                    max_faults: faults,
+                    interval: crash_interval,
+                }
             };
 
-            let generator =
-                BenchmarkParametersGenerator::new(shared_objects_ratio, committee, load)
-                    .with_custom_duration(duration)
-                    .with_faults(fault_type);
+            let generator = BenchmarkParametersGenerator::new(committee, load)
+                .with_benchmark_type(sui_benchmark_type)
+                .with_custom_duration(duration)
+                .with_faults(fault_type);
 
             Orchestrator::new(
                 settings,
@@ -340,7 +343,7 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
         }
 
         // Plot (basic) L-graphs from the collected data.
-        Operation::Plot { x_lim, y_lim } => Plotter::new(settings)
+        Operation::Plot { x_lim, y_lim } => Plotter::<SuiBenchmarkType>::new(settings)
             .with_x_lim(x_lim)
             .with_y_lim(y_lim)
             .load_measurements()
@@ -348,7 +351,9 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
             .wrap_err("Failed to plot data")?,
 
         // Print a summary of the specified measurements collection.
-        Operation::Summarize { path } => MeasurementsCollection::load(path)?.display_summary(),
+        Operation::Summarize { path } => {
+            MeasurementsCollection::<SuiBenchmarkType>::load(path)?.display_summary()
+        }
     }
     Ok(())
 }

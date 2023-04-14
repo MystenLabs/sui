@@ -14,7 +14,10 @@ use prometheus_parse::Scrape;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    benchmark::BenchmarkParameters, display, protocol::ProtocolMetrics, settings::Settings,
+    benchmark::{BenchmarkParameters, BenchmarkType},
+    display,
+    protocol::ProtocolMetrics,
+    settings::Settings,
 };
 
 /// The identifier of prometheus latency buckets.
@@ -162,20 +165,20 @@ impl Measurement {
 type ScraperId = usize;
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct MeasurementsCollection {
+pub struct MeasurementsCollection<T> {
     /// The machine / instance type.
     pub machine_specs: String,
     /// The commit of the codebase.
     pub commit: String,
     /// The benchmark parameters of the current run.
-    pub parameters: BenchmarkParameters,
+    pub parameters: BenchmarkParameters<T>,
     /// The data collected by each scraper.
     pub scrapers: HashMap<ScraperId, Vec<Measurement>>,
 }
 
-impl MeasurementsCollection {
+impl<T: BenchmarkType> MeasurementsCollection<T> {
     /// Create a new (empty) collection of measurements.
-    pub fn new(settings: &Settings, parameters: BenchmarkParameters) -> Self {
+    pub fn new(settings: &Settings, parameters: BenchmarkParameters<T>) -> Self {
         Self {
             machine_specs: settings.specs.clone(),
             commit: settings.repository.commit.clone(),
@@ -270,9 +273,7 @@ impl MeasurementsCollection {
         table.set_format(display::default_table_format());
 
         table.set_titles(row![bH2->"Benchmark Summary"]);
-        table.add_row(
-            row![b->"Shared objects:", format!("{}%",self.parameters.shared_objects_ratio)],
-        );
+        table.add_row(row![b->"Benchmark type:", self.parameters.benchmark_type]);
         table.add_row(row![bH2->""]);
         table.add_row(row![b->"Nodes:", self.parameters.nodes]);
         table.add_row(row![b->"Faults:", self.parameters.faults]);
@@ -293,7 +294,10 @@ impl MeasurementsCollection {
 mod test {
     use std::{collections::HashMap, time::Duration};
 
-    use crate::{protocol::test_protocol_metrics::TestProtocolMetrics, settings::Settings};
+    use crate::{
+        benchmark::test::TestBenchmarkType, protocol::test_protocol_metrics::TestProtocolMetrics,
+        settings::Settings,
+    };
 
     use super::{BenchmarkParameters, Measurement, MeasurementsCollection};
 
@@ -366,7 +370,10 @@ mod test {
 
         let measurement = Measurement::from_prometheus::<TestProtocolMetrics>(report);
         let settings = Settings::new_for_test();
-        let mut aggregator = MeasurementsCollection::new(&settings, BenchmarkParameters::default());
+        let mut aggregator = MeasurementsCollection::<TestBenchmarkType>::new(
+            &settings,
+            BenchmarkParameters::default(),
+        );
         let scraper_id = 1;
         aggregator.add(scraper_id, measurement);
 

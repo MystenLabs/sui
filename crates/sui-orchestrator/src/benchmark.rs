@@ -3,19 +3,36 @@
 
 use std::{
     fmt::{Debug, Display},
+    hash::Hash,
+    str::FromStr,
     time::Duration,
 };
 
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::{faults::FaultsType, measurement::MeasurementsCollection};
 
+pub trait BenchmarkType:
+    Serialize
+    + DeserializeOwned
+    + Default
+    + Clone
+    + FromStr
+    + Display
+    + Debug
+    + PartialEq
+    + Eq
+    + Hash
+    + PartialOrd
+    + Ord
+{
+}
+
 /// The benchmark parameters for a run.
 #[derive(Serialize, Deserialize, Clone)]
-pub struct BenchmarkParameters {
-    /// Percentage of shared vs owned objects; 0 means only owned objects and 100 means
-    /// only shared objects.
-    pub shared_objects_ratio: u16,
+pub struct BenchmarkParameters<T> {
+    /// The type of benchmark to run.
+    pub benchmark_type: T,
     /// The committee size.
     pub nodes: usize,
     /// The number of (crash-)faults.
@@ -26,10 +43,10 @@ pub struct BenchmarkParameters {
     pub duration: Duration,
 }
 
-impl Default for BenchmarkParameters {
+impl<T: BenchmarkType> Default for BenchmarkParameters<T> {
     fn default() -> Self {
         Self {
-            shared_objects_ratio: 0,
+            benchmark_type: T::default(),
             nodes: 4,
             faults: FaultsType::default(),
             load: 500,
@@ -38,17 +55,17 @@ impl Default for BenchmarkParameters {
     }
 }
 
-impl Debug for BenchmarkParameters {
+impl<T: BenchmarkType> Debug for BenchmarkParameters<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{}-{:?}-{}-{}",
-            self.shared_objects_ratio, self.faults, self.nodes, self.load
+            "{:?}-{:?}-{}-{}",
+            self.benchmark_type, self.faults, self.nodes, self.load
         )
     }
 }
 
-impl Display for BenchmarkParameters {
+impl<T> Display for BenchmarkParameters<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -58,17 +75,17 @@ impl Display for BenchmarkParameters {
     }
 }
 
-impl BenchmarkParameters {
+impl<T> BenchmarkParameters<T> {
     /// Make a new benchmark parameters.
     pub fn new(
-        shared_objects_ratio: u16,
+        benchmark_type: T,
         nodes: usize,
         faults: FaultsType,
         load: usize,
         duration: Duration,
     ) -> Self {
         Self {
-            shared_objects_ratio,
+            benchmark_type,
             nodes,
             faults,
             load,
@@ -95,9 +112,9 @@ pub enum LoadType {
 
 /// Generate benchmark parameters (one set of parameters per run).
 // TODO: The rusty thing to do would be to implement Iter.
-pub struct BenchmarkParametersGenerator {
-    /// The ratio of shared and owned objects (as a percentage).
-    shared_objects_ratio: u16,
+pub struct BenchmarkParametersGenerator<T> {
+    /// The type of benchmark to run.
+    benchmark_type: T,
     /// The committee size.
     pub nodes: usize,
     /// The load type.
@@ -109,21 +126,21 @@ pub struct BenchmarkParametersGenerator {
     /// The load of the next benchmark run.
     next_load: Option<usize>,
     /// Temporary hold a lower bound of the breaking point.
-    lower_bound_result: Option<MeasurementsCollection>,
+    lower_bound_result: Option<MeasurementsCollection<T>>,
     /// Temporary hold an upper bound of the breaking point.
-    upper_bound_result: Option<MeasurementsCollection>,
+    upper_bound_result: Option<MeasurementsCollection<T>>,
     /// The current number of iterations.
     iterations: usize,
 }
 
-impl Iterator for BenchmarkParametersGenerator {
-    type Item = BenchmarkParameters;
+impl<T: BenchmarkType> Iterator for BenchmarkParametersGenerator<T> {
+    type Item = BenchmarkParameters<T>;
 
     /// Return the next set of benchmark parameters to run.
     fn next(&mut self) -> Option<Self::Item> {
         self.next_load.map(|load| {
             BenchmarkParameters::new(
-                self.shared_objects_ratio,
+                self.benchmark_type.clone(),
                 self.nodes,
                 self.faults.clone(),
                 load,
@@ -133,12 +150,12 @@ impl Iterator for BenchmarkParametersGenerator {
     }
 }
 
-impl BenchmarkParametersGenerator {
+impl<T: BenchmarkType> BenchmarkParametersGenerator<T> {
     /// The default benchmark duration.
     const DEFAULT_DURATION: Duration = Duration::from_secs(180);
 
     /// make a new generator.
-    pub fn new(shared_objects_ration: u16, nodes: usize, mut load_type: LoadType) -> Self {
+    pub fn new(nodes: usize, mut load_type: LoadType) -> Self {
         let next_load = match &mut load_type {
             LoadType::Fixed(loads) => {
                 if loads.is_empty() {
@@ -150,7 +167,7 @@ impl BenchmarkParametersGenerator {
             LoadType::Search { starting_load, .. } => Some(*starting_load),
         };
         Self {
-            shared_objects_ratio: shared_objects_ration,
+            benchmark_type: T::default(),
             nodes,
             load_type,
             faults: FaultsType::default(),
@@ -160,6 +177,12 @@ impl BenchmarkParametersGenerator {
             upper_bound_result: None,
             iterations: 0,
         }
+    }
+
+    /// Set the benchmark type.
+    pub fn with_benchmark_type(mut self, benchmark_type: T) -> Self {
+        self.benchmark_type = benchmark_type;
+        self
     }
 
     /// Set crash-recovery pattern and the number of faulty nodes.
@@ -176,8 +199,8 @@ impl BenchmarkParametersGenerator {
 
     /// Detects whether the latest benchmark parameters run the system out of capacity.
     fn out_of_capacity(
-        last_result: &MeasurementsCollection,
-        new_result: &MeasurementsCollection,
+        last_result: &MeasurementsCollection<T>,
+        new_result: &MeasurementsCollection<T>,
     ) -> bool {
         // We consider the system is out of capacity if the latency increased by over 5x with
         // respect to the latest run.
@@ -193,7 +216,7 @@ impl BenchmarkParametersGenerator {
 
     /// Register a new benchmark measurements collection. These results are used to determine
     /// whether the system reached its breaking point.
-    pub fn register_result(&mut self, result: MeasurementsCollection) {
+    pub fn register_result(&mut self, result: MeasurementsCollection<T>) {
         self.next_load = match &mut self.load_type {
             LoadType::Fixed(loads) => {
                 if loads.is_empty() {
@@ -245,24 +268,49 @@ impl BenchmarkParametersGenerator {
 }
 
 #[cfg(test)]
-mod test {
+pub mod test {
+    use std::{fmt::Display, str::FromStr};
+
+    use serde::{Deserialize, Serialize};
+
     use crate::{
         measurement::{Measurement, MeasurementsCollection},
         settings::Settings,
     };
 
-    use super::{BenchmarkParametersGenerator, LoadType};
+    use super::{BenchmarkParametersGenerator, BenchmarkType, LoadType};
+
+    /// Mock benchmark type for unit tests.
+    #[derive(
+        Serialize, Deserialize, Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, Default,
+    )]
+    pub struct TestBenchmarkType;
+
+    impl Display for TestBenchmarkType {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "TestBenchmarkType")
+        }
+    }
+
+    impl FromStr for TestBenchmarkType {
+        type Err = ();
+
+        fn from_str(_s: &str) -> Result<Self, Self::Err> {
+            Ok(Self {})
+        }
+    }
+
+    impl BenchmarkType for TestBenchmarkType {}
 
     #[test]
     fn set_lower_bound() {
         let settings = Settings::new_for_test();
-        let shared_objects_ratio = 0;
         let nodes = 4;
         let load = LoadType::Search {
             starting_load: 100,
             max_iterations: 10,
         };
-        let mut generator = BenchmarkParametersGenerator::new(shared_objects_ratio, nodes, load);
+        let mut generator = BenchmarkParametersGenerator::<TestBenchmarkType>::new(nodes, load);
         let parameters = generator.next().unwrap();
 
         let collection = MeasurementsCollection::new(&settings, parameters);
@@ -283,13 +331,12 @@ mod test {
     #[test]
     fn set_upper_bound() {
         let settings = Settings::new_for_test();
-        let shared_objects_ratio = 0;
         let nodes = 4;
         let load = LoadType::Search {
             starting_load: 100,
             max_iterations: 10,
         };
-        let mut generator = BenchmarkParametersGenerator::new(shared_objects_ratio, nodes, load);
+        let mut generator = BenchmarkParametersGenerator::<TestBenchmarkType>::new(nodes, load);
         let first_parameters = generator.next().unwrap();
 
         // Register a first result (zero latency). This sets the lower bound.
@@ -323,13 +370,12 @@ mod test {
     #[test]
     fn max_iterations() {
         let settings = Settings::new_for_test();
-        let shared_objects_ratio = 0;
         let nodes = 4;
         let load = LoadType::Search {
             starting_load: 100,
             max_iterations: 0,
         };
-        let mut generator = BenchmarkParametersGenerator::new(shared_objects_ratio, nodes, load);
+        let mut generator = BenchmarkParametersGenerator::<TestBenchmarkType>::new(nodes, load);
         let parameters = generator.next().unwrap();
 
         let collection = MeasurementsCollection::new(&settings, parameters);

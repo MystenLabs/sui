@@ -16,13 +16,16 @@ use plotters::{
     style::{Color, RED, WHITE},
 };
 
-use crate::{faults::FaultsType, measurement::MeasurementsCollection, settings::Settings};
+use crate::{
+    benchmark::BenchmarkType, faults::FaultsType, measurement::MeasurementsCollection,
+    settings::Settings,
+};
 
 /// The set of parameters that uniquely identify a set of measurements. This id avoids
 /// plotting incomparable measurements on the same graph.
 #[derive(Hash, PartialEq, Eq)]
-pub struct MeasurementsCollectionId {
-    shared_objects_ratio: u16,
+pub struct MeasurementsCollectionId<T> {
+    benchmark_type: T,
     nodes: usize,
     faults: FaultsType,
     duration: Duration,
@@ -30,12 +33,12 @@ pub struct MeasurementsCollectionId {
     commit: String,
 }
 
-impl Debug for MeasurementsCollectionId {
+impl<T: BenchmarkType> Debug for MeasurementsCollectionId<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "{}-{:?}-{}-{}",
-            self.shared_objects_ratio,
+            self.benchmark_type,
             self.faults,
             self.nodes,
             self.duration.as_secs()
@@ -43,20 +46,20 @@ impl Debug for MeasurementsCollectionId {
     }
 }
 
-impl Display for MeasurementsCollectionId {
+impl<T: BenchmarkType> Display for MeasurementsCollectionId<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "{} nodes ({}) - {}% shared objects",
-            self.nodes, self.faults, self.shared_objects_ratio
+            self.nodes, self.faults, self.benchmark_type
         )
     }
 }
 
-impl From<MeasurementsCollection> for MeasurementsCollectionId {
-    fn from(collection: MeasurementsCollection) -> Self {
+impl<T> From<MeasurementsCollection<T>> for MeasurementsCollectionId<T> {
+    fn from(collection: MeasurementsCollection<T>) -> Self {
         Self {
-            shared_objects_ratio: collection.parameters.shared_objects_ratio,
+            benchmark_type: collection.parameters.benchmark_type,
             nodes: collection.parameters.nodes,
             faults: collection.parameters.faults,
             duration: collection.parameters.duration,
@@ -76,8 +79,8 @@ struct PlotDataPoint {
     stdev: f32,
 }
 
-impl From<&MeasurementsCollection> for PlotDataPoint {
-    fn from(collection: &MeasurementsCollection) -> Self {
+impl<T: BenchmarkType> From<&MeasurementsCollection<T>> for PlotDataPoint {
+    fn from(collection: &MeasurementsCollection<T>) -> Self {
         Self {
             x: collection.aggregate_tps() as f32,
             y: collection.aggregate_average_latency().as_secs_f64() as f32,
@@ -87,18 +90,18 @@ impl From<&MeasurementsCollection> for PlotDataPoint {
 }
 
 /// Plot latency-throughput graphs.
-pub struct Plotter {
+pub struct Plotter<T> {
     /// The benchmarks settings.
     settings: Settings,
     /// The collection of measurements to plot.
-    measurements: HashMap<MeasurementsCollectionId, Vec<MeasurementsCollection>>,
+    measurements: HashMap<MeasurementsCollectionId<T>, Vec<MeasurementsCollection<T>>>,
     /// The limit of the x-axis.
     x_lim: Option<f32>,
     /// THe limit of the y-axis.
     y_lim: Option<f32>,
 }
 
-impl Plotter {
+impl<T: BenchmarkType> Plotter<T> {
     /// Make a new plotter from the benchmarks settings.
     pub fn new(settings: Settings) -> Self {
         Self {
@@ -159,7 +162,7 @@ impl Plotter {
 
     fn plot_impl(
         &self,
-        id: &MeasurementsCollectionId,
+        id: &MeasurementsCollectionId<T>,
         data_points: Vec<PlotDataPoint>,
     ) -> Result<()> {
         // Set the directory to save plots and compute the plot's filename.

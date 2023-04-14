@@ -3,13 +3,16 @@
 
 use std::path::PathBuf;
 
-use crate::{benchmark::BenchmarkParameters, client::Instance};
+use crate::{
+    benchmark::{BenchmarkParameters, BenchmarkType},
+    client::Instance,
+};
 
 pub mod sui;
 
 /// The minimum interface that the protocol should implement to allow benchmarks from
 /// the orchestrator.
-pub trait ProtocolCommands {
+pub trait ProtocolCommands<T: BenchmarkType> {
     /// The list of dependencies to install (e.g., through apt-get).
     fn protocol_dependencies(&self) -> Vec<&'static str>;
 
@@ -27,7 +30,7 @@ pub trait ProtocolCommands {
     fn node_command<I>(
         &self,
         instances: I,
-        parameters: &BenchmarkParameters,
+        parameters: &BenchmarkParameters<T>,
     ) -> Vec<(Instance, String)>
     where
         I: IntoIterator<Item = Instance>;
@@ -37,7 +40,7 @@ pub trait ProtocolCommands {
     fn client_command<I>(
         &self,
         instances: I,
-        parameters: &BenchmarkParameters,
+        parameters: &BenchmarkParameters<T>,
     ) -> Vec<(Instance, String)>
     where
         I: IntoIterator<Item = Instance>;
