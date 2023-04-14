@@ -351,7 +351,7 @@ pub fn make_transfer_object_transaction(
         object_ref,
         sender,
         gas_object,
-        gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER * 10,
         gas_price,
     );
     to_sender_signed_transaction(data, keypair)
