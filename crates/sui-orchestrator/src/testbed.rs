@@ -93,7 +93,7 @@ impl<C: ServerProviderClient> Testbed<C> {
             table.add_row(row![bH2->region.to_uppercase()]);
             let mut j = 0;
             for instance in instances {
-                if (j + 1) % 5 == 0 {
+                if j % 5 == 0 {
                     table.add_row(row![]);
                 }
                 let private_key_file = self.settings.ssh_private_key_file.display();

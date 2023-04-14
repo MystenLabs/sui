@@ -13,7 +13,7 @@ from glob import glob
 from itertools import cycle
 
 # A simple python script to plot measurements results. This script requires
-# the following dependencies: `pip install matplotlib defaultlist`.
+# the following dependencies: `pip install matplotlib`.
 
 
 def aggregate_tps(measurement, i=-1):
@@ -51,6 +51,22 @@ def aggregate_stdev_latency(measurement, i=-1):
             second_term = (float(last['sum']['secs']) / count)**2
             stdev += [math.sqrt(first_term - second_term)]
     return max(stdev)
+
+
+def aggregate_p_latency(measurement, p=50, i=-1):
+    latency = []
+    for data in measurement['scrapers'].values():
+        last = data[i]
+        count = float(last['count'])
+        buckets = [(float(l), c) for l, c in last['buckets'].items()]
+        buckets.sort(key=lambda x: x[0])
+
+        for l, c in buckets:
+            if c >= count * p / 100:
+                latency += [l]
+                break
+
+    return sum(latency) / len(latency) if latency else 0
 
 
 class PlotType(Enum):
@@ -105,11 +121,12 @@ class MeasurementId:
 
 
 class Plotter:
-    def __init__(self, data_directory, parameters, y_max=None, legend_columns=2):
+    def __init__(self, data_directory, parameters, y_max=None, legend_columns=2, median=True):
         self.data_directory = data_directory
         self.parameters = parameters
         self.y_max = y_max
         self.legend_columns = legend_columns
+        self.median = median
 
     def _make_plot_directory(self):
         plot_directory = os.path.join(self.data_directory, 'plots')
@@ -239,8 +256,12 @@ class Plotter:
             measurements.sort(key=lambda x: x['parameters']['load'])
             for measurement in measurements:
                 x_values += [aggregate_tps(measurement)]
-                y_values += [aggregate_average_latency(measurement)]
-                e_values += [aggregate_stdev_latency(measurement)]
+                if self.median:
+                    y_values += [aggregate_p_latency(measurement, p=50)]
+                    e_values += [aggregate_p_latency(measurement, p=75)]
+                else:
+                    y_values += [aggregate_average_latency(measurement)]
+                    e_values += [aggregate_stdev_latency(measurement)]
 
             if x_values:
                 id = MeasurementId(measurements[0])
@@ -404,7 +425,7 @@ if __name__ == "__main__":
         '--dir', default='./', help='Data directory'
     )
     parser.add_argument(
-        '--shared-objects-ratio', nargs='+', type=int, default=[0],
+        '--shared-objects-ratio', nargs='+', type=int, default=[0, 100],
         help='The ratio of shared objects to plot (in separate graphs)'
     )
     parser.add_argument(
@@ -437,7 +458,7 @@ if __name__ == "__main__":
     for r in args.shared_objects_ratio:
         parameters = PlotParameters(r, args.committee, args.faults)
         plotter = Plotter(
-            args.dir, parameters, args.y_max, args.legend_columns
+            args.dir, parameters, args.y_max, args.legend_columns, median=False
         )
         plotter.plot_latency_throughput()
         plotter.plot_health()

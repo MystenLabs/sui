@@ -388,14 +388,14 @@ impl Orchestrator {
 
             let run = [
                 "cargo run --release --bin stress --",
-                "--local false --num-client-threads 100 --num-transfer-accounts 2 ",
+                "--local false --num-client-threads 24 --num-transfer-accounts 2 ",
                 &format!(
                     "--genesis-blob-path {} --keystore-path {keystore}",
                     genesis.display()
                 ),
                 &format!("--primary-gas-id {}", gas_id),
                 "bench",
-                &format!("--num-workers 100 --in-flight-ratio 50 --target-qps {load_share}"),
+                &format!("--num-workers 24 --in-flight-ratio 30 --target-qps {load_share}"),
                 &format!("--shared-counter {shared_counter} --transfer-object {transfer_objects}"),
                 &format!("--client-metric-port {}", SuiProtocol::CLIENT_METRICS_PORT),
             ]
