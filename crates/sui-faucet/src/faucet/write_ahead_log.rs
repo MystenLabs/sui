@@ -76,7 +76,18 @@ impl WriteAheadLog {
     /// pending transaction exists, `Ok(None)` if not, and `Err(_)` if there was an internal error
     /// accessing the WAL.
     pub(crate) fn reclaim(&self, coin: ObjectID) -> Result<Option<Entry>, TypedStoreError> {
-        self.log.get(&coin)
+        match self.log.get(&coin) {
+            Ok(entry) => Ok(entry),
+            Err(TypedStoreError::SerializationError(_)) => {
+                // Remove bad log from the store, so we don't crash on start up, this can happen if we update the
+                // WAL Entry and have some leftover Entry from the WAL.
+                self.log
+                    .remove(&coin)
+                    .expect("Coin: {coin:?} unable to be removed from log.");
+                Ok(None)
+            }
+            Err(err) => Err(err),
+        }
     }
 
     /// Indicate that the transaction in flight for `coin` has landed, and the entry in the WAL can
