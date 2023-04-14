@@ -83,6 +83,9 @@ export function TransactionsForAddress({ address, type }: Props) {
     return (
         <div data-testid="tx">
             <TabGroup size="lg">
+                <TabList>
+                    <Tab>Transaction Blocks</Tab>
+                </TabList>
                 <TabPanels>
                     <TabPanel>
                         <TableCard
