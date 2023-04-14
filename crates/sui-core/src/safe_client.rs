@@ -213,7 +213,7 @@ impl<C> SafeClient<C> {
     fn check_transaction_info(
         &self,
         digest: &TransactionDigest,
-        transaction: VerifiedTransaction,
+        transaction: Arc<VerifiedTransaction>,
         status: TransactionStatus,
     ) -> SuiResult<PlainTransactionInfoResponse> {
         fp_ensure!(
@@ -227,7 +227,10 @@ impl<C> SafeClient<C> {
             TransactionStatus::Signed(signed) => {
                 self.get_committee(&signed.epoch)?;
                 Ok(PlainTransactionInfoResponse::Signed(
-                    SignedTransaction::new_from_data_and_sig(transaction.into_message(), signed),
+                    SignedTransaction::new_from_data_and_sig(
+                        (&*transaction).clone().into_message(),
+                        signed,
+                    ),
                 ))
             }
             TransactionStatus::Executed(cert_opt, effects, events) => {
@@ -236,7 +239,7 @@ impl<C> SafeClient<C> {
                     Some(cert) => {
                         let committee = self.get_committee(&cert.epoch)?;
                         let ct = CertifiedTransaction::new_from_data_and_sig(
-                            transaction.into_message(),
+                            (&*transaction).clone().into_message(),
                             cert,
                         );
                         let ct_bytes = bcs::to_bytes(&ct);
@@ -246,7 +249,7 @@ impl<C> SafeClient<C> {
                         })?;
                         let ct = VerifiedCertificate::new_from_verified(ct);
                         Ok(PlainTransactionInfoResponse::ExecutedWithCert(
-                            ct,
+                            Arc::new(ct),
                             signed_effects,
                             events,
                         ))
@@ -295,13 +298,13 @@ where
     /// Initiate a new transfer to a Sui or Primary account.
     pub async fn handle_transaction(
         &self,
-        transaction: VerifiedTransaction,
+        transaction: Arc<VerifiedTransaction>,
     ) -> Result<PlainTransactionInfoResponse, SuiError> {
         let _timer = self.metrics.handle_transaction_latency.start_timer();
         let digest = *transaction.digest();
         let response = self
             .authority_client
-            .handle_transaction(transaction.clone().into_inner())
+            .handle_transaction((&*transaction).clone().into_inner())
             .await?;
         let response = check_error!(
             self.address,
@@ -329,13 +332,13 @@ where
     /// Execute a certificate.
     pub async fn handle_certificate(
         &self,
-        certificate: CertifiedTransaction,
+        certificate: Arc<CertifiedTransaction>,
     ) -> Result<HandleCertificateResponse, SuiError> {
         let digest = *certificate.digest();
         let _timer = self.metrics.handle_certificate_latency.start_timer();
         let response = self
             .authority_client
-            .handle_certificate(certificate)
+            .handle_certificate((&*certificate).clone().into())
             .await?;
 
         let verified = check_error!(
@@ -388,7 +391,7 @@ where
             .and_then(|verified_tx| {
                 self.check_transaction_info(
                     &request.transaction_digest,
-                    verified_tx,
+                    Arc::new(verified_tx),
                     transaction_info.status,
                 )
             }).tap_err(|err| {

@@ -44,7 +44,7 @@ pub fn make_pay_tx(
     gas: ObjectRef,
     keypair: &AccountKeyPair,
     gas_price: u64,
-) -> Result<VerifiedTransaction> {
+) -> Result<Arc<VerifiedTransaction>> {
     let pay = TransactionData::new_pay(
         sender,
         input_coins,
@@ -75,7 +75,7 @@ pub async fn publish_basics_package(
         gas_price,
     );
     let effects = proxy
-        .execute_transaction_block(transaction.into())
+        .execute_transaction_block((&*transaction).clone().into())
         .await
         .unwrap();
     parse_package_ref(&effects.created()).unwrap()

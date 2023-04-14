@@ -6,6 +6,7 @@ use serde_json::json;
 use shared_crypto::intent::Intent;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::sync::Arc;
 use sui::client_commands::WalletContext;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_core::authority_client::AuthorityAPI;
@@ -54,7 +55,7 @@ pub fn make_publish_package(
     gas_object: Object,
     path: PathBuf,
     gas_price: u64,
-) -> VerifiedTransaction {
+) -> Arc<VerifiedTransaction> {
     let (sender, keypair) = deterministic_random_account_key();
     create_publish_move_package_transaction(
         gas_object.compute_object_reference(),
@@ -625,7 +626,7 @@ pub async fn delete_devnet_nft(
 
 /// Submit a certificate containing only owned-objects to all authorities.
 pub async fn submit_single_owner_transaction(
-    transaction: VerifiedTransaction,
+    transaction: Arc<VerifiedTransaction>,
     net_addresses: &[Multiaddr],
 ) -> (TransactionEffects, TransactionEvents) {
     let certificate = make_tx_certs_and_signed_effects(vec![transaction])
@@ -648,7 +649,7 @@ pub async fn submit_single_owner_transaction(
 /// at least one consensus node. We use the loop since some consensus protocols (like Tusk)
 /// may drop transactions. The certificate is submitted to every Sui authority.
 pub async fn submit_shared_object_transaction(
-    transaction: VerifiedTransaction,
+    transaction: Arc<VerifiedTransaction>,
     net_addresses: &[Multiaddr],
 ) -> SuiResult<(TransactionEffects, TransactionEvents)> {
     let (committee, key_pairs) = Committee::new_simple_test_committee();
@@ -665,7 +666,7 @@ pub async fn submit_shared_object_transaction(
 /// at least one consensus node. We use the loop since some consensus protocols (like Tusk)
 /// may drop transactions. The certificate is submitted to every Sui authority.
 pub async fn submit_shared_object_transaction_with_committee(
-    transaction: VerifiedTransaction,
+    transaction: Arc<VerifiedTransaction>,
     net_addresses: &[Multiaddr],
     committee: &Committee,
     key_pairs: &[AuthorityKeyPair],

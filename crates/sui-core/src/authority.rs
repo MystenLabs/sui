@@ -544,7 +544,7 @@ impl AuthorityState {
     /// the provided transaction is a system transaction, and hence can only be called internally.
     async fn handle_transaction_impl(
         &self,
-        transaction: VerifiedTransaction,
+        transaction: Arc<VerifiedTransaction>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<VerifiedSignedTransaction> {
         let (_gas_status, input_objects) = transaction_input_checker::check_transaction_input(
@@ -558,7 +558,7 @@ impl AuthorityState {
 
         let signed_transaction = VerifiedSignedTransaction::new(
             epoch_store.epoch(),
-            transaction,
+            (&*transaction).clone(),
             self.name,
             &*self.secret,
         );
@@ -577,7 +577,7 @@ impl AuthorityState {
     pub async fn handle_transaction(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-        transaction: VerifiedTransaction,
+        transaction: Arc<VerifiedTransaction>,
     ) -> Result<HandleTransactionResponse, SuiError> {
         fp_ensure!(
             !transaction.is_system_tx(),

@@ -189,10 +189,13 @@ where
 
         let _timer_guards = self.get_timer_guards(&transaction);
 
-        let ticket = self.submit(transaction.clone()).await.map_err(|e| {
-            warn!(?tx_digest, "QuorumDriverInternalError: {e:?}");
-            QuorumDriverError::QuorumDriverInternalError(e)
-        })?;
+        let ticket = self
+            .submit(Arc::new(transaction.clone()))
+            .await
+            .map_err(|e| {
+                warn!(?tx_digest, "QuorumDriverInternalError: {e:?}");
+                QuorumDriverError::QuorumDriverInternalError(e)
+            })?;
 
         let wait_for_local_execution = matches!(
             request.request_type,
@@ -249,7 +252,7 @@ where
     /// Submits the transaction for execution queue, returns a Future to be awaited
     async fn submit(
         &self,
-        transaction: VerifiedTransaction,
+        transaction: Arc<VerifiedTransaction>,
     ) -> SuiResult<Registration<TransactionDigest, QuorumDriverResult>> {
         let tx_digest = *transaction.digest();
         let ticket = self.notifier.register_one(&tx_digest);
@@ -345,7 +348,7 @@ where
             match effects_receiver.recv().await {
                 Ok(Ok((transaction, QuorumDriverResponse { effects_cert, .. }))) => {
                     let executable_tx = VerifiedExecutableTransaction::new_from_quorum_execution(
-                        transaction,
+                        (&*transaction).clone(),
                         effects_cert.executed_epoch(),
                     );
                     let tx_digest = executable_tx.digest();
@@ -432,7 +435,10 @@ where
         for tx in pending_txes {
             let tx_digest = *tx.digest();
             // It's not impossible we fail to enqueue a task but that's not the end of world.
-            if let Err(err) = quorum_driver.submit_transaction_no_ticket(tx).await {
+            if let Err(err) = quorum_driver
+                .submit_transaction_no_ticket(Arc::new(tx))
+                .await
+            {
                 error!(
                     ?tx_digest,
                     "Failed to enqueue transaction in pending_tx_log, err: {err:?}"

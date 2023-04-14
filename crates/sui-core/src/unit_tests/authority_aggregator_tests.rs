@@ -57,7 +57,7 @@ pub fn create_object_move_transaction(
     package_id: ObjectID,
     gas_object_ref: ObjectRef,
     gas_price: u64,
-) -> VerifiedTransaction {
+) -> Arc<VerifiedTransaction> {
     // When creating an object_basics object, we provide the value (u64) and address which will own the object
     let arguments = vec![
         CallArg::Pure(value.to_le_bytes().to_vec()),
@@ -88,7 +88,7 @@ pub fn delete_object_move_transaction(
     framework_obj_id: ObjectID,
     gas_object_ref: ObjectRef,
     gas_price: u64,
-) -> VerifiedTransaction {
+) -> Arc<VerifiedTransaction> {
     to_sender_signed_transaction(
         TransactionData::new_move_call(
             src,
@@ -114,7 +114,7 @@ pub fn set_object_move_transaction(
     framework_obj_id: ObjectID,
     gas_object_ref: ObjectRef,
     gas_price: u64,
-) -> VerifiedTransaction {
+) -> Arc<VerifiedTransaction> {
     let args = vec![
         CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref)),
         CallArg::Pure(bcs::to_bytes(&value).unwrap()),
@@ -137,7 +137,7 @@ pub fn set_object_move_transaction(
     )
 }
 
-pub async fn do_transaction<A>(authority: &SafeClient<A>, transaction: &VerifiedTransaction)
+pub async fn do_transaction<A>(authority: &SafeClient<A>, transaction: Arc<VerifiedTransaction>)
 where
     A: AuthorityAPI + Send + Sync + Clone + 'static,
 {
@@ -151,7 +151,7 @@ pub async fn extract_cert<A>(
     authorities: &[&SafeClient<A>],
     committee: &Committee,
     transaction_digest: &TransactionDigest,
-) -> CertifiedTransaction
+) -> Arc<CertifiedTransaction>
 where
     A: AuthorityAPI + Send + Sync + Clone + 'static,
 {
@@ -176,18 +176,18 @@ where
                 tx_data = Some(data);
             }
             Ok(PlainTransactionInfoResponse::ExecutedWithCert(cert, _, _)) => {
-                return cert.into_inner();
+                return Arc::new((&*cert).clone().into());
             }
             _ => {}
         }
     }
 
-    CertifiedTransaction::new(tx_data.unwrap(), votes, committee).unwrap()
+    Arc::new(CertifiedTransaction::new(tx_data.unwrap(), votes, committee).unwrap())
 }
 
 pub async fn do_cert<A>(
     authority: &SafeClient<A>,
-    cert: &CertifiedTransaction,
+    cert: Arc<CertifiedTransaction>,
 ) -> TransactionEffects
 where
     A: AuthorityAPI + Send + Sync + Clone + 'static,
@@ -263,7 +263,7 @@ async fn execute_transaction_with_fault_configs(
     }
 
     authorities
-        .process_certificate(cert.into_cert_for_testing().into())
+        .process_certificate(Arc::new((&*cert.into_cert_for_testing()).clone().into()))
         .await
         .is_ok()
 }
@@ -311,7 +311,7 @@ async fn test_quorum_map_and_reduce_timeout() {
     authorities.timeouts.pre_quorum_timeout = Duration::from_nanos(0);
     authorities.timeouts.post_quorum_timeout = Duration::from_nanos(0);
     let certified_effects = authorities
-        .process_certificate(certificate.clone().into())
+        .process_certificate(Arc::new((&*certificate).clone().into()))
         .await;
     // Ensure it is an error
     assert!(certified_effects.is_err());
@@ -2000,7 +2000,7 @@ async fn process_with_cert(
 
 async fn assert_resp_err<E, F>(
     agg: &AuthorityAggregator<HandleTransactionTestAuthorityClient>,
-    tx: VerifiedTransaction,
+    tx: Arc<VerifiedTransaction>,
     agg_err_checker: E,
     sui_err_checker: F,
 ) where

@@ -235,7 +235,10 @@ impl StressTestRunner {
             sender_key,
         );
 
-        let effects = self.execute_transaction_block(signed_txn).await.unwrap();
+        let effects = self
+            .execute_transaction_block((&*signed_txn).clone())
+            .await
+            .unwrap();
         assert!(effects.status().is_ok());
         effects.into_data()
     }

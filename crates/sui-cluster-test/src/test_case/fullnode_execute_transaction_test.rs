@@ -58,7 +58,7 @@ impl TestCaseImpl for FullNodeExecuteTransactionTest {
         let response = fullnode
             .quorum_driver()
             .execute_transaction_block(
-                txn,
+                (&*txn).clone(),
                 SuiTransactionBlockResponseOptions::new().with_effects(),
                 Some(ExecuteTransactionRequestType::WaitForEffectsCert),
             )
@@ -85,7 +85,7 @@ impl TestCaseImpl for FullNodeExecuteTransactionTest {
         let response = fullnode
             .quorum_driver()
             .execute_transaction_block(
-                txn,
+                (&*txn).clone(),
                 SuiTransactionBlockResponseOptions::new().with_effects(),
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )

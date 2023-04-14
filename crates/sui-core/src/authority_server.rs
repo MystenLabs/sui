@@ -356,7 +356,7 @@ impl ValidatorService {
         let span = error_span!("validator_state_process_tx", ?tx_digest);
 
         let info = state
-            .handle_transaction(&epoch_store, transaction)
+            .handle_transaction(&epoch_store, Arc::new(transaction))
             .instrument(span)
             .await
             .tap_err(|e| {

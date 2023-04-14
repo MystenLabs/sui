@@ -268,7 +268,7 @@ pub fn make_transfer_sui_transaction(
     sender: SuiAddress,
     keypair: &AccountKeyPair,
     gas_price: u64,
-) -> VerifiedTransaction {
+) -> Arc<VerifiedTransaction> {
     let data = TransactionData::new_transfer_sui(
         recipient,
         sender,
@@ -289,7 +289,7 @@ pub fn make_pay_sui_transaction(
     keypair: &AccountKeyPair,
     gas_price: u64,
     gas_budget: u64,
-) -> VerifiedTransaction {
+) -> Arc<VerifiedTransaction> {
     let data = TransactionData::new_pay_sui(
         sender, coins, recipients, amounts, gas_object, gas_budget, gas_price,
     )
@@ -304,7 +304,7 @@ pub fn make_transfer_object_transaction(
     keypair: &AccountKeyPair,
     recipient: SuiAddress,
     gas_price: u64,
-) -> VerifiedTransaction {
+) -> Arc<VerifiedTransaction> {
     let data = TransactionData::new_transfer(
         recipient,
         object_ref,
@@ -324,7 +324,7 @@ pub fn make_transfer_object_move_transaction(
     framework_obj_id: ObjectID,
     gas_object_ref: ObjectRef,
     gas_price: u64,
-) -> VerifiedTransaction {
+) -> Arc<VerifiedTransaction> {
     let args = vec![
         CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref)),
         CallArg::Pure(bcs::to_bytes(&AccountAddress::from(dest)).unwrap()),

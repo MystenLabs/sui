@@ -123,7 +123,7 @@ impl BenchmarkBank {
 
         let effects = self
             .proxy
-            .execute_transaction_block(verified_tx.into())
+            .execute_transaction_block((&*verified_tx).clone().into())
             .await?;
 
         if !effects.is_ok() {
@@ -177,7 +177,7 @@ impl BenchmarkBank {
 
         let effects = self
             .proxy
-            .execute_transaction_block(verified_tx.into())
+            .execute_transaction_block((&*verified_tx).clone().into())
             .await?;
 
         if !effects.is_ok() {

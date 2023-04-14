@@ -449,7 +449,7 @@ impl QuorumDriver {
         options: SuiTransactionBlockResponseOptions,
         request_type: Option<ExecuteTransactionRequestType>,
     ) -> SuiRpcResult<SuiTransactionBlockResponse> {
-        let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
+        let (tx_bytes, signatures) = (&*tx).clone().to_tx_bytes_and_signatures();
         let request_type = request_type.unwrap_or_else(|| options.default_execution_request_type());
         let mut response: SuiTransactionBlockResponse = self
             .api

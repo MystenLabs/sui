@@ -65,7 +65,7 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
 
     let res = execute_with_orchestrator(
         &orchestrator,
-        txn,
+        (&*txn).clone(),
         ExecuteTransactionRequestType::WaitForLocalExecution,
     )
     .await
@@ -119,7 +119,7 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
     let digest = *txn.digest();
     execute_with_orchestrator(
         &orchestrator,
-        txn,
+        (&*txn).clone(),
         ExecuteTransactionRequestType::WaitForLocalExecution,
     )
     .await
@@ -136,7 +136,7 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
     // Expect tx to fail
     execute_with_orchestrator(
         &orchestrator,
-        txn.clone(),
+        (&*txn).clone(),
         ExecuteTransactionRequestType::WaitForLocalExecution,
     )
     .await
@@ -144,14 +144,14 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
 
     // Because the tx did not go through, we expect to see it in the WAL log
     let pending_txes = orchestrator.load_all_pending_transactions();
-    assert_eq!(pending_txes, vec![txn.clone()]);
+    assert_eq!(pending_txes, vec![(&*txn).clone()]);
 
     // Bring up 1 validator, we obtain quorum again and tx should succeed
     test_cluster.start_validator(validator_addresses[0]).await;
     tokio::task::yield_now().await;
     execute_with_orchestrator(
         &orchestrator,
-        txn,
+        (&*txn).clone(),
         ExecuteTransactionRequestType::WaitForLocalExecution,
     )
     .await
@@ -248,7 +248,7 @@ async fn test_tx_across_epoch_boundaries() {
             let to = node.transaction_orchestrator().unwrap();
             let tx_digest = *tx.digest();
             info!(?tx_digest, "Submitting tx");
-            let tx = tx.into_inner();
+            let tx = (&*tx).clone().into_inner();
             tokio::task::spawn(async move {
                 match to
                     .execute_transaction_block(ExecuteTransactionRequest {

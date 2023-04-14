@@ -21,6 +21,7 @@ use crate::{
 use fastcrypto::traits::KeyPair as KeypairTraits;
 use shared_crypto::intent::Intent;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 pub fn make_committee_key<R>(rand: &mut R) -> (Vec<AuthorityKeyPair>, Committee)
 where
@@ -51,7 +52,7 @@ where
 
 // Creates a fake sender-signed transaction for testing. This transaction will
 // not actually work.
-pub fn create_fake_transaction() -> VerifiedTransaction {
+pub fn create_fake_transaction() -> Arc<VerifiedTransaction> {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
@@ -75,18 +76,16 @@ pub fn create_fake_transaction() -> VerifiedTransaction {
 pub fn to_sender_signed_transaction(
     data: TransactionData,
     signer: &dyn Signer<Signature>,
-) -> VerifiedTransaction {
+) -> Arc<VerifiedTransaction> {
     to_sender_signed_transaction_with_multi_signers(data, vec![signer])
 }
 
 pub fn to_sender_signed_transaction_with_multi_signers(
     data: TransactionData,
     signers: Vec<&dyn Signer<Signature>>,
-) -> VerifiedTransaction {
-    VerifiedTransaction::new_unchecked(Transaction::from_data_and_signer(
-        data,
-        Intent::sui_transaction(),
-        signers,
+) -> Arc<VerifiedTransaction> {
+    Arc::new(VerifiedTransaction::new_unchecked(
+        Transaction::from_data_and_signer(data, Intent::sui_transaction(), signers),
     ))
 }
 

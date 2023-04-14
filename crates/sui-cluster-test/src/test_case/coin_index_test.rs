@@ -51,7 +51,7 @@ impl TestCaseImpl for CoinIndexTest {
         let response = client
             .quorum_driver()
             .execute_transaction_block(
-                txn,
+                (&*txn).clone(),
                 SuiTransactionBlockResponseOptions::new()
                     .with_effects()
                     .with_balance_changes(),
@@ -111,7 +111,7 @@ impl TestCaseImpl for CoinIndexTest {
         let response = client
             .quorum_driver()
             .execute_transaction_block(
-                txn,
+                (&*txn).clone(),
                 SuiTransactionBlockResponseOptions::new()
                     .with_effects()
                     .with_balance_changes(),

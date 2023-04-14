@@ -119,7 +119,7 @@ async fn construct_shared_object_transaction_with_sequence_number(
 ) -> (
     Arc<AuthorityState>,
     Arc<AuthorityState>,
-    VerifiedTransaction,
+    Arc<VerifiedTransaction>,
     ObjectID,
     ObjectID,
 ) {
@@ -1140,7 +1140,7 @@ async fn test_handle_transfer_transaction_bad_signature() {
         .unwrap();
 
     let (_unknown_address, unknown_key): (_, AccountKeyPair) = get_key_pair();
-    let mut bad_signature_transfer_transaction = transfer_transaction.clone().into_inner();
+    let mut bad_signature_transfer_transaction = (&*transfer_transaction).clone().into_inner();
     *bad_signature_transfer_transaction
         .data_mut_for_testing()
         .tx_signatures_mut_for_testing() =
@@ -1630,7 +1630,7 @@ async fn test_objected_owned_gas() {
 
 pub async fn send_and_confirm_transaction(
     authority: &AuthorityState,
-    transaction: VerifiedTransaction,
+    transaction: Arc<VerifiedTransaction>,
 ) -> Result<(CertifiedTransaction, SignedTransactionEffects), SuiError> {
     send_and_confirm_transaction_(
         authority,
@@ -1644,7 +1644,7 @@ pub async fn send_and_confirm_transaction(
 pub async fn send_and_confirm_transaction_(
     authority: &AuthorityState,
     fullnode: Option<&AuthorityState>,
-    transaction: VerifiedTransaction,
+    transaction: Arc<VerifiedTransaction>,
     with_shared: bool, // transaction includes shared objects
 ) -> Result<(CertifiedTransaction, SignedTransactionEffects), SuiError> {
     // Make the initial request
@@ -1656,11 +1656,14 @@ pub async fn send_and_confirm_transaction_(
 
     // Collect signatures from a quorum of authorities
     let committee = authority.clone_committee_for_testing();
-    let certificate =
-        CertifiedTransaction::new(transaction.into_message(), vec![vote.clone()], &committee)
-            .unwrap()
-            .verify(&committee)
-            .unwrap();
+    let certificate = CertifiedTransaction::new(
+        (&*transaction).clone().into_message(),
+        vec![vote.clone()],
+        &committee,
+    )
+    .unwrap()
+    .verify(&committee)
+    .unwrap();
 
     if with_shared {
         send_consensus(authority, &certificate).await;
@@ -2957,7 +2960,10 @@ async fn test_idempotent_reversed_confirmation() {
         .await;
     assert!(result1.is_ok());
     let result2 = authority_state
-        .handle_transaction(&epoch_store, certified_transfer_transaction.into_unsigned())
+        .handle_transaction(
+            &epoch_store,
+            Arc::new((&*certified_transfer_transaction).clone().into_unsigned()),
+        )
         .await;
     assert!(result2.is_ok());
     assert_eq!(
@@ -4197,7 +4203,7 @@ fn init_transfer_transaction(
     gas_object_ref: ObjectRef,
     gas_budget: u64,
     gas_price: u64,
-) -> VerifiedTransaction {
+) -> Arc<VerifiedTransaction> {
     let data = TransactionData::new_transfer(
         recipient,
         object_ref,
@@ -4217,7 +4223,7 @@ fn init_certified_transfer_transaction(
     object_ref: ObjectRef,
     gas_object_ref: ObjectRef,
     authority_state: &AuthorityState,
-) -> VerifiedCertificate {
+) -> Arc<VerifiedCertificate> {
     let rgp = authority_state.reference_gas_price_for_testing().unwrap();
     let transfer_transaction = init_transfer_transaction(
         sender,
@@ -4233,24 +4239,26 @@ fn init_certified_transfer_transaction(
 
 #[cfg(test)]
 fn init_certified_transaction(
-    transaction: VerifiedTransaction,
+    transaction: Arc<VerifiedTransaction>,
     authority_state: &AuthorityState,
-) -> VerifiedCertificate {
+) -> Arc<VerifiedCertificate> {
     let vote = VerifiedSignedTransaction::new(
         0,
-        transaction.clone(),
+        (&*transaction).clone(),
         authority_state.name,
         &*authority_state.secret,
     );
     let epoch_store = authority_state.epoch_store_for_testing();
-    CertifiedTransaction::new(
-        transaction.into_message(),
-        vec![vote.auth_sig().clone()],
-        epoch_store.committee(),
+    Arc::new(
+        CertifiedTransaction::new(
+            (&*transaction).clone().into_message(),
+            vec![vote.auth_sig().clone()],
+            epoch_store.committee(),
+        )
+        .unwrap()
+        .verify(epoch_store.committee())
+        .unwrap(),
     )
-    .unwrap()
-    .verify(epoch_store.committee())
-    .unwrap()
 }
 
 #[cfg(test)]
@@ -4682,9 +4690,11 @@ async fn make_test_transaction(
             .unwrap();
         let vote = response.status.into_signed_for_testing();
         sigs.push(vote.clone());
-        if let Ok(cert) =
-            CertifiedTransaction::new(transaction.clone().into_message(), sigs.clone(), &committee)
-        {
+        if let Ok(cert) = CertifiedTransaction::new(
+            (&*transaction).clone().into_message(),
+            sigs.clone(),
+            &committee,
+        ) {
             return cert.verify(&committee).unwrap();
         }
     }

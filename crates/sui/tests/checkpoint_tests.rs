@@ -3,6 +3,7 @@
 
 use prometheus::Registry;
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use sui_core::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
@@ -47,15 +48,13 @@ async fn basic_checkpoints_integration_test() {
         AuthAggMetrics::new(&registry),
     )
     .unwrap();
-    let cert = net
+    let verified_cert = net
         .process_transaction(tx.clone())
         .await
         .unwrap()
         .into_cert_for_testing();
-    let _effects = net
-        .process_certificate(cert.clone().into_inner())
-        .await
-        .unwrap();
+    let cert = Arc::new((&*verified_cert).clone().into_inner());
+    let _effects = net.process_certificate(cert.clone()).await.unwrap();
 
     for _ in 0..600 {
         let all_included = authorities.iter().all(|handle| {

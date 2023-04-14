@@ -70,7 +70,7 @@ impl Payload for BatchPaymentTestPayload {
         self.num_payments += self.state.num_addresses();
     }
 
-    fn make_transaction(&mut self) -> VerifiedTransaction {
+    fn make_transaction(&mut self) -> Arc<VerifiedTransaction> {
         let addrs = self.state.addresses().cloned().collect::<Vec<SuiAddress>>();
         let num_recipients = addrs.len();
         let sender = if self.num_payments == 0 {

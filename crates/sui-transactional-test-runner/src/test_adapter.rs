@@ -629,8 +629,11 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             SuiSubcommand::ConsensusCommitPrologue(ConsensusCommitPrologueCommand {
                 timestamp_ms,
             }) => {
-                let transaction =
-                    VerifiedTransaction::new_consensus_commit_prologue(0, 0, timestamp_ms);
+                let transaction = Arc::new(VerifiedTransaction::new_consensus_commit_prologue(
+                    0,
+                    0,
+                    timestamp_ms,
+                ));
                 let summary = self.execute_txn(transaction, DEFAULT_GAS_BUDGET, false)?;
                 let output = self.object_summary_output(&summary);
                 Ok(output)
@@ -854,7 +857,7 @@ impl<'a> SuiTestAdapter<'a> {
         &mut self,
         sender: Option<String>,
         txn_data: impl FnOnce(/* sender */ SuiAddress, /* gas */ ObjectRef) -> TransactionData,
-    ) -> VerifiedTransaction {
+    ) -> Arc<VerifiedTransaction> {
         let test_account = match sender {
             Some(n) => match self.accounts.get(&n) {
                 Some(test_account) => test_account,
@@ -873,10 +876,11 @@ impl<'a> SuiTestAdapter<'a> {
 
     fn execute_txn(
         &mut self,
-        transaction: VerifiedTransaction,
+        transaction: Arc<VerifiedTransaction>,
         gas_budget: u64,
         uncharged: bool,
     ) -> anyhow::Result<TxnSummary> {
+        let transaction = (&*transaction).clone();
         let mut gas_status = if transaction.inner().is_system_tx() {
             SuiGasStatus::new_unmetered(&self.protocol_config)
         } else {

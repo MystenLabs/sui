@@ -18,7 +18,7 @@ use sui_types::{base_types::TransactionDigest, messages::QuorumDriverResponse};
 
 async fn setup() -> (
     AuthorityAggregator<LocalAuthorityClient>,
-    VerifiedTransaction,
+    Arc<VerifiedTransaction>,
 ) {
     let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
     let gas_object = Object::with_owner_for_testing(sender);
@@ -44,7 +44,7 @@ fn make_tx(
     sender: SuiAddress,
     keypair: &AccountKeyPair,
     gas_price: u64,
-) -> VerifiedTransaction {
+) -> Arc<VerifiedTransaction> {
     make_transfer_sui_transaction(
         gas.compute_object_reference(),
         SuiAddress::random_for_testing_only(),

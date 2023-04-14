@@ -362,7 +362,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         let tx = tx.verify()?;
         let mut retry_cnt = 0;
         while retry_cnt < 3 {
-            let ticket = self.qd.submit_transaction(tx.clone()).await?;
+            let ticket = self.qd.submit_transaction(Arc::new(tx.clone())).await?;
             // The ticket only times out when QuorumDriver exceeds the retry times
             match ticket.await {
                 Ok(resp) => {

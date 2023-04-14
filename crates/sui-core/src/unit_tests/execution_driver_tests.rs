@@ -12,6 +12,7 @@ use crate::test_authority_clients::LocalAuthorityClient;
 use crate::test_utils::{init_local_authorities, make_transfer_object_move_transaction};
 
 use std::collections::BTreeSet;
+use std::sync::Arc;
 use std::time::Duration;
 
 use itertools::Itertools;
@@ -20,7 +21,8 @@ use sui_types::committee::Committee;
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
 use sui_types::error::SuiResult;
 use sui_types::messages::{
-    TransactionEffects, TransactionEffectsAPI, VerifiedCertificate, VerifiedTransaction,
+    CertifiedTransaction, TransactionEffects, TransactionEffectsAPI, VerifiedCertificate,
+    VerifiedTransaction,
 };
 use sui_types::object::{Object, Owner};
 use test_utils::messages::{make_counter_create_transaction, make_counter_increment_transaction};
@@ -225,19 +227,22 @@ async fn pending_exec_full() {
 async fn execute_owned_on_first_three_authorities(
     authority_clients: &[&SafeClient<LocalAuthorityClient>],
     committee: &Committee,
-    txn: &VerifiedTransaction,
-) -> (VerifiedCertificate, TransactionEffects) {
-    do_transaction(authority_clients[0], txn).await;
-    do_transaction(authority_clients[1], txn).await;
-    do_transaction(authority_clients[2], txn).await;
-    let cert = extract_cert(authority_clients, committee, txn.digest())
-        .await
-        .verify(committee)
-        .unwrap();
-    do_cert(authority_clients[0], &cert).await;
-    do_cert(authority_clients[1], &cert).await;
-    let effects = do_cert(authority_clients[2], &cert).await;
-    (cert, effects)
+    txn: Arc<VerifiedTransaction>,
+) -> (Arc<VerifiedCertificate>, TransactionEffects) {
+    do_transaction(authority_clients[0], txn.clone()).await;
+    do_transaction(authority_clients[1], txn.clone()).await;
+    do_transaction(authority_clients[2], txn.clone()).await;
+    let verified_cert = Arc::new(
+        (&*extract_cert(authority_clients, committee, txn.digest()).await)
+            .clone()
+            .verify(committee)
+            .unwrap(),
+    );
+    let cert: Arc<CertifiedTransaction> = Arc::new((&*verified_cert).clone().into());
+    do_cert(authority_clients[0], cert.clone()).await;
+    do_cert(authority_clients[1], cert.clone()).await;
+    let effects = do_cert(authority_clients[2], cert.clone()).await;
+    (verified_cert, effects)
 }
 
 pub async fn do_cert_with_shared_objects(
@@ -257,20 +262,20 @@ pub async fn do_cert_with_shared_objects(
 async fn execute_shared_on_first_three_authorities(
     authority_clients: &[&SafeClient<LocalAuthorityClient>],
     committee: &Committee,
-    txn: &VerifiedTransaction,
-) -> (VerifiedCertificate, TransactionEffects) {
-    do_transaction(authority_clients[0], txn).await;
-    do_transaction(authority_clients[1], txn).await;
-    do_transaction(authority_clients[2], txn).await;
-    let cert = extract_cert(authority_clients, committee, txn.digest())
-        .await
+    txn: Arc<VerifiedTransaction>,
+) -> (Arc<VerifiedCertificate>, TransactionEffects) {
+    do_transaction(authority_clients[0], txn.clone()).await;
+    do_transaction(authority_clients[1], txn.clone()).await;
+    do_transaction(authority_clients[2], txn.clone()).await;
+    let cert = (&*extract_cert(authority_clients, committee, txn.digest()).await)
+        .clone()
         .verify(committee)
         .unwrap();
     do_cert_with_shared_objects(&authority_clients[0].authority_client().state, &cert).await;
     do_cert_with_shared_objects(&authority_clients[1].authority_client().state, &cert).await;
     let effects =
         do_cert_with_shared_objects(&authority_clients[2].authority_client().state, &cert).await;
-    (cert, effects)
+    (Arc::new(cert), effects)
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -315,7 +320,7 @@ async fn test_execution_with_dependencies() {
     let gas_ref = get_latest_ref(authority_clients[0], gas_objects[0][0].id()).await;
     let tx1 = create_object_move_transaction(*addr1, key1, *addr1, 100, package, gas_ref, rgp);
     let (cert, effects1) =
-        execute_owned_on_first_three_authorities(&authority_clients, &aggregator.committee, &tx1)
+        execute_owned_on_first_three_authorities(&authority_clients, &aggregator.committee, tx1)
             .await;
     executed_owned_certs.push(cert);
     let mut owned_object_ref = effects1.created()[0].0;
@@ -324,7 +329,7 @@ async fn test_execution_with_dependencies() {
     let gas_ref = get_latest_ref(authority_clients[0], gas_objects[0][0].id()).await;
     let tx2 = make_counter_create_transaction(gas_ref, package, *addr1, key1, rgp);
     let (cert, effects2) =
-        execute_owned_on_first_three_authorities(&authority_clients, &aggregator.committee, &tx2)
+        execute_owned_on_first_three_authorities(&authority_clients, &aggregator.committee, tx2)
             .await;
     executed_owned_certs.push(cert);
     let (mut shared_counter_ref, owner) = effects2.created()[0];
@@ -366,7 +371,7 @@ async fn test_execution_with_dependencies() {
         let (cert, effects) = execute_owned_on_first_three_authorities(
             &authority_clients,
             &aggregator.committee,
-            &owned_tx,
+            owned_tx,
         )
         .await;
         executed_owned_certs.push(cert);
@@ -389,7 +394,7 @@ async fn test_execution_with_dependencies() {
         let (cert, effects) = execute_shared_on_first_three_authorities(
             &authority_clients,
             &aggregator.committee,
-            &shared_tx,
+            shared_tx,
         )
         .await;
         executed_shared_certs.push(cert);
@@ -404,18 +409,18 @@ async fn test_execution_with_dependencies() {
     }
 
     // Enqueue certs out of dependency order for executions.
-    for cert in executed_shared_certs.iter().rev() {
+    for cert in executed_shared_certs.clone().into_iter().rev() {
         authorities[3]
             .enqueue_certificates_for_execution(
-                vec![cert.clone()],
+                vec![(&*cert).clone()],
                 &authorities[3].epoch_store_for_testing(),
             )
             .unwrap();
     }
-    for cert in executed_owned_certs.iter().rev() {
+    for cert in executed_owned_certs.clone().into_iter().rev() {
         authorities[3]
             .enqueue_certificates_for_execution(
-                vec![cert.clone()],
+                vec![(&*cert).clone()],
                 &authorities[3].epoch_store_for_testing(),
             )
             .unwrap();
@@ -423,8 +428,8 @@ async fn test_execution_with_dependencies() {
 
     // All certs should get executed eventually.
     let digests = executed_shared_certs
-        .iter()
-        .chain(executed_owned_certs.iter())
+        .into_iter()
+        .chain(executed_owned_certs.into_iter())
         .map(|cert| *cert.digest())
         .collect();
     authorities[3]
@@ -437,13 +442,13 @@ async fn test_execution_with_dependencies() {
 async fn try_sign_on_first_three_authorities(
     authority_clients: &[&SafeClient<LocalAuthorityClient>],
     committee: &Committee,
-    txn: &VerifiedTransaction,
+    txn: Arc<VerifiedTransaction>,
 ) -> SuiResult<VerifiedCertificate> {
     for client in authority_clients.iter().take(3) {
         client.handle_transaction(txn.clone()).await?;
     }
-    extract_cert(authority_clients, committee, txn.digest())
-        .await
+    (&*extract_cert(authority_clients, committee, txn.digest()).await)
+        .clone()
         .verify(committee)
 }
 
@@ -475,7 +480,7 @@ async fn test_per_object_overload() {
     let create_counter_cert = try_sign_on_first_three_authorities(
         &authority_clients,
         &aggregator.committee,
-        &create_counter_txn,
+        create_counter_txn.clone(),
     )
     .await
     .unwrap();
@@ -535,7 +540,7 @@ async fn test_per_object_overload() {
         let shared_cert = try_sign_on_first_three_authorities(
             &authority_clients,
             &aggregator.committee,
-            &shared_txn,
+            shared_txn,
         )
         .await
         .unwrap();

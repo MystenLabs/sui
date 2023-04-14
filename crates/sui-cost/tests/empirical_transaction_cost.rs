@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use insta::assert_json_snapshot;
+use std::sync::Arc;
 use std::{collections::BTreeMap, path::PathBuf};
 use sui_config::NetworkConfig;
 use sui_core::test_utils::make_transfer_object_transaction;
@@ -87,7 +88,7 @@ async fn split_n_tx(
     gas: &Object,
     gas_budget: u64,
     gas_price: u64,
-) -> VerifiedTransaction {
+) -> Arc<VerifiedTransaction> {
     let split_amounts = vec![10u64; n as usize];
     let type_args = vec![coin.get_move_template_type().unwrap()];
 
@@ -112,7 +113,7 @@ async fn create_txes(
     gas_objects: &[Object],
     configs: &NetworkConfig,
     gas_price: u64,
-) -> BTreeMap<CommonTransactionCosts, VerifiedTransaction> {
+) -> BTreeMap<CommonTransactionCosts, Arc<VerifiedTransaction>> {
     let mut ret = BTreeMap::new();
     let mut gas_objects = gas_objects.to_vec().clone();
     // let _handles = spawn_test_authorities(gas_objects.clone(), configs).await;

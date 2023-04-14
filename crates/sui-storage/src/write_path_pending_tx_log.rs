@@ -115,7 +115,7 @@ mod tests {
             .unwrap());
 
         let loaded_txes = pending_txes.load_all_pending_transactions();
-        assert_eq!(vec![tx], loaded_txes);
+        assert_eq!(vec![(&*tx).clone()], loaded_txes);
 
         pending_txes.finish_transaction(&tx_digest).unwrap();
         let loaded_txes = pending_txes.load_all_pending_transactions();

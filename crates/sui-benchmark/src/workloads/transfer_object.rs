@@ -65,7 +65,7 @@ impl Payload for TransferObjectTestPayload {
         self.transfer_to = recipient;
         self.gas = updated_gas;
     }
-    fn make_transaction(&mut self) -> VerifiedTransaction {
+    fn make_transaction(&mut self) -> Arc<VerifiedTransaction> {
         let (gas_obj, _, keypair) = self.gas.iter().find(|x| x.1 == self.transfer_from).unwrap();
         make_transfer_object_transaction(
             self.transfer_object,

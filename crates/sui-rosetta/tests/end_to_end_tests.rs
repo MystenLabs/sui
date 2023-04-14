@@ -103,7 +103,7 @@ async fn test_get_staked_sui() {
     client
         .quorum_driver()
         .execute_transaction_block(
-            tx,
+            (&*tx).clone(),
             SuiTransactionBlockResponseOptions::new(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )

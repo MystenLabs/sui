@@ -2826,7 +2826,7 @@ pub async fn build_and_try_publish_test_package(
     let transaction = to_sender_signed_transaction(data, sender_key);
 
     (
-        transaction.clone().into_inner(),
+        (&*transaction).clone().into_inner(),
         send_and_confirm_transaction(authority, transaction)
             .await
             .unwrap()

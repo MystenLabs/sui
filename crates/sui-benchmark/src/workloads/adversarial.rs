@@ -178,7 +178,7 @@ impl Payload for AdversarialTestPayload {
         self.state.update(effects);
     }
 
-    fn make_transaction(&mut self) -> VerifiedTransaction {
+    fn make_transaction(&mut self) -> Arc<VerifiedTransaction> {
         let payload_type = self.adversarial_payload_cfg.payload_type;
 
         self.create_transaction(
@@ -205,7 +205,7 @@ impl AdversarialTestPayload {
         &self,
         payload_type: &AdversarialPayloadType,
         protocol_config: &ProtocolConfig,
-    ) -> VerifiedTransaction {
+    ) -> Arc<VerifiedTransaction> {
         let args = self.get_payload_args(payload_type, protocol_config);
         let module_name = "adversarial";
         let account = self.state.account(&self.sender).unwrap();
@@ -478,7 +478,7 @@ impl Workload<dyn Payload> for AdversarialWorkload {
             reference_gas_price,
         );
         let effects = proxy
-            .execute_transaction_block(transaction.into())
+            .execute_transaction_block((&*transaction).clone().into())
             .await
             .unwrap();
         let created = effects.created();
@@ -528,7 +528,7 @@ impl Workload<dyn Payload> for AdversarialWorkload {
         );
 
         let effects = proxy
-            .execute_transaction_block(transaction.into())
+            .execute_transaction_block((&*transaction).clone().into())
             .await
             .unwrap();
 

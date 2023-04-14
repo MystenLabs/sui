@@ -5,6 +5,7 @@ use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use std::path::PathBuf;
+use std::sync::Arc;
 use sui::client_commands::WalletContext;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_core::test_utils::dummy_transaction_effects;
@@ -141,7 +142,7 @@ pub async fn get_account_and_gas_objects(
 pub async fn make_transactions_with_wallet_context(
     context: &mut WalletContext,
     max_txn_num: usize,
-) -> Vec<VerifiedTransaction> {
+) -> Vec<Arc<VerifiedTransaction>> {
     let recipient = get_key_pair::<AuthorityKeyPair>().0;
     let accounts_and_objs = get_account_and_gas_objects(context).await;
     let mut res = Vec::with_capacity(max_txn_num);
@@ -176,7 +177,7 @@ pub async fn make_transactions_with_wallet_context(
 pub async fn make_staking_transaction_with_wallet_context(
     context: &mut WalletContext,
     validator_address: SuiAddress,
-) -> VerifiedTransaction {
+) -> Arc<VerifiedTransaction> {
     let accounts_and_objs = get_account_and_gas_objects(context).await;
     let sender = accounts_and_objs[0].0;
     let gas_object = accounts_and_objs[0].1[0]
@@ -212,7 +213,7 @@ pub async fn make_counter_increment_transaction_with_wallet_context(
     counter_id: ObjectID,
     counter_initial_shared_version: SequenceNumber,
     gas_object_ref: Option<ObjectRef>,
-) -> VerifiedTransaction {
+) -> Arc<VerifiedTransaction> {
     let gas_object_ref = match gas_object_ref {
         Some(obj_ref) => obj_ref,
         None => get_gas_object_with_wallet_context(context, &sender)
@@ -244,7 +245,7 @@ pub fn test_shared_object_transactions(
     shared_object: Option<Object>,
     gas_objects: Option<Vec<Object>>,
     gas_price: u64,
-) -> Vec<VerifiedTransaction> {
+) -> Vec<Arc<VerifiedTransaction>> {
     // The key pair of the sender of the transaction.
     let (sender, keypair) = deterministic_random_account_key();
     // Make one transaction per gas object (all containing the same shared object).
@@ -291,7 +292,7 @@ pub fn create_publish_move_package_transaction(
     keypair: &AccountKeyPair,
     gas_budget: u64,
     gas_price: u64,
-) -> VerifiedTransaction {
+) -> Arc<VerifiedTransaction> {
     let build_config = BuildConfig::new_for_testing();
     let compiled_package = sui_framework::build_move_package(&path, build_config).unwrap();
     let all_module_bytes =
@@ -316,7 +317,7 @@ pub fn make_transfer_object_transaction_with_wallet_context(
     sender: SuiAddress,
     recipient: SuiAddress,
     gas_price: u64,
-) -> VerifiedTransaction {
+) -> Arc<VerifiedTransaction> {
     let data = TransactionData::new_transfer(
         recipient,
         object_ref,
@@ -334,7 +335,7 @@ pub fn make_counter_create_transaction(
     sender: SuiAddress,
     keypair: &AccountKeyPair,
     gas_price: u64,
-) -> VerifiedTransaction {
+) -> Arc<VerifiedTransaction> {
     let data = TransactionData::new_move_call(
         sender,
         package_id,
@@ -358,7 +359,7 @@ pub fn make_counter_increment_transaction(
     sender: SuiAddress,
     keypair: &AccountKeyPair,
     gas_price: u64,
-) -> VerifiedTransaction {
+) -> Arc<VerifiedTransaction> {
     let data = TransactionData::new_move_call(
         sender,
         package_id,
@@ -385,7 +386,7 @@ pub fn make_staking_transaction(
     sender: SuiAddress,
     keypair: &dyn Signer<Signature>,
     gas_price: u64,
-) -> VerifiedTransaction {
+) -> Arc<VerifiedTransaction> {
     let data = TransactionData::new_move_call(
         sender,
         SUI_SYSTEM_PACKAGE_ID,
@@ -418,7 +419,7 @@ pub fn move_transaction(
     arguments: Vec<CallArg>,
     gas_budget: u64,
     gas_price: u64,
-) -> VerifiedTransaction {
+) -> Arc<VerifiedTransaction> {
     move_transaction_with_type_tags(
         gas_object,
         module,
@@ -441,7 +442,7 @@ pub fn move_transaction_with_type_tags(
     arguments: Vec<CallArg>,
     gas_budget: u64,
     gas_price: u64,
-) -> VerifiedTransaction {
+) -> Arc<VerifiedTransaction> {
     let (sender, keypair) = deterministic_random_account_key();
 
     // Make the transaction.
@@ -462,7 +463,7 @@ pub fn move_transaction_with_type_tags(
 
 /// Make a test certificates for each input transaction.
 pub fn make_tx_certs_and_signed_effects(
-    transactions: Vec<VerifiedTransaction>,
+    transactions: Vec<Arc<VerifiedTransaction>>,
 ) -> (Vec<VerifiedCertificate>, Vec<SignedTransactionEffects>) {
     let (committee, key_pairs) = Committee::new_simple_test_committee();
     make_tx_certs_and_signed_effects_with_committee(transactions, &committee, &key_pairs)
@@ -470,7 +471,7 @@ pub fn make_tx_certs_and_signed_effects(
 
 /// Make a test certificates for each input transaction.
 pub fn make_tx_certs_and_signed_effects_with_committee(
-    transactions: Vec<VerifiedTransaction>,
+    transactions: Vec<Arc<VerifiedTransaction>>,
     committee: &Committee,
     key_pairs: &[AuthorityKeyPair],
 ) -> (Vec<VerifiedCertificate>, Vec<SignedTransactionEffects>) {
@@ -481,7 +482,7 @@ pub fn make_tx_certs_and_signed_effects_with_committee(
         for key in key_pairs {
             let vote = VerifiedSignedTransaction::new(
                 committee.epoch,
-                tx.clone(),
+                (&*tx).clone().into(),
                 key.public().into(),
                 key,
             );

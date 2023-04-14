@@ -178,15 +178,13 @@ async fn reconfig_with_revert_end_to_end_test() {
         AuthAggMetrics::new(&registry),
     )
     .unwrap();
-    let cert = net
+    let verified_cert = net
         .process_transaction(tx.clone())
         .await
         .unwrap()
         .into_cert_for_testing();
-    let (effects1, _) = net
-        .process_certificate(cert.clone().into_inner())
-        .await
-        .unwrap();
+    let cert = Arc::new((&*verified_cert).clone().into_inner());
+    let (effects1, _) = net.process_certificate(cert.clone()).await.unwrap();
     assert_eq!(0, effects1.epoch());
 
     // gas2 transaction is (most likely) reverted
@@ -198,11 +196,13 @@ async fn reconfig_with_revert_end_to_end_test() {
         &keypair,
         rgp,
     );
-    let cert = net
+
+    let verified_cert = net
         .process_transaction(tx.clone())
         .await
         .unwrap()
         .into_cert_for_testing();
+    let cert = Arc::new((&*verified_cert).clone().into_inner());
 
     // Close epoch on 3 (2f+1) validators.
     let mut reverting_authority_idx = None;
@@ -225,10 +225,7 @@ async fn reconfig_with_revert_end_to_end_test() {
     let client = net
         .get_client(&authorities[reverting_authority_idx].with(|node| node.state().name))
         .unwrap();
-    client
-        .handle_certificate(cert.clone().into_inner())
-        .await
-        .unwrap();
+    client.handle_certificate(cert.clone()).await.unwrap();
 
     authorities[reverting_authority_idx]
         .with_async(|node| async {
@@ -469,22 +466,20 @@ async fn test_validator_resign_effects() {
         AuthAggMetrics::new(&registry),
     )
     .unwrap();
-    let cert = net
+    let verified_cert = net
         .process_transaction(tx.clone())
         .await
         .unwrap()
         .into_cert_for_testing();
-    let (effects0, _) = net
-        .process_certificate(cert.clone().into_inner())
-        .await
-        .unwrap();
+    let cert = Arc::new((&*verified_cert).clone().into_inner());
+    let (effects0, _) = net.process_certificate(cert.clone()).await.unwrap();
     assert_eq!(effects0.epoch(), 0);
     // Give it enough time for the transaction to be checkpointed and hence finalized.
     sleep(Duration::from_secs(10)).await;
     trigger_reconfiguration(&authorities).await;
     // Manually reconfigure the aggregator.
     net.committee.epoch = 1;
-    let (effects1, _) = net.process_certificate(cert.into_inner()).await.unwrap();
+    let (effects1, _) = net.process_certificate(cert.clone()).await.unwrap();
     // Ensure that we are able to form a new effects cert in the new epoch.
     assert_eq!(effects1.epoch(), 1);
     assert_eq!(effects0.into_message(), effects1.into_message());
@@ -638,7 +633,7 @@ async fn test_inactive_validator_pool_read() {
     )
     .unwrap();
     let transaction = to_sender_signed_transaction(tx_data, &leaving_validator_account_key);
-    let effects = execute_transaction_block(&authorities, transaction)
+    let effects = execute_transaction_block(&authorities, (&*transaction).clone())
         .await
         .unwrap();
     assert!(effects.status().is_ok());
@@ -1143,7 +1138,7 @@ async fn safe_mode_reconfig_test() {
         make_staking_transaction_with_wallet_context(test_cluster.wallet_mut(), validator_address)
             .await;
     let response = test_cluster
-        .execute_transaction(txn)
+        .execute_transaction((&*txn).clone())
         .await
         .expect("Staking txn failed");
     assert!(response.status_ok().unwrap());
@@ -1203,7 +1198,7 @@ async fn execute_add_validator_candidate_tx(
     )
     .unwrap();
     let transaction = to_sender_signed_transaction(candidate_tx_data, account_kp);
-    let effects = execute_transaction_block(authorities, transaction)
+    let effects = execute_transaction_block(authorities, (&*transaction).clone())
         .await
         .unwrap();
     assert!(effects.status().is_ok(), "{:?}", effects.status());
@@ -1258,7 +1253,7 @@ async fn execute_join_committee_txes(
     )
     .unwrap();
     let transaction = to_sender_signed_transaction(stake_tx_data, account_kp);
-    let effects = execute_transaction_block(authorities, transaction)
+    let effects = execute_transaction_block(authorities, (&*transaction).clone())
         .await
         .unwrap();
     assert!(effects.status().is_ok(), "{:?}", effects);
@@ -1283,7 +1278,7 @@ async fn execute_join_committee_txes(
     )
     .unwrap();
     let transaction = to_sender_signed_transaction(activation_tx_data, account_kp);
-    let effects = execute_transaction_block(authorities, transaction)
+    let effects = execute_transaction_block(authorities, (&*transaction).clone())
         .await
         .unwrap();
     assert!(effects.status().is_ok(), "{:?}", effects.status());
@@ -1319,7 +1314,7 @@ async fn execute_leave_committee_tx(
     .unwrap();
 
     let transaction = to_sender_signed_transaction(tx_data, account_kp);
-    let effects = execute_transaction_block(authorities, transaction)
+    let effects = execute_transaction_block(authorities, (&*transaction).clone())
         .await
         .unwrap();
     assert!(effects.status().is_ok(), "{:?}", effects.status());

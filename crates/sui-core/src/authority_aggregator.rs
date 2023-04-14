@@ -301,12 +301,12 @@ struct ProcessCertificateState {
 
 #[derive(Debug)]
 pub enum ProcessTransactionResult {
-    Certified(VerifiedCertificate),
+    Certified(Arc<VerifiedCertificate>),
     Executed(VerifiedCertifiedTransactionEffects, TransactionEvents),
 }
 
 impl ProcessTransactionResult {
-    pub fn into_cert_for_testing(self) -> VerifiedCertificate {
+    pub fn into_cert_for_testing(self) -> Arc<VerifiedCertificate> {
         match self {
             Self::Certified(cert) => cert,
             Self::Executed(..) => panic!("Wrong type"),
@@ -966,7 +966,7 @@ where
     /// Submits the transaction to a quorum of validators to make a certificate.
     pub async fn process_transaction(
         &self,
-        transaction: VerifiedTransaction,
+        transaction: Arc<VerifiedTransaction>,
     ) -> Result<ProcessTransactionResult, AggregatorProcessTransactionError> {
         // Now broadcast the transaction to all authorities.
         let tx_digest = transaction.digest();
@@ -1264,9 +1264,9 @@ where
                 let ct_bytes = bcs::to_bytes(&ct).expect("to_bytes should never fail");
                 let ct_digest = ct.digest();
                 debug!(?ct, ?ct_bytes, ?ct_digest, "Collected tx certificate");
-                Ok(Some(ProcessTransactionResult::Certified(
+                Ok(Some(ProcessTransactionResult::Certified(Arc::new(
                     ct.verify(&self.committee)?,
-                )))
+                ))))
             }
         }
     }
@@ -1274,7 +1274,7 @@ where
     fn handle_transaction_response_with_executed(
         &self,
         state: &mut ProcessTransactionState,
-        certificate: Option<VerifiedCertificate>,
+        certificate: Option<Arc<VerifiedCertificate>>,
         plain_tx_effects: SignedTransactionEffects,
         events: TransactionEvents,
     ) -> SuiResult<Option<ProcessTransactionResult>> {
@@ -1383,7 +1383,7 @@ where
 
     pub async fn process_certificate(
         &self,
-        certificate: CertifiedTransaction,
+        certificate: Arc<CertifiedTransaction>,
     ) -> Result<
         (VerifiedCertifiedTransactionEffects, TransactionEvents),
         AggregatorProcessCertificateError,
@@ -1572,7 +1572,7 @@ where
         transaction: &VerifiedTransaction,
     ) -> Result<VerifiedCertifiedTransactionEffects, anyhow::Error> {
         let result = self
-            .process_transaction(transaction.clone())
+            .process_transaction(Arc::new(transaction.clone()))
             .instrument(tracing::debug_span!("process_tx"))
             .await?;
         let cert = match result {
@@ -1583,7 +1583,7 @@ where
         };
         self.metrics.total_tx_certificates_created.inc();
         let response = self
-            .process_certificate(cert.clone().into())
+            .process_certificate(Arc::new((&*cert).clone().into()))
             .instrument(tracing::debug_span!("process_cert"))
             .await?;
 

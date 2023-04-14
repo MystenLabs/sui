@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::ExecutionEffects;
-use std::fmt::Display;
+use std::{fmt::Display, sync::Arc};
 use sui_types::messages::VerifiedTransaction;
 
 /// A Payload is a transaction wrapper of a particular type (transfer object, shared counter, etc).
@@ -11,5 +11,5 @@ use sui_types::messages::VerifiedTransaction;
 /// effect by invoking `make_new_payload(effects)`
 pub trait Payload: Send + Sync + std::fmt::Debug + Display {
     fn make_new_payload(&mut self, effects: &ExecutionEffects);
-    fn make_transaction(&mut self) -> VerifiedTransaction;
+    fn make_transaction(&mut self) -> Arc<VerifiedTransaction>;
 }

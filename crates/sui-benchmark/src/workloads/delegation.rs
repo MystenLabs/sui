@@ -54,7 +54,7 @@ impl Payload for DelegationTestPayload {
     /// delegation flow is split into two phases
     /// first `make_transaction` call creates separate coin object for future delegation
     /// followup call creates delegation transaction itself
-    fn make_transaction(&mut self) -> VerifiedTransaction {
+    fn make_transaction(&mut self) -> Arc<VerifiedTransaction> {
         match self.coin {
             Some(coin) => make_staking_transaction(
                 self.gas,

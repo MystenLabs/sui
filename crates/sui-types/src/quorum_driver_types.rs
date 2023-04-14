@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use crate::base_types::{AuthorityName, ObjectRef, TransactionDigest};
 use crate::committee::StakeUnit;
@@ -15,8 +16,10 @@ use thiserror::Error;
 
 pub type QuorumDriverResult = Result<QuorumDriverResponse, QuorumDriverError>;
 
-pub type QuorumDriverEffectsQueueResult =
-    Result<(VerifiedTransaction, QuorumDriverResponse), (TransactionDigest, QuorumDriverError)>;
+pub type QuorumDriverEffectsQueueResult = Result<
+    (Arc<VerifiedTransaction>, QuorumDriverResponse),
+    (TransactionDigest, QuorumDriverError),
+>;
 
 /// Client facing errors regarding transaction submission via Quorum Driver.
 /// Every invariant needs detailed documents to instruct client handling.

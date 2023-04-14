@@ -46,7 +46,7 @@ impl Payload for SharedCounterTestPayload {
         }
         self.gas.0 = effects.gas_object().0;
     }
-    fn make_transaction(&mut self) -> VerifiedTransaction {
+    fn make_transaction(&mut self) -> Arc<VerifiedTransaction> {
         make_counter_increment_transaction(
             self.gas.0,
             self.package_id,
@@ -206,7 +206,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
             let proxy_ref = proxy.clone();
             futures.push(async move {
                 if let Ok(effects) = proxy_ref
-                    .execute_transaction_block(transaction.into())
+                    .execute_transaction_block((&*transaction).clone().into())
                     .await
                 {
                     effects.created()[0].0

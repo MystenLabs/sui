@@ -56,7 +56,7 @@ fn make_transaction(gas_object: Object, input: Vec<CallArg>) -> VerifiedExecutab
         rgp,
         rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
     );
-    VerifiedExecutableTransaction::new_system(transaction, 0)
+    VerifiedExecutableTransaction::new_system((&*transaction).clone(), 0)
 }
 
 fn get_input_keys(objects: &[Object]) -> Vec<InputKey> {

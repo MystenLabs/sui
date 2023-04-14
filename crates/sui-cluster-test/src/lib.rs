@@ -132,7 +132,7 @@ impl TestContext {
 
     /// See `make_transactions_with_wallet_context` for potential caveats
     /// of this helper function.
-    pub async fn make_transactions(&mut self, max_txn_num: usize) -> Vec<VerifiedTransaction> {
+    pub async fn make_transactions(&mut self, max_txn_num: usize) -> Vec<Arc<VerifiedTransaction>> {
         make_transactions_with_wallet_context(self.get_wallet_mut(), max_txn_num).await
     }
 
