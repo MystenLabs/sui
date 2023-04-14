@@ -75,7 +75,7 @@ export function FieldItem({
 
     return (
         <Text variant="body/medium" color="steel-darker" truncate={truncate}>
-            {String(value)}
+            {value === null || value === undefined ? null : String(value)}
         </Text>
     );
 }
