@@ -19,7 +19,7 @@ import { type DataType } from '../ObjectResultType';
 
 import styles from './ObjectView.module.css';
 
-import { TransactionsForAddress } from '~/components/transactions/TransactionsForAddress';
+import TransactionBlocksForAddress from '~/components/TransactionBlocksForAddress/TransactionBlocksForAddress';
 import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
 import { Heading } from '~/ui/Heading';
 import { AddressLink, ObjectLink, TransactionLink } from '~/ui/InternalLink';
@@ -266,10 +266,11 @@ export function TokenView({ data }: { data: DataType }) {
                     <OwnedObjects id={data.id} byAddress={false} />
                 </div>
             </div>
-            <div>
+            <TransactionBlocksForAddress address={data.id} isObject />
+            {/* <div>
                 <h2 className={styles.header}>Transaction Blocks</h2>
                 <TransactionsForAddress address={data.id} type="object" />
-            </div>
+            </div> */}
         </div>
     );
 }

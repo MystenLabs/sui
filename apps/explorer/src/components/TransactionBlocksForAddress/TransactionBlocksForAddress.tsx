@@ -1,9 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type PaginatedTransactionResponse } from '@mysten/sui.js';
+import {
+    type TransactionFilter,
+    type PaginatedTransactionResponse,
+} from '@mysten/sui.js';
 import { type InfiniteData } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useReducer, useState } from 'react';
 
 import { genTableDataFromTxData } from '../transactions/TxCardUtils';
 
@@ -14,16 +17,85 @@ import {
 import { Heading } from '~/ui/Heading';
 import { Pagination } from '~/ui/Pagination';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
+import { RadioGroup, RadioOption } from '~/ui/Radio';
 import { TableCard } from '~/ui/TableCard';
 
 type TransactionBlocksForAddressProps = {
     address: string;
+    isObject?: boolean;
+};
+
+enum PAGE_ACTIONS {
+    NEXT,
+    PREV,
+    FIRST,
+}
+
+enum FILTER_VALUES {
+    UNFILTERED = 'Unfiltered',
+    INPUT = 'InputObject',
+    CHANGED = 'ChangedObject',
+}
+
+type TransactionBlocksForAddressActionType = {
+    type: PAGE_ACTIONS;
+    isObject: boolean;
+    filterValue: FILTER_VALUES;
+};
+
+type PageStateByFilterMap = {
+    Unfiltered: number;
+    InputObject: number;
+    ChangedObject: number;
+};
+
+const FILTER_OPTIONS = [
+    { label: 'Input Objects', value: 'InputObject' },
+    { label: 'Updated Objects', value: 'ChangedObject' },
+];
+
+const reducer = (
+    state: PageStateByFilterMap,
+    action: TransactionBlocksForAddressActionType
+) => {
+    switch (action.type) {
+        case PAGE_ACTIONS.NEXT:
+            return {
+                ...state,
+                [action.filterValue]: state[action.filterValue] + 1,
+            };
+        case PAGE_ACTIONS.PREV:
+            return {
+                ...state,
+                [action.filterValue]: state[action.filterValue] - 1,
+            };
+        case PAGE_ACTIONS.FIRST:
+            return {
+                ...state,
+                [action.filterValue]: 0,
+            };
+        default:
+            return { ...state };
+    }
 };
 
 function TransactionBlocksForAddress({
     address,
+    isObject = false,
 }: TransactionBlocksForAddressProps) {
-    const [currentPage, setCurrentPage] = useState(0);
+    const [filterValue, setFilterValue] = useState(FILTER_VALUES.UNFILTERED);
+    const [currentPageState, dispatch] = useReducer(reducer, {
+        Unfiltered: 0,
+        InputObject: 0,
+        ChangedObject: 0,
+    });
+
+    useEffect(() => {
+        if (isObject) {
+            setFilterValue(FILTER_VALUES.CHANGED);
+        }
+    }, [isObject]);
+
     const {
         data,
         isLoading,
@@ -31,7 +103,14 @@ function TransactionBlocksForAddress({
         isFetchingNextPage,
         fetchNextPage,
         hasNextPage,
-    } = useGetTransactionBlocksForAddress(address);
+    } = useGetTransactionBlocksForAddress(
+        address,
+        filterValue !== FILTER_VALUES.UNFILTERED
+            ? ({
+                  [filterValue]: address,
+              } as TransactionFilter)
+            : undefined
+    );
 
     const generateTableCard = (
         currentPage: number,
@@ -50,6 +129,21 @@ function TransactionBlocksForAddress({
                 <Heading color="gray-90" variant="heading4/semibold">
                     Transaction Blocks
                 </Heading>
+
+                <RadioGroup
+                    className="flex"
+                    ariaLabel="transaction filter"
+                    value={filterValue}
+                    onChange={setFilterValue}
+                >
+                    {FILTER_OPTIONS.map((filter) => (
+                        <RadioOption
+                            key={filter.value}
+                            value={filter.value}
+                            label={filter.label}
+                        />
+                    ))}
+                </RadioGroup>
             </div>
 
             <div className="flex flex-col space-y-5 pt-5 text-left xl:pr-10">
@@ -67,7 +161,9 @@ function TransactionBlocksForAddress({
                         colWidths={['30%', '30%', '10%', '20%', '10%']}
                     />
                 ) : (
-                    <div>{generateTableCard(currentPage, data)}</div>
+                    <div>
+                        {generateTableCard(currentPageState[filterValue], data)}
+                    </div>
                 )}
 
                 {(hasNextPage || (data && data?.pages.length > 1)) && (
@@ -80,18 +176,36 @@ function TransactionBlocksForAddress({
                             // Make sure we are at the end before fetching another page
                             if (
                                 data &&
-                                currentPage === data?.pages.length - 1 &&
+                                currentPageState[filterValue] ===
+                                    data?.pages.length - 1 &&
                                 !isLoading &&
                                 !isFetching
                             ) {
                                 fetchNextPage();
                             }
-                            setCurrentPage(currentPage + 1);
+                            dispatch({
+                                type: PAGE_ACTIONS.NEXT,
+                                isObject,
+                                filterValue,
+                            });
+                            // setCurrentPage(currentPage + 1);
                         }}
                         hasNext={Boolean(hasNextPage)}
-                        hasPrev={currentPage !== 0}
-                        onPrev={() => setCurrentPage(currentPage - 1)}
-                        onFirst={() => setCurrentPage(1)}
+                        hasPrev={currentPageState[filterValue] !== 0}
+                        onPrev={() =>
+                            dispatch({
+                                type: PAGE_ACTIONS.PREV,
+                                isObject,
+                                filterValue,
+                            })
+                        }
+                        onFirst={() =>
+                            dispatch({
+                                type: PAGE_ACTIONS.FIRST,
+                                isObject,
+                                filterValue,
+                            })
+                        }
                     />
                 )}
             </div>
