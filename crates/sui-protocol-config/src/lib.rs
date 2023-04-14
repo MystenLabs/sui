@@ -139,7 +139,7 @@ struct FeatureFlags {
     // If true, then the scoring decision mechanism will not get disabled when we do have more than
     // f low scoring authorities, but it will simply flag as low scoring only up to f authorities.
     #[serde(skip_serializing_if = "is_false")]
-    scoring_decision_with_no_disable: bool,
+    scoring_decision_with_validity_cutoff: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -622,8 +622,8 @@ impl ProtocolConfig {
         self.feature_flags.missing_type_is_compatibility_error
     }
 
-    pub fn scoring_decision_with_no_disable(&self) -> bool {
-        self.feature_flags.scoring_decision_with_no_disable
+    pub fn scoring_decision_with_validity_cutoff(&self) -> bool {
+        self.feature_flags.scoring_decision_with_validity_cutoff
     }
 }
 
@@ -1011,7 +1011,7 @@ impl ProtocolConfig {
                 let mut cfg = Self::get_for_version_impl(version - 1);
                 cfg.feature_flags.missing_type_is_compatibility_error = true;
                 cfg.gas_model_version = Some(4);
-                cfg.feature_flags.scoring_decision_with_no_disable = true;
+                cfg.feature_flags.scoring_decision_with_validity_cutoff = true;
                 cfg.scoring_decision_mad_divisor = Some(2.3);
                 cfg.scoring_decision_cutoff_value = Some(2.5);
                 cfg

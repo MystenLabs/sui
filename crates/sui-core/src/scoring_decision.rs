@@ -49,7 +49,7 @@ pub fn update_low_scoring_authorities(
     metrics: &Arc<AuthorityMetrics>,
     protocol_config: &ProtocolConfig,
 ) {
-    if protocol_config.scoring_decision_with_no_disable() {
+    if protocol_config.scoring_decision_with_validity_cutoff() {
         update_low_scoring_authorities_with_no_disable_mechanism(
             low_scoring_authorities,
             committee,
