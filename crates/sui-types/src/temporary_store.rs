@@ -536,7 +536,7 @@ impl<S> TemporaryStore<S> {
 
     /// Resets any mutations, deletions, and events recorded in the store, as well as any storage costs and
     /// rebates, then Re-runs gas smashing. Effects on store are now as if we were about to begin execution
-    pub fn reset(&mut self, gas: &[ObjectRef], gas_status: &mut SuiGasStatus<'_>) {
+    pub fn reset(&mut self, gas: &[ObjectRef], gas_status: &mut SuiGasStatus) {
         self.drop_writes();
         gas_status.reset_storage_cost_and_rebate();
 
@@ -768,7 +768,7 @@ impl<S: ObjectStore> TemporaryStore<S> {
     pub fn charge_gas_legacy<T>(
         &mut self,
         gas_object_id: ObjectID,
-        gas_status: &mut SuiGasStatus<'_>,
+        gas_status: &mut SuiGasStatus,
         execution_result: &mut Result<T, ExecutionError>,
         gas: &[ObjectRef],
     ) {
@@ -860,7 +860,7 @@ impl<S: ObjectStore> TemporaryStore<S> {
     /// gas_object_id can be None if this is a system transaction.
     fn charge_gas_for_storage_changes(
         &mut self,
-        gas_status: &mut SuiGasStatus<'_>,
+        gas_status: &mut SuiGasStatus,
         gas_object_id: ObjectID,
     ) -> Result<u64, ExecutionError> {
         let mut total_bytes_written_deleted = 0;
@@ -957,7 +957,7 @@ impl<S: ObjectStore> TemporaryStore<S> {
     pub fn charge_gas<T>(
         &mut self,
         gas_object_id: Option<ObjectID>,
-        gas_status: &mut SuiGasStatus<'_>,
+        gas_status: &mut SuiGasStatus,
         execution_result: &mut Result<T, ExecutionError>,
         gas: &[ObjectRef],
     ) -> GasCostSummary {
@@ -985,18 +985,18 @@ impl<S: ObjectStore> TemporaryStore<S> {
             }
         }
 
+        // compute and collect storage charges
         self.ensure_gas_and_input_mutated(gas_object_id);
         self.collect_storage_and_rebate(gas_status);
+        // system transactions (None gas_object_id)  do not have gas and so do not charge
+        // for storage, however they track storage values to check for conservation rules
         if let Some(gas_object_id) = gas_object_id {
-            if let Err(err) = gas_status.charge_storage_and_rebate() {
-                self.reset(gas, gas_status);
-                gas_status.adjust_computation_on_out_of_gas();
-                self.ensure_gas_and_input_mutated(Some(gas_object_id));
-                self.collect_rebate(gas_status);
-                if execution_result.is_ok() {
-                    *execution_result = Err(err);
-                }
+            if self.protocol_config.gas_model_version() < 4 {
+                self.handle_storage_and_rebate_v1(gas, gas_object_id, gas_status, execution_result)
+            } else {
+                self.handle_storage_and_rebate_v2(gas, gas_object_id, gas_status, execution_result)
             }
+
             let cost_summary = gas_status.summary();
             let gas_used = cost_summary.net_gas_usage();
 
@@ -1009,6 +1009,53 @@ impl<S: ObjectStore> TemporaryStore<S> {
             cost_summary
         } else {
             GasCostSummary::default()
+        }
+    }
+
+    fn handle_storage_and_rebate_v1<T>(
+        &mut self,
+        gas: &[ObjectRef],
+        gas_object_id: ObjectID,
+        gas_status: &mut SuiGasStatus,
+        execution_result: &mut Result<T, ExecutionError>,
+    ) {
+        if let Err(err) = gas_status.charge_storage_and_rebate() {
+            self.reset(gas, gas_status);
+            gas_status.adjust_computation_on_out_of_gas();
+            self.ensure_gas_and_input_mutated(Some(gas_object_id));
+            self.collect_rebate(gas_status);
+            if execution_result.is_ok() {
+                *execution_result = Err(err);
+            }
+        }
+    }
+
+    fn handle_storage_and_rebate_v2<T>(
+        &mut self,
+        gas: &[ObjectRef],
+        gas_object_id: ObjectID,
+        gas_status: &mut SuiGasStatus,
+        execution_result: &mut Result<T, ExecutionError>,
+    ) {
+        if let Err(err) = gas_status.charge_storage_and_rebate() {
+            // we run out of gas charging storage, reset and try charging for storage again.
+            // Input objects are touched and so they have a storage cost
+            self.reset(gas, gas_status);
+            self.ensure_gas_and_input_mutated(Some(gas_object_id));
+            self.collect_storage_and_rebate(gas_status);
+            if let Err(err) = gas_status.charge_storage_and_rebate() {
+                // we run out of gas attempting to charge for the input objects exclusively,
+                // deal with this edge case by not charging for storage
+                self.reset(gas, gas_status);
+                gas_status.adjust_computation_on_out_of_gas();
+                self.ensure_gas_and_input_mutated(Some(gas_object_id));
+                self.collect_rebate(gas_status);
+                if execution_result.is_ok() {
+                    *execution_result = Err(err);
+                }
+            } else if execution_result.is_ok() {
+                *execution_result = Err(err);
+            }
         }
     }
 
@@ -1064,7 +1111,7 @@ impl<S: ObjectStore> TemporaryStore<S> {
     /// All objects will be updated with their new (current) storage rebate/cost.
     /// `SuiGasStatus` `storage_rebate` and `storage_gas_units` track the transaction
     /// overall storage rebate and cost.
-    fn collect_storage_and_rebate(&mut self, gas_status: &mut SuiGasStatus<'_>) {
+    fn collect_storage_and_rebate(&mut self, gas_status: &mut SuiGasStatus) {
         let mut objects_to_update = vec![];
         for (object_id, (object, write_kind)) in &mut self.written {
             // get the object storage_rebate in input for mutated objects
@@ -1128,7 +1175,7 @@ impl<S: ObjectStore> TemporaryStore<S> {
         }
     }
 
-    fn collect_rebate(&self, gas_status: &mut SuiGasStatus<'_>) {
+    fn collect_rebate(&self, gas_status: &mut SuiGasStatus) {
         for (object_id, (version, kind)) in &self.deleted {
             match kind {
                 DeleteKind::Wrap | DeleteKind::Normal => {

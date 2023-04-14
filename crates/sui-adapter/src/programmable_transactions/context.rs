@@ -39,7 +39,7 @@ use super::types::*;
 sui_macros::checked_arithmetic! {
 
 /// Maintains all runtime state specific to programmable transactions
-pub struct ExecutionContext<'vm, 'state, 'a, 'b, S: StorageView> {
+pub struct ExecutionContext<'vm, 'state, 'a, S: StorageView> {
     /// The protocol config
     pub protocol_config: &'a ProtocolConfig,
     /// The MoveVM
@@ -50,7 +50,7 @@ pub struct ExecutionContext<'vm, 'state, 'a, 'b, S: StorageView> {
     /// creation of new object IDs
     pub tx_context: &'a mut TxContext,
     /// The gas status used for metering
-    pub gas_status: &'a mut SuiGasStatus<'b>,
+    pub gas_status: &'a mut SuiGasStatus,
     /// The session used for interacting with Move types and calls
     pub session: Session<'state, 'vm, LinkageView<'state, S>>,
     /// Additional transfers not from the Move runtime
@@ -85,13 +85,13 @@ struct AdditionalWrite {
     bytes: Vec<u8>,
 }
 
-impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, S> {
+impl<'vm, 'state, 'a, S: StorageView> ExecutionContext<'vm, 'state, 'a, S> {
     pub fn new(
         protocol_config: &'a ProtocolConfig,
         vm: &'vm MoveVM,
         state_view: &'state S,
         tx_context: &'a mut TxContext,
-        gas_status: &'a mut SuiGasStatus<'b>,
+        gas_status: &'a mut SuiGasStatus,
         gas_coin_opt: Option<ObjectID>,
         inputs: Vec<CallArg>,
     ) -> Result<Self, ExecutionError> {

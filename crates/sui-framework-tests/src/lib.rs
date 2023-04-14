@@ -4,6 +4,7 @@
 #[cfg(test)]
 mod test {
     use move_cli::base::test::UnitTestResult;
+    use move_unit_test::UnitTestingConfig;
     use std::path::{Path, PathBuf};
     use sui_framework::build_move_package;
     use sui_framework_build::compiled_package::BuildConfig;
@@ -60,13 +61,14 @@ mod test {
         config.run_bytecode_verifier = true;
         config.print_diags_to_stderr = true;
         let move_config = config.config.clone();
+        let testing_config = UnitTestingConfig::default_with_bound(Some(3_000_000));
 
         // build tests first to enable Sui-specific test code verification
         build_move_package(path, config)
             .unwrap_or_else(|e| panic!("Building tests at {}.\nWith error {e}", path.display()));
 
         assert_eq!(
-            run_move_unit_tests(path, move_config, None, false).unwrap(),
+            run_move_unit_tests(path, move_config, Some(testing_config), false).unwrap(),
             UnitTestResult::Success
         );
     }

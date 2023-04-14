@@ -146,6 +146,8 @@ pub enum UserInputError {
         gas_price: u64,
         reference_gas_price: u64,
     },
+    #[error("Gas price cannot exceed {:?} mist", max_gas_price)]
+    GasPriceTooHigh { max_gas_price: u64 },
     #[error("Object {object_id} is not a gas object")]
     InvalidGasObject { object_id: ObjectID },
     #[error("Gas object does not have enough balance to cover minimal gas spend")]

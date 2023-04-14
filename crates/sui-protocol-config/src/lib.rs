@@ -21,7 +21,7 @@ const MAX_PROTOCOL_VERSION: u64 = 5;
 //            `max_size_written_objects_system_tx`
 // Version 4: New reward slashing rate. Framework changes to skip stake susbidy when the epoch
 //            length is short.
-// Version 5: Package upgrade compatibility error fix.
+// Version 5: Package upgrade compatibility error fix. New gas cost table.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -229,6 +229,12 @@ pub struct ProtocolConfig {
 
     /// Maximum number of gas units that a single MoveCall transaction can use. Enforced by the Sui adapter.
     max_tx_gas: Option<u64>,
+
+    /// Maximum amount of the proposed gas price in MIST (defined in the transaction).
+    max_gas_price: Option<u64>,
+
+    /// The max computation bucket for gas. This is the max that can be charged for computation.
+    max_gas_computation_bucket: Option<u64>,
 
     /// Maximum number of nested loops. Enforced by the Move bytecode verifier.
     max_loop_depth: Option<u64>,
@@ -728,6 +734,8 @@ impl ProtocolConfig {
                 max_move_object_size: Some(250 * 1024),
                 max_move_package_size: Some(100 * 1024),
                 max_tx_gas: Some(10_000_000_000),
+                max_gas_price: Some(100_000),
+                max_gas_computation_bucket: Some(5_000_000),
                 max_loop_depth: Some(5),
                 max_generic_instantiation_length: Some(32),
                 max_function_parameters: Some(128),
@@ -983,6 +991,7 @@ impl ProtocolConfig {
             5 => {
                 let mut cfg = Self::get_for_version_impl(version - 1);
                 cfg.feature_flags.missing_type_is_compatibility_error = true;
+                cfg.gas_model_version = Some(4);
                 cfg
             }
             // Use this template when making changes:

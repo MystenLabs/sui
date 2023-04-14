@@ -30,6 +30,8 @@ pub struct SuiRunArgs {
     /// caution!
     #[clap(long = "protocol-version")]
     pub protocol_version: Option<u64>,
+    #[clap(long = "uncharged")]
+    pub uncharged: bool,
 }
 
 #[derive(Debug, clap::Parser)]

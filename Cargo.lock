@@ -9213,6 +9213,7 @@ version = "0.1.0"
 dependencies = [
  "move-cli",
  "move-package",
+ "move-unit-test",
  "sui-framework",
  "sui-framework-build",
  "sui-move",
