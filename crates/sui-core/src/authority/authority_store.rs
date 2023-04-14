@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::ops::Not;
 use std::path::Path;
@@ -10,6 +11,7 @@ use std::{iter, mem, thread};
 use either::Either;
 use fastcrypto::hash::MultisetHash;
 use futures::stream::FuturesUnordered;
+use lru::LruCache;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::resolver::ModuleResolver;
 use once_cell::sync::OnceCell;
@@ -46,11 +48,15 @@ use super::{authority_store_tables::AuthorityPerpetualTables, *};
 use mysten_common::sync::notify_read::NotifyRead;
 use sui_storage::package_object_cache::PackageObjectCache;
 use sui_types::gas_coin::TOTAL_SUPPLY_MIST;
+use tap::TapOptional;
 use typed_store::rocks::util::is_ref_count_value;
 
 const NUM_SHARDS: usize = 4096;
 
 struct AuthorityStoreMetrics {
+    executed_effects_cache_hits: IntCounter,
+    executed_effects_cache_misses: IntCounter,
+    executed_effects_cache_evictions: IntCounter,
     sui_conservation_check_latency: IntGauge,
     sui_conservation_live_object_count: IntGauge,
     sui_conservation_imbalance: IntGauge,
@@ -60,8 +66,23 @@ struct AuthorityStoreMetrics {
 }
 
 impl AuthorityStoreMetrics {
-    pub fn new(registry: &Registry) -> Self {
-        Self {
+    pub fn new(registry: &Registry) -> Arc<Self> {
+        Arc::new(Self {
+            executed_effects_cache_hits: register_int_counter_with_registry!(
+                "executed_effects_cache_hits",
+                "Number of cache hits for executed effects",
+                registry,
+            ).unwrap(),
+            executed_effects_cache_misses: register_int_counter_with_registry!(
+                "executed_effects_cache_misses",
+                "Number of cache misses for executed effects",
+                registry,
+            ).unwrap(),
+            executed_effects_cache_evictions: register_int_counter_with_registry!(
+                "executed_effects_cache_evictions",
+                "Number of cache evictions for executed effects",
+                registry,
+            ).unwrap(),
             sui_conservation_check_latency: register_int_gauge_with_registry!(
                 "sui_conservation_check_latency",
                 "Number of seconds took to scan all live objects in the store for SUI conservation check",
@@ -93,7 +114,68 @@ impl AuthorityStoreMetrics {
                 &["flag"],
                 registry,
             ).unwrap(),
+        })
+    }
+}
+
+struct Caches {
+    executed_effects: parking_lot::Mutex<LruCache<TransactionDigest, TransactionEffectsDigest>>,
+    metrics: Arc<AuthorityStoreMetrics>,
+}
+
+impl Caches {
+    pub fn new(metrics: Arc<AuthorityStoreMetrics>) -> Self {
+        Self {
+            executed_effects: parking_lot::Mutex::new(LruCache::new(10000.try_into().unwrap())),
+            metrics,
         }
+    }
+
+    fn cache_effects_digest(
+        &self,
+        digest: &TransactionDigest,
+        effects_digest: TransactionEffectsDigest,
+    ) {
+        self.executed_effects
+            .lock()
+            .push(*digest, effects_digest)
+            .tap_some(|_| self.metrics.executed_effects_cache_evictions.inc());
+    }
+
+    fn remove_effects_digest(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Option<TransactionEffectsDigest> {
+        self.executed_effects.lock().pop(digest)
+    }
+
+    fn get_executed_effects_digest(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Option<TransactionEffectsDigest> {
+        self.executed_effects
+            .lock()
+            .get(digest)
+            .cloned()
+            .tap_some(|_| self.metrics.executed_effects_cache_hits.inc())
+            .tap_none(|| self.metrics.executed_effects_cache_misses.inc())
+    }
+
+    fn multi_get_executed_effects_digest<J: Borrow<TransactionDigest>>(
+        &self,
+        digests: impl IntoIterator<Item = J>,
+    ) -> Vec<Option<TransactionEffectsDigest>> {
+        let mut executed_effects = self.executed_effects.lock();
+        digests
+            .into_iter()
+            .map(|digest| {
+                executed_effects
+                    .get(digest.borrow())
+                    .cloned()
+                    .tap_some(|_| self.metrics.executed_effects_cache_hits.inc())
+                    .tap_none(|| self.metrics.executed_effects_cache_misses.inc())
+            })
+            .collect()
     }
 }
 
@@ -108,6 +190,7 @@ pub struct AuthorityStore {
     mutex_table: MutexTable<ObjectDigest>,
 
     pub(crate) perpetual_tables: Arc<AuthorityPerpetualTables>,
+    caches: Caches,
 
     // Implementation detail to support notify_read_effects().
     pub(crate) executed_effects_notify_read: NotifyRead<TransactionDigest, TransactionEffects>,
@@ -129,7 +212,7 @@ pub struct AuthorityStore {
     /// Whether to enable expensive SUI conservation check at epoch boundaries.
     enable_epoch_sui_conservation_check: bool,
 
-    metrics: AuthorityStoreMetrics,
+    metrics: Arc<AuthorityStoreMetrics>,
 }
 
 pub type ExecutionLockReadGuard<'a> = RwLockReadGuard<'a, EpochId>;
@@ -227,9 +310,11 @@ impl AuthorityStore {
     ) -> SuiResult<Arc<Self>> {
         let epoch = committee.epoch;
 
+        let metrics = AuthorityStoreMetrics::new(registry);
         let store = Arc::new(Self {
             mutex_table: MutexTable::new(NUM_SHARDS),
             perpetual_tables,
+            caches: Caches::new(metrics.clone()),
             executed_effects_notify_read: NotifyRead::new(),
             executed_effects_digests_notify_read: NotifyRead::new(),
             root_state_notify_read:
@@ -238,7 +323,7 @@ impl AuthorityStore {
             objects_lock_table: Arc::new(RwLockTable::new(NUM_SHARDS)),
             indirect_objects_threshold,
             enable_epoch_sui_conservation_check,
-            metrics: AuthorityStoreMetrics::new(registry),
+            metrics,
         });
         // Only initialize an empty database.
         if store
@@ -347,11 +432,21 @@ impl AuthorityStore {
         Ok(self.perpetual_tables.effects.multi_get(effects_digests)?)
     }
 
+    pub fn get_executed_effects_digest(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> SuiResult<Option<TransactionEffectsDigest>> {
+        if let Some(digest) = self.caches.get_executed_effects_digest(tx_digest) {
+            return Ok(Some(digest));
+        }
+        Ok(self.perpetual_tables.executed_effects.get(tx_digest)?)
+    }
+
     pub fn get_executed_effects(
         &self,
         tx_digest: &TransactionDigest,
     ) -> SuiResult<Option<TransactionEffects>> {
-        let effects_digest = self.perpetual_tables.executed_effects.get(tx_digest)?;
+        let effects_digest = self.get_executed_effects_digest(tx_digest)?;
         match effects_digest {
             Some(digest) => Ok(self.perpetual_tables.effects.get(&digest)?),
             None => Ok(None),
@@ -364,7 +459,26 @@ impl AuthorityStore {
         &self,
         digests: &[TransactionDigest],
     ) -> SuiResult<Vec<Option<TransactionEffectsDigest>>> {
-        Ok(self.perpetual_tables.executed_effects.multi_get(digests)?)
+        let mut cache_hits = self.caches.multi_get_executed_effects_digest(digests);
+
+        let misses = digests
+            .iter()
+            .zip(cache_hits.clone())
+            .filter_map(|(digest, cache_result)| cache_result.is_none().then(|| *digest));
+
+        let mut db_reads = self
+            .perpetual_tables
+            .executed_effects
+            .multi_get(misses)?
+            .into_iter();
+
+        for cache_result in cache_hits.iter_mut() {
+            if cache_result.is_none() {
+                *cache_result = db_reads.next().unwrap();
+            }
+        }
+
+        Ok(cache_hits)
     }
 
     /// Given a list of transaction digests, returns a list of the corresponding effects only if they have been
@@ -373,7 +487,7 @@ impl AuthorityStore {
         &self,
         digests: &[TransactionDigest],
     ) -> SuiResult<Vec<Option<TransactionEffects>>> {
-        let executed_effects_digests = self.perpetual_tables.executed_effects.multi_get(digests)?;
+        let executed_effects_digests = self.multi_get_executed_effects_digests(digests)?;
         let effects = self.multi_get_effects(executed_effects_digests.iter().flatten())?;
         let mut tx_to_effects_map = effects
             .into_iter()
@@ -387,10 +501,11 @@ impl AuthorityStore {
     }
 
     pub fn is_tx_already_executed(&self, digest: &TransactionDigest) -> SuiResult<bool> {
-        Ok(self
-            .perpetual_tables
-            .executed_effects
-            .contains_key(digest)?)
+        Ok(self.caches.get_executed_effects_digest(digest).is_some()
+            || self
+                .perpetual_tables
+                .executed_effects
+                .contains_key(digest)?)
     }
 
     /// Returns future containing the state hash for the given epoch
@@ -623,6 +738,49 @@ impl AuthorityStore {
         }
     }
 
+    /// Checks if the input object identified by the InputKey exists, with support for non-system
+    /// packages i.e. when version is None.
+    pub fn input_object_multi_exists(
+        &self,
+        keys: impl Iterator<Item = InputKey> + Clone,
+    ) -> Result<Vec<bool>, SuiError> {
+        let (keys_with_version, keys_without_version): (Vec<_>, Vec<_>) = keys
+            .clone()
+            .enumerate()
+            .partition(|(_, key)| key.1.is_some());
+
+        let versioned_results = keys_with_version.iter().map(|(idx, _)| *idx).zip(
+            self.perpetual_tables
+                .objects
+                .multi_get(
+                    keys_with_version
+                        .iter()
+                        .map(|(_, k)| ObjectKey(k.0, k.1.unwrap())),
+                )?
+                .into_iter()
+                .map(|o| o.is_some()),
+        );
+
+        let unversioned_results = keys_without_version.into_iter().map(|(idx, key)| {
+            (
+                idx,
+                match self
+                    .get_object_or_tombstone(key.0)
+                    .expect("read cannot fail")
+                {
+                    None => false,
+                    Some(entry) => entry.2.is_alive(),
+                },
+            )
+        });
+
+        let mut results = versioned_results
+            .chain(unversioned_results)
+            .collect::<Vec<_>>();
+        results.sort_by_key(|(idx, _)| *idx);
+        Ok(results.into_iter().map(|(_, result)| result).collect())
+    }
+
     /// Attempts to acquire execution lock for an executable transaction.
     /// Returns the lock if the transaction is matching current executed epoch
     /// Returns None otherwise
@@ -834,6 +992,9 @@ impl AuthorityStore {
                 &self.perpetual_tables.executed_effects,
                 [(transaction_digest, effects_digest)],
             )?;
+
+        self.caches
+            .cache_effects_digest(transaction_digest, effects_digest);
 
         // test crashing before writing the batch
         fail_point_async!("crash");
@@ -1273,6 +1434,8 @@ impl AuthorityStore {
             &self.perpetual_tables.executed_effects,
             iter::once(tx_digest),
         )?;
+        self.caches.remove_effects_digest(tx_digest);
+
         if let Some(events_digest) = effects.events_digest() {
             write_batch.delete_range(
                 &self.perpetual_tables.events,
