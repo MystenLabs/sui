@@ -43,7 +43,7 @@ export default function EpochDetail() {
         enhancedRpc.getEpochs({
             // todo: endpoint returns no data for epoch 0
             cursor: id === '0' ? undefined : (Number(id!) - 1).toString(),
-            limit: '1',
+            limit: 1,
         })
     );
 

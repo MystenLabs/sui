@@ -368,7 +368,9 @@
           "name": "limit",
           "description": "Maximum item returned per page, default to [QUERY_MAX_RESULT_LIMIT_CHECKPOINTS] if not specified.",
           "schema": {
-            "$ref": "#/components/schemas/BigInt_for_uint64"
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0.0
           }
         },
         {

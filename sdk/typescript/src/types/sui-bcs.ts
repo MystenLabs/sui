@@ -8,21 +8,6 @@ import {
   StructTypeDefinition,
 } from '@mysten/bcs';
 import { SuiObjectRef } from './objects';
-import { RpcApiVersion } from './version';
-
-function registerUTF8String(bcs: BCS) {
-  bcs.registerType(
-    'utf8string',
-    (writer, str) => {
-      const bytes = Array.from(new TextEncoder().encode(str));
-      return writer.writeVec(bytes, (writer, el) => writer.write8(el));
-    },
-    (reader) => {
-      let bytes = reader.readVec((reader) => reader.read8());
-      return new TextDecoder().decode(new Uint8Array(bytes));
-    },
-  );
-}
 
 /**
  * A reference to a shared object.
@@ -221,10 +206,17 @@ const BCS_SPEC: TypeSchema = {
 };
 
 const bcs = new BCS({ ...getSuiMoveConfig(), types: BCS_SPEC });
-registerUTF8String(bcs);
 
-export function bcsForVersion(_v?: RpcApiVersion) {
-  return bcs;
-}
+bcs.registerType(
+  'utf8string',
+  (writer, str) => {
+    const bytes = Array.from(new TextEncoder().encode(str));
+    return writer.writeVec(bytes, (writer, el) => writer.write8(el));
+  },
+  (reader) => {
+    let bytes = reader.readVec((reader) => reader.read8());
+    return new TextDecoder().decode(new Uint8Array(bytes));
+  },
+);
 
 export { bcs };

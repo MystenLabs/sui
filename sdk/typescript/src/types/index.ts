@@ -7,7 +7,6 @@ export * from './events';
 export * from './transactions';
 export * from '../framework/framework';
 export * from './sui-bcs';
-export * from './version';
 export * from './faucet';
 export * from './normalized';
 export * from './validator';
