@@ -168,7 +168,7 @@ impl ProtocolCommands<SuiBenchmarkType> for SuiProtocol {
                 let genesis = genesis_path.display();
                 let keystore = keystore_path.display();
                 let gas_id =
-                    GenesisConfig::benchmark_gas_object_id_offsets(committee_size)[i].clone();
+                    GenesisConfig::benchmark_gas_object_id_offsets(committee_size * 2)[i].clone();
 
                 let run = [
                     "cargo run --release --bin stress --",
