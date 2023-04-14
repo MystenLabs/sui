@@ -359,6 +359,13 @@ module sui::kiosk {
         coin::take(&mut self.profits, amount, ctx)
     }
 
+    // === KioskOwnerCap fields access ===
+
+    /// Get the `for` field from the `KioskOwnerCap`.
+    public fun kiosk_cap_for(self: &KioskOwnerCap): ID {
+        self.for
+    }
+
     // === Kiosk fields access ===
 
     /// Check whether the an `item` is present in the `Kiosk`.
@@ -385,7 +392,7 @@ module sui::kiosk {
     }
 
     /// Check whether the `KioskOwnerCap` matches the `Kiosk`.
-    public fun has_access(self: &mut Kiosk, cap: &KioskOwnerCap): bool {
+    public fun has_access(self: &Kiosk, cap: &KioskOwnerCap): bool {
         object::id(self) == cap.for
     }
 
