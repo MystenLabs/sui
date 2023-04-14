@@ -4,15 +4,15 @@
 use crate::event_handler::EVENT_DISPATCH_BUFFER_SIZE;
 use futures::Stream;
 use mysten_metrics::spawn_monitored_task;
+use parking_lot::RwLock;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 use sui_json_rpc_types::Filter;
 use sui_types::base_types::ObjectID;
 use sui_types::error::SuiError;
-use tokio::runtime::Handle;
+use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
-use tokio::sync::{mpsc, RwLock};
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{debug, warn};
 
@@ -47,7 +47,7 @@ where
     }
 
     async fn send_to_all_subscribers(subscribers: Subscribers<T, F>, data: T) {
-        for (id, (subscriber, filter)) in subscribers.read().await.clone() {
+        for (id, (subscriber, filter)) in subscribers.read().clone() {
             if !(filter.matches(&data)) {
                 continue;
             }
@@ -59,7 +59,7 @@ where
                         debug!("Sending Move event to subscriber [{id}].")
                     }
                     Err(e) => {
-                        subscribers.write().await.remove(&id);
+                        subscribers.write().remove(&id);
                         warn!("Error sending event, removing subscriber [{id}] from subscriber list. Error: {e}");
                     }
                 }
@@ -69,11 +69,10 @@ where
 
     /// Subscribe to the data stream filtered by the filter object.
     pub fn subscribe(&self, filter: F) -> impl Stream<Item = T> {
-        let handle = Handle::current();
-        let _ = handle.enter();
-        let mut subscribers = futures::executor::block_on(async { self.subscribers.write().await });
         let (tx, rx) = mpsc::channel::<T>(EVENT_DISPATCH_BUFFER_SIZE);
-        subscribers.insert(ObjectID::random().to_string(), (tx, filter));
+        self.subscribers
+            .write()
+            .insert(ObjectID::random().to_string(), (tx, filter));
         ReceiverStream::new(rx)
     }
 
