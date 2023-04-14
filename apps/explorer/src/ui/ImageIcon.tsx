@@ -4,30 +4,25 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import { useState } from 'react';
 
-const imageStyle = cva(
-    [
-        'bg-gradient-to-r from-gradient-blue-start to-gradient-blue-end text-white capitalize overflow-hidden',
-    ],
-    {
-        variants: {
-            size: {
-                sm: 'w-6 h-6 font-medium text-subtitleSmallExtra',
-                md: 'w-7.5 h-7.5 font-medium text-body',
-                lg: 'md:w-10 md:h-10 w-8 h-8 font-medium text-heading4 md:text-iconTextLarge',
-                xl: 'md:w-31.5 md:h-31.5 w-16 h-16 font-medium text-heading4 md:text-iconTextLarge',
-            },
-            circle: {
-                true: 'rounded-full',
-                false: 'rounded-md',
-            },
+const imageStyle = cva(['text-white capitalize overflow-hidden bg-gray-40'], {
+    variants: {
+        size: {
+            sm: 'w-6 h-6 font-medium text-subtitleSmallExtra',
+            md: 'w-7.5 h-7.5 font-medium text-body',
+            lg: 'md:w-10 md:h-10 w-8 h-8 font-medium text-heading4 md:text-iconTextLarge',
+            xl: 'md:w-31.5 md:h-31.5 w-16 h-16 font-medium text-heading4 md:text-iconTextLarge',
         },
+        circle: {
+            true: 'rounded-full',
+            false: 'rounded-md',
+        },
+    },
 
-        defaultVariants: {
-            circle: false,
-            size: 'md',
-        },
-    }
-);
+    defaultVariants: {
+        circle: false,
+        size: 'md',
+    },
+});
 
 export interface ImageIconProps extends VariantProps<typeof imageStyle> {
     src?: string | null;
@@ -38,7 +33,7 @@ export interface ImageIconProps extends VariantProps<typeof imageStyle> {
 
 function FallBackAvatar({ fallback }: { fallback: string }) {
     return (
-        <div className="flex h-full w-full items-center justify-center">
+        <div className="flex h-full w-full items-center justify-center bg-gradient-to-r from-gradient-blue-start to-gradient-blue-end">
             {fallback?.slice(0, 2)}
         </div>
     );
@@ -60,7 +55,7 @@ export function ImageIcon({
                 <img
                     src={src || ''}
                     alt={alt}
-                    className="flex h-full w-full items-center justify-center"
+                    className="flex h-full w-full items-center justify-center object-contain"
                     onError={() => setError(true)}
                 />
             )}
