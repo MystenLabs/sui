@@ -92,7 +92,7 @@ export function getFieldTypeValue(
 
     return {
         displayName: `${normalizedType.name}${
-            typeParam === '' ? '' : ` <${typeParam}>`
+            typeParam === '' ? '' : `<${typeParam}>`
         }`,
         normalizedType: `${address}::${module}::${name}`,
     };
