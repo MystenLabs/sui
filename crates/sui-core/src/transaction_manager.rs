@@ -125,15 +125,17 @@ impl AvailableObjectsCache {
         }
     }
 
-    fn is_object_available(&mut self, object: &InputKey) -> bool {
+    // Returns Some(true/false) for a definitive result. Returns None if the caller must defer to
+    // the db.
+    fn is_object_available(&mut self, object: &InputKey) -> Option<bool> {
         match (self.cache.get(&object.0), object.1) {
-            (Some(Some(current)), Some(requested)) => *current >= requested,
-            (Some(_), None) => true,
+            (Some(Some(current)), Some(requested)) => Some(*current >= requested),
+            (Some(_), None) => Some(true),
             (Some(None), Some(requested)) => {
                 warn!(?requested, "requested specific version for versionless key");
-                false
+                None
             }
-            _ => false,
+            _ => None,
         }
     }
 }
@@ -336,6 +338,7 @@ impl TransactionManager {
         let mut pending = Vec::new();
         // Check input objects availability, before taking TM lock.
         let mut object_availability: HashMap<InputKey, bool> = HashMap::new();
+        let mut input_object_cache_misses = BTreeSet::new();
         for (cert, expected_effects_digest) in certs {
             let digest = *cert.digest();
             // skip already executed txes
@@ -368,13 +371,18 @@ impl TransactionManager {
                     .filter(|key| {
                         if object_availability.contains_key(key) {
                             false
-                        } else if inner.available_objects_cache.is_object_available(key) {
-                            self.metrics.transaction_manager_object_cache_hits.inc();
-                            object_availability.insert(**key, true);
-                            false
                         } else {
-                            self.metrics.transaction_manager_object_cache_misses.inc();
-                            true
+                            match inner.available_objects_cache.is_object_available(key) {
+                                Some(available) => {
+                                    self.metrics.transaction_manager_object_cache_hits.inc();
+                                    object_availability.insert(**key, available);
+                                    false
+                                }
+                                None => {
+                                    self.metrics.transaction_manager_object_cache_misses.inc();
+                                    true
+                                }
+                            }
                         }
                     })
                     .cloned()
@@ -382,16 +390,8 @@ impl TransactionManager {
             };
 
             for key in &cache_miss_keys {
-                // Checking object availability without holding TM lock to reduce contention.
-                // But input objects can become available before TM lock is acquired.
-                // So missing objects' availability are checked again after releasing the TM lock.
                 if !object_availability.contains_key(key) {
-                    object_availability.insert(
-                        *key,
-                        self.authority_store
-                            .input_object_exists(key)
-                            .expect("Checking object existence cannot fail!"),
-                    );
+                    input_object_cache_misses.insert(*key);
                 }
             }
 
@@ -401,6 +401,19 @@ impl TransactionManager {
                 acquiring_locks: input_object_locks,
                 acquired_locks: BTreeMap::new(),
             });
+        }
+
+        // Checking object availability without holding TM lock to reduce contention.
+        // But input objects can become available before TM lock is acquired.
+        // So missing objects' availability are checked again after releasing the TM lock.
+        let cache_miss_availibility = self
+            .authority_store
+            .input_object_multi_exists(input_object_cache_misses.iter().cloned())
+            .expect("Checking object existence cannot fail!")
+            .into_iter()
+            .zip(input_object_cache_misses.into_iter());
+        for (available, key) in cache_miss_availibility {
+            object_availability.insert(key, available);
         }
 
         // After this point, the function cannot return early and must run to the end. Otherwise,
@@ -567,9 +580,14 @@ impl TransactionManager {
             })
             .collect();
 
-        let (cache_hits, cache_misses): (Vec<_>, Vec<_>) = keys_to_recheck
-            .into_iter()
-            .partition(|key| inner.available_objects_cache.is_object_available(key));
+        let (cache_hits, cache_misses): (Vec<_>, Vec<_>) =
+            keys_to_recheck.into_iter().partition(|key| {
+                inner
+                    .available_objects_cache
+                    .is_object_available(key)
+                    // only take positive cache hits now - negative cache hits must be rechecked
+                    .unwrap_or(false)
+            });
 
         self.metrics
             .transaction_manager_object_cache_hits
