@@ -8,6 +8,7 @@ feature_flags:
   advance_epoch_start_time_in_safe_mode: true
   loaded_child_objects_fixed: true
   missing_type_is_compatibility_error: true
+  scoring_decision_with_validity_cutoff: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -164,4 +165,6 @@ hash_keccak256_data_cost_per_block: 2
 hmac_hmac_sha3_256_cost_base: 52
 hmac_hmac_sha3_256_input_cost_per_byte: 2
 hmac_hmac_sha3_256_input_cost_per_block: 2
+scoring_decision_mad_divisor: 2.3
+scoring_decision_cutoff_value: 2.5
 

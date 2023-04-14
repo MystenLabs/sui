@@ -21,7 +21,8 @@ const MAX_PROTOCOL_VERSION: u64 = 5;
 //            `max_size_written_objects_system_tx`
 // Version 4: New reward slashing rate. Framework changes to skip stake susbidy when the epoch
 //            length is short.
-// Version 5: Package upgrade compatibility error fix. New gas cost table.
+// Version 5: Package upgrade compatibility error fix. New gas cost table. New scoring decision
+//            mechanism that includes up to f scoring authorities.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -135,6 +136,10 @@ struct FeatureFlags {
     // compatibility error.
     #[serde(skip_serializing_if = "is_false")]
     missing_type_is_compatibility_error: bool,
+    // If true, then the scoring decision mechanism will not get disabled when we do have more than
+    // f low scoring authorities, but it will simply flag as low scoring only up to f authorities.
+    #[serde(skip_serializing_if = "is_false")]
+    scoring_decision_with_validity_cutoff: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -564,6 +569,12 @@ pub struct ProtocolConfig {
     hmac_hmac_sha3_256_cost_base: Option<u64>,
     hmac_hmac_sha3_256_input_cost_per_byte: Option<u64>,
     hmac_hmac_sha3_256_input_cost_per_block: Option<u64>,
+
+    // Const params for consensus scoring decision
+    // The scaling factor property for the MED outlier detection
+    scoring_decision_mad_divisor: Option<f64>,
+    // The cutoff value for the MED outlier detection
+    scoring_decision_cutoff_value: Option<f64>,
 }
 
 // feature flags
@@ -609,6 +620,10 @@ impl ProtocolConfig {
 
     pub fn missing_type_is_compatibility_error(&self) -> bool {
         self.feature_flags.missing_type_is_compatibility_error
+    }
+
+    pub fn scoring_decision_with_validity_cutoff(&self) -> bool {
+        self.feature_flags.scoring_decision_with_validity_cutoff
     }
 }
 
@@ -954,6 +969,10 @@ impl ProtocolConfig {
                 max_size_written_objects: None,
                 max_size_written_objects_system_tx: None,
 
+                // Const params for consensus scoring decision
+                scoring_decision_mad_divisor: None,
+                scoring_decision_cutoff_value: None,
+
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
             },
@@ -992,6 +1011,9 @@ impl ProtocolConfig {
                 let mut cfg = Self::get_for_version_impl(version - 1);
                 cfg.feature_flags.missing_type_is_compatibility_error = true;
                 cfg.gas_model_version = Some(4);
+                cfg.feature_flags.scoring_decision_with_validity_cutoff = true;
+                cfg.scoring_decision_mad_divisor = Some(2.3);
+                cfg.scoring_decision_cutoff_value = Some(2.5);
                 cfg
             }
             // Use this template when making changes:
