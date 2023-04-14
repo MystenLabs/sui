@@ -15,6 +15,8 @@ pub struct NetworkConnectionMetrics {
     pub network_peer_connected: IntGaugeVec,
     /// The number of connected peers
     pub network_peers: IntGauge,
+    /// Number of disconnect events per peer.
+    pub network_peer_disconnects: IntCounterVec,
 
     /// PathStats
     /// The rtt for a peer connection in ms.
@@ -60,6 +62,13 @@ impl NetworkConnectionMetrics {
             network_peers: register_int_gauge_with_registry!(
                 format!("{node}_network_peers"),
                 "The number of connected peers.",
+                registry
+            )
+            .unwrap(),
+            network_peer_disconnects: register_int_counter_vec_with_registry!(
+                format!("{node}_network_peer_disconnects"),
+                "Number of disconnect events per peer.",
+                &["peer_id", "reason"],
                 registry
             )
             .unwrap(),

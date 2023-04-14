@@ -82,8 +82,7 @@ impl ConnectionMonitor {
 
         // now report the connected peers
         for peer_id in connected_peers.iter() {
-            self.handle_peer_status_change(*peer_id, ConnectionStatus::Connected)
-                .await;
+            self.handle_peer_event(PeerEvent::NewPeer(*peer_id)).await;
         }
 
         let mut connection_stat_collection_interval =
@@ -118,14 +117,7 @@ impl ConnectionMonitor {
                     }
                 }
                 Ok(event) = subscriber.recv() => {
-                    match event {
-                        PeerEvent::NewPeer(peer_id) => {
-                            self.handle_peer_status_change(peer_id, ConnectionStatus::Connected).await;
-                        }
-                        PeerEvent::LostPeer(peer_id, _) => {
-                            self.handle_peer_status_change(peer_id, ConnectionStatus::Disconnected).await;
-                        }
-                    }
+                    self.handle_peer_event(event).await;
                 }
                 _ = wait_for_shutdown(&mut self.rx_shutdown) => {
                     return;
@@ -134,11 +126,7 @@ impl ConnectionMonitor {
         }
     }
 
-    async fn handle_peer_status_change(
-        &self,
-        peer_id: PeerId,
-        connection_status: ConnectionStatus,
-    ) {
+    async fn handle_peer_event(&self, peer_event: PeerEvent) {
         if let Some(network) = self.network.upgrade() {
             self.connection_metrics
                 .network_peers
@@ -147,19 +135,32 @@ impl ConnectionMonitor {
             return;
         }
 
-        if let Some(ty) = self.peer_id_types.get(&peer_id) {
-            let int_status = match connection_status {
-                ConnectionStatus::Connected => 1,
-                ConnectionStatus::Disconnected => 0,
-            };
+        let (peer_id, status, int_status) = match peer_event {
+            PeerEvent::NewPeer(peer_id) => (peer_id, ConnectionStatus::Connected, 1),
+            PeerEvent::LostPeer(peer_id, _) => (peer_id, ConnectionStatus::Disconnected, 0),
+        };
+        self.connection_statuses.insert(peer_id, status);
 
+        // Only report peer IDs for known peers to prevent unlimited cardinality.
+        let peer_id_str = if self.peer_id_types.contains_key(&peer_id) {
+            format!("{peer_id}")
+        } else {
+            "other_peer".to_string()
+        };
+
+        if let Some(ty) = self.peer_id_types.get(&peer_id) {
             self.connection_metrics
                 .network_peer_connected
-                .with_label_values(&[&format!("{peer_id}"), ty])
+                .with_label_values(&[&peer_id_str, ty])
                 .set(int_status);
         }
 
-        self.connection_statuses.insert(peer_id, connection_status);
+        if let PeerEvent::LostPeer(_, reason) = peer_event {
+            self.connection_metrics
+                .network_peer_disconnects
+                .with_label_values(&[&peer_id_str, &format!("{reason:?}")])
+                .inc();
+        }
     }
 
     // TODO: Replace this with ClosureMetric
