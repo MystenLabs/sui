@@ -1560,9 +1560,18 @@ impl<'a> VerificationObligation<'a> {
 
             // This error message may be very long, so we print out the error in chunks of 2048
             // characters to avoid hitting the max log line length
-            for (i, chunk) in error_message.as_bytes()
-                    .chunks(chunk_size).map(std::str::from_utf8).enumerate() {
-                debug!("Failed to batch verify aggregated auth sig {} (chunk {}): {}", e, i, chunk.unwrap());
+            for (i, chunk) in error_message
+                .as_bytes()
+                .chunks(chunk_size)
+                .map(std::str::from_utf8)
+                .enumerate()
+            {
+                debug!(
+                    "Failed to batch verify aggregated auth sig {} (chunk {}): {}",
+                    e,
+                    i,
+                    chunk.unwrap()
+                );
             }
 
             SuiError::InvalidSignature {
