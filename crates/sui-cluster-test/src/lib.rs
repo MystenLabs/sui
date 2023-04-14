@@ -19,6 +19,7 @@ use sui_json_rpc_types::{
 use sui_types::base_types::TransactionDigest;
 use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::object::Owner;
+use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use test_utils::messages::make_transactions_with_wallet_context;
 
 use shared_crypto::intent::Intent;
@@ -29,7 +30,7 @@ use sui_types::{
     messages::{Transaction, TransactionData, VerifiedTransaction},
 };
 use test_case::{
-    coin_merge_split_test::CoinMergeSplitTest,
+    coin_index_test::CoinIndexTest, coin_merge_split_test::CoinMergeSplitTest,
     fullnode_build_publish_transaction_test::FullNodeBuildPublishTransactionTest,
     fullnode_execute_transaction_test::FullNodeExecuteTransactionTest,
     native_transfer_test::NativeTransferTest, shared_object_test::SharedCounterTest,
@@ -91,12 +92,34 @@ impl TestContext {
         self.client.get_fullnode_client()
     }
 
+    fn clone_fullnode_client(&self) -> SuiClient {
+        self.client.get_fullnode_client().clone()
+    }
+
     fn get_fullnode_rpc_url(&self) -> &str {
         self.cluster.fullnode_url()
     }
 
     fn get_wallet(&self) -> &WalletContext {
         self.client.get_wallet()
+    }
+
+    async fn get_latest_sui_system_state(&self) -> SuiSystemStateSummary {
+        self.client
+            .get_fullnode_client()
+            .governance_api()
+            .get_latest_sui_system_state()
+            .await
+            .unwrap()
+    }
+
+    async fn get_reference_gas_price(&self) -> u64 {
+        self.client
+            .get_fullnode_client()
+            .governance_api()
+            .get_reference_gas_price()
+            .await
+            .unwrap()
     }
 
     fn get_wallet_mut(&mut self) -> &mut WalletContext {
@@ -147,10 +170,14 @@ impl TestContext {
             )
             .await
             .unwrap_or_else(|e| panic!("Failed to execute transaction for {}. {}", desc, e));
-        assert!(matches!(
-            resp.effects.as_ref().unwrap().status(),
-            SuiExecutionStatus::Success
-        ));
+        assert!(
+            matches!(
+                resp.effects.as_ref().unwrap().status(),
+                SuiExecutionStatus::Success
+            ),
+            "Failed to execute transaction for {desc}: {:?}",
+            resp
+        );
         resp
     }
 
@@ -288,6 +315,7 @@ impl ClusterTest {
             TestCase::new(SharedCounterTest {}),
             TestCase::new(FullNodeExecuteTransactionTest {}),
             TestCase::new(FullNodeBuildPublishTransactionTest {}),
+            TestCase::new(CoinIndexTest {}),
         ];
 
         // TODO: improve the runner parallelism for efficiency

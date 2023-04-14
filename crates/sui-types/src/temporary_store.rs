@@ -38,12 +38,17 @@ use crate::{
 };
 use crate::{is_system_package, SUI_SYSTEM_STATE_OBJECT_ID};
 
+pub type WrittenObjects = BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>;
+pub type ObjectMap = BTreeMap<ObjectID, Object>;
+pub type TxCoins = (ObjectMap, WrittenObjects);
+
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct InnerTemporaryStore {
-    pub objects: BTreeMap<ObjectID, Object>,
+    pub objects: ObjectMap,
     pub mutable_inputs: Vec<ObjectRef>,
-    pub written: BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
+    pub written: WrittenObjects,
+    // deleted or wrapped or unwrap-then-delete
     pub deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
     pub events: TransactionEvents,
     pub max_binary_format_version: u32,
