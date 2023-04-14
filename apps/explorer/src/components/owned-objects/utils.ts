@@ -83,17 +83,15 @@ export function getFieldTypeValue(
     let typeParam = '';
 
     if (normalizedType.typeArguments?.length) {
-        typeParam = normalizedType.typeArguments
+        typeParam = `<${normalizedType.typeArguments
             .map(
                 (typeArg) => getFieldTypeValue(typeArg, objectType).displayName
             )
-            .join(', ');
+            .join(', ')}>`;
     }
 
     return {
-        displayName: `${normalizedType.name}${
-            typeParam === '' ? '' : `<${typeParam}>`
-        }`,
+        displayName: `${normalizedType.name}${typeParam}`,
         normalizedType: `${address}::${module}::${name}`,
     };
 }
