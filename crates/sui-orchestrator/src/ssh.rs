@@ -25,11 +25,21 @@ pub enum CommandStatus {
     Terminated,
 }
 
+impl CommandStatus {
+    /// Return whether a background command is still running. Returns `Terminated` if the
+    /// command is not running in the background.
+    pub fn status(command_id: &str, text: &str) -> Self {
+        if text.contains(command_id) {
+            Self::Running
+        } else {
+            Self::Terminated
+        }
+    }
+}
+
 /// The command to execute on all specified remote machines.
-#[derive(Clone)]
-pub struct SshCommand<C: Fn(usize) -> String> {
-    /// The shell command to execute, parametrized by instance index.
-    pub command: C,
+#[derive(Clone, Default)]
+pub struct CommandContext {
     /// Whether to run the command in the background (and return immediately). Commands
     /// running in the background are identified by a unique id.
     pub background: Option<String>,
@@ -39,11 +49,10 @@ pub struct SshCommand<C: Fn(usize) -> String> {
     pub log_file: Option<PathBuf>,
 }
 
-impl<C: Fn(usize) -> String> SshCommand<C> {
+impl CommandContext {
     /// Create a new ssh command.
-    pub fn new(command: C) -> Self {
+    pub fn new() -> Self {
         Self {
-            command,
             background: None,
             path: None,
             log_file: None,
@@ -68,9 +77,9 @@ impl<C: Fn(usize) -> String> SshCommand<C> {
         self
     }
 
-    /// Convert the command into a string.
-    pub fn stringify(&self, index: usize) -> String {
-        let mut str = (self.command)(index);
+    /// Apply the context to a base command.
+    pub fn apply<S: Into<String>>(&self, base_command: S) -> String {
+        let mut str = base_command.into();
         if let Some(log_file) = &self.log_file {
             str = format!("{str} |& tee {}", log_file.as_path().display());
         }
@@ -81,15 +90,6 @@ impl<C: Fn(usize) -> String> SshCommand<C> {
             str = format!("(cd {} && {str})", exec_path.as_path().display());
         }
         str
-    }
-
-    /// Return whether a background command is still running. Returns `Terminated` if the
-    /// command is not running in the background.
-    pub fn status(&self, context: &str) -> CommandStatus {
-        match &self.background {
-            Some(id) if context.contains(id) => CommandStatus::Running,
-            _ => CommandStatus::Terminated,
-        }
     }
 }
 
@@ -145,27 +145,43 @@ impl SshConnectionManager {
     }
 
     /// Execute the specified ssh command on all provided instances.
-    pub async fn execute<'a, I, C>(
+    pub async fn execute<I, S>(
         &self,
         instances: I,
-        command: &SshCommand<C>,
+        command: S,
+        context: CommandContext,
     ) -> SshResult<Vec<(String, String)>>
     where
-        I: Iterator<Item = &'a Instance>,
-        C: Fn(usize) -> String + Clone + Send + 'static,
+        I: IntoIterator<Item = Instance>,
+        S: Into<String> + Clone + Send + 'static,
+    {
+        let targets = instances
+            .into_iter()
+            .map(|instance| (instance, command.clone()));
+        self.execute_per_instance(targets, context).await
+    }
+
+    /// Execute the ssh command associated with each instance.
+    pub async fn execute_per_instance<I, S>(
+        &self,
+        instances: I,
+        context: CommandContext,
+    ) -> SshResult<Vec<(String, String)>>
+    where
+        I: IntoIterator<Item = (Instance, S)>,
+        S: Into<String> + Send + 'static,
     {
         let handles = instances
-            .cloned()
-            .enumerate()
-            .map(|(i, instance)| {
+            .into_iter()
+            .map(|(instance, command)| {
                 let ssh_manager = self.clone();
-                let command = command.clone();
+                let context = context.clone();
 
                 tokio::spawn(async move {
                     ssh_manager
                         .connect(instance.ssh_address())
                         .await?
-                        .execute(command.stringify(i))
+                        .execute(context.apply(command))
                 })
             })
             .collect::<Vec<_>>();
@@ -178,24 +194,28 @@ impl SshConnectionManager {
     }
 
     /// Wait until a command running in the background returns or started.
-    pub async fn wait_for_command<'a, I, C>(
+    pub async fn wait_for_command<I>(
         &self,
         instances: I,
-        command: &SshCommand<C>,
+        command_id: &str,
         status: CommandStatus,
     ) -> SshResult<()>
     where
-        I: Iterator<Item = &'a Instance> + Clone,
-        C: Fn(usize) -> String,
+        I: IntoIterator<Item = Instance> + Clone,
     {
         loop {
             sleep(Self::RETRY_DELAY).await;
 
-            let check_command = SshCommand::new(move |_| "(tmux ls || true)".into());
-            let result = self.execute(instances.clone(), &check_command).await?;
+            let result = self
+                .execute(
+                    instances.clone(),
+                    "(tmux ls || true)",
+                    CommandContext::default(),
+                )
+                .await?;
             if result
                 .iter()
-                .all(|(stdout, _)| command.status(stdout) == status)
+                .all(|(stdout, _)| CommandStatus::status(command_id, stdout) == status)
             {
                 break;
             }
@@ -203,28 +223,37 @@ impl SshConnectionManager {
         Ok(())
     }
 
-    pub async fn wait_for_success<'a, I, C>(&self, instances: I, command: &SshCommand<C>)
+    pub async fn wait_for_success<I, S>(&self, instances: I, command: S)
     where
-        I: Iterator<Item = &'a Instance> + Clone,
-        C: Fn(usize) -> String + Clone + Send + 'static,
+        I: IntoIterator<Item = Instance> + Clone,
+        S: Into<String> + Clone + Send + 'static,
     {
         loop {
             sleep(Self::RETRY_DELAY).await;
 
-            if self.execute(instances.clone(), command).await.is_ok() {
+            if self
+                .execute(
+                    instances.clone(),
+                    command.clone(),
+                    CommandContext::default(),
+                )
+                .await
+                .is_ok()
+            {
                 break;
             }
         }
     }
 
     /// Kill a command running in the background of the specified instances.
-    pub async fn kill<'a, I>(&self, instances: I, command_id: &str) -> SshResult<()>
+    pub async fn kill<I>(&self, instances: I, command_id: &str) -> SshResult<()>
     where
-        I: Iterator<Item = &'a Instance>,
+        I: IntoIterator<Item = Instance>,
     {
-        let command = format!("(tmux kill-session -t {command_id} || true)");
-        let ssh_command = SshCommand::new(move |_| command.clone());
-        self.execute(instances, &ssh_command).await?;
+        let ssh_command = format!("(tmux kill-session -t {command_id} || true)");
+        let targets = instances.into_iter().map(|x| (x, ssh_command.clone()));
+        self.execute_per_instance(targets, CommandContext::default())
+            .await?;
         Ok(())
     }
 }

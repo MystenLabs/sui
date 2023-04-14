@@ -10,13 +10,8 @@ pub mod sui;
 /// The minimum interface that the protocol should implement to allow benchmarks from
 /// the orchestrator.
 pub trait ProtocolCommands {
-    /// The port where the node exposes prometheus metrics.
-    const NODE_METRICS_PORT: u16;
-    /// The port where the client exposes prometheus metrics.
-    const CLIENT_METRICS_PORT: u16;
-
     /// The list of dependencies to install (e.g., through apt-get).
-    fn protocol_dependencies() -> Vec<&'static str>;
+    fn protocol_dependencies(&self) -> Vec<&'static str>;
 
     /// The directories of all databases (that should be erased before each run).
     fn db_directories(&self) -> Vec<PathBuf>;
@@ -27,26 +22,35 @@ pub trait ProtocolCommands {
     where
         I: Iterator<Item = &'a Instance>;
 
-    /// The command to run a node. This command is a function producing a string based
-    /// on an input index (that should be node's unique index).
-    fn node_command<'a, I>(&self, instances: I) -> Box<dyn Fn(usize) -> String>
-    where
-        I: Iterator<Item = &'a Instance>;
-
-    /// The command to run a client. This command is a function producing a string based
-    /// on an input index (that should be client's unique index).
-    fn client_command<'a, I>(
+    /// The command to run a node. The function returns a vector of commands along with the
+    /// associated instance on which to run the command.
+    fn node_command<I>(
         &self,
         instances: I,
         parameters: &BenchmarkParameters,
-    ) -> Box<dyn Fn(usize) -> String>
+    ) -> Vec<(Instance, String)>
     where
-        I: Iterator<Item = &'a Instance>;
+        I: IntoIterator<Item = Instance>;
+
+    /// The command to run a client. The function returns a vector of commands along with the
+    /// associated instance on which to run the command.
+    fn client_command<I>(
+        &self,
+        instances: I,
+        parameters: &BenchmarkParameters,
+    ) -> Vec<(Instance, String)>
+    where
+        I: IntoIterator<Item = Instance>;
 }
 
 /// The names of the minimum metrics exposed by the load generators that are required to
 /// compute performance.
 pub trait ProtocolMetrics {
+    /// The port where the node exposes prometheus metrics.
+    const NODE_METRICS_PORT: u16;
+    /// The port where the client exposes prometheus metrics.
+    const CLIENT_METRICS_PORT: u16;
+
     /// The name of the metric reporting the total duration of the benchmark (in seconds).
     const BENCHMARK_DURATION: &'static str;
     /// The name of the metric reporting the total number of finalized transactions/
@@ -68,6 +72,8 @@ pub mod test_protocol_metrics {
     pub struct TestProtocolMetrics;
 
     impl ProtocolMetrics for TestProtocolMetrics {
+        const NODE_METRICS_PORT: u16 = 8080;
+        const CLIENT_METRICS_PORT: u16 = 8081;
         const BENCHMARK_DURATION: &'static str = "benchmark_duration";
         const TOTAL_TRANSACTIONS: &'static str = "latency_s_count";
         const LATENCY_BUCKETS: &'static str = "latency_s";

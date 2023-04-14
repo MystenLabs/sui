@@ -8,7 +8,6 @@ use std::{
     time::Duration,
 };
 
-use sui_config::genesis_config::GenesisConfig;
 use tokio::time::{self, Instant};
 
 use crate::{
@@ -19,13 +18,13 @@ use crate::{
     faults::CrashRecoverySchedule,
     logs::LogsAnalyzer,
     measurement::{Measurement, MeasurementsCollection},
-    protocol::{sui::SuiProtocol, ProtocolCommands},
+    protocol::{ProtocolCommands, ProtocolMetrics},
     settings::Settings,
-    ssh::{CommandStatus, SshCommand, SshConnectionManager},
+    ssh::{CommandContext, CommandStatus, SshConnectionManager},
 };
 
 /// An orchestrator to run benchmarks on a testbed.
-pub struct Orchestrator {
+pub struct Orchestrator<P> {
     /// The testbed's settings.
     settings: Settings,
     /// The state of the testbed (reflecting accurately the state of the machines).
@@ -34,7 +33,7 @@ pub struct Orchestrator {
     instance_setup_commands: Vec<String>,
     /// Protocol-specific commands generator to generate the protocol configuration files,
     /// boot clients and nodes, etc.
-    protocol_commands: SuiProtocol,
+    protocol_commands: P,
     /// The interval between measurements collection.
     scrape_interval: Duration,
     /// The interval to crash nodes.
@@ -52,7 +51,7 @@ pub struct Orchestrator {
     dedicated_clients: usize,
 }
 
-impl Orchestrator {
+impl<P> Orchestrator<P> {
     /// The default interval between measurements collection.
     const DEFAULT_SCRAPE_INTERVAL: Duration = Duration::from_secs(15);
     /// The default interval to crash nodes.
@@ -63,7 +62,7 @@ impl Orchestrator {
         settings: Settings,
         instances: Vec<Instance>,
         instance_setup_commands: Vec<String>,
-        protocol_commands: SuiProtocol,
+        protocol_commands: P,
         ssh_manager: SshConnectionManager,
     ) -> Self {
         Self {
@@ -176,39 +175,32 @@ impl Orchestrator {
 
         Ok((client_instances, nodes_instances))
     }
+}
 
+impl<P: ProtocolCommands + ProtocolMetrics> Orchestrator<P> {
     /// Boot one node per instance.
-    async fn boot_nodes(&self, instances: Vec<Instance>) -> TestbedResult<()> {
+    async fn boot_nodes(
+        &self,
+        instances: Vec<Instance>,
+        parameters: &BenchmarkParameters,
+    ) -> TestbedResult<()> {
         // Run one node per instance.
-        let listen_addresses = SuiProtocol::make_listen_addresses(&instances);
-        let working_dir = self.settings.working_dir.clone();
-        let command = move |i: usize| -> String {
-            let mut config_path = working_dir.clone();
-            config_path.push("sui_config");
-            config_path.push(format!("validator-config-{i}.yaml"));
-            let address = listen_addresses[i].clone();
-            let run = format!(
-                "cargo run --release --bin sui-node -- --config-path {} --listen-address {address}",
-                config_path.display()
-            );
-            ["source $HOME/.cargo/env", &run].join(" && ")
-        };
+        let targets = self
+            .protocol_commands
+            .node_command(instances.clone(), parameters);
 
         let repo = self.settings.repository_name();
-        let ssh_command = SshCommand::new(command)
+        let context = CommandContext::new()
             .run_background("node".into())
             .with_log_file("~/node.log".into())
             .with_execute_from_path(repo.into());
         self.ssh_manager
-            .execute(instances.iter(), &ssh_command)
+            .execute_per_instance(targets, context)
             .await?;
 
         // Wait until all nodes are reachable.
-        let metrics_command = format!("curl 127.0.0.1:{}/metrics", SuiProtocol::NODE_METRICS_PORT);
-        let metrics_ssh_command = SshCommand::new(move |_| metrics_command.clone());
-        self.ssh_manager
-            .wait_for_success(instances.iter(), &metrics_ssh_command)
-            .await;
+        let metrics = format!("curl 127.0.0.1:{}/metrics", P::NODE_METRICS_PORT);
+        self.ssh_manager.wait_for_success(instances, metrics).await;
 
         Ok(())
     }
@@ -248,7 +240,7 @@ impl Orchestrator {
             .map(|x| x.as_str())
             .collect();
 
-        let protocol_dependencies = SuiProtocol::protocol_dependencies();
+        let protocol_dependencies = self.protocol_commands.protocol_dependencies();
 
         let command = [
             &basic_commands[..],
@@ -258,9 +250,9 @@ impl Orchestrator {
         .concat()
         .join(" && ");
 
-        let instances = self.instances.iter().filter(|x| x.is_active());
-        let ssh_command = SshCommand::new(move |_| command.clone());
-        self.ssh_manager.execute(instances, &ssh_command).await?;
+        let active = self.instances.iter().filter(|x| x.is_active()).cloned();
+        let context = CommandContext::default();
+        self.ssh_manager.execute(active, command, context).await?;
 
         display::done();
         Ok(())
@@ -283,19 +275,20 @@ impl Orchestrator {
         ]
         .join(" && ");
 
-        let instances = self.instances.iter().filter(|x| x.is_active());
+        let active = self.instances.iter().filter(|x| x.is_active()).cloned();
+
         let id = "update";
         let repo_name = self.settings.repository_name();
-        let ssh_command = SshCommand::new(move |_| command.clone())
+        let context = CommandContext::new()
             .run_background(id.into())
             .with_execute_from_path(repo_name.into());
         self.ssh_manager
-            .execute(instances.clone(), &ssh_command)
+            .execute(active.clone(), command, context)
             .await?;
 
         // Wait until the command finished running.
         self.ssh_manager
-            .wait_for_command(instances, &ssh_command, CommandStatus::Terminated)
+            .wait_for_command(active, &id, CommandStatus::Terminated)
             .await?;
 
         display::done();
@@ -312,11 +305,9 @@ impl Orchestrator {
         // Generate the genesis configuration file and the keystore allowing access to gas objects.
         let command = self.protocol_commands.genesis_command(nodes.iter());
         let repo_name = self.settings.repository_name();
-        let ssh_command =
-            SshCommand::new(move |_| command.clone()).with_execute_from_path(repo_name.into());
-        self.ssh_manager
-            .execute(clients.iter().chain(nodes.iter()), &ssh_command)
-            .await?;
+        let context = CommandContext::new().with_execute_from_path(repo_name.into());
+        let all = clients.into_iter().chain(nodes.into_iter());
+        self.ssh_manager.execute(all, command, context).await?;
 
         display::done();
         Ok(())
@@ -333,22 +324,21 @@ impl Orchestrator {
         }
         if cleanup {
             command.push("(rm -rf ~/*log* || true)".into());
-            // command.push("(rm -rf ~/*.yml || true)".into());
-            // command.push("(rm -rf ~/*.keystore || true)".into());
+            command.push("(rm -rf ~/*.yml || true)".into());
+            command.push("(rm -rf ~/*.keystore || true)".into());
         }
         let command = command.join(" ; ");
 
         // Execute the deletion on all machines.
-        let instances = self.instances.iter().filter(|x| x.is_active());
-        let ssh_command = SshCommand::new(move |_| command.clone());
-        self.ssh_manager.execute(instances, &ssh_command).await?;
+        let active = self.instances.iter().filter(|x| x.is_active()).cloned();
+        let context = CommandContext::default();
+        self.ssh_manager.execute(active, command, context).await?;
 
         display::done();
         Ok(())
     }
 
-    /// Deploy the nodes. Optionally specify which instances to deploy; run the entire committee
-    /// by default.
+    /// Deploy the nodes.
     pub async fn run_nodes(&self, parameters: &BenchmarkParameters) -> TestbedResult<()> {
         display::action("Deploying validators");
 
@@ -356,7 +346,7 @@ impl Orchestrator {
         let (_, nodes) = self.select_instances(parameters)?;
 
         // Boot one node per instance.
-        self.boot_nodes(nodes).await?;
+        self.boot_nodes(nodes, parameters).await?;
 
         display::done();
         Ok(())
@@ -370,57 +360,22 @@ impl Orchestrator {
         let (clients, _) = self.select_instances(parameters)?;
 
         // Deploy the load generators.
-        let working_dir = self.settings.working_dir.clone();
-        let number_of_clients = clients.len();
-        let load_share = parameters.load / number_of_clients;
-        let shared_counter = parameters.shared_objects_ratio;
-        let transfer_objects = 100 - shared_counter;
-        let command = move |i: usize| -> String {
-            let mut genesis = working_dir.clone();
-            genesis.push("sui_config");
-            genesis.push("genesis.blob");
-            let gas_id =
-                GenesisConfig::benchmark_gas_object_id_offsets(number_of_clients)[i].clone();
-            let keystore = format!(
-                "~/working_dir/sui_config/{}",
-                sui_config::SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME
-            );
-
-            let run = [
-                "cargo run --release --bin stress --",
-                "--local false --num-client-threads 24 --num-transfer-accounts 2 ",
-                &format!(
-                    "--genesis-blob-path {} --keystore-path {keystore}",
-                    genesis.display()
-                ),
-                &format!("--primary-gas-id {}", gas_id),
-                "bench",
-                &format!("--num-workers 24 --in-flight-ratio 30 --target-qps {load_share}"),
-                &format!("--shared-counter {shared_counter} --transfer-object {transfer_objects}"),
-                &format!("--client-metric-port {}", SuiProtocol::CLIENT_METRICS_PORT),
-            ]
-            .join(" ");
-            ["source $HOME/.cargo/env", &run].join(" && ")
-        };
+        let targets = self
+            .protocol_commands
+            .client_command(clients.clone(), parameters);
 
         let repo = self.settings.repository_name();
-        let ssh_command = SshCommand::new(command)
+        let context = CommandContext::new()
             .run_background("client".into())
             .with_log_file("~/client.log".into())
             .with_execute_from_path(repo.into());
         self.ssh_manager
-            .execute(clients.iter(), &ssh_command)
+            .execute_per_instance(targets, context)
             .await?;
 
         // Wait until all load generators are reachable.
-        let metrics_command = format!(
-            "curl 127.0.0.1:{}/metrics",
-            SuiProtocol::CLIENT_METRICS_PORT
-        );
-        let metrics_ssh_command = SshCommand::new(move |_| metrics_command.clone());
-        self.ssh_manager
-            .wait_for_success(clients.iter(), &metrics_ssh_command)
-            .await;
+        let metrics = format!("curl 127.0.0.1:{}/metrics", P::CLIENT_METRICS_PORT);
+        self.ssh_manager.wait_for_success(clients, metrics).await;
 
         display::done();
         Ok(())
@@ -440,11 +395,7 @@ impl Orchestrator {
         let (clients, nodes) = self.select_instances(parameters)?;
 
         // Regularly scrape the client metrics.
-        let command = format!(
-            "curl 127.0.0.1:{}/metrics",
-            SuiProtocol::CLIENT_METRICS_PORT
-        );
-        let ssh_command = SshCommand::new(move |_| command.clone());
+        let metrics = format!("curl 127.0.0.1:{}/metrics", P::CLIENT_METRICS_PORT);
 
         let mut aggregator = MeasurementsCollection::new(&self.settings, parameters.clone());
         let mut metrics_interval = time::interval(self.scrape_interval);
@@ -465,16 +416,14 @@ impl Orchestrator {
 
                     let stdio = self
                         .ssh_manager
-                        .execute(clients.iter(), &ssh_command)
+                        .execute(clients.clone(), metrics.clone(), CommandContext::default())
                         .await?;
                     for (i, (stdout, _stderr)) in stdio.iter().enumerate() {
-                        let measurement = Measurement::from_prometheus::<SuiProtocol>(stdout);
+                        let measurement = Measurement::from_prometheus::<P>(stdout);
                         aggregator.add(i, measurement);
                     }
 
-                    if aggregator.benchmark_duration() >= parameters.duration {
-                        break;
-                    } else if elapsed > (parameters.duration + self.scrape_interval).as_secs() {
+                    if elapsed > parameters.duration .as_secs() {
                         display::error("Maximum scraping duration exceeded");
                         break;
                     }
@@ -482,16 +431,16 @@ impl Orchestrator {
 
                 // Kill and recover nodes according to the input schedule.
                 _ = faults_interval.tick() => {
-                    let action = faults_schedule.update();
+                    let  action = faults_schedule.update();
                     if !action.kill.is_empty() {
-                        self.ssh_manager.kill(action.kill.iter(), "node").await?;
+                        self.ssh_manager.kill(action.kill.clone(), "node").await?;
                     }
                     if !action.boot.is_empty() {
-                        self.boot_nodes(action.boot.clone()).await?;
+                        self.boot_nodes(action.boot.clone(), parameters).await?;
                     }
                     if !action.kill.is_empty() || !action.boot.is_empty() {
                         display::newline();
-                        display::config("Update testbed", action);
+                        display::config("Testbed update", action);
                     }
                 }
             }

@@ -17,11 +17,7 @@ pub struct SuiProtocol {
 }
 
 impl ProtocolCommands for SuiProtocol {
-    const NODE_METRICS_PORT: u16 =
-        ValidatorGenesisInfo::DEFAULT_METRICS_PORT + GenesisConfig::BENCHMARKS_PORT_OFFSET as u16;
-    const CLIENT_METRICS_PORT: u16 = 8081;
-
-    fn protocol_dependencies() -> Vec<&'static str> {
+    fn protocol_dependencies(&self) -> Vec<&'static str> {
         vec![
             // Install typical sui dependencies.
             "sudo apt-get -y install curl git-all clang cmake gcc libssl-dev pkg-config libclang-dev",
@@ -64,36 +60,48 @@ impl ProtocolCommands for SuiProtocol {
         .join(" && ")
     }
 
-    fn node_command<'a, I>(&self, instances: I) -> Box<dyn Fn(usize) -> String>
+    fn node_command<I>(
+        &self,
+        instances: I,
+        _parameters: &BenchmarkParameters,
+    ) -> Vec<(Instance, String)>
     where
-        I: Iterator<Item = &'a Instance>,
+        I: IntoIterator<Item = Instance>,
     {
-        let instances: Vec<_> = instances.cloned().collect();
+        let working_dir = self.working_dir.clone();
+
+        let instances: Vec<_> = instances.into_iter().collect();
         let listen_addresses = Self::make_listen_addresses(&instances);
 
-        let working_dir = self.working_dir.clone();
-        Box::new(move |i| {
-            let validator_config = sui_config::validator_config_file(i);
-            let config_path: PathBuf = [&working_dir, &validator_config.into()].iter().collect();
-            let path = config_path.display();
-            let address = listen_addresses[i].clone();
+        instances
+            .into_iter()
+            .enumerate()
+            .map(|(i, instance)| {
+                let validator_config = sui_config::validator_config_file(i);
+                let config_path: PathBuf =
+                    [&working_dir, &validator_config.into()].iter().collect();
+                let path = config_path.display();
+                let address = listen_addresses[i].clone();
 
-            let run = [
-                "cargo run --release --bin sui-node --",
-                &format!("--config-path {path} --listen-address {address}"),
-            ]
-            .join(" ");
-            ["source $HOME/.cargo/env", &run].join(" && ")
-        })
+                let run = [
+                    "cargo run --release --bin sui-node --",
+                    &format!("--config-path {path} --listen-address {address}"),
+                ]
+                .join(" ");
+                let command = ["source $HOME/.cargo/env", &run].join(" && ");
+
+                (instance, command)
+            })
+            .collect()
     }
 
-    fn client_command<'a, I>(
+    fn client_command<I>(
         &self,
-        _instances: I,
+        instances: I,
         parameters: &BenchmarkParameters,
-    ) -> Box<dyn Fn(usize) -> String>
+    ) -> Vec<(Instance, String)>
     where
-        I: Iterator<Item = &'a Instance>,
+        I: IntoIterator<Item = Instance>,
     {
         let genesis_path: PathBuf = [&self.working_dir, &sui_config::SUI_GENESIS_FILENAME.into()]
             .iter()
@@ -104,35 +112,50 @@ impl ProtocolCommands for SuiProtocol {
         ]
         .iter()
         .collect();
+
+        let clients: Vec<_> = instances.into_iter().collect();
         let committee_size = parameters.nodes;
-        let load_share = parameters.load / committee_size;
+        let load_share = parameters.load / clients.len();
         let shared_counter = parameters.shared_objects_ratio;
         let transfer_objects = 100 - shared_counter;
         let metrics_port = Self::CLIENT_METRICS_PORT;
 
-        Box::new(move |i| {
-            let genesis = genesis_path.display();
-            let keystore = keystore_path.display();
-            // let gas_id = SuiProtocol::gas_object_id_offsets(committee_size)[i].clone();
-            let gas_id = GenesisConfig::benchmark_gas_object_id_offsets(committee_size)[i].clone();
-            let run = [
-                "cargo run --release --bin stress --",
-                "--num-client-threads 24 --num-server-threads 1",
-                "--local false --num-transfer-accounts 2",
-                &format!("--genesis-blob-path {genesis} --keystore-path {keystore}",),
-                &format!("--primary-gas-id {gas_id}"),
-                "bench",
-                &format!("--in-flight-ratio 30 --num-workers 24 --target-qps {load_share}"),
-                &format!("--shared-counter {shared_counter} --transfer-object {transfer_objects}"),
-                &format!("--client-metric-host 0.0.0.0 --client-metric-port {metrics_port}"),
-            ]
-            .join(" ");
-            ["source $HOME/.cargo/env", &run].join(" && ")
-        })
+        clients
+            .into_iter()
+            .enumerate()
+            .map(|(i, instance)| {
+                let genesis = genesis_path.display();
+                let keystore = keystore_path.display();
+                let gas_id =
+                    GenesisConfig::benchmark_gas_object_id_offsets(committee_size)[i].clone();
+
+                let run = [
+                    "cargo run --release --bin stress --",
+                    "--num-client-threads 24 --num-server-threads 1",
+                    "--local false --num-transfer-accounts 2",
+                    &format!("--genesis-blob-path {genesis} --keystore-path {keystore}",),
+                    &format!("--primary-gas-id {gas_id}"),
+                    "bench",
+                    &format!("--in-flight-ratio 30 --num-workers 24 --target-qps {load_share}"),
+                    &format!(
+                        "--shared-counter {shared_counter} --transfer-object {transfer_objects}"
+                    ),
+                    &format!("--client-metric-host 0.0.0.0 --client-metric-port {metrics_port}"),
+                ]
+                .join(" ");
+                let command = ["source $HOME/.cargo/env", &run].join(" && ");
+
+                (instance, command)
+            })
+            .collect()
     }
 }
 
 impl ProtocolMetrics for SuiProtocol {
+    const NODE_METRICS_PORT: u16 =
+        ValidatorGenesisInfo::DEFAULT_METRICS_PORT + GenesisConfig::BENCHMARKS_PORT_OFFSET as u16;
+    const CLIENT_METRICS_PORT: u16 = 8081;
+
     const BENCHMARK_DURATION: &'static str = "benchmark_duration";
     const TOTAL_TRANSACTIONS: &'static str = "latency_s_count";
     const LATENCY_BUCKETS: &'static str = "latency_s";

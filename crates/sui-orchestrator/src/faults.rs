@@ -35,12 +35,12 @@ impl Display for FaultsType {
         match self {
             Self::Permanent { faults } => {
                 if *faults == 0 {
-                    write!(f, "No faults")
+                    write!(f, "no faults")
                 } else {
-                    write!(f, "{faults} permanently crashed")
+                    write!(f, "{faults} crashed")
                 }
             }
-            Self::CrashRecovery { max_faults } => write!(f, "up to {max_faults} crash-recovery"),
+            Self::CrashRecovery { max_faults } => write!(f, "{max_faults} crash-recovery"),
         }
     }
 }
