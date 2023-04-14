@@ -13,7 +13,7 @@ disallowed-methods = [
     { path = "log::error", reason = "use tracing::error instead" },
     { path = "log::warn", reason = "use tracing::warn instead" },
     # known to cause blocking issues
-    { path = "futures::executor::block_on", reason = "use atokio::runtime::runtime::Runtime::block_on instead"},
+    { path = "futures::executor::block_on", reason = "use tokio::runtime::runtime::Runtime::block_on instead"},
     # unbounded channels are for expert use only
     { path = "tokio::sync::mpsc::unbounded_channel", reason = "use a bounded channel instead" },
     { path = "futures::channel::mpsc::unbounded", reason = "use a bounded channel instead" },
