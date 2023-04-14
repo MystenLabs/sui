@@ -963,7 +963,7 @@ impl<S: ObjectStore> TemporaryStore<S> {
     ) -> GasCostSummary {
         // at this point, we have done *all* charging for computation,
         // but have not yet set the storage rebate or storage gas units
-        if self.protocol_config.gas_model_version() < 2 {
+        if gas_status.is_legacy_gas() {
             assert!(gas_status.storage_rebate() == 0);
             assert!(gas_status.storage_gas_units() == 0);
         } else {
@@ -991,7 +991,7 @@ impl<S: ObjectStore> TemporaryStore<S> {
         // system transactions (None gas_object_id)  do not have gas and so do not charge
         // for storage, however they track storage values to check for conservation rules
         if let Some(gas_object_id) = gas_object_id {
-            if self.protocol_config.gas_model_version() < 4 {
+            if gas_status.charge_budget_for_storage_out_of_gas() {
                 self.handle_storage_and_rebate_v1(gas, gas_object_id, gas_status, execution_result)
             } else {
                 self.handle_storage_and_rebate_v2(gas, gas_object_id, gas_status, execution_result)
@@ -1065,7 +1065,7 @@ impl<S: ObjectStore> TemporaryStore<S> {
             old_obj.storage_rebate
         } else {
             // else, this is a dynamic field, not an input object
-            if self.protocol_config.gas_model_version() < 2 {
+            if gas::is_legacy_gas(&self.protocol_config) {
                 if let Ok(Some(old_obj)) = self.store.get_object(id) {
                     if old_obj.version() != expected_version {
                         // not a lot we can do safely and under this condition everything is broken
@@ -1122,7 +1122,7 @@ impl<S: ObjectStore> TemporaryStore<S> {
                         old_obj.storage_rebate
                     } else {
                         // else, this is a dynamic field, not an input object
-                        if self.protocol_config.gas_model_version() < 2 {
+                        if gas_status.is_legacy_gas() {
                             if let Ok(Some(old_obj)) = self.store.get_object(object_id) {
                                 let expected_version = object.version();
                                 if old_obj.version() != expected_version {
@@ -1231,7 +1231,7 @@ impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
             Ok((input_sui, obj.storage_rebate))
         } else {
             // not in input objects, must be a dynamic field
-            if self.protocol_config.gas_model_version() < 2 {
+            if gas::is_legacy_gas(&self.protocol_config) {
                 let obj = self
                     .store
                     .get_object(id)

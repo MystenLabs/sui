@@ -53,28 +53,52 @@ pub enum SuiGasStatus {
 
 impl SuiGasStatus {
     pub fn new_with_budget(gas_budget: u64, gas_price: u64, config: &ProtocolConfig) -> Self {
-        match config.gas_model_version() {
-            1 => Self::V1(SuiGasStatusV1::new_with_budget(
+        if config.gas_model_version() < 2 {
+            Self::V1(SuiGasStatusV1::new_with_budget(
                 gas_budget,
                 gas_price,
                 config,
-            )),
-            2 | 3 | 4 => Self::V2(SuiGasStatusV2::new_with_budget(
+            ))
+        } else {
+            Self::V2(SuiGasStatusV2::new_with_budget(
                 gas_budget,
                 gas_price,
                 config,
-            )),
-            _ => panic!("unknown gas model version"),
+            ))
         }
     }
 
     pub fn new_unmetered(config: &ProtocolConfig) -> Self {
-        match config.gas_model_version() {
-            1 => Self::V1(SuiGasStatusV1::new_unmetered()),
-            2 | 3 | 4 => Self::V2(SuiGasStatusV2::new_unmetered()),
-            _ => panic!("unknown gas model version"),
+        if config.gas_model_version() < 2 {
+            Self::V1(SuiGasStatusV1::new_unmetered())
+        } else {
+            Self::V2(SuiGasStatusV2::new_unmetered())
         }
     }
+
+    // Return true if the gas model is the legacy one. That is the gas model before mainnet, and
+    // all code gated by that will be deleted once testnet is "reset"
+    pub fn is_legacy_gas(&self) -> bool {
+        match self {
+            Self::V1(_) => true,
+            Self::V2(_) => false,
+        }
+    }
+
+    // Return true if storage out of gas charge entire budget. That is deprecated behavior
+    // in mainnet
+    pub fn charge_budget_for_storage_out_of_gas(&self) -> bool {
+        match self {
+            Self::V1(_) => true,
+            Self::V2(gas_status) => gas_status.charge_budget_for_storage_out_of_gas(),
+        }
+    }
+}
+
+// Return true if the gas model is the legacy one. That is the gas model before mainnet, and
+// all code gated by that will be deleted once testnet is "reset"
+pub fn is_legacy_gas(config: &ProtocolConfig) -> bool {
+    config.gas_model_version() < 2
 }
 
 pub enum SuiCostTable {
@@ -84,10 +108,10 @@ pub enum SuiCostTable {
 
 impl SuiCostTable {
     pub fn new(config: &ProtocolConfig) -> Self {
-        match config.gas_model_version() {
-            1 => Self::V1(SuiCostTableV1::new(config)),
-            2 | 3 | 4 => Self::V2(SuiCostTableV2::new(config)),
-            _ => panic!("unknown gas model version"),
+        if config.gas_model_version() < 2 {
+            Self::V1(SuiCostTableV1::new(config))
+        } else {
+            Self::V2(SuiCostTableV2::new(config))
         }
     }
 
@@ -96,10 +120,10 @@ impl SuiCostTable {
     }
 
     pub fn unmetered(config: &ProtocolConfig) -> Self {
-        match config.gas_model_version() {
-            1 => Self::V1(SuiCostTableV1::unmetered()),
-            2 | 3 | 4 => Self::V2(SuiCostTableV2::unmetered()),
-            _ => panic!("unknown gas model version"),
+        if config.gas_model_version() < 2 {
+            Self::V1(SuiCostTableV1::unmetered())
+        } else {
+            Self::V2(SuiCostTableV2::unmetered())
         }
     }
 
@@ -305,13 +329,6 @@ pub fn deduct_gas(gas_object: &mut Object, charge_or_rebate: i64) {
         balance - charge_or_rebate as u64
     };
     gas_coin.set_coin_value_unsafe(new_balance)
-}
-
-pub fn refund_gas(gas_object: &mut Object, amount: u64) {
-    // The object must be a gas coin as we have checked in transaction handle phase.
-    let gas_coin = gas_object.data.try_as_move_mut().unwrap();
-    let balance = gas_coin.get_coin_value_unsafe();
-    gas_coin.set_coin_value_unsafe(balance + amount)
 }
 
 pub fn get_gas_balance(gas_object: &Object) -> UserInputResult<u64> {

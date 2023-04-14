@@ -300,7 +300,7 @@ fn execute_transaction<
         execution_result
     });
 
-    if protocol_config.gas_model_version() > 1 {
+    if !gas_status.is_legacy_gas() {
         // We always go through the gas charging process, but for system transaction, we don't pass
         // the gas object ID since it's not a valid object.
         // TODO: Ideally we should make gas object ref None in the first place.

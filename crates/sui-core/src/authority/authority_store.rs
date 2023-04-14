@@ -31,7 +31,7 @@ use sui_types::storage::{
     get_module_by_id, BackingPackageStore, ChildObjectResolver, DeleteKind, ObjectKey, ObjectStore,
 };
 use sui_types::sui_system_state::get_sui_system_state;
-use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentSync};
+use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, gas, storage::ParentSync};
 use typed_store::rocks::{DBBatch, TypedStoreError};
 use typed_store::traits::Map;
 
@@ -1464,7 +1464,7 @@ impl AuthorityStore {
                 .protocol_version(),
         );
         // Prior to gas model v2, SUI conservation is not guaranteed.
-        if ProtocolConfig::get_for_version(protocol_version).gas_model_version() <= 1 {
+        if gas::is_legacy_gas(&ProtocolConfig::get_for_version(protocol_version)) {
             return Ok(());
         }
 

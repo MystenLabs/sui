@@ -150,10 +150,10 @@ impl SuiCostTable {
 }
 
 fn cost_table_for_version(config: &ProtocolConfig) -> CostTable {
-    match config.gas_model_version() {
-        1 | 2 | 3 => initial_cost_schedule_v1(),
-        4 => initial_cost_schedule_v2(),
-        _ => panic!("Unknown gas cost table version"),
+    if config.gas_model_version() < 4 {
+        initial_cost_schedule_v1()
+    } else {
+        initial_cost_schedule_v2()
     }
 }
 
@@ -163,6 +163,8 @@ pub struct SuiGasStatus {
     pub gas_status: GasStatus,
     // Cost table contains a set of constant/config for the gas model/charging
     cost_table: SuiCostTable,
+    // gas model version
+    gas_model: u64,
     // Gas budget for this gas status instance.
     // Typically the gas budget as defined in the `TransactionData::GasData`
     gas_budget: u64,
@@ -213,10 +215,12 @@ impl SuiGasStatus {
         storage_gas_price: u64,
         rebate_rate: u64,
         cost_table: SuiCostTable,
+        gas_model: u64,
     ) -> SuiGasStatus {
         SuiGasStatus {
             gas_status: move_gas_status,
             gas_budget,
+            gas_model,
             charge,
             computation_cost: 0,
             gas_price,
@@ -254,6 +258,7 @@ impl SuiGasStatus {
             storage_gas_price,
             config.storage_rebate_rate(),
             sui_cost_table,
+            config.gas_model_version(),
         )
     }
 
@@ -282,6 +287,7 @@ impl SuiGasStatus {
             storage_gas_price,
             rebate_rate,
             cost_table,
+            4, // so in test we use the latest model, revisit with a better setup for testing
         )
     }
 
@@ -294,7 +300,12 @@ impl SuiGasStatus {
             0,
             0,
             SuiCostTable::unmetered(),
+            4, // so we use the latest model, revisit with a better setup
         )
+    }
+
+    pub fn charge_budget_for_storage_out_of_gas(&self) -> bool {
+        self.gas_model < 4
     }
 }
 
