@@ -46,10 +46,13 @@ jobs:
           # valid for. This is optional and defaults to "1h"
           certificate-ttl: 12h
 
-      # Cargo clean and git restore on any left over files from git checkout
-      - name: Environment clean
-        run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@fullnode-compat-test-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && cargo clean && git restore ."
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Get latest CI-tagged binary commit hash
+        run: echo "CI_COMMIT_HASH=$(git for-each-ref --sort=creatordate refs/tags | grep -E 'sui_v(.*)_ci' | tail -1 | awk '{ print $1 }')" >> $GITHUB_OUTPUT
+        id: get-ci-tag
 
       # Wipe database from previous runs
       - name: Wipe SuiDB
@@ -58,18 +61,22 @@ jobs:
           tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@fullnode-compat-test-01 "sudo rm -rf /var/lib/sui/suidb || true"
 
       # Checkout the latest sui repo
-      # TODO(william) instead download the latest build binary from s3
       - name: Checkout sui repo
         run: |
           tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 10 ssh ubuntu@fullnode-compat-test-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && git fetch origin main && git rebase origin/main"
 
-      - name: Build sui-node
+      # Cargo clean and git restore on any left over files from git checkout
+      - name: Environment clean
         run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 30 ssh ubuntu@fullnode-compat-test-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && CARGO_INCREMENTAL=0 cargo build --release --bin sui-node"
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@fullnode-compat-test-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && cargo clean && git restore ."
+
+      - name: Fetch sui-node binary
+        run: |
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 30 ssh ubuntu@fullnode-compat-test-01 "mkdir -p /var/lib/sui/bin && cd /var/lib/sui/bin && wget https://sui-releases.s3.us-east-1.amazonaws.com/${{ steps.get-ci-tag.outputs.CI_COMMIT_HASH }}/sui-node && chmod +x sui-node"
 
       - name: Run sync script
         run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 720 ssh ubuntu@fullnode-compat-test-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && CARGO_TERM_COLOR=always ./scripts/fullnode-sync.sh -p ./target/release/sui-node -n testnet ${{ github.event.inputs.verbose == true && '-v' || '' }}"
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 720 ssh ubuntu@fullnode-compat-test-01 "cd ~/sui && echo "Running compatibility checker against binary built at commit hash ${{ steps.get-ci-tag.outputs.CI_COMMIT_HASH }}" && CARGO_TERM_COLOR=always ./scripts/fullnode-sync.sh -p /var/lib/sui/bin/sui-node -n testnet ${{ github.event.inputs.verbose == true && '-v' || '' }}"
 
   notify:
     name: Notify
