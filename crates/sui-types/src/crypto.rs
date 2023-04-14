@@ -45,6 +45,7 @@ use fastcrypto::error::FastCryptoError;
 use fastcrypto::hash::{Blake2b256, HashFunction};
 pub use fastcrypto::traits::Signer;
 use std::fmt::Debug;
+use tracing::debug;
 
 #[cfg(test)]
 #[path = "unit_tests/crypto_tests.rs"]
@@ -1549,11 +1550,23 @@ impl<'a> VerificationObligation<'a> {
             pks,
             &self.messages.iter().map(|x| &x[..]).collect::<Vec<_>>()[..],
         )
-        .map_err(|e| SuiError::InvalidSignature {
-            error: format!(
+        .map_err(|e| {
+            let error_message = format!(
                 "Failed to batch verify aggregated auth sig {} pks: {:?} messages: {:?} sigs: {:?}",
                 e, &self.public_keys, &self.messages, &self.signatures
-            ),
+            );
+
+            // The error message may be very long, so we print out the error in chunks of 2048
+            // characters to avoid hitting the max log line length
+            error_message
+                .as_bytes()
+                .chunks(2048)
+                .map(std::str::from_utf8)
+                .for_each(|x| debug!("{}", x.unwrap()));
+
+            SuiError::InvalidSignature {
+                error: error_message,
+            }
         })?;
         Ok(())
     }
