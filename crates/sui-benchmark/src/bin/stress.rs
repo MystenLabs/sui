@@ -86,6 +86,7 @@ async fn main() -> Result<()> {
             .unwrap(),
     );
     let registry: Registry = registry_service.default_registry();
+    mysten_metrics::init_metrics(&registry);
 
     let barrier = Arc::new(Barrier::new(2));
     let cloned_barrier = barrier.clone();

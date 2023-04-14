@@ -42,6 +42,7 @@ regex = "1.7.1"
 
 move-core-types.workspace = true
 move-package.workspace = true
+mysten-metrics = { path = "../mysten-metrics" }
 narwhal-node = { path = "../../narwhal/node" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 test-utils = { path = "../test-utils" }
