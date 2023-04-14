@@ -267,10 +267,6 @@ export function TokenView({ data }: { data: DataType }) {
                 </div>
             </div>
             <TransactionBlocksForAddress address={data.id} isObject />
-            {/* <div>
-                <h2 className={styles.header}>Transaction Blocks</h2>
-                <TransactionsForAddress address={data.id} type="object" />
-            </div> */}
         </div>
     );
 }
