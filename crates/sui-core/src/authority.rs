@@ -2075,7 +2075,7 @@ impl AuthorityState {
     /// Depending on the object pruning policies that will be enforced in the
     /// future there is no software-level guarantee/SLA to retrieve an object
     /// with an old version even if it exists/existed.
-    pub async fn get_past_object_read(
+    pub fn get_past_object_read(
         &self,
         object_id: &ObjectID,
         version: SequenceNumber,
