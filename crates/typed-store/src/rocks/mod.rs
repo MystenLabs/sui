@@ -17,7 +17,7 @@ use rocksdb::{checkpoint::Checkpoint, BlockBasedOptions, Cache, LiveFile};
 use rocksdb::{
     properties, AsColumnFamilyRef, CStrLike, ColumnFamilyDescriptor, DBWithThreadMode, Error,
     ErrorKind, IteratorMode, MultiThreaded, OptimisticTransactionOptions, ReadOptions, Transaction,
-    WriteBatch, WriteBatchWithTransaction, WriteOptions,
+    UniversalCompactOptions, WriteBatch, WriteBatchWithTransaction, WriteOptions,
 };
 use serde::{de::DeserializeOwned, Serialize};
 use std::collections::HashSet;
@@ -50,6 +50,8 @@ const ENV_VAR_DB_WAL_SIZE: &str = "MYSTEN_DB_WAL_SIZE_MB";
 const DEFAULT_DB_WAL_SIZE: usize = 10 * 1024;
 
 const ENV_VAR_L0_NUM_FILES_COMPACTION_TRIGGER: &str = "L0_NUM_FILES_COMPACTION_TRIGGER";
+const DEFAULT_L0_NUM_FILES_COMPACTION_TRIGGER: usize = 8;
+
 const ENV_VAR_MAX_BACKGROUND_JOBS: &str = "MAX_BACKGROUND_JOBS";
 
 #[cfg(test)]
@@ -1829,9 +1831,22 @@ pub fn base_db_options() -> DBOptions {
     opt.set_table_cache_num_shard_bits(10);
 
     // Allow buffering 512MiB of writes before flushing to disk.
-    opt.set_write_buffer_size(128 * 1024 * 1024);
+    opt.set_write_buffer_size(256 * 1024 * 1024);
     opt.set_max_write_buffer_number(4);
 
+    opt.set_universal_compaction_options(&UniversalCompactOptions::default());
+    opt.set_num_levels(20);
+    opt.set_num_levels(10);
+    opt.set_target_file_size_base(512 * 1024 * 1024);
+    opt.set_max_bytes_for_level_base(2 * 1024 * 1024 * 1024);
+    opt.set_level_zero_file_num_compaction_trigger(
+        read_size_from_env(ENV_VAR_L0_NUM_FILES_COMPACTION_TRIGGER)
+            .unwrap_or(DEFAULT_L0_NUM_FILES_COMPACTION_TRIGGER)
+            .try_into()
+            .unwrap(),
+    );
+    opt.set_level_zero_slowdown_writes_trigger(40);
+    opt.set_level_zero_stop_writes_trigger(60);
     opt.set_min_level_to_compress(2);
     opt.set_compression_type(rocksdb::DBCompressionType::Lz4);
     opt.set_bottommost_compression_type(rocksdb::DBCompressionType::Zstd);
@@ -1904,17 +1919,16 @@ pub fn optimized_for_high_throughput_options(
     optimize_for_point_lookup: bool,
 ) -> DBOptions {
     let mut db_options = default_db_options();
-    db_options.options.set_write_buffer_size(128 * 1024 * 1024);
-    db_options.options.set_min_write_buffer_number_to_merge(2);
     db_options.options.set_max_write_buffer_number(8);
-    db_options
-        .options
-        .set_level_zero_file_num_compaction_trigger(
-            read_size_from_env(ENV_VAR_L0_NUM_FILES_COMPACTION_TRIGGER)
-                .unwrap_or(4)
-                .try_into()
-                .unwrap(),
-        );
+
+    // Revisit if intra-epoch pruning is enabled.
+    // db_options.options.set_min_write_buffer_number_to_merge(2);
+    // db_options
+    //     .options
+    //     .set_target_file_size_base(64 * 1024 * 1024);
+    // db_options
+    //     .options
+    //     .set_max_bytes_for_level_base(512 * 1024 * 1024);
 
     db_options.options.set_max_background_jobs(
         read_size_from_env(ENV_VAR_MAX_BACKGROUND_JOBS)
