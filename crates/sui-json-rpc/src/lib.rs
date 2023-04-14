@@ -158,6 +158,7 @@ impl JsonRpcServerBuilder {
             .set_host_filtering(AllowHosts::Any)
             .set_middleware(middleware)
             .set_logger(metrics_logger)
+            .http_only()
             .build(listen_address)
             .await?;
         let addr = server.local_addr()?;

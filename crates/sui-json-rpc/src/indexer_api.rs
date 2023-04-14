@@ -174,7 +174,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
     }
 
     fn subscribe_event(&self, sink: SubscriptionSink, filter: EventFilter) -> SubscriptionResult {
-        spawn_subscription(sink, self.state.event_handler.subscribe(filter));
+        // spawn_subscription(sink, self.state.event_handler.subscribe(filter));
         Ok(())
     }
 
