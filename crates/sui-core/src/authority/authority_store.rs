@@ -111,6 +111,8 @@ pub struct AuthorityStore {
 
     // Implementation detail to support notify_read_effects().
     pub(crate) executed_effects_notify_read: NotifyRead<TransactionDigest, TransactionEffects>,
+    pub(crate) executed_effects_digests_notify_read:
+        NotifyRead<TransactionDigest, TransactionEffectsDigest>,
 
     pub(crate) root_state_notify_read: NotifyRead<EpochId, (CheckpointSequenceNumber, Accumulator)>,
     /// This lock denotes current 'execution epoch'.
@@ -229,6 +231,7 @@ impl AuthorityStore {
             mutex_table: MutexTable::new(NUM_SHARDS),
             perpetual_tables,
             executed_effects_notify_read: NotifyRead::new(),
+            executed_effects_digests_notify_read: NotifyRead::new(),
             root_state_notify_read:
                 NotifyRead::<EpochId, (CheckpointSequenceNumber, Accumulator)>::new(),
             execution_lock: RwLock::new(epoch),
@@ -353,6 +356,15 @@ impl AuthorityStore {
             Some(digest) => Ok(self.perpetual_tables.effects.get(&digest)?),
             None => Ok(None),
         }
+    }
+
+    /// Given a list of transaction digests, returns a list of the corresponding effects only if they have been
+    /// executed. For transactions that have not been executed, None is returned.
+    pub fn multi_get_executed_effects_digests(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> SuiResult<Vec<Option<TransactionEffectsDigest>>> {
+        Ok(self.perpetual_tables.executed_effects.multi_get(digests)?)
     }
 
     /// Given a list of transaction digests, returns a list of the corresponding effects only if they have been
