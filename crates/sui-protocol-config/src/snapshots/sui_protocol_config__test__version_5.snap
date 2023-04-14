@@ -8,7 +8,7 @@ feature_flags:
   advance_epoch_start_time_in_safe_mode: true
   loaded_child_objects_fixed: true
   missing_type_is_compatibility_error: true
-  scoring_decision_with_no_disable: true
+  scoring_decision_with_validity_cutoff: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
