@@ -1,0 +1,64 @@
+processed 15 tasks
+
+init:
+A: object(0,0)
+
+task 1 'publish'. lines 6-13:
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5646800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'upgrade'. lines 14-17:
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5016000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 3 'run'. lines 19-21:
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 2622000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 4 'upgrade'. lines 22-27:
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package::authorize_upgrade (function index 21) at offset 24, Abort Code: 1
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package") }, function: 21, instruction: 24, function_name: Some("authorize_upgrade") }, 1), source: Some(VMError { major_status: ABORTED, sub_status: Some(1), message: Some("sui::package::authorize_upgrade at offset 24"), exec_state: Some(ExecutionState { stack_trace: [] }), location: Module(ModuleId { address: sui, name: Identifier("package") }), indices: [], offsets: [(FunctionDefinitionIndex(21), 24)] }), command: Some(0) } }
+
+task 5 'upgrade'. lines 28-33:
+created: object(5,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5016000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 6 'upgrade'. lines 34-37:
+created: object(6,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5016000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 7 'run'. lines 39-41:
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 2622000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 8 'upgrade'. lines 42-47:
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package::authorize_upgrade (function index 21) at offset 24, Abort Code: 1
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package") }, function: 21, instruction: 24, function_name: Some("authorize_upgrade") }, 1), source: Some(VMError { major_status: ABORTED, sub_status: Some(1), message: Some("sui::package::authorize_upgrade at offset 24"), exec_state: Some(ExecutionState { stack_trace: [] }), location: Module(ModuleId { address: sui, name: Identifier("package") }), indices: [], offsets: [(FunctionDefinitionIndex(21), 24)] }), command: Some(0) } }
+
+task 9 'upgrade'. lines 48-53:
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package::authorize_upgrade (function index 21) at offset 24, Abort Code: 1
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package") }, function: 21, instruction: 24, function_name: Some("authorize_upgrade") }, 1), source: Some(VMError { major_status: ABORTED, sub_status: Some(1), message: Some("sui::package::authorize_upgrade at offset 24"), exec_state: Some(ExecutionState { stack_trace: [] }), location: Module(ModuleId { address: sui, name: Identifier("package") }), indices: [], offsets: [(FunctionDefinitionIndex(21), 24)] }), command: Some(0) } }
+
+task 10 'upgrade'. lines 54-59:
+created: object(10,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5016000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 11 'run'. lines 60-62:
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package::restrict (function index 23) at offset 10, Abort Code: 1
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package") }, function: 23, instruction: 10, function_name: Some("restrict") }, 1), source: Some(VMError { major_status: ABORTED, sub_status: Some(1), message: Some("sui::package::restrict at offset 10"), exec_state: Some(ExecutionState { stack_trace: [(Some(ModuleId { address: sui, name: Identifier("package") }), FunctionDefinitionIndex(18), 2)] }), location: Module(ModuleId { address: sui, name: Identifier("package") }), indices: [], offsets: [(FunctionDefinitionIndex(23), 10)] }), command: Some(0) } }
+
+task 12 'run'. lines 63-63:
+mutated: object(0,0)
+deleted: object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 13 'view-object'. lines 65-67:
+No object at id 1,1
+
+task 14 'upgrade'. lines 68-71:
+Error: INVALID TEST. Could not load object argument 0xc1a85383fc881013473c67dd4a5881e823f0b533bcd9dc6cac45bf87095c4a47

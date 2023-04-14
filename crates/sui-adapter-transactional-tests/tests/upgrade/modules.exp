@@ -1,0 +1,25 @@
+processed 6 tasks
+
+init:
+A: object(0,0)
+
+task 1 'publish'. lines 6-28:
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 9583600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'upgrade'. lines 29-50:
+Error: Transaction Effects Status: Invalid package upgrade. New package is incompatible with previous version
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PackageUpgradeError { upgrade_error: IncompatibleUpgrade }, source: None, command: Some(1) } }
+
+task 3 'upgrade'. lines 51-69:
+Error: Transaction Effects Status: Invalid package upgrade. New package is incompatible with previous version
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PackageUpgradeError { upgrade_error: IncompatibleUpgrade }, source: None, command: Some(1) } }
+
+task 4 'upgrade'. lines 70-89:
+Error: Transaction Effects Status: Invalid package upgrade. New package is incompatible with previous version
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PackageUpgradeError { upgrade_error: IncompatibleUpgrade }, source: Some("Existing module b not found in next version of package"), command: Some(1) } }
+
+task 5 'upgrade'. lines 90-107:
+Error: Transaction Effects Status: Invalid package upgrade. New package is incompatible with previous version
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PackageUpgradeError { upgrade_error: IncompatibleUpgrade }, source: Some("Existing module a not found in next version of package"), command: Some(1) } }
