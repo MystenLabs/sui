@@ -324,8 +324,6 @@ impl<P: ProtocolCommands + ProtocolMetrics> Orchestrator<P> {
         }
         if cleanup {
             command.push("(rm -rf ~/*log* || true)".into());
-            command.push("(rm -rf ~/*.yml || true)".into());
-            command.push("(rm -rf ~/*.keystore || true)".into());
         }
         let command = command.join(" ; ");
 
@@ -424,7 +422,6 @@ impl<P: ProtocolCommands + ProtocolMetrics> Orchestrator<P> {
                     }
 
                     if elapsed > parameters.duration .as_secs() {
-                        display::error("Maximum scraping duration exceeded");
                         break;
                     }
                 },

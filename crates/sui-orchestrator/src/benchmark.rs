@@ -96,7 +96,7 @@ pub enum LoadType {
 /// Generate benchmark parameters (one set of parameters per run).
 // TODO: The rusty thing to do would be to implement Iter.
 pub struct BenchmarkParametersGenerator {
-    /// The ratio of shared and owned objects (as a percentage)/
+    /// The ratio of shared and owned objects (as a percentage).
     shared_objects_ratio: u16,
     /// The committee size.
     pub nodes: usize,
