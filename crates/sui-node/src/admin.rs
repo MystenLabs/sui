@@ -8,7 +8,6 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use mysten_metrics::spawn_monitored_task;
 use serde::Deserialize;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
@@ -46,7 +45,7 @@ struct AppState {
     filter_handle: FilterHandle,
 }
 
-pub fn start_admin_server(node: Arc<SuiNode>, port: u16, filter_handle: FilterHandle) {
+pub async fn run_admin_server(node: Arc<SuiNode>, port: u16, filter_handle: FilterHandle) {
     let filter = filter_handle.get().unwrap();
 
     let app_state = AppState {
@@ -76,12 +75,10 @@ pub fn start_admin_server(node: Arc<SuiNode>, port: u16, filter_handle: FilterHa
         "starting admin server"
     );
 
-    spawn_monitored_task!(async move {
-        axum::Server::bind(&socket_address)
-            .serve(app.into_make_service())
-            .await
-            .unwrap();
-    });
+    axum::Server::bind(&socket_address)
+        .serve(app.into_make_service())
+        .await
+        .unwrap()
 }
 
 async fn get_filter(State(state): State<Arc<AppState>>) -> (StatusCode, String) {
