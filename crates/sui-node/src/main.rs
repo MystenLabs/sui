@@ -48,6 +48,7 @@ async fn main() -> Result<()> {
     // Ensure that a validator never calls get_for_min_version/get_for_max_version.
     // TODO: re-enable after we figure out how to eliminate crashes in prod because of this.
     // ProtocolConfig::poison_get_for_min_version();
+    console_subscriber::init();
 
     let args = Args::parse();
     let mut config = NodeConfig::load(&args.config_path)?;
@@ -64,10 +65,10 @@ async fn main() -> Result<()> {
         .unwrap();
 
     // Initialize logging
-    let (_guard, filter_handle) = telemetry_subscribers::TelemetryConfig::new()
-        .with_env()
-        .with_prom_registry(&prometheus_registry)
-        .init();
+    // let (_guard, filter_handle) = telemetry_subscribers::TelemetryConfig::new()
+    //     .with_env()
+    //     .with_prom_registry(&prometheus_registry)
+    //     .init();
 
     info!("Sui Node version: {VERSION}");
     info!(
@@ -95,7 +96,7 @@ async fn main() -> Result<()> {
     });
 
     let node = sui_node::SuiNode::start(&config, registry_service).await?;
-    sui_node::admin::start_admin_server(node.clone(), config.admin_interface_port, filter_handle);
+    //sui_node::admin::start_admin_server(node.clone(), config.admin_interface_port, filter_handle);
 
     // TODO: Do we want to provide a way for the node to gracefully shutdown?
     loop {

@@ -9493,6 +9493,7 @@ dependencies = [
  "arc-swap",
  "axum",
  "clap 3.2.23",
+ "console-subscriber",
  "const-str",
  "fastcrypto",
  "futures",

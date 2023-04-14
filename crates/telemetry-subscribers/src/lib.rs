@@ -291,10 +291,9 @@ impl TelemetryConfig {
         // tokio-console layer
         // Please see https://docs.rs/console-subscriber/latest/console_subscriber/struct.Builder.html#configuration
         // for environment vars/config options
-        #[cfg(feature = "tokio-console")]
-        if config.tokio_console {
-            layers.push(console_subscriber::spawn().boxed());
-        }
+        // if config.tokio_console {
+        //     layers.push(console_subscriber::spawn().boxed());
+        // }
 
         if let Some(registry) = config.prom_registry {
             let span_lat_layer = PrometheusSpanLatencyLayer::try_new(&registry, 15)
