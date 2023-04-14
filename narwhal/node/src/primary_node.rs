@@ -26,6 +26,11 @@ use types::{
     metered_channel, Certificate, ConditionalBroadcastReceiver, PreSubscribedBroadcastSender, Round,
 };
 
+/// The window where the schedule change takes place in consensus. It represents number
+/// of committed sub dags.
+/// TODO: move this to node properties
+pub const CONSENSUS_SCHEDULE_CHANGE_SUB_DAGS: u64 = 300;
+
 struct PrimaryNodeInner {
     // The configuration parameters.
     parameters: Parameters,
@@ -52,10 +57,6 @@ struct PrimaryNodeInner {
 impl PrimaryNodeInner {
     /// The default channel capacity.
     pub const CHANNEL_CAPACITY: usize = 1_000;
-    /// The window where the schedule change takes place in consensus. It represents number
-    /// of committed sub dags.
-    /// TODO: move this to node properties
-    const CONSENSUS_SCHEDULE_CHANGE_SUB_DAGS: u64 = 300;
 
     // Starts the primary node with the provided info. If the node is already running then this
     // method will return an error instead.
@@ -356,7 +357,7 @@ impl PrimaryNodeInner {
             committee.clone(),
             store.consensus_store.clone(),
             consensus_metrics.clone(),
-            Self::CONSENSUS_SCHEDULE_CHANGE_SUB_DAGS,
+            CONSENSUS_SCHEDULE_CHANGE_SUB_DAGS,
         );
         let consensus_handles = Consensus::spawn(
             committee.clone(),

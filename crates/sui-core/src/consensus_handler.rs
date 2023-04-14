@@ -34,6 +34,7 @@ use sui_types::messages::{
 };
 use sui_types::storage::ParentSync;
 
+use narwhal_node::primary_node::CONSENSUS_SCHEDULE_CHANGE_SUB_DAGS;
 use tracing::{debug, error, info, instrument};
 
 pub struct ConsensusHandler<T> {
@@ -164,6 +165,7 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             consensus_output.sub_dag.reputation_score.clone(),
             self.authority_names_to_hostnames.clone(),
             &self.metrics,
+            CONSENSUS_SCHEDULE_CHANGE_SUB_DAGS,
         );
 
         self.metrics

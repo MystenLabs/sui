@@ -15,7 +15,7 @@ use tracing::info;
 
 // TODO: migrate these values to config
 const MAD_DIVISOR: f64 = 2.0;
-const CUTOFF_VALUE: f64 = 2.5;
+const CUTOFF_VALUE: f64 = 1.3;
 
 /// Updates list of authorities that are deemed to have low reputation scores by consensus
 /// these may be lagging behind the network, byzantine, or not reliably participating for any reason.
@@ -50,6 +50,7 @@ pub fn update_low_scoring_authorities(
     reputation_scores: ReputationScores,
     authority_names_to_hostnames: HashMap<AuthorityName, String>,
     metrics: &Arc<AuthorityMetrics>,
+    max_score: u64,
 ) {
     if !reputation_scores.final_of_schedule {
         return;
@@ -82,11 +83,22 @@ pub fn update_low_scoring_authorities(
 
     let mut score_list = vec![];
     let mut nonzero_scores = vec![];
+    let good_score_cap = max_score * 3 / 4;
+
     for (score, _stake) in scores_per_authority.values() {
         score_list.push(*score as f64);
-        if score != &0_u64 {
+        if *score != 0_u64 && *score < good_score_cap {
             nonzero_scores.push(*score as f64);
         }
+    }
+
+    // we have no scores to evaluate either because they are all zero, or all are above the good score cap
+    if nonzero_scores.is_empty() {
+        metrics.consensus_handler_num_low_scoring_authorities.set(0);
+
+        info!("No non-zero scores to evaluate - disabling low scoring mechanism");
+        low_scoring_authorities.swap(Arc::new(HashMap::new()));
+        return;
     }
 
     let median_value = median(&nonzero_scores);
@@ -107,7 +119,7 @@ pub fn update_low_scoring_authorities(
 
         // We expect the methodology to include the zero scoring validators, but we explicitly
         // include them to make sure, as we know for sure that those have no contribution.
-        if *score == 0 || temp < -CUTOFF_VALUE {
+        if *score < good_score_cap && (*score == 0 || temp < -CUTOFF_VALUE) {
             low_scoring.push((a, *score));
         }
     }
@@ -198,6 +210,7 @@ mod tests {
             reputation_scores_1,
             peer_id_map.clone(),
             &metrics,
+            100,
         );
 
         assert_eq!(
@@ -223,6 +236,7 @@ mod tests {
             reputation_scores,
             peer_id_map.clone(),
             &metrics,
+            700,
         );
         assert_eq!(
             *low_scoring.load().get(&a4.protocol_key().into()).unwrap(),
@@ -247,6 +261,7 @@ mod tests {
             reputation_scores,
             peer_id_map.clone(),
             &metrics,
+            800,
         );
         assert_eq!(low_scoring.load().len(), 1);
 
@@ -267,6 +282,7 @@ mod tests {
             reputation_scores,
             peer_id_map.clone(),
             &metrics,
+            1000,
         );
 
         assert_eq!(low_scoring.load().len(), 1);
@@ -288,6 +304,7 @@ mod tests {
             reputation_scores,
             peer_id_map.clone(),
             &metrics,
+            500,
         );
         assert_eq!(low_scoring.load().len(), 1);
 
@@ -321,6 +338,7 @@ mod tests {
             reputation_scores,
             peer_id_map.clone(),
             &metrics,
+            200,
         );
 
         assert_eq!(low_scoring.load().len(), 10);
@@ -337,6 +355,7 @@ mod tests {
             reputation_scores,
             peer_id_map,
             &metrics,
+            200,
         );
 
         assert_eq!(
@@ -392,6 +411,7 @@ mod tests {
             reputation_scores,
             HashMap::new(),
             &metrics,
+            400,
         );
         assert_eq!(
             *low_scoring.load().get(&a4.protocol_key().into()).unwrap(),
@@ -448,6 +468,7 @@ mod tests {
             reputation_scores,
             HashMap::new(),
             &metrics,
+            400,
         );
         assert_eq!(low_scoring.load().len(), 3);
     }
@@ -517,6 +538,7 @@ mod tests {
             reputation_scores,
             peer_id_map,
             &metrics,
+            600,
         );
 
         assert_eq!(low_scoring.load().len(), 10);
@@ -535,7 +557,7 @@ mod tests {
 
         // read the file
         let (authority_host_names, all_authority_scores) =
-            read_scores_csv("/Users/akichidis/Downloads/Score per host change-data-as-joinbyfield-2023-04-13 23_38_34.csv");
+            read_scores_csv("/Users/akichidis/Downloads/authority_scores_private_testnet.csv");
 
         let mut authority_names_to_hostnames = HashMap::new();
 
@@ -576,6 +598,7 @@ mod tests {
                 reputation_scores,
                 authority_names_to_hostnames.clone(),
                 &metrics,
+                300,
             );
 
             // snapshot the low scoring authorities
