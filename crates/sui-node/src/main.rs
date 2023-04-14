@@ -45,7 +45,7 @@ struct Args {
     listen_address: Option<Multiaddr>,
 }
 
-#[tokio::main]
+#[tokio::main(worker_threads = 4)]
 async fn main() -> Result<()> {
     // Ensure that a validator never calls get_for_min_version/get_for_max_version.
     // TODO: re-enable after we figure out how to eliminate crashes in prod because of this.
@@ -103,6 +103,7 @@ async fn main() -> Result<()> {
     let (sender, receiver) = oneshot::channel();
     thread::spawn(move || {
         tokio::runtime::Builder::new_multi_thread()
+            .thread_name("sui-node-tokio-runtime-worker")
             .enable_all()
             .build()
             .unwrap()
