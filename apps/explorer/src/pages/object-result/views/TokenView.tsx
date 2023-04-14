@@ -217,52 +217,9 @@ export function TokenView({ data }: { data: SuiObjectResponse }) {
                     </TabPanel>
                 </TabPanels>
             </TabGroup>
-            {properties.length > 0 && (
-                <div>
-                    <h2 className={styles.header}>Properties</h2>
-                    <table className={styles.properties}>
-                        <tbody>
-                            {properties.map(([key, value], index) => (
-                                <tr key={index}>
-                                    <td>{key}</td>
-                                    <td>
-                                        {/* TODO: Use normalized module to determine this display. */}
-                                        {typeof value === 'string' &&
-                                        (value.startsWith('http://') ||
-                                            value.startsWith('https://')) ? (
-                                            <Link
-                                                href={value}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                            >
-                                                {value}
-                                            </Link>
-                                        ) : (
-                                            value
-                                        )}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            )}
-            {structProperties.length > 0 && (
-                <ModulesWrapper
-                    data={{
-                        title: '',
-                        content: structPropertiesDisplay,
-                    }}
-                />
-            )}
-            <div>
-                <h2 className={styles.header}>Dynamic Fields</h2>
-                <div className={styles.ownedobjects}>
-                    <OwnedObjects id={data.id} byAddress={false} />
-                </div>
-            </div>
-            <TransactionBlocksForAddress address={data.id} isObject />
-            <TransactionsForAddress address={objectId} type="object" />
+            <ObjectFieldsCard id={objectId} />
+            <DynamicFieldsCard id={objectId} />
+            <TransactionBlocksForAddress address={objectId} isObject />
         </div>
     );
 }
