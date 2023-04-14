@@ -44,13 +44,7 @@ use tracing::{debug, error, info};
 
 /// This function calls the Bytecode verifier to test it
 fn run_verifier(module: CompiledModule) -> Result<CompiledModule, String> {
-    match panic::catch_unwind(|| verify_module(&module)) {
-        Ok(res) => match res {
-            Ok(_) => Ok(module),
-            Err(err) => Err(format!("Module verification failed: {:#?}", err)),
-        },
-        Err(err) => Err(format!("Verifier panic: {:#?}", err)),
-    }
+    verify_module(&module)
 }
 
 static STORAGE_WITH_MOVE_STDLIB: Lazy<InMemoryStorage> = Lazy::new(|| {
@@ -316,7 +310,7 @@ pub fn bytecode_generation(
         if let Some(verified_module) = verified_module {
             if RUN_ON_VM {
                 debug!("Done...Running module on VM...");
-                let execution_result = panic::catch_unwind(|| run_vm(verified_module));
+                let execution_result = run_vm(verified_module);
                 match execution_result {
                     Ok(execution_result) => match execution_result {
                         Ok(_) => {
