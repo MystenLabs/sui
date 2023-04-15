@@ -44,6 +44,8 @@ const ENV_VAR_DB_WRITE_BUFFER_SIZE: &str = "MYSTEN_DB_WRITE_BUFFER_SIZE_MB";
 const DEFAULT_DB_WRITE_BUFFER_SIZE: usize = 1024;
 
 const ENV_VAR_DB_MAX_OPEN_FILES: &str = "DB_MAX_OPEN_FILES";
+const ENV_VAR_DB_DATA_BLOCK_SIZE: &str = "DB_DATA_BLOCK_SIZE";
+const DEFAULT_DB_DATA_BLOCK_SIZE: usize = 1024;
 
 // Write ahead log size per RocksDB instance can be set via the env var below.
 // If the env var is not set, use the default value in MiB.
@@ -1978,6 +1980,9 @@ pub fn optimized_for_high_throughput_options(
             .set_block_cache(&Cache::new_lru_cache(block_cache_size_mb * 1024 * 1024).unwrap());
         // Set a bloomfilter with 0.1% false positive rate.
         block_options.set_bloom_filter(15.5, false);
+        block_options.set_block_size(
+            read_size_from_env(ENV_VAR_DB_DATA_BLOCK_SIZE).unwrap_or(DEFAULT_DB_DATA_BLOCK_SIZE),
+        );
 
         // From https://github.com/EighteenZi/rocksdb_wiki/blob/master/Block-Cache.md#caching-index-and-filter-blocks
         block_options.set_pin_l0_filter_and_index_blocks_in_cache(true);
