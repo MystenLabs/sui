@@ -25,9 +25,8 @@ module deepbook::custodian {
 
     struct Custodian<phantom T> has key, store {
         id: UID,
-        // Holds custody of protocol fees.
-        // The logic of withdrawing protocol fees is left out intentionally for further confirmation from Sui foundation.
-        custodian_balances: Balance<T>,
+        /// Stores all fees collected from DeepBook trades. These funds are not accessible.
+        protocol_fees: Balance<T>,
         account_balances: Table<ID, Account<T>>,
     }
 
@@ -52,7 +51,7 @@ module deepbook::custodian {
     public(friend) fun new<T>(ctx: &mut TxContext): Custodian<T> {
         Custodian<T> {
             id: object::new(ctx),
-            custodian_balances: balance::zero(),
+            protocol_fees: balance::zero(),
             account_balances: table::new(ctx),
         }
     }
@@ -85,18 +84,11 @@ module deepbook::custodian {
         coin::from_balance(decrease_user_available_balance<QuoteAsset>(custodian, user, quantity), ctx)
     }
 
-    public(friend) fun increase_custodian_balance<T>(
+    public(friend) fun deposit_protocol_fees<T>(
         custodian: &mut Custodian<T>,
         quantity: Balance<T>
     ) {
-        balance::join(&mut custodian.custodian_balances, quantity);
-    }
-
-    public(friend) fun decrease_custodian_balance<T>(
-        custodian: &mut Custodian<T>,
-        quantity: u64,
-    ): Balance<T> {
-        split(&mut custodian.custodian_balances, quantity)
+        balance::join(&mut custodian.protocol_fees, quantity);
     }
 
     public(friend) fun increase_user_available_balance<T>(

@@ -1259,7 +1259,7 @@ Emitted only when a maker order is filled.
                         maker_rebate,
                     ),
                 );
-                <a href="custodian.md#0xdee9_custodian_increase_custodian_balance">custodian::increase_custodian_balance</a>&lt;BaseAsset&gt;(
+                <a href="custodian.md#0xdee9_custodian_deposit_protocol_fees">custodian::deposit_protocol_fees</a>&lt;BaseAsset&gt;(
                     &<b>mut</b> pool.base_custodian,
                     taker_commission_balance,
                 );
@@ -1414,7 +1414,7 @@ Emitted only when a maker order is filled.
                         maker_rebate,
                     ),
                 );
-                <a href="custodian.md#0xdee9_custodian_increase_custodian_balance">custodian::increase_custodian_balance</a>&lt;BaseAsset&gt;(
+                <a href="custodian.md#0xdee9_custodian_deposit_protocol_fees">custodian::deposit_protocol_fees</a>&lt;BaseAsset&gt;(
                     &<b>mut</b> pool.base_custodian,
                     taker_commission_balance,
                 );
@@ -1561,7 +1561,7 @@ Emitted only when a maker order is filled.
                         maker_rebate,
                     ),
                 );
-                <a href="custodian.md#0xdee9_custodian_increase_custodian_balance">custodian::increase_custodian_balance</a>&lt;QuoteAsset&gt;(
+                <a href="custodian.md#0xdee9_custodian_deposit_protocol_fees">custodian::deposit_protocol_fees</a>&lt;QuoteAsset&gt;(
                     &<b>mut</b> pool.quote_custodian,
                     taker_commission_balance,
                 );

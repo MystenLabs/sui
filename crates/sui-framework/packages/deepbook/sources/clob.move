@@ -406,7 +406,7 @@ module deepbook::clob {
                             maker_rebate,
                         ),
                     );
-                    custodian::increase_custodian_balance<BaseAsset>(
+                    custodian::deposit_protocol_fees<BaseAsset>(
                         &mut pool.base_custodian,
                         taker_commission_balance,
                     );
@@ -541,7 +541,7 @@ module deepbook::clob {
                             maker_rebate,
                         ),
                     );
-                    custodian::increase_custodian_balance<BaseAsset>(
+                    custodian::deposit_protocol_fees<BaseAsset>(
                         &mut pool.base_custodian,
                         taker_commission_balance,
                     );
@@ -668,7 +668,7 @@ module deepbook::clob {
                             maker_rebate,
                         ),
                     );
-                    custodian::increase_custodian_balance<QuoteAsset>(
+                    custodian::deposit_protocol_fees<QuoteAsset>(
                         &mut pool.quote_custodian,
                         taker_commission_balance,
                     );

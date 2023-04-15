@@ -16,8 +16,7 @@
 -  [Function `deposit`](#0xdee9_custodian_deposit)
 -  [Function `withdraw_base_asset`](#0xdee9_custodian_withdraw_base_asset)
 -  [Function `withdraw_quote_asset`](#0xdee9_custodian_withdraw_quote_asset)
--  [Function `increase_custodian_balance`](#0xdee9_custodian_increase_custodian_balance)
--  [Function `decrease_custodian_balance`](#0xdee9_custodian_decrease_custodian_balance)
+-  [Function `deposit_protocol_fees`](#0xdee9_custodian_deposit_protocol_fees)
 -  [Function `increase_user_available_balance`](#0xdee9_custodian_increase_user_available_balance)
 -  [Function `decrease_user_available_balance`](#0xdee9_custodian_decrease_user_available_balance)
 -  [Function `increase_user_locked_balance`](#0xdee9_custodian_increase_user_locked_balance)
@@ -120,10 +119,10 @@
 
 </dd>
 <dt>
-<code>custodian_balances: <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;</code>
+<code>protocol_fees: <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;</code>
 </dt>
 <dd>
-
+ Stores all fees collected from DeepBook trades. These funds are not accessible.
 </dd>
 <dt>
 <code>account_balances: <a href="../../../.././build/Sui/docs/table.md#0x2_table_Table">table::Table</a>&lt;<a href="../../../.././build/Sui/docs/object.md#0x2_object_ID">object::ID</a>, <a href="custodian.md#0xdee9_custodian_Account">custodian::Account</a>&lt;T&gt;&gt;</code>
@@ -246,7 +245,7 @@
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian.md#0xdee9_custodian_new">new</a>&lt;T&gt;(ctx: &<b>mut</b> TxContext): <a href="custodian.md#0xdee9_custodian_Custodian">Custodian</a>&lt;T&gt; {
     <a href="custodian.md#0xdee9_custodian_Custodian">Custodian</a>&lt;T&gt; {
         id: <a href="../../../.././build/Sui/docs/object.md#0x2_object_new">object::new</a>(ctx),
-        custodian_balances: <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_zero">balance::zero</a>(),
+        protocol_fees: <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_zero">balance::zero</a>(),
         account_balances: <a href="../../../.././build/Sui/docs/table.md#0x2_table_new">table::new</a>(ctx),
     }
 }
@@ -344,13 +343,13 @@
 
 </details>
 
-<a name="0xdee9_custodian_increase_custodian_balance"></a>
+<a name="0xdee9_custodian_deposit_protocol_fees"></a>
 
-## Function `increase_custodian_balance`
+## Function `deposit_protocol_fees`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian.md#0xdee9_custodian_increase_custodian_balance">increase_custodian_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian.md#0xdee9_custodian_Custodian">custodian::Custodian</a>&lt;T&gt;, quantity: <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian.md#0xdee9_custodian_deposit_protocol_fees">deposit_protocol_fees</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian.md#0xdee9_custodian_Custodian">custodian::Custodian</a>&lt;T&gt;, quantity: <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -359,38 +358,11 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian.md#0xdee9_custodian_increase_custodian_balance">increase_custodian_balance</a>&lt;T&gt;(
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian.md#0xdee9_custodian_deposit_protocol_fees">deposit_protocol_fees</a>&lt;T&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian.md#0xdee9_custodian_Custodian">Custodian</a>&lt;T&gt;,
     quantity: Balance&lt;T&gt;
 ) {
-    <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> <a href="custodian.md#0xdee9_custodian">custodian</a>.custodian_balances, quantity);
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0xdee9_custodian_decrease_custodian_balance"></a>
-
-## Function `decrease_custodian_balance`
-
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian.md#0xdee9_custodian_decrease_custodian_balance">decrease_custodian_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian.md#0xdee9_custodian_Custodian">custodian::Custodian</a>&lt;T&gt;, quantity: u64): <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian.md#0xdee9_custodian_decrease_custodian_balance">decrease_custodian_balance</a>&lt;T&gt;(
-    <a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian.md#0xdee9_custodian_Custodian">Custodian</a>&lt;T&gt;,
-    quantity: u64,
-): Balance&lt;T&gt; {
-    split(&<b>mut</b> <a href="custodian.md#0xdee9_custodian">custodian</a>.custodian_balances, quantity)
+    <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> <a href="custodian.md#0xdee9_custodian">custodian</a>.protocol_fees, quantity);
 }
 </code></pre>
 
