@@ -1,14 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+/// Description:
 /// This module defines a Rule which forces buyers to put the purchased
 /// item into the Kiosk and lock it. The most common use case for the
 /// Rule is making sure an item never leaves Kiosks and has policies
 /// enforced on every transfer.
 ///
-/// Note: "locking" mechanic disallows the `kiosk::take` function and
-/// forces the owner to use `list` or `list_with_purchase_cap` methods
-/// if they wish to move the item somewhere else.
+/// Configuration:
+/// - None
+///
+/// Use cases:
+/// - Enforcing policies on every trade
+/// - Making sure an item never leaves the Kiosk / certain ecosystem
+///
+/// Notes:
+/// - "locking" mechanic disallows the `kiosk::take` function and forces
+/// the owner to use `list` or `list_with_purchase_cap` methods if they
+/// wish to move the item somewhere else.
+///
 module kiosk::kiosk_lock_rule {
     use sui::kiosk::{Self, Kiosk};
     use sui::transfer_policy::{

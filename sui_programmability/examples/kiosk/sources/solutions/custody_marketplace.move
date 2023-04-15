@@ -69,6 +69,12 @@ module kiosk::kiosk_custody_marketplace {
         kiosk_id: ID,
     }
 
+    /// A Witness type to prove that the purchase was made through the Marketplace.
+    /// Generated based on the Kiosk ID check (via a lookup of a key in the Marketplace).
+    ///
+    /// Can be used to enforce trades inside the marketplace via the WitnessRule.
+    struct MarketplaceConfirmation has drop {}
+
     /// A custom dynamic field key to store the `KioskOwnerCap`.
     struct OwnerKey has store, copy, drop { kiosk_id: ID }
 
@@ -180,6 +186,39 @@ module kiosk::kiosk_custody_marketplace {
         assert!(kiosk_profits == kiosk::profits_amount(kiosk), EAmountChanged);
 
         df::add(&mut self.id, OwnerKey { kiosk_id }, kiosk_cap);
+    }
+
+    // === Confirmations for Transfer Rules ===
+
+    /// Confirm that TransferRequest is coming from the Marketplace by
+    /// checking the Kiosk ID in the Marketplace.
+    public fun confirm_trade(
+        self: &Marketplace,
+        req: &TransferRequest
+    ): TradeConfirmation {
+        assert!(df::exists_(
+            &self.id,
+            OwnerKey { kiosk_id: policy::from(req) }
+        ), EWrongKiosk);
+
+        TradeConfirmation {}
+    }
+
+    /// Confirm that the item is placed in the Kiosk that belongs to
+    /// the Marketplace. This witness can make sure the item never leaves
+    /// the Marketplace if the creator has chosen to check that.
+    public fun confirm_placement(
+        self: &Marketplace,
+        req: &TransferRequest,
+        kiosk: &Kiosk
+    ): PlacementConfirmation {
+        let item_id = policy::item(req);
+        let kiosk_id = object::id(kiosk);
+
+        assert!(df::exists_(&self.id, OwnerKey { kiosk_id }), EWrongKiosk);
+        assert!(kiosk::has_item(kiosk, item_id), EWrongKiosk);
+
+        PlacementConfirmation {}
     }
 
     // === Init + Display ===
