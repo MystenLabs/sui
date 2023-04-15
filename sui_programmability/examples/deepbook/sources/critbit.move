@@ -3,22 +3,19 @@ module deepbook::critbit {
     use sui::table::{Self, Table};
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
-    const ENotImplemented: u64 = 1;
-    const EExceedCapacity: u64 = 2;
-    const ETreeNotEmpty: u64 = 3;
-    const EKeyAlreadyExist: u64 = 4;
-    const ELeafNotExist: u64 = 5;
-    const EAssertFalse: u64 = 6;
-    const EIndexOutOfRange: u64 = 7;
-    const ENullParent: u64 = 8;
-    const ENullChild: u64 = 9;
+    const EExceedCapacity: u64 = 1;
+    const ETreeNotEmpty: u64 = 2;
+    const EKeyAlreadyExist: u64 = 3;
+    const ELeafNotExist: u64 = 4;
+    const EIndexOutOfRange: u64 = 5;
+    const ENullParent: u64 = 6;
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
 
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Constants <<<<<<<<<<<<<<<<<<<<<<<<
     const PARTITION_INDEX: u64 = 0x8000000000000000; // 9223372036854775808
     const MAX_U64: u64 = 0xFFFFFFFFFFFFFFFF; // 18446744073709551615
-    const MAX_CAPACITY: u64 = 0x7fffffffffffffff;
+    const MAX_CAPACITY: u64 = 0x7FFFFFFFFFFFFFFF;
     // <<<<<<<<<<<<<<<<<<<<<<<< Constants <<<<<<<<<<<<<<<<<<<<<<<<
 
     struct Leaf<V> has store, drop {
@@ -59,83 +56,83 @@ module deepbook::critbit {
         }
     }
 
-    public fun size<V: store>(tree: &CritbitTree<V>): u64 {
-        table::length(&tree.leaves)
+    public fun size<V: store>(self: &CritbitTree<V>): u64 {
+        table::length(&self.leaves)
     }
 
-    public fun is_empty<V: store>(tree: &CritbitTree<V>): bool {
-        table::is_empty(&tree.leaves)
+    public fun is_empty<V: store>(self: &CritbitTree<V>): bool {
+        table::is_empty(&self.leaves)
     }
 
 
     // Return (key, index) the leaf with minimum value.
     // A market buy order will start consuming liquidty from the min leaf.
-    public fun min_leaf<V: store>(_tree: &CritbitTree<V>): (u64, u64) {
-        assert!(!is_empty(_tree), ELeafNotExist);
-        let min_leaf = table::borrow(&_tree.leaves, _tree.min_leaf);
-        return (min_leaf.key, _tree.min_leaf)
+    public fun min_leaf<V: store>(self: &CritbitTree<V>): (u64, u64) {
+        assert!(!is_empty(self), ELeafNotExist);
+        let min_leaf = table::borrow(&self.leaves, self.min_leaf);
+        return (min_leaf.key, self.min_leaf)
     }
 
     // Return (key, index) the leaf with maximum value.
     // A market sell order will start consuming liquidity from the max leaf.
-    public fun max_leaf<V: store>(_tree: &CritbitTree<V>): (u64, u64) {
-        assert!(!is_empty(_tree), ELeafNotExist);
-        let max_leaf = table::borrow(&_tree.leaves, _tree.max_leaf);
-        return (max_leaf.key, _tree.max_leaf)
+    public fun max_leaf<V: store>(self: &CritbitTree<V>): (u64, u64) {
+        assert!(!is_empty(self), ELeafNotExist);
+        let max_leaf = table::borrow(&self.leaves, self.max_leaf);
+        return (max_leaf.key, self.max_leaf)
     }
 
     // Return the previous leaf (key, index) of the input leaf.
     // Market sell orders consume liquidities by iterating through the leaves in descending order starting from the max leaf of the asks Critbit Tree.
     // This function provides the iterator for this procedure.
-    public fun previous_leaf<V: store>(_tree: &CritbitTree<V>, _key: u64): (u64, u64) {
-        let (_, index) = find_leaf(_tree, _key);
+    public fun previous_leaf<V: store>(self: &CritbitTree<V>, key: u64): (u64, u64) {
+        let (_, index) = find_leaf(self, key);
         assert!(index != PARTITION_INDEX, ELeafNotExist);
         let ptr = MAX_U64 - index;
-        let parent = table::borrow(&_tree.leaves, index).parent;
-        while (parent != PARTITION_INDEX && is_left_child(_tree, parent, ptr)){
+        let parent = table::borrow(&self.leaves, index).parent;
+        while (parent != PARTITION_INDEX && is_left_child(self, parent, ptr)){
             ptr = parent;
-            parent = table::borrow(&_tree.internal_nodes, ptr).parent;
+            parent = table::borrow(&self.internal_nodes, ptr).parent;
         };
         if(parent == PARTITION_INDEX) {
             return (0, PARTITION_INDEX)
         };
-        index = MAX_U64 - right_most_leaf(_tree, table::borrow(&_tree.internal_nodes, parent).left_child);
-        let key = table::borrow(&_tree.leaves, index).key;
+        index = MAX_U64 - right_most_leaf(self, table::borrow(&self.internal_nodes, parent).left_child);
+        let key = table::borrow(&self.leaves, index).key;
         return (key, index)
     }
 
     // Return the next leaf (key, index) of the input leaf.
     // Market buy orders consume liquidities by iterating through the leaves in ascending order starting from the min leaf of the asks Critbit Tree.
     // This function provides the iterator for this procedure.
-    public fun next_leaf<V: store>(_tree: &CritbitTree<V>, _key: u64): (u64, u64) {
-        let (_, index) = find_leaf(_tree, _key);
+    public fun next_leaf<V: store>(self: &CritbitTree<V>, key: u64): (u64, u64) {
+        let (_, index) = find_leaf(self, key);
         assert!(index != PARTITION_INDEX, ELeafNotExist);
         let ptr = MAX_U64 - index;
-        let parent = table::borrow(&_tree.leaves, index).parent;
-        while (parent != PARTITION_INDEX && !is_left_child(_tree, parent, ptr)){
+        let parent = table::borrow(&self.leaves, index).parent;
+        while (parent != PARTITION_INDEX && !is_left_child(self, parent, ptr)){
             ptr = parent;
-            parent = table::borrow(&_tree.internal_nodes, ptr).parent;
+            parent = table::borrow(&self.internal_nodes, ptr).parent;
         };
         if(parent == PARTITION_INDEX) {
             return (0, PARTITION_INDEX)
         };
-        index = MAX_U64 - left_most_leaf(_tree, table::borrow(&_tree.internal_nodes, parent).right_child);
-        let key = table::borrow(&_tree.leaves, index).key;
+        index = MAX_U64 - left_most_leaf(self, table::borrow(&self.internal_nodes, parent).right_child);
+        let key = table::borrow(&self.leaves, index).key;
         return (key, index)
     }
 
-    fun left_most_leaf<V: store>(_tree: &CritbitTree<V>, root: u64): u64 {
+    fun left_most_leaf<V: store>(self: &CritbitTree<V>, root: u64): u64 {
         let ptr = root;
         while (ptr < PARTITION_INDEX){
-            ptr = table::borrow(& _tree.internal_nodes, ptr).left_child;
+            ptr = table::borrow(& self.internal_nodes, ptr).left_child;
         };
         ptr
     }
 
-    fun right_most_leaf<V: store>(_tree: &CritbitTree<V>, root: u64): u64 {
+    fun right_most_leaf<V: store>(self: &CritbitTree<V>, root: u64): u64 {
         let ptr = root;
         while (ptr < PARTITION_INDEX){
-            ptr = table::borrow(& _tree.internal_nodes, ptr).right_child;
+            ptr = table::borrow(& self.internal_nodes, ptr).right_child;
         };
         ptr
     }
@@ -144,33 +141,33 @@ module deepbook::critbit {
     // Insert new leaf to the tree.
     // Returns the index of the leaf.
     // Called when a new order is being injected to the order book.
-    public fun insert_leaf<V: store>(_tree: &mut CritbitTree<V>, _key: u64, _value: V): u64 {
+    public fun insert_leaf<V: store>(self: &mut CritbitTree<V>, key: u64, value: V): u64 {
         let new_leaf = Leaf<V>{
-            key: _key,
-            value: _value,
+            key,
+            value,
             parent: PARTITION_INDEX,
         };
-        let new_leaf_index = _tree.next_leaf_index;
-        _tree.next_leaf_index = _tree.next_leaf_index + 1;
+        let new_leaf_index = self.next_leaf_index;
+        self.next_leaf_index = self.next_leaf_index + 1;
         assert!(new_leaf_index < MAX_CAPACITY - 1, EExceedCapacity);
-        table::add(&mut _tree.leaves, new_leaf_index, new_leaf);
+        table::add(&mut self.leaves, new_leaf_index, new_leaf);
 
-        let closest_leaf_index = get_closest_leaf_index_by_key(_tree, _key);
+        let closest_leaf_index = get_closest_leaf_index_by_key(self, key);
 
         // handle the first insertion
         if(closest_leaf_index == PARTITION_INDEX){
             assert!(new_leaf_index == 0, ETreeNotEmpty);
-            _tree.root = MAX_U64 - new_leaf_index;
-            _tree.min_leaf = new_leaf_index;
-            _tree.max_leaf = new_leaf_index;
+            self.root = MAX_U64 - new_leaf_index;
+            self.min_leaf = new_leaf_index;
+            self.max_leaf = new_leaf_index;
             return 0
         };
 
-        let closest_key = table::borrow(&_tree.leaves, closest_leaf_index).key;
-        assert!(closest_key != _key, EKeyAlreadyExist);
+        let closest_key = table::borrow(&self.leaves, closest_leaf_index).key;
+        assert!(closest_key != key, EKeyAlreadyExist);
 
         // note that we reserve count_leading_zeros of form u128 for future usage
-        let critbit = 64 - (count_leading_zeros(((closest_key ^ _key) as u128) ) -64);
+        let critbit = 64 - (count_leading_zeros(((closest_key ^ key) as u128) ) -64);
         let new_mask = 1u64 << (critbit - 1);
 
         let new_internal_node = InternalNode{
@@ -179,20 +176,20 @@ module deepbook::critbit {
             right_child: PARTITION_INDEX,
             parent: PARTITION_INDEX,
         };
-        let new_internal_node_index = _tree.next_internal_node_index;
-        _tree.next_internal_node_index = _tree.next_internal_node_index + 1;
-        table::add(&mut _tree.internal_nodes, new_internal_node_index, new_internal_node);
+        let new_internal_node_index = self.next_internal_node_index;
+        self.next_internal_node_index = self.next_internal_node_index + 1;
+        table::add(&mut self.internal_nodes, new_internal_node_index, new_internal_node);
 
-        let ptr = _tree.root;
+        let ptr = self.root;
         let new_internal_node_parent_index = PARTITION_INDEX;
         // search position of the new internal node
         while (ptr < PARTITION_INDEX) {
-            let internal_node = table::borrow(&_tree.internal_nodes, ptr);
+            let internal_node = table::borrow(&self.internal_nodes, ptr);
             if (new_mask > internal_node.mask) {
                 break
             };
             new_internal_node_parent_index = ptr;
-            if (_key & internal_node.mask == 0){
+            if (key & internal_node.mask == 0){
                 ptr = internal_node.left_child;
             }else {
                 ptr = internal_node.right_child;
@@ -202,24 +199,24 @@ module deepbook::critbit {
         // we update the child info of new internal node's parent
         if (new_internal_node_parent_index == PARTITION_INDEX){
             // if the new internal node is root
-            _tree.root = new_internal_node_index;
+            self.root = new_internal_node_index;
         } else{
             // In another case, we update the child field of the new internal node's parent
             // and the parent field of the new internal node
-            let is_left_child = is_left_child(_tree, new_internal_node_parent_index, ptr);
-            update_child(_tree, new_internal_node_parent_index, new_internal_node_index, is_left_child);
+            let is_left_child = is_left_child(self, new_internal_node_parent_index, ptr);
+            update_child(self, new_internal_node_parent_index, new_internal_node_index, is_left_child);
         };
 
         // finally, we update the child filed of the new internal node
-        let is_left_child = new_mask & _key == 0;
-        update_child(_tree, new_internal_node_index, MAX_U64 - new_leaf_index, is_left_child);
-        update_child(_tree, new_internal_node_index, ptr, !is_left_child);
+        let is_left_child = new_mask & key == 0;
+        update_child(self, new_internal_node_index, MAX_U64 - new_leaf_index, is_left_child);
+        update_child(self, new_internal_node_index, ptr, !is_left_child);
 
-        if (table::borrow(&_tree.leaves, _tree.min_leaf).key > _key) {
-            _tree.min_leaf = new_leaf_index;
+        if (table::borrow(&self.leaves, self.min_leaf).key > key) {
+            self.min_leaf = new_leaf_index;
         };
-        if (table::borrow(&_tree.leaves, _tree.max_leaf).key < _key) {
-            _tree.max_leaf = new_leaf_index;
+        if (table::borrow(&self.leaves, self.max_leaf).key < key) {
+            self.max_leaf = new_leaf_index;
         };
         new_leaf_index
     }
@@ -227,54 +224,54 @@ module deepbook::critbit {
 
     // Find the leaf from the tree.
     // Returns true and the index of the leaf if exists.
-    public fun find_leaf<V: store>(_tree: & CritbitTree<V>, _key: u64): (bool, u64) {
-        if (is_empty(_tree)) {
+    public fun find_leaf<V: store>(self: & CritbitTree<V>, key: u64): (bool, u64) {
+        if (is_empty(self)) {
             return (false, PARTITION_INDEX)
         };
-        let closest_leaf_index = get_closest_leaf_index_by_key(_tree, _key);
-        let closeset_leaf = table::borrow(&_tree.leaves, closest_leaf_index);
-        if (closeset_leaf.key != _key){
+        let closest_leaf_index = get_closest_leaf_index_by_key(self, key);
+        let closeset_leaf = table::borrow(&self.leaves, closest_leaf_index);
+        if (closeset_leaf.key != key){
             return (false, PARTITION_INDEX)
         } else{
             return (true, closest_leaf_index)
         }
     }
 
-    public fun find_closest_key<V: store>(_tree: & CritbitTree<V>, _key: u64): u64 {
-        if (is_empty(_tree)) {
+    public fun find_closest_key<V: store>(self: &CritbitTree<V>, key: u64): u64 {
+        if (is_empty(self)) {
             return 0
         };
-        let closest_leaf_index = get_closest_leaf_index_by_key(_tree, _key);
-        let closeset_leaf = table::borrow(&_tree.leaves, closest_leaf_index);
+        let closest_leaf_index = get_closest_leaf_index_by_key(self, key);
+        let closeset_leaf = table::borrow(&self.leaves, closest_leaf_index);
         closeset_leaf.key
     }
 
-    public fun remove_leaf_by_index<V: store>(_tree: &mut CritbitTree<V>, _index: u64): V {
-        let key = table::borrow(& _tree.leaves, _index).key;
-        if(_tree.min_leaf == _index) {
-            let (_, index) = next_leaf(_tree, key);
-            _tree.min_leaf = index;
+    public fun remove_leaf_by_index<V: store>(self: &mut CritbitTree<V>, index: u64): V {
+        let key = table::borrow(& self.leaves, index).key;
+        if(self.min_leaf == index) {
+            let (_, index) = next_leaf(self, key);
+            self.min_leaf = index;
         };
-        if(_tree.max_leaf == _index) {
-            let (_, index) = previous_leaf(_tree, key);
-            _tree.max_leaf = index;
+        if(self.max_leaf == index) {
+            let (_, index) = previous_leaf(self, key);
+            self.max_leaf = index;
         };
 
         let is_left_child_;
-        let Leaf<V> {key: _, value, parent: removed_leaf_parent_index} = table::remove(&mut _tree.leaves, _index);
-        if (size(_tree) == 0) {
-            _tree.root = PARTITION_INDEX;
-            _tree.min_leaf = PARTITION_INDEX;
-            _tree.max_leaf = PARTITION_INDEX;
-            _tree.next_internal_node_index = 0;
-            _tree.next_leaf_index = 0;
+        let Leaf<V> {key: _, value, parent: removed_leaf_parent_index} = table::remove(&mut self.leaves, index);
+        if (size(self) == 0) {
+            self.root = PARTITION_INDEX;
+            self.min_leaf = PARTITION_INDEX;
+            self.max_leaf = PARTITION_INDEX;
+            self.next_internal_node_index = 0;
+            self.next_leaf_index = 0;
         } else{
             assert!(removed_leaf_parent_index != PARTITION_INDEX, EIndexOutOfRange);
-            let removed_leaf_parent = table::borrow(&_tree.internal_nodes, removed_leaf_parent_index);
+            let removed_leaf_parent = table::borrow(&self.internal_nodes, removed_leaf_parent_index);
             let removed_leaf_grand_parent_index = removed_leaf_parent.parent;
 
             // note that sibling of the removed leaf can be a leaf or a internal node
-            is_left_child_ = is_left_child(_tree, removed_leaf_parent_index, MAX_U64 - _index);
+            is_left_child_ = is_left_child(self, removed_leaf_parent_index, MAX_U64 - index);
             let sibling_index = if (is_left_child_) { removed_leaf_parent.right_child }
             else { removed_leaf_parent.left_child };
 
@@ -283,41 +280,41 @@ module deepbook::critbit {
                 // update the parent of the sibling node and and set sibling as the tree root
                 if (sibling_index < PARTITION_INDEX) {
                     // sibling is a internal node
-                    table::borrow_mut(&mut _tree.internal_nodes, sibling_index).parent = PARTITION_INDEX;
+                    table::borrow_mut(&mut self.internal_nodes, sibling_index).parent = PARTITION_INDEX;
                 } else{
                     // sibling is a leaf
-                    table::borrow_mut(&mut _tree.leaves, MAX_U64 - sibling_index).parent = PARTITION_INDEX;
+                    table::borrow_mut(&mut self.leaves, MAX_U64 - sibling_index).parent = PARTITION_INDEX;
                 };
-                _tree.root = sibling_index;
+                self.root = sibling_index;
             } else {
                 // grand parent of the removed leaf is a internal node
                 // set sibling as the child of the grand parent of the removed leaf
-                is_left_child_ = is_left_child(_tree, removed_leaf_grand_parent_index, removed_leaf_parent_index);
-                update_child(_tree, removed_leaf_grand_parent_index, sibling_index, is_left_child_);
+                is_left_child_ = is_left_child(self, removed_leaf_grand_parent_index, removed_leaf_parent_index);
+                update_child(self, removed_leaf_grand_parent_index, sibling_index, is_left_child_);
             };
-            table::remove(&mut _tree.internal_nodes, removed_leaf_parent_index);
+            table::remove(&mut self.internal_nodes, removed_leaf_parent_index);
         };
         value
     }
 
 
-    public fun borrow_mut_leaf_by_index<V: store>(tree: &mut CritbitTree<V>, index: u64): &mut V {
-        let entry = table::borrow_mut(&mut tree.leaves, index);
+    public fun borrow_mut_leaf_by_index<V: store>(self: &mut CritbitTree<V>, index: u64): &mut V {
+        let entry = table::borrow_mut(&mut self.leaves, index);
         &mut entry.value
     }
 
-    public fun borrow_leaf_by_index<V: store>(tree: & CritbitTree<V>, index: u64): &V {
-        let entry = table::borrow(&tree.leaves, index);
+    public fun borrow_leaf_by_index<V: store>(self: &CritbitTree<V>, index: u64): &V {
+        let entry = table::borrow(&self.leaves, index);
         &entry.value
     }
 
-    public fun borrow_leaf_by_key<V: store>(tree: & CritbitTree<V>, key: u64): &V {
-        let (is_exist, index) = find_leaf(tree, key);
+    public fun borrow_leaf_by_key<V: store>(self: &CritbitTree<V>, key: u64): &V {
+        let (is_exist, index) = find_leaf(self, key);
         assert!(is_exist, ELeafNotExist);
-        borrow_leaf_by_index(tree, index)
+        borrow_leaf_by_index(self, index)
     }
 
-    public fun drop<V: store + drop>(tree: CritbitTree<V>) {
+    public fun drop<V: store + drop>(self: CritbitTree<V>) {
         let CritbitTree<V> {
             root: _,
             internal_nodes,
@@ -327,14 +324,14 @@ module deepbook::critbit {
             next_internal_node_index: _,
             next_leaf_index: _,
 
-        } = tree;
+        } = self;
         table::drop(internal_nodes);
         table::drop(leaves);
     }
 
 
-    public fun destroy_empty<V: store>(tree: CritbitTree<V>) {
-        assert!(table::length(&tree.leaves) == 0, 0);
+    public fun destroy_empty<V: store>(self: CritbitTree<V>) {
+        assert!(table::length(&self.leaves) == 0, 0);
 
         let CritbitTree<V> {
             root: _,
@@ -344,20 +341,20 @@ module deepbook::critbit {
             max_leaf: _,
             next_internal_node_index: _,
             next_leaf_index: _
-        } = tree;
+        } = self;
 
         table::destroy_empty(leaves);
         table::destroy_empty(internal_nodes);
     }
 
     // function for internal usage
-    fun get_closest_leaf_index_by_key<V: store>(tree: &CritbitTree<V>, _key: u64): u64 {
-        let ptr = tree.root;
+    fun get_closest_leaf_index_by_key<V: store>(self: &CritbitTree<V>, key: u64): u64 {
+        let ptr = self.root;
         // if tree is empty, return the patrition index
         if(ptr == PARTITION_INDEX) return PARTITION_INDEX;
         while (ptr < PARTITION_INDEX){
-            let node = table::borrow(&tree.internal_nodes, ptr);
-            if (_key & node.mask == 0){
+            let node = table::borrow(&self.internal_nodes, ptr);
+            if (key & node.mask == 0){
                 ptr = node.left_child;
             } else {
                 ptr = node.right_child;
@@ -367,23 +364,24 @@ module deepbook::critbit {
     }
 
     // new_child is the leaf index inside tree
-    fun update_child<V: store>(_tree: &mut CritbitTree<V>, parent_index: u64, new_child: u64, is_left_child: bool) {
+    fun update_child<V: store>(self: &mut CritbitTree<V>, parent_index: u64, new_child: u64, is_left_child: bool) {
         assert!(parent_index != PARTITION_INDEX, ENullParent);
         if (is_left_child) {
-            table::borrow_mut(&mut _tree.internal_nodes, parent_index).left_child = new_child;
+            table::borrow_mut(&mut self.internal_nodes, parent_index).left_child = new_child;
         } else{
-            table::borrow_mut(&mut _tree.internal_nodes, parent_index).right_child = new_child;
+            table::borrow_mut(&mut self.internal_nodes, parent_index).right_child = new_child;
         };
         if (new_child != PARTITION_INDEX) {
             if (new_child > PARTITION_INDEX){
-                table::borrow_mut(&mut _tree.leaves, MAX_U64 - new_child).parent = parent_index;
+                table::borrow_mut(&mut self.leaves, MAX_U64 - new_child).parent = parent_index;
             }else{
-                table::borrow_mut(&mut _tree.internal_nodes, new_child).parent = parent_index;
+                table::borrow_mut(&mut self.internal_nodes, new_child).parent = parent_index;
             }
         };
     }
-    fun is_left_child<V: store>(_tree: &CritbitTree<V>, parent_index: u64, index: u64): bool {
-        table::borrow(&_tree.internal_nodes, parent_index).left_child == index
+
+    fun is_left_child<V: store>(self: &CritbitTree<V>, parent_index: u64, index: u64): bool {
+        table::borrow(&self.internal_nodes, parent_index).left_child == index
     }
 
     fun count_leading_zeros(x: u128): u8 {
@@ -428,6 +426,7 @@ module deepbook::critbit {
             n
         }
     }
+
     #[test_only]
     public fun new_leaf_for_test<V>(key: u64, value: V, parent: u64): Leaf<V> {
         Leaf<V> {
@@ -436,6 +435,7 @@ module deepbook::critbit {
             parent,
         }
     }
+
     #[test_only]
     public fun new_internal_node_for_test(mask: u64, parent: u64, left_child: u64, right_child: u64): InternalNode {
         InternalNode {
@@ -450,7 +450,7 @@ module deepbook::critbit {
     use std::vector;
     #[test_only]
     public fun check_tree_struct<V: store>(
-        tree: &CritbitTree<V>,
+        self: &CritbitTree<V>,
         internal_node_keys: &vector<u64>,
         internal_node: &vector<InternalNode>,
         leaves_keys: &vector<u64>,
@@ -461,11 +461,11 @@ module deepbook::critbit {
     ): bool {
         assert!(vector::length(internal_node_keys) == vector::length(internal_node), 0);
         assert!(vector::length(leaves_keys) == vector::length(leaves), 0);
-        if(tree.root != root || tree.min_leaf != min_leaf || tree.max_leaf != max_leaf){
+        if(self.root != root || self.min_leaf != min_leaf || self.max_leaf != max_leaf){
             return false
         };
-        let internal_node_from_tree = &tree.internal_nodes;
-        let leaves_from_tree = &tree.leaves;
+        let internal_node_from_tree = &self.internal_nodes;
+        let leaves_from_tree = &self.leaves;
         let i = 0;
         let is_equal = true;
         while (i < vector::length(internal_node_keys)){
@@ -489,12 +489,12 @@ module deepbook::critbit {
     }
 
     #[test_only]
-    public fun check_empty_tree<V: store>(tree: &CritbitTree<V>, ) {
-        assert!(table::is_empty(&tree.leaves), 0);
-        assert!(table::is_empty(&tree.internal_nodes), 0);
-        assert!(tree.root == PARTITION_INDEX, 0);
-        assert!(tree.min_leaf == PARTITION_INDEX, 0);
-        assert!(tree.max_leaf == PARTITION_INDEX, 0);
+    public fun check_empty_tree<V: store>(self: &CritbitTree<V>, ) {
+        assert!(table::is_empty(&self.leaves), 0);
+        assert!(table::is_empty(&self.internal_nodes), 0);
+        assert!(self.root == PARTITION_INDEX, 0);
+        assert!(self.min_leaf == PARTITION_INDEX, 0);
+        assert!(self.max_leaf == PARTITION_INDEX, 0);
     }
 }
 
@@ -504,7 +504,7 @@ module deepbook::critbit_test {
     use deepbook::critbit::{Self, InternalNode, Leaf, check_tree_struct};
     use sui::test_scenario::{Self as test, ctx, Scenario, next_tx, end, TransactionEffects};
 
-    const PARTITION_INDEX: u64 = 1 << 63; // 9223372036854775808
+    const PARTITION_INDEX: u64 = 0x8000000000000000; // 9223372036854775808
     const MAX_U64: u64 = 0xFFFFFFFFFFFFFFFF; // 18446744073709551615
 
     #[test] fun test_critbit() { let _ = test_critbit_(scenario());}
