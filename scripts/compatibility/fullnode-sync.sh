@@ -40,7 +40,7 @@ while getopts "hvn:e:p:" OPT; do
             >&2 echo " -n NETWORK         The network to run the fullnode on."
             >&2 echo "                    (Default: ${DEFAULT_NETWORK})"
             >&2 echo " -e END_EPOCH       EpochID at which to stop syncing and declare success."
-            >&2 echo "                    If unspecified, will use current epoch of NETWORK."
+            >&2 echo "                    If unspecified or -1, will use current epoch of NETWORK."
             >&2 echo " -t EPOCH_TIMEOUT   Number of minutes to wait until epoch advancement before timing out."
             >&2 exit 0
             ;;
@@ -106,7 +106,7 @@ SUI_NODE_PID=$!
 
 # start monitoring script
 END_EPOCH_ARG=""
-if [[ ! -z $END_EPOCH ]]; then
+if [[ ! -z $END_EPOCH && $END_EPOCH != -1 ]]; then
     END_EPOCH_ARG="--end-epoch $END_EPOCH"
 fi
 
@@ -115,7 +115,7 @@ if [[ ! -z $EPOCH_TIMEOUT ]]; then
     EPOCH_TIMEOUT_ARG="--epoch-timeout $EPOCH_TIMEOUT"
 fi
 
-./scripts/monitor_synced.py $END_EPOCH_ARG $EPOCH_TIMEOUT_ARG --env $NETWORK $VERBOSE
+./scripts/compatibility/monitor_synced.py $END_EPOCH_ARG $EPOCH_TIMEOUT_ARG --env $NETWORK $VERBOSE
 
 kill $SUI_NODE_PID
 exit 0

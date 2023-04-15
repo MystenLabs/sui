@@ -1,11 +1,11 @@
-name: Compatibility Checker
+name: Compatibility Checker (Sharded)
 
 concurrency:
   group: ${{ github.workflow }}
 
 on:
   schedule:
-    - cron: "0 10 * * *" # UTC timing is every day at 2am PST
+    - cron: "0 6 * * *" # UTC timing is every day at 10pm PST
   workflow_dispatch:
     inputs:
       verbose:
@@ -20,7 +20,27 @@ on:
         default: true
 
 jobs:
-  genesis-sync-test:
+  genesis-sync-test-sharded:
+    strategy:
+      matrix:
+        shard_manifest:
+          [
+            {
+              hostname: "fullnode-compat-test-01",
+              start_epoch: 0,
+              end_epoch: 748,
+            },
+            {
+              hostname: "fullnode-compat-test-02",
+              start_epoch: 748,
+              end_epoch: 753,
+            },
+            {
+              hostname: "fullnode-compat-test-03",
+              start_epoch: 753,
+              end_epoch: -1,
+            },
+          ]
     timeout-minutes: 720
     permissions:
       # The "id-token: write" permission is required or Machine ID will not be
@@ -54,33 +74,58 @@ jobs:
         run: echo "CI_COMMIT_HASH=$(git for-each-ref --sort=creatordate refs/tags | grep -E 'sui_v(.*)_ci' | tail -1 | awk '{ print $1 }')" >> $GITHUB_OUTPUT
         id: get-ci-tag
 
-      # Wipe database from previous runs
-      - name: Wipe SuiDB
-        if: ${{ github.event.inputs.preserve-state == false }}
-        run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@fullnode-compat-test-01 "sudo rm -rf /var/lib/sui/suidb || true"
-
       # Checkout the latest sui repo
       - name: Checkout sui repo
         run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 10 ssh ubuntu@fullnode-compat-test-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && git fetch origin main && git rebase origin/main"
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 10 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && git fetch origin main && git rebase origin/main"
 
       # Cargo clean and git restore on any left over files from git checkout
       - name: Environment clean
         run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@fullnode-compat-test-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && cargo clean && git restore ."
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && cargo clean && git restore ."
 
       - name: Fetch sui-node binary
         run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 30 ssh ubuntu@fullnode-compat-test-01 "mkdir -p /var/lib/sui/bin && cd /var/lib/sui/bin && wget https://sui-releases.s3.us-east-1.amazonaws.com/${{ steps.get-ci-tag.outputs.CI_COMMIT_HASH }}/sui-node && chmod +x sui-node"
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 30 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && mkdir -p /var/lib/sui/bin && cd /var/lib/sui/bin && wget https://sui-releases.s3.us-east-1.amazonaws.com/${{ steps.get-ci-tag.outputs.CI_COMMIT_HASH }}/sui-node && chmod +x sui-node"
+
+      # Wipe database from previous runs
+      - name: Wipe SuiDB
+        if: ${{ github.event.inputs.preserve-state == false }}
+        run: |
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && sudo rm -rf /var/lib/sui/suidb || true"
+
+      - name: Setup DB structure
+        if: ${{ (matrix.shard_manifest.start_epoch != 0) && (github.event.inputs.preserve-state == false) }}
+        run: |
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && mkdir -p /var/lib/sui/suidb/epoch_${{ matrix.shard_manifest.start_epoch }} && cd /var/lib/sui/suidb/epoch_${{ matrix.shard_manifest.start_epoch }} && mkdir checkpoints && mkdir epochs && mkdir -p store/perpetual"
+
+      - name: Download epoch snapshot artifacts
+        if: ${{ (matrix.shard_manifest.start_epoch != 0) && (github.event.inputs.preserve-state == false) }}
+        run: |
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 60 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && cd /var/lib/sui/suidb/epoch_${{ matrix.shard_manifest.start_epoch }}/epochs && wget -i /var/lib/sui/s3_urls/epochs"
+
+      - name: Download checkpoint snapshot artifacts
+        if: ${{ (matrix.shard_manifest.start_epoch != 0) && (github.event.inputs.preserve-state == false) }}
+        run: |
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 60 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && cd /var/lib/sui/suidb/epoch_${{ matrix.shard_manifest.start_epoch }}/checkpoints && wget -i /var/lib/sui/s3_urls/checkpoints"
+
+      - name: Download perpetual snapshot artifacts
+        if: ${{ (matrix.shard_manifest.start_epoch != 0) && (github.event.inputs.preserve-state == false) }}
+        run: |
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 60 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && cd /var/lib/sui/suidb/epoch_${{ matrix.shard_manifest.start_epoch }}/store/perpetual && wget -i /var/lib/sui/s3_urls/store_perpetual"
+
+      - name: Mark snapshot as live
+        if: ${{ (matrix.shard_manifest.start_epoch != 0) && (github.event.inputs.preserve-state == false) }}
+        run: |
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && mv /var/lib/sui/suidb/epoch_${{ matrix.shard_manifest.start_epoch }} /var/lib/sui/suidb/live"
 
       - name: Run sync script
         run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 720 ssh ubuntu@fullnode-compat-test-01 "cd ~/sui && echo "Running compatibility checker against binary built at commit hash ${{ steps.get-ci-tag.outputs.CI_COMMIT_HASH }}" && CARGO_TERM_COLOR=always ./scripts/compatibility/fullnode-sync.sh -p /var/lib/sui/bin/sui-node -n testnet ${{ github.event.inputs.verbose == true && '-v' || '' }}"
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 720 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && echo "Running compatibility checker against binary built at commit hash ${{ steps.get-ci-tag.outputs.CI_COMMIT_HASH }}" && CARGO_TERM_COLOR=always ./scripts/compatibility/fullnode-sync.sh -p /var/lib/sui/bin/sui-node -n testnet -e ${{ matrix.shard_manifest.end_epoch }} ${{ github.event.inputs.verbose == true && '-v' || '' }}"
 
   notify:
     name: Notify
-    needs: [genesis-sync-test]
+    needs: [genesis-sync-test-sharded]
     runs-on: ubuntu-latest
     if: always() # always notify
 
