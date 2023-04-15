@@ -739,6 +739,7 @@ impl AuthorityState {
     pub async fn try_execute_immediately(
         &self,
         certificate: &VerifiedExecutableTransaction,
+        expected_effects_digest: Option<TransactionEffectsDigest>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
         let _metrics_guard = self.metrics.internal_execution_latency.start_timer();
@@ -751,7 +752,7 @@ impl AuthorityState {
         // may as well hold the lock and save the cpu time for other requests.
         let tx_guard = epoch_store.acquire_tx_guard(certificate).await?;
 
-        self.process_certificate(tx_guard, certificate, epoch_store)
+        self.process_certificate(tx_guard, certificate, expected_effects_digest, epoch_store)
             .await
             .tap_err(|e| info!(?tx_digest, "process_certificate failed: {e}"))
     }
@@ -766,6 +767,7 @@ impl AuthorityState {
         let (effects, execution_error_opt) = self
             .try_execute_immediately(
                 &VerifiedExecutableTransaction::new_from_certificate(certificate.clone()),
+                None,
                 &epoch_store,
             )
             .await?;
@@ -796,6 +798,7 @@ impl AuthorityState {
         &self,
         tx_guard: CertTxGuard,
         certificate: &VerifiedExecutableTransaction,
+        expected_effects_digest: Option<TransactionEffectsDigest>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
         let digest = *certificate.digest();
@@ -846,6 +849,23 @@ impl AuthorityState {
             }
             Ok(res) => res,
         };
+
+        if let Some(expected_effects_digest) = expected_effects_digest {
+            if effects.digest() != expected_effects_digest {
+                error!(
+                    tx_digest = ?digest,
+                    ?expected_effects_digest,
+                    actual_effects = ?effects,
+                    "fork detected!"
+                );
+                panic!(
+                    "Transaction {} is expected to have effects digest {}, but got {}!",
+                    digest,
+                    expected_effects_digest,
+                    effects.digest(),
+                );
+            }
+        }
 
         fail_point_async!("crash");
 
