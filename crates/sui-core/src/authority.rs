@@ -24,6 +24,7 @@ use prometheus::{
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use sui_config::transaction_deny_config::TransactionDenyConfig;
 use sui_types::TypeTag;
 use tap::TapFallible;
 use tokio::sync::mpsc::unbounded_channel;
@@ -500,6 +501,8 @@ pub struct AuthorityState {
 
     /// Config controlling what kind of expensive safety checks to perform.
     expensive_safety_check_config: ExpensiveSafetyCheckConfig,
+
+    transaction_deny_config: TransactionDenyConfig,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -554,6 +557,7 @@ impl AuthorityState {
             &self.database,
             epoch_store.as_ref(),
             &transaction.data().intent_message().value,
+            &self.transaction_deny_config,
         )
         .await?;
 
@@ -1095,6 +1099,7 @@ impl AuthorityState {
                     &self.database,
                     epoch_store.as_ref(),
                     &transaction,
+                    &self.transaction_deny_config,
                 )
                 .await?,
                 None,
@@ -1692,6 +1697,7 @@ impl AuthorityState {
         genesis_objects: &[Object],
         db_checkpoint_config: &DBCheckpointConfig,
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
+        transaction_deny_config: TransactionDenyConfig,
     ) -> Arc<Self> {
         Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
 
@@ -1731,6 +1737,7 @@ impl AuthorityState {
             _authority_per_epoch_pruner,
             db_checkpoint_config: db_checkpoint_config.clone(),
             expensive_safety_check_config,
+            transaction_deny_config,
         });
 
         // Start a task to execute ready certificates.

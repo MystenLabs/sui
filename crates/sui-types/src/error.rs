@@ -183,6 +183,9 @@ pub enum UserInputError {
     )]
     EmptyCommandInput,
 
+    #[error("Transaction is denied: {}", error)]
+    TransactionDenied { error: String },
+
     #[error("Feature is not yet supported: {0}")]
     Unsupported(String),
 }

@@ -932,6 +932,13 @@ impl TransactionKind {
             _ => 0,
         }
     }
+
+    pub fn iter_commands(&self) -> impl Iterator<Item = &Command> {
+        match self {
+            TransactionKind::ProgrammableTransaction(pt) => pt.commands.iter(),
+            _ => [].iter(),
+        }
+    }
 }
 
 impl Display for TransactionKind {
@@ -2953,6 +2960,10 @@ impl InputObjectKind {
                 version: None,
             },
         }
+    }
+
+    pub fn is_shared_object(&self) -> bool {
+        matches!(self, Self::SharedMoveObject { .. })
     }
 }
 

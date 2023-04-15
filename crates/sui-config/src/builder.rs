@@ -520,6 +520,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     indirect_objects_threshold: usize::MAX,
                     expensive_safety_check_config: Default::default(),
                     name_service_resolver_object_id: None,
+                    transaction_deny_config: Default::default(),
                 }
             })
             .collect();
