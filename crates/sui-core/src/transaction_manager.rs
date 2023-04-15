@@ -53,6 +53,8 @@ pub struct TransactionManager {
 struct PendingCertificate {
     // Certified transaction to be executed.
     certificate: VerifiedExecutableTransaction,
+    // When executing from checkpoint, the certified effects digest is provided, so that forks can
+    // be detected prior to committing the transaction.
     expected_effects_digest: Option<TransactionEffectsDigest>,
     // Input object locks that have not been acquired, because:
     // 1. The object has not been created yet.
@@ -252,7 +254,7 @@ impl TransactionManager {
         self.enqueue_impl(certs, epoch_store)
     }
 
-    pub(crate) fn enqueue_with_expected_effects(
+    pub(crate) fn enqueue_with_expected_effects_digest(
         &self,
         certs: Vec<(VerifiedExecutableTransaction, TransactionEffectsDigest)>,
         epoch_store: &AuthorityPerEpochStore,
