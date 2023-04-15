@@ -7,7 +7,7 @@ use std::{
 };
 
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
-use sui_types::messages::VerifiedExecutableTransaction;
+use sui_types::{digests::TransactionEffectsDigest, messages::VerifiedExecutableTransaction};
 use tokio::{
     sync::{mpsc::UnboundedReceiver, oneshot, Semaphore},
     time::sleep,
@@ -29,7 +29,10 @@ const EXECUTION_FAILURE_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 /// processing the transaction in a loop.
 pub async fn execution_process(
     authority_state: Weak<AuthorityState>,
-    mut rx_ready_certificates: UnboundedReceiver<VerifiedExecutableTransaction>,
+    mut rx_ready_certificates: UnboundedReceiver<(
+        VerifiedExecutableTransaction,
+        Option<TransactionEffectsDigest>,
+    )>,
     mut rx_execution_shutdown: oneshot::Receiver<()>,
 ) {
     info!("Starting pending certificates execution process.");
@@ -40,10 +43,12 @@ pub async fn execution_process(
     // Loop whenever there is a signal that a new transactions is ready to process.
     loop {
         let certificate;
+        let expected_effects_digest;
         tokio::select! {
             result = rx_ready_certificates.recv() => {
-                if let Some(cert) = result {
+                if let Some((cert, fx_digest)) = result {
                     certificate = cert;
+                    expected_effects_digest = fx_digest;
                 } else {
                     // Should only happen after the AuthorityState has shut down and tx_ready_certificate
                     // has been dropped by TransactionManager.
@@ -89,7 +94,7 @@ pub async fn execution_process(
             loop {
                 attempts += 1;
                 let res = authority
-                    .try_execute_immediately(&certificate, &epoch_store)
+                    .try_execute_immediately(&certificate, expected_effects_digest, &epoch_store)
                     .await;
                 if let Err(e) = res {
                     if attempts == EXECUTION_MAX_ATTEMPTS {
