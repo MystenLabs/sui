@@ -1578,7 +1578,7 @@ impl<'a> VerificationObligation<'a> {
             }
 
             SuiError::InvalidSignature {
-                error: error_message,
+                error: format!("Failed to batch verify aggregated auth sig {}", e),
             }
         })?;
         Ok(())
