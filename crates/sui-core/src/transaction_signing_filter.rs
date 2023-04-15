@@ -8,6 +8,10 @@ use sui_types::{
     storage::BackingPackageStore,
 };
 
+#[cfg(test)]
+#[path = "unit_tests/transaction_deny_tests.rs"]
+mod transaction_deny_tests;
+
 macro_rules! deny_if_true {
     ($cond:expr, $msg:expr) => {
         if ($cond) {
@@ -94,7 +98,9 @@ fn check_input_objects(
     input_objects: &[InputObjectKind],
 ) -> SuiResult {
     let deny_map = filter_config.get_object_deny_map();
-    if deny_map.is_empty() {
+    let shared_object_disabled = filter_config.shared_object_disabled();
+    if deny_map.is_empty() && !shared_object_disabled {
+        // No need to iterate through the input objects if no relevant policy is set.
         return Ok(());
     }
     for object_kind in input_objects {
@@ -104,7 +110,7 @@ fn check_input_objects(
             format!("Access to input object {:?} is temporarily disabled", id)
         );
         deny_if_true!(
-            filter_config.shared_object_disabled() && object_kind.is_shared_object(),
+            shared_object_disabled && object_kind.is_shared_object(),
             "Usage of shared object in transactions is temporarily disabled"
         );
     }

@@ -51,6 +51,7 @@ pub struct TransactionDenyConfig {
 
     #[serde(skip)]
     sender_deny_map: OnceCell<HashSet<SuiAddress>>,
+    // TODO: We could consider add a deny list for types that we want to disable public transfer.
 }
 
 impl TransactionDenyConfig {
@@ -83,5 +84,55 @@ impl TransactionDenyConfig {
 
     pub fn user_transaction_disabled(&self) -> bool {
         self.user_transaction_disabled
+    }
+}
+
+#[derive(Default)]
+pub struct TransactionDenyConfigBuilder {
+    config: TransactionDenyConfig,
+}
+
+impl TransactionDenyConfigBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn build(self) -> TransactionDenyConfig {
+        self.config
+    }
+
+    pub fn disable_user_transaction(mut self) -> Self {
+        self.config.user_transaction_disabled = true;
+        self
+    }
+
+    pub fn disable_shared_object_transaction(mut self) -> Self {
+        self.config.shared_object_disabled = true;
+        self
+    }
+
+    pub fn disable_package_publish(mut self) -> Self {
+        self.config.package_publish_disabled = true;
+        self
+    }
+
+    pub fn disable_package_upgrade(mut self) -> Self {
+        self.config.package_upgrade_disabled = true;
+        self
+    }
+
+    pub fn add_denied_object(mut self, id: ObjectID) -> Self {
+        self.config.object_deny_list.push(id);
+        self
+    }
+
+    pub fn add_denied_address(mut self, address: SuiAddress) -> Self {
+        self.config.address_deny_list.push(address);
+        self
+    }
+
+    pub fn add_denied_package(mut self, id: ObjectID) -> Self {
+        self.config.package_deny_list.push(id);
+        self
     }
 }
