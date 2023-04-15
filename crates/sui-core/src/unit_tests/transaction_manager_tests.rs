@@ -6,6 +6,7 @@ use std::{time::Duration, vec};
 use sui_types::{
     base_types::ObjectID,
     crypto::deterministic_random_account_key,
+    digests::TransactionEffectsDigest,
     messages::{CallArg, ObjectArg, VerifiedExecutableTransaction, TEST_ONLY_GAS_UNIT_FOR_GENERIC},
     object::Object,
     SUI_FRAMEWORK_OBJECT_ID,
@@ -28,7 +29,10 @@ fn make_transaction_manager(
     state: &AuthorityState,
 ) -> (
     TransactionManager,
-    UnboundedReceiver<VerifiedExecutableTransaction>,
+    UnboundedReceiver<(
+        VerifiedExecutableTransaction,
+        Option<TransactionEffectsDigest>,
+    )>,
 ) {
     // Create a new transaction manager instead of reusing the authority's, to examine
     // transaction_manager output from rx_ready_certificates.
@@ -254,8 +258,8 @@ async fn transaction_manager_read_lock() {
     );
 
     // TM should output the 2 read-only transactions eventually.
-    let tx_0 = rx_ready_certificates.recv().await.unwrap();
-    let tx_1 = rx_ready_certificates.recv().await.unwrap();
+    let tx_0 = rx_ready_certificates.recv().await.unwrap().0;
+    let tx_1 = rx_ready_certificates.recv().await.unwrap().0;
     let mut want_digests = vec![transaction_read_0.digest(), transaction_read_1.digest()];
     want_digests.sort();
     let mut got_digests = vec![tx_0.digest(), tx_1.digest()];
@@ -273,7 +277,7 @@ async fn transaction_manager_read_lock() {
     transaction_manager.notify_commit(tx_1.digest(), vec![], &state.epoch_store_for_testing());
 
     // TM should output the default-lock transaction eventually.
-    let tx_2 = rx_ready_certificates.recv().await.unwrap();
+    let tx_2 = rx_ready_certificates.recv().await.unwrap().0;
     assert_eq!(tx_2.digest(), transaction_default.digest());
 
     assert_eq!(transaction_manager.inflight_queue_len(), 1);

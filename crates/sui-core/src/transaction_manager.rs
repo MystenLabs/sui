@@ -12,6 +12,7 @@ use parking_lot::RwLock;
 use sui_types::{
     base_types::ObjectID,
     committee::EpochId,
+    digests::TransactionEffectsDigest,
     messages::{TransactionDataAPI, VerifiedCertificate, VerifiedExecutableTransaction},
 };
 use sui_types::{base_types::TransactionDigest, error::SuiResult};
@@ -40,7 +41,10 @@ const MIN_HASHMAP_CAPACITY: usize = 1000;
 /// storage, committed objects and certificates are notified back to TransactionManager.
 pub struct TransactionManager {
     authority_store: Arc<AuthorityStore>,
-    tx_ready_certificates: UnboundedSender<VerifiedExecutableTransaction>,
+    tx_ready_certificates: UnboundedSender<(
+        VerifiedExecutableTransaction,
+        Option<TransactionEffectsDigest>,
+    )>,
     metrics: Arc<AuthorityMetrics>,
     inner: RwLock<Inner>,
 }
@@ -49,6 +53,9 @@ pub struct TransactionManager {
 struct PendingCertificate {
     // Certified transaction to be executed.
     certificate: VerifiedExecutableTransaction,
+    // When executing from checkpoint, the certified effects digest is provided, so that forks can
+    // be detected prior to committing the transaction.
+    expected_effects_digest: Option<TransactionEffectsDigest>,
     // Input object locks that have not been acquired, because:
     // 1. The object has not been created yet.
     // 2. The object exists, but this transaction is trying to acquire a r/w lock while the object
@@ -203,7 +210,10 @@ impl TransactionManager {
     pub(crate) fn new(
         authority_store: Arc<AuthorityStore>,
         epoch_store: &AuthorityPerEpochStore,
-        tx_ready_certificates: UnboundedSender<VerifiedExecutableTransaction>,
+        tx_ready_certificates: UnboundedSender<(
+            VerifiedExecutableTransaction,
+            Option<TransactionEffectsDigest>,
+        )>,
         metrics: Arc<AuthorityMetrics>,
     ) -> TransactionManager {
         let transaction_manager = TransactionManager {
@@ -240,10 +250,34 @@ impl TransactionManager {
         certs: Vec<VerifiedExecutableTransaction>,
         epoch_store: &AuthorityPerEpochStore,
     ) -> SuiResult<()> {
+        let certs = certs.into_iter().map(|cert| (cert, None)).collect();
+        self.enqueue_impl(certs, epoch_store)
+    }
+
+    pub(crate) fn enqueue_with_expected_effects_digest(
+        &self,
+        certs: Vec<(VerifiedExecutableTransaction, TransactionEffectsDigest)>,
+        epoch_store: &AuthorityPerEpochStore,
+    ) -> SuiResult<()> {
+        let certs = certs
+            .into_iter()
+            .map(|(cert, fx)| (cert, Some(fx)))
+            .collect();
+        self.enqueue_impl(certs, epoch_store)
+    }
+
+    fn enqueue_impl(
+        &self,
+        certs: Vec<(
+            VerifiedExecutableTransaction,
+            Option<TransactionEffectsDigest>,
+        )>,
+        epoch_store: &AuthorityPerEpochStore,
+    ) -> SuiResult<()> {
         let mut pending = Vec::new();
         // Check input objects availability, before taking TM lock.
         let mut object_availability: HashMap<InputKey, bool> = HashMap::new();
-        for cert in certs {
+        for (cert, expected_effects_digest) in certs {
             let digest = *cert.digest();
             // skip already executed txes
             if self.authority_store.is_tx_already_executed(&digest)? {
@@ -281,6 +315,7 @@ impl TransactionManager {
 
             pending.push(PendingCertificate {
                 certificate: cert,
+                expected_effects_digest,
                 acquiring_locks: input_object_locks,
                 acquired_locks: BTreeMap::new(),
             });
@@ -563,6 +598,7 @@ impl TransactionManager {
     /// Sends the ready certificate for execution.
     fn certificate_ready(&self, inner: &mut Inner, pending_certificate: PendingCertificate) {
         let cert = pending_certificate.certificate;
+        let expected_effects_digest = pending_certificate.expected_effects_digest;
         trace!(tx_digest = ?cert.digest(), "certificate ready");
         // Record as an executing certificate.
         assert_eq!(
@@ -578,7 +614,9 @@ impl TransactionManager {
             .executing_certificates
             .insert(*cert.digest(), pending_certificate.acquired_locks)
             .is_none());
-        let _ = self.tx_ready_certificates.send(cert);
+        let _ = self
+            .tx_ready_certificates
+            .send((cert, expected_effects_digest));
         self.metrics.transaction_manager_num_ready.inc();
         self.metrics.execution_driver_dispatch_queue.inc();
     }
