@@ -44,7 +44,6 @@ use sui_framework::BuiltInFramework;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::id::UID;
-use sui_types::move_package::UpgradePolicy;
 use sui_types::MOVE_STDLIB_OBJECT_ID;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, SUI_ADDRESS_LENGTH},
@@ -763,7 +762,7 @@ impl<'a> SuiTestAdapter<'a> {
         dependencies: Vec<String>,
         sender: String,
         gas_budget: Option<u64>,
-        policy: Option<String>,
+        policy: u8,
     ) -> anyhow::Result<Option<String>> {
         let modules_bytes = modules
             .iter()
@@ -790,12 +789,6 @@ impl<'a> SuiTestAdapter<'a> {
         let mut builder = ProgrammableTransactionBuilder::new();
 
         SuiValue::Object(upgrade_capability).into_argument(&mut builder, self)?; // Argument::Input(0)
-        let policy = policy.map(|x| Ok(match x.as_str() {
-            "compatible" => UpgradePolicy::COMPATIBLE,
-            "additive" => UpgradePolicy::ADDITIVE,
-            "dep_only" => UpgradePolicy::DEP_ONLY,
-            _ => bail!("Invalid upgrade policy {x}. Policy must be one of 'compatible', 'additive', and 'dep_only'")
-        })).unwrap_or(Ok(UpgradePolicy::COMPATIBLE))?;
         let upgrade_arg = builder.pure(policy).unwrap();
         let digest: Vec<u8> =
             MovePackage::compute_digest_for_modules_and_deps(&modules_bytes, &dependencies).into();
