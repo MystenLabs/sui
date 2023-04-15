@@ -143,7 +143,7 @@ fn timestamps_table_default_config() -> DBOptions {
     point_lookup_db_options()
 }
 fn owner_index_table_default_config() -> DBOptions {
-    default_db_options()
+    optimized_for_high_throughput_options(1024, false)
 }
 fn dynamic_field_index_table_default_config() -> DBOptions {
     optimized_for_high_throughput_options(1024, true)
