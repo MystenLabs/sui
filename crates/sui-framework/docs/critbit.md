@@ -305,7 +305,7 @@
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="critbit.md#0xdee9_critbit_new">new</a>&lt;V: store&gt;(ctx: &<b>mut</b> <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;V&gt;
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_new">new</a>&lt;V: store&gt;(ctx: &<b>mut</b> <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;V&gt;
 </code></pre>
 
 
@@ -314,7 +314,7 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="critbit.md#0xdee9_critbit_new">new</a>&lt;V: store&gt;(ctx: &<b>mut</b> TxContext): <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt; {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_new">new</a>&lt;V: store&gt;(ctx: &<b>mut</b> TxContext): <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt; {
     <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;{
         root: <a href="critbit.md#0xdee9_critbit_PARTITION_INDEX">PARTITION_INDEX</a>,
         internal_nodes: <a href="../../../.././build/Sui/docs/table.md#0x2_table_new">table::new</a>(ctx),
@@ -337,7 +337,7 @@
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="critbit.md#0xdee9_critbit_size">size</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;V&gt;): u64
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_size">size</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;V&gt;): u64
 </code></pre>
 
 
@@ -346,7 +346,7 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="critbit.md#0xdee9_critbit_size">size</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;): u64 {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_size">size</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;): u64 {
     <a href="../../../.././build/Sui/docs/table.md#0x2_table_length">table::length</a>(&tree.leaves)
 }
 </code></pre>
@@ -361,7 +361,7 @@
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="critbit.md#0xdee9_critbit_is_empty">is_empty</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;V&gt;): bool
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_is_empty">is_empty</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;V&gt;): bool
 </code></pre>
 
 
@@ -370,7 +370,7 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="critbit.md#0xdee9_critbit_is_empty">is_empty</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;): bool {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_is_empty">is_empty</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;): bool {
     <a href="../../../.././build/Sui/docs/table.md#0x2_table_is_empty">table::is_empty</a>(&tree.leaves)
 }
 </code></pre>
@@ -385,7 +385,7 @@
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="critbit.md#0xdee9_critbit_min_leaf">min_leaf</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;V&gt;): (u64, u64)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_min_leaf">min_leaf</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;V&gt;): (u64, u64)
 </code></pre>
 
 
@@ -394,7 +394,7 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="critbit.md#0xdee9_critbit_min_leaf">min_leaf</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;): (u64, u64) {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_min_leaf">min_leaf</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;): (u64, u64) {
     <b>assert</b>!(!<a href="critbit.md#0xdee9_critbit_is_empty">is_empty</a>(tree), <a href="critbit.md#0xdee9_critbit_ELeafNotExist">ELeafNotExist</a>);
     <b>let</b> min_leaf = <a href="../../../.././build/Sui/docs/table.md#0x2_table_borrow">table::borrow</a>(&tree.leaves, tree.min_leaf);
     <b>return</b> (min_leaf.key, tree.min_leaf)
@@ -411,7 +411,7 @@
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="critbit.md#0xdee9_critbit_max_leaf">max_leaf</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;V&gt;): (u64, u64)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_max_leaf">max_leaf</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;V&gt;): (u64, u64)
 </code></pre>
 
 
@@ -420,7 +420,7 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="critbit.md#0xdee9_critbit_max_leaf">max_leaf</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;): (u64, u64) {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_max_leaf">max_leaf</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;): (u64, u64) {
     <b>assert</b>!(!<a href="critbit.md#0xdee9_critbit_is_empty">is_empty</a>(tree), <a href="critbit.md#0xdee9_critbit_ELeafNotExist">ELeafNotExist</a>);
     <b>let</b> max_leaf = <a href="../../../.././build/Sui/docs/table.md#0x2_table_borrow">table::borrow</a>(&tree.leaves, tree.max_leaf);
     <b>return</b> (max_leaf.key, tree.max_leaf)
@@ -474,7 +474,7 @@
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="critbit.md#0xdee9_critbit_next_leaf">next_leaf</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;V&gt;, _key: u64): (u64, u64)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_next_leaf">next_leaf</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;V&gt;, _key: u64): (u64, u64)
 </code></pre>
 
 
@@ -483,7 +483,7 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="critbit.md#0xdee9_critbit_next_leaf">next_leaf</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;, _key: u64): (u64, u64) {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_next_leaf">next_leaf</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;, _key: u64): (u64, u64) {
     <b>let</b> (_, index) = <a href="critbit.md#0xdee9_critbit_find_leaf">find_leaf</a>(tree, _key);
     <b>assert</b>!(index != <a href="critbit.md#0xdee9_critbit_PARTITION_INDEX">PARTITION_INDEX</a>, <a href="critbit.md#0xdee9_critbit_ELeafNotExist">ELeafNotExist</a>);
     <b>let</b> ptr = <a href="critbit.md#0xdee9_critbit_MAX_U64">MAX_U64</a> - index;
@@ -567,7 +567,7 @@
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="critbit.md#0xdee9_critbit_insert_leaf">insert_leaf</a>&lt;V: store&gt;(tree: &<b>mut</b> <a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;V&gt;, _key: u64, _value: V): u64
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_insert_leaf">insert_leaf</a>&lt;V: store&gt;(tree: &<b>mut</b> <a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;V&gt;, _key: u64, _value: V): u64
 </code></pre>
 
 
@@ -576,7 +576,7 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="critbit.md#0xdee9_critbit_insert_leaf">insert_leaf</a>&lt;V: store&gt;(tree: &<b>mut</b> <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;, _key: u64, _value: V): u64 {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_insert_leaf">insert_leaf</a>&lt;V: store&gt;(tree: &<b>mut</b> <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;, _key: u64, _value: V): u64 {
     <b>let</b> new_leaf = <a href="critbit.md#0xdee9_critbit_Leaf">Leaf</a>&lt;V&gt;{
         key: _key,
         value: _value,
@@ -667,7 +667,7 @@
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="critbit.md#0xdee9_critbit_find_leaf">find_leaf</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;V&gt;, _key: u64): (bool, u64)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_find_leaf">find_leaf</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;V&gt;, _key: u64): (bool, u64)
 </code></pre>
 
 
@@ -676,7 +676,7 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="critbit.md#0xdee9_critbit_find_leaf">find_leaf</a>&lt;V: store&gt;(tree: & <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;, _key: u64): (bool, u64) {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_find_leaf">find_leaf</a>&lt;V: store&gt;(tree: & <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;, _key: u64): (bool, u64) {
     <b>if</b> (<a href="critbit.md#0xdee9_critbit_is_empty">is_empty</a>(tree)) {
         <b>return</b> (<b>false</b>, <a href="critbit.md#0xdee9_critbit_PARTITION_INDEX">PARTITION_INDEX</a>)
     };
@@ -700,7 +700,7 @@
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="critbit.md#0xdee9_critbit_find_closest_key">find_closest_key</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;V&gt;, _key: u64): u64
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_find_closest_key">find_closest_key</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;V&gt;, _key: u64): u64
 </code></pre>
 
 
@@ -709,7 +709,7 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="critbit.md#0xdee9_critbit_find_closest_key">find_closest_key</a>&lt;V: store&gt;(tree: & <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;, _key: u64): u64 {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_find_closest_key">find_closest_key</a>&lt;V: store&gt;(tree: & <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;, _key: u64): u64 {
     <b>if</b> (<a href="critbit.md#0xdee9_critbit_is_empty">is_empty</a>(tree)) {
         <b>return</b> 0
     };
@@ -729,7 +729,7 @@
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="critbit.md#0xdee9_critbit_remove_leaf_by_index">remove_leaf_by_index</a>&lt;V: store&gt;(tree: &<b>mut</b> <a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;V&gt;, _index: u64): V
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_remove_leaf_by_index">remove_leaf_by_index</a>&lt;V: store&gt;(tree: &<b>mut</b> <a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;V&gt;, _index: u64): V
 </code></pre>
 
 
@@ -738,7 +738,7 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="critbit.md#0xdee9_critbit_remove_leaf_by_index">remove_leaf_by_index</a>&lt;V: store&gt;(tree: &<b>mut</b> <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;, _index: u64): V {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_remove_leaf_by_index">remove_leaf_by_index</a>&lt;V: store&gt;(tree: &<b>mut</b> <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;, _index: u64): V {
     <b>let</b> key = <a href="../../../.././build/Sui/docs/table.md#0x2_table_borrow">table::borrow</a>(& tree.leaves, _index).key;
     <b>if</b>(tree.min_leaf == _index) {
         <b>let</b> (_, index) = <a href="critbit.md#0xdee9_critbit_next_leaf">next_leaf</a>(tree, key);
@@ -800,7 +800,7 @@
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="critbit.md#0xdee9_critbit_borrow_mut_leaf_by_index">borrow_mut_leaf_by_index</a>&lt;V: store&gt;(tree: &<b>mut</b> <a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;V&gt;, index: u64): &<b>mut</b> V
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_borrow_mut_leaf_by_index">borrow_mut_leaf_by_index</a>&lt;V: store&gt;(tree: &<b>mut</b> <a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;V&gt;, index: u64): &<b>mut</b> V
 </code></pre>
 
 
@@ -809,7 +809,7 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="critbit.md#0xdee9_critbit_borrow_mut_leaf_by_index">borrow_mut_leaf_by_index</a>&lt;V: store&gt;(tree: &<b>mut</b> <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;, index: u64): &<b>mut</b> V {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_borrow_mut_leaf_by_index">borrow_mut_leaf_by_index</a>&lt;V: store&gt;(tree: &<b>mut</b> <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;, index: u64): &<b>mut</b> V {
     <b>let</b> entry = <a href="../../../.././build/Sui/docs/table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> tree.leaves, index);
     &<b>mut</b> entry.value
 }
@@ -825,7 +825,7 @@
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="critbit.md#0xdee9_critbit_borrow_leaf_by_index">borrow_leaf_by_index</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;V&gt;, index: u64): &V
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_borrow_leaf_by_index">borrow_leaf_by_index</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;V&gt;, index: u64): &V
 </code></pre>
 
 
@@ -834,7 +834,7 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="critbit.md#0xdee9_critbit_borrow_leaf_by_index">borrow_leaf_by_index</a>&lt;V: store&gt;(tree: & <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;, index: u64): &V {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_borrow_leaf_by_index">borrow_leaf_by_index</a>&lt;V: store&gt;(tree: & <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;, index: u64): &V {
     <b>let</b> entry = <a href="../../../.././build/Sui/docs/table.md#0x2_table_borrow">table::borrow</a>(&tree.leaves, index);
     &entry.value
 }
@@ -850,7 +850,7 @@
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="critbit.md#0xdee9_critbit_borrow_leaf_by_key">borrow_leaf_by_key</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;V&gt;, key: u64): &V
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_borrow_leaf_by_key">borrow_leaf_by_key</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;V&gt;, key: u64): &V
 </code></pre>
 
 
@@ -859,7 +859,7 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="critbit.md#0xdee9_critbit_borrow_leaf_by_key">borrow_leaf_by_key</a>&lt;V: store&gt;(tree: & <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;, key: u64): &V {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_borrow_leaf_by_key">borrow_leaf_by_key</a>&lt;V: store&gt;(tree: & <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;, key: u64): &V {
     <b>let</b> (is_exist, index) = <a href="critbit.md#0xdee9_critbit_find_leaf">find_leaf</a>(tree, key);
     <b>assert</b>!(is_exist, <a href="critbit.md#0xdee9_critbit_ELeafNotExist">ELeafNotExist</a>);
     <a href="critbit.md#0xdee9_critbit_borrow_leaf_by_index">borrow_leaf_by_index</a>(tree, index)
@@ -876,7 +876,7 @@
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="critbit.md#0xdee9_critbit_drop">drop</a>&lt;V: drop, store&gt;(tree: <a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;V&gt;)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_drop">drop</a>&lt;V: drop, store&gt;(tree: <a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;V&gt;)
 </code></pre>
 
 
@@ -885,7 +885,7 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="critbit.md#0xdee9_critbit_drop">drop</a>&lt;V: store + drop&gt;(tree: <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;) {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_drop">drop</a>&lt;V: store + drop&gt;(tree: <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;) {
     <b>let</b> <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt; {
         root: _,
         internal_nodes,
@@ -911,7 +911,7 @@
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="critbit.md#0xdee9_critbit_destroy_empty">destroy_empty</a>&lt;V: store&gt;(tree: <a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;V&gt;)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_destroy_empty">destroy_empty</a>&lt;V: store&gt;(tree: <a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;V&gt;)
 </code></pre>
 
 
@@ -920,7 +920,7 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="critbit.md#0xdee9_critbit_destroy_empty">destroy_empty</a>&lt;V: store&gt;(tree: <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;) {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_destroy_empty">destroy_empty</a>&lt;V: store&gt;(tree: <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;) {
     <b>assert</b>!(<a href="../../../.././build/Sui/docs/table.md#0x2_table_length">table::length</a>(&tree.leaves) == 0, 0);
 
     <b>let</b> <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt; {

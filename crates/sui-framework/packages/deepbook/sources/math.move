@@ -5,13 +5,15 @@ module deepbook::math {
 
     /// scaling setting for float
     const FLOAT_SCALING: u64 = 1000000000;
-
     const FLOAT_SCALING_U128: u128 = 1000000000;
 
-    /// error when float overflow
-    const EFloatOverflow: u64 = 8;
+    public fun mul(x: u64, y: u64): u64 {
+        let x = (x as u128);
+        let y = (y as u128);
+        ((x * y / FLOAT_SCALING_U128) as u64)
+    }
 
-    public fun mul(x: u64, y: u64): (bool, u64) {
+    public fun mul_round(x: u64, y: u64): (bool, u64) {
         let x = (x as u128);
         let y = (y as u128);
         let is_round_down = true;
@@ -19,7 +21,7 @@ module deepbook::math {
         (is_round_down, ((x * y / FLOAT_SCALING_U128) as u64))
     }
 
-    public fun div(x: u64, y: u64): (bool, u64) {
+    public fun div_round(x: u64, y: u64): (bool, u64) {
         let x = (x as u128);
         let y = (y as u128);
         let is_round_down = true;

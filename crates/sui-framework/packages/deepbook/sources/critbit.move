@@ -5,6 +5,10 @@ module deepbook::critbit {
     use sui::tx_context::TxContext;
     use sui::table::{Self, Table};
 
+    friend deepbook::clob;
+    #[test_only]
+    friend deepbook::critbit_test;
+
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
     const ENotImplemented: u64 = 1;
     const EExceedCapacity: u64 = 2;
@@ -50,7 +54,7 @@ module deepbook::critbit {
         next_leaf_index: u64
     }
 
-    public fun new<V: store>(ctx: &mut TxContext): CritbitTree<V> {
+    public(friend) fun new<V: store>(ctx: &mut TxContext): CritbitTree<V> {
         CritbitTree<V>{
             root: PARTITION_INDEX,
             internal_nodes: table::new(ctx),
@@ -62,18 +66,17 @@ module deepbook::critbit {
         }
     }
 
-    public fun size<V: store>(tree: &CritbitTree<V>): u64 {
+    public(friend) fun size<V: store>(tree: &CritbitTree<V>): u64 {
         table::length(&tree.leaves)
     }
 
-    public fun is_empty<V: store>(tree: &CritbitTree<V>): bool {
+    public(friend) fun is_empty<V: store>(tree: &CritbitTree<V>): bool {
         table::is_empty(&tree.leaves)
     }
 
-
     // Return (key, index) the leaf with minimum value.
     // A market buy order will start consuming liquidty from the min leaf.
-    public fun min_leaf<V: store>(tree: &CritbitTree<V>): (u64, u64) {
+    public(friend) fun min_leaf<V: store>(tree: &CritbitTree<V>): (u64, u64) {
         assert!(!is_empty(tree), ELeafNotExist);
         let min_leaf = table::borrow(&tree.leaves, tree.min_leaf);
         return (min_leaf.key, tree.min_leaf)
@@ -81,7 +84,7 @@ module deepbook::critbit {
 
     // Return (key, index) the leaf with maximum value.
     // A market sell order will start consuming liquidity from the max leaf.
-    public fun max_leaf<V: store>(tree: &CritbitTree<V>): (u64, u64) {
+    public(friend) fun max_leaf<V: store>(tree: &CritbitTree<V>): (u64, u64) {
         assert!(!is_empty(tree), ELeafNotExist);
         let max_leaf = table::borrow(&tree.leaves, tree.max_leaf);
         return (max_leaf.key, tree.max_leaf)
@@ -110,7 +113,7 @@ module deepbook::critbit {
     // Return the next leaf (key, index) of the input leaf.
     // Market buy orders consume liquidities by iterating through the leaves in ascending order starting from the min leaf of the asks Critbit Tree.
     // This function provides the iterator for this procedure.
-    public fun next_leaf<V: store>(tree: &CritbitTree<V>, _key: u64): (u64, u64) {
+    public(friend) fun next_leaf<V: store>(tree: &CritbitTree<V>, _key: u64): (u64, u64) {
         let (_, index) = find_leaf(tree, _key);
         assert!(index != PARTITION_INDEX, ELeafNotExist);
         let ptr = MAX_U64 - index;
@@ -143,11 +146,10 @@ module deepbook::critbit {
         ptr
     }
 
-
     // Insert new leaf to the tree.
     // Returns the index of the leaf.
     // Called when a new order is being injected to the order book.
-    public fun insert_leaf<V: store>(tree: &mut CritbitTree<V>, _key: u64, _value: V): u64 {
+    public(friend) fun insert_leaf<V: store>(tree: &mut CritbitTree<V>, _key: u64, _value: V): u64 {
         let new_leaf = Leaf<V>{
             key: _key,
             value: _value,
@@ -227,10 +229,9 @@ module deepbook::critbit {
         new_leaf_index
     }
 
-
     // Find the leaf from the tree.
     // Returns true and the index of the leaf if exists.
-    public fun find_leaf<V: store>(tree: & CritbitTree<V>, _key: u64): (bool, u64) {
+    public(friend) fun find_leaf<V: store>(tree: & CritbitTree<V>, _key: u64): (bool, u64) {
         if (is_empty(tree)) {
             return (false, PARTITION_INDEX)
         };
@@ -243,7 +244,7 @@ module deepbook::critbit {
         }
     }
 
-    public fun find_closest_key<V: store>(tree: & CritbitTree<V>, _key: u64): u64 {
+    public(friend) fun find_closest_key<V: store>(tree: & CritbitTree<V>, _key: u64): u64 {
         if (is_empty(tree)) {
             return 0
         };
@@ -252,7 +253,7 @@ module deepbook::critbit {
         closeset_leaf.key
     }
 
-    public fun remove_leaf_by_index<V: store>(tree: &mut CritbitTree<V>, _index: u64): V {
+    public(friend) fun remove_leaf_by_index<V: store>(tree: &mut CritbitTree<V>, _index: u64): V {
         let key = table::borrow(& tree.leaves, _index).key;
         if(tree.min_leaf == _index) {
             let (_, index) = next_leaf(tree, key);
@@ -303,24 +304,23 @@ module deepbook::critbit {
         value
     }
 
-
-    public fun borrow_mut_leaf_by_index<V: store>(tree: &mut CritbitTree<V>, index: u64): &mut V {
+    public(friend) fun borrow_mut_leaf_by_index<V: store>(tree: &mut CritbitTree<V>, index: u64): &mut V {
         let entry = table::borrow_mut(&mut tree.leaves, index);
         &mut entry.value
     }
 
-    public fun borrow_leaf_by_index<V: store>(tree: & CritbitTree<V>, index: u64): &V {
+    public(friend) fun borrow_leaf_by_index<V: store>(tree: & CritbitTree<V>, index: u64): &V {
         let entry = table::borrow(&tree.leaves, index);
         &entry.value
     }
 
-    public fun borrow_leaf_by_key<V: store>(tree: & CritbitTree<V>, key: u64): &V {
+    public(friend) fun borrow_leaf_by_key<V: store>(tree: & CritbitTree<V>, key: u64): &V {
         let (is_exist, index) = find_leaf(tree, key);
         assert!(is_exist, ELeafNotExist);
         borrow_leaf_by_index(tree, index)
     }
 
-    public fun drop<V: store + drop>(tree: CritbitTree<V>) {
+    public(friend) fun drop<V: store + drop>(tree: CritbitTree<V>) {
         let CritbitTree<V> {
             root: _,
             internal_nodes,
@@ -335,8 +335,7 @@ module deepbook::critbit {
         table::drop(leaves);
     }
 
-
-    public fun destroy_empty<V: store>(tree: CritbitTree<V>) {
+    public(friend) fun destroy_empty<V: store>(tree: CritbitTree<V>) {
         assert!(table::length(&tree.leaves) == 0, 0);
 
         let CritbitTree<V> {
@@ -502,7 +501,6 @@ module deepbook::critbit {
 }
 
 #[test_only]
-
 module deepbook::critbit_test {
     use deepbook::critbit::{Self, InternalNode, Leaf, check_tree_struct};
     use sui::test_scenario::{Self as test, ctx, Scenario, next_tx, end, TransactionEffects};
