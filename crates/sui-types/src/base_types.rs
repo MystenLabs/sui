@@ -395,32 +395,20 @@ impl ObjectInfo {
 const PACKAGE: &str = "package";
 impl ObjectType {
     pub fn is_gas_coin(&self) -> bool {
-        match self {
-            ObjectType::Struct(s) => s.is_gas_coin(),
-            ObjectType::Package => false,
-        }
+        matches!(self, ObjectType::Struct(s) if s.is_gas_coin())
     }
 
     pub fn is_coin(&self) -> bool {
-        match self {
-            ObjectType::Struct(s) => s.is_coin(),
-            ObjectType::Package => false,
-        }
+        matches!(self, ObjectType::Struct(s) if s.is_coin())
     }
 
     /// Return true if `self` is `0x2::coin::Coin<t>`
     pub fn is_coin_t(&self, t: &TypeTag) -> bool {
-        match self {
-            ObjectType::Struct(s) => s.is_coin_t(t),
-            ObjectType::Package => false,
-        }
+        matches!(self, ObjectType::Struct(s) if s.is_coin_t(t))
     }
 
     pub fn is_package(&self) -> bool {
-        match self {
-            ObjectType::Struct(_) => false,
-            ObjectType::Package => true,
-        }
+        matches!(self, ObjectType::Package)
     }
 }
 

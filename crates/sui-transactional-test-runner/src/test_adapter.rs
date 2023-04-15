@@ -389,16 +389,9 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             })
             .collect::<Result<_, _>>()?;
         let gas_price = self.gas_price;
-        // we are assuming that all packages depend on the system packages except DeepBook, so these don't have to
-        // be provided explicitly as parameters
-        // TODO: could probably filter out SuiSystem as well, and just generally be more fine-grained
-        dependencies.extend(BuiltInFramework::iter_system_packages().filter_map(|p| {
-            if *p.id() == DEEPBOOK_OBJECT_ID {
-                None
-            } else {
-                Some(p.id())
-            }
-        }));
+        // we are assuming that all packages depend on Move Stdlib and Sui Framework, so these
+        // don't have to be provided explicitly as parameters
+        dependencies.extend([MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID]);
         let data = |sender, gas| {
             let mut builder = ProgrammableTransactionBuilder::new();
             if upgradeable {
@@ -791,11 +784,9 @@ impl<'a> SuiTestAdapter<'a> {
                 Ok(id)
             })
             .collect::<Result<_, _>>()?;
-        dependencies.extend(
-            BuiltInFramework::all_package_ids()
-                .into_iter()
-                .filter(|id| *id != DEEPBOOK_OBJECT_ID),
-        );
+        // we are assuming that all packages depend on Move Stdlib and Sui Framework, so these
+        // don't have to be provided explicitly as parameters
+        dependencies.extend([MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID]);
 
         let mut builder = ProgrammableTransactionBuilder::new();
 
@@ -1310,32 +1301,24 @@ static NAMED_ADDRESSES: Lazy<BTreeMap<String, NumericalAddress>> = Lazy::new(|| 
 pub(crate) static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
     // TODO invoke package system?
     let sui_files: &Path = Path::new(DEFAULT_FRAMEWORK_PATH);
-    let sui_system_sources: String = {
+    let sui_system_sources = {
         let mut buf = sui_files.to_path_buf();
-        buf.push("packages");
-        buf.push("sui-system");
-        buf.push("sources");
+        buf.extend(["packages", "sui-system", "sources"]);
         buf.to_string_lossy().to_string()
     };
-    let sui_sources: String = {
+    let sui_sources = {
         let mut buf = sui_files.to_path_buf();
-        buf.push("packages");
-        buf.push("sui-framework");
-        buf.push("sources");
+        buf.extend(["packages", "sui-framework", "sources"]);
         buf.to_string_lossy().to_string()
     };
     let sui_deps = {
         let mut buf = sui_files.to_path_buf();
-        buf.push("packages");
-        buf.push("move-stdlib");
-        buf.push("sources");
+        buf.extend(["packages", "move-stdlib", "sources"]);
         buf.to_string_lossy().to_string()
     };
-    let deepbook_sources: String = {
+    let deepbook_sources = {
         let mut buf = sui_files.to_path_buf();
-        buf.push("packages");
-        buf.push("deepbook");
-        buf.push("sources");
+        buf.extend(["packages", "deepbook", "sources"]);
         buf.to_string_lossy().to_string()
     };
     let fully_compiled_res = move_compiler::construct_pre_compiled_lib(
