@@ -379,7 +379,6 @@ async fn test_timeout_while_waiting_for_certificates() {
 
     // AND some random block digests
     let digests: Vec<CertificateDigest> = (0..10)
-        .into_iter()
         .map(|_| {
             let header = Header::V1(
                 author

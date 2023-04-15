@@ -42,10 +42,7 @@ pub(crate) fn examine_genesis_checkpoint(genesis: UnsignedGenesis) {
         .map(|v| (v.staking_pool.id, v))
         .collect::<BTreeMap<_, _>>();
 
-    let mut validator_options = validator_map
-        .iter()
-        .map(|(name, _)| *name)
-        .collect::<Vec<_>>();
+    let mut validator_options: Vec<_> = validator_map.keys().copied().collect();
     validator_options.extend_from_slice(&[STR_ALL, STR_EXIT]);
     println!("Total Number of Validators: {}", validator_set.len());
 

@@ -52,7 +52,7 @@ pub const RESULT: &str = "Result";
 pub const NESTED_RESULT: &str = "NestedResult";
 
 impl Display for CommandToken {
-    fn fmt<'f>(&self, formatter: &mut fmt::Formatter<'f>) -> Result<(), fmt::Error> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         let s = match *self {
             CommandToken::Whitespace => "[whitespace]",
             CommandToken::Comment => "[comment]",

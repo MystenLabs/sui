@@ -106,7 +106,6 @@ impl<K: Hash + Eq + Send + Sync + 'static, L: Lock + 'static> LockTable<K, L> {
 
         let lock_table: Arc<Vec<RwLock<InnerLockTable<K, L>>>> = Arc::new(
             (0..num_shards)
-                .into_iter()
                 .map(|_| RwLock::new(HashMap::new()))
                 .collect(),
         );

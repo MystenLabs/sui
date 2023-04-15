@@ -218,18 +218,13 @@ pub struct MultiGetTransactionBlocks {
     pub digests: Vec<TransactionDigest>,
 }
 
-#[derive(Clone, EnumString)]
+#[derive(Clone, EnumString, Default)]
 #[strum(serialize_all = "lowercase")]
 pub enum AddressQueryType {
+    #[default]
     From,
     To,
     Both,
-}
-
-impl Default for AddressQueryType {
-    fn default() -> Self {
-        AddressQueryType::From
-    }
 }
 
 #[derive(Clone)]

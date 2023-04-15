@@ -88,7 +88,7 @@ pub trait BackingPackageStore {
             .map(|opt_obj| opt_obj.and_then(|obj| obj.data.try_into_package()))
     }
     /// Returns Ok(<object for each package id in `package_ids`>) if all package IDs in
-    /// `package_id` were found. If any package in `package_ids` was not found it returns Err(<list
+    /// `package_id` were found. If any package in `package_ids` was not found it returns a list
     /// of any package ids that are unable to be found>).
     fn get_package_objects<'a>(
         &self,

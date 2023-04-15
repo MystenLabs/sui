@@ -233,7 +233,7 @@ impl Cluster {
             return HashMap::new();
         }
 
-        let (min, max) = rounds.values().into_iter().minmax().into_option().unwrap();
+        let (min, max) = rounds.values().minmax().into_option().unwrap();
         assert!(
             max - min <= commit_threshold,
             "Nodes shouldn't be that behind"

@@ -80,7 +80,7 @@ impl Committee {
         mut voting_weights: BTreeMap<AuthorityName, StakeUnit>,
     ) -> Self {
         let num_nodes = voting_weights.len();
-        let total_votes: StakeUnit = voting_weights.iter().map(|(_, votes)| *votes).sum();
+        let total_votes: StakeUnit = voting_weights.values().cloned().sum();
 
         let normalization_coef = TOTAL_VOTING_POWER as f64 / total_votes as f64;
         let mut total_sum = 0;
