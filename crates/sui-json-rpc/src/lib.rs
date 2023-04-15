@@ -130,6 +130,15 @@ impl JsonRpcServerBuilder {
             })
             .unwrap_or(u32::MAX);
 
+        let max_subscription = env::var("RPC_MAX_SUBSCRIPTION")
+            .ok()
+            .and_then(|o| {
+                u32::from_str(&o)
+                    .tap_err(|e| warn!("Cannot parse RPC_MAX_SUBSCRIPTION to u32: {e}"))
+                    .ok()
+            })
+            .unwrap_or(50);
+
         let metrics_logger = MetricsLogger::new(&self.registry, &methods_names);
 
         let disable_routing = env::var("DISABLE_BACKWARD_COMPATIBILITY")
@@ -157,6 +166,7 @@ impl JsonRpcServerBuilder {
             .max_connections(max_connection)
             .set_host_filtering(AllowHosts::Any)
             .set_middleware(middleware)
+            .max_subscriptions_per_connection(max_subscription)
             .set_logger(metrics_logger)
             .build(listen_address)
             .await?;
