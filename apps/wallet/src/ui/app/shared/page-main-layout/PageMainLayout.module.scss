@@ -43,6 +43,6 @@
 }
 
 .with-nav {
-    padding: 25px sizing.$main-sides-space;
+    padding: 16px sizing.$main-sides-space;
     @include utils.main-extra-space-for-nav;
 }
