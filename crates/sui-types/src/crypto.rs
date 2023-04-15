@@ -1555,7 +1555,7 @@ impl<'a> VerificationObligation<'a> {
                 "Failed to batch verify aggregated auth sig: {}. pks: {:?}, messages: {:?}, sigs: {:?}",
                 e,
                 &self.public_keys,
-                self.messages.iter().map(|m| Base64::encode(m)).collect::<Vec<String>>(),
+                self.messages.iter().map(Base64::encode).collect::<Vec<String>>(),
                 &self.signatures.iter().map(|s| Base64::encode(s.as_ref())).collect::<Vec<String>>()
             );
 
