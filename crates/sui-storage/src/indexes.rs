@@ -24,7 +24,10 @@ use sui_types::messages::TransactionEvents;
 use sui_types::object::Owner;
 use sui_types::query::TransactionFilter;
 use typed_store::rocks::DBOptions;
-use typed_store::rocks::{default_db_options, point_lookup_db_options, DBMap, MetricConf};
+use typed_store::rocks::{
+    default_db_options, optimized_for_high_throughput_options, point_lookup_db_options, DBMap,
+    MetricConf,
+};
 use typed_store::traits::Map;
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store_derive::DBMapUtils;
@@ -143,7 +146,7 @@ fn owner_index_table_default_config() -> DBOptions {
     default_db_options()
 }
 fn dynamic_field_index_table_default_config() -> DBOptions {
-    default_db_options()
+    optimized_for_high_throughput_options(1024, true)
 }
 fn index_table_default_config() -> DBOptions {
     default_db_options()
