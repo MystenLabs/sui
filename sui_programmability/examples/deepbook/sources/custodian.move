@@ -1,3 +1,7 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+/// The custodian moudle of deepbook, used as escrow account for user funds
 module deepbook::custodian {
     use sui::balance::{Self, Balance, split};
     use sui::coin::{Self, Coin};
@@ -7,19 +11,20 @@ module deepbook::custodian {
 
     friend deepbook::clob;
 
-    // Custodian for limit orders.
-
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
     const EUserBalanceDoesNotExist: u64 = 1;
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
 
+    // account capacity authorize the accessilility to the escrow account
+    struct AccountCap has key, store{ id: UID }
+
+    // escrow account for user funds
     struct Account<phantom T> has store {
         available_balance: Balance<T>,
         locked_balance: Balance<T>,
     }
 
-    struct AccountCap has key, store{ id: UID }
-
+    // Custodian for limit orders.
     struct Custodian<phantom T> has key, store {
         id: UID,
         // Holds custody of protocol fees.

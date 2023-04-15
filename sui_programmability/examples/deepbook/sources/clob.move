@@ -1,3 +1,7 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+/// The clob moudle of deepbook, handle the business logic for the central limit order book
 module deepbook::clob {
     use std::ascii;
     use std::bcs::to_bytes;

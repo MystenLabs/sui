@@ -1,3 +1,7 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+/// The critbit moudle of deepbook, use as the underlying data structure for storing all orders at all price levels
 module deepbook::critbit {
     use sui::tx_context::TxContext;
     use sui::table::{Self, Table};
