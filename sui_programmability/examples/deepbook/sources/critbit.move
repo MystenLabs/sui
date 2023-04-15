@@ -323,16 +323,13 @@ module deepbook::critbit {
             max_leaf: _,
             next_internal_node_index: _,
             next_leaf_index: _,
-
         } = self;
         table::drop(internal_nodes);
         table::drop(leaves);
     }
 
-
     public fun destroy_empty<V: store>(self: CritbitTree<V>) {
         assert!(table::length(&self.leaves) == 0, 0);
-
         let CritbitTree<V> {
             root: _,
             leaves,
@@ -342,7 +339,6 @@ module deepbook::critbit {
             next_internal_node_index: _,
             next_leaf_index: _
         } = self;
-
         table::destroy_empty(leaves);
         table::destroy_empty(internal_nodes);
     }
