@@ -4,6 +4,7 @@ concurrency:
   group: ${{ github.workflow }}
 
 on:
+  pull_request:
   schedule:
     - cron: "0 6 * * *" # UTC timing is every day at 10pm PST
   workflow_dispatch:
