@@ -43,6 +43,8 @@ use sui_macros::{fail_point, nondeterministic};
 const ENV_VAR_DB_WRITE_BUFFER_SIZE: &str = "MYSTEN_DB_WRITE_BUFFER_SIZE_MB";
 const DEFAULT_DB_WRITE_BUFFER_SIZE: usize = 1024;
 
+const ENV_VAR_DB_MAX_OPEN_FILES: &str = "DB_MAX_OPEN_FILES";
+
 // Write ahead log size per RocksDB instance can be set via the env var below.
 // If the env var is not set, use the default value in MiB.
 const ENV_VAR_DB_WAL_SIZE: &str = "MYSTEN_DB_WAL_SIZE_MB";
@@ -1859,8 +1861,10 @@ pub fn base_db_options() -> DBOptions {
     // One common issue when running tests on Mac is that the default ulimit is too low,
     // leading to I/O errors such as "Too many open files". Raising fdlimit to bypass it.
     if let Some(limit) = fdlimit::raise_fd_limit() {
+        let max_num_files =
+            read_size_from_env(ENV_VAR_DB_MAX_OPEN_FILES).unwrap_or((limit / 8) as usize);
         // on windows raise_fd_limit return None
-        opt.set_max_open_files((limit / 8) as i32);
+        opt.set_max_open_files(max_num_files as i32);
     }
 
     // The table cache is locked for updates and this determines the number
