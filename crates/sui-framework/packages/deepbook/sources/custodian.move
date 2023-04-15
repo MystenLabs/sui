@@ -21,17 +21,20 @@ module deepbook::custodian {
         locked_balance: Balance<T>,
     }
 
-    struct AccountCap has key, store{ id: UID }
+    struct AccountCap has key, store { id: UID }
 
     struct Custodian<phantom T> has key, store {
         id: UID,
-        // Holds custody of protocol fees.
-        // The logic of withdrawing protocol fees is left out intentionally for further confirmation from Sui foundation.
-        custodian_balances: Balance<T>,
+        /// Map from an AccountCap object ID to an Account object
         account_balances: Table<ID, Account<T>>,
     }
 
-    public fun usr_balance<Asset>(
+    /// Create an `AccountCap` that can be used across all DeepBook pool
+    public fun mint_account_cap(ctx: &mut TxContext): AccountCap {
+        AccountCap { id: object::new(ctx) }
+    }
+
+    public(friend) fun account_balance<Asset>(
         custodian: &Custodian<Asset>,
         user: ID
     ): (u64, u64){
@@ -41,28 +44,11 @@ module deepbook::custodian {
         (avail_balance, locked_balance)
     }
 
-    public fun mint_account_cap(ctx: &mut TxContext): AccountCap {
-        AccountCap { id: object::new(ctx) }
-    }
-
-    public fun get_account_cap_id(account_cap: &AccountCap): ID {
-        object::uid_to_inner(&account_cap.id)
-    }
-
     public(friend) fun new<T>(ctx: &mut TxContext): Custodian<T> {
         Custodian<T> {
             id: object::new(ctx),
-            custodian_balances: balance::zero(),
             account_balances: table::new(ctx),
         }
-    }
-
-    public(friend) fun deposit<T>(
-        custodian: &mut Custodian<T>,
-        coin: Coin<T>,
-        user: ID
-    ) {
-        increase_user_available_balance<T>(custodian, user, coin::into_balance(coin));
     }
 
     public(friend) fun withdraw_base_asset<BaseAsset>(
@@ -71,8 +57,7 @@ module deepbook::custodian {
         account_cap: &AccountCap,
         ctx: &mut TxContext
     ): Coin<BaseAsset> {
-        let user = get_account_cap_id(account_cap);
-        coin::from_balance(decrease_user_available_balance<BaseAsset>(custodian, user, quantity), ctx)
+        coin::from_balance(decrease_user_available_balance<BaseAsset>(custodian, account_cap, quantity), ctx)
     }
 
     public(friend) fun withdraw_quote_asset<QuoteAsset>(
@@ -81,22 +66,7 @@ module deepbook::custodian {
         account_cap: &AccountCap,
         ctx: &mut TxContext
     ): Coin<QuoteAsset> {
-        let user = get_account_cap_id(account_cap);
-        coin::from_balance(decrease_user_available_balance<QuoteAsset>(custodian, user, quantity), ctx)
-    }
-
-    public(friend) fun increase_custodian_balance<T>(
-        custodian: &mut Custodian<T>,
-        quantity: Balance<T>
-    ) {
-        balance::join(&mut custodian.custodian_balances, quantity);
-    }
-
-    public(friend) fun decrease_custodian_balance<T>(
-        custodian: &mut Custodian<T>,
-        quantity: u64,
-    ): Balance<T> {
-        split(&mut custodian.custodian_balances, quantity)
+        coin::from_balance(decrease_user_available_balance<QuoteAsset>(custodian, account_cap, quantity), ctx)
     }
 
     public(friend) fun increase_user_available_balance<T>(
@@ -110,19 +80,19 @@ module deepbook::custodian {
 
     public(friend) fun decrease_user_available_balance<T>(
         custodian: &mut Custodian<T>,
-        user: ID,
+        account_cap: &AccountCap,
         quantity: u64,
     ): Balance<T> {
-        let account = borrow_mut_account_balance<T>(custodian, user);
+        let account = borrow_mut_account_balance<T>(custodian, object::uid_to_inner(&account_cap.id));
         balance::split(&mut account.available_balance, quantity)
     }
 
     public(friend) fun increase_user_locked_balance<T>(
         custodian: &mut Custodian<T>,
-        user: ID,
+        account_cap: &AccountCap,
         quantity: Balance<T>,
     ) {
-        let account = borrow_mut_account_balance<T>(custodian, user);
+        let account = borrow_mut_account_balance<T>(custodian, object::uid_to_inner(&account_cap.id));
         balance::join(&mut account.locked_balance, quantity);
     }
 
@@ -135,6 +105,25 @@ module deepbook::custodian {
         split(&mut account.locked_balance, quantity)
     }
 
+    /// Move `quantity` from the unlocked balance of `user` to the locked balance of `user`
+    public(friend) fun lock_balance<T>(
+        custodian: &mut Custodian<T>,
+        account_cap: &AccountCap,
+        quantity: u64,
+    ) {
+        let to_lock = decrease_user_available_balance(custodian, account_cap, quantity);
+        increase_user_locked_balance(custodian, account_cap, to_lock);
+    }
+
+    /// Move `quantity` from the locked balance of `user` to the unlocked balacne of `user`
+    public(friend) fun unlock_balance<T>(
+        custodian: &mut Custodian<T>,
+        user: ID,
+        quantity: u64,
+    ) {
+        let locked_balance = decrease_user_locked_balance<T>(custodian, user, quantity);
+        increase_user_available_balance<T>(custodian, user, locked_balance)
+    }
 
     public fun account_available_balance<T>(
         custodian: &Custodian<T>,
@@ -178,13 +167,15 @@ module deepbook::custodian {
     #[test_only]
     friend deepbook::clob_test;
     #[test_only]
-    use deepbook::usd::USD;
-    #[test_only]
     use sui::test_scenario::{Self, Scenario};
     #[test_only]
     use sui::transfer;
     #[test_only]
     const ENull: u64 = 0;
+
+    #[test_only]
+    struct USD {}
+
     #[test_only]
     public fun assert_user_balance<T>(
         custodian: &Custodian<T>,
@@ -213,4 +204,12 @@ module deepbook::custodian {
         increase_user_available_balance<T>(custodian, user, balance::create_for_testing(quantity));
     }
 
+    #[test_only]
+    public(friend) fun deposit<T>(
+        custodian: &mut Custodian<T>,
+        coin: Coin<T>,
+        user: ID
+    ) {
+        increase_user_available_balance<T>(custodian, user, coin::into_balance(coin));
+    }
 }
