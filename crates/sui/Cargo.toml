@@ -7,6 +7,11 @@ publish = false
 edition = "2021"
 
 [dependencies]
+rusoto_core = { version = "0.48.0" }
+rusoto_kms = { version = "0.48.0" }
+lazy_static = "1.4.0"
+
+aws-config = "0.55.1"
 anemo.workspace = true
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 serde = { version = "1.0.144", features = ["derive"] }
