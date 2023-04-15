@@ -429,6 +429,7 @@ fn objects_table_default_config() -> DBOptions {
 fn transactions_table_default_config() -> DBOptions {
     default_db_options()
         .optimize_for_write_throughput()
+        .optimize_for_large_values_no_scan()
         .optimize_for_point_lookup(
             read_size_from_env(ENV_VAR_TRANSACTIONS_BLOCK_CACHE_SIZE).unwrap_or(512),
         )
@@ -437,6 +438,7 @@ fn transactions_table_default_config() -> DBOptions {
 fn effects_table_default_config() -> DBOptions {
     default_db_options()
         .optimize_for_write_throughput()
+        .optimize_for_large_values_no_scan()
         .optimize_for_point_lookup(
             read_size_from_env(ENV_VAR_EFFECTS_BLOCK_CACHE_SIZE).unwrap_or(1024),
         )
@@ -445,6 +447,7 @@ fn effects_table_default_config() -> DBOptions {
 fn events_table_default_config() -> DBOptions {
     default_db_options()
         .optimize_for_write_throughput()
+        .optimize_for_large_values_no_scan()
         .optimize_for_read(read_size_from_env(ENV_VAR_EVENTS_BLOCK_CACHE_SIZE).unwrap_or(1024))
 }
 

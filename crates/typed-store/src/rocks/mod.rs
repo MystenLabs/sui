@@ -52,15 +52,13 @@ const DEFAULT_DB_WRITE_BUFFER_SIZE: usize = 1024;
 const ENV_VAR_DB_WAL_SIZE: &str = "MYSTEN_DB_WAL_SIZE_MB";
 const DEFAULT_DB_WAL_SIZE: usize = 1024;
 
+// Environment variable to controlling behavior for write throughput optimized tables.
 const ENV_VAR_L0_NUM_FILES_COMPACTION_TRIGGER: &str = "L0_NUM_FILES_COMPACTION_TRIGGER";
-const DEFAULT_L0_NUM_FILES_COMPACTION_TRIGGER: usize = 8;
-
+const DEFAULT_L0_NUM_FILES_COMPACTION_TRIGGER: usize = 6;
 const ENV_VAR_MAX_WRITE_BUFFER_SIZE_MB: &str = "MAX_WRITE_BUFFER_SIZE_MB";
 const DEFAULT_MAX_WRITE_BUFFER_SIZE_MB: usize = 256;
-
 const ENV_VAR_MAX_WRITE_BUFFER_NUMBER: &str = "MAX_WRITE_BUFFER_NUMBER";
-const DEFAULT_MAX_WRITE_BUFFER_NUMBER: usize = 4;
-
+const DEFAULT_MAX_WRITE_BUFFER_NUMBER: usize = 6;
 const ENV_VAR_TARGET_FILE_SIZE_BASE_MB: &str = "TARGET_FILE_SIZE_BASE_MB";
 const DEFAULT_TARGET_FILE_SIZE_BASE_MB: usize = 128;
 
@@ -1844,6 +1842,8 @@ impl ReadWriteOptions {
     }
 }
 
+// TODO: refactor this into a builder pattern, where rocksdb::Options are
+// generated after a call to build().
 #[derive(Default, Clone)]
 pub struct DBOptions {
     pub options: rocksdb::Options,
@@ -1851,25 +1851,51 @@ pub struct DBOptions {
 }
 
 impl DBOptions {
-    // Optimize tables where no scans are performed.
+    // Optimize lookup perf for tables where no scans are performed.
+    // If non-trivial number of values can be > 512B in size, it is beneficial to also
+    // specify optimize_for_large_values_no_scan().
     pub fn optimize_for_point_lookup(mut self, block_cache_size_mb: usize) -> DBOptions {
+        // NOTE: this overwrites the block options.
         self.options
             .optimize_for_point_lookup(block_cache_size_mb as u64);
         self
     }
 
-    // Optimize tables with a mix of lookup and scan workloads.
-    pub fn optimize_for_read(mut self, block_cache_size_mb: usize) -> DBOptions {
-        let mut block_options = BlockBasedOptions::default();
-        block_options
-            .set_block_cache(&Cache::new_lru_cache(block_cache_size_mb * 1024 * 1024).unwrap());
-        // Set a bloomfilter with 1% false positive rate.
-        block_options.set_bloom_filter(10.0, false);
-        self.options.set_block_based_table_factory(&block_options);
+    // Optimize write and lookup perf for tables which are rarely scanned, and have large values.
+    // https://rocksdb.org/blog/2021/05/26/integrated-blob-db.html
+    // REQUIRED: table must set optimize_for_write_throughput() earlier.
+    pub fn optimize_for_large_values_no_scan(mut self) -> DBOptions {
+        // Blob settings.
+        self.options.set_enable_blob_files(true);
+        self.options
+            .set_blob_compression_type(rocksdb::DBCompressionType::Lz4);
+        self.options.set_enable_blob_gc(true);
+        // TODO: consider setting a min_blob_size.
+        // self.options.set_min_blob_size(512);
+
+        // Since large blobs are not in sst files, reduce the target file size and base level
+        // target size.
+        // Keep sst file size at 64MiB.
+        let target_file_size_base = 64 << 20;
+        self.options
+            .set_target_file_size_base(target_file_size_base);
+        // Level 1 default to 64MiB * 6 ~ 384MiB.
+        let max_level_zero_file_num = read_size_from_env(ENV_VAR_L0_NUM_FILES_COMPACTION_TRIGGER)
+            .unwrap_or(DEFAULT_L0_NUM_FILES_COMPACTION_TRIGGER);
+        self.options
+            .set_max_bytes_for_level_base(target_file_size_base * max_level_zero_file_num as u64);
+
         self
     }
 
-    // Optmize DB receiving significant insertions.
+    // Optimize tables with a mix of lookup and scan workloads.
+    pub fn optimize_for_read(mut self, block_cache_size_mb: usize) -> DBOptions {
+        self.options
+            .set_block_based_table_factory(&get_block_options(block_cache_size_mb));
+        self
+    }
+
+    // Optimize DB receiving significant insertions.
     pub fn optimize_db_for_write_throughput(mut self, db_max_write_buffer_gb: u64) -> DBOptions {
         self.options
             .set_db_write_buffer_size(db_max_write_buffer_gb as usize * 1024 * 1024 * 1024);
@@ -1878,24 +1904,60 @@ impl DBOptions {
         self
     }
 
-    // Optmize tables receiving significant insertions.
+    // Optimize tables receiving significant insertions.
     pub fn optimize_for_write_throughput(mut self) -> DBOptions {
-        self.options.set_max_write_buffer_number(6);
-        self.options.set_min_write_buffer_number_to_merge(2);
+        // Increase write buffer size to 256MiB.
+        let write_buffer_size = read_size_from_env(ENV_VAR_MAX_WRITE_BUFFER_SIZE_MB)
+            .unwrap_or(DEFAULT_MAX_WRITE_BUFFER_SIZE_MB)
+            * 1024
+            * 1024;
+        self.options.set_write_buffer_size(write_buffer_size);
+        // Increase write buffers to keep to 6 before slowing down writes.
+        let max_write_buffer_number = read_size_from_env(ENV_VAR_MAX_WRITE_BUFFER_NUMBER)
+            .unwrap_or(DEFAULT_MAX_WRITE_BUFFER_NUMBER);
+        self.options
+            .set_max_write_buffer_number(max_write_buffer_number.try_into().unwrap());
+        // Keep 1 write buffer so recent writes can be read from memory.
+        self.options
+            .set_max_write_buffer_size_to_maintain((write_buffer_size).try_into().unwrap());
+
+        // Increase compaction trigger for level 0 to 6.
+        let max_level_zero_file_num = read_size_from_env(ENV_VAR_L0_NUM_FILES_COMPACTION_TRIGGER)
+            .unwrap_or(DEFAULT_L0_NUM_FILES_COMPACTION_TRIGGER);
+        self.options.set_level_zero_file_num_compaction_trigger(
+            max_level_zero_file_num.try_into().unwrap(),
+        );
+        self.options.set_level_zero_slowdown_writes_trigger(
+            (max_level_zero_file_num * 4).try_into().unwrap(),
+        );
+        self.options
+            .set_level_zero_stop_writes_trigger((max_level_zero_file_num * 5).try_into().unwrap());
+
+        // Increase sst file size to 128MiB.
+        self.options.set_target_file_size_base(
+            read_size_from_env(ENV_VAR_TARGET_FILE_SIZE_BASE_MB)
+                .unwrap_or(DEFAULT_TARGET_FILE_SIZE_BASE_MB) as u64
+                * 1024
+                * 1024,
+        );
+
+        // Increase level 1 target size to 256MiB * 6 ~ 1.5GiB.
+        self.options
+            .set_max_bytes_for_level_base((write_buffer_size * max_level_zero_file_num) as u64);
+
         self
     }
 
     // Optimize tables receiving significant deletions.
     // TODO: revisit when intra-epoch pruning is enabled.
     pub fn optimize_for_pruning(mut self) -> DBOptions {
-        self.options.set_target_file_size_base(64 * 1024 * 1024);
-        self.options.set_max_bytes_for_level_base(512 * 1024 * 1024);
+        self.options.set_min_write_buffer_number_to_merge(2);
         self
     }
 }
 
-/// Base options to be used across all rocksdb instances.
-pub fn base_db_options() -> DBOptions {
+/// Creates a default RocksDB option, to be used when RocksDB option is unspecified.
+pub fn default_db_options() -> DBOptions {
     let mut opt = rocksdb::Options::default();
 
     // One common issue when running tests on Mac is that the default ulimit is too low,
@@ -1909,40 +1971,8 @@ pub fn base_db_options() -> DBOptions {
     // of shards, ie 2^10. Increase in case of lock contentions.
     opt.set_table_cache_num_shard_bits(10);
 
-    // Default allowing to buffer 1GiB of writes before slowing down writes.
-    let write_buffer_size = read_size_from_env(ENV_VAR_MAX_WRITE_BUFFER_SIZE_MB)
-        .unwrap_or(DEFAULT_MAX_WRITE_BUFFER_SIZE_MB)
-        * 1024
-        * 1024;
-    opt.set_write_buffer_size(write_buffer_size);
-    let max_write_buffer_number = read_size_from_env(ENV_VAR_MAX_WRITE_BUFFER_NUMBER)
-        .unwrap_or(DEFAULT_MAX_WRITE_BUFFER_NUMBER);
-    opt.set_max_write_buffer_number(max_write_buffer_number.try_into().unwrap());
-    // Keep 1 write buffer in memory so recent writes can be read from memory.
-    opt.set_max_write_buffer_size_to_maintain((write_buffer_size).try_into().unwrap());
-
-    // Compaction trigger for level 0 compaction. Default to 8.
-    opt.set_level_zero_file_num_compaction_trigger(
-        read_size_from_env(ENV_VAR_L0_NUM_FILES_COMPACTION_TRIGGER)
-            .unwrap_or(DEFAULT_L0_NUM_FILES_COMPACTION_TRIGGER)
-            .try_into()
-            .unwrap(),
-    );
-    opt.set_level_zero_slowdown_writes_trigger(32);
-    opt.set_level_zero_stop_writes_trigger(40);
-
-    // Default to ~128MiB per sst file.
-    opt.set_target_file_size_base(
-        read_size_from_env(ENV_VAR_TARGET_FILE_SIZE_BASE_MB)
-            .unwrap_or(DEFAULT_TARGET_FILE_SIZE_BASE_MB) as u64
-            * 1024
-            * 1024,
-    );
-
-    // LSM related options.
-    // Level 1 is ~16GiB.
-    opt.set_max_bytes_for_level_base(16 * 1024 * 1024 * 1024);
-    opt.set_min_level_to_compress(1);
+    // LSM compression settings
+    opt.set_min_level_to_compress(2);
     opt.set_compression_type(rocksdb::DBCompressionType::Lz4);
     opt.set_bottommost_compression_type(rocksdb::DBCompressionType::Zstd);
     opt.set_bottommost_zstd_max_train_bytes(1024 * 1024, true);
@@ -1976,34 +2006,33 @@ pub fn base_db_options() -> DBOptions {
     opt.increase_parallelism(4);
     opt.set_enable_pipelined_write(true);
 
+    opt.set_block_based_table_factory(&get_block_options(128));
+
+    // Set memtable bloomfilter.
+    opt.set_memtable_prefix_bloom_ratio(0.02);
+
     DBOptions {
         options: opt,
         rw_options: ReadWriteOptions::default(),
     }
 }
 
-/// Creates a default RocksDB option, to be used when RocksDB option is not specified..
-pub fn default_db_options() -> DBOptions {
-    let mut opt = base_db_options();
-
+fn get_block_options(block_cache_size_mb: usize) -> BlockBasedOptions {
     // Set options mostly similar to those used in optimize_for_point_lookup(),
     // except non-default binary and hash index, to hopefully reduce lookup latencies
     // without causing any regression for scanning, with slightly more memory usages.
     // https://github.com/facebook/rocksdb/blob/11cb6af6e5009c51794641905ca40ce5beec7fee/options/options.cc#L611-L621
     let mut block_options = BlockBasedOptions::default();
-    // Configure a 64MiB block cache.
-    block_options.set_block_cache(&Cache::new_lru_cache(64 << 20).unwrap());
+    // Increase block size to 16KiB.
+    // https://github.com/EighteenZi/rocksdb_wiki/blob/master/Memory-usage-in-RocksDB.md#indexes-and-filter-blocks
+    block_options.set_block_size(16 * 1024);
+    // Configure a block cache.
+    block_options.set_block_cache(&Cache::new_lru_cache(block_cache_size_mb << 20).unwrap());
     // Set a bloomfilter with 1% false positive rate.
     block_options.set_bloom_filter(10.0, false);
-
     // From https://github.com/EighteenZi/rocksdb_wiki/blob/master/Block-Cache.md#caching-index-and-filter-blocks
     block_options.set_pin_l0_filter_and_index_blocks_in_cache(true);
-
-    opt.options.set_block_based_table_factory(&block_options);
-    // Set memtable bloomfilter.
-    opt.options.set_memtable_prefix_bloom_ratio(0.02);
-
-    opt
+    block_options
 }
 
 /// Opens a database with options, and a number of column families that are created if they do not exist.
