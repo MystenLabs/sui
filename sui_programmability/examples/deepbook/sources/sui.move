@@ -1,3 +1,4 @@
+#[test_only]
 module deepbook::sui {
     use std::option::none;
 

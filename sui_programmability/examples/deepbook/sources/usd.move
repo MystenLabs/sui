@@ -1,3 +1,4 @@
+#[test_only]
 module deepbook::usd {
     use std::option::none;
 
