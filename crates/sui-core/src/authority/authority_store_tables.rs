@@ -404,10 +404,11 @@ fn owned_object_transaction_locks_table_default_config() -> DBOptions {
 }
 
 fn objects_table_default_config() -> DBOptions {
+    let optimize_for_point_look_up = std::env::var("OBJECTS_TABLE_POINT_LOOK_UP").is_ok();
     DBOptions {
         options: optimized_for_high_throughput_options(
             read_size_from_env(ENV_VAR_OBJECTS_BLOCK_CACHE_SIZE).unwrap_or(5 * 1024),
-            false,
+            optimize_for_point_look_up,
         )
         .options,
         rw_options: ReadWriteOptions {

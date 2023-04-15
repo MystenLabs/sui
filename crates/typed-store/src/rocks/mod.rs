@@ -1809,6 +1809,11 @@ pub struct DBOptions {
 pub fn base_db_options() -> DBOptions {
     let mut opt = rocksdb::Options::default();
 
+    if env::var("ROCKS_DB_ENABLE_STATS").is_ok() {
+        opt.enable_statistics();
+        opt.set_stats_dump_period_sec(60);
+    }
+
     // One common issue when running tests on Mac is that the default ulimit is too low,
     // leading to I/O errors such as "Too many open files". Raising fdlimit to bypass it.
     if let Some(limit) = fdlimit::raise_fd_limit() {
@@ -1925,8 +1930,8 @@ pub fn optimized_for_high_throughput_options(
         let mut block_options = BlockBasedOptions::default();
         block_options
             .set_block_cache(&Cache::new_lru_cache(block_cache_size_mb * 1024 * 1024).unwrap());
-        // Set a bloomfilter with 1% false positive rate.
-        block_options.set_bloom_filter(10.0, false);
+        // Set a bloomfilter with 0.1% false positive rate.
+        block_options.set_bloom_filter(15.5, false);
 
         // From https://github.com/EighteenZi/rocksdb_wiki/blob/master/Block-Cache.md#caching-index-and-filter-blocks
         block_options.set_pin_l0_filter_and_index_blocks_in_cache(true);
