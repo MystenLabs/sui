@@ -93,6 +93,7 @@ use sui_types::quorum_driver_types::QuorumDriverEffectsQueueResult;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
+use typed_store::rocks::default_db_options;
 use typed_store::DBMetrics;
 
 use crate::metrics::GrpcMetrics;
@@ -196,9 +197,11 @@ impl SuiNode {
             &genesis_committee,
             None,
         ));
+
+        let perpetual_options = default_db_options().optimize_db_for_write_throughput(4);
         let store = AuthorityStore::open(
             &config.db_path().join("store"),
-            None,
+            Some(perpetual_options.options),
             genesis,
             &committee_store,
             config.indirect_objects_threshold,
@@ -218,11 +221,12 @@ impl SuiNode {
         let cache_metrics = Arc::new(ResolverMetrics::new(&prometheus_registry));
         let signature_verifier_metrics = SignatureVerifierMetrics::new(&prometheus_registry);
 
+        let epoch_options = default_db_options().optimize_db_for_write_throughput(4);
         let epoch_store = AuthorityPerEpochStore::new(
             config.protocol_public_key(),
             committee.clone(),
             &config.db_path().join("store"),
-            None,
+            Some(epoch_options.options),
             EpochMetrics::new(&registry_service.default_registry()),
             epoch_start_configuration,
             store.clone(),
