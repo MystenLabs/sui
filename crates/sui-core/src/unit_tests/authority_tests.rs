@@ -54,8 +54,8 @@ use sui_types::{
 use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION};
 
 use crate::authority::move_integration_tests::build_and_publish_test_package_with_upgrade_cap;
+use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::consensus_handler::SequencedConsensusTransaction;
-use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::state_accumulator::StateAccumulator;
 use crate::{
     authority_client::{AuthorityAPI, NetworkAuthorityClient},
@@ -2831,52 +2831,9 @@ async fn test_authority_persist() {
         authority_key: AuthorityKeyPair,
         store: Arc<AuthorityStore>,
     ) -> Arc<AuthorityState> {
-        let name = authority_key.public().into();
-        let secrete = Arc::pin(authority_key);
-        let dir = env::temp_dir();
-        let epoch_path = dir.join(format!("DB_{:?}", nondeterministic!(ObjectID::random())));
-        fs::create_dir(&epoch_path).unwrap();
-        let committee_store = Arc::new(CommitteeStore::new(epoch_path, &committee, None));
-
-        let epoch_store_path = dir.join(format!("DB_{:?}", ObjectID::random()));
-        fs::create_dir(&epoch_store_path).unwrap();
-        let registry = Registry::new();
-        let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
-        let async_batch_verifier_metrics = SignatureVerifierMetrics::new(&registry);
-
-        let epoch_store = AuthorityPerEpochStore::new(
-            name,
-            Arc::new(committee),
-            &epoch_store_path,
-            None,
-            EpochMetrics::new(&registry),
-            EpochStartConfiguration::new_for_testing(),
-            store.clone(),
-            cache_metrics,
-            async_batch_verifier_metrics,
-            &ExpensiveSafetyCheckConfig::default(),
-        );
-
-        let checkpoint_store_path = dir.join(format!("DB_{:?}", ObjectID::random()));
-        fs::create_dir(&checkpoint_store_path).unwrap();
-        let checkpoint_store = CheckpointStore::new(&checkpoint_store_path);
-
-        AuthorityState::new(
-            name,
-            secrete,
-            SupportedProtocolVersions::SYSTEM_DEFAULT,
-            store,
-            epoch_store,
-            committee_store,
-            None,
-            checkpoint_store,
-            &registry,
-            AuthorityStorePruningConfig::default(),
-            &[], // no genesis objects
-            &DBCheckpointConfig::default(),
-            ExpensiveSafetyCheckConfig::new_enable_all(),
-        )
-        .await
+        TestAuthorityBuilder::new()
+            .build_with_store(committee, &authority_key, store, &[])
+            .await
     }
 
     let seed = [1u8; 32];
@@ -4040,7 +3997,8 @@ pub async fn init_state_with_committee(
     genesis: &Genesis,
     authority_key: &AuthorityKeyPair,
 ) -> Arc<AuthorityState> {
-    AuthorityState::new_for_testing(genesis.committee().unwrap(), authority_key, None, genesis)
+    TestAuthorityBuilder::new()
+        .build(genesis.committee().unwrap(), authority_key, genesis)
         .await
 }
 
