@@ -5,15 +5,14 @@
 
 
 
+-  [Struct `PoolCreated`](#0xdee9_clob_PoolCreated)
 -  [Struct `OrderPlaced`](#0xdee9_clob_OrderPlaced)
 -  [Struct `OrderCanceled`](#0xdee9_clob_OrderCanceled)
 -  [Struct `OrderFilled`](#0xdee9_clob_OrderFilled)
 -  [Struct `Order`](#0xdee9_clob_Order)
 -  [Struct `TickLevel`](#0xdee9_clob_TickLevel)
 -  [Resource `Pool`](#0xdee9_clob_Pool)
--  [Resource `Registry`](#0xdee9_clob_Registry)
 -  [Constants](#@Constants_0)
--  [Function `init`](#0xdee9_clob_init)
 -  [Function `destroy_empty_level`](#0xdee9_clob_destroy_empty_level)
 -  [Function `create_account`](#0xdee9_clob_create_account)
 -  [Function `create_pool_`](#0xdee9_clob_create_pool_)
@@ -37,25 +36,22 @@
 -  [Function `cancel_all_orders`](#0xdee9_clob_cancel_all_orders)
 -  [Function `batch_cancel_order`](#0xdee9_clob_batch_cancel_order)
 -  [Function `list_open_orders`](#0xdee9_clob_list_open_orders)
--  [Function `usr_balance`](#0xdee9_clob_usr_balance)
+-  [Function `account_balance`](#0xdee9_clob_account_balance)
 -  [Function `get_level2_book_status_bid_side`](#0xdee9_clob_get_level2_book_status_bid_side)
 -  [Function `get_level2_book_status_ask_side`](#0xdee9_clob_get_level2_book_status_ask_side)
 -  [Function `get_level2_book_status`](#0xdee9_clob_get_level2_book_status)
 -  [Function `get_order_status`](#0xdee9_clob_get_order_status)
 
 
-<pre><code><b>use</b> <a href="">0x1::ascii</a>;
-<b>use</b> <a href="../../../.././build/Sui/docs/bcs.md#0x1_bcs">0x1::bcs</a>;
-<b>use</b> <a href="">0x1::option</a>;
-<b>use</b> <a href="">0x1::string</a>;
+<pre><code><b>use</b> <a href="">0x1::option</a>;
 <b>use</b> <a href="">0x1::type_name</a>;
-<b>use</b> <a href="">0x1::vector</a>;
 <b>use</b> <a href="../../../.././build/Sui/docs/balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="../../../.././build/Sui/docs/clock.md#0x2_clock">0x2::clock</a>;
 <b>use</b> <a href="../../../.././build/Sui/docs/coin.md#0x2_coin">0x2::coin</a>;
 <b>use</b> <a href="../../../.././build/Sui/docs/event.md#0x2_event">0x2::event</a>;
 <b>use</b> <a href="../../../.././build/Sui/docs/linked_table.md#0x2_linked_table">0x2::linked_table</a>;
 <b>use</b> <a href="../../../.././build/Sui/docs/object.md#0x2_object">0x2::object</a>;
+<b>use</b> <a href="../../../.././build/Sui/docs/sui.md#0x2_sui">0x2::sui</a>;
 <b>use</b> <a href="../../../.././build/Sui/docs/table.md#0x2_table">0x2::table</a>;
 <b>use</b> <a href="../../../.././build/Sui/docs/transfer.md#0x2_transfer">0x2::transfer</a>;
 <b>use</b> <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context">0x2::tx_context</a>;
@@ -65,6 +61,70 @@
 </code></pre>
 
 
+
+<a name="0xdee9_clob_PoolCreated"></a>
+
+## Struct `PoolCreated`
+
+Emitted when a new pool is created
+
+
+<pre><code><b>struct</b> <a href="clob.md#0xdee9_clob_PoolCreated">PoolCreated</a> <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>pool_id: <a href="../../../.././build/Sui/docs/object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+ object ID of the newly created pool
+</dd>
+<dt>
+<code>base_asset: <a href="_TypeName">type_name::TypeName</a></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>quote_asset: <a href="_TypeName">type_name::TypeName</a></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>taker_fee_rate: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>maker_rebate_rate: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>tick_size: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>lot_size: u64</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
 
 <a name="0xdee9_clob_OrderPlaced"></a>
 
@@ -84,10 +144,16 @@ Emitted when a maker order is injected into the order book.
 
 <dl>
 <dt>
+<code>pool_id: <a href="../../../.././build/Sui/docs/object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+ object ID of the pool the order was placed on
+</dd>
+<dt>
 <code>order_id: u64</code>
 </dt>
 <dd>
-
+ ID of the order within the pool
 </dd>
 <dt>
 <code>is_bid: bool</code>
@@ -99,7 +165,7 @@ Emitted when a maker order is injected into the order book.
 <code>owner: <a href="../../../.././build/Sui/docs/object.md#0x2_object_ID">object::ID</a></code>
 </dt>
 <dd>
-
+ object ID of the <code>AccountCap</code> that placed the order
 </dd>
 <dt>
 <code>base_asset_quantity_placed: u64</code>
@@ -136,10 +202,16 @@ Emitted when a maker order is canceled.
 
 <dl>
 <dt>
+<code>pool_id: <a href="../../../.././build/Sui/docs/object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+ object ID of the pool the order was placed on
+</dd>
+<dt>
 <code>order_id: u64</code>
 </dt>
 <dd>
-
+ ID of the order within the pool
 </dd>
 <dt>
 <code>is_bid: bool</code>
@@ -151,7 +223,7 @@ Emitted when a maker order is canceled.
 <code>owner: <a href="../../../.././build/Sui/docs/object.md#0x2_object_ID">object::ID</a></code>
 </dt>
 <dd>
-
+ object ID of the <code>AccountCap</code> that placed the order
 </dd>
 <dt>
 <code>base_asset_quantity_canceled: u64</code>
@@ -188,10 +260,16 @@ Emitted only when a maker order is filled.
 
 <dl>
 <dt>
+<code>pool_id: <a href="../../../.././build/Sui/docs/object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+ object ID of the pool the order was placed on
+</dd>
+<dt>
 <code>order_id: u64</code>
 </dt>
 <dd>
-
+ ID of the order within the pool
 </dd>
 <dt>
 <code>is_bid: bool</code>
@@ -203,7 +281,7 @@ Emitted only when a maker order is filled.
 <code>owner: <a href="../../../.././build/Sui/docs/object.md#0x2_object_ID">object::ID</a></code>
 </dt>
 <dd>
-
+ object ID of the <code>AccountCap</code> that placed the order
 </dd>
 <dt>
 <code>total_quantity: u64</code>
@@ -412,38 +490,23 @@ Emitted only when a maker order is filled.
 <dd>
 
 </dd>
-</dl>
-
-
-</details>
-
-<a name="0xdee9_clob_Registry"></a>
-
-## Resource `Registry`
-
-
-
-<pre><code><b>struct</b> <a href="clob.md#0xdee9_clob_Registry">Registry</a> <b>has</b> key
-</code></pre>
-
-
-
-<details>
-<summary>Fields</summary>
-
-
-<dl>
 <dt>
-<code>id: <a href="../../../.././build/Sui/docs/object.md#0x2_object_UID">object::UID</a></code>
+<code>creation_fee: <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="../../../.././build/Sui/docs/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;</code>
 </dt>
 <dd>
-
+ Stores the fee paid to create this pool. These funds are not accessible.
 </dd>
 <dt>
-<code>pools: <a href="../../../.././build/Sui/docs/table.md#0x2_table_Table">table::Table</a>&lt;<a href="_String">string::String</a>, <a href="../../../.././build/Sui/docs/object.md#0x2_object_ID">object::ID</a>&gt;</code>
+<code>base_asset_trading_fees: <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;BaseAsset&gt;</code>
 </dt>
 <dd>
-
+ Stores the trading fees paid in <code>BaseAsset</code>. These funds are not accessible.
+</dd>
+<dt>
+<code>quote_asset_trading_fees: <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;QuoteAsset&gt;</code>
+</dt>
+<dd>
+ Stores the trading fees paid in <code>QuoteAsset</code>. These funds are not accessible.
 </dd>
 </dl>
 
@@ -482,15 +545,6 @@ Emitted only when a maker order is filled.
 
 
 
-<a name="0xdee9_clob_EInsufficientFee"></a>
-
-
-
-<pre><code><b>const</b> <a href="clob.md#0xdee9_clob_EInsufficientFee">EInsufficientFee</a>: u64 = 21;
-</code></pre>
-
-
-
 <a name="0xdee9_clob_EInsufficientQuoteCoin"></a>
 
 
@@ -523,6 +577,15 @@ Emitted only when a maker order is filled.
 
 
 <pre><code><b>const</b> <a href="clob.md#0xdee9_clob_EInvalidExpireTimestamp">EInvalidExpireTimestamp</a>: u64 = 22;
+</code></pre>
+
+
+
+<a name="0xdee9_clob_EInvalidFee"></a>
+
+
+
+<pre><code><b>const</b> <a href="clob.md#0xdee9_clob_EInvalidFee">EInvalidFee</a>: u64 = 21;
 </code></pre>
 
 
@@ -644,15 +707,6 @@ Emitted only when a maker order is filled.
 
 
 
-<a name="0xdee9_clob_EPoolAlreadyExist"></a>
-
-
-
-<pre><code><b>const</b> <a href="clob.md#0xdee9_clob_EPoolAlreadyExist">EPoolAlreadyExist</a>: u64 = 14;
-</code></pre>
-
-
-
 <a name="0xdee9_clob_EUnauthorizedCancel"></a>
 
 
@@ -666,16 +720,7 @@ Emitted only when a maker order is filled.
 
 
 
-<pre><code><b>const</b> <a href="clob.md#0xdee9_clob_FEE_AMOUNT_FOR_CREATE_POOL">FEE_AMOUNT_FOR_CREATE_POOL</a>: u64 = 100000000;
-</code></pre>
-
-
-
-<a name="0xdee9_clob_FEE_RECIPIENT"></a>
-
-
-
-<pre><code><b>const</b> <a href="clob.md#0xdee9_clob_FEE_RECIPIENT">FEE_RECIPIENT</a>: <b>address</b> = 0;
+<pre><code><b>const</b> <a href="clob.md#0xdee9_clob_FEE_AMOUNT_FOR_CREATE_POOL">FEE_AMOUNT_FOR_CREATE_POOL</a>: u64 = 100000000000;
 </code></pre>
 
 
@@ -788,33 +833,6 @@ Emitted only when a maker order is filled.
 
 
 
-<a name="0xdee9_clob_init"></a>
-
-## Function `init`
-
-
-
-<pre><code><b>fun</b> <a href="clob.md#0xdee9_clob_init">init</a>(ctx: &<b>mut</b> <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="clob.md#0xdee9_clob_init">init</a>(ctx: &<b>mut</b> TxContext) {
-    <a href="../../../.././build/Sui/docs/transfer.md#0x2_transfer_share_object">transfer::share_object</a>(<a href="clob.md#0xdee9_clob_Registry">Registry</a> {
-        id: <a href="../../../.././build/Sui/docs/object.md#0x2_object_new">object::new</a>(ctx),
-        pools: <a href="../../../.././build/Sui/docs/table.md#0x2_table_new">table::new</a>&lt;String, ID&gt;(ctx),
-    });
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="0xdee9_clob_destroy_empty_level"></a>
 
 ## Function `destroy_empty_level`
@@ -874,7 +892,7 @@ Emitted only when a maker order is filled.
 
 
 
-<pre><code><b>fun</b> <a href="clob.md#0xdee9_clob_create_pool_">create_pool_</a>&lt;BaseAsset, QuoteAsset&gt;(registry: &<b>mut</b> <a href="clob.md#0xdee9_clob_Registry">clob::Registry</a>, taker_fee_rate: u64, maker_rebate_rate: u64, tick_size: u64, lot_size: u64, ctx: &<b>mut</b> <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="clob.md#0xdee9_clob_create_pool_">create_pool_</a>&lt;BaseAsset, QuoteAsset&gt;(taker_fee_rate: u64, maker_rebate_rate: u64, tick_size: u64, lot_size: u64, creation_fee: <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="../../../.././build/Sui/docs/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, ctx: &<b>mut</b> <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -884,45 +902,47 @@ Emitted only when a maker order is filled.
 
 
 <pre><code><b>fun</b> <a href="clob.md#0xdee9_clob_create_pool_">create_pool_</a>&lt;BaseAsset, QuoteAsset&gt;(
-    registry: &<b>mut</b> <a href="clob.md#0xdee9_clob_Registry">Registry</a>,
     taker_fee_rate: u64,
     maker_rebate_rate: u64,
     tick_size: u64,
     lot_size: u64,
+    creation_fee: Balance&lt;SUI&gt;,
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>let</b> base_type_name = <a href="_get">type_name::get</a>&lt;BaseAsset&gt;();
     <b>let</b> quote_type_name = <a href="_get">type_name::get</a>&lt;QuoteAsset&gt;();
     <b>assert</b>!(base_type_name != quote_type_name, <a href="clob.md#0xdee9_clob_EInvalidPair">EInvalidPair</a>);
-    <b>let</b> <a href="">type_name</a> = <a href="_get">type_name::get</a>&lt;<a href="clob.md#0xdee9_clob_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;&gt;();
-    <b>let</b> symbol = from_ascii(<a href="_into_string">type_name::into_string</a>(<a href="">type_name</a>));
-    <b>let</b> tick_and_lot = <a href="_empty">vector::empty</a>&lt;u8&gt;();
-    <a href="_append">vector::append</a>(&<b>mut</b> tick_and_lot, to_bytes(&tick_size));
-    <a href="_append">vector::append</a>(&<b>mut</b> tick_and_lot, to_bytes(&lot_size));
-    <a href="_append_utf8">string::append_utf8</a>(&<b>mut</b> symbol, tick_and_lot);
-    <b>assert</b>!(
-        !<a href="../../../.././build/Sui/docs/table.md#0x2_table_contains">table::contains</a>(&registry.pools, symbol),
-        <a href="clob.md#0xdee9_clob_EPoolAlreadyExist">EPoolAlreadyExist</a>
-    );
     <b>assert</b>!(taker_fee_rate &gt;= maker_rebate_rate, <a href="clob.md#0xdee9_clob_EInvalidFeeRateRebateRate">EInvalidFeeRateRebateRate</a>);
-    <b>let</b> pool = <a href="clob.md#0xdee9_clob_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt; {
-        id: <a href="../../../.././build/Sui/docs/object.md#0x2_object_new">object::new</a>(ctx),
-        bids: <a href="critbit.md#0xdee9_critbit_new">critbit::new</a>(ctx),
-        asks: <a href="critbit.md#0xdee9_critbit_new">critbit::new</a>(ctx),
-        next_bid_order_id: <a href="clob.md#0xdee9_clob_MIN_BID_ORDER_ID">MIN_BID_ORDER_ID</a>,
-        next_ask_order_id: <a href="clob.md#0xdee9_clob_MIN_ASK_ORDER_ID">MIN_ASK_ORDER_ID</a>,
-        usr_open_orders: <a href="../../../.././build/Sui/docs/table.md#0x2_table_new">table::new</a>(ctx),
+    <b>let</b> pool_uid = <a href="../../../.././build/Sui/docs/object.md#0x2_object_new">object::new</a>(ctx);
+    <b>let</b> pool_id = *<a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_as_inner">object::uid_as_inner</a>(&pool_uid);
+    <a href="../../../.././build/Sui/docs/transfer.md#0x2_transfer_share_object">transfer::share_object</a>(
+        <a href="clob.md#0xdee9_clob_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt; {
+            id: pool_uid,
+            bids: <a href="critbit.md#0xdee9_critbit_new">critbit::new</a>(ctx),
+            asks: <a href="critbit.md#0xdee9_critbit_new">critbit::new</a>(ctx),
+            next_bid_order_id: <a href="clob.md#0xdee9_clob_MIN_BID_ORDER_ID">MIN_BID_ORDER_ID</a>,
+            next_ask_order_id: <a href="clob.md#0xdee9_clob_MIN_ASK_ORDER_ID">MIN_ASK_ORDER_ID</a>,
+            usr_open_orders: <a href="../../../.././build/Sui/docs/table.md#0x2_table_new">table::new</a>(ctx),
+            taker_fee_rate,
+            maker_rebate_rate,
+            tick_size,
+            lot_size,
+            base_custodian: <a href="custodian.md#0xdee9_custodian_new">custodian::new</a>&lt;BaseAsset&gt;(ctx),
+            quote_custodian: <a href="custodian.md#0xdee9_custodian_new">custodian::new</a>&lt;QuoteAsset&gt;(ctx),
+            creation_fee,
+            base_asset_trading_fees: <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_zero">balance::zero</a>(),
+            quote_asset_trading_fees: <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_zero">balance::zero</a>(),
+        }
+    );
+    <a href="../../../.././build/Sui/docs/event.md#0x2_event_emit">event::emit</a>(<a href="clob.md#0xdee9_clob_PoolCreated">PoolCreated</a> {
+        pool_id,
+        base_asset: base_type_name,
+        quote_asset: quote_type_name,
         taker_fee_rate,
         maker_rebate_rate,
         tick_size,
         lot_size,
-        base_custodian: <a href="custodian.md#0xdee9_custodian_new">custodian::new</a>&lt;BaseAsset&gt;(ctx),
-        quote_custodian: <a href="custodian.md#0xdee9_custodian_new">custodian::new</a>&lt;QuoteAsset&gt;(ctx),
-    };
-    <a href="../../../.././build/Sui/docs/table.md#0x2_table_add">table::add</a>(&<b>mut</b> registry.pools, symbol, <a href="../../../.././build/Sui/docs/object.md#0x2_object_id">object::id</a>(&pool));
-    <a href="../../../.././build/Sui/docs/transfer.md#0x2_transfer_share_object">transfer::share_object</a>(
-        pool
-    );
+    })
 }
 </code></pre>
 
@@ -936,7 +956,7 @@ Emitted only when a maker order is filled.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob.md#0xdee9_clob_create_pool">create_pool</a>&lt;BaseAsset, QuoteAsset, SUI&gt;(registry: &<b>mut</b> <a href="clob.md#0xdee9_clob_Registry">clob::Registry</a>, tick_size: u64, lot_size: u64, <a href="../../../.././build/Sui/docs/coin.md#0x2_coin">coin</a>: <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;SUI&gt;, ctx: &<b>mut</b> <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="clob.md#0xdee9_clob_create_pool">create_pool</a>&lt;BaseAsset, QuoteAsset&gt;(tick_size: u64, lot_size: u64, creation_fee: <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="../../../.././build/Sui/docs/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, ctx: &<b>mut</b> <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -945,25 +965,19 @@ Emitted only when a maker order is filled.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob.md#0xdee9_clob_create_pool">create_pool</a>&lt;BaseAsset, QuoteAsset, SUI&gt;(
-    registry: &<b>mut</b> <a href="clob.md#0xdee9_clob_Registry">Registry</a>,
+<pre><code><b>public</b> <b>fun</b> <a href="clob.md#0xdee9_clob_create_pool">create_pool</a>&lt;BaseAsset, QuoteAsset&gt;(
     tick_size: u64,
     lot_size: u64,
-    <a href="../../../.././build/Sui/docs/coin.md#0x2_coin">coin</a>: Coin&lt;SUI&gt;,
+    creation_fee: Coin&lt;SUI&gt;,
     ctx: &<b>mut</b> TxContext,
 ) {
-    <b>let</b> sui_type = <a href="_get">type_name::get</a>&lt;SUI&gt;();
-    <b>assert</b>!(<a href="_as_bytes">ascii::as_bytes</a>(<a href="_borrow_string">type_name::borrow_string</a>(&sui_type)) == &b"0000000000000000000000000000000000000000000000000000000000000002::sui::SUI", <a href="clob.md#0xdee9_clob_EInvalidFeeCoin">EInvalidFeeCoin</a>);
-    <b>assert</b>!(<a href="../../../.././build/Sui/docs/coin.md#0x2_coin_value">coin::value</a>(&<a href="../../../.././build/Sui/docs/coin.md#0x2_coin">coin</a>) &gt;= <a href="clob.md#0xdee9_clob_FEE_AMOUNT_FOR_CREATE_POOL">FEE_AMOUNT_FOR_CREATE_POOL</a>, <a href="clob.md#0xdee9_clob_EInsufficientFee">EInsufficientFee</a>);
-    <b>let</b> fee = <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_split">coin::split</a>(&<b>mut</b> <a href="../../../.././build/Sui/docs/coin.md#0x2_coin">coin</a>, <a href="clob.md#0xdee9_clob_FEE_AMOUNT_FOR_CREATE_POOL">FEE_AMOUNT_FOR_CREATE_POOL</a>, ctx);
-    <a href="../../../.././build/Sui/docs/transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(fee, <a href="clob.md#0xdee9_clob_FEE_RECIPIENT">FEE_RECIPIENT</a>);
-    <a href="../../../.././build/Sui/docs/transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(<a href="../../../.././build/Sui/docs/coin.md#0x2_coin">coin</a>, <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx));
+    <b>assert</b>!(<a href="../../../.././build/Sui/docs/coin.md#0x2_coin_value">coin::value</a>(&creation_fee) == <a href="clob.md#0xdee9_clob_FEE_AMOUNT_FOR_CREATE_POOL">FEE_AMOUNT_FOR_CREATE_POOL</a>, <a href="clob.md#0xdee9_clob_EInvalidFee">EInvalidFee</a>);
     <a href="clob.md#0xdee9_clob_create_pool_">create_pool_</a>&lt;BaseAsset, QuoteAsset&gt;(
-        registry,
         <a href="clob.md#0xdee9_clob_REFERENCE_TAKER_FEE_RATE">REFERENCE_TAKER_FEE_RATE</a>,
         <a href="clob.md#0xdee9_clob_REFERENCE_MAKER_REBATE_RATE">REFERENCE_MAKER_REBATE_RATE</a>,
         tick_size,
         lot_size,
+        <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_into_balance">coin::into_balance</a>(creation_fee),
         ctx
     )
 }
@@ -993,8 +1007,7 @@ Emitted only when a maker order is filled.
     <a href="../../../.././build/Sui/docs/coin.md#0x2_coin">coin</a>: Coin&lt;BaseAsset&gt;,
     account_cap: &AccountCap
 ) {
-    <b>let</b> user = get_account_cap_id(account_cap);
-    <a href="custodian.md#0xdee9_custodian_deposit">custodian::deposit</a>(&<b>mut</b> pool.base_custodian, <a href="../../../.././build/Sui/docs/coin.md#0x2_coin">coin</a>, user);
+    <a href="custodian.md#0xdee9_custodian_increase_user_available_balance">custodian::increase_user_available_balance</a>(&<b>mut</b> pool.base_custodian, <a href="../../../.././build/Sui/docs/object.md#0x2_object_id">object::id</a>(account_cap), <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_into_balance">coin::into_balance</a>(<a href="../../../.././build/Sui/docs/coin.md#0x2_coin">coin</a>))
 }
 </code></pre>
 
@@ -1022,8 +1035,7 @@ Emitted only when a maker order is filled.
     <a href="../../../.././build/Sui/docs/coin.md#0x2_coin">coin</a>: Coin&lt;QuoteAsset&gt;,
     account_cap: &AccountCap
 ) {
-    <b>let</b> user = get_account_cap_id(account_cap);
-    <a href="custodian.md#0xdee9_custodian_deposit">custodian::deposit</a>(&<b>mut</b> pool.quote_custodian, <a href="../../../.././build/Sui/docs/coin.md#0x2_coin">coin</a>, user);
+    <a href="custodian.md#0xdee9_custodian_increase_user_available_balance">custodian::increase_user_available_balance</a>(&<b>mut</b> pool.quote_custodian, <a href="../../../.././build/Sui/docs/object.md#0x2_object_id">object::id</a>(account_cap), <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_into_balance">coin::into_balance</a>(<a href="../../../.././build/Sui/docs/coin.md#0x2_coin">coin</a>))
 }
 </code></pre>
 
@@ -1213,29 +1225,20 @@ Emitted only when a maker order is filled.
 
             <b>if</b> (maker_order.expire_timestamp &lt;= current_timestamp) {
                 skip_order = <b>true</b>;
-                <b>let</b> locked_balance = <a href="custodian.md#0xdee9_custodian_decrease_user_locked_balance">custodian::decrease_user_locked_balance</a>&lt;BaseAsset&gt;(
-                    &<b>mut</b> pool.base_custodian,
-                    maker_order.owner,
-                    maker_order.quantity,
-                );
-                <a href="custodian.md#0xdee9_custodian_increase_user_available_balance">custodian::increase_user_available_balance</a>&lt;BaseAsset&gt;(
-                    &<b>mut</b> pool.base_custodian,
-                    maker_order.owner,
-                    locked_balance,
-                );
+                <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.base_custodian, maker_order.owner, maker_order.quantity);
             } <b>else</b> {
-                <b>let</b> (flag, maker_quote_quantity) = clob_math::mul(maker_base_quantity, maker_order.price);
+                <b>let</b> (flag, maker_quote_quantity) = clob_math::mul_round(maker_base_quantity, maker_order.price);
                 <b>if</b> (flag) maker_quote_quantity = maker_quote_quantity + 1;
                 // filled_quote_quantity, subtract from taker total quote remaining in each <b>loop</b>, round up <b>if</b> needed
                 <b>let</b> filled_quote_quantity =
                     <b>if</b> (taker_quote_quantity_remaining &gt;= maker_quote_quantity) { maker_quote_quantity }
                     <b>else</b> { taker_quote_quantity_remaining };
                 // filled_base_quantity, subtract from maker locked_base_balance, round up <b>if</b> needed
-                <b>let</b> (flag, filled_base_quantity) = clob_math::div(filled_quote_quantity, maker_order.price);
+                <b>let</b> (flag, filled_base_quantity) = clob_math::div_round(filled_quote_quantity, maker_order.price);
                 <b>if</b> (flag) filled_base_quantity = filled_base_quantity + 1;
                 // rebate_fee <b>to</b> maker, no need <b>to</b> round up
-                <b>let</b> (_, maker_rebate) = clob_math::mul(filled_base_quantity, pool.maker_rebate_rate);
-                <b>let</b> (is_round_down, taker_commission) = clob_math::mul(filled_base_quantity, pool.taker_fee_rate);
+                <b>let</b> maker_rebate = clob_math::mul(filled_base_quantity, pool.maker_rebate_rate);
+                <b>let</b> (is_round_down, taker_commission) = clob_math::mul_round(filled_base_quantity, pool.taker_fee_rate);
                 <b>if</b> (is_round_down) taker_commission = taker_commission + 1;
 
                 maker_base_quantity = maker_base_quantity - filled_base_quantity;
@@ -1259,10 +1262,7 @@ Emitted only when a maker order is filled.
                         maker_rebate,
                     ),
                 );
-                <a href="custodian.md#0xdee9_custodian_increase_custodian_balance">custodian::increase_custodian_balance</a>&lt;BaseAsset&gt;(
-                    &<b>mut</b> pool.base_custodian,
-                    taker_commission_balance,
-                );
+                <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> pool.base_asset_trading_fees, taker_commission_balance);
                 <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> base_balance_filled, locked_base_balance);
 
                 <a href="custodian.md#0xdee9_custodian_increase_user_available_balance">custodian::increase_user_available_balance</a>&lt;QuoteAsset&gt;(
@@ -1275,6 +1275,7 @@ Emitted only when a maker order is filled.
                 );
 
                 <a href="../../../.././build/Sui/docs/event.md#0x2_event_emit">event::emit</a>(<a href="clob.md#0xdee9_clob_OrderFilled">OrderFilled</a>&lt;BaseAsset, QuoteAsset&gt; {
+                    pool_id: *<a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_as_inner">object::uid_as_inner</a>(&pool.id),
                     order_id: maker_order.order_id,
                     is_bid: <b>false</b>,
                     owner: maker_order.owner,
@@ -1345,6 +1346,7 @@ Emitted only when a maker order is filled.
     current_timestamp: u64,
     quote_balance: Balance&lt;QuoteAsset&gt;,
 ): (Balance&lt;BaseAsset&gt;, Balance&lt;QuoteAsset&gt;) {
+    <b>let</b> pool_id = *<a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_as_inner">object::uid_as_inner</a>(&pool.id);
     // Base <a href="../../../.././build/Sui/docs/balance.md#0x2_balance">balance</a> received by taker, taking into account of taker commission.
     // Need <b>to</b> individually keep track of the remaining base quantity <b>to</b> be filled <b>to</b> avoid infinite <b>loop</b>.
     <b>let</b> taker_base_quantity_remaining = quantity;
@@ -1367,30 +1369,18 @@ Emitted only when a maker order is filled.
 
             <b>if</b> (maker_order.expire_timestamp &lt;= current_timestamp) {
                 skip_order = <b>true</b>;
-                <b>let</b> locked_balance = <a href="custodian.md#0xdee9_custodian_decrease_user_locked_balance">custodian::decrease_user_locked_balance</a>&lt;BaseAsset&gt;(
-                    &<b>mut</b> pool.base_custodian,
-                    maker_order.owner,
-                    maker_order.quantity,
-                );
-                <a href="custodian.md#0xdee9_custodian_increase_user_available_balance">custodian::increase_user_available_balance</a>&lt;BaseAsset&gt;(
-                    &<b>mut</b> pool.base_custodian,
-                    maker_order.owner,
-                    locked_balance,
-                );
-                <a href="clob.md#0xdee9_clob_emit_order_canceled">emit_order_canceled</a>&lt;BaseAsset, QuoteAsset&gt;(maker_order);
+                <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.base_custodian, maker_order.owner, maker_order.quantity);
+                <a href="clob.md#0xdee9_clob_emit_order_canceled">emit_order_canceled</a>&lt;BaseAsset, QuoteAsset&gt;(pool_id, maker_order);
             } <b>else</b> {
                 <b>let</b> filled_base_quantity =
                     <b>if</b> (taker_base_quantity_remaining &gt;= maker_base_quantity) { maker_base_quantity }
                     <b>else</b> { taker_base_quantity_remaining };
                 // filled_quote_quantity <b>to</b> maker,  no need <b>to</b> round up
-                <b>let</b> (_, filled_quote_quantity) = clob_math::mul(
-                    filled_base_quantity,
-                    maker_order.price
-                );
+                <b>let</b> filled_quote_quantity = clob_math::mul(filled_base_quantity, maker_order.price);
 
                 // rebate_fee <b>to</b> maker, no need <b>to</b> round up
-                <b>let</b> (_, maker_rebate) = clob_math::mul(filled_base_quantity, pool.maker_rebate_rate);
-                <b>let</b> (is_round_down, taker_commission) = clob_math::mul(filled_base_quantity, pool.taker_fee_rate);
+                <b>let</b> maker_rebate = clob_math::mul(filled_base_quantity, pool.maker_rebate_rate);
+                <b>let</b> (is_round_down, taker_commission) = clob_math::mul_round(filled_base_quantity, pool.taker_fee_rate);
                 <b>if</b> (is_round_down) taker_commission = taker_commission + 1;
 
                 maker_base_quantity = maker_base_quantity - filled_base_quantity;
@@ -1414,10 +1404,7 @@ Emitted only when a maker order is filled.
                         maker_rebate,
                     ),
                 );
-                <a href="custodian.md#0xdee9_custodian_increase_custodian_balance">custodian::increase_custodian_balance</a>&lt;BaseAsset&gt;(
-                    &<b>mut</b> pool.base_custodian,
-                    taker_commission_balance,
-                );
+                <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> pool.base_asset_trading_fees, taker_commission_balance);
                 <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> base_balance_filled, locked_base_balance);
 
                 <a href="custodian.md#0xdee9_custodian_increase_user_available_balance">custodian::increase_user_available_balance</a>&lt;QuoteAsset&gt;(
@@ -1430,6 +1417,7 @@ Emitted only when a maker order is filled.
                 );
 
                 <a href="../../../.././build/Sui/docs/event.md#0x2_event_emit">event::emit</a>(<a href="clob.md#0xdee9_clob_OrderFilled">OrderFilled</a>&lt;BaseAsset, QuoteAsset&gt; {
+                    pool_id,
                     order_id: maker_order.order_id,
                     is_bid: <b>false</b>,
                     owner: maker_order.owner,
@@ -1499,6 +1487,7 @@ Emitted only when a maker order is filled.
     current_timestamp: u64,
     base_balance: Balance&lt;BaseAsset&gt;,
 ): (Balance&lt;BaseAsset&gt;, Balance&lt;QuoteAsset&gt;) {
+    <b>let</b> pool_id = *<a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_as_inner">object::uid_as_inner</a>(&pool.id);
     <b>let</b> base_balance_left = base_balance;
     // Base <a href="../../../.././build/Sui/docs/balance.md#0x2_balance">balance</a> received by taker, taking into account of taker commission.
     <b>let</b> quote_balance_filled = <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_zero">balance::zero</a>&lt;QuoteAsset&gt;();
@@ -1517,29 +1506,20 @@ Emitted only when a maker order is filled.
 
             <b>if</b> (maker_order.expire_timestamp &lt;= current_timestamp) {
                 skip_order = <b>true</b>;
-                <b>let</b> (_, maker_quote_quantity) = clob_math::mul(maker_order.quantity, maker_order.price);
-                <b>let</b> locked_balance = <a href="custodian.md#0xdee9_custodian_decrease_user_locked_balance">custodian::decrease_user_locked_balance</a>&lt;QuoteAsset&gt;(
-                    &<b>mut</b> pool.quote_custodian,
-                    maker_order.owner,
-                    maker_quote_quantity,
-                );
-                <a href="custodian.md#0xdee9_custodian_increase_user_available_balance">custodian::increase_user_available_balance</a>&lt;QuoteAsset&gt;(
-                    &<b>mut</b> pool.quote_custodian,
-                    maker_order.owner,
-                    locked_balance,
-                );
-                <a href="clob.md#0xdee9_clob_emit_order_canceled">emit_order_canceled</a>&lt;BaseAsset, QuoteAsset&gt;(maker_order);
+                <b>let</b> maker_quote_quantity = clob_math::mul(maker_order.quantity, maker_order.price);
+                <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.quote_custodian, maker_order.owner, maker_quote_quantity);
+                <a href="clob.md#0xdee9_clob_emit_order_canceled">emit_order_canceled</a>&lt;BaseAsset, QuoteAsset&gt;(pool_id, maker_order);
             } <b>else</b> {
                 <b>let</b> taker_base_quantity_remaining = <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_value">balance::value</a>(&base_balance_left);
                 <b>let</b> filled_base_quantity =
                     <b>if</b> (taker_base_quantity_remaining &gt;= maker_base_quantity) { maker_base_quantity }
                     <b>else</b> { taker_base_quantity_remaining };
                 // filled_quote_quantity from maker, need <b>to</b> round up, but do in decrease stage
-                <b>let</b> (_, filled_quote_quantity) = clob_math::mul(filled_base_quantity, maker_order.price);
+                <b>let</b> filled_quote_quantity = clob_math::mul(filled_base_quantity, maker_order.price);
 
                 // rebate_fee <b>to</b> maker, no need <b>to</b> round up
-                <b>let</b> (_, maker_rebate) = clob_math::mul(filled_quote_quantity, pool.maker_rebate_rate);
-                <b>let</b> (is_round_down, taker_commission) = clob_math::mul(filled_quote_quantity, pool.taker_fee_rate);
+                <b>let</b> maker_rebate = clob_math::mul(filled_quote_quantity, pool.maker_rebate_rate);
+                <b>let</b> (is_round_down, taker_commission) = clob_math::mul_round(filled_quote_quantity, pool.taker_fee_rate);
                 <b>if</b> (is_round_down) taker_commission = taker_commission + 1;
 
                 maker_base_quantity = maker_base_quantity - filled_base_quantity;
@@ -1561,10 +1541,7 @@ Emitted only when a maker order is filled.
                         maker_rebate,
                     ),
                 );
-                <a href="custodian.md#0xdee9_custodian_increase_custodian_balance">custodian::increase_custodian_balance</a>&lt;QuoteAsset&gt;(
-                    &<b>mut</b> pool.quote_custodian,
-                    taker_commission_balance,
-                );
+                <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> pool.quote_asset_trading_fees, taker_commission_balance);
                 <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> quote_balance_filled, locked_quote_balance);
 
                 <a href="custodian.md#0xdee9_custodian_increase_user_available_balance">custodian::increase_user_available_balance</a>&lt;BaseAsset&gt;(
@@ -1577,6 +1554,7 @@ Emitted only when a maker order is filled.
                 );
 
                 <a href="../../../.././build/Sui/docs/event.md#0x2_event_emit">event::emit</a>(<a href="clob.md#0xdee9_clob_OrderFilled">OrderFilled</a>&lt;BaseAsset, QuoteAsset&gt; {
+                    pool_id: *<a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_as_inner">object::uid_as_inner</a>(&pool.id),
                     order_id: maker_order.order_id,
                     is_bid: <b>true</b>,
                     owner: maker_order.owner,
@@ -1728,34 +1706,17 @@ Returns the order id.
     account_cap: &AccountCap,
     ctx: &<b>mut</b> TxContext
 ): u64 {
-    <b>let</b> user = get_account_cap_id(account_cap);
+    <b>let</b> user = <a href="../../../.././build/Sui/docs/object.md#0x2_object_id">object::id</a>(account_cap);
     <b>let</b> order_id: u64;
     <b>let</b> open_orders: &<b>mut</b> CritbitTree&lt;<a href="clob.md#0xdee9_clob_TickLevel">TickLevel</a>&gt;;
     <b>if</b> (is_bid) {
-        <b>let</b> (_, quote_quantity) = clob_math::mul(quantity, price);
-        <b>let</b> locked_balance = <a href="custodian.md#0xdee9_custodian_decrease_user_available_balance">custodian::decrease_user_available_balance</a>&lt;QuoteAsset&gt;(
-            &<b>mut</b> pool.quote_custodian,
-            user,
-            quote_quantity,
-        );
-        <a href="custodian.md#0xdee9_custodian_increase_user_locked_balance">custodian::increase_user_locked_balance</a>&lt;QuoteAsset&gt;(
-            &<b>mut</b> pool.quote_custodian,
-            user,
-            locked_balance);
+        <b>let</b> quote_quantity = clob_math::mul(quantity, price);
+        <a href="custodian.md#0xdee9_custodian_lock_balance">custodian::lock_balance</a>&lt;QuoteAsset&gt;(&<b>mut</b> pool.quote_custodian, account_cap, quote_quantity);
         order_id = pool.next_bid_order_id;
         pool.next_bid_order_id = pool.next_bid_order_id + 1;
         open_orders = &<b>mut</b> pool.bids;
     } <b>else</b> {
-        <b>let</b> locked_balance = <a href="custodian.md#0xdee9_custodian_decrease_user_available_balance">custodian::decrease_user_available_balance</a>&lt;BaseAsset&gt;(
-            &<b>mut</b> pool.base_custodian,
-            user,
-            quantity,
-        );
-        <a href="custodian.md#0xdee9_custodian_increase_user_locked_balance">custodian::increase_user_locked_balance</a>&lt;BaseAsset&gt;(
-            &<b>mut</b> pool.base_custodian,
-            user,
-            locked_balance,
-        );
+        <a href="custodian.md#0xdee9_custodian_lock_balance">custodian::lock_balance</a>&lt;BaseAsset&gt;(&<b>mut</b> pool.base_custodian, account_cap, quantity);
         order_id = pool.next_ask_order_id;
         pool.next_ask_order_id = pool.next_ask_order_id + 1;
         open_orders = &<b>mut</b> pool.asks;
@@ -1782,6 +1743,7 @@ Returns the order id.
     <b>let</b> tick_level = borrow_mut_leaf_by_index(open_orders, tick_index);
     <a href="../../../.././build/Sui/docs/linked_table.md#0x2_linked_table_push_back">linked_table::push_back</a>(&<b>mut</b> tick_level.open_orders, order_id, order);
     <a href="../../../.././build/Sui/docs/event.md#0x2_event_emit">event::emit</a>(<a href="clob.md#0xdee9_clob_OrderPlaced">OrderPlaced</a>&lt;BaseAsset, QuoteAsset&gt; {
+        pool_id: *<a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_as_inner">object::uid_as_inner</a>(&pool.id),
         order_id,
         is_bid,
         owner: user,
@@ -1830,7 +1792,7 @@ Returns (base quantity filled, quote quantity filled, whether a maker order is b
     ctx: &<b>mut</b> TxContext
 ): (u64, u64, bool, u64) {
     // If limit bid order, check whether the price is lower than the lowest ask order by checking the min_leaf of asks Critbit Tree.
-    // If so, assign the sequnece id of the order <b>to</b> be next_bid_order_id and increment next_bid_order_id by 1.
+    // If so, assign the sequence id of the order <b>to</b> be next_bid_order_id and increment next_bid_order_id by 1.
     // Inject the new order <b>to</b> the bids Critbit Tree according <b>to</b> the price and order id.
     // Otherwise, find the price level from the asks Critbit Tree that is no greater than the input price.
     // Match the bid order against the asks Critbit Tree in the same way <b>as</b> a market order but up until the price level found in the previous step.
@@ -1840,7 +1802,7 @@ Returns (base quantity filled, quote quantity filled, whether a maker order is b
     <b>assert</b>!(price % pool.tick_size == 0, <a href="clob.md#0xdee9_clob_EInvalidPrice">EInvalidPrice</a>);
     <b>assert</b>!(quantity % pool.lot_size == 0, <a href="clob.md#0xdee9_clob_EInvalidQuantity">EInvalidQuantity</a>);
     <b>assert</b>!(expire_timestamp &gt; <a href="../../../.././build/Sui/docs/clock.md#0x2_clock_timestamp_ms">clock::timestamp_ms</a>(<a href="../../../.././build/Sui/docs/clock.md#0x2_clock">clock</a>), <a href="clob.md#0xdee9_clob_EInvalidExpireTimestamp">EInvalidExpireTimestamp</a>);
-    <b>let</b> user = get_account_cap_id(account_cap);
+    <b>let</b> user = <a href="../../../.././build/Sui/docs/object.md#0x2_object_id">object::id</a>(account_cap);
     <b>let</b> base_quantity_filled;
     <b>let</b> quote_quantity_filled;
 
@@ -1851,7 +1813,7 @@ Returns (base quantity filled, quote quantity filled, whether a maker order is b
         );
         <b>let</b> quote_balance = <a href="custodian.md#0xdee9_custodian_decrease_user_available_balance">custodian::decrease_user_available_balance</a>&lt;QuoteAsset&gt;(
             &<b>mut</b> pool.quote_custodian,
-            user,
+            account_cap,
             quote_quantity_original,
         );
         <b>let</b> (base_balance_filled, quote_balance_left) = <a href="clob.md#0xdee9_clob_match_bid">match_bid</a>(
@@ -1877,7 +1839,7 @@ Returns (base quantity filled, quote quantity filled, whether a maker order is b
     } <b>else</b> {
         <b>let</b> base_balance = <a href="custodian.md#0xdee9_custodian_decrease_user_available_balance">custodian::decrease_user_available_balance</a>&lt;BaseAsset&gt;(
             &<b>mut</b> pool.base_custodian,
-            user,
+            account_cap,
             quantity,
         );
         <b>let</b> (base_balance_left, quote_balance_filled) = <a href="clob.md#0xdee9_clob_match_ask">match_ask</a>(
@@ -1964,7 +1926,7 @@ Returns (base quantity filled, quote quantity filled, whether a maker order is b
 
 
 
-<pre><code><b>fun</b> <a href="clob.md#0xdee9_clob_emit_order_canceled">emit_order_canceled</a>&lt;BaseAsset, QuoteAsset&gt;(order: &<a href="clob.md#0xdee9_clob_Order">clob::Order</a>)
+<pre><code><b>fun</b> <a href="clob.md#0xdee9_clob_emit_order_canceled">emit_order_canceled</a>&lt;BaseAsset, QuoteAsset&gt;(pool_id: <a href="../../../.././build/Sui/docs/object.md#0x2_object_ID">object::ID</a>, order: &<a href="clob.md#0xdee9_clob_Order">clob::Order</a>)
 </code></pre>
 
 
@@ -1974,9 +1936,11 @@ Returns (base quantity filled, quote quantity filled, whether a maker order is b
 
 
 <pre><code><b>fun</b> <a href="clob.md#0xdee9_clob_emit_order_canceled">emit_order_canceled</a>&lt;BaseAsset, QuoteAsset&gt;(
+    pool_id: ID,
     order: &<a href="clob.md#0xdee9_clob_Order">Order</a>
 ) {
     <a href="../../../.././build/Sui/docs/event.md#0x2_event_emit">event::emit</a>(<a href="clob.md#0xdee9_clob_OrderCanceled">OrderCanceled</a>&lt;BaseAsset, QuoteAsset&gt; {
+        pool_id,
         order_id: order.order_id,
         is_bid: order.is_bid,
         owner: order.owner,
@@ -2010,12 +1974,13 @@ Abort if order_id is invalid or if the order is not submitted by the transaction
 <pre><code><b>public</b> <b>fun</b> <a href="clob.md#0xdee9_clob_cancel_order">cancel_order</a>&lt;BaseAsset, QuoteAsset&gt;(
     pool: &<b>mut</b> <a href="clob.md#0xdee9_clob_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
     order_id: u64,
-    account_cap: &AccountCap) {
+    account_cap: &AccountCap
+) {
     // First check the highest bit of the order id <b>to</b> see whether it's bid or ask.
     // Then retrieve the price using the order id.
     // Using the price <b>to</b> retrieve the corresponding PriceLevel from the bids / asks Critbit Tree.
     // Retrieve and remove the order from open orders of the PriceLevel.
-    <b>let</b> user = get_account_cap_id(account_cap);
+    <b>let</b> user = <a href="../../../.././build/Sui/docs/object.md#0x2_object_id">object::id</a>(account_cap);
     <b>assert</b>!(contains(&pool.usr_open_orders, user), <a href="clob.md#0xdee9_clob_EInvalidUser">EInvalidUser</a>);
     <b>let</b> usr_open_orders = borrow_mut(&<b>mut</b> pool.usr_open_orders, user);
     <b>assert</b>!(<a href="../../../.././build/Sui/docs/linked_table.md#0x2_linked_table_contains">linked_table::contains</a>(usr_open_orders, order_id), <a href="clob.md#0xdee9_clob_EInvalidOrderId">EInvalidOrderId</a>);
@@ -2033,30 +1998,12 @@ Abort if order_id is invalid or if the order is not submitted by the transaction
         user
     );
     <b>if</b> (is_bid) {
-        <b>let</b> (_, balance_locked) = clob_math::mul(order.quantity, order.price);
-        <b>let</b> locked_balance = <a href="custodian.md#0xdee9_custodian_decrease_user_locked_balance">custodian::decrease_user_locked_balance</a>&lt;QuoteAsset&gt;(
-            &<b>mut</b> pool.quote_custodian,
-            user,
-            balance_locked
-        );
-        <a href="custodian.md#0xdee9_custodian_increase_user_available_balance">custodian::increase_user_available_balance</a>&lt;QuoteAsset&gt;(
-            &<b>mut</b> pool.quote_custodian,
-            user,
-            locked_balance
-        );
+        <b>let</b> balance_locked = clob_math::mul(order.quantity, order.price);
+        <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.quote_custodian, user, balance_locked);
     } <b>else</b> {
-        <b>let</b> locked_balance = <a href="custodian.md#0xdee9_custodian_decrease_user_locked_balance">custodian::decrease_user_locked_balance</a>&lt;BaseAsset&gt;(
-            &<b>mut</b> pool.base_custodian,
-            user,
-            order.quantity
-        );
-        <a href="custodian.md#0xdee9_custodian_increase_user_available_balance">custodian::increase_user_available_balance</a>&lt;BaseAsset&gt;(
-            &<b>mut</b> pool.base_custodian,
-            user,
-            locked_balance
-        );
+        <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.base_custodian, user, order.quantity);
     };
-    <a href="clob.md#0xdee9_clob_emit_order_canceled">emit_order_canceled</a>&lt;BaseAsset, QuoteAsset&gt;(&order);
+    <a href="clob.md#0xdee9_clob_emit_order_canceled">emit_order_canceled</a>&lt;BaseAsset, QuoteAsset&gt;(*<a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_as_inner">object::uid_as_inner</a>(&pool.id), &order);
 }
 </code></pre>
 
@@ -2122,7 +2069,8 @@ Abort if order_id is invalid or if the order is not submitted by the transaction
     pool: &<b>mut</b> <a href="clob.md#0xdee9_clob_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
     account_cap: &AccountCap
 ) {
-    <b>let</b> user = get_account_cap_id(account_cap);
+    <b>let</b> pool_id = *<a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_as_inner">object::uid_as_inner</a>(&pool.id);
+    <b>let</b> user = <a href="../../../.././build/Sui/docs/object.md#0x2_object_id">object::id</a>(account_cap);
     <b>assert</b>!(contains(&pool.usr_open_orders, user), 0);
     <b>let</b> usr_open_order_ids = <a href="../../../.././build/Sui/docs/table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> pool.usr_open_orders, user);
     <b>while</b> (!<a href="../../../.././build/Sui/docs/linked_table.md#0x2_linked_table_is_empty">linked_table::is_empty</a>(usr_open_order_ids)) {
@@ -2141,30 +2089,12 @@ Abort if order_id is invalid or if the order is not submitted by the transaction
             user
         );
         <b>if</b> (is_bid) {
-            <b>let</b> (_, balance_locked) = clob_math::mul(order.quantity, order.price);
-            <b>let</b> locked_balance = <a href="custodian.md#0xdee9_custodian_decrease_user_locked_balance">custodian::decrease_user_locked_balance</a>&lt;QuoteAsset&gt;(
-                &<b>mut</b> pool.quote_custodian,
-                user,
-                balance_locked
-            );
-            <a href="custodian.md#0xdee9_custodian_increase_user_available_balance">custodian::increase_user_available_balance</a>&lt;QuoteAsset&gt;(
-                &<b>mut</b> pool.quote_custodian,
-                user,
-                locked_balance
-            );
+            <b>let</b> balance_locked = clob_math::mul(order.quantity, order.price);
+            <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.quote_custodian, user, balance_locked);
         } <b>else</b> {
-            <b>let</b> locked_balance = <a href="custodian.md#0xdee9_custodian_decrease_user_locked_balance">custodian::decrease_user_locked_balance</a>&lt;BaseAsset&gt;(
-                &<b>mut</b> pool.base_custodian,
-                user,
-                order.quantity
-            );
-            <a href="custodian.md#0xdee9_custodian_increase_user_available_balance">custodian::increase_user_available_balance</a>&lt;BaseAsset&gt;(
-                &<b>mut</b> pool.base_custodian,
-                user,
-                locked_balance
-            );
+            <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.base_custodian, user, order.quantity);
         };
-        <a href="clob.md#0xdee9_clob_emit_order_canceled">emit_order_canceled</a>&lt;BaseAsset, QuoteAsset&gt;(&order);
+        <a href="clob.md#0xdee9_clob_emit_order_canceled">emit_order_canceled</a>&lt;BaseAsset, QuoteAsset&gt;(pool_id, &order);
     };
 }
 </code></pre>
@@ -2198,13 +2128,15 @@ Grouping order_ids like [0, 2, 1, 3] would make it the most gas efficient.
 <pre><code><b>public</b> <b>fun</b> <a href="clob.md#0xdee9_clob_batch_cancel_order">batch_cancel_order</a>&lt;BaseAsset, QuoteAsset&gt;(
     pool: &<b>mut</b> <a href="clob.md#0xdee9_clob_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
     order_ids: <a href="">vector</a>&lt;u64&gt;,
-    account_cap: &AccountCap) {
+    account_cap: &AccountCap
+) {
+    <b>let</b> pool_id = *<a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_as_inner">object::uid_as_inner</a>(&pool.id);
     // First group the order ids according <b>to</b> price level,
     // so that we don't have <b>to</b> retrieve the PriceLevel multiple times <b>if</b> there are orders at the same price level.
     // Iterate over each price level, retrieve the corresponding PriceLevel.
     // Iterate over the order ids that need <b>to</b> be canceled at that price level,
     // retrieve and remove the order from open orders of the PriceLevel.
-    <b>let</b> user = get_account_cap_id(account_cap);
+    <b>let</b> user = <a href="../../../.././build/Sui/docs/object.md#0x2_object_id">object::id</a>(account_cap);
     <b>assert</b>!(contains(&pool.usr_open_orders, user), 0);
     <b>let</b> tick_index: u64 = 0;
     <b>let</b> _open_orders = <b>if</b> (!<a href="critbit.md#0xdee9_critbit_is_empty">critbit::is_empty</a>(&pool.bids)) { &pool.bids } <b>else</b> { &pool.asks };
@@ -2235,27 +2167,12 @@ Grouping order_ids like [0, 2, 1, 3] would make it the most gas efficient.
             user
         );
         <b>if</b> (is_bid) {
-            <b>let</b> (_, balance_locked) = clob_math::mul(order.quantity, order.price);
-            <b>let</b> locked_balance = <a href="custodian.md#0xdee9_custodian_decrease_user_locked_balance">custodian::decrease_user_locked_balance</a>&lt;QuoteAsset&gt;(
-                &<b>mut</b> pool.quote_custodian,
-                user,
-                balance_locked
-            );
-            <a href="custodian.md#0xdee9_custodian_increase_user_available_balance">custodian::increase_user_available_balance</a>&lt;QuoteAsset&gt;(
-                &<b>mut</b> pool.quote_custodian,
-                user,
-                locked_balance
-            );
+            <b>let</b> balance_locked = clob_math::mul(order.quantity, order.price);
+            <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.quote_custodian, user, balance_locked);
         } <b>else</b> {
-            <b>let</b> locked_balance = <a href="custodian.md#0xdee9_custodian_decrease_user_locked_balance">custodian::decrease_user_locked_balance</a>&lt;BaseAsset&gt;(
-                &<b>mut</b> pool.base_custodian, user, order.quantity);
-            <a href="custodian.md#0xdee9_custodian_increase_user_available_balance">custodian::increase_user_available_balance</a>&lt;BaseAsset&gt;(
-                &<b>mut</b> pool.base_custodian,
-                user,
-                locked_balance,
-            );
+            <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.base_custodian, user, order.quantity);
         };
-        <a href="clob.md#0xdee9_clob_emit_order_canceled">emit_order_canceled</a>&lt;BaseAsset, QuoteAsset&gt;(&order);
+        <a href="clob.md#0xdee9_clob_emit_order_canceled">emit_order_canceled</a>&lt;BaseAsset, QuoteAsset&gt;(pool_id, &order);
         i_order = i_order + 1;
     }
 }
@@ -2284,7 +2201,7 @@ Grouping order_ids like [0, 2, 1, 3] would make it the most gas efficient.
     pool: &<a href="clob.md#0xdee9_clob_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
     account_cap: &AccountCap
 ): <a href="">vector</a>&lt;<a href="clob.md#0xdee9_clob_Order">Order</a>&gt; {
-    <b>let</b> user = get_account_cap_id(account_cap);
+    <b>let</b> user = <a href="../../../.././build/Sui/docs/object.md#0x2_object_id">object::id</a>(account_cap);
     <b>let</b> usr_open_order_ids = <a href="../../../.././build/Sui/docs/table.md#0x2_table_borrow">table::borrow</a>(&pool.usr_open_orders, user);
     <b>let</b> open_orders = <a href="_empty">vector::empty</a>&lt;<a href="clob.md#0xdee9_clob_Order">Order</a>&gt;();
     <b>let</b> order_id = <a href="../../../.././build/Sui/docs/linked_table.md#0x2_linked_table_front">linked_table::front</a>(usr_open_order_ids);
@@ -2312,14 +2229,14 @@ Grouping order_ids like [0, 2, 1, 3] would make it the most gas efficient.
 
 </details>
 
-<a name="0xdee9_clob_usr_balance"></a>
+<a name="0xdee9_clob_account_balance"></a>
 
-## Function `usr_balance`
+## Function `account_balance`
 
 query user balance inside custodian
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob.md#0xdee9_clob_usr_balance">usr_balance</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob.md#0xdee9_clob_Pool">clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, account_cap: &<a href="custodian.md#0xdee9_custodian_AccountCap">custodian::AccountCap</a>): (u64, u64, u64, u64)
+<pre><code><b>public</b> <b>fun</b> <a href="clob.md#0xdee9_clob_account_balance">account_balance</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob.md#0xdee9_clob_Pool">clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, account_cap: &<a href="custodian.md#0xdee9_custodian_AccountCap">custodian::AccountCap</a>): (u64, u64, u64, u64)
 </code></pre>
 
 
@@ -2328,13 +2245,13 @@ query user balance inside custodian
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob.md#0xdee9_clob_usr_balance">usr_balance</a>&lt;BaseAsset, QuoteAsset&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="clob.md#0xdee9_clob_account_balance">account_balance</a>&lt;BaseAsset, QuoteAsset&gt;(
     pool: &<a href="clob.md#0xdee9_clob_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
     account_cap: &AccountCap
 ): (u64, u64, u64, u64) {
-    <b>let</b> user = get_account_cap_id(account_cap);
-    <b>let</b> (base_avail, base_locked) = <a href="custodian.md#0xdee9_custodian_usr_balance">custodian::usr_balance</a>(&pool.base_custodian, user);
-    <b>let</b> (quote_avail, quote_locked) = <a href="custodian.md#0xdee9_custodian_usr_balance">custodian::usr_balance</a>(&pool.quote_custodian, user);
+    <b>let</b> user = <a href="../../../.././build/Sui/docs/object.md#0x2_object_id">object::id</a>(account_cap);
+    <b>let</b> (base_avail, base_locked) = <a href="custodian.md#0xdee9_custodian_account_balance">custodian::account_balance</a>(&pool.base_custodian, user);
+    <b>let</b> (quote_avail, quote_locked) = <a href="custodian.md#0xdee9_custodian_account_balance">custodian::account_balance</a>(&pool.quote_custodian, user);
     (base_avail, base_locked, quote_avail, quote_locked)
 }
 </code></pre>
@@ -2510,7 +2427,7 @@ internal func to retrive single depth of a tick price
     order_id: u64,
     account_cap: &AccountCap
 ): &<a href="clob.md#0xdee9_clob_Order">Order</a> {
-    <b>let</b> user = get_account_cap_id(account_cap);
+    <b>let</b> user = <a href="../../../.././build/Sui/docs/object.md#0x2_object_id">object::id</a>(account_cap);
     <b>let</b> usr_open_order_ids = <a href="../../../.././build/Sui/docs/table.md#0x2_table_borrow">table::borrow</a>(&pool.usr_open_orders, user);
     <b>let</b> order_price = *<a href="../../../.././build/Sui/docs/linked_table.md#0x2_linked_table_borrow">linked_table::borrow</a>(usr_open_order_ids, order_id);
     <b>let</b> open_orders =
