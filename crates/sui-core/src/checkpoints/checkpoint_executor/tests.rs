@@ -16,6 +16,7 @@ use sui_types::committee::ProtocolVersion;
 use sui_types::messages_checkpoint::{ECMHLiveObjectSetDigest, EndOfEpochData, VerifiedCheckpoint};
 use tokio::{sync::broadcast, time::timeout};
 
+use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::{
     authority::AuthorityState, checkpoints::CheckpointStore, state_accumulator::StateAccumulator,
 };
@@ -392,9 +393,9 @@ async fn init_executor_test(
     let keypair = network_config.validator_configs[0]
         .protocol_key_pair()
         .copy();
-    let state =
-        AuthorityState::new_for_testing(committee.committee().clone(), &keypair, None, &genesis)
-            .await;
+    let state = TestAuthorityBuilder::new()
+        .build(committee.committee().clone(), &keypair, &genesis)
+        .await;
 
     let (checkpoint_sender, _): (Sender<VerifiedCheckpoint>, Receiver<VerifiedCheckpoint>) =
         broadcast::channel(buffer_size);

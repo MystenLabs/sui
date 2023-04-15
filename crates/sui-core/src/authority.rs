@@ -12,7 +12,6 @@ use arc_swap::{ArcSwap, Guard};
 use chrono::prelude::*;
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
-use fastcrypto::traits::KeyPair;
 use itertools::Itertools;
 use move_binary_format::CompiledModule;
 use move_core_types::language_storage::ModuleId;
@@ -50,7 +49,7 @@ use sui_json_rpc_types::{
     Checkpoint, DevInspectResults, DryRunTransactionBlockResponse, EventFilter, SuiEvent,
     SuiMoveValue, SuiObjectDataFilter, SuiTransactionBlockData, SuiTransactionBlockEvents,
 };
-use sui_macros::{fail_point, fail_point_async, nondeterministic};
+use sui_macros::{fail_point, fail_point_async};
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_storage::indexes::{CoinInfo, ObjectIndexChanges};
 use sui_storage::IndexStore;
@@ -101,11 +100,9 @@ use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::checkpoints::checkpoint_executor::CheckpointExecutor;
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
-use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::event_handler::EventHandler;
 use crate::execution_driver::execution_process;
 use crate::module_cache_metrics::ResolverMetrics;
-use crate::signature_verifier::SignatureVerifierMetrics;
 use crate::stake_aggregator::StakeAggregator;
 use crate::state_accumulator::StateAccumulator;
 use crate::{transaction_input_checker, transaction_manager::TransactionManager};
@@ -137,6 +134,7 @@ pub mod authority_store_pruner;
 pub mod authority_store_tables;
 pub mod authority_store_types;
 pub mod epoch_start_configuration;
+pub mod test_authority_builder;
 
 pub(crate) mod authority_notify_read;
 pub(crate) mod authority_store;
@@ -1722,85 +1720,6 @@ impl AuthorityState {
         state
             .create_owner_index_if_empty(genesis_objects, &epoch_store)
             .expect("Error indexing genesis objects.");
-
-        state
-    }
-
-    // TODO: Technically genesis_committee can be derived from genesis.
-    pub async fn new_for_testing(
-        genesis_committee: Committee,
-        key: &AuthorityKeyPair,
-        store_base_path: Option<PathBuf>,
-        genesis: &Genesis,
-    ) -> Arc<Self> {
-        let secret = Arc::pin(key.copy());
-        let name: AuthorityName = secret.public().into();
-        let path = match store_base_path {
-            Some(path) => path,
-            None => {
-                let dir = std::env::temp_dir();
-                let path = dir.join(format!("DB_{:?}", nondeterministic!(ObjectID::random())));
-                std::fs::create_dir(&path).unwrap();
-                path
-            }
-        };
-
-        // unwrap ok - for testing only.
-        let store = AuthorityStore::open_with_committee_for_testing(
-            &path.join("store"),
-            None,
-            &genesis_committee,
-            genesis,
-            0,
-        )
-        .await
-        .unwrap();
-        let registry = Registry::new();
-        let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
-        let signature_verifier_metrics = SignatureVerifierMetrics::new(&registry);
-        let epoch_store = AuthorityPerEpochStore::new(
-            name,
-            Arc::new(genesis_committee.clone()),
-            &path.join("store"),
-            None,
-            EpochMetrics::new(&registry),
-            EpochStartConfiguration::new_for_testing(),
-            store.clone(),
-            cache_metrics,
-            signature_verifier_metrics,
-            &ExpensiveSafetyCheckConfig::default(),
-        );
-
-        let epochs = Arc::new(CommitteeStore::new(
-            path.join("epochs"),
-            &genesis_committee,
-            None,
-        ));
-
-        let checkpoint_store = CheckpointStore::new(&path.join("checkpoints"));
-        let index_store = Some(Arc::new(IndexStore::new(path.join("indexes"))));
-
-        let state = AuthorityState::new(
-            secret.public().into(),
-            secret.clone(),
-            SupportedProtocolVersions::SYSTEM_DEFAULT,
-            store,
-            epoch_store,
-            epochs,
-            index_store,
-            checkpoint_store,
-            &registry,
-            AuthorityStorePruningConfig::default(),
-            genesis.objects(),
-            &DBCheckpointConfig::default(),
-            ExpensiveSafetyCheckConfig::new_enable_all(),
-        )
-        .await;
-
-        let epoch_store = state.epoch_store_for_testing();
-        state
-            .create_owner_index_if_empty(genesis.objects(), &epoch_store)
-            .unwrap();
 
         state
     }
