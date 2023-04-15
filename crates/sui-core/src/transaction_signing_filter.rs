@@ -74,12 +74,15 @@ fn check_sender_and_sponsor(
     }
     deny_if_true!(
         deny_map.contains(&tx_data.sender()),
-        format!("Access to account address {:?} is denied", tx_data.sender())
+        format!(
+            "Access to account address {:?} is temporarily disabled",
+            tx_data.sender()
+        )
     );
     deny_if_true!(
         deny_map.contains(&tx_data.gas_owner()),
         format!(
-            "Access to account address {:?} is denied",
+            "Access to account address {:?} is temporarily disabled",
             tx_data.gas_owner()
         )
     );
@@ -98,11 +101,11 @@ fn check_input_objects(
         let id = object_kind.object_id();
         deny_if_true!(
             deny_map.contains(&id),
-            format!("Access to input object {:?} is not allowed", id)
+            format!("Access to input object {:?} is temporarily disabled", id)
         );
         deny_if_true!(
             filter_config.shared_object_disabled() && object_kind.is_shared_object(),
-            "Usage of shared object in transactions is not allowed"
+            "Usage of shared object in transactions is temporarily disabled"
         );
     }
     Ok(())
@@ -155,10 +158,7 @@ fn check_package_dependencies(
     for dep in dependencies {
         deny_if_true!(
             deny_map.contains(&dep),
-            format!(
-                "Package {:?} cannot be accessed either directly or indirectly",
-                dep
-            )
+            format!("Access to package {:?} is temporarily disabled", dep)
         );
     }
     Ok(())
