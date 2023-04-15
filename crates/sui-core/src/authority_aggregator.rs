@@ -34,6 +34,7 @@ use sui_types::{
 use thiserror::Error;
 use tracing::{debug, error, info, trace, warn, Instrument};
 
+use fastcrypto::encoding::Encoding;
 use prometheus::{
     register_int_counter_vec_with_registry, register_int_counter_with_registry, IntCounter,
     IntCounterVec, Registry,
@@ -1402,8 +1403,9 @@ where
         let cert_ref = &certificate;
         let threshold = self.committee.quorum_threshold();
         let validity = self.committee.validity_threshold();
-        let cert_bytes = bcs::to_bytes(cert_ref);
-        debug!(
+
+        // TODO: We show the below messages for debugging purposes re. incident #267. When this is fixed, we should remove them again.
+        info!(
             ?tx_digest,
             quorum_threshold = threshold,
             validity_threshold = validity,
@@ -1411,11 +1413,13 @@ where
             ?cert_ref,
             "Broadcasting certificate to authorities"
         );
-        debug!(
+        let cert_bytes = fastcrypto::encoding::Base64::encode(bcs::to_bytes(cert_ref).unwrap());
+        info!(
             ?tx_digest,
             ?cert_bytes,
             "Broadcasting certificate (serialized) to authorities"
         );
+
         self.quorum_map_then_reduce_with_timeout(
             state,
             |name, client| {
