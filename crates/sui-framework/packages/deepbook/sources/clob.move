@@ -371,18 +371,18 @@ module deepbook::clob {
                         locked_balance,
                     );
                 } else {
-                    let (flag, maker_quote_quantity) = clob_math::mul(maker_base_quantity, maker_order.price);
+                    let (flag, maker_quote_quantity) = clob_math::mul_round(maker_base_quantity, maker_order.price);
                     if (flag) maker_quote_quantity = maker_quote_quantity + 1;
                     // filled_quote_quantity, subtract from taker total quote remaining in each loop, round up if needed
                     let filled_quote_quantity =
                         if (taker_quote_quantity_remaining >= maker_quote_quantity) { maker_quote_quantity }
                         else { taker_quote_quantity_remaining };
                     // filled_base_quantity, subtract from maker locked_base_balance, round up if needed
-                    let (flag, filled_base_quantity) = clob_math::div(filled_quote_quantity, maker_order.price);
+                    let (flag, filled_base_quantity) = clob_math::div_round(filled_quote_quantity, maker_order.price);
                     if (flag) filled_base_quantity = filled_base_quantity + 1;
                     // rebate_fee to maker, no need to round up
-                    let (_, maker_rebate) = clob_math::mul(filled_base_quantity, pool.maker_rebate_rate);
-                    let (is_round_down, taker_commission) = clob_math::mul(filled_base_quantity, pool.taker_fee_rate);
+                    let maker_rebate = clob_math::mul(filled_base_quantity, pool.maker_rebate_rate);
+                    let (is_round_down, taker_commission) = clob_math::mul_round(filled_base_quantity, pool.taker_fee_rate);
                     if (is_round_down) taker_commission = taker_commission + 1;
 
                     maker_base_quantity = maker_base_quantity - filled_base_quantity;
@@ -510,14 +510,11 @@ module deepbook::clob {
                         if (taker_base_quantity_remaining >= maker_base_quantity) { maker_base_quantity }
                         else { taker_base_quantity_remaining };
                     // filled_quote_quantity to maker,  no need to round up
-                    let (_, filled_quote_quantity) = clob_math::mul(
-                        filled_base_quantity,
-                        maker_order.price
-                    );
+                    let filled_quote_quantity = clob_math::mul(filled_base_quantity, maker_order.price);
 
                     // rebate_fee to maker, no need to round up
-                    let (_, maker_rebate) = clob_math::mul(filled_base_quantity, pool.maker_rebate_rate);
-                    let (is_round_down, taker_commission) = clob_math::mul(filled_base_quantity, pool.taker_fee_rate);
+                    let maker_rebate = clob_math::mul(filled_base_quantity, pool.maker_rebate_rate);
+                    let (is_round_down, taker_commission) = clob_math::mul_round(filled_base_quantity, pool.taker_fee_rate);
                     if (is_round_down) taker_commission = taker_commission + 1;
 
                     maker_base_quantity = maker_base_quantity - filled_base_quantity;
@@ -624,7 +621,7 @@ module deepbook::clob {
 
                 if (maker_order.expire_timestamp <= current_timestamp) {
                     skip_order = true;
-                    let (_, maker_quote_quantity) = clob_math::mul(maker_order.quantity, maker_order.price);
+                    let maker_quote_quantity = clob_math::mul(maker_order.quantity, maker_order.price);
                     let locked_balance = custodian::decrease_user_locked_balance<QuoteAsset>(
                         &mut pool.quote_custodian,
                         maker_order.owner,
@@ -642,11 +639,11 @@ module deepbook::clob {
                         if (taker_base_quantity_remaining >= maker_base_quantity) { maker_base_quantity }
                         else { taker_base_quantity_remaining };
                     // filled_quote_quantity from maker, need to round up, but do in decrease stage
-                    let (_, filled_quote_quantity) = clob_math::mul(filled_base_quantity, maker_order.price);
+                    let filled_quote_quantity = clob_math::mul(filled_base_quantity, maker_order.price);
 
                     // rebate_fee to maker, no need to round up
-                    let (_, maker_rebate) = clob_math::mul(filled_quote_quantity, pool.maker_rebate_rate);
-                    let (is_round_down, taker_commission) = clob_math::mul(filled_quote_quantity, pool.taker_fee_rate);
+                    let maker_rebate = clob_math::mul(filled_quote_quantity, pool.maker_rebate_rate);
+                    let (is_round_down, taker_commission) = clob_math::mul_round(filled_quote_quantity, pool.taker_fee_rate);
                     if (is_round_down) taker_commission = taker_commission + 1;
 
                     maker_base_quantity = maker_base_quantity - filled_base_quantity;
@@ -799,7 +796,7 @@ module deepbook::clob {
         let order_id: u64;
         let open_orders: &mut CritbitTree<TickLevel>;
         if (is_bid) {
-            let (_, quote_quantity) = clob_math::mul(quantity, price);
+            let quote_quantity = clob_math::mul(quantity, price);
             let locked_balance = custodian::decrease_user_available_balance<QuoteAsset>(
                 &mut pool.quote_custodian,
                 user,
@@ -1020,7 +1017,7 @@ module deepbook::clob {
             user
         );
         if (is_bid) {
-            let (_, balance_locked) = clob_math::mul(order.quantity, order.price);
+            let balance_locked = clob_math::mul(order.quantity, order.price);
             let locked_balance = custodian::decrease_user_locked_balance<QuoteAsset>(
                 &mut pool.quote_custodian,
                 user,
@@ -1088,7 +1085,7 @@ module deepbook::clob {
                 user
             );
             if (is_bid) {
-                let (_, balance_locked) = clob_math::mul(order.quantity, order.price);
+                let balance_locked = clob_math::mul(order.quantity, order.price);
                 let locked_balance = custodian::decrease_user_locked_balance<QuoteAsset>(
                     &mut pool.quote_custodian,
                     user,
@@ -1163,7 +1160,7 @@ module deepbook::clob {
                 user
             );
             if (is_bid) {
-                let (_, balance_locked) = clob_math::mul(order.quantity, order.price);
+                let balance_locked = clob_math::mul(order.quantity, order.price);
                 let locked_balance = custodian::decrease_user_locked_balance<QuoteAsset>(
                     &mut pool.quote_custodian,
                     user,
