@@ -713,7 +713,10 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
         }
         for (id, delete_kind) in deletions {
             let version = match input_object_metadata.get(&id) {
-                Some(metadata) => metadata.version,
+                Some(metadata) => {
+                    assert_invariant!(!matches!(metadata.owner, Owner::Immutable), format!("Attempting to delete immutable object {id} via delete kind {delete_kind}"));
+                    metadata.version
+                }
                 None => match state_view.get_latest_parent_entry_ref(id) {
                     Ok(Some((_, previous_version, _))) => previous_version,
                     // This object was not created this transaction but has never existed in

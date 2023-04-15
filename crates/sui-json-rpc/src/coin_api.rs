@@ -1,14 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use anyhow::anyhow;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 use move_core_types::language_storage::{StructTag, TypeTag};
+use sui_types::storage::ObjectKey;
 use tracing::debug;
 
 use sui_core::authority::AuthorityState;
@@ -16,14 +17,13 @@ use sui_json_rpc_types::{Balance, Coin as SuiCoin};
 use sui_json_rpc_types::{CoinPage, SuiCoinMetadata};
 use sui_open_rpc::Module;
 use sui_types::balance::Supply;
-use sui_types::base_types::{MoveObjectType, ObjectID, ObjectRef, ObjectType, SuiAddress};
+use sui_types::base_types::{MoveObjectType, ObjectID, ObjectRef, SuiAddress};
 use sui_types::coin::{Coin, CoinMetadata, TreasuryCap};
 use sui_types::error::{SuiError, UserInputError};
 use sui_types::gas_coin::GAS;
 use sui_types::messages::TransactionEffectsAPI;
 use sui_types::object::{Object, Owner};
 use sui_types::parse_sui_struct_tag;
-use sui_types::storage::ObjectKey;
 
 use crate::api::{cap_page_limit, CoinReadApiServer};
 use crate::error::Error;
@@ -38,42 +38,68 @@ impl CoinReadApi {
         Self { state }
     }
 
-    fn multi_get_coin(&self, coins: &[ObjectKey]) -> Result<Vec<Result<SuiCoin, Error>>, Error> {
-        let o = self.state.database.multi_get_object_by_key(coins)?;
+    fn multi_get_coin_objects(&self, coins: &[ObjectRef]) -> Result<Vec<Object>, Error> {
+        Ok(self
+            .state
+            .database
+            .multi_get_object_by_key(&coins.iter().map(ObjectKey::from).collect::<Vec<_>>())?
+            .into_iter()
+            .zip(coins)
+            .map(|(o, (id, version, _digest))| {
+                o.ok_or(UserInputError::ObjectNotFound {
+                    object_id: *id,
+                    version: Some(*version),
+                })
+            })
+            .collect::<Result<Vec<_>, UserInputError>>()?)
+    }
+
+    /// Fetch all of the objects in `coins`. It's the caller's responsibility
+    /// to ensure that every ObjRef in `coins` is in fact a coin by using `Authority::get_owner_coin_iterator`,
+    /// and that every coin is of type `coin_type_tag`.
+    /// Note: if  we are fetching gas coins, `coin_type_tag` should be `Some(SUI)`, not `Some(Coin<SUI>)`
+    fn multi_get_coin(
+        &self,
+        coins: &[ObjectRef],
+        coin_type_tag: Option<&TypeTag>,
+    ) -> Result<Vec<Result<SuiCoin, Error>>, Error> {
+        let o = self
+            .state
+            .database
+            .multi_get_object_by_key(&coins.iter().map(ObjectKey::from).collect::<Vec<_>>())?;
+        // conversion from TypeTag to string is expensive, so do it outside the loop if we already know the coin type
+        // if coin_type_tag is None, we are getting a heterogenous mix of coins and we have no choice but to string-ify in the loop
+        let coin_type_str = coin_type_tag.map(|t| t.to_string());
 
         Ok(o.into_iter()
             .zip(coins)
-            .map(|(o, ObjectKey(id, version))| {
+            .map(|(o, (id, version, digest))| {
                 let o = o.ok_or(UserInputError::ObjectNotFound {
                     object_id: *id,
                     version: Some(*version),
                 })?;
 
                 if let Some(move_object) = o.data.try_as_move() {
-                    let (balance, locked_until_epoch) = if move_object.type_().is_coin() {
-                        let coin: Coin = bcs::from_bytes(move_object.contents())?;
-                        (coin.balance.value(), None)
-                    } else {
-                        return Err(Error::SuiError(SuiError::ObjectDeserializationError {
-                            error: format!(
-                                "{:?} is not a supported coin type",
-                                move_object.type_()
-                            ),
-                        }));
-                    };
-
-                    Ok(SuiCoin {
-                        coin_type: move_object
-                            .type_()
+                    let coin_type = coin_type_str.clone().unwrap_or_else(|| {
+                        o.type_()
+                            .unwrap()
                             .type_params()
                             .first()
                             .unwrap()
-                            .to_string(),
-                        coin_object_id: o.id(),
-                        version: o.version(),
-                        digest: o.digest(),
+                            .to_string()
+                    });
+                    let balance = {
+                        let coin: Coin = bcs::from_bytes(move_object.contents())?;
+                        coin.balance.value()
+                    };
+
+                    Ok(SuiCoin {
+                        coin_type,
+                        coin_object_id: *id,
+                        version: *version,
+                        digest: *digest,
                         balance,
-                        locked_until_epoch,
+                        locked_until_epoch: None,
                         previous_transaction: o.previous_transaction,
                     })
                 } else {
@@ -89,7 +115,7 @@ impl CoinReadApi {
     async fn get_coins_internal(
         &self,
         owner: SuiAddress,
-        coin_type: Option<StructTag>,
+        coin_type: Option<&TypeTag>,
         // exclusive cursor if `Some`, otherwise start from the beginning
         cursor: Option<ObjectID>,
         limit: Option<usize>,
@@ -97,7 +123,7 @@ impl CoinReadApi {
         // TODO: Add index to improve performance?
         let limit = cap_page_limit(limit);
         let mut coins = self
-            .get_owner_coin_iterator(owner, &coin_type)?
+            .get_owner_coin_iterator(owner, coin_type)?
             .skip_while(|o| matches!(&cursor, Some(cursor) if cursor != &o.0))
             // skip an extra b/c the cursor is exclusive
             .skip(usize::from(cursor.is_some()))
@@ -109,10 +135,9 @@ impl CoinReadApi {
         let next_cursor = coins.last().cloned().map_or(cursor, |(id, _, _)| Some(id));
 
         let data = self
-            .multi_get_coin(&coins.into_iter().map(ObjectKey::from).collect::<Vec<_>>())?
+            .multi_get_coin(&coins, coin_type)?
             .into_iter()
             .collect::<Result<Vec<_>, _>>()?;
-
         Ok(CoinPage {
             data,
             next_cursor,
@@ -123,13 +148,19 @@ impl CoinReadApi {
     fn get_owner_coin_iterator<'a>(
         &'a self,
         owner: SuiAddress,
-        coin_type: &'a Option<StructTag>,
+        coin_type: Option<&'a TypeTag>,
     ) -> Result<impl Iterator<Item = ObjectRef> + '_, Error> {
         Ok(self
             .state
             .get_owner_objects_iterator(owner, None, None)?
-            .filter(move |o| matches!(&o.type_, ObjectType::Struct(type_) if is_coin_type(type_, coin_type)))
-            .map(|info|(info.object_id, info.version, info.digest)))
+            .filter(move |o| {
+                if let Some(coin_type) = coin_type {
+                    o.type_.is_coin_t(coin_type)
+                } else {
+                    o.type_.is_coin()
+                }
+            })
+            .map(|info| (info.object_id, info.version, info.digest)))
     }
 
     async fn find_package_object(
@@ -189,12 +220,12 @@ impl CoinReadApiServer for CoinReadApi {
         cursor: Option<ObjectID>,
         limit: Option<usize>,
     ) -> RpcResult<CoinPage> {
-        let coin_type = Some(match coin_type {
+        let coin_type = TypeTag::Struct(Box::new(match coin_type {
             Some(c) => parse_sui_struct_tag(&c)?,
             None => GAS::type_(),
-        });
+        }));
         Ok(self
-            .get_coins_internal(owner, coin_type, cursor, limit)
+            .get_coins_internal(owner, Some(&coin_type), cursor, limit)
             .await?)
     }
 
@@ -209,58 +240,62 @@ impl CoinReadApiServer for CoinReadApi {
     }
 
     fn get_balance(&self, owner: SuiAddress, coin_type: Option<String>) -> RpcResult<Balance> {
-        let coin_type = Some(match coin_type {
+        let coin_type = TypeTag::Struct(Box::new(match coin_type {
             Some(c) => parse_sui_struct_tag(&c)?,
             None => GAS::type_(),
-        });
+        }));
 
         // TODO: Add index to improve performance?
-        let coins = self.get_owner_coin_iterator(owner, &coin_type)?;
+        let coins = self.multi_get_coin_objects(
+            &self
+                .get_owner_coin_iterator(owner, Some(&coin_type))?
+                .collect::<Vec<_>>(),
+        )?;
         let mut total_balance = 0u128;
-        let mut locked_balance = HashMap::new();
         let mut coin_object_count = 0;
-        let coins = coins.map(ObjectKey::from).collect::<Vec<_>>();
 
-        for coin in self.multi_get_coin(&coins)? {
-            let coin = coin?;
-            if let Some(lock) = coin.locked_until_epoch {
-                *locked_balance.entry(lock).or_default() += coin.balance as u128
-            } else {
-                total_balance += coin.balance as u128;
-            }
+        for coin_obj in coins {
+            // unwraps safe because get_owner_coin_iterator can only return coin objects
+            let coin: Coin =
+                bcs::from_bytes(coin_obj.data.try_as_move().unwrap().contents()).unwrap();
+            total_balance += coin.balance.value() as u128;
             coin_object_count += 1;
         }
 
         Ok(Balance {
-            coin_type: coin_type.unwrap().to_string(),
+            coin_type: coin_type.to_string(),
             coin_object_count,
             total_balance,
-            locked_balance,
+            // note: LockedCoin is deprecated
+            locked_balance: Default::default(),
         })
     }
 
     fn get_all_balances(&self, owner: SuiAddress) -> RpcResult<Vec<Balance>> {
-        let coins = self
-            .get_owner_coin_iterator(owner, &None)?
-            .map(ObjectKey::from)
-            .collect::<Vec<_>>();
-        let mut balances: HashMap<String, Balance> = HashMap::new();
+        let mut balances: HashMap<MoveObjectType, Balance> = HashMap::new();
+        // TODO: Add index to improve performance?
+        let coin_objs = self.multi_get_coin_objects(
+            &self
+                .get_owner_coin_iterator(owner, None)?
+                .collect::<Vec<_>>(),
+        )?;
+        for coin_obj in coin_objs {
+            // unwraps safe because get_owner_coin_iterator can only return coin objects
+            let move_obj = coin_obj.data.try_as_move().unwrap();
+            let coin_type = move_obj.type_();
+            let coin: Coin = bcs::from_bytes(move_obj.contents()).unwrap();
 
-        for coin in self.multi_get_coin(&coins)? {
-            let coin = coin?;
-            let balance = balances.entry(coin.coin_type.clone()).or_insert(Balance {
-                coin_type: coin.coin_type,
+            let balance = balances.entry(coin_type.clone()).or_insert(Balance {
+                coin_type: coin_type.to_string(),
                 coin_object_count: 0,
                 total_balance: 0,
+                // note: LockedCoin is deprecated
                 locked_balance: Default::default(),
             });
-            if let Some(lock) = coin.locked_until_epoch {
-                *balance.locked_balance.entry(lock).or_default() += coin.balance as u128
-            } else {
-                balance.total_balance += coin.balance as u128;
-            }
+            balance.total_balance += coin.balance.value() as u128;
             balance.coin_object_count += 1;
         }
+
         Ok(balances.into_values().collect())
     }
 
@@ -313,15 +348,4 @@ impl CoinReadApiServer for CoinReadApi {
             treasury_cap.total_supply
         })
     }
-}
-
-fn is_coin_type(type_: &MoveObjectType, coin_type: &Option<StructTag>) -> bool {
-    if type_.is_coin() {
-        return if let Some(coin_type) = coin_type {
-            matches!(type_.type_params().first(), Some(TypeTag::Struct(type_)) if type_.to_canonical_string() == coin_type.to_canonical_string())
-        } else {
-            true
-        };
-    }
-    false
 }

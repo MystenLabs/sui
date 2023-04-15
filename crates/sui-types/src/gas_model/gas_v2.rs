@@ -12,6 +12,7 @@ use crate::{
 use move_core_types::vm_status::StatusCode;
 use once_cell::sync::Lazy;
 use std::convert::TryFrom;
+use std::iter;
 use sui_cost_tables::bytecode_tables::{GasStatus, INITIAL_COST_SCHEDULE};
 use sui_protocol_config::*;
 
@@ -418,11 +419,13 @@ pub(crate) fn check_gas_balance(
     gas_budget: u64,
     cost_table: &SuiCostTable,
 ) -> UserInputResult {
-    // 1. Gas object has an address owner.
-    if !(matches!(gas_object.owner, Owner::AddressOwner(_))) {
-        return Err(UserInputError::GasObjectNotOwnedObject {
-            owner: gas_object.owner,
-        });
+    // 1. All gas objects have an address owner
+    for gas_object in more_gas_objs.iter().chain(iter::once(&gas_object)) {
+        if !(matches!(gas_object.owner, Owner::AddressOwner(_))) {
+            return Err(UserInputError::GasObjectNotOwnedObject {
+                owner: gas_object.owner,
+            });
+        }
     }
 
     // 2. Gas budget is between min and max budget allowed

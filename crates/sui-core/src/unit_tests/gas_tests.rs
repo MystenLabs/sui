@@ -241,6 +241,115 @@ async fn test_transfer_sui_insufficient_gas() {
     assert_eq!(effects.mutated()[0].1, sender);
 }
 
+/// - All gas coins should be owned by an address (not shared or immutable)
+/// - All gas coins should be owned by the sender, or the sponsor
+#[tokio::test]
+async fn test_invalid_gas_owners() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let authority_state = init_state().await;
+
+    let init_object = |o: Object| async {
+        let obj_ref = o.compute_object_reference();
+        authority_state.insert_genesis_object(o).await;
+        obj_ref
+    };
+
+    let gas_object1 = init_object(Object::with_owner_for_testing(sender)).await;
+    let gas_object2 = init_object(Object::with_owner_for_testing(sender)).await;
+    let gas_object3 = init_object(Object::with_owner_for_testing(sender)).await;
+    let gas_object4 = init_object(Object::with_owner_for_testing(sender)).await;
+
+    let shared_object = init_object(Object::shared_for_testing()).await;
+    let immutable_object = init_object(Object::immutable_for_testing()).await;
+    let id_owned_object = init_object(Object::with_object_owner_for_testing(
+        ObjectID::random(),
+        gas_object3.0,
+    ))
+    .await;
+    let non_sender_owned_object =
+        init_object(Object::with_owner_for_testing(SuiAddress::ZERO)).await;
+
+    async fn test(
+        good_gas_object: ObjectRef,
+        bad_gas_object: ObjectRef,
+        sender: SuiAddress,
+        sender_key: &AccountKeyPair,
+        authority_state: &AuthorityState,
+    ) -> UserInputError {
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            let recipient = dbg_addr(2);
+            builder.transfer_sui(recipient, None);
+            builder.finish()
+        };
+        let kind = TransactionKind::ProgrammableTransaction(pt);
+        let data = TransactionData::new_with_gas_coins(
+            kind,
+            sender,
+            vec![good_gas_object, bad_gas_object],
+            *MAX_GAS_BUDGET,
+            1,
+        );
+        let tx = to_sender_signed_transaction(data, sender_key);
+
+        let result = send_and_confirm_transaction(authority_state, tx).await;
+        UserInputError::try_from(result.unwrap_err()).unwrap()
+    }
+
+    assert_eq!(
+        test(
+            gas_object1,
+            shared_object,
+            sender,
+            &sender_key,
+            &authority_state
+        )
+        .await,
+        UserInputError::GasObjectNotOwnedObject {
+            owner: Owner::Shared {
+                initial_shared_version: OBJECT_START_VERSION
+            }
+        }
+    );
+    assert_eq!(
+        test(
+            gas_object2,
+            immutable_object,
+            sender,
+            &sender_key,
+            &authority_state
+        )
+        .await,
+        UserInputError::GasObjectNotOwnedObject {
+            owner: Owner::Immutable
+        }
+    );
+    assert_eq!(
+        test(
+            gas_object3,
+            id_owned_object,
+            sender,
+            &sender_key,
+            &authority_state
+        )
+        .await,
+        UserInputError::GasObjectNotOwnedObject {
+            owner: Owner::ObjectOwner(gas_object3.0.into())
+        }
+    );
+    assert!(matches!(
+        test(
+            gas_object4,
+            non_sender_owned_object,
+            sender,
+            &sender_key,
+            &authority_state
+        )
+        .await,
+        UserInputError::IncorrectUserSignature { .. }
+    ))
+}
+
 #[tokio::test]
 async fn test_native_transfer_insufficient_gas_reading_objects() {
     // This test creates a transfer transaction with a gas budget, that's more than

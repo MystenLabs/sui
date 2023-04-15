@@ -766,6 +766,14 @@ impl Object {
         }
     }
 
+    pub fn immutable_for_testing() -> Self {
+        thread_local! {
+            static IMMUTABLE_OBJECT_ID: ObjectID = ObjectID::random();
+        }
+
+        Self::immutable_with_id_for_testing(IMMUTABLE_OBJECT_ID.with(|id| *id))
+    }
+
     /// make a test shared object.
     pub fn shared_for_testing() -> Object {
         thread_local! {
