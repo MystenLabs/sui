@@ -189,8 +189,9 @@ impl<T> Node<T> {
     ///
     /// let node = Node::new_leaf(1, false);
     /// assert_eq!(node.make_compressible(), true);
-    /// let node2 = Node::new_leaf(2, true);
     /// assert_eq!(node.make_compressible(), false);
+    /// let node2 = Node::new_leaf(2, true);
+    /// assert_eq!(node2.make_compressible(), false);
     /// ```
     pub fn make_compressible(&self) -> bool {
         self.compressible.set(()).is_ok()
