@@ -45,7 +45,7 @@ use fastcrypto::error::FastCryptoError;
 use fastcrypto::hash::{Blake2b256, HashFunction};
 pub use fastcrypto::traits::Signer;
 use std::fmt::Debug;
-use tracing::debug;
+use tracing::log::warn;
 
 #[cfg(test)]
 #[path = "unit_tests/crypto_tests.rs"]
@@ -1569,7 +1569,7 @@ impl<'a> VerificationObligation<'a> {
                 .map(std::str::from_utf8)
                 .enumerate()
             {
-                debug!(
+                warn!(
                     "Failed to batch verify aggregated auth sig {} (chunk {}): {}",
                     e,
                     i,
