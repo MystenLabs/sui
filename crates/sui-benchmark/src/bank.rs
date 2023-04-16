@@ -12,7 +12,7 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use sui_core::test_utils::make_pay_sui_transaction;
 use sui_types::base_types::SuiAddress;
-use sui_types::crypto::AccountKeyPair;
+use sui_types::crypto::MyAccountKeyPair;
 use tracing::debug;
 
 /// Bank is used for generating gas for running the benchmark.
@@ -127,7 +127,7 @@ impl BenchmarkBank {
             self.primary_coin.2.clone(),
         );
 
-        let address_map: HashMap<SuiAddress, Arc<AccountKeyPair>> = coin_configs
+        let address_map: HashMap<SuiAddress, Arc<MyAccountKeyPair>> = coin_configs
             .iter()
             .map(|c| (c.address, c.keypair.clone()))
             .collect();

@@ -19,7 +19,7 @@ use crate::{ExecutionEffects, ValidatorProxy};
 use sui_core::test_utils::make_transfer_object_transaction;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
-    crypto::{get_key_pair, AccountKeyPair},
+    crypto::{get_key_pair, MyAccountKeyPair},
     messages::VerifiedTransaction,
 };
 
@@ -35,6 +35,7 @@ pub struct TransferObjectTestPayload {
     gas: Vec<Gas>,
     system_state_observer: Arc<SystemStateObserver>,
     verified_tx: Option<VerifiedTransaction>,
+    repeated: u32,
 }
 
 impl Payload for TransferObjectTestPayload {
@@ -68,7 +69,7 @@ impl Payload for TransferObjectTestPayload {
     }
     fn make_transaction(&mut self) -> VerifiedTransaction {
         let (gas_obj, _, keypair) = self.gas.iter().find(|x| x.1 == self.transfer_from).unwrap();
-        if self.verified_tx.is_none() {
+        if self.verified_tx.is_none() || self.repeated > 15 {
             let vtx = make_transfer_object_transaction(
                 self.transfer_object,
                 *gas_obj,
@@ -81,9 +82,13 @@ impl Payload for TransferObjectTestPayload {
                     .reference_gas_price,
             );
             self.verified_tx = Some(vtx.clone());
+            self.repeated = 0;
             vtx
         } else {
             let vtx = self.verified_tx.clone().unwrap();
+            let d = vtx.digest();
+            tracing::warn!(?d, "sending tx");
+            self.repeated += 1;
             vtx
         }
     }
@@ -151,7 +156,7 @@ impl WorkloadBuilder<dyn Payload> for TransferObjectWorkloadBuilder {
         let mut payload_configs = vec![];
         for _i in 0..self.num_transfer_accounts {
             let (address, keypair) = get_key_pair();
-            let cloned_keypair: Arc<AccountKeyPair> = Arc::new(keypair);
+            let cloned_keypair: Arc<MyAccountKeyPair> = Arc::new(keypair);
             address_map.insert(address, cloned_keypair.clone());
             for _j in 0..self.num_payloads {
                 payload_configs.push(GasCoinConfig {
@@ -244,6 +249,7 @@ impl Workload<dyn Payload> for TransferObjectWorkload {
                     gas: g.to_vec(),
                     system_state_observer: system_state_observer.clone(),
                     verified_tx: None,
+                    repeated: 0,
                 })
             })
             .map(|b| Box::<dyn Payload>::from(b))

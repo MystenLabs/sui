@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use crate::workloads::payload::Payload;
 use sui_types::base_types::{ObjectRef, SuiAddress};
-use sui_types::crypto::AccountKeyPair;
+use sui_types::crypto::MyAccountKeyPair;
 use workload::*;
 
 #[derive(Debug)]
@@ -36,7 +36,7 @@ pub struct WorkloadInfo {
     pub workload: Box<dyn Workload<dyn Payload>>,
 }
 
-pub type Gas = (ObjectRef, SuiAddress, Arc<AccountKeyPair>);
+pub type Gas = (ObjectRef, SuiAddress, Arc<MyAccountKeyPair>);
 
 #[derive(Clone)]
 pub struct GasCoinConfig {
@@ -45,5 +45,5 @@ pub struct GasCoinConfig {
     // recipient of this gas coin
     pub address: SuiAddress,
     // recipient account key pair (useful for signing txns)
-    pub keypair: Arc<AccountKeyPair>,
+    pub keypair: Arc<MyAccountKeyPair>,
 }

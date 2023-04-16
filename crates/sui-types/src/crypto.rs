@@ -64,6 +64,7 @@ pub type AggregateAuthoritySignatureAsBytes = BLS12381AggregateSignatureAsBytes;
 
 // TODO(joyqvq): prefix these types with Default, DefaultAccountKeyPair etc
 pub type AccountKeyPair = Ed25519KeyPair;
+pub type MyAccountKeyPair = Secp256k1KeyPair;
 pub type AccountPublicKey = Ed25519PublicKey;
 pub type AccountPrivateKey = Ed25519PrivateKey;
 pub type AccountSignature = Ed25519Signature;
@@ -572,7 +573,7 @@ pub fn random_committee_key_pairs_of_size(size: usize) -> Vec<AuthorityKeyPair> 
         .collect()
 }
 
-pub fn deterministic_random_account_key() -> (SuiAddress, AccountKeyPair) {
+pub fn deterministic_random_account_key() -> (SuiAddress, MyAccountKeyPair) {
     let mut rng = StdRng::from_seed([0; 32]);
     get_key_pair_from_rng(&mut rng)
 }

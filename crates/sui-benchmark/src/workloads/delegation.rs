@@ -14,7 +14,7 @@ use rand::seq::IteratorRandom;
 use std::sync::Arc;
 use sui_core::test_utils::make_transfer_sui_transaction;
 use sui_types::base_types::{ObjectRef, SuiAddress};
-use sui_types::crypto::{get_key_pair, AccountKeyPair};
+use sui_types::crypto::{get_key_pair, MyAccountKeyPair};
 use sui_types::gas_coin::MIST_PER_SUI;
 use sui_types::messages::VerifiedTransaction;
 use test_utils::messages::make_staking_transaction;
@@ -26,7 +26,7 @@ pub struct DelegationTestPayload {
     gas: ObjectRef,
     validator: SuiAddress,
     sender: SuiAddress,
-    keypair: Arc<AccountKeyPair>,
+    keypair: Arc<MyAccountKeyPair>,
     system_state_observer: Arc<SystemStateObserver>,
 }
 

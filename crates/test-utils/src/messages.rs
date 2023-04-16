@@ -16,7 +16,7 @@ use sui_types::base_types::SuiAddress;
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::committee::Committee;
 use sui_types::crypto::{
-    deterministic_random_account_key, get_key_pair, AccountKeyPair, AuthorityKeyPair,
+    deterministic_random_account_key, get_key_pair, AccountKeyPair, MyAccountKeyPair, AuthorityKeyPair,
     AuthorityPublicKeyBytes, AuthoritySignInfo, KeypairTraits, Signature, Signer,
 };
 use sui_types::gas_coin::GasCoin;
@@ -288,7 +288,7 @@ pub fn create_publish_move_package_transaction(
     gas_object_ref: ObjectRef,
     path: PathBuf,
     sender: SuiAddress,
-    keypair: &AccountKeyPair,
+    keypair: &MyAccountKeyPair,
     gas_budget: u64,
     gas_price: u64,
 ) -> VerifiedTransaction {
@@ -332,7 +332,7 @@ pub fn make_counter_create_transaction(
     gas_object: ObjectRef,
     package_id: ObjectID,
     sender: SuiAddress,
-    keypair: &AccountKeyPair,
+    keypair: &MyAccountKeyPair,
     gas_price: u64,
 ) -> VerifiedTransaction {
     let data = TransactionData::new_move_call(
@@ -356,7 +356,7 @@ pub fn make_counter_increment_transaction(
     counter_id: ObjectID,
     counter_initial_shared_version: SequenceNumber,
     sender: SuiAddress,
-    keypair: &AccountKeyPair,
+    keypair: &MyAccountKeyPair,
     gas_price: u64,
 ) -> VerifiedTransaction {
     let data = TransactionData::new_move_call(

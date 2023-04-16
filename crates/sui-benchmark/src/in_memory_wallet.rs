@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, sync::Arc};
 use move_core_types::{identifier::Identifier, language_storage::TypeTag};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
-    crypto::AccountKeyPair,
+    crypto::MyAccountKeyPair,
     messages::{CallArg, TransactionData, TransactionDataAPI, VerifiedTransaction},
     object::Owner,
     utils::to_sender_signed_transaction,
@@ -19,7 +19,7 @@ use sui_types::messages::Command;
 /// A Sui account and all of the objects it owns
 #[derive(Debug)]
 pub struct SuiAccount {
-    key: Arc<AccountKeyPair>,
+    key: Arc<MyAccountKeyPair>,
     /// object this account uses to pay for gas
     pub gas: ObjectRef,
     /// objects owned by this account. does not include `gas`
@@ -28,7 +28,7 @@ pub struct SuiAccount {
 }
 
 impl SuiAccount {
-    pub fn new(key: Arc<AccountKeyPair>, gas: ObjectRef, objs: Vec<ObjectRef>) -> Self {
+    pub fn new(key: Arc<MyAccountKeyPair>, gas: ObjectRef, objs: Vec<ObjectRef>) -> Self {
         let owned = objs.into_iter().map(|obj| (obj.0, obj)).collect();
         SuiAccount { key, gas, owned }
     }
@@ -52,7 +52,7 @@ impl SuiAccount {
     }
 
     /// Get a ref to the keypair for this account
-    pub fn key(&self) -> &AccountKeyPair {
+    pub fn key(&self) -> &MyAccountKeyPair {
         self.key.as_ref()
     }
 }
@@ -75,7 +75,7 @@ impl InMemoryWallet {
     pub fn add_account(
         &mut self,
         addr: SuiAddress,
-        key: Arc<AccountKeyPair>,
+        key: Arc<MyAccountKeyPair>,
         gas: ObjectRef,
         objs: Vec<ObjectRef>,
     ) {
@@ -182,7 +182,7 @@ impl InMemoryWallet {
         )
     }
 
-    pub fn keypair(&self, addr: &SuiAddress) -> Option<Arc<AccountKeyPair>> {
+    pub fn keypair(&self, addr: &SuiAddress) -> Option<Arc<MyAccountKeyPair>> {
         self.accounts.get(addr).map(|a| a.key.clone())
     }
 
@@ -205,7 +205,7 @@ impl InMemoryWallet {
 
 pub fn move_call_pt_impl(
     sender: SuiAddress,
-    keypair: &AccountKeyPair,
+    keypair: &MyAccountKeyPair,
     package: ObjectID,
     module: &str,
     function: &str,

@@ -21,7 +21,7 @@ use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage, SuiPac
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{random_object_ref, ObjectID};
 use sui_types::crypto::{
-    generate_proof_of_possession, get_key_pair, AccountKeyPair, AuthorityPublicKeyBytes,
+    generate_proof_of_possession, get_key_pair, MyAccountKeyPair, AuthorityPublicKeyBytes,
     NetworkKeyPair, SuiKeyPair,
 };
 use sui_types::crypto::{AuthorityKeyPair, Signer};
@@ -177,7 +177,7 @@ async fn init_genesis(
         let authority_name = key_pair.public().into();
         let worker_key_pair: NetworkKeyPair = get_key_pair().1;
         let worker_name = worker_key_pair.public().clone();
-        let account_key_pair: SuiKeyPair = get_key_pair::<AccountKeyPair>().1.into();
+        let account_key_pair: SuiKeyPair = get_key_pair::<MyAccountKeyPair>().1.into();
         let network_key_pair: NetworkKeyPair = get_key_pair().1;
         let validator_info = ValidatorInfo {
             name: format!("validator-{i}"),
@@ -262,7 +262,7 @@ pub fn make_transfer_sui_transaction(
     recipient: SuiAddress,
     amount: Option<u64>,
     sender: SuiAddress,
-    keypair: &AccountKeyPair,
+    keypair: &MyAccountKeyPair,
     gas_price: u64,
 ) -> VerifiedTransaction {
     let data = TransactionData::new_transfer_sui(
@@ -282,7 +282,7 @@ pub fn make_pay_sui_transaction(
     recipients: Vec<SuiAddress>,
     amounts: Vec<u64>,
     sender: SuiAddress,
-    keypair: &AccountKeyPair,
+    keypair: &MyAccountKeyPair,
     gas_price: u64,
     gas_budget: u64,
 ) -> VerifiedTransaction {
@@ -297,7 +297,7 @@ pub fn make_transfer_object_transaction(
     object_ref: ObjectRef,
     gas_object: ObjectRef,
     sender: SuiAddress,
-    keypair: &AccountKeyPair,
+    keypair: &MyAccountKeyPair,
     recipient: SuiAddress,
     gas_price: u64,
 ) -> VerifiedTransaction {
@@ -314,7 +314,7 @@ pub fn make_transfer_object_transaction(
 
 pub fn make_transfer_object_move_transaction(
     src: SuiAddress,
-    keypair: &AccountKeyPair,
+    keypair: &MyAccountKeyPair,
     dest: SuiAddress,
     object_ref: ObjectRef,
     framework_obj_id: ObjectID,
@@ -347,7 +347,7 @@ pub fn make_transfer_object_move_transaction(
 pub fn make_dummy_tx(
     receiver: SuiAddress,
     sender: SuiAddress,
-    sender_sec: &AccountKeyPair,
+    sender_sec: &MyAccountKeyPair,
 ) -> VerifiedTransaction {
     Transaction::from_data_and_signer(
         TransactionData::new_transfer(

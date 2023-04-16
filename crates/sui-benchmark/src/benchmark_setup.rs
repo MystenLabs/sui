@@ -12,7 +12,7 @@ use tracing::debug;
 
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
-use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
+use sui_types::crypto::{deterministic_random_account_key, MyAccountKeyPair};
 use tokio::time::sleep;
 
 use crate::bank::BenchmarkBank;
@@ -84,7 +84,7 @@ impl Env {
         num_server_threads: u64,
     ) -> Result<BenchmarkSetup> {
         info!("Running benchmark setup in local mode..");
-        let (address, keypair): (SuiAddress, AccountKeyPair) = deterministic_random_account_key();
+        let (address, keypair): (SuiAddress, MyAccountKeyPair) = deterministic_random_account_key();
         let generated_gas = generate_max_test_gas_objects_with_owner(1, address);
         let (mut network_config, generated_gas) =
             test_and_configure_authority_configs_with_objects(committee_size, generated_gas);

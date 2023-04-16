@@ -16,7 +16,7 @@ use sui_types::messages::{
 use sui_types::utils::to_sender_signed_transaction;
 
 use crate::workloads::Gas;
-use sui_types::crypto::{AccountKeyPair, KeypairTraits};
+use sui_types::crypto::{MyAccountKeyPair, KeypairTraits};
 use test_utils::messages::create_publish_move_package_transaction;
 use test_utils::transaction::parse_package_ref;
 
@@ -28,10 +28,10 @@ pub type UpdatedAndNewlyMintedGasCoins = Vec<Gas>;
 pub fn get_ed25519_keypair_from_keystore(
     keystore_path: PathBuf,
     requested_address: &SuiAddress,
-) -> Result<AccountKeyPair> {
+) -> Result<MyAccountKeyPair> {
     let keystore = FileBasedKeystore::new(&keystore_path)?;
     match keystore.get_key(requested_address) {
-        Ok(SuiKeyPair::Ed25519(kp)) => Ok(kp.copy()),
+        Ok(SuiKeyPair::Secp256k1(kp)) => Ok(kp.copy()),
         other => Err(anyhow::anyhow!("Invalid key type: {:?}", other)),
     }
 }
@@ -42,7 +42,7 @@ pub fn make_pay_tx(
     addresses: Vec<SuiAddress>,
     split_amounts: Vec<u64>,
     gas: ObjectRef,
-    keypair: &AccountKeyPair,
+    keypair: &MyAccountKeyPair,
     gas_price: u64,
 ) -> Result<VerifiedTransaction> {
     let pay = TransactionData::new_pay(
@@ -61,7 +61,7 @@ pub async fn publish_basics_package(
     gas: ObjectRef,
     proxy: Arc<dyn ValidatorProxy + Sync + Send>,
     sender: SuiAddress,
-    keypair: &AccountKeyPair,
+    keypair: &MyAccountKeyPair,
     gas_price: u64,
 ) -> ObjectRef {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
