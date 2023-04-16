@@ -10999,6 +10999,7 @@ dependencies = [
  "eyre",
  "fdlimit",
  "hdrhistogram",
+ "itertools",
  "msim",
  "num_cpus",
  "once_cell",
