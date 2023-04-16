@@ -4,6 +4,7 @@
 
 use crate::authority_client::AuthorityAPI;
 use crate::epoch::committee_store::CommitteeStore;
+use fastcrypto::encoding::Encoding;
 use mysten_metrics::histogram::{Histogram, HistogramVec};
 use prometheus::core::GenericCounter;
 use prometheus::{register_int_counter_vec_with_registry, IntCounterVec, Registry};
@@ -19,7 +20,7 @@ use sui_types::{
     messages::*,
 };
 use tap::TapFallible;
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 
 macro_rules! check_error {
     ($address:expr, $cond:expr, $msg:expr) => {
@@ -239,10 +240,17 @@ impl<C> SafeClient<C> {
                             transaction.into_message(),
                             cert,
                         );
-                        let ct_bytes = bcs::to_bytes(&ct);
                         ct.verify_signature(&committee).tap_err(|e| {
-                            // This may not deserve an Error level log, but it's useful for debugging for now.
-                            error!(?digest, ?ct, ?ct_bytes, "Received invalid tx cert {}", e)
+                            // TODO: We show the below messages for debugging purposes re. incident #267. When this is fixed, we should remove them again.
+                            warn!(?digest, ?ct, "Received invalid tx cert: {}", e);
+                            let ct_bytes =
+                                fastcrypto::encoding::Base64::encode(bcs::to_bytes(&ct).unwrap());
+                            warn!(
+                                ?digest,
+                                ?ct_bytes,
+                                "Received invalid tx cert (serialized): {}",
+                                e
+                            );
                         })?;
                         let ct = VerifiedCertificate::new_from_verified(ct);
                         Ok(PlainTransactionInfoResponse::ExecutedWithCert(
