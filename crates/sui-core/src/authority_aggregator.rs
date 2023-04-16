@@ -42,6 +42,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::string::ToString;
 use std::sync::Arc;
 use std::time::Duration;
+use rand::{Rng, RngCore};
 use sui_types::committee::{CommitteeWithNetworkMetadata, StakeUnit};
 use tap::TapFallible;
 use tokio::time::{sleep, timeout};
@@ -970,7 +971,7 @@ where
     ) -> Result<ProcessTransactionResult, AggregatorProcessTransactionError> {
         // Now broadcast the transaction to all authorities.
         let tx_digest = transaction.digest();
-        debug!(
+        warn!(
             tx_digest = ?tx_digest,
             "Broadcasting transaction request to authorities"
         );
@@ -1192,20 +1193,20 @@ where
     ) -> SuiResult<Option<ProcessTransactionResult>> {
         match response {
             Ok(PlainTransactionInfoResponse::Signed(signed)) => {
-                debug!(?tx_digest, name=?name.concise(), weight, "Received signed transaction from validator handle_transaction");
+                warn!(?tx_digest, name=?name.concise(), weight, "Received signed transaction from validator handle_transaction");
                 self.handle_transaction_response_with_signed(state, signed)
                     .tap_ok(|opt_cert| {
                         if let Some(cert) = opt_cert.as_ref() {
-                            debug!(?tx_digest, ?cert, "Collected tx certificate for digest")
+                            warn!(?tx_digest, "Collected tx certificate for digest")
                         }
                     })
             }
             Ok(PlainTransactionInfoResponse::ExecutedWithCert(cert, effects, events)) => {
-                debug!(?tx_digest, name=?name.concise(), weight, "Received prev certificate and effects from validator handle_transaction");
+                warn!(?tx_digest, name=?name.concise(), weight, "Received prev certificate and effects from validator handle_transaction");
                 self.handle_transaction_response_with_executed(state, Some(cert), effects, events)
             }
             Ok(PlainTransactionInfoResponse::ExecutedWithoutCert(_, effects, events)) => {
-                debug!(?tx_digest, name=?name.concise(), weight, "Received prev effects from validator handle_transaction");
+                warn!(?tx_digest, name=?name.concise(), weight, "Received prev effects from validator handle_transaction");
                 self.handle_transaction_response_with_executed(state, None, effects, events)
             }
             Err(err) => Err(err),
@@ -1403,25 +1404,30 @@ where
         let threshold = self.committee.quorum_threshold();
         let validity = self.committee.validity_threshold();
         let cert_bytes = bcs::to_bytes(cert_ref);
-        debug!(
+        warn!(
             ?tx_digest,
             quorum_threshold = threshold,
             validity_threshold = validity,
             ?timeout_after_quorum,
-            ?cert_ref,
-            ?cert_bytes,
             "Broadcasting certificate to authorities"
         );
         self.quorum_map_then_reduce_with_timeout(
             state,
             |name, client| {
                 Box::pin(async move {
-                    client
-                        .handle_certificate(cert_ref.clone())
-                        .instrument(
-                            tracing::trace_span!("handle_certificate", authority =? name.concise()),
-                        )
-                        .await
+                    let b = rand::thread_rng().next_u32() % 10;
+                    if b == 0 {
+                        warn!(?tx_digest, "failed");
+                        Err(SuiError::TimeoutError)
+                    }
+                    else {
+                        client
+                            .handle_certificate(cert_ref.clone())
+                            .instrument(
+                                tracing::trace_span!("handle_certificate", authority =? name.concise()),
+                            )
+                            .await
+                    }
                 })
             },
             |mut state, name, weight, response| {
@@ -1478,7 +1484,7 @@ where
         )
         .await
         .map_err(|state| {
-            debug!(
+            warn!(
                 ?tx_digest,
                 num_unique_effects = state.effects_map.unique_key_count(),
                 non_retryable_stake = state.non_retryable_stake,
@@ -1587,6 +1593,8 @@ where
             .instrument(tracing::debug_span!("process_cert"))
             .await?;
 
+        let d = transaction.digest();
+        warn!(?d, "completed");
         Ok(response.0)
     }
 

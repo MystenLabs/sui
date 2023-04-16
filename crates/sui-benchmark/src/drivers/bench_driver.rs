@@ -428,6 +428,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                 let metrics_cloned = metrics_cloned.clone();
                                 // TODO: clone committee for each request is not ideal.
                                 let committee_cloned = Arc::new(worker.proxy.clone_committee());
+                                let tx2 = tx.clone();
                                 let res = worker.proxy
                                     .execute_transaction_block(tx.clone().into())
                                 .then(|res| async move {
@@ -460,6 +461,9 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                         }
                                     }
                                 });
+                                let d = tx2.digest().clone();
+                                let _ = worker.proxy.execute_transaction_block(tx2.clone().into()).await;
+                                tracing::warn!(?d, "second");
                                 futures.push(Box::pin(res));
                             }
                         }

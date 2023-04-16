@@ -69,7 +69,7 @@ impl Payload for TransferObjectTestPayload {
     }
     fn make_transaction(&mut self) -> VerifiedTransaction {
         let (gas_obj, _, keypair) = self.gas.iter().find(|x| x.1 == self.transfer_from).unwrap();
-        if self.verified_tx.is_none() || self.repeated > 15 {
+        if self.verified_tx.is_none() || self.repeated == 0 {
             let vtx = make_transfer_object_transaction(
                 self.transfer_object,
                 *gas_obj,
@@ -83,6 +83,8 @@ impl Payload for TransferObjectTestPayload {
             );
             self.verified_tx = Some(vtx.clone());
             self.repeated = 0;
+            let d = vtx.digest();
+            tracing::warn!(?d, "sending tx");
             vtx
         } else {
             let vtx = self.verified_tx.clone().unwrap();
