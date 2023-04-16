@@ -156,7 +156,7 @@ impl LocalAuthorityClient {
             .into_inner();
 
         let events = if let Some(digest) = signed_effects.events_digest() {
-            state.get_transaction_events(digest)?
+            state.get_transaction_events(digest).await?
         } else {
             TransactionEvents::default()
         };

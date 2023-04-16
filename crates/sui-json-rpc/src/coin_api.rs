@@ -2,14 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
-use std::sync::Arc;
 
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 use move_core_types::language_storage::{StructTag, TypeTag};
+use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
 use tracing::debug;
 
+use mysten_metrics::spawn_monitored_task;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{Balance, Coin as SuiCoin};
 use sui_json_rpc_types::{CoinPage, SuiCoinMetadata};
@@ -37,7 +39,7 @@ impl CoinReadApi {
         Self { state, metrics }
     }
 
-    fn get_coins_iterator(
+    async fn get_coins_iterator(
         &self,
         owner: SuiAddress,
         cursor: (String, ObjectID),
@@ -46,22 +48,30 @@ impl CoinReadApi {
     ) -> anyhow::Result<CoinPage> {
         let limit = cap_page_limit(limit);
         self.metrics.get_coins_limit.report(limit as u64);
-        let coins = self
-            .state
-            .get_owned_coins_iterator_with_cursor(owner, cursor, limit + 1, one_coin_type_only)?
-            .map(|(coin_type, obj_id, coin)| (coin_type, obj_id, coin));
+        let state = self.state.clone();
 
-        let mut data = coins
-            .map(|(coin_type, coin_object_id, coin)| SuiCoin {
-                coin_type,
-                coin_object_id,
-                version: coin.version,
-                digest: coin.digest,
-                balance: coin.balance,
-                locked_until_epoch: None,
-                previous_transaction: coin.previous_transaction,
-            })
-            .collect::<Vec<_>>();
+        let mut data = spawn_monitored_task!(async move {
+            Ok::<_, SuiError>(
+                state
+                    .get_owned_coins_iterator_with_cursor(
+                        owner,
+                        cursor,
+                        limit + 1,
+                        one_coin_type_only,
+                    )?
+                    .map(|(coin_type, coin_object_id, coin)| SuiCoin {
+                        coin_type,
+                        coin_object_id,
+                        version: coin.version,
+                        digest: coin.digest,
+                        balance: coin.balance,
+                        locked_until_epoch: None,
+                        previous_transaction: coin.previous_transaction,
+                    })
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .await??;
 
         let has_next_page = data.len() > limit;
         data.truncate(limit);
@@ -85,20 +95,26 @@ impl CoinReadApi {
     ) -> Result<Object, Error> {
         let publish_txn_digest = self
             .state
-            .get_object_read(package_id)?
+            .get_object_read(package_id)
+            .await?
             .into_object()?
             .previous_transaction;
+
         let (_, effect) = self
             .state
             .get_executed_transaction_and_effects(publish_txn_digest)
             .await?;
-        let created: &[(ObjectRef, Owner)] = effect.created();
 
-        let object_id = async {
+        async fn find_object_with_type(
+            state: &Arc<AuthorityState>,
+            created: &[(ObjectRef, Owner)],
+            object_struct_tag: &StructTag,
+            package_id: &ObjectID,
+        ) -> Result<ObjectID, anyhow::Error> {
             for ((id, version, _), _) in created {
-                if let Ok(past_object) = self.state.get_past_object_read(id, *version) {
+                if let Ok(past_object) = state.get_past_object_read(id, *version).await {
                     if let Ok(object) = past_object.into_object() {
-                        if matches!(object.type_(), Some(type_) if type_.is(&object_struct_tag)) {
+                        if matches!(object.type_(), Some(type_) if type_.is(object_struct_tag)) {
                             return Ok(*id);
                         }
                     }
@@ -110,8 +126,19 @@ impl CoinReadApi {
                 package_id
             ))
         }
+
+        let object_id = find_object_with_type(
+            &self.state,
+            effect.created(),
+            &object_struct_tag,
+            package_id,
+        )
         .await?;
-        Ok(self.state.get_object_read(&object_id)?.into_object()?)
+        Ok(self
+            .state
+            .get_object_read(&object_id)
+            .await?
+            .into_object()?)
     }
 }
 
@@ -146,9 +173,11 @@ impl CoinReadApiServer for CoinReadApi {
             None => (coin_type_tag.to_string(), ObjectID::ZERO),
         };
 
-        let coins = self.get_coins_iterator(
-            owner, cursor, limit, true, // only care about one type of coin
-        )?;
+        let coins = self
+            .get_coins_iterator(
+                owner, cursor, limit, true, // only care about one type of coin
+            )
+            .await?;
 
         Ok(coins)
     }
@@ -188,9 +217,11 @@ impl CoinReadApiServer for CoinReadApi {
             }
         }?;
 
-        let coins = self.get_coins_iterator(
-            owner, cursor, limit, false, // return all types of coins
-        )?;
+        let coins = self
+            .get_coins_iterator(
+                owner, cursor, limit, false, // return all types of coins
+            )
+            .await?;
 
         Ok(coins)
     }

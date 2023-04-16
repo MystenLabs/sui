@@ -227,9 +227,7 @@ where
             .await?)
     }
 
-    // TODO: remove this after `futures::executor::block_on` is removed. @Ge @Chris
-    #[allow(clippy::disallowed_methods)]
-    fn try_get_past_object(
+    async fn try_get_past_object(
         &self,
         object_id: ObjectID,
         version: SequenceNumber,
@@ -240,10 +238,10 @@ where
             .indexer_metrics()
             .try_get_past_object_latency
             .start_timer();
-        let past_obj_resp = block_on(
-            self.fullnode
-                .try_get_past_object(object_id, version, options),
-        );
+        let past_obj_resp = self
+            .fullnode
+            .try_get_past_object(object_id, version, options)
+            .await;
         past_obj_guard.stop_and_record();
         past_obj_resp
     }

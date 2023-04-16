@@ -130,12 +130,11 @@ impl JsonRpcServerBuilder {
             })
             .unwrap_or(u32::MAX);
 
-        let metrics_logger = MetricsLogger::new(&self.registry, &methods_names);
-
         let disable_routing = env::var("DISABLE_BACKWARD_COMPATIBILITY")
             .ok()
             .and_then(|v| bool::from_str(&v).ok())
             .unwrap_or_default();
+
         info!(
             "Compatibility method routing {}.",
             if disable_routing {
@@ -144,14 +143,16 @@ impl JsonRpcServerBuilder {
                 "enabled"
             }
         );
-        // We need to use the routing layer to block access to the old methods when routing is disabled.
-        let routing_layer = RoutingLayer::new(routing, disable_routing);
-
-        let middleware = tower::ServiceBuilder::new()
-            .layer(cors)
-            .layer(routing_layer);
-
         let handle = thread::spawn(move || {
+            // We need to use the routing layer to block access to the old methods when routing is disabled.
+            let routing_layer = RoutingLayer::new(routing, disable_routing);
+
+            let middleware = tower::ServiceBuilder::new()
+                .layer(cors)
+                .layer(routing_layer);
+
+            let metrics_logger = MetricsLogger::new(&self.registry, &methods_names);
+
             let rt = tokio::runtime::Builder::new_multi_thread()
                 .thread_name("sui-node-jsonrpc-worker")
                 .enable_all()

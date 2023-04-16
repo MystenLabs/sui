@@ -125,23 +125,29 @@ impl TransactionExecutionApi {
 
                 let object_cache = ObjectProviderCache::new(self.state.clone());
                 let balance_changes = if opts.show_balance_changes {
-                    Some(get_balance_changes_from_effect(
-                        &object_cache,
-                        &effects.effects,
-                        input_objs,
-                        None,
-                    )?)
+                    Some(
+                        get_balance_changes_from_effect(
+                            &object_cache,
+                            &effects.effects,
+                            input_objs,
+                            None,
+                        )
+                        .await?,
+                    )
                 } else {
                     None
                 };
                 let object_changes = if opts.show_object_changes {
-                    Some(get_object_changes(
-                        &object_cache,
-                        sender,
-                        effects.effects.modified_at_versions(),
-                        effects.effects.all_changed_objects(),
-                        effects.effects.all_deleted(),
-                    )?)
+                    Some(
+                        get_object_changes(
+                            &object_cache,
+                            sender,
+                            effects.effects.modified_at_versions(),
+                            effects.effects.all_changed_objects(),
+                            effects.effects.all_deleted(),
+                        )
+                        .await?,
+                    )
                 } else {
                     None
                 };
@@ -180,14 +186,16 @@ impl TransactionExecutionApi {
             &transaction_effects,
             input_objs,
             mock_gas,
-        )?;
+        )
+        .await?;
         let object_changes = get_object_changes(
             &object_cache,
             sender,
             transaction_effects.modified_at_versions(),
             transaction_effects.all_changed_objects(),
             transaction_effects.all_deleted(),
-        )?;
+        )
+        .await?;
 
         Ok(DryRunTransactionBlockResponse {
             effects: resp.effects,
