@@ -45,7 +45,7 @@ use sui_config::genesis::Genesis;
 use sui_config::node::{
     AuthorityStorePruningConfig, DBCheckpointConfig, ExpensiveSafetyCheckConfig,
 };
-use sui_framework::BuiltInFramework;
+use sui_framework::{BuiltInFramework, SystemPackage};
 use sui_json_rpc_types::{
     Checkpoint, DevInspectResults, DryRunTransactionBlockResponse, EventFilter, SuiEvent,
     SuiMoveValue, SuiObjectDataFilter, SuiTransactionBlockData, SuiTransactionBlockEvents,
@@ -3169,11 +3169,22 @@ impl AuthorityState {
                 None => TransactionDigest::genesis(),
             };
 
-            let system_package = BuiltInFramework::get_package_by_id(&system_package_ref.0);
-            let bytes = system_package.bytes().to_vec();
             #[cfg(msim)]
-            let bytes = framework_injection::get_override_bytes(&system_package_ref.0, self.name)
-                .unwrap_or(bytes);
+            let SystemPackage {
+                id: _,
+                bytes,
+                dependencies,
+            } = framework_injection::get_override_system_package(&system_package_ref.0, self.name)
+                .unwrap_or_else(|| {
+                    BuiltInFramework::get_package_by_id(&system_package_ref.0).clone()
+                });
+
+            #[cfg(not(msim))]
+            let SystemPackage {
+                id: _,
+                bytes,
+                dependencies,
+            } = BuiltInFramework::get_package_by_id(&system_package_ref.0).clone();
 
             let modules: Vec<_> = bytes
                 .iter()
@@ -3186,7 +3197,7 @@ impl AuthorityState {
             let new_object = Object::new_system_package(
                 &modules,
                 system_package_ref.1,
-                system_package.dependencies().to_vec(),
+                dependencies.clone(),
                 prev_transaction,
             );
 
@@ -3198,11 +3209,7 @@ impl AuthorityState {
                 return None;
             }
 
-            res.push((
-                system_package_ref.1,
-                bytes,
-                system_package.dependencies().to_vec(),
-            ));
+            res.push((system_package_ref.1, bytes, dependencies));
         }
 
         Some(res)
@@ -3628,6 +3635,7 @@ pub mod framework_injection {
     use std::{cell::RefCell, collections::BTreeSet};
     use sui_framework::{BuiltInFramework, SystemPackage};
     use sui_types::base_types::{AuthorityName, ObjectID};
+    use sui_types::is_system_package;
 
     type FrameworkOverrideConfig = BTreeMap<ObjectID, PackageOverrideConfig>;
 
@@ -3696,6 +3704,26 @@ pub mod framework_injection {
         })
     }
 
+    pub fn get_override_system_package(
+        package_id: &ObjectID,
+        name: AuthorityName,
+    ) -> Option<SystemPackage> {
+        let bytes = get_override_bytes(package_id, name)?;
+        let dependencies = if is_system_package(*package_id) {
+            BuiltInFramework::get_package_by_id(package_id)
+                .dependencies()
+                .to_vec()
+        } else {
+            // Assume that entirely new injected packages depend on all existing system packages.
+            BuiltInFramework::all_package_ids()
+        };
+        Some(SystemPackage {
+            id: *package_id,
+            bytes,
+            dependencies,
+        })
+    }
+
     pub fn get_extra_packages(name: AuthorityName) -> Vec<SystemPackage> {
         let built_in = BTreeSet::from_iter(BuiltInFramework::all_package_ids().into_iter());
         let extra: Vec<ObjectID> = OVERRIDE.with(|cfg| {
@@ -3707,12 +3735,10 @@ pub mod framework_injection {
 
         extra
             .into_iter()
-            .map(|package| {
-                SystemPackage::new(
-                    package,
-                    get_override_bytes(&package, name).unwrap(),
-                    BuiltInFramework::all_package_ids(),
-                )
+            .map(|package| SystemPackage {
+                id: package,
+                bytes: get_override_bytes(&package, name).unwrap(),
+                dependencies: BuiltInFramework::all_package_ids(),
             })
             .collect()
     }

@@ -26,28 +26,20 @@ pub mod natives;
 
 /// Represents a system package in the framework, that's built from the source code inside
 /// sui-framework.
-#[derive(Serialize, PartialEq, Eq, Deserialize)]
+#[derive(Clone, Serialize, PartialEq, Eq, Deserialize)]
 pub struct SystemPackage {
-    id: ObjectID,
-    bytes: Vec<Vec<u8>>,
-    dependencies: Vec<ObjectID>,
+    pub id: ObjectID,
+    pub bytes: Vec<Vec<u8>>,
+    pub dependencies: Vec<ObjectID>,
 }
 
 impl SystemPackage {
-    pub fn from_bcs(id: ObjectID, raw_bytes: &'static [u8], dependencies: &[ObjectID]) -> Self {
+    pub fn new(id: ObjectID, raw_bytes: &'static [u8], dependencies: &[ObjectID]) -> Self {
         let bytes: Vec<Vec<u8>> = bcs::from_bytes(raw_bytes).unwrap();
         Self {
             id,
             bytes,
             dependencies: dependencies.to_vec(),
-        }
-    }
-
-    pub fn new(id: ObjectID, bytes: Vec<Vec<u8>>, dependencies: Vec<ObjectID>) -> Self {
-        Self {
-            id,
-            bytes,
-            dependencies,
         }
     }
 
@@ -101,7 +93,7 @@ macro_rules! define_system_packages {
     ([$(($id:expr, $path:expr, $deps:expr)),* $(,)?]) => {{
         static PACKAGES: Lazy<Vec<SystemPackage>> = Lazy::new(|| {
             vec![
-                $(SystemPackage::from_bcs(
+                $(SystemPackage::new(
                     $id,
                     include_bytes!(concat!(env!("OUT_DIR"), "/", $path)),
                     &$deps,
