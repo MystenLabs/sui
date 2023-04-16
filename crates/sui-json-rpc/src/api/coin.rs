@@ -38,7 +38,7 @@ pub trait CoinReadApi {
     ) -> RpcResult<CoinPage>;
 
     /// Return the total coin balance for one coin type, owned by the address owner.
-    #[method(name = "getBalance")]
+    #[method(name = "getBalance", blocking)]
     fn get_balance(
         &self,
         /// the owner's Sui address
@@ -48,7 +48,7 @@ pub trait CoinReadApi {
     ) -> RpcResult<Balance>;
 
     /// Return the total coin balance for all coin type, owned by the address owner.
-    #[method(name = "getAllBalances")]
+    #[method(name = "getAllBalances", blocking)]
     fn get_all_balances(
         &self,
         /// the owner's Sui address
