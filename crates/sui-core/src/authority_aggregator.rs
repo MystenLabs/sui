@@ -1404,7 +1404,6 @@ where
         let threshold = self.committee.quorum_threshold();
         let validity = self.committee.validity_threshold();
 
-        // TODO: We show the below messages for debugging purposes re. incident #267. When this is fixed, we should remove them again.
         info!(
             ?tx_digest,
             quorum_threshold = threshold,
@@ -1413,6 +1412,7 @@ where
             ?cert_ref,
             "Broadcasting certificate to authorities"
         );
+        // TODO: We show the below messages for debugging purposes re. incident #267. When this is fixed, we should remove them again.
         let cert_bytes = fastcrypto::encoding::Base64::encode(bcs::to_bytes(cert_ref).unwrap());
         info!(
             ?tx_digest,
