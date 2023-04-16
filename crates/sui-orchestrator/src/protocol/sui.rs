@@ -155,7 +155,6 @@ impl ProtocolCommands<SuiBenchmarkType> for SuiProtocol {
         .collect();
 
         let clients: Vec<_> = instances.into_iter().collect();
-        let committee_size = parameters.nodes;
         let load_share = parameters.load / clients.len();
         let shared_counter = parameters.benchmark_type.shared_objects_ratio;
         let transfer_objects = 100 - shared_counter;
@@ -167,8 +166,10 @@ impl ProtocolCommands<SuiBenchmarkType> for SuiProtocol {
             .map(|(i, instance)| {
                 let genesis = genesis_path.display();
                 let keystore = keystore_path.display();
-                let gas_id =
-                    GenesisConfig::benchmark_gas_object_id_offsets(committee_size * 2)[i].clone();
+                let gas_id = GenesisConfig::benchmark_gas_object_id_offsets(
+                    GenesisConfig::BENCHMARKS_NUM_GENESIS_OBJECTS,
+                )[i]
+                    .clone();
 
                 let run = [
                     "cargo run --release --bin stress --",

@@ -255,6 +255,8 @@ impl GenesisConfig {
     pub const BENCHMARKS_RNG_SEED: u64 = 0;
     /// Port offset for benchmarks' genesis configs.
     pub const BENCHMARKS_PORT_OFFSET: usize = 500;
+    /// The number of gas objects to include in the genesis.
+    pub const BENCHMARKS_NUM_GENESIS_OBJECTS: usize = 50;
 
     pub fn for_local_testing() -> Self {
         Self::custom_genesis(
@@ -364,14 +366,15 @@ impl GenesisConfig {
 
         // Generate one genesis gas object per validator (this seems a good rule of thumb to produce
         // enough gas objects for most types of benchmarks).
-        let genesis_gas_objects = Self::benchmark_gas_object_id_offsets(ips.len() * 2)
-            .into_iter()
-            .map(|id| ObjectConfigRange {
-                offset: id,
-                count: 5000,
-                gas_value: 18446744073709551615,
-            })
-            .collect();
+        let genesis_gas_objects =
+            Self::benchmark_gas_object_id_offsets(Self::BENCHMARKS_NUM_GENESIS_OBJECTS)
+                .into_iter()
+                .map(|id| ObjectConfigRange {
+                    offset: id,
+                    count: 5000,
+                    gas_value: 18446744073709551615,
+                })
+                .collect();
 
         // Make a predictable address that will own all gas objects.
         let gas_key = Self::benchmark_gas_key();
