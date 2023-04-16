@@ -12,8 +12,8 @@ use anyhow::anyhow;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{ModuleId, StructTag};
 use rocksdb::SliceTransform;
-use sui_types::base_types::SUI_ADDRESS_LENGTH;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use sui_types::base_types::SUI_ADDRESS_LENGTH;
 use sui_types::temporary_store::TxCoins;
 use tracing::{debug, trace};
 
@@ -177,7 +177,9 @@ fn coin_index_table_default_config() -> DBOptions {
     // * 2: hex encoding
     // + 2: 0x prefix
     let prefix_length = SUI_ADDRESS_LENGTH * 2 + 2;
-    options.options.set_prefix_extractor(SliceTransform::create_fixed_prefix(prefix_length));
+    options
+        .options
+        .set_prefix_extractor(SliceTransform::create_fixed_prefix(prefix_length));
     DBOptions {
         options: options.options,
         rw_options: ReadWriteOptions {

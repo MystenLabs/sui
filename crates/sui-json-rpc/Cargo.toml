@@ -29,6 +29,7 @@ tokio = { workspace = true, features = ["full"] }
 signature = "1.6.0"
 thiserror = "1.0.37"
 bcs = "0.1.4"
+num_cpus = "1.14.0"
 eyre = "0.6.8"
 
 tap = "1.0"

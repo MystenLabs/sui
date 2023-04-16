@@ -88,7 +88,10 @@ impl JsonRpcServerBuilder {
         Ok(self.module.merge(module.rpc())?)
     }
 
-    pub async fn start(mut self, listen_address: SocketAddr) -> Result<ServerHandle, Error> {
+    pub async fn start(
+        mut self,
+        listen_address: SocketAddr,
+    ) -> Result<(ServerHandle, tokio::runtime::Runtime), Error> {
         let acl = match env::var("ACCESS_CONTROL_ALLOW_ORIGIN") {
             Ok(value) => {
                 let allow_hosts = value
@@ -150,10 +153,31 @@ impl JsonRpcServerBuilder {
             .layer(cors)
             .layer(routing_layer);
 
+        let worker_threads = std::option_env!("JSONRPC_RUNTIME_WORKER_THREADS")
+            .map(|s| {
+                s.parse()
+                    .expect("Invalid JSONRPC_RUNTIME_WORKER_THREADS env")
+            })
+            .unwrap_or(num_cpus::get());
+        let max_blocking_threads = std::option_env!("JSONRPC_RUNTIME_MAX_BLOCKING_THREADS")
+            .map(|s| {
+                s.parse()
+                    .expect("Invalid JSONRPC_RUNTIME_MAX_BLOCKING_THREADS env")
+            })
+            .unwrap_or(512);
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .thread_name("sui-node-jsonrpc-worker")
+            .enable_all()
+            .worker_threads(worker_threads)
+            .max_blocking_threads(max_blocking_threads)
+            .build()
+            .unwrap();
+
         let server = ServerBuilder::default()
             .batch_requests_supported(false)
             .max_response_body_size(MAX_REQUEST_SIZE)
             .max_connections(max_connection)
+            .custom_tokio_runtime(runtime.handle().clone())
             .set_host_filtering(AllowHosts::Any)
             .set_middleware(middleware)
             .set_logger(metrics_logger)
@@ -165,7 +189,7 @@ impl JsonRpcServerBuilder {
         info!(local_addr =? addr, "Sui JSON-RPC server listening on {addr}");
         info!("Available JSON-RPC methods : {:?}", methods_names);
 
-        Ok(handle)
+        Ok((handle, runtime))
     }
 }
 

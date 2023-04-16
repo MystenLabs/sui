@@ -23,6 +23,7 @@ use sui_core::consensus_adapter::LazyNarwhalClient;
 use sui_json_rpc::api::JsonRpcMetrics;
 use sui_types::sui_system_state::SuiSystemState;
 use tap::tap::TapFallible;
+use tokio::runtime::Runtime;
 use tokio::sync::broadcast;
 use tokio::sync::oneshot;
 use tokio::sync::{watch, Mutex};
@@ -117,7 +118,7 @@ pub struct ValidatorComponents {
 pub struct SuiNode {
     config: NodeConfig,
     validator_components: Mutex<Option<ValidatorComponents>>,
-    _json_rpc_service: Option<ServerHandle>,
+    _json_rpc_service: Option<(ServerHandle, Runtime)>,
     state: Arc<AuthorityState>,
     transaction_orchestrator: Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
     registry_service: RegistryService,
@@ -1133,7 +1134,7 @@ pub async fn build_server(
     transaction_orchestrator: &Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
     config: &NodeConfig,
     prometheus_registry: &Registry,
-) -> Result<Option<ServerHandle>> {
+) -> Result<Option<(ServerHandle, Runtime)>> {
     // Validators do not expose these APIs
     if config.consensus_config().is_some() {
         return Ok(None);

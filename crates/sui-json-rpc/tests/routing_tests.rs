@@ -24,7 +24,7 @@ async fn test_rpc_backward_compatibility() {
     builder.register_module(TestApiModule).unwrap();
 
     let port = get_available_port("0.0.0.0");
-    let handle = builder
+    let (handle, _runtime) = builder
         .start(SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port)))
         .await
         .unwrap();
@@ -108,7 +108,7 @@ async fn test_disable_routing() {
     builder.register_module(TestApiModule).unwrap();
 
     let port = get_available_port("0.0.0.0");
-    let handle = builder
+    let (handle, _runtime) = builder
         .start(SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port)))
         .await
         .unwrap();

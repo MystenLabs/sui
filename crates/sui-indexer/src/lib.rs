@@ -28,6 +28,7 @@ use prometheus::{Registry, TextEncoder};
 use regex::Regex;
 use rustls::client::{ServerCertVerified, ServerCertVerifier};
 use rustls::{Certificate, Error, ServerName};
+use tokio::runtime::Runtime;
 use tracing::{info, warn};
 use url::Url;
 
@@ -166,7 +167,7 @@ impl Indexer {
 
         if config.rpc_server_worker && config.fullnode_sync_worker {
             info!("Starting indexer with both fullnode sync and RPC server");
-            let handle =
+            let (handle, _runtime) =
                 build_json_rpc_server(registry, store.clone(), event_handler.clone(), config)
                     .await
                     .expect("Json rpc server should not run into errors upon start.");
@@ -192,7 +193,7 @@ impl Indexer {
             .await
         } else if config.rpc_server_worker {
             info!("Starting indexer with only RPC server");
-            let handle =
+            let (handle, _runtime) =
                 build_json_rpc_server(registry, store.clone(), event_handler.clone(), config)
                     .await
                     .expect("Json rpc server should not run into errors upon start.");
@@ -365,7 +366,7 @@ pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clo
     state: S,
     event_handler: Arc<EventHandler>,
     config: &IndexerConfig,
-) -> Result<ServerHandle, IndexerError> {
+) -> Result<(ServerHandle, Runtime), IndexerError> {
     let mut builder = JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry);
     let http_client = get_http_client(config.rpc_client_url.as_str())?;
 
