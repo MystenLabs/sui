@@ -83,7 +83,7 @@ pub enum Operation {
         crash_interval: Duration,
 
         /// The minimum duration of the benchmark in seconds.
-        #[clap(long, value_parser = parse_duration, default_value = "300", global = true)]
+        #[clap(long, value_parser = parse_duration, default_value = "600", global = true)]
         duration: Duration,
 
         /// The interval between measurements collection in seconds.

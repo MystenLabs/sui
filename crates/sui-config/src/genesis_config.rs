@@ -391,6 +391,7 @@ impl GenesisConfig {
         // genesis; it is thus important they have the same parameters.
         let parameters = GenesisCeremonyParameters {
             chain_start_timestamp_ms: 0,
+            epoch_duration_ms: 1000 * 60 * 15, // 15 minutes
             ..GenesisCeremonyParameters::new()
         };
 
