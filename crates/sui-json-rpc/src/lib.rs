@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::env;
 use std::net::SocketAddr;
 use std::str::FromStr;
+use std::thread::JoinHandle;
+use std::{env, thread};
 
 use hyper::header::HeaderName;
 use hyper::header::HeaderValue;
@@ -88,7 +89,7 @@ impl JsonRpcServerBuilder {
         Ok(self.module.merge(module.rpc())?)
     }
 
-    pub async fn start(mut self, listen_address: SocketAddr) -> Result<ServerHandle, Error> {
+    pub async fn start(mut self, listen_address: SocketAddr) -> Result<JoinHandle<()>, Error> {
         let acl = match env::var("ACCESS_CONTROL_ALLOW_ORIGIN") {
             Ok(value) => {
                 let allow_hosts = value
@@ -150,21 +151,33 @@ impl JsonRpcServerBuilder {
             .layer(cors)
             .layer(routing_layer);
 
-        let server = ServerBuilder::default()
-            .batch_requests_supported(false)
-            .max_response_body_size(MAX_REQUEST_SIZE)
-            .max_connections(max_connection)
-            .set_host_filtering(AllowHosts::Any)
-            .set_middleware(middleware)
-            .set_logger(metrics_logger)
-            .build(listen_address)
-            .await?;
-        let addr = server.local_addr()?;
-        let handle = server.start(self.module)?;
+        let handle = thread::spawn(move || {
+            let rt = tokio::runtime::Builder::new_multi_thread()
+                .thread_name("sui-node-jsonrpc-worker")
+                .enable_all()
+                .build()
+                .unwrap();
 
-        info!(local_addr =? addr, "Sui JSON-RPC server listening on {addr}");
-        info!("Available JSON-RPC methods : {:?}", methods_names);
+            let server = rt
+                .block_on(
+                    ServerBuilder::default()
+                        .batch_requests_supported(false)
+                        .max_response_body_size(MAX_REQUEST_SIZE)
+                        .max_connections(max_connection)
+                        .set_host_filtering(AllowHosts::Any)
+                        .set_middleware(middleware)
+                        .custom_tokio_runtime(rt.handle().clone())
+                        .set_logger(metrics_logger)
+                        .build(listen_address),
+                )
+                .unwrap();
 
+            let addr = server.local_addr().unwrap();
+            let handle = server.start(self.module).unwrap();
+            info!(local_addr =? addr, "Sui JSON-RPC server listening on {addr}");
+            info!("Available JSON-RPC methods : {:?}", methods_names);
+            rt.block_on(handle.stopped());
+        });
         Ok(handle)
     }
 }
