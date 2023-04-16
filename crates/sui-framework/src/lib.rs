@@ -34,12 +34,20 @@ pub struct SystemPackage {
 }
 
 impl SystemPackage {
-    pub fn new(id: ObjectID, raw_bytes: &'static [u8], dependencies: &[ObjectID]) -> Self {
+    pub fn from_bcs(id: ObjectID, raw_bytes: &'static [u8], dependencies: &[ObjectID]) -> Self {
         let bytes: Vec<Vec<u8>> = bcs::from_bytes(raw_bytes).unwrap();
         Self {
             id,
             bytes,
             dependencies: dependencies.to_vec(),
+        }
+    }
+
+    pub fn new(id: ObjectID, bytes: Vec<Vec<u8>>, dependencies: Vec<ObjectID>) -> Self {
+        Self {
+            id,
+            bytes,
+            dependencies,
         }
     }
 
@@ -93,7 +101,7 @@ macro_rules! define_system_packages {
     ([$(($id:expr, $path:expr, $deps:expr)),* $(,)?]) => {{
         static PACKAGES: Lazy<Vec<SystemPackage>> = Lazy::new(|| {
             vec![
-                $(SystemPackage::new(
+                $(SystemPackage::from_bcs(
                     $id,
                     include_bytes!(concat!(env!("OUT_DIR"), "/", $path)),
                     &$deps,

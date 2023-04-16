@@ -26,8 +26,8 @@ use sui_types::epoch_data::EpochData;
 use sui_types::error::{ExecutionError, ExecutionErrorKind};
 use sui_types::gas::{GasCostSummary, SuiGasStatusAPI};
 use sui_types::messages::{
-    Argument, ConsensusCommitPrologue, GenesisTransaction, ObjectArg, ProgrammableTransaction,
-    TransactionKind, Command,
+    Argument, Command, ConsensusCommitPrologue, GenesisTransaction, ObjectArg,
+    ProgrammableTransaction, TransactionKind,
 };
 use sui_types::storage::{ChildObjectResolver, ObjectStore, ParentSync, WriteKind};
 use sui_types::sui_system_state::{AdvanceEpochParams, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME};

@@ -3104,7 +3104,16 @@ impl AuthorityState {
         max_binary_format_version: u32,
     ) -> Vec<ObjectRef> {
         let mut results = vec![];
-        for system_package in BuiltInFramework::iter_system_packages() {
+
+        let system_packages = BuiltInFramework::iter_system_packages();
+
+        // Add extra framework packages during simtest
+        #[cfg(msim)]
+        let extra_packages = framework_injection::get_extra_packages(self.name);
+        #[cfg(msim)]
+        let system_packages = system_packages.map(|p| p).chain(extra_packages.iter());
+
+        for system_package in system_packages {
             let modules = system_package.modules().to_vec();
             // In simtests, we could override the current built-in framework packages.
             #[cfg(msim)]
@@ -3122,6 +3131,7 @@ impl AuthorityState {
             };
             results.push(obj_ref);
         }
+
         results
     }
 
@@ -3148,15 +3158,16 @@ impl AuthorityState {
 
         let mut res = Vec::with_capacity(system_packages.len());
         for (system_package_ref, object) in system_packages.into_iter().zip(objects.iter()) {
-            let cur_object = object
-                .as_ref()
-                .unwrap_or_else(|| panic!("system package {:?} must exist", system_package_ref.0));
+            let prev_transaction = match object {
+                Some(cur_object) if cur_object.compute_object_reference() == system_package_ref => {
+                    // Skip this one because it doesn't need to be upgraded.
+                    info!("Framework {} does not need updating", system_package_ref.0);
+                    continue;
+                }
 
-            if cur_object.compute_object_reference() == system_package_ref {
-                // Skip this one because it doesn't need to be upgraded.
-                info!("Framework {} does not need updating", system_package_ref.0);
-                continue;
-            }
+                Some(cur_object) => cur_object.previous_transaction,
+                None => TransactionDigest::genesis(),
+            };
 
             let system_package = BuiltInFramework::get_package_by_id(&system_package_ref.0);
             let bytes = system_package.bytes().to_vec();
@@ -3176,7 +3187,7 @@ impl AuthorityState {
                 &modules,
                 system_package_ref.1,
                 system_package.dependencies().to_vec(),
-                cur_object.previous_transaction,
+                prev_transaction,
             );
 
             let new_ref = new_object.compute_object_reference();
@@ -3613,8 +3624,9 @@ mod tests {
 #[cfg(msim)]
 pub mod framework_injection {
     use move_binary_format::CompiledModule;
-    use std::cell::RefCell;
     use std::collections::BTreeMap;
+    use std::{cell::RefCell, collections::BTreeSet};
+    use sui_framework::{BuiltInFramework, SystemPackage};
     use sui_types::base_types::{AuthorityName, ObjectID};
 
     type FrameworkOverrideConfig = BTreeMap<ObjectID, PackageOverrideConfig>;
@@ -3682,5 +3694,26 @@ pub mod framework_injection {
                 PackageOverrideConfig::PerValidator(func) => func(name),
             })
         })
+    }
+
+    pub fn get_extra_packages(name: AuthorityName) -> Vec<SystemPackage> {
+        let built_in = BTreeSet::from_iter(BuiltInFramework::all_package_ids().into_iter());
+        let extra: Vec<ObjectID> = OVERRIDE.with(|cfg| {
+            cfg.borrow()
+                .keys()
+                .filter_map(|package| (!built_in.contains(package)).then_some(*package))
+                .collect()
+        });
+
+        extra
+            .into_iter()
+            .map(|package| {
+                SystemPackage::new(
+                    package,
+                    get_override_bytes(&package, name).unwrap(),
+                    BuiltInFramework::all_package_ids(),
+                )
+            })
+            .collect()
     }
 }
