@@ -19,6 +19,7 @@ use move_core_types::value::{MoveStruct, MoveStructLayout, MoveValue};
 use tap::TapFallible;
 use tracing::{debug, error, info, instrument, warn};
 
+use mysten_metrics::spawn_monitored_task;
 use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
@@ -131,7 +132,7 @@ impl ReadApi {
         })
     }
 
-    fn multi_get_transaction_blocks_internal(
+    async fn multi_get_transaction_blocks_internal(
         &self,
         digests: Vec<TransactionDigest>,
         opts: Option<SuiTransactionBlockResponseOptions>,
@@ -165,6 +166,7 @@ impl ReadApi {
             let transactions = self
                 .state
                 .multi_get_executed_transactions(&digests)
+                .await
                 .tap_err(
                     |err| debug!(digests=?digests, "Failed to multi get transaction: {:?}", err),
                 )?;
@@ -178,9 +180,13 @@ impl ReadApi {
 
         // Fetch effects when `show_events` is true because events relies on effects
         if opts.require_effects() {
-            let effects_list = self.state.multi_get_executed_effects(&digests).tap_err(
-                |err| debug!(digests=?digests, "Failed to multi get effects: {:?}", err),
-            )?;
+            let effects_list = self
+                .state
+                .multi_get_executed_effects(&digests)
+                .await
+                .tap_err(
+                    |err| debug!(digests=?digests, "Failed to multi get effects: {:?}", err),
+                )?;
             for ((_digest, cache_entry), e) in
                 temp_response.iter_mut().zip(effects_list.into_iter())
             {
@@ -190,7 +196,7 @@ impl ReadApi {
 
         let checkpoint_seq_list = self
             .state
-            .multi_get_transaction_checkpoint(&digests)
+            .multi_get_transaction_checkpoint(&digests).await
             .tap_err(
                 |err| debug!(digests=?digests, "Failed to multi get checkpoint sequence number: {:?}", err))?;
         for ((_digest, cache_entry), seq) in temp_response
@@ -324,6 +330,7 @@ impl ReadApi {
                     None,
                 ));
             }
+            let results = join_all(results).await;
             for (result, entry) in results.into_iter().zip(temp_response.iter_mut()) {
                 match result {
                     Ok(balance_changes) => entry.1.balance_changes = Some(balance_changes),
@@ -358,6 +365,7 @@ impl ReadApi {
                     effects.all_deleted(),
                 ));
             }
+            let results = join_all(results).await;
             for (result, entry) in results.into_iter().zip(temp_response.iter_mut()) {
                 match result {
                     Ok(object_changes) => entry.1.object_changes = Some(object_changes),
@@ -394,7 +402,7 @@ impl ReadApiServer for ReadApi {
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiObjectResponse> {
         info!("get_object");
-        let object_read = self.state.get_object_read(&object_id).map_err(|e| {
+        let object_read = self.state.get_object_read(&object_id).await.map_err(|e| {
             warn!(?object_id, "Failed to get object: {:?}", e);
             anyhow!("{e}")
         })?;
@@ -482,7 +490,7 @@ impl ReadApiServer for ReadApi {
     }
 
     #[instrument(skip(self))]
-    fn try_get_past_object(
+    async fn try_get_past_object(
         &self,
         object_id: ObjectID,
         version: SequenceNumber,
@@ -492,6 +500,7 @@ impl ReadApiServer for ReadApi {
         let past_read = self
             .state
             .get_past_object_read(&object_id, version)
+            .await
             .map_err(|e| {
                 error!("Failed to call try_get_past_object for object: {object_id:?} version: {version:?} with error: {e:?}");
                 anyhow!("{e}")
@@ -606,7 +615,7 @@ impl ReadApiServer for ReadApi {
         // Fetch effects when `show_events` is true because events relies on effects
         if opts.require_effects() {
             temp_response.effects =
-                Some(self.state.get_executed_effects(digest).tap_err(
+                Some(self.state.get_executed_effects(digest).await.tap_err(
                     |err| debug!(tx_digest=?digest, "Failed to get effects: {:?}", err),
                 )?);
         }
@@ -614,6 +623,7 @@ impl ReadApiServer for ReadApi {
         if let Some((_, seq)) = self
             .state
             .get_transaction_checkpoint_sequence(&digest)
+            .await
             .map_err(|e| {
                 error!("Failed to retrieve checkpoint sequence for transaction {digest:?} with error: {e:?}");
                 anyhow!("{e}")
@@ -626,7 +636,7 @@ impl ReadApiServer for ReadApi {
             let checkpoint = self
                 .state
                 // safe to unwrap because we have checked `is_some` above
-                .get_checkpoint_by_sequence_number(*checkpoint_seq)
+                .get_checkpoint_by_sequence_number(*checkpoint_seq).await
                 .map_err(|e|{
                     error!("Failed to get checkpoint by sequence number: {checkpoint_seq:?} with error: {e:?}");
                     anyhow!("{e}"
@@ -641,6 +651,7 @@ impl ReadApiServer for ReadApi {
                 let events = self
                     .state
                     .get_transaction_events(event_digest)
+                    .await
                     .map_err(|e|
                         {
                             error!("Failed to call get transaction events for events digest: {event_digest:?} with error {e:?}");
@@ -662,6 +673,7 @@ impl ReadApiServer for ReadApi {
             if let Some(effects) = &temp_response.effects {
                 let balance_changes =
                     get_balance_changes_from_effect(&object_cache, effects, input_objects, None)
+                        .await
                         .map_err(Error::SuiError)?;
                 temp_response.balance_changes = Some(balance_changes);
             }
@@ -679,6 +691,7 @@ impl ReadApiServer for ReadApi {
                     effects.all_changed_objects(),
                     effects.all_deleted(),
                 )
+                .await
                 .map_err(Error::SuiError)?;
                 temp_response.object_changes = Some(object_changes);
             }
@@ -703,10 +716,10 @@ impl ReadApiServer for ReadApi {
     async fn get_events(&self, transaction_digest: TransactionDigest) -> RpcResult<Vec<SuiEvent>> {
         info!("get_events");
         let store = self.state.load_epoch_store_one_call_per_task();
-        let effect = self.state.get_executed_effects(transaction_digest)?;
+        let effect = self.state.get_executed_effects(transaction_digest).await?;
         let events = if let Some(event_digest) = effect.events_digest() {
             self.state
-                .get_transaction_events(event_digest)
+                .get_transaction_events(event_digest).await
                 .map_err(
                     |e| {
                         error!("Failed to get transaction events for event digest {event_digest:?} with error: {e:?}");
@@ -761,10 +774,15 @@ impl ReadApiServer for ReadApi {
         info!("get_checkpoints");
         let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS)?;
 
+        let state = self.state.clone();
+
         self.metrics.get_checkpoints_limit.report(limit as u64);
-        let mut data =
-            self.state
-                .get_checkpoints(cursor.map(|s| *s), limit as u64 + 1, descending_order)?;
+
+        let mut data = spawn_monitored_task!(async move {
+            state.get_checkpoints(cursor.map(|s| *s), limit as u64 + 1, descending_order)
+        })
+        .await
+        .map_err(|e| anyhow!(e))??;
 
         let has_next_page = data.len() > limit;
         data.truncate(limit);
@@ -937,7 +955,7 @@ pub async fn get_move_modules_by_package(
     state: &AuthorityState,
     package: ObjectID,
 ) -> RpcResult<BTreeMap<String, NormalizedModule>> {
-    let object_read = state.get_object_read(&package).map_err(|e| {
+    let object_read = state.get_object_read(&package).await.map_err(|e| {
         warn!("Failed to call get_move_modules_by_package for package: {package:?}");
         anyhow!("{e}")
     })?;

@@ -63,8 +63,8 @@ pub trait ReadApi {
     /// can be retrieved by this API, even if the object and version exists/existed.
     /// The result may vary across nodes depending on their pruning policies.
     /// Return the object information for a specified version
-    #[method(name = "tryGetPastObject", blocking)]
-    fn try_get_past_object(
+    #[method(name = "tryGetPastObject")]
+    async fn try_get_past_object(
         &self,
         /// the ID of the queried object
         object_id: ObjectID,

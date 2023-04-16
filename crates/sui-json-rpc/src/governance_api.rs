@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use futures::future::try_join_all;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 
@@ -31,7 +32,7 @@ use tracing::{info, instrument};
 
 use crate::api::{GovernanceReadApiServer, JsonRpcMetrics};
 use crate::error::Error;
-use crate::SuiRpcModule;
+use crate::{ObjectProvider, SuiRpcModule};
 
 pub struct GovernanceReadApi {
     state: Arc<AuthorityState>,
@@ -63,8 +64,8 @@ impl GovernanceReadApi {
     ) -> Result<Vec<DelegatedStake>, Error> {
         let stakes_read = staked_sui_ids
             .iter()
-            .map(|id| self.state.get_object_read(id))
-            .collect::<Result<Vec<_>, _>>()?;
+            .map(|id| self.state.get_object_read(id));
+        let stakes_read = try_join_all(stakes_read).await?;
         if stakes_read.is_empty() {
             return Ok(vec![]);
         }
@@ -77,8 +78,8 @@ impl GovernanceReadApi {
                 ObjectRead::Deleted(oref) => {
                     match self
                         .state
-                        .database
-                        .find_object_lt_or_eq_version(oref.0, oref.1.one_before().unwrap())
+                        .find_object_lt_or_eq_version(&oref.0, &oref.1.one_before().unwrap())
+                        .await?
                     {
                         Some(o) => stakes.push((StakedSui::try_from(&o)?, false)),
                         None => {
