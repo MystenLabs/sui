@@ -11,6 +11,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use anyhow::anyhow;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{ModuleId, StructTag};
+use rocksdb::SliceTransform;
+use sui_types::base_types::SUI_ADDRESS_LENGTH;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sui_types::temporary_store::TxCoins;
 use tracing::{debug, trace};
@@ -168,12 +170,16 @@ fn index_table_default_config() -> DBOptions {
     default_db_options()
 }
 fn coin_index_table_default_config() -> DBOptions {
+    let mut options = optimized_for_high_throughput_options(
+        read_size_from_env(ENV_VAR_COIN_INDEX_BLOCK_CACHE_SIZE_MB).unwrap_or(5 * 1024),
+        false,
+    );
+    // * 2: hex encoding
+    // + 2: 0x prefix
+    let prefix_length = SUI_ADDRESS_LENGTH * 2 + 2;
+    options.options.set_prefix_extractor(SliceTransform::create_fixed_prefix(prefix_length));
     DBOptions {
-        options: optimized_for_high_throughput_options(
-            read_size_from_env(ENV_VAR_COIN_INDEX_BLOCK_CACHE_SIZE_MB).unwrap_or(5 * 1024),
-            false,
-        )
-        .options,
+        options: options.options,
         rw_options: ReadWriteOptions {
             ignore_range_deletions: true,
         },
@@ -246,13 +252,13 @@ impl IndexStore {
         // For a object to appear in `new_owners`, it must be owned by `Owner::Address` after the tx.
         // It also must not be deleted, hence appear in written_coins (see `AuthorityState::commit_certificate`)
         // It also must be a coin type (see `AuthorityState::commit_certificate`).
-        // Here the coin could be transfered to a new address, to simply have the metadata changed (digest, balance etc)
+        // Here the coin could be transfered to a new address, or simply have the metadata changed (.e.g balance)
         // due to a successful or failed transaction.
         let coin_add_keys = object_index_changes
         .new_owners
         .iter()
         .filter_map(|((owner, obj_id), obj_info)| {
-            // If it's in written_coins, then it's not a coin. Skip it.
+            // If it's not in written_coins, then it's not a coin. Skip it.
             let (_obj_ref, obj, _write_kind) = written_coins.get(obj_id)?;
             let coin_type_tag = obj.coin_type_maybe().unwrap_or_else(|| {
                 panic!(
