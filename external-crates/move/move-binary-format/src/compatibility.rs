@@ -293,12 +293,11 @@ impl InclusionCheck {
         }
 
         // If we're checking exactness we make sure there's an inclusion, and that the size of all
-        // of the tables are the exact same.
+        // of the tables are the exact same except for constants.
         if (self == &Self::Equal)
             && (old_module.structs.len() != new_module.structs.len()
                 || old_module.functions.len() != new_module.functions.len()
-                || old_module.friends.len() != new_module.friends.len()
-                || old_module.constants.len() != new_module.constants.len())
+                || old_module.friends.len() != new_module.friends.len())
         {
             return err;
         }
