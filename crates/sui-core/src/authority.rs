@@ -1962,7 +1962,7 @@ impl AuthorityState {
     }
 
     pub fn clone_committee_for_testing(&self) -> Committee {
-        self.epoch_store_for_testing().committee().clone()
+        Committee::clone(self.epoch_store_for_testing().committee())
     }
 
     pub async fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
@@ -2091,7 +2091,7 @@ impl AuthorityState {
     /// Depending on the object pruning policies that will be enforced in the
     /// future there is no software-level guarantee/SLA to retrieve an object
     /// with an old version even if it exists/existed.
-    pub async fn get_past_object_read(
+    pub fn get_past_object_read(
         &self,
         object_id: &ObjectID,
         version: SequenceNumber,
