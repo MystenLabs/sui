@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use rusoto_core::Region;
 use rusoto_kms::{Kms, KmsClient, SignRequest};
-use tokio::runtime::Runtime;
 
 use anyhow::anyhow;
 use bip32::DerivationPath;
@@ -90,6 +89,9 @@ pub enum KeyToolCommand {
         keyid: String,
         #[clap(long)]
         intent: Option<Intent>,
+        #[clap(long)]
+        pubkey: String,
+        
     },
     /// Add a new key to sui.key based on the input mnemonic phrase, the key scheme flag {ed25519 | secp256k1 | secp256r1}
     /// and an optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1
@@ -235,6 +237,7 @@ impl KeyToolCommand {
                 data,
                 keyid,
                 intent,
+                pubkey
             } => {
                 println!("Signer address: {}", address);
                 println!("Raw tx_bytes to execute: {}", data);
@@ -271,26 +274,34 @@ impl KeyToolCommand {
                 // Sign the message
                 let response = kms.sign(request).await.unwrap();
 
-                // let response = Runtime::new()
-                // .unwrap()
-                // .block_on(async {
-                //     kms.sign(request)
-                //     .await
-                // })?;
+                // TODO, just plopping more things into flag
+                let mut flag = vec![0x01];
+
 
                 // Print the signature
                 println!("{:?}", response.signature);
 
+                let sig_bytes = response.signature.map(|b| b.to_vec()).unwrap_or_default();
+                let pubkey_bytes = &Base64::decode(&pubkey).map_err(|e| {
+                    anyhow!("Cannot decode pubkey {:?}", e)
+                })?;
+                // Concatenate serialized sig
+
+                flag.extend(&sig_bytes);
+                
+                flag.extend(&pubkey_bytes.to_vec());
+                
+                // let pub_key = sig.public_key.hex_bytes.to_vec()?;
                 // let sui_signature =
                 //     keystore.sign_secure(&address, &intent_msg.value, intent_msg.intent)?;
+            
+                
                
-               
-               
-               
-                //     println!(
-                //     "Serialized signature (`flag || sig || pk` in Base64): {:?}",
-                //     sui_signature.encode_base64()
-                // );
+                let bcs_serialized_sig =   Base64::encode(bcs::to_bytes(&flag)?);
+                    println!(
+                    "Serialized signature (`flag || sig || pk` in Base64): {:?}",
+                    bcs_serialized_sig
+                );
             }    
 
             KeyToolCommand::Import {
