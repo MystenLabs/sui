@@ -11,6 +11,7 @@ use sui_types::{
     messages::VerifiedTransaction,
 };
 
+use super::test_authority_builder::TestAuthorityBuilder;
 use super::*;
 
 pub async fn send_and_confirm_transaction(

@@ -54,9 +54,6 @@ use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION};
 
 use crate::authority::move_integration_tests::build_and_publish_test_package_with_upgrade_cap;
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
-use crate::consensus_handler::SequencedConsensusTransaction;
-use crate::epoch::epoch_metrics::EpochMetrics;
-use crate::state_accumulator::StateAccumulator;
 use crate::{
     authority_client::{AuthorityAPI, NetworkAuthorityClient},
     authority_server::AuthorityServer,
