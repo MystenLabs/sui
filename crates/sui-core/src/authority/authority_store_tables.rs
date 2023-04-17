@@ -29,6 +29,7 @@ const ENV_VAR_TRANSACTIONS_BLOCK_CACHE_SIZE: &str = "TRANSACTIONS_BLOCK_CACHE_MB
 const ENV_VAR_EFFECTS_BLOCK_CACHE_SIZE: &str = "EFFECTS_BLOCK_CACHE_MB";
 const ENV_VAR_EVENTS_BLOCK_CACHE_SIZE: &str = "EVENTS_BLOCK_CACHE_MB";
 const ENV_VAR_INDIRECT_OBJECTS_BLOCK_CACHE_SIZE: &str = "INDIRECT_OBJECTS_BLOCK_CACHE_MB";
+const ENV_VAR_PERIODIC_COMPACTION_SECONDS: &str = "PERIODIC_COMPACTION_SECONDS";
 
 /// AuthorityPerpetualTables contains data that must be preserved from one epoch to the next.
 #[derive(DBMapUtils)]
@@ -124,12 +125,32 @@ impl AuthorityPerpetualTables {
     }
 
     pub fn open(parent_path: &Path, db_options: Option<Options>) -> Self {
-        Self::open_tables_read_write(
+        let tables = Self::open_tables_read_write(
             Self::path(parent_path),
             MetricConf::with_sampling(SamplingInterval::new(Duration::from_secs(60), 0)),
             db_options,
             None,
-        )
+        );
+        tables
+            .objects
+            .rocksdb
+            .set_options_cf(
+                &tables
+                    .objects
+                    .rocksdb
+                    .cf_handle("objects")
+                    .expect("objects cf not found"),
+                &[(
+                    "periodic_compaction_seconds",
+                    &format!(
+                        "{}",
+                        read_size_from_env(ENV_VAR_PERIODIC_COMPACTION_SECONDS)
+                            .unwrap_or(24 * 60 * 60)
+                    ),
+                )],
+            )
+            .expect("failed to set options for objects cf");
+        tables
     }
 
     pub fn open_readonly(parent_path: &Path) -> AuthorityPerpetualTablesReadOnly {
@@ -413,13 +434,15 @@ fn owned_object_transaction_locks_table_default_config() -> DBOptions {
 }
 
 fn objects_table_default_config() -> DBOptions {
+    let mut options = default_db_options()
+        .optimize_for_write_throughput()
+        .optimize_for_read(
+            read_size_from_env(ENV_VAR_OBJECTS_BLOCK_CACHE_SIZE).unwrap_or(5 * 1024),
+        )
+        .options;
+    options.set_compaction_filter("empty filter", empty_compaction_filter);
     DBOptions {
-        options: default_db_options()
-            .optimize_for_write_throughput()
-            .optimize_for_read(
-                read_size_from_env(ENV_VAR_OBJECTS_BLOCK_CACHE_SIZE).unwrap_or(5 * 1024),
-            )
-            .options,
+        options,
         rw_options: ReadWriteOptions {
             ignore_range_deletions: true,
         },
