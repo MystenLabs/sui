@@ -432,12 +432,13 @@ async fn query_function(read: ReadApi, function_name: &str, mut cursor: Option<T
         ).await;
         if page.is_err() {
             println!("Error fetcing transactions: {:?}", page);
-            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
             continue;
         }
         let page = page.unwrap();
         cursor = page.next_cursor;
         println!("function {} query result size: {}, new cursor: {:?}", function_name, page.data.len(), cursor);
         tx.send(page.data.iter().map(|resp| resp.digest).collect()).await.unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
     }
 }
