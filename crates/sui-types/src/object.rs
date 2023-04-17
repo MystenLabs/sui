@@ -592,7 +592,9 @@ impl Object {
             previous_transaction,
         );
 
+        #[cfg(not(msim))]
         assert!(ret.is_system_package());
+
         ret
     }
 
