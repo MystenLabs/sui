@@ -2044,7 +2044,10 @@ pub fn open_cf<P: AsRef<Path>>(
     opt_cfs: &[&str],
 ) -> Result<Arc<RocksDB>, TypedStoreError> {
     let options = db_options.unwrap_or_else(|| default_db_options().options);
-    let column_descriptors: Vec<_> = opt_cfs.iter().map(|name| (*name, &options)).collect();
+    let column_descriptors: Vec<_> = opt_cfs
+        .iter()
+        .map(|name| (*name, options.clone()))
+        .collect();
     open_cf_opts(
         path,
         Some(options.clone()),
@@ -2067,7 +2070,7 @@ pub fn open_cf_opts<P: AsRef<Path>>(
     path: P,
     db_options: Option<rocksdb::Options>,
     metric_conf: MetricConf,
-    opt_cfs: &[(&str, &rocksdb::Options)],
+    opt_cfs: &[(&str, rocksdb::Options)],
 ) -> Result<Arc<RocksDB>, TypedStoreError> {
     let path = path.as_ref();
     // In the simulator, we intercept the wall clock in the test thread only. This causes problems
@@ -2105,7 +2108,7 @@ pub fn open_cf_opts_transactional<P: AsRef<Path>>(
     path: P,
     db_options: Option<rocksdb::Options>,
     metric_conf: MetricConf,
-    opt_cfs: &[(&str, &rocksdb::Options)],
+    opt_cfs: &[(&str, rocksdb::Options)],
 ) -> Result<Arc<RocksDB>, TypedStoreError> {
     let path = path.as_ref();
     let cfs = populate_missing_cfs(opt_cfs, path)?;
@@ -2134,7 +2137,7 @@ pub fn open_cf_opts_secondary<P: AsRef<Path>>(
     secondary_path: Option<P>,
     db_options: Option<rocksdb::Options>,
     metric_conf: MetricConf,
-    opt_cfs: &[(&str, &rocksdb::Options)],
+    opt_cfs: &[(&str, rocksdb::Options)],
 ) -> Result<Arc<RocksDB>, TypedStoreError> {
     let primary_path = primary_path.as_ref();
     let secondary_path = secondary_path.as_ref().map(|p| p.as_ref());
@@ -2156,7 +2159,7 @@ pub fn open_cf_opts_secondary<P: AsRef<Path>>(
         // Add CFs not explicitly listed
         for cf_key in cfs.iter() {
             if !opt_cfs.contains_key(&cf_key[..]) {
-                opt_cfs.insert(cf_key, &default_db_options.options);
+                opt_cfs.insert(cf_key, default_db_options.options.clone());
             }
         }
 
@@ -2247,7 +2250,7 @@ pub fn safe_drop_db(path: PathBuf) -> Result<(), rocksdb::Error> {
 }
 
 fn populate_missing_cfs(
-    input_cfs: &[(&str, &rocksdb::Options)],
+    input_cfs: &[(&str, rocksdb::Options)],
     path: &Path,
 ) -> Result<Vec<(String, rocksdb::Options)>, rocksdb::Error> {
     let mut cfs = vec![];
