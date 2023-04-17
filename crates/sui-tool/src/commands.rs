@@ -7,12 +7,15 @@ use crate::{
     ConciseObjectOutput, GroupedObjectOutput, VerboseObjectOutput,
 };
 use anyhow::Result;
+use sui_network::default_mysten_network_config;
 use std::path::PathBuf;
+use sui_sdk::SuiClientBuilder;
 use sui_config::genesis::Genesis;
-use sui_core::authority_client::AuthorityAPI;
+use sui_core::{authority_client::{AuthorityAPI, NetworkAuthorityClient}, quorum_driver};
 
 use sui_types::{base_types::*, object::Owner};
-
+use mysten_network::Multiaddr;
+use sui_json_rpc_types::SuiTransactionBlockResponseQuery;
 use clap::*;
 use sui_config::Config;
 use sui_types::messages_checkpoint::{
@@ -143,6 +146,12 @@ pub enum ToolCommand {
         config_path: PathBuf,
         #[clap(long = "db-checkpoint-path")]
         db_checkpoint_path: PathBuf,
+    },
+
+    #[clap(name = "invalid-sig-stress")]
+    InvalidSigStress {
+        #[clap(long = "fullnode-url")]
+        fullnode_url: Option<String>,
     },
 }
 
@@ -301,6 +310,91 @@ impl ToolCommand {
             } => {
                 let config = sui_config::NodeConfig::load(config_path)?;
                 restore_from_db_checkpoint(&config, &db_checkpoint_path).await?;
+            }
+            ToolCommand::InvalidSigStress { fullnode_url} => {
+                let channel = default_mysten_network_config()
+                    .connect_lazy(&Multiaddr::try_from("/dns/lhr-00.testnet.sui.io/tcp/8080/http").unwrap())
+                    .unwrap();
+                let net_client_1 = NetworkAuthorityClient::new(channel);
+                let channel = default_mysten_network_config()
+                    .connect_lazy(&Multiaddr::try_from("/dns/icn-00.testnet.sui.io/tcp/8080/http").unwrap())
+                    .unwrap();
+                let net_client_2 = NetworkAuthorityClient::new(channel);
+                let fullnode_url = fullnode_url.unwrap_or_else(|| "http://ewr-tnt-rpc-12.testnet.sui.io:9000".to_string());
+                let client = SuiClientBuilder::default()
+                    .build(fullnode_url)
+                    .await
+                    .unwrap();
+                let read = client.read_api();
+                let quorum_driver = client.quorum_driver();
+                loop {
+                    let page = read.query_transaction_blocks(
+                        SuiTransactionBlockResponseQuery::new_with_filter(
+                            sui_types::query::TransactionFilter::MoveFunction { 
+                                package: ObjectID::from_hex_literal("0xe158e6df182971bb6c85eb9de9fbfb460b68163d19afc45873c8672b5cc521b2").unwrap(),
+                                module: Some("TOKEN".to_string()),
+                                function: None,
+                            },
+                        ),
+                        None,
+                        Some(100), 
+                        true, 
+                    ).await;
+                    if page.is_err() {
+                        println!("Error fetcing transactions: {:?}", page);
+                        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                        continue;
+                    }
+                    let page = page.unwrap().data;
+                    page.iter().map(|resp| {
+                        let tx_digest = resp.digest;
+                        let mut tx = None;
+                        let resp = net_client_1
+                            .handle_transaction_info_request(TransactionInfoRequest {
+                                transaction_digest: tx_digest,
+                            }).await;
+                        if resp.is_ok() {
+                            tx = Some(resp.unwrap().transaction);
+                        } else {
+                            let resp = net_client_2
+                                .handle_transaction_info_request(TransactionInfoRequest {
+                                    transaction_digest: tx_digest,
+                                }).await;
+                            if resp.is_ok() {
+                                tx = Some(resp.unwrap().transaction);
+                            }
+                        }
+                        if tx.is_none() {
+                            println!("Error fetching transaction: {:?}", tx_digest);
+                            return;
+                        }
+                        quorum_driver.execute_transaction_block(tx
+                            , options, request_type)
+                        // let responses = join_all(clients.iter().map(|(name, (address, client))| async {
+                        //         .await;
+                        //     (
+                        //         *name,
+                        //         address.clone(),
+                        //         result,
+                        //         timer.elapsed().as_secs_f64(),
+                        //     )
+                        // }))
+                        // .await;
+
+                        // let tx = quorum_driver.send_transaction(resp.transaction.clone()).await.unwrap();
+                        // resp.digest
+                    })
+                    page.iter().map(futures::future::ready).for_each(|tx| {
+                        let tx = tx.clone();
+                        tokio::spawn(async move {
+                            let tx = tx.unwrap();
+                            let tx = quorum_driver.get_transaction_block(tx.id).await.unwrap();
+                            let tx = tx.unwrap();
+                            let tx = tx.transaction;
+                        )
+                    );
+                }
+
             }
         };
         Ok(())
