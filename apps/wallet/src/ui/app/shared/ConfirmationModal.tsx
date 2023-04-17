@@ -52,33 +52,31 @@ export function ConfirmationModal({
                 setIsCancelLoading(false);
             }}
             footer={
-                <div className="flex flex-row self-center gap-3">
-                    <div>
-                        <Button
-                            variant={cancelStyle}
-                            text={cancelText}
-                            loading={isCancelLoading}
-                            disabled={isConfirmLoading}
-                            onClick={async () => {
-                                setIsCancelLoading(true);
-                                await onResponse(false);
-                                setIsCancelLoading(false);
-                            }}
-                        />
-                    </div>
-                    <div>
-                        <Button
-                            variant={confirmStyle}
-                            text={confirmText}
-                            loading={isConfirmLoading}
-                            disabled={isCancelLoading}
-                            onClick={async () => {
-                                setIsConfirmLoading(true);
-                                await onResponse(true);
-                                setIsConfirmLoading(false);
-                            }}
-                        />
-                    </div>
+                <div className="flex flex-row self-stretch gap-3">
+                    <Button
+                        variant={cancelStyle}
+                        size="tall"
+                        text={cancelText}
+                        loading={isCancelLoading}
+                        disabled={isConfirmLoading}
+                        onClick={async () => {
+                            setIsCancelLoading(true);
+                            await onResponse(false);
+                            setIsCancelLoading(false);
+                        }}
+                    />
+                    <Button
+                        variant={confirmStyle}
+                        size="tall"
+                        text={confirmText}
+                        loading={isConfirmLoading}
+                        disabled={isCancelLoading}
+                        onClick={async () => {
+                            setIsConfirmLoading(true);
+                            await onResponse(true);
+                            setIsConfirmLoading(false);
+                        }}
+                    />
                 </div>
             }
         />
