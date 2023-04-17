@@ -1286,12 +1286,7 @@ impl<'a> DBTransaction<'a> {
         let db_iter = self
             .transaction
             .raw_iterator_cf_opt(&db.cf(), db.opts.readopts());
-        Iter::new(
-            RocksDBRawIter::OptimisticTransaction(db_iter),
-            db.cf.clone(),
-            &db.db_metrics,
-            &db.iter_bytes_sample_interval,
-        )
+        Iter::new(RocksDBRawIter::OptimisticTransaction(db_iter))
     }
 
     pub fn keys<K: DeserializeOwned, V: DeserializeOwned>(
@@ -1589,12 +1584,7 @@ where
                 .read_perf_ctx_metrics
                 .report_metrics(&self.cf);
         }
-        Iter::new(
-            db_iter,
-            self.cf.clone(),
-            &self.db_metrics,
-            &self.iter_bytes_sample_interval,
-        )
+        Iter::new(db_iter)
     }
 
     fn safe_iter(&'a self) -> Self::SafeIterator {
@@ -1661,12 +1651,7 @@ where
                 .read_perf_ctx_metrics
                 .report_metrics(&self.cf);
         }
-        Iter::new(
-            db_iter,
-            self.cf.clone(),
-            &self.db_metrics,
-            &self.iter_bytes_sample_interval,
-        )
+        Iter::new(db_iter)
     }
 
     fn keys(&'a self) -> Self::Keys {
