@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFormatCoin, CoinFormat } from '@mysten/core';
 import { ArrowRight12 } from '@mysten/icons';
 import {
     normalizeSuiAddress,
@@ -10,6 +11,8 @@ import {
     getObjectId,
     getObjectVersion,
     getObjectPreviousTransactionDigest,
+    getSuiObjectData,
+    SUI_TYPE_ARG,
 } from '@mysten/sui.js';
 import { useState, useEffect, useCallback } from 'react';
 
@@ -36,6 +39,12 @@ export function TokenView({ data }: { data: SuiObjectResponse }) {
     const name = extractName(display);
     const objectId = getObjectId(data);
     const objectType = parseObjectType(data);
+    const storageRebate = getSuiObjectData(data)?.storageRebate;
+    const [storageRebateFormatted, symbol] = useFormatCoin(
+        storageRebate,
+        SUI_TYPE_ARG,
+        CoinFormat.FULL
+    );
     const [fileType, setFileType] = useState<undefined | string>(undefined);
 
     useEffect(() => {
@@ -70,8 +79,8 @@ export function TokenView({ data }: { data: SuiObjectResponse }) {
                 <TabPanels>
                     <TabPanel noGap>
                         <div className="flex flex-col md:flex-row md:divide-x md:divide-gray-45">
-                            <div className="flex-1 divide-y divide-gray-45 pb-6 md:basis-2/3 md:pb-0">
-                                <div className="pb-7 pr-10 pt-4">
+                            <div className="flex-1 divide-y divide-gray-45 pb-6 md:basis-2/3 md:pb-0 md:pr-10">
+                                <div className="py-4 pb-7">
                                     <DescriptionList>
                                         {objOwner ? (
                                             <DescriptionItem
@@ -134,7 +143,7 @@ export function TokenView({ data }: { data: SuiObjectResponse }) {
                                     </DescriptionList>
                                 </div>
                                 {display ? (
-                                    <div className="pr-10 pt-2 md:pt-2.5">
+                                    <div className="py-4 pb-7">
                                         <DescriptionList>
                                             <LinkOrTextDescriptionItem
                                                 title="Name"
@@ -162,6 +171,28 @@ export function TokenView({ data }: { data: SuiObjectResponse }) {
                                         </DescriptionList>
                                     </div>
                                 ) : null}
+                                {storageRebate && (
+                                    <div className="py-4 pb-7">
+                                        <DescriptionList>
+                                            <DescriptionItem title="Storage Rebate">
+                                                <div className="leading-1 flex items-end gap-0.5">
+                                                    <Text
+                                                        variant="body/medium"
+                                                        color="steel-darker"
+                                                    >
+                                                        {storageRebateFormatted}
+                                                    </Text>
+                                                    <Text
+                                                        variant="captionSmall/normal"
+                                                        color="steel"
+                                                    >
+                                                        {symbol}
+                                                    </Text>
+                                                </div>
+                                            </DescriptionItem>
+                                        </DescriptionList>
+                                    </div>
+                                )}
                             </div>
                             {imgUrl !== '' && (
                                 <div className="border-0 border-t border-solid border-gray-45 pt-6 md:basis-1/3 md:border-t-0 md:pl-10">
