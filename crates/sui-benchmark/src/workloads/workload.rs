@@ -9,8 +9,6 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use sui_types::gas_coin::MIST_PER_SUI;
 
-pub const MIN_SUI_PER_WORKLOAD: u64 = 10_000_000 * MIST_PER_SUI;
-
 // This is the maximum gas we will transfer from primary coin into any gas coin
 // for running the benchmark
 pub const MAX_GAS_FOR_TESTING: u64 = 1_000 * MIST_PER_SUI;
