@@ -125,14 +125,14 @@ module deepbook::custodian {
         increase_user_available_balance<T>(custodian, user, locked_balance)
     }
 
-    public fun account_available_balance<T>(
+    public(friend) fun account_available_balance<T>(
         custodian: &Custodian<T>,
         user: ID,
     ): u64 {
         balance::value(&table::borrow(&custodian.account_balances, user).available_balance)
     }
 
-    public fun account_locked_balance<T>(
+    public(friend) fun account_locked_balance<T>(
         custodian: &Custodian<T>,
         user: ID,
     ): u64 {
@@ -177,7 +177,7 @@ module deepbook::custodian {
     struct USD {}
 
     #[test_only]
-    public fun assert_user_balance<T>(
+    public(friend) fun assert_user_balance<T>(
         custodian: &Custodian<T>,
         user: ID,
         available_balance: u64,
@@ -196,7 +196,7 @@ module deepbook::custodian {
     }
 
     #[test_only]
-    public fun test_increase_user_available_balance<T>(
+    public(friend) fun test_increase_user_available_balance<T>(
         custodian: &mut Custodian<T>,
         user: ID,
         quantity: u64,
