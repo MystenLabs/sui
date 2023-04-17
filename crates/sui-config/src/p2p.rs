@@ -54,7 +54,7 @@ impl Default for P2pConfig {
 
 impl P2pConfig {
     pub fn excessive_message_size(&self) -> usize {
-        const EXCESSIVE_MESSAGE_SIZE: usize = 8 << 20;
+        const EXCESSIVE_MESSAGE_SIZE: usize = 32 << 20;
 
         self.excessive_message_size
             .unwrap_or(EXCESSIVE_MESSAGE_SIZE)
