@@ -312,11 +312,11 @@ async fn run_fetch_task(
 
     // Process and store fetched certificates.
     let num_certs_fetched = response.certificates.len();
-    process_certificates_helper(response, &state.synchronizer).await?;
+    process_certificates_helper(response, &state.synchronizer, state.metrics.clone()).await?;
     state
         .metrics
         .certificate_fetcher_num_certificates_processed
-        .add(num_certs_fetched as i64);
+        .inc_by(num_certs_fetched as u64);
 
     debug!("Successfully fetched and processed {num_certs_fetched} certificates");
     Ok(())
@@ -407,6 +407,7 @@ async fn fetch_certificates_helper(
 async fn process_certificates_helper(
     response: FetchCertificatesResponse,
     synchronizer: &Synchronizer,
+    metrics: Arc<PrimaryMetrics>,
 ) -> DagResult<()> {
     trace!("Start sending fetched certificates to processing");
     if response.certificates.len() > MAX_CERTIFICATES_TO_FETCH {
@@ -426,11 +427,16 @@ async fn process_certificates_helper(
         .map(|certs| {
             let certs = certs.to_vec();
             let sync = synchronizer.clone();
+            let metrics = metrics.clone();
             // Use threads dedicated to computation heavy work.
             spawn_blocking(move || {
+                let now = Instant::now();
                 for c in &certs {
                     sync.sanitize_certificate(c)?;
                 }
+                metrics
+                    .certificate_fetcher_total_verification_us
+                    .inc_by(now.elapsed().as_micros() as u64);
                 Ok::<Vec<Certificate>, DagError>(certs)
             })
         })
@@ -438,6 +444,7 @@ async fn process_certificates_helper(
     // Process verified certificates in the same order as received.
     for task in verify_tasks {
         let certificates = task.await.map_err(|_| DagError::Canceled)??;
+        let now = Instant::now();
         for cert in certificates {
             if let Err(e) = synchronizer.try_accept_fetched_certificate(cert).await {
                 // It is possible that subsequent certificates are useful,
@@ -445,6 +452,9 @@ async fn process_certificates_helper(
                 warn!("Failed to accept fetched certificate: {e}");
             }
         }
+        metrics
+            .certificate_fetcher_total_accept_us
+            .inc_by(now.elapsed().as_micros() as u64);
     }
 
     trace!("Fetched certificates have been processed");
