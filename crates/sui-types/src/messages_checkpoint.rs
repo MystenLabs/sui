@@ -395,11 +395,11 @@ impl CheckpointContents {
 // CheckpointBuilder::split_checkpoint_chunks should also be updated accordingly.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FullCheckpointContents {
-    transactions: Vec<ExecutionData>,
+    pub transactions: Vec<ExecutionData>,
     /// This field 'pins' user signatures for the checkpoint
     /// The length of this vector is same as length of transactions vector
     /// System transactions has empty signatures
-    user_signatures: Vec<Vec<GenericSignature>>,
+    pub user_signatures: Vec<Vec<GenericSignature>>,
 }
 
 impl FullCheckpointContents {
