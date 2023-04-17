@@ -148,7 +148,7 @@ impl CoinReadApi {
 
         let object_id = async {
             for ((id, version, _), _) in created {
-                if let Ok(past_object) = self.state.get_past_object_read(id, *version).await {
+                if let Ok(past_object) = self.state.get_past_object_read(id, *version) {
                     if let Ok(object) = past_object.into_object() {
                         if matches!(object.type_(), Some(type_) if type_.is(&object_struct_tag)) {
                             return Ok(*id);
