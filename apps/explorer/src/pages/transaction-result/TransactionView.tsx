@@ -215,18 +215,14 @@ export function TransactionView({
                                         <StatAmount
                                             amount={formattedAmount}
                                             symbol={symbol}
-                                            date={Number(timestamp ?? 0)}
+                                            date={Number(timestamp)}
                                         />
                                     </section>
-                                ) : (
-                                    timestamp && (
-                                        <div className="mb-3">
-                                            <DateCard
-                                                date={Number(timestamp ?? 0)}
-                                            />
-                                        </div>
-                                    )
-                                )}
+                                ) : timestamp ? (
+                                    <div className="mb-3">
+                                        <DateCard date={Number(timestamp)} />
+                                    </div>
+                                ) : null}
                                 {isSponsoredTransaction && (
                                     <div className="mt-10">
                                         <SponsorTransactionAddress
