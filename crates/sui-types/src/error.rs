@@ -280,7 +280,7 @@ pub enum SuiError {
         "Signature is not valid, but a retry may result in a valid one: {}",
         error
     )]
-    PotentiallyTemporaryInvalidSignature { error: String },
+    PotentiallyTemporarilyInvalidSignature { error: String },
 
     // Certificate verification and execution
     #[error(
@@ -644,7 +644,7 @@ impl SuiError {
                 }
             }
 
-            SuiError::PotentiallyTemporaryInvalidSignature { .. } => (true, true),
+            SuiError::PotentiallyTemporarilyInvalidSignature { .. } => (true, true),
 
             // Overload errors
             SuiError::TooManyTransactionsPendingExecution { .. } => (true, true),
