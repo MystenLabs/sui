@@ -17,6 +17,9 @@ use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::BTreeMap;
+use sui_types::temporary_store::TxCoins;
+use sui_types::TypeTag;
+use tracing::{debug, trace};
 
 use crate::sharded_lru::ShardedLruCache;
 use sui_json_rpc_types::SuiObjectDataFilter;
@@ -25,6 +28,8 @@ use sui_types::base_types::{
 };
 use sui_types::base_types::{ObjectInfo, ObjectRef};
 use sui_types::digests::TransactionEventsDigest;
+use sui_types::digests::{ObjectDigest, TransactionEventsDigest};
+use sui_types::dynamic_field::{self, DynamicFieldInfo, DynamicFieldName};
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::TransactionEvents;
@@ -986,18 +991,47 @@ impl IndexStore {
         name: &DynamicFieldName,
     ) -> SuiResult<Option<ObjectID>> {
         debug!(?object, "get_dynamic_field_object_id");
-        Ok(self
+        let key_bytes = bcs::to_bytes(&name.value).map_err(|e| {
+            SuiError::Unknown(format!(
+                "Unable to generate bytes for value. Got error: {e:?}"
+            ))
+        })?;
+        let dynamic_field_id =
+            dynamic_field::derive_dynamic_field_id(object, &name.type_, &key_bytes).map_err(
+                |e| {
+                    SuiError::Unknown(format!(
+                        "Unable to generate dynamic field id. Got error: {e:?}"
+                    ))
+                },
+            )?;
+
+        if self
             .tables
             .dynamic_field_index
-            .iter()
-            // The object id 0 is the smallest possible
-            .skip_to(&(object, ObjectID::ZERO))?
-            .find(|((object_owner, _), info)| {
-                object_owner == &object
-                    && info.name.type_ == name.type_
-                    && info.name.value == name.value
-            })
-            .map(|(_, object_info)| object_info.object_id))
+            .contains_key(&(object, dynamic_field_id))?
+        {
+            return Ok(Some(dynamic_field_id));
+        }
+
+        let dynamic_object_field_struct =
+            DynamicFieldInfo::dynamic_object_field_wrapper(name.type_.clone());
+        let dynamic_object_field_type = TypeTag::Struct(Box::new(dynamic_object_field_struct));
+        let dynamic_object_field_id =
+            dynamic_field::derive_dynamic_field_id(object, &dynamic_object_field_type, &key_bytes)
+                .map_err(|e| {
+                    SuiError::Unknown(format!(
+                        "Unable to generate dynamic field id. Got error: {e:?}"
+                    ))
+                })?;
+        if let Some(info) = self
+            .tables
+            .dynamic_field_index
+            .get(&(object, dynamic_object_field_id))?
+        {
+            return Ok(Some(info.object_id));
+        }
+
+        Ok(None)
     }
 
     pub fn get_owner_objects(
