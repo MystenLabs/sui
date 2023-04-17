@@ -240,18 +240,27 @@ impl<C> SafeClient<C> {
                             transaction.into_message(),
                             cert,
                         );
-                        ct.verify_signature(&committee).tap_err(|e| {
-                            // TODO: We show the below messages for debugging purposes re. incident #267. When this is fixed, we should remove them again.
-                            warn!(?digest, ?ct, "Received invalid tx cert: {}", e);
-                            let ct_bytes =
-                                fastcrypto::encoding::Base64::encode(bcs::to_bytes(&ct).unwrap());
-                            warn!(
-                                ?digest,
-                                ?ct_bytes,
-                                "Received invalid tx cert (serialized): {}",
-                                e
-                            );
-                        })?;
+                        ct.verify_signature(&committee)
+                            .tap_err(|e| {
+                                // TODO: We show the below messages for debugging purposes re. incident #267. When this is fixed, we should remove them again.
+                                warn!(?digest, ?ct, "Received invalid tx cert: {}", e);
+                                let ct_bytes = fastcrypto::encoding::Base64::encode(
+                                    bcs::to_bytes(&ct).unwrap(),
+                                );
+                                warn!(
+                                    ?digest,
+                                    ?ct_bytes,
+                                    "Received invalid tx cert (serialized): {}",
+                                    e
+                                );
+                            })
+                            .map_err(|e| match e {
+                                // TODO: Remove as well once incident #267 is resolved.
+                                SuiError::InvalidSignature(error) => {
+                                    SuiError::PotentiallyTemporaryInvalidSignature { error }
+                                }
+                                _ => e,
+                            })?;
                         let ct = VerifiedCertificate::new_from_verified(ct);
                         Ok(PlainTransactionInfoResponse::ExecutedWithCert(
                             ct,
