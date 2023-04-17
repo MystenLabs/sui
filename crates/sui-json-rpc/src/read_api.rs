@@ -7,8 +7,6 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use fastcrypto::encoding::Base64;
-use futures::executor::block_on;
-use futures::future::join_all;
 use itertools::Itertools;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
@@ -131,7 +129,7 @@ impl ReadApi {
         })
     }
 
-    async fn multi_get_transaction_blocks_internal(
+    fn multi_get_transaction_blocks_internal(
         &self,
         digests: Vec<TransactionDigest>,
         opts: Option<SuiTransactionBlockResponseOptions>,
@@ -302,7 +300,7 @@ impl ReadApi {
 
         let object_cache = ObjectProviderCache::new(self.state.clone());
         if opts.show_balance_changes {
-            let mut futures = vec![];
+            let mut results = vec![];
             for resp in temp_response.values() {
                 let input_objects = if let Some(tx) = resp.transaction() {
                     tx.data()
@@ -315,7 +313,7 @@ impl ReadApi {
                     // don't have the input tx, so not much we can do. perhaps this is an Err?
                     Vec::new()
                 };
-                futures.push(get_balance_changes_from_effect(
+                results.push(get_balance_changes_from_effect(
                     &object_cache,
                     resp.effects.as_ref().ok_or_else(|| {
                         anyhow!("unable to derive balance changes because effect is empty")
@@ -324,7 +322,6 @@ impl ReadApi {
                     None,
                 ));
             }
-            let results = join_all(futures).await;
             for (result, entry) in results.into_iter().zip(temp_response.iter_mut()) {
                 match result {
                     Ok(balance_changes) => entry.1.balance_changes = Some(balance_changes),
@@ -337,13 +334,13 @@ impl ReadApi {
         }
 
         if opts.show_object_changes {
-            let mut futures = vec![];
+            let mut results = vec![];
             for resp in temp_response.values() {
                 let effects = resp.effects.as_ref().ok_or_else(|| {
                     anyhow!("unable to derive object changes because effect is empty")
                 })?;
 
-                futures.push(get_object_changes(
+                results.push(get_object_changes(
                     &object_cache,
                     resp.transaction
                         .as_ref()
@@ -359,7 +356,6 @@ impl ReadApi {
                     effects.all_deleted(),
                 ));
             }
-            let results = join_all(futures).await;
             for (result, entry) in results.into_iter().zip(temp_response.iter_mut()) {
                 match result {
                     Ok(object_changes) => entry.1.object_changes = Some(object_changes),
@@ -477,7 +473,7 @@ impl ReadApiServer for ReadApi {
         }
     }
 
-    async fn try_get_past_object(
+    fn try_get_past_object(
         &self,
         object_id: ObjectID,
         version: SequenceNumber,
@@ -486,7 +482,6 @@ impl ReadApiServer for ReadApi {
         let past_read = self
             .state
             .get_past_object_read(&object_id, version)
-            .await
             .map_err(|e| {
                 error!("Failed to call try_get_past_object for object: {object_id:?} version: {version:?} with error: {e:?}");
                 anyhow!("{e}")
@@ -529,17 +524,16 @@ impl ReadApiServer for ReadApi {
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiPastObjectResponse>> {
         if past_objects.len() <= QUERY_MAX_RESULT_LIMIT {
-            let results = block_on(async {
-                let mut futures = vec![];
-                for past_object in past_objects {
-                    futures.push(self.try_get_past_object(
+            let results: Vec<_> = past_objects
+                .iter()
+                .map(|past_object| {
+                    self.try_get_past_object(
                         past_object.object_id,
                         past_object.version,
                         options.clone(),
-                    ));
-                }
-                join_all(futures).await
-            });
+                    )
+                })
+                .collect();
             let (oks, errs): (Vec<_>, Vec<_>) = results.into_iter().partition(Result::is_ok);
             let success = oks.into_iter().filter_map(Result::ok).collect();
             let errors: Vec<_> = errs.into_iter().filter_map(Result::err).collect();
@@ -652,7 +646,6 @@ impl ReadApiServer for ReadApi {
             if let Some(effects) = &temp_response.effects {
                 let balance_changes =
                     get_balance_changes_from_effect(&object_cache, effects, input_objects, None)
-                        .await
                         .map_err(Error::SuiError)?;
                 temp_response.balance_changes = Some(balance_changes);
             }
@@ -670,7 +663,6 @@ impl ReadApiServer for ReadApi {
                     effects.all_changed_objects(),
                     effects.all_deleted(),
                 )
-                .await
                 .map_err(Error::SuiError)?;
                 temp_response.object_changes = Some(object_changes);
             }
@@ -688,9 +680,7 @@ impl ReadApiServer for ReadApi {
         digests: Vec<TransactionDigest>,
         opts: Option<SuiTransactionBlockResponseOptions>,
     ) -> RpcResult<Vec<SuiTransactionBlockResponse>> {
-        Ok(block_on(
-            self.multi_get_transaction_blocks_internal(digests, opts),
-        )?)
+        Ok(self.multi_get_transaction_blocks_internal(digests, opts)?)
     }
 
     fn get_events(&self, transaction_digest: TransactionDigest) -> RpcResult<Vec<SuiEvent>> {
