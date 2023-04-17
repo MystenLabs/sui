@@ -71,10 +71,10 @@ use sui_types::effects::{
     SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
     VerifiedCertifiedTransactionEffects, VerifiedSignedTransactionEffects,
 };
-use sui_types::error::{ExecutionError, UserInputError};
+use sui_types::error::{ExecutionError, ExecutionErrorKind, UserInputError};
 use sui_types::event::{Event, EventID};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::gas::{GasCostSummary, SuiGasStatus};
+use sui_types::gas::{write_gas_stats, GasCostSummary, SuiGasStatus};
 use sui_types::layout_resolver::LayoutResolver;
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
@@ -1127,7 +1127,7 @@ impl AuthorityState {
         Option<ExecutionError>,
     )> {
         let _scope = monitored_scope("Execution::prepare_certificate");
-        let _metrics_guard = self.metrics.prepare_certificate_latency.start_timer();
+        let metrics_guard = self.metrics.prepare_certificate_latency.start_timer();
 
         // check_certificate_input also checks shared object locks when loading the shared objects.
         let (gas_status, input_objects) = transaction_input_checker::check_certificate_input(
@@ -1171,7 +1171,44 @@ impl AuthorityState {
                 self.certificate_deny_config.certificate_deny_set(),
             );
 
-        Ok((inner_temp_store, effects, execution_error_opt.err()))
+        let time = (metrics_guard.stop_and_record() * 1_000_000_000.0).round() as u64;
+        let shared = effects.shared_objects().len();
+        let created = effects.created().len();
+        let mutated = effects.mutated().len();
+        let unwrapped = effects.unwrapped().len();
+        let deleted = effects.deleted().len();
+        let unwrapped_deleted = effects.unwrapped_then_deleted().len();
+        let wrapped = effects.wrapped().len();
+        let err = execution_error_opt.err();
+        let error = match &err {
+            None => 0,
+            Some(err) => match err.kind() {
+                ExecutionErrorKind::InsufficientGas => 1,
+                ExecutionErrorKind::InvariantViolation
+                | ExecutionErrorKind::VMInvariantViolation => 2,
+                _ => 3,
+            }
+        };
+        write_gas_stats(
+            format!(
+                "{}: time = {}, error = {}, shared = {}, created = {}, \
+                    mutated = {}, unwrapped = {}, deleted = {}, \
+                    unwrapped_deleted = {}, wrapped = {}",
+                *certificate.digest(),
+                time,
+                error,
+                shared,
+                created,
+                mutated,
+                unwrapped,
+                deleted,
+                unwrapped_deleted,
+                wrapped,
+            )
+            .as_str(),
+        );
+
+        Ok((inner_temp_store, effects, err))
     }
 
     pub async fn dry_exec_transaction(
@@ -1368,7 +1405,12 @@ impl AuthorityState {
             transaction_digest,
             protocol_config,
         );
-        let gas_status = SuiGasStatus::new_with_budget(max_tx_gas, gas_price, protocol_config);
+        let gas_status = SuiGasStatus::new_with_budget(
+            max_tx_gas,
+            gas_price,
+            protocol_config,
+            Some(transaction_digest),
+        );
         let move_vm = Arc::new(
             adapter::new_move_vm(
                 epoch_store.native_functions().clone(),

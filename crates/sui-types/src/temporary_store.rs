@@ -228,6 +228,10 @@ impl<S> TemporaryStore<S> {
         }
     }
 
+    pub fn tx_digest(&self) -> TransactionDigest {
+        self.tx_digest
+    }
+
     // Helpers to access private fields
     pub fn objects(&self) -> &BTreeMap<ObjectID, Object> {
         &self.input_objects
