@@ -1,5 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::bank::BenchmarkBank;
+use crate::options::Opts;
+use crate::util::get_ed25519_keypair_from_keystore;
+use crate::{FullNodeProxy, LocalValidatorAggregatorProxy, ValidatorProxy};
 use anyhow::{anyhow, bail, Context, Result};
 use prometheus::Registry;
 use rand::seq::SliceRandom;
@@ -8,22 +12,16 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
 use sui_config::utils;
-
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
-use tokio::time::sleep;
-
-use crate::bank::BenchmarkBank;
-use crate::options::Opts;
-use crate::util::get_ed25519_keypair_from_keystore;
-use crate::workloads::workload::MIN_SUI_PER_WORKLOAD;
-use crate::{FullNodeProxy, LocalValidatorAggregatorProxy, ValidatorProxy};
 use sui_types::object::generate_max_test_gas_objects_with_owner;
+use sui_types::object::Owner;
 use test_utils::authority::test_and_configure_authority_configs_with_objects;
 use test_utils::authority::{spawn_fullnode, spawn_test_authorities};
 use tokio::runtime::Builder;
 use tokio::sync::{oneshot, Barrier};
+use tokio::time::sleep;
 use tracing::info;
 
 pub enum Env {
@@ -222,37 +220,6 @@ impl Env {
         );
 
         let primary_gas_owner_addr = ObjectID::from_hex_literal(primary_gas_owner_id)?;
-
-        // TODO: Add a way to query local proxy for gas objects.
-        // i.e. get from genesis blob and then query for the latest object version.
-
-        // Require the use of fullnode to query for gas object for now.
-        if fullnode_rpc_urls.is_empty() {
-            bail!("fullnode-rpc-url is required for remote run to get gas objects");
-        }
-        let fn_proxy = Arc::new(FullNodeProxy::from_url(&fullnode_rpc_urls[0]).await?);
-
-        let mut gas_objects = fn_proxy
-            .get_owned_objects(primary_gas_owner_addr.into())
-            .await?;
-        gas_objects.sort_by_key(|&(gas, _)| std::cmp::Reverse(gas));
-
-        // TODO: Merge all owned gas objects into one and use that as the primary gas object.
-        let (balance, primary_gas_obj) = gas_objects
-            .iter()
-            .filter(|(balance, _)| *balance > MIN_SUI_PER_WORKLOAD)
-            .collect::<Vec<_>>()
-            .choose(&mut rand::thread_rng())
-            .context(format!(
-                "Failed to choose a random primary gas id with atleast {MIN_SUI_PER_WORKLOAD} SUI"
-            ))?;
-
-        info!(
-            "Using primary gas id: {} with balance of {balance}",
-            primary_gas_obj.id()
-        );
-
-        let primary_gas_account = primary_gas_obj.owner.get_owner_address()?;
         let keystore_path = Some(&keystore_path)
             .filter(|s| !s.is_empty())
             .map(PathBuf::from)
@@ -262,21 +229,78 @@ impl Env {
                     &keystore_path
                 ))
             })?;
-        let keypair = Arc::new(get_ed25519_keypair_from_keystore(
-            keystore_path,
-            &primary_gas_account,
-        )?);
 
-        let primary_coin = (
-            primary_gas_obj.compute_object_reference(),
-            primary_gas_account,
-            keypair,
-        );
+        let current_gas = if use_fullnode_for_execution {
+            // Go through fullnode to get the current gas object.
+            let mut gas_objects = proxy
+                .get_owned_objects(primary_gas_owner_addr.into())
+                .await?;
+            gas_objects.sort_by_key(|&(gas, _)| std::cmp::Reverse(gas));
+
+            // TODO: Merge all owned gas objects into one and use that as the primary gas object.
+            let (balance, primary_gas_obj) = gas_objects
+                .iter()
+                .max_by_key(|(balance, _)| balance)
+                .context(
+                    "Failed to choose the gas object with the largest amount of gas".to_string(),
+                )?;
+
+            info!(
+                "Using primary gas id: {} with balance of {balance}",
+                primary_gas_obj.id()
+            );
+
+            let primary_gas_account = primary_gas_obj.owner.get_owner_address()?;
+
+            let keypair = Arc::new(get_ed25519_keypair_from_keystore(
+                keystore_path,
+                &primary_gas_account,
+            )?);
+
+            (
+                primary_gas_obj.compute_object_reference(),
+                primary_gas_account,
+                keypair,
+            )
+        } else {
+            // Go through local proxy to get the current gas object.
+            let mut genesis_gas_objects = Vec::new();
+
+            for obj in genesis.objects().iter() {
+                let owner = &obj.owner;
+                if let Owner::AddressOwner(addr) = owner {
+                    if *addr == primary_gas_owner_addr.into() {
+                        genesis_gas_objects.push(obj.clone());
+                    }
+                }
+            }
+
+            let genesis_gas_obj = genesis_gas_objects
+                .choose(&mut rand::thread_rng())
+                .context("Failed to choose a random primary gas")?
+                .clone();
+
+            let current_gas_object = proxy.get_object(genesis_gas_obj.id()).await?;
+            let current_gas_account = current_gas_object.owner.get_owner_address()?;
+
+            let keypair = Arc::new(get_ed25519_keypair_from_keystore(
+                keystore_path,
+                &current_gas_account,
+            )?);
+
+            info!("Using primary gas obj: {}", current_gas_object.id());
+
+            (
+                current_gas_object.compute_object_reference(),
+                current_gas_account,
+                keypair,
+            )
+        };
 
         Ok(BenchmarkSetup {
             server_handle: join_handle,
             shutdown_notifier: sender,
-            bank: BenchmarkBank::new(proxy.clone(), primary_coin),
+            bank: BenchmarkBank::new(proxy.clone(), current_gas),
             proxies,
         })
     }
