@@ -37,7 +37,7 @@ use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary
 use crate::error::{Error, SuiRpcResult};
 use crate::{RpcClient, WAIT_FOR_TX_TIMEOUT_SEC};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ReadApi {
     api: Arc<RpcClient>,
 }
