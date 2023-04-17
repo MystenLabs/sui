@@ -35,7 +35,7 @@ use std::{
 };
 use tap::TapFallible;
 use tokio::sync::oneshot;
-use tracing::{debug, error, info, instrument};
+use tracing::{error, info, instrument, warn};
 
 use self::{iter::Iter, keys::Keys, values::Values};
 use crate::rocks::safe_iter::SafeIter;
@@ -44,15 +44,15 @@ use sui_macros::{fail_point, nondeterministic};
 
 // Write buffer size per RocksDB instance can be set via the env var below.
 // If the env var is not set, use the default value in MiB.
-const ENV_VAR_DB_WRITE_BUFFER_SIZE: &str = "MYSTEN_DB_WRITE_BUFFER_SIZE_MB";
+const ENV_VAR_DB_WRITE_BUFFER_SIZE: &str = "DB_WRITE_BUFFER_SIZE_MB";
 const DEFAULT_DB_WRITE_BUFFER_SIZE: usize = 1024;
 
 // Write ahead log size per RocksDB instance can be set via the env var below.
 // If the env var is not set, use the default value in MiB.
-const ENV_VAR_DB_WAL_SIZE: &str = "MYSTEN_DB_WAL_SIZE_MB";
+const ENV_VAR_DB_WAL_SIZE: &str = "DB_WAL_SIZE_MB";
 const DEFAULT_DB_WAL_SIZE: usize = 1024;
 
-// Environment variable to controlling behavior for write throughput optimized tables.
+// Environment variable to control behavior of write throughput optimized tables.
 const ENV_VAR_L0_NUM_FILES_COMPACTION_TRIGGER: &str = "L0_NUM_FILES_COMPACTION_TRIGGER";
 const DEFAULT_L0_NUM_FILES_COMPACTION_TRIGGER: usize = 6;
 const ENV_VAR_MAX_WRITE_BUFFER_SIZE_MB: &str = "MAX_WRITE_BUFFER_SIZE_MB";
@@ -61,6 +61,9 @@ const ENV_VAR_MAX_WRITE_BUFFER_NUMBER: &str = "MAX_WRITE_BUFFER_NUMBER";
 const DEFAULT_MAX_WRITE_BUFFER_NUMBER: usize = 6;
 const ENV_VAR_TARGET_FILE_SIZE_BASE_MB: &str = "TARGET_FILE_SIZE_BASE_MB";
 const DEFAULT_TARGET_FILE_SIZE_BASE_MB: usize = 128;
+
+// Set to 1 to disable blob storage for transactions and effects.
+const ENV_VAR_DISABLE_BLOB_STORAGE: &str = "DISABLE_BLOB_STORAGE";
 
 const ENV_VAR_MAX_BACKGROUND_JOBS: &str = "MAX_BACKGROUND_JOBS";
 
@@ -1814,11 +1817,10 @@ where
 
 pub fn read_size_from_env(var_name: &str) -> Option<usize> {
     env::var(var_name)
-        .tap_err(|e| debug!("Env var {} is not set: {}", var_name, e))
         .ok()?
         .parse::<usize>()
         .tap_err(|e| {
-            info!(
+            warn!(
                 "Env var {} does not contain valid usize integer: {}",
                 var_name, e
             )
@@ -1865,13 +1867,19 @@ impl DBOptions {
     // https://rocksdb.org/blog/2021/05/26/integrated-blob-db.html
     // REQUIRED: table must set optimize_for_write_throughput() earlier.
     pub fn optimize_for_large_values_no_scan(mut self) -> DBOptions {
+        if env::var(ENV_VAR_DISABLE_BLOB_STORAGE).is_ok() {
+            info!("Large value blob storage optimization is disabled via env var.");
+            return self;
+        }
+
         // Blob settings.
         self.options.set_enable_blob_files(true);
         self.options
             .set_blob_compression_type(rocksdb::DBCompressionType::Lz4);
         self.options.set_enable_blob_gc(true);
-        // TODO: consider setting a min_blob_size.
-        // self.options.set_min_blob_size(512);
+        // Not setting a min_blob_size, to avoid additional behavior variance when workload changes.
+        // Most transactions and effects are > 300B, which makes blob storage worthwhile for
+        // saving write cost.
 
         // Since large blobs are not in sst files, reduce the target file size and base level
         // target size.
