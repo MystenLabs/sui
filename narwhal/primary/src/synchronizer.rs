@@ -49,7 +49,8 @@ pub mod synchronizer_tests;
 
 /// Only try to accept or suspend a certificate, if it is within this limit above the
 /// locally highest processed round.
-const NEW_CERTIFICATE_ROUND_LIMIT: Round = 100;
+/// Expected max memory usage with 100 nodes: 100 nodes * 1000 rounds * 3.3KB per certificate = 330MB.
+const NEW_CERTIFICATE_ROUND_LIMIT: Round = 1000;
 
 struct Inner {
     /// The id of this primary.
