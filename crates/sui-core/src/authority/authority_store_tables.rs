@@ -290,6 +290,8 @@ impl AuthorityPerpetualTables {
         self.root_state_hash_by_epoch.clear()?;
         self.epoch_start_configuration.clear()?;
         self.pruned_checkpoint.clear()?;
+        self.expected_network_sui_amount.clear()?;
+        self.expected_storage_fund_imbalance.clear()?;
         self.objects
             .rocksdb
             .flush()
