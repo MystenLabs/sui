@@ -1,7 +1,7 @@
 name: Compatibility Checker (Sharded)
 
 concurrency:
-  group: ${{ github.workflow }}
+  group: compatibility-checker-cluster
 
 on:
   schedule:
@@ -13,27 +13,24 @@ on:
         required: false
         description: "Run with verbose logging"
         default: false
-      preserve-state:
-        type: boolean
-        required: false
-        description: "Preserve database state of previous run"
-        default: true
 
 jobs:
   genesis-sync-test-sharded:
     strategy:
       matrix:
-        shard_manifest:
-          [
+        shard_manifest: [
+            # we need shards to overlap by one epoch for full coverage, as snapshot N
+            # does not start at the beginning of epoch N, but rather at the end of
+            # epoch N, and immediately reconfigures to N+1.
             {
               hostname: "fullnode-compat-test-01",
               start_epoch: 0,
-              end_epoch: 748,
+              end_epoch: 749,
             },
             {
               hostname: "fullnode-compat-test-02",
               start_epoch: 748,
-              end_epoch: 753,
+              end_epoch: 754,
             },
             {
               hostname: "fullnode-compat-test-03",
@@ -86,42 +83,41 @@ jobs:
 
       - name: Fetch sui-node binary
         run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 30 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && mkdir -p /var/lib/sui/bin && cd /var/lib/sui/bin && wget https://sui-releases.s3.us-east-1.amazonaws.com/${{ steps.get-ci-tag.outputs.CI_COMMIT_HASH }}/sui-node && chmod +x sui-node"
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 30 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && rm -rf /opt/sui/bin && mkdir -p /opt/sui/bin && cd /opt/sui/bin && wget https://sui-releases.s3.us-east-1.amazonaws.com/${{ steps.get-ci-tag.outputs.CI_COMMIT_HASH }}/sui-node && chmod +x sui-node"
 
       # Wipe database from previous runs
       - name: Wipe SuiDB
-        if: ${{ github.event.inputs.preserve-state == false }}
         run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && sudo rm -rf /var/lib/sui/suidb || true"
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && sudo rm -rf /opt/sui/suidb || true"
 
       - name: Setup DB structure
-        if: ${{ (matrix.shard_manifest.start_epoch != 0) && (github.event.inputs.preserve-state == false) }}
+        if: ${{ (matrix.shard_manifest.start_epoch != 0) }}
         run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && mkdir -p /var/lib/sui/suidb/epoch_${{ matrix.shard_manifest.start_epoch }} && cd /var/lib/sui/suidb/epoch_${{ matrix.shard_manifest.start_epoch }} && mkdir checkpoints && mkdir epochs && mkdir -p store/perpetual"
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && mkdir -p /opt/sui/suidb/epoch_${{ matrix.shard_manifest.start_epoch }} && cd /opt/sui/suidb/epoch_${{ matrix.shard_manifest.start_epoch }} && mkdir checkpoints && mkdir epochs && mkdir -p store/perpetual"
 
       - name: Download epoch snapshot artifacts
-        if: ${{ (matrix.shard_manifest.start_epoch != 0) && (github.event.inputs.preserve-state == false) }}
+        if: ${{ (matrix.shard_manifest.start_epoch != 0) }}
         run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 60 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && cd /var/lib/sui/suidb/epoch_${{ matrix.shard_manifest.start_epoch }}/epochs && wget -i /var/lib/sui/s3_urls/epochs"
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 60 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && cd /opt/sui/suidb/epoch_${{ matrix.shard_manifest.start_epoch }}/epochs && wget -i /opt/sui/s3_urls/epochs"
 
       - name: Download checkpoint snapshot artifacts
-        if: ${{ (matrix.shard_manifest.start_epoch != 0) && (github.event.inputs.preserve-state == false) }}
+        if: ${{ (matrix.shard_manifest.start_epoch != 0) }}
         run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 60 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && cd /var/lib/sui/suidb/epoch_${{ matrix.shard_manifest.start_epoch }}/checkpoints && wget -i /var/lib/sui/s3_urls/checkpoints"
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 60 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && cd /opt/sui/suidb/epoch_${{ matrix.shard_manifest.start_epoch }}/checkpoints && wget -i /opt/sui/s3_urls/checkpoints"
 
       - name: Download perpetual snapshot artifacts
-        if: ${{ (matrix.shard_manifest.start_epoch != 0) && (github.event.inputs.preserve-state == false) }}
+        if: ${{ (matrix.shard_manifest.start_epoch != 0) }}
         run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 60 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && cd /var/lib/sui/suidb/epoch_${{ matrix.shard_manifest.start_epoch }}/store/perpetual && wget -i /var/lib/sui/s3_urls/store_perpetual"
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 60 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && cd /opt/sui/suidb/epoch_${{ matrix.shard_manifest.start_epoch }}/store/perpetual && wget -i /opt/sui/s3_urls/store_perpetual"
 
       - name: Mark snapshot as live
-        if: ${{ (matrix.shard_manifest.start_epoch != 0) && (github.event.inputs.preserve-state == false) }}
+        if: ${{ (matrix.shard_manifest.start_epoch != 0) }}
         run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && mv /var/lib/sui/suidb/epoch_${{ matrix.shard_manifest.start_epoch }} /var/lib/sui/suidb/live"
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && mv /opt/sui/suidb/epoch_${{ matrix.shard_manifest.start_epoch }} /opt/sui/suidb/live"
 
       - name: Run sync script
         run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 720 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && echo "Running compatibility checker against binary built at commit hash ${{ steps.get-ci-tag.outputs.CI_COMMIT_HASH }}" && CARGO_TERM_COLOR=always ./scripts/compatibility/fullnode-sync.sh -p /var/lib/sui/bin/sui-node -n testnet -e ${{ matrix.shard_manifest.end_epoch }} ${{ github.event.inputs.verbose == true && '-v' || '' }}"
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 720 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && echo "Running compatibility checker against binary built at commit hash ${{ steps.get-ci-tag.outputs.CI_COMMIT_HASH }}" && CARGO_TERM_COLOR=always ./scripts/compatibility/fullnode-sync.sh -p /opt/sui/bin/sui-node -n testnet -e ${{ matrix.shard_manifest.end_epoch }} ${{ github.event.inputs.verbose == true && '-v' || '' }}"
 
   notify:
     name: Notify
@@ -185,7 +181,7 @@ jobs:
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "To debug failures: See run logs; Rerun with `verbose` logging enabled, `clean` disabled in order to sync from last place); `tsh ssh ubuntu@fullnode-compat-test-01` if needed. \nMetrics can be viewed at https://metrics.sui.io/d/_nu1mWC7zx/sui-fullnode?orgId=1&refresh=1m&var-Environment=mysten-metrics-internal&var-network=testnet&var-host=fullnode-compat-test-01"
+                    "text": "To debug failures: See run logs; Rerun with `verbose` logging enabled; `tsh ssh ubuntu@fullnode-compat-test-01` if needed (or -02, -03). \nMetrics can be viewed at https://metrics.sui.io/d/_nu1mWC7zx/sui-fullnode?orgId=1&refresh=1m&var-Environment=mysten-metrics-internal&var-network=testnet&var-host=fullnode-compat-test-01"
                   }
                 }
               ]
