@@ -8,8 +8,10 @@ use rocksdb::MultiThreaded;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::str;
+use std::sync::Arc;
 use strum_macros::EnumString;
 use sui_core::authority::authority_per_epoch_store::AuthorityEpochTables;
+use sui_core::authority::authority_store_pruner::AuthorityStorePruner;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::authority::authority_store_types::{StoreData, StoreObject};
 use sui_core::epoch::committee_store::CommitteeStoreTables;
@@ -174,6 +176,12 @@ pub fn duplicate_objects_summary(db_path: PathBuf) -> (usize, usize, usize, usiz
         }
     }
     (total_count, duplicate_count, total_bytes, duplicated_bytes)
+}
+
+pub fn compact(db_path: PathBuf) -> anyhow::Result<()> {
+    let perpetual = Arc::new(AuthorityPerpetualTables::open(&db_path, None));
+    AuthorityStorePruner::compact(&perpetual)?;
+    Ok(())
 }
 
 // TODO: condense this using macro or trait dyn skills
