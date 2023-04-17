@@ -304,7 +304,7 @@ module kiosk::collectible {
 module kiosk::template {
     use std::option::some;
     use sui::tx_context::TxContext;
-    use collectible::collectible;
+    use kiosk::collectible;
 
     /// The maximum supply setting for the collectible.
     const MAX_SUPPLY: u32 = 1000;
@@ -314,7 +314,7 @@ module kiosk::template {
     /// The type of the collectible.
     struct Template has store {}
 
-    fun init(otw: ARTYBARA, ctx: &mut TxContext) {
+    fun init(otw: TEMPLATE, ctx: &mut TxContext) {
         collectible::claim_ticket<
             TEMPLATE,
             Template

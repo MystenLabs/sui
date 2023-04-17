@@ -1,35 +1,29 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// Kiosk is a primitive for building open, zero-fee trading platforms
-/// with a high degree of customization over transfer policies.
-
-/// The system has 3 main audiences:
+/// Kiosk is a trading primitive and the main building block for Asset trading.
 ///
-/// 1. Creators: for a type to be tradable in the Kiosk ecosystem,
-/// creator (publisher) of the type needs to issue a `TransferPolicyCap`
-/// which gives them a power to enforce any constraint on trades by
-/// either using one of the pre-built primitives (see `sui::royalty`)
-/// or by implementing a custom policy. The latter requires additional
-/// support for discoverability in the ecosystem and should be performed
-/// within the scope of an Application or some platform.
+/// 1. Anyone can create a new Kiosk by running `kiosk::new()`
+/// 2. By default, only the owner of the Kiosk can place/take/borrow items.
+/// 3. The owner can also list items for sale (in SUI) right in the Kiosk allowing
+/// anyone on the network to purchase it.
+/// 4. Kiosk enforces `TransferPolicy` on every purchase; the buyer must complete
+/// the Transfer Policy requirements to unblock the transaction.
+/// 5. Kiosk supports strong policy enforcement by allowing "locking" an asset in
+/// the Kiosk and only allowing it to be sold (can't be taken). To lock an item,
+/// use `kiosk::lock()` method.
+/// 6. If there's a need to use the trading functionality in a third party module,
+/// owner can create a `PurchaseCap` which locks the asset and allows the bearer
+/// to purchase it from the Kiosk for any price no less than the minimum price set
+/// in the `PurchaseCap` (this allows for variable-price sales).
+/// 7. Kiosk can be extended with a custom functionality by using `PurchaseCap`
+/// and dynamic fields (see `kiosk` section in examples).
 ///
-/// - A type can not be traded in the Kiosk unless there's a policy for it.
-/// - 0-royalty policy is just as easy as "freezing" the `AllowTransferCap`
-///   making it available for everyone to authorize deals "for free"
+/// Kiosk requires TransferPolicy approval on every purchase, be it via the simple
+/// purchase flow or a purchase via the `PurchaseCap`, therefore giving creators an
+/// option to enforce custom rules on the trading of their assets.
 ///
-/// 2. Traders: anyone can create a Kiosk and depending on whether it's
-/// a shared object or some shared-wrapper the owner can trade any type
-/// that has issued `TransferPolicyCap` in a Kiosk. To do so, they need
-/// to make an offer, and any party can purchase the item for the amount of
-/// SUI set in the offer. The responsibility to follow the transfer policy
-/// set by the creator of the `T` is on the buyer.
-///
-/// 3. Marketplaces: marketplaces can either watch for the offers made in
-/// personal Kiosks or even integrate the Kiosk primitive and build on top
-/// of it. In the custom logic scenario, the `TransferPolicyCap` can also
-/// be used to implement application-specific transfer rules.
-///
+/// See `sui::transfer_policy` for mode details on `TransferPolicy` and `TransferRequest`.
 module sui::kiosk {
     use std::option::{Self, Option};
     use sui::object::{Self, UID, ID};
@@ -112,7 +106,9 @@ module sui::kiosk {
         kiosk_id: ID,
         /// ID of the listed item.
         item_id: ID,
-        /// Minimum price for which the item can be purchased.
+        /// Minimum price for which the item can be purchased. This field
+        /// acts as a guarantee of payment in cases when the `PurchaseCap`
+        /// is entrusted to the third party.
         min_price: u64
     }
 

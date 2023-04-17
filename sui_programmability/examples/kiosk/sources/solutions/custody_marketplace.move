@@ -44,6 +44,7 @@ module kiosk::kiosk_custody_marketplace {
     use sui::kiosk::{Self, Kiosk, KioskOwnerCap};
     use sui::object::{Self, ID, UID};
     use sui::sui::SUI;
+    use sui::transfer_policy::{Self as policy, TransferRequest};
     use sui::tx_context::TxContext;
     use sui::transfer;
 
@@ -73,7 +74,9 @@ module kiosk::kiosk_custody_marketplace {
     /// Generated based on the Kiosk ID check (via a lookup of a key in the Marketplace).
     ///
     /// Can be used to enforce trades inside the marketplace via the WitnessRule.
-    struct MarketplaceConfirmation has drop {}
+    struct TradeConfirmation has drop {}
+
+    struct PlacementConfirmation has drop {}
 
     /// A custom dynamic field key to store the `KioskOwnerCap`.
     struct OwnerKey has store, copy, drop { kiosk_id: ID }
@@ -176,7 +179,7 @@ module kiosk::kiosk_custody_marketplace {
     /// Kiosk balance is not changed.
     public fun return_cap(
         self: &mut Marketplace,
-        kiosk: &Kiosk,
+        kiosk: &mut Kiosk,
         kiosk_cap: KioskOwnerCap,
         borrow: Borrow,
     ) {
@@ -192,9 +195,9 @@ module kiosk::kiosk_custody_marketplace {
 
     /// Confirm that TransferRequest is coming from the Marketplace by
     /// checking the Kiosk ID in the Marketplace.
-    public fun confirm_trade(
+    public fun confirm_trade<T>(
         self: &Marketplace,
-        req: &TransferRequest
+        req: &TransferRequest<T>
     ): TradeConfirmation {
         assert!(df::exists_(
             &self.id,
@@ -207,9 +210,9 @@ module kiosk::kiosk_custody_marketplace {
     /// Confirm that the item is placed in the Kiosk that belongs to
     /// the Marketplace. This witness can make sure the item never leaves
     /// the Marketplace if the creator has chosen to check that.
-    public fun confirm_placement(
+    public fun confirm_placement<T>(
         self: &Marketplace,
-        req: &TransferRequest,
+        req: &TransferRequest<T>,
         kiosk: &Kiosk
     ): PlacementConfirmation {
         let item_id = policy::item(req);
