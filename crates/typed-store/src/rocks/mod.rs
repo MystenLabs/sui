@@ -635,6 +635,16 @@ impl<K, V> DBMap<K, V> {
             }
             info!("Returning the cf metric logging task for DBMap: {}", &cf);
         });
+        if let Some(periodic_compaction_seconds) = opts.periodic_compaction_seconds {
+            db.set_options_cf(
+                &db.cf_handle(opt_cf).expect("column family not found"),
+                &[(
+                    "periodic_compaction_seconds",
+                    &format!("{}", periodic_compaction_seconds),
+                )],
+            )
+            .expect("failed to set options for objects cf");
+        }
         DBMap {
             rocksdb: db.clone(),
             opts: opts.clone(),
@@ -1831,6 +1841,7 @@ pub fn read_size_from_env(var_name: &str) -> Option<usize> {
 #[derive(Default, Clone, Debug)]
 pub struct ReadWriteOptions {
     pub ignore_range_deletions: bool,
+    pub periodic_compaction_seconds: Option<usize>,
 }
 
 impl ReadWriteOptions {

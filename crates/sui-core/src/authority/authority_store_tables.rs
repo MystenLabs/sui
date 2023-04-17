@@ -29,6 +29,7 @@ const ENV_VAR_TRANSACTIONS_BLOCK_CACHE_SIZE: &str = "TRANSACTIONS_BLOCK_CACHE_MB
 const ENV_VAR_EFFECTS_BLOCK_CACHE_SIZE: &str = "EFFECTS_BLOCK_CACHE_MB";
 const ENV_VAR_EVENTS_BLOCK_CACHE_SIZE: &str = "EVENTS_BLOCK_CACHE_MB";
 const ENV_VAR_INDIRECT_OBJECTS_BLOCK_CACHE_SIZE: &str = "INDIRECT_OBJECTS_BLOCK_CACHE_MB";
+const ENV_VAR_PERIODIC_COMPACTION_SECONDS: &str = "PERIODIC_COMPACTION_SECONDS";
 
 /// AuthorityPerpetualTables contains data that must be preserved from one epoch to the next.
 #[derive(DBMapUtils)]
@@ -422,6 +423,9 @@ fn objects_table_default_config() -> DBOptions {
             .options,
         rw_options: ReadWriteOptions {
             ignore_range_deletions: true,
+            periodic_compaction_seconds: Some(
+                read_size_from_env(ENV_VAR_PERIODIC_COMPACTION_SECONDS).unwrap_or(24 * 60 * 60),
+            ),
         },
     }
 }
