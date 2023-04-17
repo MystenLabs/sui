@@ -33,7 +33,7 @@ export async function requestSuiFromFaucet(
     parsed = await res.json();
   } catch (e) {
     throw new Error(
-      `Ecountered error when parsing response from faucet, error: ${e}, status ${res.status}, response ${res}`,
+      `Encountered error when parsing response from faucet, error: ${e}, status ${res.status}, response ${res}`,
     );
   }
   if (parsed.error) {
