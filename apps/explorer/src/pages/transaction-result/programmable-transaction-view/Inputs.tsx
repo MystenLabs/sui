@@ -45,7 +45,7 @@ export function Inputs({ inputs }: Props) {
 
                         return (
                             <li key={index}>
-                                <div className="mt-1 text-bodySmall font-medium text-steel-dark">
+                                <div className="mt-1 break-all text-bodySmall font-medium text-steel-dark">
                                     {JSON.stringify(input.value)}
                                 </div>
                             </li>
