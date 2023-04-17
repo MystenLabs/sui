@@ -32,8 +32,8 @@ use crate::{
 };
 
 // Reject a transaction if transaction manager queue length is above this threshold.
-// 20000 = 10k TPS * 2s resident time in transaction manager.
-pub(crate) const MAX_TM_QUEUE_LENGTH: usize = 20_000;
+// 100_000 = 10k TPS * 5s resident time in transaction manager (pending + executing) * 2.
+pub(crate) const MAX_TM_QUEUE_LENGTH: usize = 100_000;
 
 // Reject a transaction if the number of pending transactions depending on the object
 // is above the threshold.
