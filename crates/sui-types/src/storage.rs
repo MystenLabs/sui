@@ -76,10 +76,11 @@ pub trait Storage {
 
     fn read_object(&self, id: &ObjectID) -> Option<&Object>;
 
-    fn apply_object_changes(
+    fn apply_object_changes(&mut self, changes: BTreeMap<ObjectID, ObjectChange>);
+
+    fn save_loaded_child_objects(
         &mut self,
-        changes: BTreeMap<ObjectID, ObjectChange>,
-        loaded_child_objects: Option<BTreeMap<ObjectID, SequenceNumber>>,
+        loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
     );
 }
 

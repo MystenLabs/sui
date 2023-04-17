@@ -88,33 +88,26 @@ pub fn execute<S: StorageView, Mode: ExecutionMode>(
                 // We still need to record the loaded child objects for debugging
                 let loaded_child_objects = object_runtime.loaded_child_objects();
                 drop(context);
-                state_view.apply_object_changes(BTreeMap::new(), Some(loaded_child_objects));
+                state_view.save_loaded_child_objects(loaded_child_objects);
                 return Err(err);
         };
     }
 
-
-    // Save loaded objects table incase we fail in post execution
+    // Save loaded objects table in case we fail in post execution
     let object_runtime: &ObjectRuntime = context.session.get_native_extensions().get();
     // We still need to record the loaded child objects for debugging
     let loaded_child_objects = object_runtime.loaded_child_objects();
 
     // apply changes
+    let finished  = context.finish::<Mode>();
+    // Save loaded objects for debug. We dont want to lose the info
+    state_view.save_loaded_child_objects(loaded_child_objects);
+
     let ExecutionResults {
         object_changes,
         user_events,
-        loaded_child_objects
-    } = match context.finish::<Mode>() {
-        Ok(results) => results,
-        Err(err) => {
-            // Save loaded objects for debug
-            state_view.apply_object_changes(BTreeMap::new(), Some(loaded_child_objects));
-            return Err(err);
-        }
-    };
-
-    state_view.apply_object_changes(object_changes, loaded_child_objects);
-
+    } =  finished?;
+    state_view.apply_object_changes(object_changes);
     for (module_id, tag, contents) in user_events {
         state_view.log_event(Event::new(
             module_id.address(),

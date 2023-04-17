@@ -906,7 +906,7 @@ impl AuthorityState {
             // We only care about this for full nodes
             inner_temporary_store.loaded_child_objects.clone()
         } else {
-            None
+            BTreeMap::new()
         };
 
         let tx_coins = self
@@ -1282,7 +1282,7 @@ impl AuthorityState {
         timestamp_ms: u64,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         tx_coins: Option<TxCoins>,
-        loaded_child_objects: Option<BTreeMap<ObjectID, SequenceNumber>>,
+        loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
     ) -> SuiResult<u64> {
         let changes = self
             .process_object_index(effects, epoch_store)
@@ -1493,7 +1493,7 @@ impl AuthorityState {
         events: &TransactionEvents,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         tx_coins: Option<TxCoins>,
-        loaded_child_objects: Option<BTreeMap<ObjectID, SequenceNumber>>,
+        loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
     ) -> SuiResult {
         if self.indexes.is_none() {
             return Ok(());

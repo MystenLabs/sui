@@ -292,7 +292,7 @@ impl IndexStore {
         digest: &TransactionDigest,
         timestamp_ms: u64,
         tx_coins: Option<TxCoins>,
-        loaded_child_objects: Option<BTreeMap<ObjectID, SequenceNumber>>,
+        loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
     ) -> SuiResult<u64> {
         let sequence = self.next_sequence_number.fetch_add(1, Ordering::SeqCst);
 
@@ -425,13 +425,11 @@ impl IndexStore {
         )?;
 
         // Loaded child objects table
-        if let Some(loaded_child_objects) = loaded_child_objects {
-            let loaded_child_objects: Vec<_> = loaded_child_objects.into_iter().collect();
-            batch.insert_batch(
-                &self.tables.dynamic_field_loaded_child_object_versions,
-                std::iter::once((*digest, loaded_child_objects)),
-            )?;
-        };
+        let loaded_child_objects: Vec<_> = loaded_child_objects.into_iter().collect();
+        batch.insert_batch(
+            &self.tables.dynamic_field_loaded_child_object_versions,
+            std::iter::once((*digest, loaded_child_objects)),
+        )?;
 
         batch.write()?;
         Ok(sequence)
