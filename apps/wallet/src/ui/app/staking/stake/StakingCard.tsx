@@ -319,7 +319,7 @@ function StakingCard() {
                                             initialIsOpen
                                         >
                                             <Text
-                                                variant="p3"
+                                                variant="pSubtitle"
                                                 color="steel-dark"
                                                 weight="normal"
                                             >

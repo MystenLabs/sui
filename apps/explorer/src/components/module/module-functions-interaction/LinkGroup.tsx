@@ -27,7 +27,7 @@ export function LinkGroup(props: LinkGroupProps) {
                   ))
                 : null}
             {isText ? (
-                <div className="text-p2 font-medium text-gray-90">
+                <div className="text-pBodySmall font-medium text-gray-90">
                     {props.text}
                 </div>
             ) : null}

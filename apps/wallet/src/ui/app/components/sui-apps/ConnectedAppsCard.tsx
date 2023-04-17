@@ -82,7 +82,7 @@ function ConnectedDapps() {
                 </Heading>
             </div>
             <div className="my-4">
-                <Text variant="p2" color="gray-80" weight="normal">
+                <Text variant="pBodySmall" color="gray-80" weight="normal">
                     Apps you have connected to through the Sui Wallet in this
                     browser.
                 </Text>

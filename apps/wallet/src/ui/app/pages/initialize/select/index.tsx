@@ -46,7 +46,7 @@ const SelectPage = () => {
                         >
                             {aSelection.title}
                         </Heading>
-                        <Text variant="p1" color="gray-85" weight="medium">
+                        <Text variant="pBody" color="gray-85" weight="medium">
                             {aSelection.desc}
                         </Text>
 

@@ -37,7 +37,11 @@ export function ConfirmationModal({
             body={
                 hint ? (
                     <div className="break-words text-center">
-                        <Text variant="p2" color="steel-dark" weight="normal">
+                        <Text
+                            variant="pBodySmall"
+                            color="steel-dark"
+                            weight="normal"
+                        >
                             {hint}
                         </Text>
                     </div>

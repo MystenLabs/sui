@@ -108,7 +108,7 @@ export function ImportPrivateKey() {
                         <FieldLabel txt="Enter Private Key">
                             <Field
                                 name="privateKey"
-                                className="shadow-button text-steel-dark font-medium text-p1 resize-none rounded-xl border border-solid border-steel p-3"
+                                className="shadow-button text-steel-dark font-medium text-pBody resize-none rounded-xl border border-solid border-steel p-3"
                                 component={'textarea'}
                                 rows="3"
                                 spellCheck="false"

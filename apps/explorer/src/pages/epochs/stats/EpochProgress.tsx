@@ -36,26 +36,29 @@ export function EpochProgress({
                     </Heading>
                     <div>
                         <Text
-                            variant="p4/normal"
+                            variant="pSubtitleSmall/normal"
                             uppercase
                             color="steel-darker"
                         >
                             Start
                         </Text>
-                        <Text variant="p3/semibold" color="steel-darker">
+                        <Text variant="pSubtitle/semibold" color="steel-darker">
                             {formatDate(start)}
                         </Text>
                     </div>
                     {!inProgress && end ? (
                         <div>
                             <Text
-                                variant="p4/normal"
+                                variant="pSubtitleSmall/normal"
                                 uppercase
                                 color="steel-darker"
                             >
                                 End
                             </Text>
-                            <Text variant="p3/semibold" color="steel-darker">
+                            <Text
+                                variant="pSubtitle/semibold"
+                                color="steel-darker"
+                            >
                                 {formatDate(end)}
                             </Text>
                         </div>

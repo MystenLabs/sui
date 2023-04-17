@@ -75,7 +75,7 @@ const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
                             </div>
                             <div className="mb-3.5 mt-2 text-center">
                                 <Text
-                                    variant="p2"
+                                    variant="pBodySmall"
                                     color="steel-dark"
                                     weight="normal"
                                 >
@@ -104,7 +104,7 @@ const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
                             </div>
                             <div className="mb-1 text-center">
                                 <Text
-                                    variant="p2"
+                                    variant="pBodySmall"
                                     color="steel-dark"
                                     weight="normal"
                                 >
@@ -151,7 +151,7 @@ const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
                         to="/"
                         text="Open Sui Wallet"
                         after={
-                            <ArrowLeft16 className="text-p2 font-normal rotate-135" />
+                            <ArrowLeft16 className="text-pBodySmall font-normal rotate-135" />
                         }
                     />
                 </div>

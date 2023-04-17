@@ -50,7 +50,7 @@ export function Account({ account }: AccountProps) {
                         </div>
                         <Copy16
                             onClick={copyCallback}
-                            className="transition text-base leading-none text-gray-60 active:text-gray-60 group-hover:text-hero-darkest cursor-pointer p1"
+                            className="transition text-base leading-none text-gray-60 active:text-gray-60 group-hover:text-hero-darkest cursor-pointer"
                         />
                         <ChevronDown16 className="transition text-base leading-none text-gray-60 ui-open:rotate-180 ui-open:text-hero-darkest group-hover:text-hero-darkest" />
                     </Disclosure.Button>

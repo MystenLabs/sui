@@ -173,7 +173,7 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                         {showSponsorInfo && (
                             <div className="flex justify-between items-center py-3.5">
                                 <Text
-                                    variant="p1"
+                                    variant="pBody"
                                     weight="medium"
                                     color="steel-darker"
                                 >
@@ -199,12 +199,12 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                             type={ExplorerLinkType.transaction}
                             transactionID={getTransactionDigest(txn)}
                             title="View on Sui Explorer"
-                            className="text-sui-dark text-p4 font-semibold no-underline uppercase tracking-wider"
+                            className="text-sui-dark text-pSubtitleSmall font-semibold no-underline uppercase tracking-wider"
                             showIcon={false}
                         >
                             View on Explorer
                         </ExplorerLink>
-                        <ArrowUpRight12 className="text-steel text-p3" />
+                        <ArrowUpRight12 className="text-steel text-pSubtitle" />
                     </div>
                 </div>
             </ReceiptCardBg>

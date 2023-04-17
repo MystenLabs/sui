@@ -11,7 +11,7 @@ import { ReactComponent as InfoIcon } from './icons/info.svg';
 import { Text } from '~/ui/Text';
 
 const bannerStyles = cva(
-    'inline-flex text-p2 font-medium rounded-2xl overflow-hidden gap-2 items-center flex-nowrap relative',
+    'inline-flex text-pBodySmall font-medium rounded-2xl overflow-hidden gap-2 items-center flex-nowrap relative',
     {
         variants: {
             variant: {

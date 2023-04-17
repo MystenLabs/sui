@@ -55,12 +55,12 @@ export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
             <div className="min-w-0 basis-full break-words md:basis-2/3">
                 <DescriptionList>
                     <DescriptionItem title="Description">
-                        <Text variant="p1/medium" color="gray-90">
+                        <Text variant="pBody/medium" color="gray-90">
                             {description || '--'}
                         </Text>
                     </DescriptionItem>
                     <DescriptionItem title="Location">
-                        <Text variant="p1/medium" color="gray-90">
+                        <Text variant="pBody/medium" color="gray-90">
                             --
                         </Text>
                     </DescriptionItem>
@@ -71,7 +71,7 @@ export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
                         />
                     </DescriptionItem>
                     <DescriptionItem title="Public Key">
-                        <Text variant="p1/medium" color="steel-darker">
+                        <Text variant="pBody/medium" color="steel-darker">
                             {validatorPublicKey}
                         </Text>
                     </DescriptionItem>
