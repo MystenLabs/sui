@@ -54,13 +54,13 @@ export function HomeMetrics() {
     const { data: transactionCount } = useQuery(
         ['home', 'transaction-count'],
         () => rpc.getTotalTransactionBlocks(),
-        { cacheTime: 24 * 60 * 60 * 1000, staleTime: Infinity, retry: false }
+        { cacheTime: 24 * 60 * 60 * 1000, staleTime: Infinity, retry: 5 }
     );
 
     const { data: networkMetrics } = useQuery(
         ['home', 'metrics'],
         () => enhancedRpc.getNetworkMetrics(),
-        { cacheTime: 24 * 60 * 60 * 1000, staleTime: Infinity, retry: false }
+        { cacheTime: 24 * 60 * 60 * 1000, staleTime: Infinity, retry: 5 }
     );
 
     return (

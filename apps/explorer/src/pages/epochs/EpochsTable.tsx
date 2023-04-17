@@ -47,9 +47,9 @@ export function EpochsTable({
             }),
         {
             keepPreviousData: true,
+            retry: 5,
             // Disable refetching if not on the first page:
             // refetchInterval: pagination.cursor ? undefined : refetchInterval,
-            retry: false,
             staleTime: Infinity,
             cacheTime: 24 * 60 * 60 * 1000,
         }
