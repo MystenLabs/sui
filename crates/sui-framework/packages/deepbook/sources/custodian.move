@@ -30,7 +30,7 @@ module deepbook::custodian {
     }
 
     /// Create an `AccountCap` that can be used across all DeepBook pool
-    public(friend) fun mint_account_cap(ctx: &mut TxContext): AccountCap {
+    public fun mint_account_cap(ctx: &mut TxContext): AccountCap {
         AccountCap { id: object::new(ctx) }
     }
 
