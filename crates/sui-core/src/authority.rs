@@ -1313,7 +1313,7 @@ impl AuthorityState {
             digest,
             timestamp_ms,
             tx_coins,
-            loaded_child_objects
+            loaded_child_objects,
         )
     }
 

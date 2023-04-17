@@ -1573,7 +1573,6 @@ pub enum SuiObjectArg {
     },
 }
 
-
 #[serde_as]
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename = "DynamicFieldLoadedChildObject", rename_all = "camelCase")]
