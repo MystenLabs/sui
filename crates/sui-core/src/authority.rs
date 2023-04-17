@@ -1946,7 +1946,7 @@ impl AuthorityState {
     }
 
     pub fn clone_committee_for_testing(&self) -> Committee {
-        self.epoch_store_for_testing().committee().clone()
+        Committee::clone(self.epoch_store_for_testing().committee())
     }
 
     pub async fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {

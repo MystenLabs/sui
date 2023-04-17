@@ -492,7 +492,7 @@ impl AuthorityPerEpochStore {
         )
     }
 
-    pub fn committee(&self) -> &Committee {
+    pub fn committee(&self) -> &Arc<Committee> {
         &self.committee
     }
 
