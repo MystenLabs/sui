@@ -13,9 +13,10 @@ use crate::{
 };
 use bincode::Options;
 use collectable::TryExtend;
+use itertools::Itertools;
 use rocksdb::{
     checkpoint::Checkpoint, BlockBasedOptions, BottommostLevelCompaction, Cache, CompactOptions,
-    LiveFile,
+    LiveFile, OptimisticTransactionDB, SnapshotWithThreadMode,
 };
 use rocksdb::{
     properties, AsColumnFamilyRef, CStrLike, ColumnFamilyDescriptor, DBWithThreadMode, Error,
@@ -423,6 +424,15 @@ impl RocksDB {
         delegate_call!(self.flush()).map_err(|e| TypedStoreError::RocksDBError(e.into_string()))
     }
 
+    pub fn snapshot(&self) -> RocksDBSnapshot<'_> {
+        match self {
+            Self::DBWithThreadMode(d) => RocksDBSnapshot::DBWithThreadMode(d.underlying.snapshot()),
+            Self::OptimisticTransactionDB(d) => {
+                RocksDBSnapshot::OptimisticTransactionDB(d.underlying.snapshot())
+            }
+        }
+    }
+
     pub fn checkpoint(&self, path: &Path) -> Result<(), TypedStoreError> {
         let checkpoint = match self {
             Self::DBWithThreadMode(d) => Checkpoint::new(&d.underlying)?,
@@ -499,6 +509,43 @@ impl RocksDB {
             .and_then(|f| f.to_str())
             .unwrap_or("unknown")
             .to_string()
+    }
+}
+
+pub enum RocksDBSnapshot<'a> {
+    DBWithThreadMode(rocksdb::Snapshot<'a>),
+    OptimisticTransactionDB(SnapshotWithThreadMode<'a, OptimisticTransactionDB>),
+}
+
+impl<'a> RocksDBSnapshot<'a> {
+    pub fn multi_get_cf_opt<'b: 'a, K, I, W>(
+        &'a self,
+        keys: I,
+        readopts: ReadOptions,
+    ) -> Vec<Result<Option<Vec<u8>>, rocksdb::Error>>
+    where
+        K: AsRef<[u8]>,
+        I: IntoIterator<Item = (&'b W, K)>,
+        W: 'b + AsColumnFamilyRef,
+    {
+        match self {
+            Self::DBWithThreadMode(s) => s.multi_get_cf_opt(keys, readopts),
+            Self::OptimisticTransactionDB(s) => s.multi_get_cf_opt(keys, readopts),
+        }
+    }
+    pub fn multi_get_cf<'b: 'a, K, I, W>(
+        &'a self,
+        keys: I,
+    ) -> Vec<Result<Option<Vec<u8>>, rocksdb::Error>>
+    where
+        K: AsRef<[u8]>,
+        I: IntoIterator<Item = (&'b W, K)>,
+        W: 'b + AsColumnFamilyRef,
+    {
+        match self {
+            Self::DBWithThreadMode(s) => s.multi_get_cf(keys),
+            Self::OptimisticTransactionDB(s) => s.multi_get_cf(keys),
+        }
     }
 }
 
@@ -922,6 +969,10 @@ impl<K, V> DBMap<K, V> {
 
     pub fn checkpoint_db(&self, path: &Path) -> Result<(), TypedStoreError> {
         self.rocksdb.checkpoint(path)
+    }
+
+    pub fn snapshot(&self) -> Result<RocksDBSnapshot<'_>, TypedStoreError> {
+        Ok(self.rocksdb.snapshot())
     }
 
     pub fn table_summary(&self) -> eyre::Result<TableSummary> {
@@ -1754,6 +1805,40 @@ where
             .collect();
 
         values_parsed
+    }
+
+    /// Returns a vector of values corresponding to the keys provided.
+    #[instrument(level = "trace", skip_all, err)]
+    fn chunked_multi_get<J>(
+        &self,
+        keys: impl IntoIterator<Item = J>,
+        chunk_size: usize,
+    ) -> Result<Vec<Option<V>>, TypedStoreError>
+    where
+        J: Borrow<K>,
+    {
+        let cf = self.cf();
+        let keys_bytes = keys
+            .into_iter()
+            .map(|k| (&cf, be_fix_int_ser(k.borrow()).unwrap()));
+        let chunked_keys = keys_bytes.into_iter().chunks(chunk_size);
+        let snapshot = self.snapshot()?;
+        let mut results = vec![];
+        for chunk in chunked_keys.into_iter() {
+            let chunk_result = snapshot.multi_get_cf(chunk);
+            let values_parsed: Result<Vec<_>, TypedStoreError> = chunk_result
+                .into_iter()
+                .map(|value_byte| {
+                    let value_byte = value_byte?;
+                    match value_byte {
+                        Some(data) => Ok(Some(bcs::from_bytes(&data)?)),
+                        None => Ok(None),
+                    }
+                })
+                .collect();
+            results.extend(values_parsed?);
+        }
+        Ok(results)
     }
 
     /// Convenience method for batch insertion

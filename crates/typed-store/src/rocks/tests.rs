@@ -137,6 +137,26 @@ async fn test_multi_get(#[values(true, false)] is_transactional: bool) {
 
 #[rstest]
 #[tokio::test]
+async fn test_chunked_multi_get(#[values(true, false)] is_transactional: bool) {
+    let db = open_map(temp_dir(), None, is_transactional);
+
+    db.insert(&123, &"123".to_string())
+        .expect("Failed to insert");
+    db.insert(&456, &"456".to_string())
+        .expect("Failed to insert");
+
+    let result = db
+        .chunked_multi_get([123, 456, 789], 1)
+        .expect("Failed to chunk multi get");
+
+    assert_eq!(result.len(), 3);
+    assert_eq!(result[0], Some("123".to_string()));
+    assert_eq!(result[1], Some("456".to_string()));
+    assert_eq!(result[2], None);
+}
+
+#[rstest]
+#[tokio::test]
 async fn test_skip(#[values(true, false)] is_transactional: bool) {
     let db = open_map(temp_dir(), None, is_transactional);
 

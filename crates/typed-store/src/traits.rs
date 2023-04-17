@@ -91,6 +91,18 @@ where
             .collect()
     }
 
+    /// Returns a vector of values corresponding to the keys provided, non-atomically.
+    fn chunked_multi_get<J>(
+        &self,
+        keys: impl IntoIterator<Item = J>,
+        _chunk_size: usize,
+    ) -> Result<Vec<Option<V>>, Self::Error>
+    where
+        J: Borrow<K>,
+    {
+        keys.into_iter().map(|key| self.get(key.borrow())).collect()
+    }
+
     /// Inserts key-value pairs, non-atomically.
     fn multi_insert<J, U>(
         &self,
