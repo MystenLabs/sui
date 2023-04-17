@@ -23,6 +23,7 @@ use sui_storage::IndexStore;
 use sui_types::base_types::{AuthorityName, ObjectID};
 use sui_types::committee::Committee;
 use sui_types::crypto::AuthorityKeyPair;
+use sui_types::messages::{VerifiedExecutableTransaction, VerifiedTransaction};
 use sui_types::object::Object;
 
 pub struct TestAuthorityBuilder {
@@ -66,7 +67,24 @@ impl TestAuthorityBuilder {
         )
         .await
         .unwrap();
-        Self::build_with_store(self, genesis_committee, key, store, &[]).await
+        let state = Self::build_with_store(self, genesis_committee, key, store, &[]).await;
+        // For any type of local testing that does not actually spawn a node, the checkpoint executor
+        // won't be started, which means we won't actually execute the genesis transaction. In that case,
+        // the genesis objects (e.g. all the genesis test coins) won't be accessible. Executing it
+        // explicitly makes sure all genesis objects are ready for use.
+        state
+            .try_execute_immediately(
+                &VerifiedExecutableTransaction::new_from_checkpoint(
+                    VerifiedTransaction::new_unchecked(genesis.transaction().clone()),
+                    genesis.epoch(),
+                    genesis.checkpoint().sequence_number,
+                ),
+                None,
+                &state.epoch_store_for_testing(),
+            )
+            .await
+            .unwrap();
+        state
     }
 
     pub async fn build_with_store(
