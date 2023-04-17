@@ -9,14 +9,13 @@ use crypto::NetworkPublicKey;
 use fastcrypto::hash::Hash as _;
 use futures::{stream::FuturesOrdered, StreamExt};
 use mysten_common::sync::notify_once::NotifyOnce;
-use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use network::{
     anemo_ext::{NetworkExt, WaitingPeer},
     client::NetworkClient,
     PrimaryToWorkerClient, RetryConfig,
 };
 use parking_lot::Mutex;
-use std::time::Instant;
 use std::{
     cmp::min,
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
@@ -146,6 +145,8 @@ impl Inner {
         _lock: &MutexGuard<'_, State>,
         certificate: Certificate,
     ) -> DagResult<()> {
+        let _scope = monitored_scope("accept_certificate_internal");
+
         debug!("Processing certificate {:?}", certificate);
 
         let digest = certificate.digest();
@@ -663,6 +664,8 @@ impl Synchronizer {
         certificate: Certificate,
         early_suspend: bool,
     ) -> DagResult<()> {
+        let _scope = monitored_scope("process_certificate_with_lock");
+
         debug!("Processing certificate {:?}", certificate);
 
         // The state lock must be held for the rest of the function, to ensure updating state,
