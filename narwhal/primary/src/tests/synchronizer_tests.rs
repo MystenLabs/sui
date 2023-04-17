@@ -208,11 +208,11 @@ async fn accept_suspended_certificates() {
         }
     }
 
-    // Create a certificate > 100 rounds above the highest local round.
+    // Create a certificate > 1000 rounds above the highest local round.
     let (_digest, cert) = mock_signed_certificate(
         keys.as_slice(),
         certificates.last().cloned().unwrap().origin(),
-        200,
+        2000,
         next_parents,
         &committee,
     );
