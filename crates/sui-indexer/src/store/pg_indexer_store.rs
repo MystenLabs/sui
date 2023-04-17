@@ -1856,20 +1856,26 @@ async fn get_network_metrics_cached(
 #[async_trait]
 impl ObjectProvider for PgIndexerStore {
     type Error = IndexerError;
-    async fn get_object(
+    fn get_object(
         &self,
-        id: &ObjectID,
-        version: &SequenceNumber,
+        _id: &ObjectID,
+        _version: &SequenceNumber,
     ) -> Result<sui_types::object::Object, Self::Error> {
-        self.get_sui_types_object(id, version).await
+        Err(IndexerError::NotSupportedError(
+            "Object cache is not supported".to_string(),
+        ))
+        // self.get_sui_types_object(id, version)
     }
 
-    async fn find_object_lt_or_eq_version(
+    fn find_object_lt_or_eq_version(
         &self,
-        id: &ObjectID,
-        version: &SequenceNumber,
+        _id: &ObjectID,
+        _version: &SequenceNumber,
     ) -> Result<Option<sui_types::object::Object>, Self::Error> {
-        self.find_sui_types_object_lt_or_eq_version(id, version)
-            .await
+        Err(IndexerError::NotSupportedError(
+            "find_object_lt_or_eq_version is not supported".to_string(),
+        ))
+        // self.find_sui_types_object_lt_or_eq_version(id, version)
+        //     .await
     }
 }
