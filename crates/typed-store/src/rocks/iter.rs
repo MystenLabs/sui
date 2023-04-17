@@ -1,11 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use std::{marker::PhantomData, sync::Arc};
+use std::marker::PhantomData;
 
 use bincode::Options;
 use rocksdb::Direction;
-
-use crate::metrics::{DBMetrics, SamplingInterval};
 
 use super::{be_fix_int_ser, errors::TypedStoreError, RocksDBRawIter};
 use serde::{de::DeserializeOwned, Serialize};
@@ -15,26 +13,15 @@ pub struct Iter<'a, K, V> {
     db_iter: RocksDBRawIter<'a>,
     _phantom: PhantomData<(K, V)>,
     direction: Direction,
-    cf: String,
-    db_metrics: Arc<DBMetrics>,
-    iter_bytes_sample_interval: SamplingInterval,
     is_initialized: bool,
 }
 
 impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iter<'a, K, V> {
-    pub(super) fn new(
-        db_iter: RocksDBRawIter<'a>,
-        cf: String,
-        db_metrics: &Arc<DBMetrics>,
-        iter_bytes_sample_interval: &SamplingInterval,
-    ) -> Self {
+    pub(super) fn new(db_iter: RocksDBRawIter<'a>) -> Self {
         Self {
             db_iter,
             _phantom: PhantomData,
             direction: Direction::Forward,
-            cf,
-            db_metrics: db_metrics.clone(),
-            iter_bytes_sample_interval: iter_bytes_sample_interval.clone(),
             is_initialized: false,
         }
     }
@@ -64,19 +51,10 @@ impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iterator for Iter<'a, K, V> {
                 .expect("Valid iterator failed to get value");
             let key = config.deserialize(raw_key).ok();
             let value = bcs::from_bytes(raw_value).ok();
-            if self.iter_bytes_sample_interval.sample() {
-                let total_bytes_read = (raw_key.len() + raw_value.len()) as f64;
-                self.db_metrics
-                    .op_metrics
-                    .rocksdb_iter_bytes
-                    .with_label_values(&[&self.cf])
-                    .observe(total_bytes_read);
-            }
             match self.direction {
                 Direction::Forward => self.db_iter.next(),
                 Direction::Reverse => self.db_iter.prev(),
             }
-
             key.and_then(|k| value.map(|v| (k, v)))
         } else {
             None
