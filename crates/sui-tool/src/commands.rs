@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand},
     get_object, get_transaction_block, make_clients,
-    replay::{ReplayToolCommand, execute_replay_command},
+    replay::{execute_replay_command, ReplayToolCommand},
     restore_from_db_checkpoint, ConciseObjectOutput, GroupedObjectOutput, VerboseObjectOutput,
 };
 use anyhow::Result;

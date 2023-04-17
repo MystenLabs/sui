@@ -404,9 +404,9 @@ impl ObjectRuntimeState {
         mut self,
         by_value_inputs: BTreeSet<ObjectID>,
         external_transfers: BTreeSet<ObjectID>,
-        mut loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
+        loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
         child_object_effects: BTreeMap<ObjectID, ChildObjectEffect>,
-        loaded_child_objects_fixed: bool,
+        _loaded_child_objects_fixed: bool,
     ) -> Result<RuntimeResults, ExecutionError> {
         let mut wrapped_children = BTreeSet::new();
 

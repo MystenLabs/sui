@@ -19,7 +19,7 @@ use sui_adapter::execution_engine::execute_transaction_to_effects_impl;
 use sui_adapter::execution_mode;
 use sui_config::node::ExpensiveSafetyCheckConfig;
 use sui_core::authority::TemporaryStore;
-use sui_framework::system_package_ids;
+use sui_framework::BuiltInFramework;
 use sui_json_rpc_types::{
     EventFilter, SuiEvent, SuiGetPastObjectRequest, SuiObjectData, SuiObjectDataOptions,
     SuiObjectRef, SuiTransactionBlockEffectsV1, SuiTransactionBlockResponseOptions,
@@ -265,7 +265,7 @@ impl LocalExec {
 
     pub async fn multi_download(
         &self,
-        objs: &Vec<(ObjectID, SequenceNumber)>,
+        objs: &[(ObjectID, SequenceNumber)],
     ) -> Result<Vec<Object>, LocalExecError> {
         let objs: Vec<_> = objs
             .iter()
@@ -298,7 +298,7 @@ impl LocalExec {
 
     pub async fn multi_download_and_store(
         &mut self,
-        objs: &Vec<(ObjectID, SequenceNumber)>,
+        objs: &[(ObjectID, SequenceNumber)],
     ) -> Result<Vec<Object>, LocalExecError> {
         let objs = self.multi_download(objs).await?;
         for obj in objs.iter() {
@@ -330,7 +330,7 @@ impl LocalExec {
         // This is okay since the versions can never change
         let non_system_package_objs: Vec<_> = objs
             .into_iter()
-            .filter(|o| !system_package_ids().contains(o))
+            .filter(|o| !BuiltInFramework::all_package_ids().contains(o))
             .collect();
         let objs = self
             .multi_download_latest(non_system_package_objs)
@@ -494,8 +494,8 @@ impl LocalExec {
             .await?;
 
         // Download gas (although this should already be in cache from modified at versions?)
-        self.multi_download_and_store(&tx_info.gas.iter().map(|w| (w.0, w.1)).collect())
-            .await?;
+        let gas_refs: Vec<_> = tx_info.gas.iter().map(|w| (w.0, w.1)).collect();
+        self.multi_download_and_store(&gas_refs).await?;
 
         // This assumes we already initialized the protocol version table `protocol_version_epoch_table`
         let protocol_config = &tx_info.protocol_config;
@@ -597,7 +597,7 @@ impl LocalExec {
             Some(obj) => obj.clone(),
             None => {
                 assert!(
-                    !system_package_ids().contains(obj_id),
+                    !BuiltInFramework::all_package_ids().contains(obj_id),
                     "All system packages should be downloaded already"
                 );
                 self.download_latest_object(obj_id)?
@@ -730,7 +730,7 @@ impl LocalExec {
     pub async fn system_package_versions(
         &self,
     ) -> Result<BTreeMap<ObjectID, Vec<(SequenceNumber, TransactionDigest)>>, LocalExecError> {
-        let system_package_ids = system_package_ids();
+        let system_package_ids = BuiltInFramework::all_package_ids();
         let mut system_package_objs = self.multi_download_latest(system_package_ids).await?;
 
         let mut mapping = BTreeMap::new();
@@ -747,21 +747,19 @@ impl LocalExec {
             });
 
             // Next round
-            system_package_objs = self
-                .multi_download(
-                    &previous_txs
-                        .iter()
-                        .filter_map(|(q, _)| {
-                            let prev_ver = u64::from(q.1) - 1;
-                            if prev_ver == 0 {
-                                None
-                            } else {
-                                Some((q.0, SequenceNumber::from(prev_ver)))
-                            }
-                        })
-                        .collect(),
-                )
-                .await?;
+            // Get the previous version of each object if exists
+            let previous_ver_refs: Vec<_> = previous_txs
+                .iter()
+                .filter_map(|(q, _)| {
+                    let prev_ver = u64::from(q.1) - 1;
+                    if prev_ver == 0 {
+                        None
+                    } else {
+                        Some((q.0, SequenceNumber::from(prev_ver)))
+                    }
+                })
+                .collect();
+            system_package_objs = self.multi_download(&previous_ver_refs).await?;
         }
         Ok(mapping)
     }
@@ -939,7 +937,8 @@ impl LocalExec {
                 } => {
                     // We already downloaded
                     if let Some(o) = self.store.get(id) {
-                        Ok(shared_inputs.push(o.clone()))
+                        shared_inputs.push(o.clone());
+                        Ok(())
                     } else {
                         Err(LocalExecError::GeneralError {
                             err: format!(
@@ -978,7 +977,7 @@ impl LocalExec {
                         self.package_cache
                             .lock()
                             .expect("Cannot lock")
-                            .get(&i)
+                            .get(i)
                             .unwrap()
                             .clone(),
                     )

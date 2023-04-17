@@ -933,6 +933,7 @@ impl AuthorityState {
                 effects,
                 &events,
                 epoch_store,
+                tx_coins,
                 loaded_child_objects,
             )
             .await
@@ -1312,6 +1313,7 @@ impl AuthorityState {
             digest,
             timestamp_ms,
             tx_coins,
+            loaded_child_objects
         )
     }
 

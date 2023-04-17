@@ -12,9 +12,7 @@ use anyhow::anyhow;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{ModuleId, StructTag};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use sui_types::temporary_store::TxCoins;
-use tracing::{debug, trace};
-
+use std::collections::BTreeMap;
 use sui_json_rpc_types::SuiObjectDataFilter;
 use sui_types::base_types::{
     ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxSequenceNumber,
@@ -26,6 +24,8 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::TransactionEvents;
 use sui_types::object::Owner;
 use sui_types::query::TransactionFilter;
+use sui_types::temporary_store::TxCoins;
+use tracing::{debug, trace};
 use typed_store::rocks::{
     default_db_options, read_size_from_env, DBBatch, DBMap, DBOptions, MetricConf, ReadWriteOptions,
 };
@@ -291,8 +291,8 @@ impl IndexStore {
         object_index_changes: ObjectIndexChanges,
         digest: &TransactionDigest,
         timestamp_ms: u64,
-        loaded_child_objects: Option<BTreeMap<ObjectID, SequenceNumber>>,
         tx_coins: Option<TxCoins>,
+        loaded_child_objects: Option<BTreeMap<ObjectID, SequenceNumber>>,
     ) -> SuiResult<u64> {
         let sequence = self.next_sequence_number.fetch_add(1, Ordering::SeqCst);
 
