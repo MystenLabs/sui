@@ -5,6 +5,7 @@ import { CoinFormat } from '@mysten/core';
 import { CheckFill16 } from '@mysten/icons';
 
 import { CoinBalance } from './CoinBalance';
+import { ExpandableList } from './ExpandableList';
 import { Heading } from './Heading';
 import { TransactionAddress } from './TransactionAddress';
 
@@ -58,26 +59,33 @@ export function RecipientTransactionAddresses({
             title={recipients.length > 1 ? 'Recipients' : 'Recipient'}
         >
             <div className="flex flex-col gap-4">
-                {recipients.map(({ address, amount, coinType }, i) => (
-                    <div
-                        className="flex flex-col gap-0.5"
-                        key={`${address}-${i}`}
-                    >
-                        <TransactionAddress
-                            icon={<CheckFill16 className="text-success" />}
-                            address={address}
-                        />
-                        {amount ? (
-                            <div className="ml-6">
-                                <CoinBalance
-                                    amount={amount}
-                                    coinType={coinType}
-                                    format={CoinFormat.FULL}
+                <ExpandableList
+                    defaultItemsToShow={3}
+                    items={recipients.map(
+                        ({ address, amount, coinType }, i) => (
+                            <div
+                                className="flex flex-col gap-0.5"
+                                key={`${address}-${i}`}
+                            >
+                                <TransactionAddress
+                                    icon={
+                                        <CheckFill16 className="text-success" />
+                                    }
+                                    address={address}
                                 />
+                                {amount ? (
+                                    <div className="ml-6">
+                                        <CoinBalance
+                                            amount={amount}
+                                            coinType={coinType}
+                                            format={CoinFormat.FULL}
+                                        />
+                                    </div>
+                                ) : null}
                             </div>
-                        ) : null}
-                    </div>
-                ))}
+                        )
+                    )}
+                />
             </div>
         </TransactionAddressSection>
     );
