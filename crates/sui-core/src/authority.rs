@@ -711,10 +711,8 @@ impl AuthorityState {
 
         if !certificate.contains_shared_object() {
             // Shared object transactions need to be sequenced by Narwhal before enqueueing
-            // for execution.
-            // They are done in AuthorityPerEpochStore::handle_consensus_transaction(),
-            // which will enqueue this certificate for execution.
-            // For owned object transactions, we can enqueue the certificate for execution immediately.
+            // for execution, done in AuthorityPerEpochStore::handle_consensus_transaction().
+            // For owned object transactions, they can be enqueued for execution immediately.
             self.enqueue_certificates_for_execution(vec![certificate.clone()], epoch_store)?;
         }
 
@@ -1728,19 +1726,14 @@ impl AuthorityState {
         &self.transaction_manager
     }
 
-    /// Adds certificates to the pending certificate store and transaction manager for ordered execution.
+    /// Adds certificates to transaction manager for ordered execution.
+    /// It is unnecessary to persist the certificates into the pending_execution table,
+    /// because only Narwhal output needs to be persisted.
     pub fn enqueue_certificates_for_execution(
         &self,
         certs: Vec<VerifiedCertificate>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<()> {
-        let executable_txns: Vec<_> = certs
-            .clone()
-            .into_iter()
-            .map(VerifiedExecutableTransaction::new_from_certificate)
-            .map(VerifiedExecutableTransaction::serializable)
-            .collect();
-        epoch_store.insert_pending_execution(&executable_txns)?;
         self.transaction_manager
             .enqueue_certificates(certs, epoch_store)
     }
