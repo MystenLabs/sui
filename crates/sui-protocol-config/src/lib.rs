@@ -1013,7 +1013,7 @@ impl ProtocolConfig {
                 cfg.gas_model_version = Some(4);
                 cfg.feature_flags.scoring_decision_with_validity_cutoff = true;
                 cfg.scoring_decision_mad_divisor = Some(2.3);
-                cfg.scoring_decision_cutoff_value = Some(2.8);
+                cfg.scoring_decision_cutoff_value = Some(2.9);
                 cfg
             }
             // Use this template when making changes:
