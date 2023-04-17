@@ -256,7 +256,7 @@ impl<C> SafeClient<C> {
                             })
                             .map_err(|e| match e {
                                 // TODO: Remove as well once incident #267 is resolved.
-                                SuiError::InvalidSignature(error) => {
+                                SuiError::InvalidSignature { error } => {
                                     SuiError::PotentiallyTemporaryInvalidSignature { error }
                                 }
                                 _ => e,
