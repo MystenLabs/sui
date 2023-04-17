@@ -8,14 +8,14 @@ use crate::{
 };
 use anyhow::Result;
 use sui_network::default_mysten_network_config;
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc, str::FromStr};
 use sui_sdk::SuiClientBuilder;
 use sui_config::genesis::Genesis;
-use sui_core::{authority_client::{AuthorityAPI, NetworkAuthorityClient}, quorum_driver};
+use sui_core::{authority_client::{AuthorityAPI, NetworkAuthorityClient}, quorum_driver, epoch::committee_store::CommitteeStore, safe_client::SafeClientMetricsBase, authority_aggregator::{AuthAggMetrics, AuthorityAggregator}};
 
 use sui_types::{base_types::*, object::Owner};
 use mysten_network::Multiaddr;
-use sui_json_rpc_types::SuiTransactionBlockResponseQuery;
+use sui_json_rpc_types::{SuiTransactionBlockResponseQuery, SuiTransactionBlockResponseOptions};
 use clap::*;
 use sui_config::Config;
 use sui_types::messages_checkpoint::{
@@ -312,22 +312,41 @@ impl ToolCommand {
                 restore_from_db_checkpoint(&config, &db_checkpoint_path).await?;
             }
             ToolCommand::InvalidSigStress { fullnode_url} => {
-                let channel = default_mysten_network_config()
-                    .connect_lazy(&Multiaddr::try_from("/dns/lhr-00.testnet.sui.io/tcp/8080/http").unwrap())
-                    .unwrap();
-                let net_client_1 = NetworkAuthorityClient::new(channel);
-                let channel = default_mysten_network_config()
-                    .connect_lazy(&Multiaddr::try_from("/dns/icn-00.testnet.sui.io/tcp/8080/http").unwrap())
-                    .unwrap();
-                let net_client_2 = NetworkAuthorityClient::new(channel);
-                let fullnode_url = fullnode_url.unwrap_or_else(|| "http://ewr-tnt-rpc-12.testnet.sui.io:9000".to_string());
+                // let channel = default_mysten_network_config()
+                //     .connect_lazy(&Multiaddr::try_from("/dns/lhr-00.testnet.sui.io/tcp/8080/http").unwrap())
+                //     .unwrap();
+                // let net_client_1 = NetworkAuthorityClient::new(channel);
+                // let channel = default_mysten_network_config()
+                //     .connect_lazy(&Multiaddr::try_from("/dns/icn-00.testnet.sui.io/tcp/8080/http").unwrap())
+                //     .unwrap();
+                // let net_client_2 = NetworkAuthorityClient::new(channel);
+                let fullnode_url = fullnode_url.unwrap_or_else(|| "https://fullnode.testnet.sui.io:443".to_string());
                 let client = SuiClientBuilder::default()
                     .build(fullnode_url)
                     .await
                     .unwrap();
                 let read = client.read_api();
                 let quorum_driver = client.quorum_driver();
+                let sui_system_state = client.governance_api().get_latest_sui_system_state().await?;
+                let committee = sui_system_state.get_sui_committee_for_benchmarking();
+                // println!("Committee: {:?}", committee);
+                let committee_store =
+                    Arc::new(CommitteeStore::new_for_testing(&committee.committee));
+                let _ = committee_store
+                    .insert_new_committee(&committee.committee)
+                    .unwrap();
+                let registry = prometheus::Registry::new();
+                let metrics = SafeClientMetricsBase::new(&registry);
+                let metrics2 = AuthAggMetrics::new(&registry);
+                let agg = Arc::new(AuthorityAggregator::new_from_committee(
+                    committee,
+                    &committee_store,
+                    metrics,
+                    metrics2,
+                )?);
+                let mut cursor = Some(TransactionDigest::from_str("D9fKs9uPzUpXgDmy2WxuYjYjRrEzEsUBN6jiQbrp9LSe").unwrap());
                 loop {
+                    println!("new query");
                     let page = read.query_transaction_blocks(
                         SuiTransactionBlockResponseQuery::new_with_filter(
                             sui_types::query::TransactionFilter::MoveFunction { 
@@ -336,65 +355,36 @@ impl ToolCommand {
                                 function: None,
                             },
                         ),
-                        None,
-                        Some(100), 
-                        true, 
+                        cursor,
+                        Some(100),
+                        false,
                     ).await;
                     if page.is_err() {
                         println!("Error fetcing transactions: {:?}", page);
                         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
                         continue;
                     }
-                    let page = page.unwrap().data;
-                    page.iter().map(|resp| {
+                    let page = page.unwrap();
+                    cursor = page.next_cursor;
+                    println!("new query size: {}, new cursor: {:?}", page.data.len(), cursor);
+                    let tasks = page.data.iter().map(|resp| {
                         let tx_digest = resp.digest;
-                        let mut tx = None;
-                        let resp = net_client_1
-                            .handle_transaction_info_request(TransactionInfoRequest {
-                                transaction_digest: tx_digest,
-                            }).await;
-                        if resp.is_ok() {
-                            tx = Some(resp.unwrap().transaction);
-                        } else {
-                            let resp = net_client_2
-                                .handle_transaction_info_request(TransactionInfoRequest {
-                                    transaction_digest: tx_digest,
-                                }).await;
-                            if resp.is_ok() {
-                                tx = Some(resp.unwrap().transaction);
-                            }
-                        }
-                        if tx.is_none() {
+                        println!("Fetching transaction: {:?}", tx_digest);
+                        let agg_clone = agg.clone();
+                        async move { 
+                        let tx = agg_clone.fetch_transaction(tx_digest, None).await;
+                        if tx.is_err() {
                             println!("Error fetching transaction: {:?}", tx_digest);
                             return;
                         }
-                        quorum_driver.execute_transaction_block(tx
-                            , options, request_type)
-                        // let responses = join_all(clients.iter().map(|(name, (address, client))| async {
-                        //         .await;
-                        //     (
-                        //         *name,
-                        //         address.clone(),
-                        //         result,
-                        //         timer.elapsed().as_secs_f64(),
-                        //     )
-                        // }))
-                        // .await;
-
-                        // let tx = quorum_driver.send_transaction(resp.transaction.clone()).await.unwrap();
-                        // resp.digest
-                    })
-                    page.iter().map(futures::future::ready).for_each(|tx| {
-                        let tx = tx.clone();
-                        tokio::spawn(async move {
-                            let tx = tx.unwrap();
-                            let tx = quorum_driver.get_transaction_block(tx.id).await.unwrap();
-                            let tx = tx.unwrap();
-                            let tx = tx.transaction;
-                        )
-                    );
+                        let tx = tx.unwrap();
+                        let _ = quorum_driver.execute_transaction_block(tx, SuiTransactionBlockResponseOptions::default(), None).await;
+                        println!("Done executing transaction: {:?}", tx_digest);
+                        }
+                    }).collect::<Vec<_>>();
+                    let _ = futures::future::join_all(tasks).await;
+                    println!("Done with page");
                 }
-
             }
         };
         Ok(())

@@ -2091,6 +2091,13 @@ impl PlainTransactionInfoResponse {
             | PlainTransactionInfoResponse::ExecutedWithoutCert(_, _, _) => true,
         }
     }
+    pub fn into_transaction(self) -> VerifiedTransaction {
+        match self {
+            PlainTransactionInfoResponse::Signed(t) => t.into_unsigned().verify().unwrap(),
+            PlainTransactionInfoResponse::ExecutedWithCert(c, _, _) => c.into_unsigned(),
+            PlainTransactionInfoResponse::ExecutedWithoutCert(c, _, _) => c.into_unsigned(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -9932,6 +9932,7 @@ dependencies = [
  "itertools",
  "mysten-network",
  "narwhal-types",
+ "prometheus",
  "rocksdb",
  "ron",
  "strum",

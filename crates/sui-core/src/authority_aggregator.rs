@@ -1625,6 +1625,35 @@ where
         )
         .await
     }
+
+    pub async fn fetch_transaction(
+        &self,
+        digest: TransactionDigest,
+        timeout_total: Option<Duration>,
+    ) -> Result<VerifiedTransaction, anyhow::Error> {
+        let tx = self
+            .quorum_once_with_timeout(
+                None,
+                None,
+                |_, client| {
+                    Box::pin(async move {
+                        let tx = client
+                            .handle_transaction_info_request(TransactionInfoRequest {
+                                transaction_digest: digest,
+                            })
+                            .await?;
+                        Ok(tx)
+                    })
+                },
+                self.timeouts.serial_authority_request_timeout,
+                timeout_total,
+                "retry_locked_transaction".to_string(),
+            )
+            .await?;
+        // println!("Tx: {:?}", tx);
+        Ok(tx.into_transaction())
+    }
+
 }
 pub struct AuthorityAggregatorBuilder<'a> {
     network_config: Option<&'a NetworkConfig>,

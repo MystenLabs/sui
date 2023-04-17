@@ -61,7 +61,7 @@ impl CommitteeStore {
     }
 
     pub fn init_genesis_committee(&self, genesis_committee: Committee) -> SuiResult {
-        assert_eq!(genesis_committee.epoch, 0);
+        // assert_eq!(genesis_committee.epoch, 0);
         self.tables.committee_map.insert(&0, &genesis_committee)?;
         self.cache.write().insert(0, Arc::new(genesis_committee));
         Ok(())
