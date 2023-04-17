@@ -370,6 +370,13 @@ impl CheckpointStore {
         self.checkpoint_content.insert(contents.digest(), &contents)
     }
 
+    pub fn delete_full_checkpoint_contents(
+        &self,
+        seq: CheckpointSequenceNumber,
+    ) -> Result<(), TypedStoreError> {
+        self.full_checkpoint_content.remove(&seq)
+    }
+
     pub fn get_epoch_last_checkpoint(
         &self,
         epoch_id: EpochId,
