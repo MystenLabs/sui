@@ -7,7 +7,7 @@ set -e
 DEFAULT_NETWORK="testnet"
 CLEAN=0
 LOG_LEVEL="info"
-SUI_RUN_PATH="/var/lib/sui"
+SUI_RUN_PATH="/opt/sui"
 VERBOSE=""
 
 function cleanup {
@@ -17,7 +17,7 @@ function cleanup {
 
 trap cleanup EXIT
 
-while getopts "hvn:e:p:" OPT; do
+while getopts "hvn:e:p:t:" OPT; do
     case $OPT in
         p) 
             SUI_BIN_PATH=$OPTARG ;;
@@ -74,7 +74,7 @@ if [[ ! -f "${SUI_RUN_PATH}/fullnode.yaml" ]]; then
     sed -i "s|suidb|${SUI_RUN_PATH}/suidb|g" ${SUI_RUN_PATH}/fullnode.yaml
 
     if [[ $NETWORK != "devnet" ]]; then
-        cat >> "$SUI_RUN_PATH/fullnode.yaml" <<- EOM
+        cat >> "${SUI_RUN_PATH}/fullnode.yaml" <<- EOM
 
 p2p-config:
   seed-peers:

@@ -1,7 +1,7 @@
 name: Compatibility Checker
 
 concurrency:
-  group: ${{ github.workflow }}
+  group: compatibility-checker-cluster
 
 on:
   schedule:
@@ -13,11 +13,6 @@ on:
         required: false
         description: "Run with verbose logging"
         default: false
-      preserve-state:
-        type: boolean
-        required: false
-        description: "Preserve database state of previous run"
-        default: true
 
 jobs:
   genesis-sync-test:
@@ -56,9 +51,8 @@ jobs:
 
       # Wipe database from previous runs
       - name: Wipe SuiDB
-        if: ${{ github.event.inputs.preserve-state == false }}
         run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@fullnode-compat-test-01 "sudo rm -rf /var/lib/sui/suidb || true"
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@fullnode-compat-test-01 "sudo rm -rf /opt/sui/suidb || true"
 
       # Checkout the latest sui repo
       - name: Checkout sui repo
@@ -72,11 +66,11 @@ jobs:
 
       - name: Fetch sui-node binary
         run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 30 ssh ubuntu@fullnode-compat-test-01 "mkdir -p /var/lib/sui/bin && cd /var/lib/sui/bin && wget https://sui-releases.s3.us-east-1.amazonaws.com/${{ steps.get-ci-tag.outputs.CI_COMMIT_HASH }}/sui-node && chmod +x sui-node"
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 30 ssh ubuntu@fullnode-compat-test-01 "rm -rf /opt/sui/bin && mkdir -p /opt/sui/bin && cd /opt/sui/bin && wget https://sui-releases.s3.us-east-1.amazonaws.com/${{ steps.get-ci-tag.outputs.CI_COMMIT_HASH }}/sui-node && chmod +x sui-node"
 
       - name: Run sync script
         run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 720 ssh ubuntu@fullnode-compat-test-01 "cd ~/sui && echo "Running compatibility checker against binary built at commit hash ${{ steps.get-ci-tag.outputs.CI_COMMIT_HASH }}" && CARGO_TERM_COLOR=always ./scripts/compatibility/fullnode-sync.sh -p /var/lib/sui/bin/sui-node -n testnet ${{ github.event.inputs.verbose == true && '-v' || '' }}"
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 720 ssh ubuntu@fullnode-compat-test-01 "cd ~/sui && echo "Running compatibility checker against binary built at commit hash ${{ steps.get-ci-tag.outputs.CI_COMMIT_HASH }}" && CARGO_TERM_COLOR=always ./scripts/compatibility/fullnode-sync.sh -p /opt/sui/bin/sui-node -n testnet ${{ github.event.inputs.verbose == true && '-v' || '' }}"
 
   notify:
     name: Notify
@@ -140,7 +134,7 @@ jobs:
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "To debug failures: See run logs; Rerun with `verbose` logging enabled, `clean` disabled in order to sync from last place); `tsh ssh ubuntu@fullnode-compat-test-01` if needed. \nMetrics can be viewed at https://metrics.sui.io/d/_nu1mWC7zx/sui-fullnode?orgId=1&refresh=1m&var-Environment=mysten-metrics-internal&var-network=testnet&var-host=fullnode-compat-test-01"
+                    "text": "To debug failures: See run logs; Rerun with `verbose` logging enabled; `tsh ssh ubuntu@fullnode-compat-test-01` if needed. \nMetrics can be viewed at https://metrics.sui.io/d/_nu1mWC7zx/sui-fullnode?orgId=1&refresh=1m&var-Environment=mysten-metrics-internal&var-network=testnet&var-host=fullnode-compat-test-01"
                   }
                 }
               ]
