@@ -57,7 +57,7 @@ use std::{
 };
 use sui_config::p2p::StateSyncConfig;
 use sui_types::{
-    digests::{CheckpointContentsDigest, CheckpointDigest},
+    digests::CheckpointDigest,
     messages_checkpoint::{
         CertifiedCheckpointSummary as Checkpoint, CheckpointSequenceNumber, FullCheckpointContents,
         VerifiedCheckpoint, VerifiedCheckpointContents,
@@ -1068,7 +1068,7 @@ where
         .collect::<Vec<_>>();
     rand::seq::SliceRandom::shuffle(peers.as_mut_slice(), &mut rng);
 
-    let Some(contents) = get_full_checkpoint_contents(&mut peers, &store, checkpoint.content_digest, timeout).await else {
+    let Some(contents) = get_full_checkpoint_contents(&mut peers, &store, &checkpoint, timeout).await else {
         return Err(anyhow!("unable to sync checkpoint contents for checkpoint {}", checkpoint.sequence_number()));
     };
 
@@ -1080,16 +1080,22 @@ where
 async fn get_full_checkpoint_contents<S>(
     peers: &mut [StateSyncClient<anemo::Peer>],
     store: S,
-    digest: CheckpointContentsDigest,
+    checkpoint: &VerifiedCheckpoint,
     timeout: Duration,
 ) -> Option<FullCheckpointContents>
 where
     S: WriteStore,
     <S as ReadStore>::Error: std::error::Error,
 {
+    let digest = checkpoint.content_digest;
     if let Some(contents) = store
-        .get_full_checkpoint_contents(&digest)
+        .get_full_checkpoint_contents_by_sequence_number(*checkpoint.sequence_number())
         .expect("store operation should not fail")
+        .or_else(|| {
+            store
+                .get_full_checkpoint_contents(&digest)
+                .expect("store operation should not fail")
+        })
     {
         return Some(contents);
     }
@@ -1109,7 +1115,7 @@ where
             if contents.verify_digests(digest).is_ok() {
                 let verified_contents = VerifiedCheckpointContents::new_unchecked(contents.clone());
                 store
-                    .insert_checkpoint_contents(verified_contents)
+                    .insert_checkpoint_contents(checkpoint, verified_contents)
                     .expect("store operation should not fail");
                 return Some(contents);
             }
