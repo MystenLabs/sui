@@ -1,35 +1,29 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// Kiosk is a primitive for building open, zero-fee trading platforms
-/// with a high degree of customization over transfer policies.
-
-/// The system has 3 main audiences:
+/// Kiosk is a trading primitive and the main building block for Asset trading.
 ///
-/// 1. Creators: for a type to be tradable in the Kiosk ecosystem,
-/// creator (publisher) of the type needs to issue a `TransferPolicyCap`
-/// which gives them a power to enforce any constraint on trades by
-/// either using one of the pre-built primitives (see `sui::royalty`)
-/// or by implementing a custom policy. The latter requires additional
-/// support for discoverability in the ecosystem and should be performed
-/// within the scope of an Application or some platform.
+/// 1. Anyone can create a new Kiosk by running `kiosk::new()`
+/// 2. By default, only the owner of the Kiosk can place/take/borrow items.
+/// 3. The owner can also list items for sale (in SUI) right in the Kiosk allowing
+/// anyone on the network to purchase it.
+/// 4. Kiosk enforces `TransferPolicy` on every purchase; the buyer must complete
+/// the Transfer Policy requirements to unblock the transaction.
+/// 5. Kiosk supports strong policy enforcement by allowing "locking" an asset in
+/// the Kiosk and only allowing it to be sold (can't be taken). To lock an item,
+/// use `kiosk::lock()` method.
+/// 6. If there's a need to use the trading functionality in a third party module,
+/// owner can create a `PurchaseCap` which locks the asset and allows the bearer
+/// to purchase it from the Kiosk for any price no less than the minimum price set
+/// in the `PurchaseCap` (this allows for variable-price sales).
+/// 7. Kiosk can be extended with a custom functionality by using `PurchaseCap`
+/// and dynamic fields (see `kiosk` section in examples).
 ///
-/// - A type can not be traded in the Kiosk unless there's a policy for it.
-/// - 0-royalty policy is just as easy as "freezing" the `AllowTransferCap`
-///   making it available for everyone to authorize deals "for free"
+/// Kiosk requires TransferPolicy approval on every purchase, be it via the simple
+/// purchase flow or a purchase via the `PurchaseCap`, therefore giving creators an
+/// option to enforce custom rules on the trading of their assets.
 ///
-/// 2. Traders: anyone can create a Kiosk and depending on whether it's
-/// a shared object or some shared-wrapper the owner can trade any type
-/// that has issued `TransferPolicyCap` in a Kiosk. To do so, they need
-/// to make an offer, and any party can purchase the item for the amount of
-/// SUI set in the offer. The responsibility to follow the transfer policy
-/// set by the creator of the `T` is on the buyer.
-///
-/// 3. Marketplaces: marketplaces can either watch for the offers made in
-/// personal Kiosks or even integrate the Kiosk primitive and build on top
-/// of it. In the custom logic scenario, the `TransferPolicyCap` can also
-/// be used to implement application-specific transfer rules.
-///
+/// See `sui::transfer_policy` for mode details on `TransferPolicy` and `TransferRequest`.
 module sui::kiosk {
     use std::option::{Self, Option};
     use sui::object::{Self, UID, ID};
@@ -45,6 +39,7 @@ module sui::kiosk {
     use sui::coin::{Self, Coin};
     use sui::sui::SUI;
     use sui::event;
+    use sui::kiosk_actions as actions;
 
     /// Trying to withdraw profits and sender is not owner.
     const ENotOwner: u64 = 0;
@@ -70,6 +65,8 @@ module sui::kiosk {
     const EItemMismatch: u64 = 10;
     /// An is not found while trying to borrow.
     const EItemNotFound: u64 = 11;
+    /// Extension is not allowed to perform this action.
+    const EExtNotPermitted: u64 = 12;
 
     /// An object which allows selling collectibles within "kiosk" ecosystem.
     /// By default gives the functionality to list an item openly - for anyone
@@ -112,7 +109,9 @@ module sui::kiosk {
         kiosk_id: ID,
         /// ID of the listed item.
         item_id: ID,
-        /// Minimum price for which the item can be purchased.
+        /// Minimum price for which the item can be purchased. This field
+        /// acts as a guarantee of payment in cases when the `PurchaseCap`
+        /// is entrusted to the third party.
         min_price: u64
     }
 
@@ -132,9 +131,18 @@ module sui::kiosk {
     struct Listing has store, copy, drop { id: ID, is_exclusive: bool }
 
     /// Dynamic field key which marks that an item is locked in the `Kiosk` and
-    /// can't be `take`n. The item then can only be listed / sold via the PurchaseCap.
+    /// can't be `take`n. The item then can only be listed / sold via the `PurchaseCap`.
     /// Lock is released on `purchase`.
     struct Lock has store, copy, drop { id: ID }
+
+    /// Dynamic field key for an extension abilities configuration. Certain
+    /// extensions might need to have access to owner-only functions if the owner
+    /// authorizes their usage. Currently supported methods are: `borrow`, `place`
+    /// and `lock`.
+    ///
+    /// The `action_set` can support up to 16 different "actions" and all their
+    /// combinations in the future.
+    struct Extension<phantom E> has store, copy, drop {}
 
     // === Events ===
 
@@ -230,8 +238,7 @@ module sui::kiosk {
         self: &mut Kiosk, cap: &KioskOwnerCap, item: T
     ) {
         assert!(object::id(self) == cap.for, ENotOwner);
-        self.item_count = self.item_count + 1;
-        dof::add(&mut self.id, Item { id: object::id(&item) }, item)
+        place_(self, item)
     }
 
     /// Place an item to the `Kiosk` and issue a `Lock` for it. Once placed this
@@ -378,6 +385,70 @@ module sui::kiosk {
         coin::take(&mut self.profits, amount, ctx)
     }
 
+    // === Extension calls ===
+
+    /// Add a new extension to the Kiosk; depending on the `cap` parameter, the extension
+    /// might be able to call `place`, `borrow`, `borrow_mut` and `lock` functions.
+    public fun add_extension<E: drop>(
+        _ext: E,
+        self: &mut Kiosk,
+        cap: &KioskOwnerCap,
+        action_set: u16
+    ) {
+        assert!(object::id(self) == cap.for, ENotOwner);
+        df::add(&mut self.id, Extension<E> {}, action_set);
+    }
+
+    /// Get the action set for the extension.
+    public fun get_extension<E: drop>(self: &Kiosk): u16 {
+        *df::borrow(&self.id, Extension<E> {})
+    }
+
+    /// Remove an extension from the Kiosk; can be performed any time, even if the
+    /// extension does not implement uninstallation logic.
+    public fun remove_extension<E>(self: &mut Kiosk, cap: &KioskOwnerCap): Option<u16> {
+        assert!(object::id(self) == cap.for, ENotOwner);
+        df::remove_if_exists(&mut self.id, Extension<E> {})
+    }
+
+    /// Extension: place an item if the `Place` action is enabled.
+    public fun ext_place<E: drop, T: key + store>(
+        _ext: E, self: &mut Kiosk, item: T
+    ) {
+        let action_set = get_extension<E>(self);
+        assert!(actions::can_place(action_set), EExtNotPermitted);
+        place_(self, item)
+    }
+
+    /// Extension: place and lock an item if the `Lock` action is enabled.
+    public fun ext_lock<E: drop, T: key + store>(
+        _ext: E, self: &mut Kiosk, _policy: &TransferPolicy<T>, item: T
+    ) {
+        let action_set = get_extension<E>(self);
+        assert!(actions::can_lock(action_set), EExtNotPermitted);
+        df::add(&mut self.id, Lock { id: object::id(&item) }, true);
+        place_(self, item)
+    }
+
+    /// Extension: borrow an item if the `Borrow` action is enabled.
+    public fun ext_borrow<E: drop, T: key + store>(
+        _ext: E, self: &Kiosk, id: ID
+    ): &T {
+        let action_set = get_extension<E>(self);
+        assert!(actions::can_borrow(action_set), EExtNotPermitted);
+        assert!(has_item(self, id), EItemNotFound);
+        dof::borrow(&self.id, Item { id })
+    }
+
+    // === Extension-supported calls and Internal ===
+
+    /// Internal method - place an item in the `Kiosk`. Can be called by the Kiosk
+    /// Owner or by an Extension if the "Place" capability is enabled.
+    fun place_<T: key + store>(self: &mut Kiosk, item: T) {
+        self.item_count = self.item_count + 1;
+        dof::add(&mut self.id, Item { id: object::id(&item) }, item)
+    }
+
     // === Kiosk fields access ===
 
     /// Check whether the an `item` is present in the `Kiosk`.
@@ -414,8 +485,10 @@ module sui::kiosk {
         &mut self.id
     }
 
-    /// Allow or disallow `uid` and `uid_mut` access via the `allow_extensions` setting.
-    public fun set_allow_extensions(self: &mut Kiosk, cap: &KioskOwnerCap, allow_extensions: bool) {
+    /// Allow or disallow `uid_mut` access via the `allow_extensions` setting.
+    public fun set_allow_extensions(
+        self: &mut Kiosk, cap: &KioskOwnerCap, allow_extensions: bool
+    ) {
         assert!(object::id(self) == cap.for, ENotOwner);
         self.allow_extensions = allow_extensions;
     }
@@ -470,7 +543,9 @@ module sui::kiosk {
 
     /// Mutably borrow an item from the `Kiosk`.
     /// Item can be `borrow_mut`ed only if it's not `is_listed`.
-    public fun borrow_mut<T: key + store>(self: &mut Kiosk, cap: &KioskOwnerCap, id: ID): &mut T {
+    public fun borrow_mut<T: key + store>(
+        self: &mut Kiosk, cap: &KioskOwnerCap, id: ID
+    ): &mut T {
         assert!(object::id(self) == cap.for, ENotOwner);
         assert!(has_item(self, id), EItemNotFound);
         assert!(!is_listed(self, id), EItemIsListed);
@@ -480,7 +555,9 @@ module sui::kiosk {
 
     /// Take the item from the `Kiosk` with a guarantee that it will be returned.
     /// Item can be `borrow_val`-ed only if it's not `is_listed`.
-    public fun borrow_val<T: key + store>(self: &mut Kiosk, cap: &KioskOwnerCap, id: ID): (T, Borrow) {
+    public fun borrow_val<T: key + store>(
+        self: &mut Kiosk, cap: &KioskOwnerCap, id: ID
+    ): (T, Borrow) {
         assert!(object::id(self) == cap.for, ENotOwner);
         assert!(has_item(self, id), EItemNotFound);
         assert!(!is_listed(self, id), EItemIsListed);
@@ -491,7 +568,8 @@ module sui::kiosk {
         )
     }
 
-    /// Return the borrowed item to the `Kiosk`. This method cannot be avoided if `borrow_val` is used.
+    /// Return the borrowed item to the `Kiosk`. This method cannot be avoided if
+    /// `borrow_val` is used.
     public fun return_val<T: key + store>(self: &mut Kiosk, item: T, borrow: Borrow) {
         let Borrow { kiosk_id, item_id } = borrow;
 
@@ -516,5 +594,43 @@ module sui::kiosk {
     /// Get the `min_price` from the `PurchaseCap`.
     public fun purchase_cap_min_price<T: key + store>(self: &PurchaseCap<T>): u64 {
         self.min_price
+    }
+}
+
+/// Utility module implementing the action_set parsing. Currently all methods are
+/// friends to allow for
+module sui::kiosk_actions {
+    friend sui::kiosk;
+
+    /// Check whether the first bit of the value is set (odd value)
+    public(friend) fun can_place(action_set: u16): bool { action_set & 0x01 != 0 }
+    /// Check whether the second bit of the value is set;
+    public(friend) fun can_borrow(action_set: u16): bool { action_set & 0x02 != 0 }
+    /// Check whether the third bit of the value is set;
+    public(friend) fun can_lock(action_set: u16): bool { action_set & 0x04 != 0 }
+
+    #[test]
+    /// Test the bits of the value.
+    fun test_action_set() {
+        assert!(check(0x0) == vector[false, false, false], 0); // 000
+        assert!(check(0x1) == vector[false, false, true], 0);  // 001
+        assert!(check(0x2) == vector[false, true, false], 0);  // 010
+        assert!(check(0x3) == vector[false, true, true], 0);   // 011
+        assert!(check(0x4) == vector[true, false, false], 0);  // 100
+        assert!(check(0x5) == vector[true, false, true], 0);   // 101
+    }
+
+    #[test_only] fun add_place(action_set: &mut u16) { *action_set = *action_set | 0x01 }
+    #[test_only] fun add_borrow(action_set: &mut u16) { *action_set = *action_set | 0x02 }
+    #[test_only] fun add_lock(action_set: &mut u16) { *action_set = *action_set | 0x04 }
+
+    #[test_only]
+    /// Turn the bits into a vector of booleans for testing.
+    fun check(self: u16): vector<bool> {
+        vector[
+            can_lock(self),
+            can_borrow(self),
+            can_place(self),
+        ]
     }
 }
