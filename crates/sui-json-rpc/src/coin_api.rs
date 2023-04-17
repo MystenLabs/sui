@@ -247,7 +247,7 @@ impl CoinReadApiServer for CoinReadApi {
         Ok(coins)
     }
 
-    fn get_balance(&self, owner: SuiAddress, coin_type: Option<String>) -> RpcResult<Balance> {
+    async fn get_balance(&self, owner: SuiAddress, coin_type: Option<String>) -> RpcResult<Balance> {
         let coin_type_tag = TypeTag::Struct(Box::new(match coin_type {
             Some(c) => parse_sui_struct_tag(&c)?,
             None => GAS::type_(),
@@ -258,7 +258,7 @@ impl CoinReadApiServer for CoinReadApi {
         Ok(balance)
     }
 
-    fn get_all_balances(&self, owner: SuiAddress) -> RpcResult<Vec<Balance>> {
+    async fn get_all_balances(&self, owner: SuiAddress) -> RpcResult<Vec<Balance>> {
         let all_balances = self.get_all_balances_iterator(owner)?;
 
         Ok(all_balances)
