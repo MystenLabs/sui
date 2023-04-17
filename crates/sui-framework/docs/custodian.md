@@ -464,7 +464,7 @@ Move <code>quantity</code> from the locked balance of <code>user</code> to the u
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="custodian.md#0xdee9_custodian_account_available_balance">account_available_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<a href="custodian.md#0xdee9_custodian_Custodian">custodian::Custodian</a>&lt;T&gt;, user: <a href="../../../.././build/Sui/docs/object.md#0x2_object_ID">object::ID</a>): u64
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian.md#0xdee9_custodian_account_available_balance">account_available_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<a href="custodian.md#0xdee9_custodian_Custodian">custodian::Custodian</a>&lt;T&gt;, user: <a href="../../../.././build/Sui/docs/object.md#0x2_object_ID">object::ID</a>): u64
 </code></pre>
 
 
@@ -473,7 +473,7 @@ Move <code>quantity</code> from the locked balance of <code>user</code> to the u
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="custodian.md#0xdee9_custodian_account_available_balance">account_available_balance</a>&lt;T&gt;(
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian.md#0xdee9_custodian_account_available_balance">account_available_balance</a>&lt;T&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<a href="custodian.md#0xdee9_custodian_Custodian">Custodian</a>&lt;T&gt;,
     user: ID,
 ): u64 {
@@ -491,7 +491,7 @@ Move <code>quantity</code> from the locked balance of <code>user</code> to the u
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="custodian.md#0xdee9_custodian_account_locked_balance">account_locked_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<a href="custodian.md#0xdee9_custodian_Custodian">custodian::Custodian</a>&lt;T&gt;, user: <a href="../../../.././build/Sui/docs/object.md#0x2_object_ID">object::ID</a>): u64
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian.md#0xdee9_custodian_account_locked_balance">account_locked_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<a href="custodian.md#0xdee9_custodian_Custodian">custodian::Custodian</a>&lt;T&gt;, user: <a href="../../../.././build/Sui/docs/object.md#0x2_object_ID">object::ID</a>): u64
 </code></pre>
 
 
@@ -500,7 +500,7 @@ Move <code>quantity</code> from the locked balance of <code>user</code> to the u
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="custodian.md#0xdee9_custodian_account_locked_balance">account_locked_balance</a>&lt;T&gt;(
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian.md#0xdee9_custodian_account_locked_balance">account_locked_balance</a>&lt;T&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<a href="custodian.md#0xdee9_custodian_Custodian">Custodian</a>&lt;T&gt;,
     user: ID,
 ): u64 {
