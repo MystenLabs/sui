@@ -4,6 +4,7 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use crate::execution_mode::{self, ExecutionMode};
+use move_binary_format::access::ModuleAccess;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_vm_runtime::move_vm::MoveVM;
@@ -25,8 +26,8 @@ use sui_types::epoch_data::EpochData;
 use sui_types::error::{ExecutionError, ExecutionErrorKind};
 use sui_types::gas::{GasCostSummary, SuiGasStatusAPI};
 use sui_types::messages::{
-    Argument, ConsensusCommitPrologue, GenesisTransaction, ObjectArg, ProgrammableTransaction,
-    TransactionKind,
+    Argument, Command, ConsensusCommitPrologue, GenesisTransaction, ObjectArg,
+    ProgrammableTransaction, TransactionKind,
 };
 use sui_types::storage::{ChildObjectResolver, ObjectStore, ParentSync, WriteKind};
 use sui_types::sui_system_state::{AdvanceEpochParams, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME};
@@ -635,45 +636,53 @@ fn advance_epoch<S: ObjectStore + BackingPackageStore + ParentSync + ChildObject
     }
 
     for (version, modules, dependencies) in change_epoch.system_packages.into_iter() {
-        let modules: Vec<_> = modules
-            .into_iter()
-            .map(|m| {
-                CompiledModule::deserialize_with_max_version(
-                    &m,
-                    protocol_config.move_binary_format_version(),
-                )
-                .unwrap()
-            })
+        let max_format_version = protocol_config.move_binary_format_version();
+        let deserialized_modules: Vec<_> = modules
+            .iter()
+            .map(|m| CompiledModule::deserialize_with_max_version(m, max_format_version).unwrap())
             .collect();
 
-        // Note: every new system package should be created at OBJECT_START_VERSION
-        let mut new_package =
-            Object::new_system_package(&modules, version, dependencies, tx_ctx.digest());
+        if version == OBJECT_START_VERSION {
+            let package_id = deserialized_modules.first().unwrap().address();
+            info!("adding new system package {package_id}");
 
-        let write_kind = if version == OBJECT_START_VERSION {
-            info!(
-                "adding new system package {:?}",
-                new_package.compute_object_reference()
-            );
-            // creation of a new framework module
-            WriteKind::Create
+            let publish_pt = {
+                let mut b = ProgrammableTransactionBuilder::new();
+                b.command(Command::Publish(modules, dependencies));
+                b.finish()
+            };
+
+            programmable_transactions::execution::execute::<_, execution_mode::System>(
+                protocol_config,
+                move_vm,
+                temporary_store,
+                tx_ctx,
+                gas_status,
+                None,
+                publish_pt,
+            )
+            .expect("System Package Publish must succeed");
         } else {
+            let mut new_package = Object::new_system_package(
+                &deserialized_modules, version, dependencies, tx_ctx.digest(),
+            );
+
             info!(
                 "upgraded system package {:?}",
                 new_package.compute_object_reference()
             );
-            // upgrade of a previously existing framework module
-            WriteKind::Mutate
-        };
 
-        // Decrement the version before writing the package so that the store can record the version
-        // growing by one in the effects.
-        new_package
-            .data
-            .try_as_package_mut()
-            .unwrap()
-            .decrement_version();
-        temporary_store.write_object(new_package, write_kind);
+            // Decrement the version before writing the package so that the store can record the
+            // version growing by one in the effects.
+            new_package
+                .data
+                .try_as_package_mut()
+                .unwrap()
+                .decrement_version();
+
+            // upgrade of a previously existing framework module
+            temporary_store.write_object(new_package, WriteKind::Mutate);
+        }
     }
 
     Ok(())
