@@ -3,7 +3,6 @@
 use crate::bank::BenchmarkBank;
 use crate::options::Opts;
 use crate::util::get_ed25519_keypair_from_keystore;
-use crate::workloads::workload::MIN_SUI_PER_WORKLOAD;
 use crate::{FullNodeProxy, LocalValidatorAggregatorProxy, ValidatorProxy};
 use anyhow::{anyhow, bail, Context, Result};
 use prometheus::Registry;
@@ -230,9 +229,8 @@ impl Env {
                     &keystore_path
                 ))
             })?;
-        let current_gas;
 
-        if use_fullnode_for_execution {
+        let current_gas = if use_fullnode_for_execution {
             // Go through fullnode to get the current gas object.
             let mut gas_objects = proxy
                 .get_owned_objects(primary_gas_owner_addr.into())
@@ -242,12 +240,10 @@ impl Env {
             // TODO: Merge all owned gas objects into one and use that as the primary gas object.
             let (balance, primary_gas_obj) = gas_objects
                 .iter()
-                .filter(|(balance, _)| *balance > MIN_SUI_PER_WORKLOAD)
-                .collect::<Vec<_>>()
-                .choose(&mut rand::thread_rng())
-                .context(format!(
-                "Failed to choose a random primary gas id with atleast {MIN_SUI_PER_WORKLOAD} SUI"
-            ))?;
+                .max_by_key(|(balance, _)| balance)
+                .context(
+                    "Failed to choose the gas object with the largest amount of gas".to_string(),
+                )?;
 
             info!(
                 "Using primary gas id: {} with balance of {balance}",
@@ -261,11 +257,11 @@ impl Env {
                 &primary_gas_account,
             )?);
 
-            current_gas = (
+            (
                 primary_gas_obj.compute_object_reference(),
                 primary_gas_account,
                 keypair,
-            );
+            )
         } else {
             // Go through local proxy to get the current gas object.
             let mut genesis_gas_objects = Vec::new();
@@ -292,14 +288,14 @@ impl Env {
                 &current_gas_account,
             )?);
 
-            current_gas = (
+            info!("Using primary gas obj: {}", current_gas_object.id());
+
+            (
                 current_gas_object.compute_object_reference(),
                 current_gas_account,
                 keypair,
-            );
-
-            info!("Using primary gas obj: {}", current_gas_object.id());
-        }
+            )
+        };
 
         Ok(BenchmarkSetup {
             server_handle: join_handle,
