@@ -11,7 +11,7 @@ use move_core_types::parser::parse_struct_tag;
 use move_core_types::resolver::{ModuleResolver, ResourceResolver};
 use serde::{Deserialize, Serialize};
 use similar::{ChangeTag, TextDiff};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use sui_adapter::adapter;
@@ -40,6 +40,7 @@ use sui_types::messages::{SenderSignedData, TransactionDataAPI};
 use sui_types::object::{Data, Object, Owner};
 use sui_types::storage::get_module_by_id;
 use sui_types::storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync};
+use sui_types::DEEPBOOK_OBJECT_ID;
 use thiserror::Error;
 use tracing::{error, info};
 
@@ -125,18 +126,28 @@ pub async fn execute_replay_command(
             );
         }
         ReplayToolCommand::Report => {
-            let table = LocalExec::new_from_fn_url(&rpc_url)
-                .await?
-                .protocol_ver_to_epoch_map()
-                .await?;
+            let mut lx = LocalExec::new_from_fn_url(&rpc_url).await?;
+            let epoch_table = lx.protocol_ver_to_epoch_map().await?;
+
+            // We need this for other activities in this session
+            lx.current_protocol_version = *epoch_table.keys().peekable().last().unwrap();
+
             println!("  Protocol Version  |                Epoch Change TX               |      Epoch Range");
             println!("-------------------------------------------------------------------------------------");
 
-            for (protocol_version, (tx_digest, start_epoch, end_epoch)) in table {
+            for (protocol_version, (tx_digest, start_epoch, end_epoch)) in epoch_table {
                 println!(
                     " {:^16}   | {:^32} | {:^10}-{:^10}",
                     protocol_version, tx_digest, start_epoch, end_epoch
                 );
+            }
+
+            lx.populate_protocol_version_tables().await?;
+            for x in lx.protocol_version_system_package_table {
+                println!("Protocol version: {}", x.0);
+                for (package_id, seq_num) in x.1 {
+                    println!("Package: {} Seq: {}", package_id, seq_num);
+                }
             }
         }
     }
@@ -144,16 +155,18 @@ pub async fn execute_replay_command(
 }
 
 pub struct LocalExec {
-    client: SuiClient,
+    pub client: SuiClient,
     // For a given protocol version, what TX created it, and what is the valid range of epochs
     // at this protocol version.
-    protocol_version_epoch_table: BTreeMap<u64, (TransactionDigest, u64, u64)>,
+    pub protocol_version_epoch_table: BTreeMap<u64, (TransactionDigest, u64, u64)>,
     // For a given protocol version, the mapping valid sequence numbers for each framework package
-    protocol_version_system_package_table: BTreeMap<u64, BTreeMap<ObjectID, SequenceNumber>>,
+    pub protocol_version_system_package_table: BTreeMap<u64, BTreeMap<ObjectID, SequenceNumber>>,
 
-    store: BTreeMap<ObjectID, Object>,
-    package_cache: Arc<Mutex<BTreeMap<ObjectID, Object>>>,
-    object_version_cache: Arc<Mutex<BTreeMap<(ObjectID, SequenceNumber), Object>>>,
+    pub current_protocol_version: u64,
+
+    pub store: BTreeMap<ObjectID, Object>,
+    pub package_cache: Arc<Mutex<BTreeMap<ObjectID, Object>>>,
+    pub object_version_cache: Arc<Mutex<BTreeMap<(ObjectID, SequenceNumber), Object>>>,
 }
 
 #[derive(Clone, Debug)]
@@ -243,6 +256,7 @@ impl LocalExec {
             object_version_cache: Arc::new(Mutex::new(BTreeMap::new())),
             protocol_version_epoch_table: BTreeMap::new(),
             protocol_version_system_package_table: BTreeMap::new(),
+            current_protocol_version: 0,
         }
     }
 
@@ -330,7 +344,7 @@ impl LocalExec {
         // This is okay since the versions can never change
         let non_system_package_objs: Vec<_> = objs
             .into_iter()
-            .filter(|o| !BuiltInFramework::all_package_ids().contains(o))
+            .filter(|o| !self.system_package_ids().contains(o))
             .collect();
         let objs = self
             .multi_download_latest(non_system_package_objs)
@@ -380,6 +394,7 @@ impl LocalExec {
         object_id: &ObjectID,
         version: SequenceNumber,
     ) -> Result<Object, LocalExecError> {
+        println!("Downloading object {} {}", object_id, version);
         if self
             .object_version_cache
             .lock()
@@ -477,6 +492,8 @@ impl LocalExec {
     ) -> Result<Vec<TransactionDigest>, LocalExecError> {
         let tx_info = self.resolve_tx_components(tx_digest).await?;
 
+        // We need this for other activities in this session
+        self.current_protocol_version = tx_info.protocol_config.version.as_u64();
         // A lot of the logic here isnt designed for genesis
         if tx_info.sender == SuiAddress::ZERO {
             // Genesis.
@@ -549,14 +566,14 @@ impl LocalExec {
             let local_chain_str = format!("\n{:#?}", new_effects);
 
             let diff = TextDiff::from_lines(&on_chain_str, &local_chain_str);
-
+            println!("On-chain vs local diff");
             for change in diff.iter_all_changes() {
                 let sign = match change.tag() {
-                    ChangeTag::Delete => "-",
-                    ChangeTag::Insert => "+",
-                    ChangeTag::Equal => " ",
+                    ChangeTag::Delete => "---",
+                    ChangeTag::Insert => "+++",
+                    ChangeTag::Equal => "   ",
                 };
-                print!("{}{}", sign, change);
+                println!("{}{}", sign, change);
             }
             return Err(LocalExecError::GeneralError {
                 err: format!("Effects differ for tx: {}", tx_digest),
@@ -565,16 +582,35 @@ impl LocalExec {
         Ok(new_effects.dependencies)
     }
 
+    fn system_package_ids(&self) -> Vec<ObjectID> {
+        let mut ids = BuiltInFramework::all_package_ids();
+
+        if self.current_protocol_version < 5 {
+            ids.retain(|id| *id != DEEPBOOK_OBJECT_ID)
+        }
+        ids
+    }
+
     pub async fn prepare_object_runtime(
         &mut self,
         tx_digest: &TransactionDigest,
     ) -> Result<(), LocalExecError> {
         // Get the dynamic fields loaded
-        let loaded_df_child_objs = self
+
+        let loaded_df_child_objs = match self
             .client
             .read_api()
             .get_dynamic_fields_loaded_objects(*tx_digest)
-            .await?;
+            .await
+        {
+            Ok(objs) => objs,
+            Err(e) => {
+                error!("Error getting dynamic fields loaded objects: {}. This RPC server might not support this feature yet", e);
+                return Err(LocalExecError::GeneralError {
+                    err: format!("Error getting dynamic fields loaded objects: {}", e),
+                });
+            }
+        };
 
         // Fetch the refs
         let loaded_df_child_refs = loaded_df_child_objs
@@ -597,7 +633,7 @@ impl LocalExec {
             Some(obj) => obj.clone(),
             None => {
                 assert!(
-                    !BuiltInFramework::all_package_ids().contains(obj_id),
+                    !self.system_package_ids().contains(obj_id),
                     "All system packages should be downloaded already"
                 );
                 self.download_latest_object(obj_id)?
@@ -618,6 +654,7 @@ impl LocalExec {
         Ok(o)
     }
 
+    /// Must be called after `populate_protocol_version_tables`
     pub fn system_package_versions_for_epoch(
         &self,
         epoch: u64,
@@ -730,10 +767,11 @@ impl LocalExec {
     pub async fn system_package_versions(
         &self,
     ) -> Result<BTreeMap<ObjectID, Vec<(SequenceNumber, TransactionDigest)>>, LocalExecError> {
-        let system_package_ids = BuiltInFramework::all_package_ids();
+        let system_package_ids = self.system_package_ids();
         let mut system_package_objs = self.multi_download_latest(system_package_ids).await?;
 
         let mut mapping = BTreeMap::new();
+
         // Extract all the transactions which created or mutated this object
         while !system_package_objs.is_empty() {
             // For the given object and its version, record the transaction which upgraded or created it
@@ -759,7 +797,20 @@ impl LocalExec {
                     }
                 })
                 .collect();
-            system_package_objs = self.multi_download(&previous_ver_refs).await?;
+            system_package_objs = match self.multi_download(&previous_ver_refs).await {
+                Ok(packages) => packages,
+                Err(e) => {
+                    if e.to_string().contains("Obj deleted") {
+                        // This happens when the RPC server prunes older object
+                        // Replays in the current protocol version will work but old ones might not
+                        // as we cannot fetch the package
+                        error!("Object deleted from RPC server. This might be due to pruning: {:#?}. Historical replays might not work", e);
+                        break;
+                    } else {
+                        return Err(e);
+                    }
+                }
+            };
         }
         Ok(mapping)
     }

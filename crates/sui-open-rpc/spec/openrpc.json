@@ -391,6 +391,30 @@
       }
     },
     {
+      "name": "sui_getDynamicFieldsLoadedObjects",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "params": [
+        {
+          "name": "digest",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/TransactionDigest"
+          }
+        }
+      ],
+      "result": {
+        "name": "SuiDynamicFieldLoadedChildObjectsResponse",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/DynamicFieldLoadedChildObjectsRespone"
+        }
+      }
+    },
+    {
       "name": "sui_getEvents",
       "tags": [
         {
@@ -3211,6 +3235,35 @@
           },
           "version": {
             "$ref": "#/components/schemas/SequenceNumber"
+          }
+        }
+      },
+      "DynamicFieldLoadedChildObject": {
+        "type": "object",
+        "required": [
+          "objectId",
+          "sequenceNumber"
+        ],
+        "properties": {
+          "objectId": {
+            "$ref": "#/components/schemas/ObjectID"
+          },
+          "sequenceNumber": {
+            "$ref": "#/components/schemas/SequenceNumber"
+          }
+        }
+      },
+      "DynamicFieldLoadedChildObjectsRespone": {
+        "type": "object",
+        "required": [
+          "loadedChildObjects"
+        ],
+        "properties": {
+          "loadedChildObjects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DynamicFieldLoadedChildObject"
+            }
           }
         }
       },
