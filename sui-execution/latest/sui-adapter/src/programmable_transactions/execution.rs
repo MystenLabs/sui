@@ -23,6 +23,7 @@ use move_vm_runtime::{
     move_vm::MoveVM,
     session::{LoadedFunctionInstantiation, SerializedReturnValues},
 };
+use move_vm_runtime::native_functions::NativesTracker;
 use move_vm_types::loaded_data::runtime_types::{StructType, Type};
 use serde::{de::DeserializeSeed, Deserialize};
 use sui_move_natives::object_runtime::ObjectRuntime;
@@ -39,7 +40,7 @@ use sui_types::{
         CommandKind, ExecutionResults, ObjectContents, ObjectValue, RawValueType, SuiResolver,
         Value,
     },
-    gas::{SuiGasStatus, SuiGasStatusAPI},
+    gas::{write_gas_stats, SuiGasStatus, SuiGasStatusAPI},
     id::{RESOLVED_SUI_ID, UID},
     metrics::LimitsMetrics,
     move_package::{
@@ -78,6 +79,7 @@ pub fn execute<S: StorageView, Mode: ExecutionMode>(
 where
     for<'state> &'state S: SuiResolver,
 {
+    let digest = tx_context.digest();
     let ProgrammableTransaction { inputs, commands } = pt;
     let mut context = ExecutionContext::new(
         protocol_config,
@@ -102,6 +104,16 @@ where
         };
     }
 
+    // get natives info
+    let natives_tracker: &NativesTracker = context.session.get_native_extensions().get();
+    if !natives_tracker.natives.is_empty() {
+        let mut natives = format!("{}: natives: [", digest);
+        for (name, (count, cost)) in natives_tracker.natives.iter() {
+            natives = format!("{} {} = ({}, {}), ", natives, name, count, cost);
+        }
+        natives = format!("{}]", natives);
+        write_gas_stats(natives.as_str());
+    }
     // Save loaded objects table in case we fail in post execution
     let object_runtime: &ObjectRuntime = context.session.get_native_extensions().get();
     // We still need to record the loaded child objects for replay

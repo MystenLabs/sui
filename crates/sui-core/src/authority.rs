@@ -72,11 +72,11 @@ use sui_types::effects::{
     SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
     VerifiedCertifiedTransactionEffects, VerifiedSignedTransactionEffects,
 };
-use sui_types::error::{ExecutionError, UserInputError};
+use sui_types::error::{ExecutionError, ExecutionErrorKind, UserInputError};
 use sui_types::event::{Event, EventID};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution_mode;
-use sui_types::gas::{GasCostSummary, SuiGasStatus};
+use sui_types::gas::{write_gas_stats, GasCostSummary, SuiGasStatus};
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
     CheckpointCommitment, CheckpointContents, CheckpointContentsDigest, CheckpointDigest,
@@ -1173,7 +1173,43 @@ impl AuthorityState {
                 self.certificate_deny_config.certificate_deny_set(),
             );
 
-        Ok((inner_temp_store, effects, execution_error_opt.err()))
+        let shared = effects.shared_objects().len();
+        let created = effects.created().len();
+        let mutated = effects.mutated().len();
+        let unwrapped = effects.unwrapped().len();
+        let deleted = effects.deleted().len();
+        let unwrapped_deleted = effects.unwrapped_then_deleted().len();
+        let wrapped = effects.wrapped().len();
+        let err = execution_error_opt.err();
+        let error = match &err {
+            None => 0,
+            Some(err) => match err.kind() {
+                ExecutionErrorKind::InsufficientGas => 1,
+                ExecutionErrorKind::InvariantViolation
+                | ExecutionErrorKind::VMInvariantViolation => 2,
+                _ => 3,
+            },
+        };
+        write_gas_stats(
+            format!(
+                "{}: err = {}, o_s = {}, o_c = {}, \
+                    o_m = {}, o_u = {}, o_d = {}, \
+                    o_u_d = {}, o_w = {}, sgn = {}",
+                *certificate.digest(),
+                error,
+                shared,
+                created,
+                mutated,
+                unwrapped,
+                deleted,
+                unwrapped_deleted,
+                wrapped,
+                signer,
+            )
+            .as_str(),
+        );
+
+        Ok((inner_temp_store, effects, err))
     }
 
     pub async fn dry_exec_transaction(
@@ -1394,7 +1430,12 @@ impl AuthorityState {
             transaction_digest,
             protocol_config,
         );
-        let gas_status = SuiGasStatus::new_with_budget(max_tx_gas, gas_price, protocol_config);
+        let gas_status = SuiGasStatus::new_with_budget(
+            max_tx_gas,
+            gas_price,
+            protocol_config,
+            Some(transaction_digest),
+        );
         let move_vm = Arc::new(
             adapter::new_move_vm(
                 epoch_store.native_functions().clone(),

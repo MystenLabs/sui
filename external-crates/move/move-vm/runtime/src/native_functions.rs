@@ -26,6 +26,26 @@ use std::{
     sync::Arc,
 };
 
+use better_any::{Tid, TidAble};
+use std::collections::BTreeMap;
+
+#[derive(Tid)]
+pub struct NativesTracker {
+    pub natives: BTreeMap<String, (u64, u64)>,
+}
+
+impl NativesTracker {
+    pub fn new() -> Self {
+        NativesTracker { natives: BTreeMap::new() }
+    }
+
+    pub fn track_native(&mut self, native: String, cost: u64) {
+        let pair = self.natives.entry(native).or_insert((0, 0));
+        pair.0 += 1;
+        pair.1 += cost;
+    }
+}
+
 pub type UnboxedNativeFunction = dyn Fn(&mut NativeContext, Vec<Type>, VecDeque<Value>) -> PartialVMResult<NativeResult>
     + Send
     + Sync

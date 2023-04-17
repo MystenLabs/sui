@@ -14,7 +14,8 @@ use move_vm_config::{
 };
 pub use move_vm_runtime::move_vm::MoveVM;
 use move_vm_runtime::{
-    native_extensions::NativeContextExtensions, native_functions::NativeFunctionTable,
+    native_extensions::NativeContextExtensions,
+    native_functions::{NativeFunctionTable, NativesTracker},
 };
 use sui_types::metrics::BytecodeVerifierMetrics;
 use sui_verifier::check_for_verifier_timeout;
@@ -121,6 +122,7 @@ pub fn new_native_extensions<'r>(
         metrics,
     ));
     extensions.add(NativesCostTable::from_protocol_config(protocol_config));
+    extensions.add(NativesTracker::new());
     extensions
 }
 
