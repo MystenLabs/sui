@@ -2482,6 +2482,10 @@ impl<'env> StructEnv<'env> {
         self.data.name
     }
 
+    pub fn get_name_string(&self) -> String {
+        self.get_name().display(self.symbol_pool()).to_string()
+    }
+
     /// Gets full name as string.
     pub fn get_full_name_str(&self) -> String {
         format!(

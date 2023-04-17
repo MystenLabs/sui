@@ -9,7 +9,7 @@
 module basics::lock {
     use sui::object::{Self, ID, UID};
     use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
+    use sui::tx_context::TxContext;
     use std::option::{Self, Option};
 
     /// Lock is empty, nothing to take.
@@ -41,7 +41,7 @@ module basics::lock {
 
     /// Lock some content inside a shared object. A Key is created and is
     /// sent to the transaction sender.
-    public entry fun create<T: store + key>(obj: T, ctx: &mut TxContext) {
+    public fun create<T: store + key>(obj: T, ctx: &mut TxContext): Key<T> {
         let id = object::new(ctx);
         let for = object::uid_to_inner(&id);
 
@@ -50,15 +50,15 @@ module basics::lock {
             locked: option::some(obj),
         });
 
-        transfer::public_transfer(Key<T> {
+        Key<T> {
             for,
             id: object::new(ctx)
-        }, tx_context::sender(ctx));
+        }
     }
 
     /// Lock something inside a shared object using a Key. Aborts if
     /// lock is not empty or if key doesn't match the lock.
-    public entry fun lock<T: store + key>(
+    public fun lock<T: store + key>(
         obj: T,
         lock: &mut Lock<T>,
         key: &Key<T>,
@@ -82,15 +82,6 @@ module basics::lock {
 
         option::extract(&mut lock.locked)
     }
-
-    /// Unlock the Lock and transfer its contents to the transaction sender.
-    public fun take<T: store + key>(
-        lock: &mut Lock<T>,
-        key: &Key<T>,
-        ctx: &mut TxContext,
-    ) {
-        transfer::public_transfer(unlock(lock, key), tx_context::sender(ctx))
-    }
 }
 
 #[test_only]
@@ -98,6 +89,7 @@ module basics::lockTest {
     use sui::object::{Self, UID};
     use sui::test_scenario;
     use sui::transfer;
+    use sui::tx_context;
     use basics::lock::{Self, Lock, Key};
 
     /// Custom structure which we will store inside a Lock.
@@ -119,7 +111,8 @@ module basics::lockTest {
             let ctx = test_scenario::ctx(scenario);
             let id = object::new(ctx);
 
-            lock::create(Treasure { id }, ctx);
+            let l = lock::create(Treasure { id }, ctx);
+            transfer::public_transfer(l, tx_context::sender(ctx))
         };
 
         // Now User1 owns a key from the lock. He decides to send this
@@ -127,7 +120,6 @@ module basics::lockTest {
         test_scenario::next_tx(scenario, user1);
         {
             let key = test_scenario::take_from_sender<Key<Treasure>>(scenario);
-
             transfer::public_transfer(key, user2);
         };
 
@@ -139,7 +131,8 @@ module basics::lockTest {
             let key = test_scenario::take_from_sender<Key<Treasure>>(scenario);
             let ctx = test_scenario::ctx(scenario);
 
-            lock::take<Treasure>(lock, &key, ctx);
+            let l = lock::unlock<Treasure>(lock, &key);
+            transfer::public_transfer(l, tx_context::sender(ctx));
 
             test_scenario::return_shared(lock_val);
             test_scenario::return_to_sender(scenario, key);

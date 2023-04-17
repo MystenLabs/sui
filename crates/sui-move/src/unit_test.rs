@@ -44,6 +44,9 @@ impl Test {
         let legacy_digest = false;
         let dump_bytecode_as_base64 = false;
         let generate_struct_layouts: bool = false;
+        // don't run linters on unit tests
+        let lint = false;
+        let color = false;
         build::Build::execute_internal(
             rerooted_path.clone(),
             BuildConfig {
@@ -54,6 +57,8 @@ impl Test {
             legacy_digest,
             dump_bytecode_as_base64,
             generate_struct_layouts,
+            lint,
+            color,
         )?;
         run_move_unit_tests(
             rerooted_path,

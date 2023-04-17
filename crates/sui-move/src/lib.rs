@@ -15,6 +15,7 @@ pub mod build;
 pub mod coverage;
 #[cfg(feature = "disassemble")]
 pub mod disassemble;
+mod linters;
 pub mod new;
 #[cfg(feature = "prove")]
 pub mod prove;

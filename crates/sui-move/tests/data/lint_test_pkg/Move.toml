@@ -1,0 +1,10 @@
+[package]
+name = "lint_test_pkg"
+version = "0.0.1"
+
+[dependencies]
+Sui = { local = "../../../../sui-framework/packages/sui-framework" }
+
+[addresses]
+lint_test_pkg =  "0x0"
+sui =  "0000000000000000000000000000000000000000000000000000000000000002"
