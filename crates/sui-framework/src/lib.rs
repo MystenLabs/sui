@@ -26,11 +26,11 @@ pub mod natives;
 
 /// Represents a system package in the framework, that's built from the source code inside
 /// sui-framework.
-#[derive(Serialize, PartialEq, Eq, Deserialize)]
+#[derive(Clone, Serialize, PartialEq, Eq, Deserialize)]
 pub struct SystemPackage {
-    id: ObjectID,
-    bytes: Vec<Vec<u8>>,
-    dependencies: Vec<ObjectID>,
+    pub id: ObjectID,
+    pub bytes: Vec<Vec<u8>>,
+    pub dependencies: Vec<ObjectID>,
 }
 
 impl SystemPackage {
