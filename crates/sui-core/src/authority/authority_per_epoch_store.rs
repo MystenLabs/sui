@@ -173,7 +173,7 @@ pub struct AuthorityPerEpochStore {
 #[derive(DBMapUtils)]
 pub struct AuthorityEpochTables {
     /// This is map between the transaction digest and transactions found in the `transaction_lock`.
-    #[default_options_override_fn = "transactions_table_default_config"]
+    #[default_options_override_fn = "signed_transactions_table_default_config"]
     signed_transactions:
         DBMap<TransactionDigest, TrustedEnvelope<SenderSignedData, AuthoritySignInfo>>,
 
@@ -206,6 +206,7 @@ pub struct AuthorityEpochTables {
     /// progress. But it is more complex, because it would be necessary to track inflight
     /// executions not ordered by indices. For now, tracking inflight certificates as a map
     /// seems easier.
+    #[default_options_override_fn = "pending_execution_table_default_config"]
     pending_execution: DBMap<TransactionDigest, TrustedExecutableTransaction>,
 
     /// Track which transactions have been processed in handle_consensus_transaction. We must be
@@ -219,6 +220,7 @@ pub struct AuthorityEpochTables {
     consensus_message_processed: DBMap<SequencedConsensusTransactionKey, bool>,
 
     /// Map stores pending transactions that this authority submitted to consensus
+    #[default_options_override_fn = "pending_consensus_transactions_table_default_config"]
     pending_consensus_transactions: DBMap<ConsensusTransactionKey, ConsensusTransaction>,
 
     // todo - this table will be deleted after switch to EpochFlag::InMemoryCheckpointRoots
@@ -264,6 +266,7 @@ pub struct AuthorityEpochTables {
     /// the sequence number of checkpoint does not match height here.
     ///
     /// The boolean value indicates whether this is the last checkpoint of the epoch.
+    #[default_options_override_fn = "pending_checkpoints_table_default_config"]
     pending_checkpoints: DBMap<CheckpointCommitHeight, PendingCheckpoint>,
 
     /// Checkpoint builder maintains internal list of transactions it included in checkpoints here
@@ -295,6 +298,30 @@ pub struct AuthorityEpochTables {
     /// Contains a single key, which overrides the value of
     /// ProtocolConfig::buffer_stake_for_protocol_upgrade_bps
     override_protocol_upgrade_buffer_stake: DBMap<u64, u64>,
+}
+
+fn signed_transactions_table_default_config() -> DBOptions {
+    default_db_options()
+        .optimize_for_write_throughput()
+        .optimize_for_large_values_no_scan()
+}
+
+fn pending_execution_table_default_config() -> DBOptions {
+    default_db_options()
+        .optimize_for_write_throughput()
+        .optimize_for_large_values_no_scan()
+}
+
+fn pending_consensus_transactions_table_default_config() -> DBOptions {
+    default_db_options()
+        .optimize_for_write_throughput()
+        .optimize_for_large_values_no_scan()
+}
+
+fn pending_checkpoints_table_default_config() -> DBOptions {
+    default_db_options()
+        .optimize_for_write_throughput()
+        .optimize_for_large_values_no_scan()
 }
 
 impl AuthorityEpochTables {
@@ -1981,12 +2008,6 @@ impl AuthorityPerEpochStore {
             .epoch_total_duration
             .set(self.epoch_open_time.elapsed().as_millis() as i64);
     }
-}
-
-fn transactions_table_default_config() -> DBOptions {
-    default_db_options()
-        .optimize_for_point_lookup(128)
-        .optimize_for_write_throughput()
 }
 
 impl ExecutionComponents {

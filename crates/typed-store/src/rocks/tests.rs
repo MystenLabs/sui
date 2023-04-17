@@ -708,7 +708,7 @@ async fn test_transactional() {
     let path = temp_dir();
     let opt = rocksdb::Options::default();
     let rocksdb =
-        open_cf_opts_transactional(path, None, MetricConf::default(), &[("cf", &opt)]).unwrap();
+        open_cf_opts_transactional(path, None, MetricConf::default(), &[("cf", opt)]).unwrap();
     let db = DBMap::<String, String>::reopen(&rocksdb, None, &ReadWriteOptions::default())
         .expect("Failed to re-open storage");
 
@@ -732,7 +732,7 @@ async fn test_transaction_snapshot() {
     let path = temp_dir();
     let opt = rocksdb::Options::default();
     let rocksdb =
-        open_cf_opts_transactional(path, None, MetricConf::default(), &[("cf", &opt)]).unwrap();
+        open_cf_opts_transactional(path, None, MetricConf::default(), &[("cf", opt)]).unwrap();
     let db = DBMap::<String, String>::reopen(&rocksdb, None, &ReadWriteOptions::default())
         .expect("Failed to re-open storage");
 
@@ -819,7 +819,7 @@ async fn test_retry_transaction() {
     let path = temp_dir();
     let opt = rocksdb::Options::default();
     let rocksdb =
-        open_cf_opts_transactional(path, None, MetricConf::default(), &[("cf", &opt)]).unwrap();
+        open_cf_opts_transactional(path, None, MetricConf::default(), &[("cf", opt)]).unwrap();
     let db = DBMap::<String, String>::reopen(&rocksdb, None, &ReadWriteOptions::default())
         .expect("Failed to re-open storage");
 
@@ -879,7 +879,7 @@ async fn test_transaction_read_your_write() {
     let path = temp_dir();
     let opt = rocksdb::Options::default();
     let rocksdb =
-        open_cf_opts_transactional(path, None, MetricConf::default(), &[("cf", &opt)]).unwrap();
+        open_cf_opts_transactional(path, None, MetricConf::default(), &[("cf", opt)]).unwrap();
     let db = DBMap::<String, String>::reopen(&rocksdb, None, &ReadWriteOptions::default())
         .expect("Failed to re-open storage");
     db.insert(&key1.to_string(), &"1".to_string()).unwrap();
@@ -944,7 +944,7 @@ async fn open_as_secondary_test() {
         None,
         None,
         MetricConf::default(),
-        &[("table", &opt)],
+        &[("table", opt)],
     )
     .unwrap();
     let secondary_db = DBMap::<i32, String>::reopen(
@@ -1100,7 +1100,7 @@ fn open_map<P: AsRef<Path>, K, V>(
             path,
             None,
             MetricConf::default(),
-            &[(cf, &default_db_options().options)],
+            &[(cf, default_db_options().options)],
         )
         .map(|db| DBMap::new(db, &ReadWriteOptions::default(), cf))
         .expect("failed to open rocksdb")
@@ -1119,7 +1119,10 @@ fn open_map<P: AsRef<Path>, K, V>(
 fn open_rocksdb<P: AsRef<Path>>(path: P, opt_cfs: &[&str], is_transactional: bool) -> Arc<RocksDB> {
     if is_transactional {
         let options = default_db_options().options;
-        let cfs: Vec<_> = opt_cfs.iter().map(|name| (*name, &options)).collect();
+        let cfs: Vec<_> = opt_cfs
+            .iter()
+            .map(|name| (*name, options.clone()))
+            .collect();
         open_cf_opts_transactional(path, None, MetricConf::default(), &cfs)
             .expect("failed to open rocksdb")
     } else {
