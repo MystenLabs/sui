@@ -260,7 +260,10 @@ impl AuthorityStore {
         &self,
         effects_digests: impl Iterator<Item = &'a TransactionEffectsDigest>,
     ) -> SuiResult<Vec<Option<TransactionEffects>>> {
-        Ok(self.perpetual_tables.effects.multi_get(effects_digests)?)
+        Ok(self
+            .perpetual_tables
+            .effects
+            .chunked_multi_get(effects_digests, 50)?)
     }
 
     pub fn get_executed_effects(
@@ -280,7 +283,10 @@ impl AuthorityStore {
         &self,
         digests: &[TransactionDigest],
     ) -> SuiResult<Vec<Option<TransactionEffects>>> {
-        let executed_effects_digests = self.perpetual_tables.executed_effects.multi_get(digests)?;
+        let executed_effects_digests = self
+            .perpetual_tables
+            .executed_effects
+            .chunked_multi_get(digests, 50)?;
         let effects = self.multi_get_effects(executed_effects_digests.iter().flatten())?;
         let mut tx_to_effects_map = effects
             .into_iter()
@@ -366,7 +372,7 @@ impl AuthorityStore {
         Ok(self
             .perpetual_tables
             .executed_transactions_to_checkpoint
-            .multi_get(digests)?
+            .chunked_multi_get(digests, 50)?
             .into_iter()
             .collect())
     }
@@ -411,7 +417,10 @@ impl AuthorityStore {
         &self,
         object_keys: &[ObjectKey],
     ) -> Result<Vec<Option<Object>>, SuiError> {
-        let wrappers = self.perpetual_tables.objects.multi_get(object_keys)?;
+        let wrappers = self
+            .perpetual_tables
+            .objects
+            .chunked_multi_get(object_keys, 50)?;
         let mut ret = vec![];
 
         for w in wrappers {
@@ -915,7 +924,7 @@ impl AuthorityStore {
         let locks = self
             .perpetual_tables
             .owned_object_transaction_locks
-            .multi_get(owned_input_objects)?;
+            .chunked_multi_get(owned_input_objects, 50)?;
 
         for ((i, lock), obj_ref) in locks.into_iter().enumerate().zip(owned_input_objects) {
             // The object / version must exist, and therefore lock initialized.
@@ -1056,7 +1065,7 @@ impl AuthorityStore {
         let locks = self
             .perpetual_tables
             .owned_object_transaction_locks
-            .multi_get(objects)?;
+            .chunked_multi_get(objects, 50)?;
         for (lock, obj_ref) in locks.into_iter().zip(objects) {
             if lock.is_none() {
                 let latest_lock = self.get_latest_lock_for_object_id(obj_ref.0)?;
@@ -1083,7 +1092,7 @@ impl AuthorityStore {
         let locks = self
             .perpetual_tables
             .owned_object_transaction_locks
-            .multi_get(objects)?;
+            .chunked_multi_get(objects, 50)?;
 
         if !is_force_reset {
             // If any locks exist and are not None, return errors for them
@@ -1209,7 +1218,7 @@ impl AuthorityStore {
             ($object_keys: expr) => {
                 self.perpetual_tables
                     .objects
-                    .multi_get($object_keys.clone())?
+                    .chunked_multi_get($object_keys.clone(), 50)?
                     .into_iter()
                     .zip($object_keys)
                     .filter_map(|(obj_opt, key)| {
@@ -1327,7 +1336,7 @@ impl AuthorityStore {
         Ok(self
             .perpetual_tables
             .transactions
-            .multi_get(tx_digests)
+            .chunked_multi_get(tx_digests, 50)
             .map(|v| v.into_iter().map(|v| v.map(|v| v.into())).collect())?)
     }
 
