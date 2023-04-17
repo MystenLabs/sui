@@ -16,6 +16,7 @@ use network::{
     PrimaryToWorkerClient, RetryConfig,
 };
 use parking_lot::Mutex;
+use std::time::Instant;
 use std::{
     cmp::min,
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
@@ -32,7 +33,7 @@ use tokio::{
     task::JoinSet,
     time::sleep,
 };
-use tracing::{debug, error, trace, warn};
+use tracing::{debug, error, instrument, trace, warn};
 use types::{
     ensure,
     error::{AcceptNotification, DagError, DagResult},
@@ -139,11 +140,14 @@ impl Inner {
     }
 
     // State lock must be held when calling this function.
+    #[instrument(level = "debug", skip_all)]
     async fn accept_certificate_internal(
         &self,
         _lock: &MutexGuard<'_, State>,
         certificate: Certificate,
     ) -> DagResult<()> {
+        debug!("Processing certificate {:?}", certificate);
+
         let digest = certificate.digest();
 
         // TODO: remove this validation later to reduce rocksdb access.
@@ -653,11 +657,14 @@ impl Synchronizer {
     ///
     /// Because of the atomicity requirement, this function cannot be made cancellation safe.
     /// So it is run in a loop inside a separate task, connected to `Synchronizer` via a channel.
+    #[instrument(level = "debug", skip_all)]
     async fn process_certificate_with_lock(
         inner: &Inner,
         certificate: Certificate,
         early_suspend: bool,
     ) -> DagResult<()> {
+        debug!("Processing certificate {:?}", certificate);
+
         // The state lock must be held for the rest of the function, to ensure updating state,
         // writing certificates into storage and sending certificates to consensus are atomic.
         // The atomicity makes sure the internal state is consistent with DAG in certificate store,
