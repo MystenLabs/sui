@@ -40,7 +40,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Find the last report issue open
-        uses: micalevisk/last-issue-action@v2.0
+        uses: micalevisk/last-issue-action@v2.1
         id: last_issue
         with:
           state: open
