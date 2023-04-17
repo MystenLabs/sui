@@ -50,7 +50,7 @@ impl<
 pub struct ExecutionResults {
     pub object_changes: BTreeMap<ObjectID, ObjectChange>,
     pub user_events: Vec<(ModuleId, StructTag, Vec<u8>)>,
-}
+    pub loaded_child_objects: Option<BTreeMap<ObjectID, SequenceNumber>>,
 
 #[derive(Clone, Debug)]
 pub struct InputObjectMetadata {

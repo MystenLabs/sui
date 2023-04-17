@@ -81,15 +81,39 @@ pub fn execute<S: StorageView, Mode: ExecutionMode>(
     // execute commands
     let mut mode_results = Mode::empty_results();
     for (idx, command) in commands.into_iter().enumerate() {
-        execute_command::<_, Mode>(&mut context, &mut mode_results, command)
-            .map_err(|e| e.with_command_index(idx))?
+        if let Err(err) = execute_command::<_, Mode>(&mut context, &mut mode_results, command)
+                        .map_err(|e| e.with_command_index(idx)) {
+                let object_runtime: &ObjectRuntime = context.session.get_native_extensions().get();
+                // We still need to record the loaded child objects for debugging
+                let loaded_child_objects = object_runtime.loaded_child_objects();
+                drop(context);
+                state_view.apply_object_changes(BTreeMap::new(), Some(loaded_child_objects));
+                return Err(err);
+        };
     }
+
+
+    // Save loaded objects table incase we fail in post execution
+    let object_runtime: &ObjectRuntime = context.session.get_native_extensions().get();
+    // We still need to record the loaded child objects for debugging
+    let loaded_child_objects = object_runtime.loaded_child_objects();
+
     // apply changes
     let ExecutionResults {
         object_changes,
         user_events,
-    } = context.finish::<Mode>()?;
-    state_view.apply_object_changes(object_changes);
+        loaded_child_objects
+    } = match context.finish::<Mode>() {
+        Ok(results) => results,
+        Err(err) => {
+            // Save loaded objects for debug
+            state_view.apply_object_changes(BTreeMap::new(), Some(loaded_child_objects));
+            return Err(err);
+        }
+    };
+
+    state_view.apply_object_changes(object_changes, loaded_child_objects);
+
     for (module_id, tag, contents) in user_events {
         state_view.log_event(Event::new(
             module_id.address(),

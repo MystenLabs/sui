@@ -50,6 +50,7 @@ pub struct IndexerMetrics {
     pub get_checkpoint_latency: Histogram,
     pub get_checkpoints_latency: Histogram,
     pub get_events_latency: Histogram,
+    pub get_dynamic_fields_loaded_objects_latency: Histogram,
     pub get_total_transaction_blocks_latency: Histogram,
     pub get_latest_checkpoint_sequence_number_latency: Histogram,
     // indexer.rs
@@ -309,6 +310,13 @@ impl IndexerMetrics {
             get_dynamic_field_object_latency: register_histogram_with_registry!(
                 "get_dynamic_field_object_latency",
                 "Time spent in get_dynamic_field_object on the fullnode behind.",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry
+            )
+            .unwrap(),
+            get_dynamic_fields_loaded_objects_latency: register_histogram_with_registry!(
+                "get_dynamic_fields_loaded_objects_latency",
+                "Time spent in get_dynamic_fields_loaded_objects_latency on the fullnode behind.",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry
             )

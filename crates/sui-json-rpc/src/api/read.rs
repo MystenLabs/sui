@@ -86,6 +86,12 @@ pub trait ReadApi {
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiPastObjectResponse>>;
 
+    #[method(name = "getDynamicFieldsLoadedObjects", blocking)]
+    fn get_dynamic_fields_loaded_objects(
+        &self,
+        digest: TransactionDigest,
+    ) -> RpcResult<SuiDynamicFieldLoadedChildObjectsResponse>;
+
     /// Return a checkpoint
     #[method(name = "getCheckpoint")]
     async fn get_checkpoint(

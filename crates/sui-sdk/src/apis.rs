@@ -242,6 +242,17 @@ impl ReadApi {
             .dry_run_transaction_block(Base64::from_bytes(&bcs::to_bytes(&tx)?))
             .await?)
     }
+
+    pub async fn get_dynamic_fields_loaded_objects(
+        &self,
+        digest: TransactionDigest,
+    ) -> SuiRpcResult<SuiDynamicFieldLoadedChildObjectsResponse> {
+        Ok(self
+            .api
+            .http
+            .get_dynamic_fields_loaded_objects(digest)
+            .await?)
+    }
 }
 
 #[derive(Debug, Clone)]

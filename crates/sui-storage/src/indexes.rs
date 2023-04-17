@@ -115,6 +115,10 @@ pub struct IndexStoreTables {
     #[default_options_override_fn = "dynamic_field_index_table_default_config"]
     dynamic_field_index: DBMap<DynamicFieldKey, DynamicFieldInfo>,
 
+    /// This is an index of all the versions of loaded dynamic field objects
+    dynamic_field_loaded_child_object_versions:
+        DBMap<TransactionDigest, Vec<(ObjectID, SequenceNumber)>>,
+
     #[default_options_override_fn = "index_table_default_config"]
     event_order: DBMap<EventId, EventIndex>,
     #[default_options_override_fn = "index_table_default_config"]
@@ -287,6 +291,7 @@ impl IndexStore {
         object_index_changes: ObjectIndexChanges,
         digest: &TransactionDigest,
         timestamp_ms: u64,
+        loaded_child_objects: Option<BTreeMap<ObjectID, SequenceNumber>>,
         tx_coins: Option<TxCoins>,
     ) -> SuiResult<u64> {
         let sequence = self.next_sequence_number.fetch_add(1, Ordering::SeqCst);
@@ -419,6 +424,15 @@ impl IndexStore {
             }),
         )?;
 
+        // Loaded child objects table
+        if let Some(loaded_child_objects) = loaded_child_objects {
+            let loaded_child_objects: Vec<_> = loaded_child_objects.into_iter().collect();
+            batch.insert_batch(
+                &self.tables.dynamic_field_loaded_child_object_versions,
+                std::iter::once((*digest, loaded_child_objects)),
+            )?;
+        };
+
         batch.write()?;
         Ok(sequence)
     }
@@ -493,6 +507,17 @@ impl IndexStore {
                 }
             }
         }
+    }
+
+    /// Returns dynamic field loaded objects table for a tx
+    pub fn get_dynamic_field_loaded_child_object_versions(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> SuiResult<Option<Vec<(ObjectID, SequenceNumber)>>> {
+        self.tables
+            .dynamic_field_loaded_child_object_versions
+            .get(transaction_digest)
+            .map_err(|err| err.into())
     }
 
     /// Returns unix timestamp for a transaction if it exists

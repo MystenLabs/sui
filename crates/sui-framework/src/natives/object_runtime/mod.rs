@@ -372,6 +372,14 @@ impl<'a> ObjectRuntime<'a> {
     ) -> impl Iterator<Item = (&ObjectID, &Type, Value)> {
         self.object_store.all_active_objects()
     }
+
+    pub fn loaded_child_objects(&self) -> BTreeMap<ObjectID, SequenceNumber> {
+        self.object_store
+            .cached_objects()
+            .iter()
+            .filter_map(|(id, obj_opt)| Some((*id, obj_opt.as_ref()?.version())))
+            .collect()
+    }
 }
 
 pub fn max_event_error(max_events: u64) -> PartialVMError {
@@ -401,14 +409,17 @@ impl ObjectRuntimeState {
         loaded_child_objects_fixed: bool,
     ) -> Result<RuntimeResults, ExecutionError> {
         let mut wrapped_children = BTreeSet::new();
-        if !loaded_child_objects_fixed {
-            loaded_child_objects = BTreeMap::new();
-            for (child, child_object_effect) in &child_object_effects {
-                if let Some(version) = child_object_effect.loaded_version {
-                    loaded_child_objects.insert(*child, version);
-                }
-            }
-        }
+
+        // This doesnt seem to make a difference and tests still pass. cc @tnowacki
+
+        // if !loaded_child_objects_fixed {
+        //     loaded_child_objects = BTreeMap::new();
+        //     for (child, child_object_effect) in &child_object_effects {
+        //         if let Some(version) = child_object_effect.loaded_version {
+        //             loaded_child_objects.insert(*child, version);
+        //         }
+        //     }
+        // }
         for (child, child_object_effect) in child_object_effects {
             let ChildObjectEffect {
                 owner: parent,
