@@ -153,6 +153,8 @@ pub enum ToolCommand {
     InvalidSigStress {
         #[clap(long = "fullnode-url")]
         fullnode_url: Option<String>,
+        #[clap(long = "starting-tx-digest")]
+        starting_tx_digest: String,
     },
 }
 
@@ -312,15 +314,7 @@ impl ToolCommand {
                 let config = sui_config::NodeConfig::load(config_path)?;
                 restore_from_db_checkpoint(&config, &db_checkpoint_path).await?;
             }
-            ToolCommand::InvalidSigStress { fullnode_url} => {
-                // let channel = default_mysten_network_config()
-                //     .connect_lazy(&Multiaddr::try_from("/dns/lhr-00.testnet.sui.io/tcp/8080/http").unwrap())
-                //     .unwrap();
-                // let net_client_1 = NetworkAuthorityClient::new(channel);
-                // let channel = default_mysten_network_config()
-                //     .connect_lazy(&Multiaddr::try_from("/dns/icn-00.testnet.sui.io/tcp/8080/http").unwrap())
-                //     .unwrap();
-                // let net_client_2 = NetworkAuthorityClient::new(channel);
+            ToolCommand::InvalidSigStress { fullnode_url, starting_tx_digest} => {
                 let fullnode_url = fullnode_url.unwrap_or_else(|| "https://fullnode.testnet.sui.io:443".to_string());
                 let client = SuiClientBuilder::default()
                     .build(fullnode_url)
@@ -347,7 +341,7 @@ impl ToolCommand {
                 )?);
 
                 let (tx, mut rx) = mpsc::channel(10_000);
-                let cursor = Some(TransactionDigest::from_str("D9fKs9uPzUpXgDmy2WxuYjYjRrEzEsUBN6jiQbrp9LSe").unwrap());
+                let cursor = Some(TransactionDigest::from_str(&starting_tx_digest).unwrap());
                 tokio::spawn(query_function(
                     read.clone(),
                     "mint_test_token_usdt",
