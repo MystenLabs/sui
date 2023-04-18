@@ -16,11 +16,11 @@ export function useGetTransactionBlocksForAddress(
 ) {
     const rpc = useRpcClient();
     return useInfiniteQuery(
-        ['get-transaction-blocks', address],
+        ['get-transaction-blocks', address, filter, limit],
         async ({ pageParam }) =>
             await rpc.queryTransactionBlocks({
                 filter,
-                cursor: pageParam ? pageParam.cursor : null,
+                cursor: pageParam,
                 order: 'descending',
                 limit,
                 options: {
@@ -31,11 +31,7 @@ export function useGetTransactionBlocksForAddress(
             }),
         {
             getNextPageParam: (lastPage) =>
-                lastPage?.hasNextPage
-                    ? {
-                          cursor: lastPage.nextCursor,
-                      }
-                    : false,
+                lastPage?.hasNextPage ? lastPage.nextCursor : false,
             enabled: !!address,
         }
     );
