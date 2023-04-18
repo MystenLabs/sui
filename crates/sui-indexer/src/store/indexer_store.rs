@@ -189,7 +189,7 @@ pub trait IndexerStore {
     ) -> Result<usize, IndexerError>;
     // TODO(gegaowp): keep this method in this trait for now for easier reverting,
     // will remove it if it's no longer needed.
-    async fn persist_all_checkpoint_data(
+    fn persist_all_checkpoint_data(
         &self,
         data: &TemporaryCheckpointStore,
     ) -> Result<usize, IndexerError>;
