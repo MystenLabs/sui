@@ -465,10 +465,22 @@ impl LocalExec {
             .get_object_with_options(*object_id, options)
             .await
         {
-            Ok(obj) => obj_from_sui_obj_response(&obj).map(Some),
+            Ok(obj) => match obj_from_sui_obj_response(&obj) {
+                Ok(w) => Ok(Some(w)),
+                Err(err) => {
+                    if err.to_string().contains("NotExists") {
+                        error!("Could not find object {object_id} on RPC server. It might have been pruned, deleted, or never existed.");
+                        Ok(None)
+                    } else {
+                        Err(LocalExecError::SuiRpcError {
+                            err: err.to_string(),
+                        })
+                    }
+                }
+            },
             Err(err) => {
                 if err.to_string().contains("NotExists") {
-                    error!("Could not find object {object_id} on RPC server. I might have been pruned, deleted, or never existed.");
+                    error!("Could not find object {object_id} on RPC server. It might have been pruned, deleted, or never existed.");
                     Ok(None)
                 } else {
                     Err(LocalExecError::SuiRpcError {
