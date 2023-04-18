@@ -1,23 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::replay::execute_replay_command;
+use crate::replay::ReplayToolCommand;
 use crate::{
     db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand},
     get_object, get_transaction_block, make_clients, restore_from_db_checkpoint,
     ConciseObjectOutput, GroupedObjectOutput, VerboseObjectOutput,
 };
 use anyhow::Result;
+use clap::*;
 use std::path::PathBuf;
 use sui_config::genesis::Genesis;
-use sui_core::authority_client::AuthorityAPI;
-
-use sui_types::{base_types::*, object::Owner};
-
-use clap::*;
 use sui_config::Config;
+use sui_core::authority_client::AuthorityAPI;
 use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
+use sui_types::{base_types::*, object::Owner};
 
 #[derive(Parser, Clone, ValueEnum)]
 pub enum Verbosity {
@@ -143,6 +143,16 @@ pub enum ToolCommand {
         config_path: PathBuf,
         #[clap(long = "db-checkpoint-path")]
         db_checkpoint_path: PathBuf,
+    },
+
+    #[clap(name = "replay")]
+    Replay {
+        #[clap(long = "rpc")]
+        rpc_url: String,
+        #[clap(long = "safety-checks")]
+        safety_checks: bool,
+        #[clap(subcommand)]
+        cmd: ReplayToolCommand,
     },
 }
 
@@ -302,6 +312,11 @@ impl ToolCommand {
                 let config = sui_config::NodeConfig::load(config_path)?;
                 restore_from_db_checkpoint(&config, &db_checkpoint_path).await?;
             }
+            ToolCommand::Replay {
+                rpc_url,
+                safety_checks,
+                cmd,
+            } => execute_replay_command(rpc_url, safety_checks, cmd).await?,
         };
         Ok(())
     }
