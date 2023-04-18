@@ -8,8 +8,9 @@ use prometheus::{
     register_int_counter_with_registry, register_int_gauge_with_registry, IntCounter, IntGauge,
     Registry,
 };
+use rocksdb::LiveFile;
 use std::cmp::{max, min};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::{sync::Arc, time::Duration};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_storage::mutex_table::RwLockTable;
@@ -231,6 +232,44 @@ impl AuthorityStorePruner {
         Ok(())
     }
 
+    fn next_file_for_compaction(
+        perpetual_db: &Arc<AuthorityPerpetualTables>,
+        processed: &HashSet<String>,
+    ) -> anyhow::Result<Option<LiveFile>> {
+        let threshold = 500_f64;
+        let mut result: Option<LiveFile> = None;
+        for sst_file in perpetual_db.objects.rocksdb.live_files()? {
+            if sst_file.column_family_name != "objects"
+                || ((sst_file.size as f64) / (sst_file.num_entries as f64) < threshold)
+                || sst_file.level < 2
+                || sst_file.start_key.is_none()
+                || sst_file.end_key.is_none()
+                || processed.contains(&sst_file.name)
+            {
+                continue;
+            }
+            if let Some(candidate) = &result {
+                if candidate.size > sst_file.size {
+                    continue;
+                }
+            }
+            result = Some(sst_file);
+        }
+        Ok(result)
+    }
+
+    fn manual_compaction(perpetual_db: &Arc<AuthorityPerpetualTables>) -> anyhow::Result<()> {
+        let mut processed = HashSet::new();
+        while let Some(sst_file) = Self::next_file_for_compaction(perpetual_db, &processed)? {
+            let start_key: ObjectKey = bcs::from_bytes(sst_file.start_key.as_ref().unwrap())?;
+            let end_key: ObjectKey = bcs::from_bytes(sst_file.end_key.as_ref().unwrap())?;
+            eprintln!("sst file {:?}. Processed: {}", sst_file, processed.len());
+            perpetual_db.objects.compact_range(&start_key, &end_key)?;
+            processed.insert(sst_file.name);
+        }
+        Ok(())
+    }
+
     fn setup_objects_pruning(
         config: AuthorityStorePruningConfig,
         epoch_duration_ms: u64,
@@ -259,6 +298,9 @@ impl AuthorityStorePruner {
             loop {
                 tokio::select! {
                     _ = prune_interval.tick(), if config.num_epochs_to_retain != u64::MAX => {
+                        if let Err(err) = Self::manual_compaction(&perpetual_db) {
+                            error!("Failed to manualy compact SST files {:?}", err);
+                        }
                         if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, &objects_lock_table, config, metrics.clone()).await {
                             error!("Failed to prune objects: {:?}", err);
                         }
