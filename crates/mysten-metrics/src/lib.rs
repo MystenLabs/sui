@@ -18,6 +18,7 @@ use uuid::Uuid;
 
 mod guards;
 pub mod histogram;
+pub mod scoped_timer;
 pub use guards::*;
 
 #[derive(Debug)]
