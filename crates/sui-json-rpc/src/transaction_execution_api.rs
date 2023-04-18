@@ -115,33 +115,33 @@ impl TransactionExecutionApi {
                         .load_epoch_store_one_call_per_task()
                         .module_cache()
                         .clone();
-                    events = Some(SuiTransactionBlockEvents::try_from(
+                    events = SuiTransactionBlockEvents::try_from(
                         transaction_events,
                         digest,
                         None,
                         module_cache.as_ref(),
-                    )?);
+                    ).ok();
                 }
 
                 let object_cache = ObjectProviderCache::new(self.state.clone());
                 let balance_changes = if opts.show_balance_changes {
-                    Some(get_balance_changes_from_effect(
+                    get_balance_changes_from_effect(
                         &object_cache,
                         &effects.effects,
                         input_objs,
                         None,
-                    )?)
+                    ).ok()
                 } else {
                     None
                 };
                 let object_changes = if opts.show_object_changes {
-                    Some(get_object_changes(
+                    get_object_changes(
                         &object_cache,
                         sender,
                         effects.effects.modified_at_versions(),
                         effects.effects.all_changed_objects(),
                         effects.effects.all_deleted(),
-                    )?)
+                    ).ok()
                 } else {
                     None
                 };
