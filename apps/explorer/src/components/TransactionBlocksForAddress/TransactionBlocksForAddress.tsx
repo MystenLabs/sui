@@ -94,7 +94,7 @@ function TransactionBlocksForAddress({
             setFilterValue(FILTER_VALUES.CHANGED);
         }
     }, [isObject]);
-
+   
     const {
         data,
         isLoading,
@@ -102,6 +102,7 @@ function TransactionBlocksForAddress({
         isFetchingNextPage,
         fetchNextPage,
         hasNextPage,
+        refetch
     } = useGetTransactionBlocksForAddress(
         address,
         filterValue !== FILTER_VALUES.UNFILTERED
@@ -110,6 +111,10 @@ function TransactionBlocksForAddress({
               } as TransactionFilter)
             : undefined
     );
+
+    useEffect(() => {
+        refetch()
+    }, [filterValue, refetch]);
 
     const generateTableCard = (
         currentPage: number,
