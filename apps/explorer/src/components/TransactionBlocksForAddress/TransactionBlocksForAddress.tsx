@@ -94,7 +94,7 @@ function TransactionBlocksForAddress({
             setFilterValue(FILTER_VALUES.CHANGED);
         }
     }, [isObject]);
-   
+
     const {
         data,
         isLoading,
