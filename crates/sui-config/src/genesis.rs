@@ -1900,12 +1900,11 @@ mod test {
 
     #[test]
     fn genesis_transaction() {
-        let dir = tempfile::TempDir::new().unwrap();
-        let builder = crate::builder::ConfigBuilder::new(&dir);
-        let protocol_version = builder.protocol_version;
-        let protocol_config = ProtocolConfig::get_for_version(protocol_version);
+        let builder = crate::builder::ConfigBuilder::new_with_temp_dir();
         let network_config = builder.build();
         let genesis = network_config.genesis;
+        let protocol_version = ProtocolVersion::new(genesis.sui_system_object().protocol_version());
+        let protocol_config = ProtocolConfig::get_for_version(protocol_version);
 
         let genesis_transaction = genesis.transaction.clone();
 
