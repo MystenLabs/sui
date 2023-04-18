@@ -3,7 +3,7 @@ div.imagebox {
 }
 
 .display-container {
-    @apply h-50 w-50;
+    @apply h-full w-full;
 }
 
 img.smallimage {
