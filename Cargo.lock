@@ -7104,9 +7104,9 @@ dependencies = [
 
 [[package]]
 name = "proptest"
-version = "1.0.0"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e0d9cc07f18492d879586c92b485def06bc850da3118075cd45d50e9c95b0e5"
+checksum = "29f1b898011ce9595050a68e60f90bad083ff2987a695a42357134c8381fba70"
 dependencies = [
  "bit-set",
  "bitflags",
@@ -7120,6 +7120,7 @@ dependencies = [
  "regex-syntax",
  "rusty-fork",
  "tempfile",
+ "unarray",
 ]
 
 [[package]]
@@ -10021,6 +10022,7 @@ dependencies = [
  "narwhal-crypto",
  "once_cell",
  "proptest",
+ "proptest-derive",
  "rand 0.8.5",
  "roaring",
  "schemars",
@@ -10977,6 +10979,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "transaction-fuzzer"
+version = "0.1.0"
+dependencies = [
+ "move-core-types",
+ "proptest",
+ "proptest-derive",
+ "rand 0.8.5",
+ "sui-core",
+ "sui-protocol-config",
+ "sui-types",
+ "tokio",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "try-lock"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11083,6 +11101,12 @@ dependencies = [
  "hex",
  "static_assertions",
 ]
+
+[[package]]
+name = "unarray"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eaea85b334db583fe3274d12b4cd1880032beab409c0d774be044d4480ab9a94"
 
 [[package]]
 name = "uncased"
@@ -12405,6 +12429,7 @@ dependencies = [
  "typenum",
  "ucd-trie",
  "uint",
+ "unarray",
  "uncased",
  "unescape",
  "unic-char-property",

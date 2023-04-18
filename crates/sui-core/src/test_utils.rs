@@ -1,10 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::{AuthorityState, EffectsNotifyRead};
 use crate::authority_aggregator::{AuthorityAggregator, TimeoutConfig};
 use crate::epoch::committee_store::CommitteeStore;
+use crate::state_accumulator::StateAccumulator;
 use crate::test_authority_clients::LocalAuthorityClient;
+use fastcrypto::hash::MultisetHash;
 use fastcrypto::traits::KeyPair;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
@@ -25,12 +28,13 @@ use sui_types::crypto::{
     NetworkKeyPair, SuiKeyPair,
 };
 use sui_types::crypto::{AuthorityKeyPair, Signer};
-use sui_types::messages::ObjectArg;
+use sui_types::error::SuiError;
 use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS;
 use sui_types::messages::{
     CallArg, SignedTransaction, TransactionData, VerifiedTransaction,
     TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
+use sui_types::messages::{ObjectArg, SignedTransactionEffects};
 use sui_types::utils::create_fake_transaction;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
@@ -45,6 +49,61 @@ use tokio::time::timeout;
 use tracing::{info, warn};
 
 const WAIT_FOR_TX_TIMEOUT: Duration = Duration::from_secs(15);
+
+pub async fn init_state() -> Arc<AuthorityState> {
+    let dir = tempfile::TempDir::new().unwrap();
+    let network_config = sui_config::builder::ConfigBuilder::new(&dir).build();
+    let genesis = network_config.genesis;
+    let keypair = network_config.validator_configs[0]
+        .protocol_key_pair()
+        .copy();
+    TestAuthorityBuilder::new()
+        .build(genesis.committee().unwrap(), &keypair, &genesis)
+        .await
+}
+
+pub async fn send_and_confirm_transaction(
+    authority: &AuthorityState,
+    fullnode: Option<&AuthorityState>,
+    transaction: VerifiedTransaction,
+) -> Result<(CertifiedTransaction, SignedTransactionEffects), SuiError> {
+    // Make the initial request
+    let epoch_store = authority.load_epoch_store_one_call_per_task();
+    let response = authority
+        .handle_transaction(&epoch_store, transaction.clone())
+        .await?;
+    let vote = response.status.into_signed_for_testing();
+
+    // Collect signatures from a quorum of authorities
+    let committee = authority.clone_committee_for_testing();
+    let certificate =
+        CertifiedTransaction::new(transaction.into_message(), vec![vote.clone()], &committee)
+            .unwrap()
+            .verify(&committee)
+            .unwrap();
+
+    // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
+    // we unfortunately don't get a very descriptive error message, but we can at least see that something went wrong inside the VM
+    //
+    // We also check the incremental effects of the transaction on the live object set against StateAccumulator
+    // for testing and regression detection
+    let state_acc = StateAccumulator::new(authority.database.clone());
+    let mut state = state_acc.accumulate_live_object_set();
+    let (result, _execution_error_opt) = authority.try_execute_for_test(&certificate).await?;
+    let state_after = state_acc.accumulate_live_object_set();
+    let effects_acc = state_acc.accumulate_effects(
+        vec![result.inner().data().clone()],
+        epoch_store.protocol_config(),
+    );
+    state.union(&effects_acc);
+
+    assert_eq!(state_after.digest(), state.digest());
+
+    if let Some(fullnode) = fullnode {
+        fullnode.try_execute_for_test(&certificate).await?;
+    }
+    Ok((certificate.into_inner(), result.into_inner()))
+}
 
 // note: clippy is confused about this being dead - it appears to only be used in cfg(test), but
 // adding #[cfg(test)] causes other targets to fail

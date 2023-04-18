@@ -625,6 +625,7 @@ typed-arena = { version = "2" }
 typenum = { version = "1", default-features = false }
 ucd-trie = { version = "0.1", default-features = false, features = ["std"] }
 uint = { version = "0.9" }
+unarray = { version = "0.1", default-features = false }
 uncased = { version = "0.9", default-features = false }
 unescape = { version = "0.1", default-features = false }
 unic-char-property = { version = "0.9", default-features = false }
@@ -1383,6 +1384,7 @@ typed-arena = { version = "2" }
 typenum = { version = "1", default-features = false }
 ucd-trie = { version = "0.1", default-features = false, features = ["std"] }
 uint = { version = "0.9" }
+unarray = { version = "0.1", default-features = false }
 uncased = { version = "0.9", default-features = false }
 unescape = { version = "0.1", default-features = false }
 unic-char-property = { version = "0.9", default-features = false }
