@@ -29,10 +29,8 @@ export function useGetOwnedObjects(
         {
             staleTime: 10 * 60 * 1000,
             enabled: !!address,
-            getNextPageParam: (lastPage) => {
-                console.log({ lastPage });
-                return lastPage?.hasNextPage ? lastPage.nextCursor : null;
-            },
+            getNextPageParam: (lastPage) =>
+                lastPage?.hasNextPage ? lastPage.nextCursor : null,
         }
     );
 }

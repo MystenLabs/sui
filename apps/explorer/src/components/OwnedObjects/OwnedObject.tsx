@@ -1,15 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    type SuiObjectResponse,
-    getObjectId,
-    getObjectDisplay,
-} from '@mysten/sui.js';
+import { type SuiObjectResponse, getObjectDisplay } from '@mysten/sui.js';
 
-import useMedia from '~/hooks/useMedia';
 import { ObjectDetails } from '~/ui/ObjectDetails';
-import { extractName, parseObjectType } from '~/utils/objectUtils';
+import { parseObjectType } from '~/utils/objectUtils';
+import { trimStdLibPrefix } from '~/utils/stringUtils';
 
 type OwnedObjectTypes = {
     obj: SuiObjectResponse;
@@ -17,14 +13,13 @@ type OwnedObjectTypes = {
 
 function OwnedObject({ obj }: OwnedObjectTypes): JSX.Element {
     const displayMeta = getObjectDisplay(obj).data;
-    const { url } = useMedia(displayMeta?.image_url ?? '');
     return (
         <ObjectDetails
-            id={getObjectId(obj)}
-            name={extractName(displayMeta) ?? ''}
             variant="small"
-            type={parseObjectType(obj)}
-            image={url}
+            id={obj.data?.objectId}
+            type={trimStdLibPrefix(parseObjectType(obj))}
+            name={displayMeta?.name ?? displayMeta?.description}
+            image={displayMeta?.image_url}
         />
     );
 }

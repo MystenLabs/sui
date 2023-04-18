@@ -5,15 +5,47 @@ import { Dialog, Transition } from '@headlessui/react';
 import { X12 } from '@mysten/icons';
 import { Fragment, type ReactNode } from 'react';
 
-import { IconButton } from './IconButton';
+import { Heading } from '../Heading';
 
-export interface LightBoxProps {
+export interface ModalProps {
     open: boolean;
     onClose: () => void;
     children: ReactNode;
 }
 
-export function LightBox({ open, onClose, children }: LightBoxProps) {
+export function CloseButton({ onClick }: { onClick: () => void }) {
+    return (
+        <button
+            onClick={onClick}
+            type="button"
+            className="absolute right-0 top-0 p-4 text-steel hover:text-steel-darker"
+        >
+            <X12 />
+        </button>
+    );
+}
+
+export function ModalBody({ children }: { children: ReactNode }) {
+    return <div className="py-5">{children}</div>;
+}
+
+export function ModalContent({ children }: { children: ReactNode }) {
+    return (
+        <div className="flex flex-col rounded-lg bg-gray-40 p-5">
+            {children}
+        </div>
+    );
+}
+
+export function ModalHeading({ children }: { children: ReactNode }) {
+    return (
+        <Heading variant="heading3/semibold" color="gray-90">
+            {children}
+        </Heading>
+    );
+}
+
+export function Modal({ open, onClose, children }: ModalProps) {
     return (
         <Transition show={open} as={Fragment}>
             <Dialog className="relative z-50" open={open} onClose={onClose}>
@@ -43,14 +75,6 @@ export function LightBox({ open, onClose, children }: LightBoxProps) {
                             leaveTo="opacity-0 scale-95"
                         >
                             <div className="w-full max-w-xl transform align-middle transition-all">
-                                <div className="absolute -right-12">
-                                    <IconButton
-                                        onClick={onClose}
-                                        className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border-0 bg-gray-90 p-0 text-sui-light outline-none hover:scale-105 active:scale-100"
-                                        aria-label="Close"
-                                        icon={X12}
-                                    />
-                                </div>
                                 {children}
                             </div>
                         </Transition.Child>

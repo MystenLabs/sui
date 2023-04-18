@@ -44,6 +44,9 @@ const headingStyles = cva([], {
             true: 'font-mono',
             false: 'font-sans',
         },
+        truncate: {
+            true: 'truncate',
+        },
         /** Fix the header size, and disable responsive sizing of the heading. */
         fixed: { true: '', false: '' },
     },
