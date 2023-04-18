@@ -33,7 +33,7 @@ use crate::{
 
 // Reject a transaction if transaction manager queue length is above this threshold.
 // 100_000 = 10k TPS * 5s resident time in transaction manager (pending + executing) * 2.
-pub(crate) const MAX_TM_QUEUE_LENGTH: usize = 100_000;
+// pub(crate) const MAX_TM_QUEUE_LENGTH: usize = 100_000;
 
 // Reject a transaction if the number of pending transactions depending on the object
 // is above the threshold.
@@ -256,13 +256,13 @@ impl ValidatorService {
         msg: &SenderSignedData,
     ) -> SuiResult<()> {
         // Too many transactions are pending execution.
-        let inflight_queue_len = state.transaction_manager().inflight_queue_len();
-        if inflight_queue_len >= MAX_TM_QUEUE_LENGTH {
-            return Err(SuiError::TooManyTransactionsPendingExecution {
-                queue_len: inflight_queue_len,
-                threshold: MAX_TM_QUEUE_LENGTH,
-            });
-        }
+        // let inflight_queue_len = state.transaction_manager().inflight_queue_len();
+        // if inflight_queue_len >= MAX_TM_QUEUE_LENGTH {
+        //     return Err(SuiError::TooManyTransactionsPendingExecution {
+        //         queue_len: inflight_queue_len,
+        //         threshold: MAX_TM_QUEUE_LENGTH,
+        //     });
+        // }
 
         for (object_id, queue_len) in state.transaction_manager().objects_queue_len(
             msg.intent_message()
