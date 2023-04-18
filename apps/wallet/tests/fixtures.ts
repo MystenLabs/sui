@@ -38,7 +38,7 @@ export const test = base.extend<{
     },
     // eslint-disable-next-line no-empty-pattern
     demoPageUrl: async ({}, use) => {
-        await use('http://localhost:5181');
+        await use('http://localhost:5174');
     },
 });
 
