@@ -498,7 +498,8 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
 
     let result: SuiCoinMetadata = http_client
         .get_coin_metadata(format!("{package_id}::trusted_coin::TRUSTED_COIN"))
-        .await?;
+        .await?
+        .unwrap();
 
     assert_eq!("TRUSTED", result.symbol);
     assert_eq!("Trusted Coin for test", result.description);

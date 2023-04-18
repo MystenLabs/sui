@@ -250,7 +250,7 @@ impl CoinReadApiServer for CoinReadApi {
             .collect())
     }
 
-    async fn get_coin_metadata(&self, coin_type: String) -> RpcResult<SuiCoinMetadata> {
+    async fn get_coin_metadata(&self, coin_type: String) -> RpcResult<Option<SuiCoinMetadata>> {
         let coin_struct = parse_sui_struct_tag(&coin_type)?;
 
         let metadata_object = self
@@ -258,15 +258,10 @@ impl CoinReadApiServer for CoinReadApi {
                 &coin_struct.address.into(),
                 CoinMetadata::type_(coin_struct),
             )
-            .await?;
-        let metadata_object_id = metadata_object.id();
-        Ok(metadata_object.try_into().map_err(|e: SuiError| {
-            debug!(
-                ?metadata_object_id,
-                "Failed to convert object to CoinMetadata: {:?}", e
-            );
-            Error::from(e)
-        })?)
+            .await
+            .ok();
+
+        Ok(metadata_object.and_then(|v: Object| v.try_into().ok()))
     }
 
     async fn get_total_supply(&self, coin_type: String) -> RpcResult<Supply> {
