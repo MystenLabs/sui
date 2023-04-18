@@ -29,7 +29,6 @@ import { Tooltip } from '~/ui/Tooltip';
 import { getValidatorMoveEvent } from '~/utils/getValidatorMoveEvent';
 import { VALIDATOR_LOW_STAKE_GRACE_PERIOD } from '~/utils/validatorConstants';
 
-const APY_DECIMALS = 2;
 
 const NodeMap = lazy(() => import('../../components/node-map'));
 
@@ -249,7 +248,7 @@ function ValidatorPageResult() {
         const averageAPY = apys?.reduce((acc, cur) => acc + cur, 0);
         // exclude validators with no apy
         const numberOfValidatorsWithAPY = apys?.filter((a) => a > 0).length;
-        return roundFloat(averageAPY / numberOfValidatorsWithAPY, APY_DECIMALS);
+        return roundFloat(averageAPY / numberOfValidatorsWithAPY);
     }, [rollingAverageApys]);
 
     const lastEpochRewardOnAllValidators = useMemo(() => {
