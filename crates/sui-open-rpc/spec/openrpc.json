@@ -391,30 +391,6 @@
       }
     },
     {
-      "name": "sui_getDynamicFieldsLoadedObjects",
-      "tags": [
-        {
-          "name": "Read API"
-        }
-      ],
-      "params": [
-        {
-          "name": "digest",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/TransactionDigest"
-          }
-        }
-      ],
-      "result": {
-        "name": "SuiLoadedChildObjectsResponse",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/LoadedChildObjectsResponse"
-        }
-      }
-    },
-    {
       "name": "sui_getEvents",
       "tags": [
         {
@@ -494,6 +470,30 @@
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/BigInt_for_uint64"
+        }
+      }
+    },
+    {
+      "name": "sui_getLoadedChildObjects",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "params": [
+        {
+          "name": "digest",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/TransactionDigest"
+          }
+        }
+      ],
+      "result": {
+        "name": "SuiLoadedChildObjectsResponse",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/LoadedChildObjectsResponse"
         }
       }
     },
@@ -3238,35 +3238,6 @@
           }
         }
       },
-      "LoadedChildObject": {
-        "type": "object",
-        "required": [
-          "objectId",
-          "sequenceNumber"
-        ],
-        "properties": {
-          "objectId": {
-            "$ref": "#/components/schemas/ObjectID"
-          },
-          "sequenceNumber": {
-            "$ref": "#/components/schemas/SequenceNumber"
-          }
-        }
-      },
-      "LoadedChildObjectsResponse": {
-        "type": "object",
-        "required": [
-          "loadedChildObjects"
-        ],
-        "properties": {
-          "loadedChildObjects": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/LoadedChildObject"
-            }
-          }
-        }
-      },
       "DynamicFieldName": {
         "type": "object",
         "required": [
@@ -3879,6 +3850,35 @@
             "additionalProperties": false
           }
         ]
+      },
+      "LoadedChildObject": {
+        "type": "object",
+        "required": [
+          "objectId",
+          "sequenceNumber"
+        ],
+        "properties": {
+          "objectId": {
+            "$ref": "#/components/schemas/ObjectID"
+          },
+          "sequenceNumber": {
+            "$ref": "#/components/schemas/SequenceNumber"
+          }
+        }
+      },
+      "LoadedChildObjectsResponse": {
+        "type": "object",
+        "required": [
+          "loadedChildObjects"
+        ],
+        "properties": {
+          "loadedChildObjects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LoadedChildObject"
+            }
+          }
+        }
       },
       "MoveCallParams": {
         "type": "object",
