@@ -70,7 +70,7 @@ export function SignMessageRequest({ request }: SignMessageRequestProps) {
                 </div>
                 <div className="px-5 pb-5 break-words">
                     <Text
-                        variant="p2"
+                        variant="pBodySmall"
                         weight="medium"
                         color="steel-darker"
                         mono={type === 'base64'}

@@ -99,7 +99,7 @@ export function ImportLedgerAccounts() {
         summaryCardBody = (
             <div className="w-full h-full flex flex-col justify-center items-center gap-2">
                 <SpinnerIcon className="animate-spin text-steel w-4 h-4" />
-                <Text variant="p2" color="steel-darker">
+                <Text variant="pBodySmall" color="steel-darker">
                     Looking for accounts
                 </Text>
             </div>
@@ -108,7 +108,7 @@ export function ImportLedgerAccounts() {
         summaryCardBody = (
             <div className="w-full h-full flex flex-col justify-center items-center gap-2">
                 <ThumbUpIcon className="text-steel w-8 h-8" />
-                <Text variant="p2" color="steel-darker">
+                <Text variant="pBodySmall" color="steel-darker">
                     All Ledger accounts have been imported.
                 </Text>
             </div>

@@ -38,7 +38,7 @@ function OwnedObject({ obj }: OwnedObjectTypes): JSX.Element {
                         <ObjectLink objectId={getObjectId(obj)} />
                     </div>
                     <div className="overflow-hidden text-gray-80">
-                        <Text variant="p2/medium" truncate>
+                        <Text variant="pBodySmall/medium" truncate>
                             {trimStdLibPrefix(parseObjectType(obj))}
                         </Text>
                     </div>

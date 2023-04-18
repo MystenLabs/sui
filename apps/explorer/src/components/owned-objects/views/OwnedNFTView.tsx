@@ -26,7 +26,7 @@ export default function OwnedNFTView({ results }: { results: DataType }) {
                             <ObjectLink objectId={entryObj.id} />
                         </div>
                         <div className={styles.typevalue}>
-                            <Text variant="p2/medium">
+                            <Text variant="pBodySmall/medium">
                                 {trimStdLibPrefix(entryObj.Type)}
                             </Text>
                         </div>

@@ -32,7 +32,7 @@ function SignaturePanel({
             </TabList>
             <DescriptionList>
                 <DescriptionItem title="Scheme">
-                    <Text variant="p1/medium" color="steel-darker">
+                    <Text variant="pBody/medium" color="steel-darker">
                         {signature.signatureScheme}
                     </Text>
                 </DescriptionItem>
@@ -43,7 +43,7 @@ function SignaturePanel({
                     />
                 </DescriptionItem>
                 <DescriptionItem title="Signature">
-                    <Text variant="p1/medium" color="steel-darker">
+                    <Text variant="pBody/medium" color="steel-darker">
                         {toB64(signature.signature)}
                     </Text>
                 </DescriptionItem>

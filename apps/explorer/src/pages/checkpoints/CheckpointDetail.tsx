@@ -48,7 +48,7 @@ export default function CheckpointDetail() {
                             <DescriptionList>
                                 <DescriptionItem title="Checkpoint Sequence No.">
                                     <Text
-                                        variant="p1/medium"
+                                        variant="pBody/medium"
                                         color="steel-darker"
                                     >
                                         {data.sequenceNumber}
@@ -59,7 +59,7 @@ export default function CheckpointDetail() {
                                 </DescriptionItem>
                                 <DescriptionItem title="Checkpoint Timestamp">
                                     <Text
-                                        variant="p1/medium"
+                                        variant="pBody/medium"
                                         color="steel-darker"
                                     >
                                         {data.timestampMs
@@ -93,7 +93,7 @@ export default function CheckpointDetail() {
                                             title="Signature"
                                         >
                                             <Text
-                                                variant="p1/medium"
+                                                variant="pBody/medium"
                                                 color="steel-darker"
                                             >
                                                 {data.validatorSignature}

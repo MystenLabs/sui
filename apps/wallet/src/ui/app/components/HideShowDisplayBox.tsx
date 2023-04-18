@@ -61,7 +61,11 @@ export function HideShowDisplayBox({
             <div className="break-all relative">
                 {valueHidden ? null : (
                     <div className="absolute top-0">
-                        <Text variant="p1" weight="medium" color="steel-darker">
+                        <Text
+                            variant="pBody"
+                            weight="medium"
+                            color="steel-darker"
+                        >
                             {typeof value === 'string'
                                 ? value
                                 : value.map((aValue, index) => (

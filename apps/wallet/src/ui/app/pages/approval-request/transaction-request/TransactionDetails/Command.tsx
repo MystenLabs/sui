@@ -112,7 +112,7 @@ export function Command({ command }: CommandProps) {
             </button>
 
             {expanded && (
-                <div className="mt-2 text-p2 font-medium text-steel">
+                <div className="mt-2 text-pBodySmall font-medium text-steel">
                     ({convertCommandToString(command)})
                 </div>
             )}

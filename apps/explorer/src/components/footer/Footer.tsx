@@ -43,7 +43,10 @@ function Footer() {
                     <div className="h-full space-y-2 md:flex md:flex-col md:justify-between">
                         <SuiLogoIcon className="mx-auto md:mx-0" />
                         <div className="mt-auto">
-                            <Text color="white" variant="p4/semibold">
+                            <Text
+                                color="white"
+                                variant="pSubtitleSmall/semibold"
+                            >
                                 &copy;
                                 {`${new Date().getFullYear()} Sui. All
                                 rights reserved.`}
