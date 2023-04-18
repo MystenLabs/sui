@@ -369,18 +369,18 @@ impl ReadApi {
         }
 
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
-        let result = temp_response
+        let converted_tx_block_resps = temp_response
             .into_iter()
             .map(|c| convert_to_response(c.1, &opts, epoch_store.module_cache()))
-            .collect::<Vec<_>>();
-        self.metrics
-            .get_tx_blocks_result_size
-            .report(result.len() as u64);
+            .collect::<Result<Vec<_>, _>>()?;
 
         self.metrics
+            .get_tx_blocks_result_size
+            .report(converted_tx_block_resps.len() as u64);
+        self.metrics
             .get_tx_blocks_result_size_total
-            .inc_by(result.len() as u64);
-        Ok(result)
+            .inc_by(converted_tx_block_resps.len() as u64);
+        Ok(converted_tx_block_resps)
     }
 }
 
@@ -669,11 +669,7 @@ impl ReadApiServer for ReadApi {
             }
         }
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
-        Ok(convert_to_response(
-            temp_response,
-            &opts,
-            epoch_store.module_cache(),
-        ))
+        convert_to_response(temp_response, &opts, epoch_store.module_cache())
     }
 
     fn multi_get_transaction_blocks(
@@ -1079,39 +1075,31 @@ fn convert_to_response(
     cache: IntermediateTransactionResponse,
     opts: &SuiTransactionBlockResponseOptions,
     module_cache: &impl GetModule,
-) -> SuiTransactionBlockResponse {
+) -> RpcResult<SuiTransactionBlockResponse> {
     let mut response = SuiTransactionBlockResponse::new(cache.digest);
     response.errors = cache.errors;
 
     if opts.show_raw_input && cache.transaction.is_some() {
         let sender_signed_data = cache.transaction.as_ref().unwrap().data();
-        match bcs::to_bytes(sender_signed_data) {
-            Ok(t) => response.raw_transaction = t,
-            Err(e) => response.errors.push(e.to_string()),
-        }
+        let raw_tx = bcs::to_bytes(sender_signed_data)
+            .map_err(|e| anyhow!("Failed to serialize raw transaction with error: {}", e))?;
+        response.raw_transaction = raw_tx;
     }
 
     if opts.show_input && cache.transaction.is_some() {
-        match SuiTransactionBlock::try_from(cache.transaction.unwrap().into_message(), module_cache)
-        {
-            Ok(t) => {
-                response.transaction = Some(t);
-            }
-            Err(e) => {
-                response.errors.push(e.to_string());
-            }
-        }
+        let tx_block =
+            SuiTransactionBlock::try_from(cache.transaction.unwrap().into_message(), module_cache)?;
+        response.transaction = Some(tx_block);
     }
 
     if opts.show_effects && cache.effects.is_some() {
-        match cache.effects.unwrap().try_into() {
-            Ok(effects) => {
-                response.effects = Some(effects);
-            }
-            Err(e) => {
-                response.errors.push(e.to_string());
-            }
-        }
+        let effects = cache.effects.unwrap().try_into().map_err(|e| {
+            anyhow!(
+                "Failed to convert transaction block effects with error: {}",
+                e
+            )
+        })?;
+        response.effects = Some(effects);
     }
 
     response.checkpoint = cache.checkpoint_seq;
@@ -1128,5 +1116,5 @@ fn convert_to_response(
     if opts.show_object_changes {
         response.object_changes = cache.object_changes;
     }
-    response
+    Ok(response)
 }
