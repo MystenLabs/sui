@@ -141,7 +141,7 @@
 			},
 			{
 				"label": "Connect to a Sui Network",
-				"fileName": "build/devnet"
+				"fileName": "build/connect-sui-network"
 			},
 			{
 				"label": "Sui Client CLI",
