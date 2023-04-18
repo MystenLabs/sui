@@ -49,12 +49,22 @@ const config: PlaywrightTestConfig = {
             },
         },
     ],
-    webServer: {
-        command: 'pnpm demoApp:dev --port 5181',
-        port: 5181,
-        timeout: 30 * 1000,
-        reuseExistingServer: !process.env.CI,
-    },
+    webServer: [
+        {
+            command: 'pnpm demoApp:dev --port 5181',
+            port: 5181,
+            timeout: 30 * 1000,
+            reuseExistingServer: !process.env.CI,
+        },
+        {
+            command:
+                process.env.E2E_RUN_LOCAL_NET_CMD ??
+                'RUST_LOG="consensus=off" cargo run --bin sui-test-validator',
+            port: 9123,
+            timeout: 120 * 1000,
+            reuseExistingServer: !process.env.CI,
+        },
+    ],
 };
 
 export default config;
