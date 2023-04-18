@@ -14,7 +14,7 @@ use move_core_types::{
 };
 use move_vm_runtime::{move_vm::MoveVM, session::Session};
 use move_vm_types::loaded_data::runtime_types::Type;
-use sui_framework::natives::object_runtime::{max_event_error, ObjectRuntime, RuntimeResults};
+use sui_move_natives::object_runtime::{max_event_error, ObjectRuntime, RuntimeResults};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     balance::Balance,

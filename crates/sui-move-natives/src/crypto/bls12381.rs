@@ -16,7 +16,7 @@ use move_vm_types::{
 use smallvec::smallvec;
 use std::collections::VecDeque;
 
-use crate::natives::NativesCostTable;
+use crate::NativesCostTable;
 
 const BLS12381_BLOCK_SIZE: usize = 64;
 

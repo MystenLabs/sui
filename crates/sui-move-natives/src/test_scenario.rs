@@ -2,11 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    legacy_test_cost,
-    natives::{
-        get_nth_struct_field,
-        object_runtime::{ObjectRuntime, RuntimeResults},
-    },
+    get_nth_struct_field, legacy_test_cost,
+    object_runtime::{ObjectRuntime, RuntimeResults},
 };
 use linked_hash_map::LinkedHashMap;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};

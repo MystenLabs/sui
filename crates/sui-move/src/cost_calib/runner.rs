@@ -6,7 +6,6 @@ use move_package::BuildConfig;
 use move_unit_test::UnitTestingConfig;
 use std::{collections::HashMap, io::BufWriter, path::Path};
 use sui_cost_tables::bytecode_tables::initial_cost_schedule_for_unit_tests;
-use sui_framework::natives;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 
 const MAX_UNIT_TEST_INSTRUCTIONS: u64 = 1_000_000_000;
@@ -62,7 +61,7 @@ pub fn run_calib_tests(
                 num_threads: 1,
                 ..config
             },
-            natives::all_natives(/* silent */ true),
+            sui_move_natives::all_natives(/* silent */ true),
             Some(initial_cost_schedule_for_unit_tests()),
             false,
             &mut test_output_buf,

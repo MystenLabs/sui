@@ -86,6 +86,7 @@ members = [
     "crates/sui-macros",
     "crates/sui-move",
     "crates/sui-move-build",
+    "crates/sui-move-natives",
     "crates/sui-network",
     "crates/sui-node",
     "crates/sui-open-rpc",

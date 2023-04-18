@@ -1,33 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-mod address;
-mod crypto;
-mod dynamic_field;
-mod event;
-mod object;
-pub mod object_runtime;
-mod test_scenario;
-mod test_utils;
-mod transfer;
-mod tx_context;
-mod types;
-mod validator;
-
-use crate::make_native;
-use better_any::{Tid, TidAble};
-use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_core_types::{gas_algebra::InternalGas, identifier::Identifier};
-use move_stdlib::natives::{GasParameters, NurseryGasParameters};
-use move_vm_runtime::native_functions::{NativeFunction, NativeFunctionTable};
-use move_vm_types::{
-    natives::function::NativeResult,
-    values::{Struct, Value},
-};
-use std::sync::Arc;
-use sui_protocol_config::ProtocolConfig;
-use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS};
-
 use self::{
     address::{AddressFromBytesCostParams, AddressFromU256CostParams, AddressToU256CostParams},
     crypto::{bls12381, ecdsa_k1, ecdsa_r1, ecvrf, ed25519, groth16, hash, hmac},
@@ -60,6 +33,31 @@ use self::{
     types::TypesIsOneTimeWitnessCostParams,
     validator::ValidatorValidateMetadataBcsCostParams,
 };
+use better_any::{Tid, TidAble};
+use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_core_types::{gas_algebra::InternalGas, identifier::Identifier};
+use move_stdlib::natives::{GasParameters, NurseryGasParameters};
+use move_vm_runtime::native_functions::{NativeFunction, NativeFunctionTable};
+use move_vm_types::{
+    natives::function::NativeResult,
+    values::{Struct, Value},
+};
+use std::sync::Arc;
+use sui_protocol_config::ProtocolConfig;
+use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS};
+
+mod address;
+mod crypto;
+mod dynamic_field;
+mod event;
+mod object;
+pub mod object_runtime;
+mod test_scenario;
+mod test_utils;
+mod transfer;
+mod tx_context;
+mod types;
+mod validator;
 
 #[derive(Tid)]
 pub struct NativesCostTable {
@@ -732,4 +730,8 @@ macro_rules! make_native {
             },
         )
     };
+}
+
+pub(crate) fn legacy_test_cost() -> InternalGas {
+    InternalGas::new(0)
 }

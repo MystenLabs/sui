@@ -9,11 +9,11 @@ publish = false
 
 [dependencies]
 anyhow = "1.0.64"
+bcs = "0.1.4"
 bimap = "0.6.2"
 clap = { version = "3.1.8", features = ["derive"] }
 once_cell = "1.16"
 rand = "0.8.5"
-bcs = "0.1.4"
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
@@ -25,9 +25,10 @@ move-symbol-pool.workspace = true
 move-transactional-test-runner.workspace = true
 move-vm-runtime.workspace = true
 
-sui-framework = { path = "../sui-framework" }
-sui-types = { path = "../sui-types", features = ["test-utils"]}
 sui-adapter = { path = "../sui-adapter" }
 sui-core = { path = "../sui-core" }
+sui-framework = { path = "../sui-framework" }
+sui-move-natives = { path = "../sui-move-natives" }
 sui-protocol-config = { path = "../sui-protocol-config" }
+sui-types = { path = "../sui-types", features = ["test-utils"]}
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

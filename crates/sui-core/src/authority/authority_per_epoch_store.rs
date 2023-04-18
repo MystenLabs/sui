@@ -2017,7 +2017,7 @@ impl ExecutionComponents {
         metrics: Arc<ResolverMetrics>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
     ) -> Self {
-        let native_functions = sui_framework::natives::all_natives(/* silent */ true);
+        let native_functions = sui_move_natives::all_natives(/* silent */ true);
         let move_vm = Arc::new(
             adapter::new_move_vm(
                 native_functions.clone(),

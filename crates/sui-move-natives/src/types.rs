@@ -14,7 +14,7 @@ use move_vm_types::{
 use smallvec::smallvec;
 use std::collections::VecDeque;
 
-use crate::natives::NativesCostTable;
+use crate::NativesCostTable;
 
 pub(crate) fn is_otw_struct(struct_layout: &MoveStructLayout, type_tag: &TypeTag) -> bool {
     let has_one_bool_field = match struct_layout {
