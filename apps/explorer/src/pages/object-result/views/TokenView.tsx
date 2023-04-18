@@ -21,9 +21,9 @@ import { parseImageURL, extractName } from '../../../utils/objectUtils';
 import { trimStdLibPrefix, genFileTypeMsg } from '../../../utils/stringUtils';
 import { LinkOrTextDescriptionItem } from '../LinkOrTextDescriptionItem';
 
+import TransactionBlocksForAddress from '~/components/TransactionBlocksForAddress/TransactionBlocksForAddress';
 import { DynamicFieldsCard } from '~/components/owned-objects/views/DynamicFieldsCard';
 import { ObjectFieldsCard } from '~/components/owned-objects/views/ObjectFieldsCard';
-import { TransactionsForAddress } from '~/components/transactions/TransactionsForAddress';
 import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
 import { Heading } from '~/ui/Heading';
 import { AddressLink, ObjectLink, TransactionLink } from '~/ui/InternalLink';
@@ -250,7 +250,7 @@ export function TokenView({ data }: { data: SuiObjectResponse }) {
             </TabGroup>
             <ObjectFieldsCard id={objectId} />
             <DynamicFieldsCard id={objectId} />
-            <TransactionsForAddress address={objectId} type="object" />
+            <TransactionBlocksForAddress address={objectId} isObject />
         </div>
     );
 }
