@@ -23,7 +23,7 @@ use sui_types::sui_serde::BigInt;
 use crate::errors::IndexerError;
 use crate::store::IndexerStore;
 use crate::types::SuiTransactionBlockResponseWithOptions;
-use sui_json_rpc_types::SuiDynamicFieldLoadedChildObjectsResponse;
+use sui_json_rpc_types::SuiLoadedChildObjectsResponse;
 
 pub(crate) struct ReadApi<S> {
     fullnode: HttpClient,
@@ -340,16 +340,16 @@ where
         events_resp
     }
 
-    fn get_dynamic_fields_loaded_objects(
+    fn get_loaded_child_objects(
         &self,
         digest: TransactionDigest,
-    ) -> RpcResult<SuiDynamicFieldLoadedChildObjectsResponse> {
+    ) -> RpcResult<SuiLoadedChildObjectsResponse> {
         let dynamic_fields_load_obj_guard = self
             .state
             .indexer_metrics()
-            .get_dynamic_fields_loaded_objects_latency
+            .get_loaded_child_objects_latency
             .start_timer();
-        let dyn_fields_resp = block_on(self.fullnode.get_dynamic_fields_loaded_objects(digest));
+        let dyn_fields_resp = block_on(self.fullnode.get_loaded_child_objects(digest));
         dynamic_fields_load_obj_guard.stop_and_record();
         dyn_fields_resp
     }

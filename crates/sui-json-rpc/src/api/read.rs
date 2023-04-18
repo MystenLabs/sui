@@ -4,7 +4,7 @@
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 
-use sui_json_rpc_types::SuiDynamicFieldLoadedChildObjectsResponse;
+use sui_json_rpc_types::SuiLoadedChildObjectsResponse;
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, CheckpointPage, SuiEvent, SuiGetPastObjectRequest,
     SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse, SuiTransactionBlockResponse,
@@ -87,11 +87,11 @@ pub trait ReadApi {
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiPastObjectResponse>>;
 
-    #[method(name = "getDynamicFieldsLoadedObjects", blocking)]
-    fn get_dynamic_fields_loaded_objects(
+    #[method(name = "getLoadedChildObjects", blocking)]
+    fn get_loaded_child_objects(
         &self,
         digest: TransactionDigest,
-    ) -> RpcResult<SuiDynamicFieldLoadedChildObjectsResponse>;
+    ) -> RpcResult<SuiLoadedChildObjectsResponse>;
 
     /// Return a checkpoint
     #[method(name = "getCheckpoint")]

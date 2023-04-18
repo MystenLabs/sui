@@ -26,9 +26,7 @@ use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse, SuiTransactionBlock,
     SuiTransactionBlockEvents, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
-use sui_json_rpc_types::{
-    SuiDynamicFieldLoadedChildObject, SuiDynamicFieldLoadedChildObjectsResponse,
-};
+use sui_json_rpc_types::{SuiLoadedChildObject, SuiLoadedChildObjectsResponse};
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::collection_types::VecMap;
@@ -777,21 +775,20 @@ impl ReadApiServer for ReadApi {
         self.get_checkpoints(cursor, limit.map(|l| *l as usize), descending_order)
     }
 
-    fn get_dynamic_fields_loaded_objects(
+    fn get_loaded_child_objects(
         &self,
         digest: TransactionDigest,
-    ) -> RpcResult<SuiDynamicFieldLoadedChildObjectsResponse> {
-        Ok(SuiDynamicFieldLoadedChildObjectsResponse {
-            loaded_child_objects: match self
-                .state
-                .get_dynamic_field_loaded_child_object_versions(&digest)
-                .map_err(|e| {
+    ) -> RpcResult<SuiLoadedChildObjectsResponse> {
+        Ok(SuiLoadedChildObjectsResponse {
+            loaded_child_objects: match self.state.loaded_child_object_versions(&digest).map_err(
+                |e| {
                     error!("Failed to get loaded child objects at {digest:?} with error: {e:?}");
                     Error::SuiError(e)
-                })? {
+                },
+            )? {
                 Some(v) => v
                     .into_iter()
-                    .map(|q| SuiDynamicFieldLoadedChildObject::new(q.0, q.1))
+                    .map(|q| SuiLoadedChildObject::new(q.0, q.1))
                     .collect::<Vec<_>>(),
                 None => vec![],
             },

@@ -109,7 +109,8 @@ pub fn execute_transaction_to_effects_impl<
     move_vm: &Arc<MoveVM>,
     gas_status: SuiGasStatus,
     epoch_id: &EpochId,
-    epoch_timestamp_ms: u64,    protocol_config: &ProtocolConfig,
+    epoch_timestamp_ms: u64,
+    protocol_config: &ProtocolConfig,
     enable_expensive_checks: bool
 ) -> (
     InnerTemporaryStore,

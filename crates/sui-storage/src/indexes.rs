@@ -508,7 +508,7 @@ impl IndexStore {
     }
 
     /// Returns dynamic field loaded objects table for a tx
-    pub fn get_dynamic_field_loaded_child_object_versions(
+    pub fn loaded_child_object_versions(
         &self,
         transaction_digest: &TransactionDigest,
     ) -> SuiResult<Option<Vec<(ObjectID, SequenceNumber)>>> {

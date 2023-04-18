@@ -407,10 +407,10 @@
         }
       ],
       "result": {
-        "name": "SuiDynamicFieldLoadedChildObjectsResponse",
+        "name": "SuiLoadedChildObjectsResponse",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/DynamicFieldLoadedChildObjectsRespone"
+          "$ref": "#/components/schemas/LoadedChildObjectsResponse"
         }
       }
     },
@@ -3238,7 +3238,7 @@
           }
         }
       },
-      "DynamicFieldLoadedChildObject": {
+      "LoadedChildObject": {
         "type": "object",
         "required": [
           "objectId",
@@ -3253,7 +3253,7 @@
           }
         }
       },
-      "DynamicFieldLoadedChildObjectsRespone": {
+      "LoadedChildObjectsResponse": {
         "type": "object",
         "required": [
           "loadedChildObjects"
@@ -3262,7 +3262,7 @@
           "loadedChildObjects": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/DynamicFieldLoadedChildObject"
+              "$ref": "#/components/schemas/LoadedChildObject"
             }
           }
         }

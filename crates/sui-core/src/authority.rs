@@ -2379,12 +2379,12 @@ impl AuthorityState {
         }
     }
 
-    pub fn get_dynamic_field_loaded_child_object_versions(
+    pub fn loaded_child_object_versions(
         &self,
         transaction_digest: &TransactionDigest,
     ) -> SuiResult<Option<Vec<(ObjectID, SequenceNumber)>>> {
         self.get_indexes()?
-            .get_dynamic_field_loaded_child_object_versions(transaction_digest)
+            .loaded_child_object_versions(transaction_digest)
     }
 
     pub fn get_transactions(

@@ -355,7 +355,7 @@ impl<'a> ObjectStore<'a> {
         Ok(())
     }
 
-    pub fn cached_objects(&self) -> &BTreeMap<ObjectID, Option<MoveObject>> {
+    pub(super) fn cached_objects(&self) -> &BTreeMap<ObjectID, Option<MoveObject>> {
         &self.inner.cached_objects
     }
 

@@ -1575,15 +1575,15 @@ pub enum SuiObjectArg {
 
 #[serde_as]
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(rename = "DynamicFieldLoadedChildObject", rename_all = "camelCase")]
-pub struct SuiDynamicFieldLoadedChildObject {
+#[serde(rename = "LoadedChildObject", rename_all = "camelCase")]
+pub struct SuiLoadedChildObject {
     object_id: ObjectID,
     #[schemars(with = "AsSequenceNumber")]
     #[serde_as(as = "AsSequenceNumber")]
     sequence_number: SequenceNumber,
 }
 
-impl SuiDynamicFieldLoadedChildObject {
+impl SuiLoadedChildObject {
     pub fn new(object_id: ObjectID, sequence_number: SequenceNumber) -> Self {
         Self {
             object_id,
@@ -1602,10 +1602,7 @@ impl SuiDynamicFieldLoadedChildObject {
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, JsonSchema, Clone, Default)]
-#[serde(
-    rename_all = "camelCase",
-    rename = "DynamicFieldLoadedChildObjectsRespone"
-)]
-pub struct SuiDynamicFieldLoadedChildObjectsResponse {
-    pub loaded_child_objects: Vec<SuiDynamicFieldLoadedChildObject>,
+#[serde(rename_all = "camelCase", rename = "LoadedChildObjectsResponse")]
+pub struct SuiLoadedChildObjectsResponse {
+    pub loaded_child_objects: Vec<SuiLoadedChildObject>,
 }

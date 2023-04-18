@@ -595,12 +595,12 @@ impl LocalExec {
         &mut self,
         tx_digest: &TransactionDigest,
     ) -> Result<(), LocalExecError> {
-        // Get the dynamic fields loaded
+        // Get the child objects loaded
 
-        let loaded_df_child_objs = match self
+        let loaded_child_objs = match self
             .client
             .read_api()
-            .get_dynamic_fields_loaded_objects(*tx_digest)
+            .get_loaded_child_objects(*tx_digest)
             .await
         {
             Ok(objs) => objs,
@@ -613,14 +613,14 @@ impl LocalExec {
         };
 
         // Fetch the refs
-        let loaded_df_child_refs = loaded_df_child_objs
+        let loaded_child_refs = loaded_child_objs
             .loaded_child_objects
             .iter()
             .map(|obj| (obj.object_id(), obj.sequence_number()))
             .collect::<Vec<_>>();
 
         // Download and save the specific versions needed
-        self.multi_download_and_store(&loaded_df_child_refs).await?;
+        self.multi_download_and_store(&loaded_child_refs).await?;
         Ok(())
     }
 
