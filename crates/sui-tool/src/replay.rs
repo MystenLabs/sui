@@ -201,6 +201,41 @@ pub enum LocalExecError {
 
     #[error("GeneralError: {:#?}", err)]
     GeneralError { err: String },
+
+    #[error("ObjectNotExist: {:#?}", id)]
+    ObjectNotExist { id: ObjectID },
+
+    #[error(
+        "ObjectDeleted: {:#?} at version {:#?} digest {:#?}",
+        id,
+        version,
+        digest
+    )]
+    ObjectDeleted {
+        id: ObjectID,
+        version: SequenceNumber,
+        digest: ObjectDigest,
+    },
+}
+
+impl From<SuiObjectResponseError> for LocalExecError {
+    fn from(err: SuiObjectResponseError) -> Self {
+        match err {
+            SuiObjectResponseError::NotExists { object_id } => {
+                LocalExecError::ObjectNotExist { id: object_id }
+            }
+            SuiObjectResponseError::Deleted {
+                object_id,
+                digest,
+                version,
+            } => LocalExecError::ObjectDeleted {
+                id: object_id,
+                version,
+                digest,
+            },
+            _ => LocalExecError::SuiObjectResponseError { err },
+        }
+    }
 }
 
 impl From<LocalExecError> for SuiError {
@@ -456,36 +491,24 @@ impl LocalExec {
     ) -> Result<Option<Object>, LocalExecError> {
         let options = SuiObjectDataOptions::bcs_lossless();
 
-        match self
-            .client
-            .read_api()
-            .get_object_with_options(*object_id, options)
-            .await
-        {
-            Ok(obj) => match obj_from_sui_obj_response(&obj) {
-                Ok(w) => Ok(Some(w)),
-                Err(err) => {
-                    if err.to_string().contains("NotExists") {
-                        error!("Could not find object {object_id} on RPC server. It might have been pruned, deleted, or never existed.");
-                        Ok(None)
-                    } else {
-                        Err(LocalExecError::SuiRpcError {
-                            err: err.to_string(),
-                        })
-                    }
-                }
-            },
-            Err(err) => {
-                if err.to_string().contains("NotExists") {
-                    error!("Could not find object {object_id} on RPC server. It might have been pruned, deleted, or never existed.");
-                    Ok(None)
-                } else {
-                    Err(LocalExecError::SuiRpcError {
-                        err: err.to_string(),
-                    })
-                }
+        self
+        .client
+        .read_api()
+        .get_object_with_options(*object_id, options)
+        .await.map(|q| match obj_from_sui_obj_response(&q){
+            Ok(v) => Ok(Some(v)),
+            Err(LocalExecError::ObjectNotExist { id }) => {
+                error!("Could not find object {id} on RPC server. It might have been pruned, deleted, or never existed.");
+                Ok(None)
             }
-        }
+            Err(LocalExecError::ObjectDeleted { id, version, digest }) => {
+                error!("Object {id} {version} {digest} was deleted on RPC server.");
+                Ok(None)
+            },
+            Err(err) => Err(LocalExecError::SuiRpcError {
+                err: err.to_string(),
+            })
+        })?
     }
 
     pub async fn execute_all_in_checkpoint(
@@ -674,10 +697,7 @@ impl LocalExec {
                 self.download_latest_object(obj_id)?
             }
         };
-        if o.is_none() {
-            return Ok(None);
-        }
-        let o = o.unwrap();
+        let Some(o) = o else { return Ok(None) };
 
         if o.is_package() {
             self.package_cache
@@ -1139,12 +1159,8 @@ impl ResourceResolver for LocalExec {
         address: &AccountAddress,
         typ: &StructTag,
     ) -> Result<Option<Vec<u8>>, Self::Error> {
-        let object: Object = match self
-            .get_or_download_object(&ObjectID::from(*address))
-            .map_err(|e| SuiError::GenericStorageError(e.to_string()))?
-        {
-            None => return Ok(None),
-            Some(o) => o,
+        let Some(object) = self.get_or_download_object(&ObjectID::from(*address))? else {
+            return Ok(None);
         };
 
         match &object.data {
@@ -1233,12 +1249,8 @@ impl GetModule for LocalExec {
 }
 
 fn obj_from_sui_obj_response(o: &SuiObjectResponse) -> Result<Object, LocalExecError> {
-    let o: Result<SuiObjectData, anyhow::Error> = Ok(o
-        .object()
-        .map_err(|q| LocalExecError::SuiObjectResponseError { err: q })?
-        .clone());
-
-    obj_from_sui_obj_data(&o.map_err(|q| LocalExecError::GeneralError { err: q.to_string() })?)
+    let o = o.object().map_err(LocalExecError::from)?.clone();
+    obj_from_sui_obj_data(&o)
 }
 
 fn obj_from_sui_obj_data(o: &SuiObjectData) -> Result<Object, LocalExecError> {
