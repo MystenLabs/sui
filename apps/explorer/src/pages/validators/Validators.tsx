@@ -29,7 +29,6 @@ import { Tooltip } from '~/ui/Tooltip';
 import { getValidatorMoveEvent } from '~/utils/getValidatorMoveEvent';
 import { VALIDATOR_LOW_STAKE_GRACE_PERIOD } from '~/utils/validatorConstants';
 
-
 const NodeMap = lazy(() => import('../../components/node-map'));
 
 export function validatorsTableData(
