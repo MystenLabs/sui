@@ -16,7 +16,7 @@ export function useGetTransactionBlocksForAddress(
 ) {
     const rpc = useRpcClient();
     return useInfiniteQuery(
-        ['get-transaction-blocks', address],
+        ['get-transaction-blocks', address, filter],
         async ({ pageParam }) =>
             await rpc.queryTransactionBlocks({
                 filter,
