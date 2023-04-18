@@ -52,7 +52,7 @@ const config: PlaywrightTestConfig = {
     webServer: [
         {
             command: 'pnpm demoApp:dev',
-            port: 5174,
+            port: 5181,
             timeout: 30 * 1000,
             reuseExistingServer: !process.env.CI,
         },
