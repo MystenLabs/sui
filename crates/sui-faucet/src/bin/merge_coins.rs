@@ -23,7 +23,7 @@ async fn main() -> Result<(), anyhow::Error> {
     println!("SimpleFaucet::new with active address: {active_address}");
     let client = wallet.get_client().await?;
 
-    // Change this
+    // Pick a gas coin here that isn't in use by the faucet otherwise there will be some contention.
     let gas_coin = "0xfde0a5e733e446db0c5d2294673ee5f5a17c5aeacb7565ce82cbd5a145e15d44";
     let small_coins = wallet
         .gas_objects(active_address)
@@ -36,14 +36,10 @@ async fn main() -> Result<(), anyhow::Error> {
         .filter(|coin| coin.0.balance.value() <= 10000000000)
         .collect::<Vec<GasCoin>>();
 
-    // Smash coins togethers 256 objects at a time
+    // Smash coins togethers 254 objects at a time
     // TODO (jian): docs are actually wrong
     for chunk in small_coins.chunks(254) {
-        let total_balance: u64 = chunk
-            .iter()
-            .map(|coin| coin.0.balance.value())
-            .fold(0, |acc, balance| acc + balance);
-        println!("{total_balance:?}");
+        let total_balance: u64 = chunk.iter().map(|coin| coin.0.balance.value()).sum();
 
         let mut coin_vector = chunk
             .iter()
@@ -52,10 +48,8 @@ async fn main() -> Result<(), anyhow::Error> {
 
         // prepend big gas coin instance to vector
         coin_vector.insert(0, ObjectID::from_str(gas_coin).unwrap());
-        let mut target = Vec::new();
-        target.push(active_address);
-        let mut target_amount = Vec::new();
-        target_amount.push(total_balance);
+        let target = vec![active_address];
+        let target_amount = vec![total_balance];
 
         let tx_data = client
             .transaction_builder()
