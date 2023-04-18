@@ -9,6 +9,8 @@ use crate::metrics::ConsensusMetrics;
 use config::{Authority, AuthorityIdentifier, Committee, Stake};
 use fastcrypto::hash::Hash;
 use fastcrypto::hash::HashFunction;
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
 use prometheus::Registry;
 use rand::distributions::Bernoulli;
 use rand::distributions::Distribution;
@@ -20,6 +22,7 @@ use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 use std::num::NonZeroUsize;
 use std::ops::RangeInclusive;
 use std::sync::Arc;
+use storage::ConsensusStore;
 use test_utils::mock_certificate_with_rand;
 use test_utils::CommitteeFixture;
 #[allow(unused_imports)]
@@ -65,7 +68,7 @@ impl ExecutionPlan {
 }
 
 #[ignore]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
 async fn bullshark_randomised_tests() {
     // Configuration regarding the randomized tests. The tests will run for different values
     // on the below parameters to increase the different cases we can generate.
@@ -100,36 +103,93 @@ async fn bullshark_randomised_tests() {
         },
     ];
 
-    let mut run_id = 0;
-    for committee_size in COMMITTEE_SIZE {
-        for gc_depth in GC_DEPTH {
-            for dag_rounds in DAG_ROUNDS {
-                for _ in 0..DAGS_PER_SETUP {
-                    for mode in &failure_modes {
-                        // we want to skip this test as gc_depth will never be enforced
-                        if gc_depth > dag_rounds {
-                            continue;
+    let mut test_execution_list = FuturesUnordered::new();
+    let (tx, mut rx) = channel(1000);
+
+    #[derive(Debug)]
+    struct TestData {
+        dag_rounds: Round,
+        gc_depth: Round,
+        run_id: u64,
+        committee_size: usize,
+        mode: FailureModes,
+    }
+
+    tokio::spawn(async move {
+        let mut run_id = 0;
+        for committee_size in COMMITTEE_SIZE {
+            for gc_depth in GC_DEPTH {
+                for dag_rounds in DAG_ROUNDS {
+                    for _ in 0..DAGS_PER_SETUP {
+                        for mode in &failure_modes {
+                            // we want to skip this test as gc_depth will never be enforced
+                            if gc_depth > dag_rounds {
+                                continue;
+                            }
+
+                            run_id += 1;
+
+                            tx.send(TestData {
+                                dag_rounds,
+                                gc_depth,
+                                run_id,
+                                committee_size,
+                                mode: *mode,
+                            })
+                            .await
+                            .unwrap();
                         }
-
-                        run_id += 1;
-
-                        // Create a randomized DAG
-                        let (certificates, committee) =
-                            generate_randomised_dag(committee_size, dag_rounds, run_id, *mode);
-
-                        // Now provide the DAG to create execution plans, run them via consensus
-                        // and compare output against each other to ensure they are the same.
-                        generate_and_run_execution_plans(
-                            certificates,
-                            EXECUTION_PLANS,
-                            committee,
-                            gc_depth,
-                            dag_rounds,
-                            run_id,
-                            *mode,
-                        );
                     }
                 }
+            }
+        }
+    });
+
+    // Create a single store to be re-used across Bullshark instances to avoid hitting
+    // a "too many files open" issue.
+    let store = make_consensus_store(&test_utils::temp_dir());
+
+    // Run the actual tests via separate tasks
+    loop {
+        tokio::select! {
+            Some(data) = rx.recv(), if test_execution_list.len() < 20 => {
+                let TestData{
+                    dag_rounds,
+                    gc_depth,
+                    run_id,
+                    committee_size,
+                    mode
+                } = data;
+
+                let consensus_store = store.clone();
+
+                let handle = tokio::spawn(async move {
+                    // Create a randomized DAG
+                    let (certificates, committee) =
+                        generate_randomised_dag(committee_size, dag_rounds, run_id, mode);
+
+                    // Now provide the DAG to create execution plans, run them via consensus
+                    // and compare output against each other to ensure they are the same.
+                    generate_and_run_execution_plans(
+                        certificates,
+                        EXECUTION_PLANS,
+                        committee,
+                        gc_depth,
+                        dag_rounds,
+                        run_id,
+                        mode,
+                        consensus_store
+                    );
+                });
+
+                test_execution_list.push(handle);
+            },
+            Some(result) = test_execution_list.next() => {
+
+                result.unwrap();
+            },
+            else => {
+                break;
             }
         }
     }
@@ -390,6 +450,7 @@ fn generate_and_run_execution_plans(
     dag_rounds: Round,
     run_id: u64,
     modes: FailureModes,
+    store: Arc<ConsensusStore>,
 ) {
     println!(
         "Running execution plans for run_id {} for rounds={}, committee={}, gc_depth={}, modes={:?}",
@@ -403,14 +464,7 @@ fn generate_and_run_execution_plans(
     let mut executed_plans = HashSet::new();
     let mut committed_certificates = Vec::new();
 
-    // Create a single store to be re-used across Bullshark instances to avoid hitting
-    // a "too many files open" issue.
-    let store = make_consensus_store(&test_utils::temp_dir());
-
     for i in 0..test_iterations {
-        // clear store before using for next test
-        store.clear().unwrap();
-
         let seed = (i + 1) + run_id;
 
         let plan = create_execution_plan(original_certificates.clone(), seed);
@@ -469,6 +523,8 @@ fn generate_and_run_execution_plans(
             );
         }
     }
+
+    println!("Successfully run {}", run_id);
 }
 
 /// This method is accepting a list of certificates that have been created to represent a valid
