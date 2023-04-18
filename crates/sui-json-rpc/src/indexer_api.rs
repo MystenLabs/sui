@@ -217,6 +217,11 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         })
     }
 
+    fn subscribe_event(&self, sink: SubscriptionSink, filter: EventFilter) -> SubscriptionResult {
+        spawn_subscription(sink, self.state.event_handler.subscribe(filter));
+        Ok(())
+    }
+
     fn get_dynamic_fields(
         &self,
         parent_object_id: ObjectID,
@@ -380,11 +385,6 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
             next_cursor: Some(addr_object_id),
             has_next_page: false,
         })
-    }
-
-    fn subscribe_event(&self, sink: SubscriptionSink, filter: EventFilter) -> SubscriptionResult {
-        spawn_subscription(sink, self.state.event_handler.subscribe(filter));
-        Ok(())
     }
 }
 
