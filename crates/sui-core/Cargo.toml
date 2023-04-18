@@ -45,6 +45,7 @@ move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 move-core-types.workspace = true
 move-package.workspace = true
+move-symbol-pool.workspace = true
 move-vm-runtime.workspace = true
 mysten-common.workspace = true
 mysten-network.workspace = true

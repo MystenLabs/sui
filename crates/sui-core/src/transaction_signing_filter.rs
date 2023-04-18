@@ -34,7 +34,7 @@ pub fn check_transaction_for_signing(
 ) -> SuiResult {
     check_disabled_features(filter_config, tx_data)?;
 
-    check_sender_and_sponsor(filter_config, tx_data)?;
+    check_singers(filter_config, tx_data)?;
 
     check_input_objects(filter_config, input_objects)?;
 
@@ -68,28 +68,20 @@ fn check_disabled_features(
     Ok(())
 }
 
-fn check_sender_and_sponsor(
-    filter_config: &TransactionDenyConfig,
-    tx_data: &TransactionData,
-) -> SuiResult {
+fn check_singers(filter_config: &TransactionDenyConfig, tx_data: &TransactionData) -> SuiResult {
     let deny_map = filter_config.get_address_deny_map();
     if deny_map.is_empty() {
         return Ok(());
     }
-    deny_if_true!(
-        deny_map.contains(&tx_data.sender()),
-        format!(
-            "Access to account address {:?} is temporarily disabled",
-            tx_data.sender()
-        )
-    );
-    deny_if_true!(
-        deny_map.contains(&tx_data.gas_owner()),
-        format!(
-            "Access to account address {:?} is temporarily disabled",
-            tx_data.gas_owner()
-        )
-    );
+    for signer in tx_data.signers() {
+        deny_if_true!(
+            deny_map.contains(&signer),
+            format!(
+                "Access to account address {:?} is temporarily disabled",
+                signer
+            )
+        );
+    }
     Ok(())
 }
 
@@ -151,8 +143,17 @@ fn check_package_dependencies(
                                 version: None,
                             },
                         })?;
-                // linkage_table contains all transitive dependencies of the package.
-                dependencies.extend(package.linkage_table().keys().copied());
+                // linkage_table maps from the original package ID to the upgraded ID for each
+                // dependency. Here we only check the upgraded (i.e. the latest) ID against the
+                // deny list. This means that we only make sure that the denied package is not
+                // currently used as a dependency. This allows us to deny an older version of
+                // package but permits the use of a newer version.
+                dependencies.extend(
+                    package
+                        .linkage_table()
+                        .values()
+                        .map(|upgrade_info| upgrade_info.upgraded_id),
+                );
                 dependencies.push(package.id());
             }
             Command::TransferObjects(..)
