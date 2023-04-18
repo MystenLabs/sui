@@ -9,7 +9,7 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use tracing::debug;
-
+use mysten_metrics::spawn_monitored_task;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{Balance, Coin as SuiCoin};
 use sui_json_rpc_types::{CoinPage, SuiCoinMetadata};
@@ -204,19 +204,23 @@ impl CoinReadApiServer for CoinReadApi {
             Some(c) => parse_sui_struct_tag(&c)?,
             None => GAS::type_(),
         }));
-        let balance = self
+        let coin_type_str = coin_type.to_string();
+        let index = self
             .state
             .indexes
             .as_ref()
             .ok_or(Error::SuiError(SuiError::IndexStoreNotAvailable))?
-            .get_balance(owner, coin_type.clone())
-            .await
-            .map_err(|e: SuiError| {
-                debug!(?owner, "Failed to get balance with error: {:?}", e);
-                Error::from(e)
-            })?;
+            .clone();
+        let balance =
+        spawn_monitored_task!(async move { index.get_balance(owner, coin_type.clone()).await })
+                .await
+                .map_err(Error::from)?
+                .map_err(|e: SuiError| {
+                    debug!(?owner, "Failed to get balance with error: {:?}", e);
+                    Error::from(e)
+                })?;
         Ok(Balance {
-            coin_type: coin_type.to_string(),
+            coin_type: coin_type_str,
             coin_object_count: balance.num_coins,
             total_balance: balance.balance,
             // note: LockedCoin is deprecated
@@ -225,13 +229,15 @@ impl CoinReadApiServer for CoinReadApi {
     }
 
     async fn get_all_balances(&self, owner: SuiAddress) -> RpcResult<Vec<Balance>> {
-        let all_balance = self
+        let index = self
             .state
             .indexes
             .as_ref()
             .ok_or(Error::SuiError(SuiError::IndexStoreNotAvailable))?
-            .get_all_balance(owner)
+            .clone();
+        let all_balance = spawn_monitored_task!(async move { index.get_all_balance(owner).await })
             .await
+            .map_err(Error::from)?
             .map_err(|e: SuiError| {
                 debug!(?owner, "Failed to get all balance with error: {:?}", e);
                 Error::from(e)
