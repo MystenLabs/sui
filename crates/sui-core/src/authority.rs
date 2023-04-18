@@ -472,7 +472,7 @@ pub struct AuthorityState {
 
     epoch_store: ArcSwap<AuthorityPerEpochStore>,
 
-    indexes: Option<Arc<IndexStore>>,
+    pub indexes: Option<Arc<IndexStore>>,
 
     pub event_handler: Arc<EventHandler>,
     pub(crate) checkpoint_store: Arc<CheckpointStore>,
@@ -1269,7 +1269,7 @@ impl AuthorityState {
     }
 
     #[instrument(level = "debug", skip_all, err)]
-    fn index_tx(
+    async fn index_tx(
         &self,
         indexes: &IndexStore,
         digest: &TransactionDigest,
@@ -1286,33 +1286,35 @@ impl AuthorityState {
             .process_object_index(effects, epoch_store)
             .tap_err(|e| warn!("{e}"))?;
 
-        indexes.index_tx(
-            cert.data().intent_message().value.sender(),
-            cert.data()
-                .intent_message()
-                .value
-                .input_objects()?
-                .iter()
-                .map(|o| o.object_id()),
-            effects
-                .all_changed_objects()
-                .into_iter()
-                .map(|(obj_ref, owner, _kind)| (*obj_ref, *owner)),
-            cert.data()
-                .intent_message()
-                .value
-                .move_calls()
-                .into_iter()
-                .map(|(package, module, function)| {
-                    (*package, module.to_owned(), function.to_owned())
-                }),
-            events,
-            changes,
-            digest,
-            timestamp_ms,
-            tx_coins,
-            loaded_child_objects,
-        )
+        indexes
+            .index_tx(
+                cert.data().intent_message().value.sender(),
+                cert.data()
+                    .intent_message()
+                    .value
+                    .input_objects()?
+                    .iter()
+                    .map(|o| o.object_id()),
+                effects
+                    .all_changed_objects()
+                    .into_iter()
+                    .map(|(obj_ref, owner, _kind)| (*obj_ref, *owner)),
+                cert.data()
+                    .intent_message()
+                    .value
+                    .move_calls()
+                    .into_iter()
+                    .map(|(package, module, function)| {
+                        (*package, module.to_owned(), function.to_owned())
+                    }),
+                events,
+                changes,
+                digest,
+                timestamp_ms,
+                tx_coins,
+                loaded_child_objects,
+            )
+            .await
     }
 
     fn process_object_index(
@@ -1513,6 +1515,7 @@ impl AuthorityState {
                     tx_coins,
                     loaded_child_objects,
                 )
+                .await
                 .tap_ok(|_| self.metrics.post_processing_total_tx_indexed.inc())
                 .tap_err(|e| error!(?tx_digest, "Post processing - Couldn't index tx: {e}"));
 
@@ -2178,18 +2181,6 @@ impl AuthorityState {
     ) -> SuiResult<Vec<ObjectInfo>> {
         if let Some(indexes) = &self.indexes {
             indexes.get_owner_objects(owner, cursor, limit, filter)
-        } else {
-            Err(SuiError::IndexStoreNotAvailable)
-        }
-    }
-
-    pub fn get_owned_coins_iterator(
-        &self,
-        owner: SuiAddress,
-        coin_type_tag: Option<String>,
-    ) -> SuiResult<impl Iterator<Item = (String, ObjectID, CoinInfo)> + '_> {
-        if let Some(indexes) = &self.indexes {
-            indexes.get_owned_coins_iterator(owner, coin_type_tag)
         } else {
             Err(SuiError::IndexStoreNotAvailable)
         }
