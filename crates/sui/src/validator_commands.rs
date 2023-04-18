@@ -20,7 +20,7 @@ use sui_types::{
         sui_system_state_inner_v1::{UnverifiedValidatorOperationCapV1, ValidatorV1},
         sui_system_state_summary::{SuiSystemStateSummary, SuiValidatorSummary},
     },
-    SUI_SYSTEM_PACKAGE_ID,
+    SUI_SYSTEM_OBJECT_ID,
 };
 use tap::tap::TapOptional;
 
@@ -564,7 +564,7 @@ async fn call_0x5(
     let gas_obj_ref = get_gas_obj_ref(sender, &sui_client, gas_budget).await?;
     let tx_data = TransactionData::new_move_call(
         sender,
-        SUI_SYSTEM_PACKAGE_ID,
+        SUI_SYSTEM_OBJECT_ID,
         ident_str!("sui_system").to_owned(),
         ident_str!(function).to_owned(),
         vec![],
