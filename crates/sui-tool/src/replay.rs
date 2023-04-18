@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::Parser;
-use futures::executor::block_on;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::account_address::AccountAddress;
@@ -42,6 +41,7 @@ use sui_types::storage::get_module_by_id;
 use sui_types::storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync};
 use sui_types::DEEPBOOK_OBJECT_ID;
 use thiserror::Error;
+use tokio::runtime::Runtime;
 use tracing::{error, info};
 
 // TODO: add persistent cache. But perf is good enough already.
@@ -413,13 +413,17 @@ impl LocalExec {
         }
 
         let options = SuiObjectDataOptions::bcs_lossless();
-        // TODO: replace use of `block_on`
-        let object = block_on({
-            self.client
-                .read_api()
-                .try_get_parsed_past_object(*object_id, version, options)
-        })
-        .map_err(|q| LocalExecError::SuiRpcError { err: q.to_string() })?;
+        let rt: Runtime =
+            Runtime::new().map_err(|e| LocalExecError::GeneralError { err: e.to_string() })?;
+
+        let object = rt
+            .block_on(async {
+                self.client
+                    .read_api()
+                    .try_get_parsed_past_object(*object_id, version, options)
+                    .await
+            })
+            .map_err(|q| LocalExecError::SuiRpcError { err: q.to_string() })?;
 
         let o = match object {
             sui_json_rpc_types::SuiPastObjectResponse::VersionFound(o) => obj_from_sui_obj_data(&o),
@@ -436,24 +440,43 @@ impl LocalExec {
         Ok(o)
     }
 
-    pub fn download_latest_object(&self, object_id: &ObjectID) -> Result<Object, LocalExecError> {
-        // TODO: replace use of `block_on`
-        block_on(self.download_latest_object_impl(object_id))
+    pub fn download_latest_object(
+        &self,
+        object_id: &ObjectID,
+    ) -> Result<Option<Object>, LocalExecError> {
+        let rt: Runtime =
+            Runtime::new().map_err(|e| LocalExecError::GeneralError { err: e.to_string() })?;
+
+        rt.block_on(async {
+            info!("Downloading latest object {object_id}");
+            self.download_latest_object_impl(object_id).await
+        })
     }
 
     pub async fn download_latest_object_impl(
         &self,
         object_id: &ObjectID,
-    ) -> Result<Object, LocalExecError> {
+    ) -> Result<Option<Object>, LocalExecError> {
         let options = SuiObjectDataOptions::bcs_lossless();
-        let object = self
+
+        match self
             .client
             .read_api()
             .get_object_with_options(*object_id, options)
             .await
-            .map_err(|q| LocalExecError::SuiRpcError { err: q.to_string() })?;
-
-        obj_from_sui_obj_response(&object)
+        {
+            Ok(obj) => obj_from_sui_obj_response(&obj).map(Some),
+            Err(err) => {
+                if err.to_string().contains("NotExists") {
+                    error!("Could not find object {object_id} on RPC server. I might have been pruned, deleted, or never existed.");
+                    Ok(None)
+                } else {
+                    Err(LocalExecError::SuiRpcError {
+                        err: err.to_string(),
+                    })
+                }
+            }
+        }
     }
 
     pub async fn execute_all_in_checkpoint(
@@ -624,13 +647,16 @@ impl LocalExec {
         Ok(())
     }
 
-    pub fn get_or_download_object(&self, obj_id: &ObjectID) -> Result<Object, LocalExecError> {
+    pub fn get_or_download_object(
+        &self,
+        obj_id: &ObjectID,
+    ) -> Result<Option<Object>, LocalExecError> {
         if let Some(obj) = self.package_cache.lock().expect("Cannot lock").get(obj_id) {
-            return Ok(obj.clone());
+            return Ok(Some(obj.clone()));
         };
 
         let o = match self.store.get(obj_id) {
-            Some(obj) => obj.clone(),
+            Some(obj) => Some(obj.clone()),
             None => {
                 assert!(
                     !self.system_package_ids().contains(obj_id),
@@ -639,6 +665,10 @@ impl LocalExec {
                 self.download_latest_object(obj_id)?
             }
         };
+        if o.is_none() {
+            return Ok(None);
+        }
+        let o = o.unwrap();
 
         if o.is_package() {
             self.package_cache
@@ -651,7 +681,7 @@ impl LocalExec {
             .lock()
             .expect("Cannot lock")
             .insert((o_ref.0, o_ref.1), o.clone());
-        Ok(o)
+        Ok(Some(o))
     }
 
     /// Must be called after `populate_protocol_version_tables`
@@ -1061,8 +1091,7 @@ impl BackingPackageStore for LocalExec {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
         // If package not present fetch it from the network
         self.get_or_download_object(package_id)
-            .map(Some)
-            .map_err(|e| e.into())
+            .map_err(|e| SuiError::GenericStorageError(e.to_string()))
     }
 }
 
@@ -1101,7 +1130,13 @@ impl ResourceResolver for LocalExec {
         address: &AccountAddress,
         typ: &StructTag,
     ) -> Result<Option<Vec<u8>>, Self::Error> {
-        let object: Object = self.get_or_download_object(&ObjectID::from(*address))?;
+        let object: Object = match self
+            .get_or_download_object(&ObjectID::from(*address))
+            .map_err(|e| SuiError::GenericStorageError(e.to_string()))?
+        {
+            None => return Ok(None),
+            Some(o) => o,
+        };
 
         match &object.data {
             Data::Move(m) => {
