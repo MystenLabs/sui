@@ -17,9 +17,6 @@ use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::BTreeMap;
-use sui_types::temporary_store::TxCoins;
-use sui_types::TypeTag;
-use tracing::{debug, trace};
 
 use crate::sharded_lru::ShardedLruCache;
 use sui_json_rpc_types::SuiObjectDataFilter;
@@ -28,10 +25,7 @@ use sui_types::base_types::{
 };
 use sui_types::base_types::{ObjectInfo, ObjectRef};
 use sui_types::digests::TransactionEventsDigest;
-use sui_types::digests::{ObjectDigest, TransactionEventsDigest};
 use sui_types::dynamic_field::{self, DynamicFieldInfo};
-use sui_types::dynamic_field::{self, DynamicFieldInfo, DynamicFieldName};
-use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::TransactionEvents;
 use sui_types::object::Owner;
