@@ -115,9 +115,8 @@ pub struct IndexStoreTables {
     #[default_options_override_fn = "dynamic_field_index_table_default_config"]
     dynamic_field_index: DBMap<DynamicFieldKey, DynamicFieldInfo>,
 
-    /// This is an index of all the versions of loaded dynamic field objects
-    dynamic_field_loaded_child_object_versions:
-        DBMap<TransactionDigest, Vec<(ObjectID, SequenceNumber)>>,
+    /// This is an index of all the versions of loaded child objects
+    loaded_child_object_versions: DBMap<TransactionDigest, Vec<(ObjectID, SequenceNumber)>>,
 
     #[default_options_override_fn = "index_table_default_config"]
     event_order: DBMap<EventId, EventIndex>,
@@ -427,7 +426,7 @@ impl IndexStore {
         // Loaded child objects table
         let loaded_child_objects: Vec<_> = loaded_child_objects.into_iter().collect();
         batch.insert_batch(
-            &self.tables.dynamic_field_loaded_child_object_versions,
+            &self.tables.loaded_child_object_versions,
             std::iter::once((*digest, loaded_child_objects)),
         )?;
 
@@ -507,13 +506,13 @@ impl IndexStore {
         }
     }
 
-    /// Returns dynamic field loaded objects table for a tx
+    /// Return loaded child objects table for a tx
     pub fn loaded_child_object_versions(
         &self,
         transaction_digest: &TransactionDigest,
     ) -> SuiResult<Option<Vec<(ObjectID, SequenceNumber)>>> {
         self.tables
-            .dynamic_field_loaded_child_object_versions
+            .loaded_child_object_versions
             .get(transaction_digest)
             .map_err(|err| err.into())
     }
