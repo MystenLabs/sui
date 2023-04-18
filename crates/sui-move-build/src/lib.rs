@@ -49,6 +49,10 @@ use sui_types::{
 };
 use sui_verifier::verifier as sui_bytecode_verifier;
 
+#[cfg(test)]
+#[path = "unit_tests/build_tests.rs"]
+mod build_tests;
+
 /// Wrapper around the core Move `CompiledPackage` with some Sui-specific traits and info
 #[derive(Debug)]
 pub struct CompiledPackage {
@@ -439,6 +443,7 @@ impl CompiledPackage {
 
     /// Checks whether this package corresponds to a built-in framework
     pub fn is_system_package(&self) -> bool {
+        // System packages always have "published-at" addresses
         let Ok(published_at) = self.published_at else {
             return false
         };

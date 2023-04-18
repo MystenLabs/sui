@@ -48,8 +48,8 @@ shared-crypto = { path = "../shared-crypto" }
 
 [dev-dependencies]
 sui-config = { path = "../sui-config" }
-sui-framework-build = { path = "../sui-framework-build" }
 sui-keys = { path = "../sui-keys" }
+sui-move-build = { path = "../sui-move-build" }
 test-utils = { path = "../test-utils" }
 sui-sdk = { path = "../sui-sdk" }
 rand = "0.8.5"

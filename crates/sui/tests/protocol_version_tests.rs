@@ -66,9 +66,9 @@ mod sim_only_tests {
     use std::sync::Arc;
     use sui_core::authority::framework_injection;
     use sui_framework::BuiltInFramework;
-    use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage};
     use sui_json_rpc::api::WriteApiClient;
     use sui_macros::*;
+    use sui_move_build::{BuildConfig, CompiledPackage};
     use sui_protocol_config::SupportedProtocolVersions;
     use sui_types::base_types::ObjectID;
     use sui_types::id::ID;

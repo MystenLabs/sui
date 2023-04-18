@@ -16,7 +16,7 @@ futures = "0.3.25"
 
 sui-types = { path = "../sui-types" }
 sui-sdk = { path = "../../crates/sui-sdk" }
-sui-framework-build = { path = "../../crates/sui-framework-build" }
+sui-move-build = { path = "../../crates/sui-move-build" }
 
 move-binary-format.workspace = true
 move-compiler.workspace = true

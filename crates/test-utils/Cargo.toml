@@ -21,9 +21,9 @@ sui = { path = "../sui" }
 sui-config = { path = "../sui-config" }
 sui-core = { path = "../sui-core", features = ["test-utils"] }
 sui-framework = { path = "../sui-framework" }
-sui-framework-build = { path = "../sui-framework-build" }
 sui-json-rpc = { path = "../sui-json-rpc" }
 sui-json-rpc-types= { path = "../sui-json-rpc-types" }
+sui-move-build = { path = "../sui-move-build" }
 sui-node = { path = "../sui-node" }
 sui-protocol-config = { path = "../sui-protocol-config" }
 sui-swarm = { path = "../sui-swarm" }

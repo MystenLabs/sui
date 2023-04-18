@@ -13,7 +13,7 @@ use move_core_types::{
 };
 use serde_json::{json, Value};
 use sui_framework::BuiltInFramework;
-use sui_framework_build::compiled_package::BuildConfig;
+use sui_move_build::BuildConfig;
 use test_fuzz::runtime::num_traits::ToPrimitive;
 
 use crate::ResolvedCallArg;

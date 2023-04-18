@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use crate::compiled_package::BuildConfig;
+use crate::BuildConfig;
 
 #[test]
 fn generate_struct_layouts() {

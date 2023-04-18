@@ -6,7 +6,7 @@ use futures::future;
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::CompiledModule;
 use std::{collections::HashMap, fmt::Debug};
-use sui_framework_build::compiled_package::CompiledPackage;
+use sui_move_build::CompiledPackage;
 use sui_types::error::SuiObjectResponseError;
 use thiserror::Error;
 

@@ -29,7 +29,7 @@ sui-faucet = { path = "../sui-faucet" }
 sui-swarm = { path = "../sui-swarm" }
 sui = { path = "../sui" }
 sui-json-rpc-types= { path = "../sui-json-rpc-types" }
-sui-framework-build = { path = "../sui-framework-build" }
+sui-move-build = { path = "../sui-move-build" }
 sui-sdk = { path = "../sui-sdk" }
 sui-keys = { path = "../sui-keys" }
 sui-types = { path = "../sui-types" }

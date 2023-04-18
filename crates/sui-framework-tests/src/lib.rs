@@ -6,8 +6,8 @@ mod test {
     use move_cli::base::test::UnitTestResult;
     use move_unit_test::UnitTestingConfig;
     use std::path::PathBuf;
-    use sui_framework_build::compiled_package::BuildConfig;
     use sui_move::unit_test::run_move_unit_tests;
+    use sui_move_build::BuildConfig;
 
     #[test]
     #[cfg_attr(msim, ignore)]

@@ -1,9 +1,9 @@
 [package]
-name = "sui-framework-build"
+name = "sui-move-build"
 version = "0.0.0"
 edition = "2021"
 authors = ["Mysten Labs <eng@mystenlabs.com>"]
-description = "Move framework for sui platform"
+description = "Logic for building Sui Move Packages"
 license = "Apache-2.0"
 publish = false
 
@@ -14,7 +14,7 @@ tempfile = "3.3.0"
 
 serde-reflection = "0.3.6"
 sui-types = { path = "../sui-types" }
-sui-verifier = { path = "../../crates/sui-verifier" }
+sui-verifier = { path = "../sui-verifier" }
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true

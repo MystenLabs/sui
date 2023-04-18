@@ -10,7 +10,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use sui_framework_build::compiled_package::{BuildConfig, SuiPackageHooks};
+use sui_move_build::{BuildConfig, SuiPackageHooks};
 
 const DOCS_DIR: &str = "docs";
 

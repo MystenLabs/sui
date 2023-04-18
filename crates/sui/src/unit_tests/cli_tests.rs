@@ -29,7 +29,6 @@ use sui_config::{
     NetworkConfig, PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG, SUI_GENESIS_FILENAME,
     SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG,
 };
-use sui_framework_build::compiled_package::{BuildConfig, SuiPackageHooks};
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     OwnedObjectRef, SuiObjectData, SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectResponse,
@@ -37,6 +36,7 @@ use sui_json_rpc_types::{
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore};
 use sui_macros::sim_test;
+use sui_move_build::{BuildConfig, SuiPackageHooks};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
     Ed25519SuiSignature, Secp256k1SuiSignature, SignatureScheme, SuiKeyPair, SuiSignatureInner,

@@ -4,7 +4,7 @@
 use move_binary_format::file_format::CompiledModule;
 
 use sui_adapter::adapter::{default_verifier_config, run_metered_move_bytecode_verifier_impl};
-use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage};
+use sui_move_build::{BuildConfig, CompiledPackage};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::ObjectID,

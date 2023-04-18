@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::{fs, io, path::Path};
 use std::{path::PathBuf, str};
 use sui::client_commands::WalletContext;
-use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage, SuiPackageHooks};
+use sui_move_build::{BuildConfig, CompiledPackage, SuiPackageHooks};
 use sui_types::base_types::ObjectID;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},

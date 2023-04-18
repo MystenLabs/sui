@@ -15,7 +15,7 @@ move-compiler.workspace = true
 move-package.workspace = true
 move-binary-format.workspace = true
 move-command-line-common.workspace = true
-sui-framework-build = { path = "../sui-framework-build/" }
+sui-move-build = { path = "../sui-move-build/" }
 
 [[test]]
 name = "tests"
