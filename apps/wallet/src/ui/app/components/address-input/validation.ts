@@ -1,22 +1,40 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { isValidSuiAddress } from '@mysten/sui.js';
+import { isSuiNSName, useRpcClient } from '@mysten/core';
+import { type JsonRpcProvider, isValidSuiAddress } from '@mysten/sui.js';
+import { useMemo } from 'react';
 import * as Yup from 'yup';
 
-export const SUI_ADDRESS_VALIDATION = Yup.string()
-    .ensure()
-    .trim()
-    .required()
-    .transform((value: string) =>
-        value.startsWith('0x') || value === '' || value === '0'
-            ? value
-            : `0x${value}`
-    )
-    .test(
-        'is-sui-address',
-        // eslint-disable-next-line no-template-curly-in-string
-        'Invalid address. Please check again.',
-        (value) => isValidSuiAddress(value)
-    )
-    .label("Recipient's address");
+export function createSuiAddressValidation(rpc: JsonRpcProvider) {
+    return Yup.string()
+        .ensure()
+        .trim()
+        .required()
+        .test(
+            'is-sui-address',
+            'Invalid address. Please check again.',
+            async (value) => {
+                if (isSuiNSName(value)) {
+                    // TODO: Remove:
+                    return true;
+                    const address = await rpc.resolveNameServiceAddress({
+                        name: value,
+                    });
+
+                    return !!address;
+                }
+
+                return isValidSuiAddress(value);
+            }
+        )
+        .label("Recipient's address");
+}
+
+export function useSuiAddressValidation() {
+    const rpc = useRpcClient();
+
+    return useMemo(() => {
+        return createSuiAddressValidation(rpc);
+    }, [rpc]);
+}

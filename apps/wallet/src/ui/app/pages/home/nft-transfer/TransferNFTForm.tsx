@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useRpcClient } from '@mysten/core';
 import { ArrowRight16 } from '@mysten/icons';
 import { getTransactionDigest, TransactionBlock } from '@mysten/sui.js';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -22,7 +23,9 @@ import { getSignerOperationErrorMessage } from '_src/ui/app/helpers/errorMessage
 
 export function TransferNFTForm({ objectId }: { objectId: string }) {
     const activeAddress = useActiveAddress();
+    const rpc = useRpcClient();
     const validationSchema = createValidationSchema(
+        rpc,
         activeAddress || '',
         objectId
     );

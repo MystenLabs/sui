@@ -1,7 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useCoinDecimals, useFormatCoin, CoinFormat } from '@mysten/core';
+import {
+    useCoinDecimals,
+    useFormatCoin,
+    CoinFormat,
+    useRpcClient,
+} from '@mysten/core';
 import { ArrowRight16 } from '@mysten/icons';
 import { SUI_TYPE_ARG, Coin as CoinAPI, type CoinStruct } from '@mysten/sui.js';
 import { Field, Form, Formik } from 'formik';
@@ -53,6 +58,7 @@ export function SendTokenForm({
     initialAmount = '',
     initialTo = '',
 }: SendTokenFormProps) {
+    const rpc = useRpcClient();
     const activeAddress = useActiveAddress();
     // Get all coins of the type
     const { data: coinsData, isLoading: coinsIsLoading } = useGetCoins(
@@ -81,11 +87,12 @@ export function SendTokenForm({
     const validationSchemaStepOne = useMemo(
         () =>
             createValidationSchemaStepOne(
+                rpc,
                 coinBalance,
                 coinSymbol,
                 coinDecimals
             ),
-        [coinBalance, coinSymbol, coinDecimals]
+        [rpc, coinBalance, coinSymbol, coinDecimals]
     );
 
     const [tokenBalance, symbol, queryResult] = useFormatCoin(

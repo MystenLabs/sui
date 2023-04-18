@@ -5,6 +5,12 @@ import { SuiAddress } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 import { useRpcClient } from '../api/RpcClientContext';
 
+// This should align with whatever names we want to be able to resolve.
+const SUI_NS_DOMAINS = ['.sui'];
+export function isSuiNSName(name: string) {
+    return SUI_NS_DOMAINS.some((domain) => name.endsWith(domain));
+}
+
 export function useResolveSuiNSAddress(name?: string | null) {
     const rpc = useRpcClient();
 
