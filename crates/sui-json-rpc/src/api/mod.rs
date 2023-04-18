@@ -19,7 +19,10 @@ pub use indexer::IndexerApiServer;
 pub use move_utils::MoveUtilsClient;
 pub use move_utils::MoveUtilsOpenRpc;
 pub use move_utils::MoveUtilsServer;
-use prometheus::{register_int_counter_with_registry, IntCounter};
+use prometheus::IntGauge;
+use prometheus::{
+    register_int_counter_with_registry, register_int_gauge_with_registry, IntCounter,
+};
 pub use read::ReadApiClient;
 pub use read::ReadApiOpenRpc;
 pub use read::ReadApiServer;
@@ -96,6 +99,10 @@ pub struct JsonRpcMetrics {
 
     pub get_stake_sui_result_size: Histogram,
     pub get_stake_sui_result_size_total: IntCounter,
+
+    pub get_balance_in_flight: IntGauge,
+    pub get_all_balances_in_flight: IntGauge,
+    pub get_balance_timeout_count: IntCounter,
 }
 
 impl JsonRpcMetrics {
@@ -237,6 +244,24 @@ impl JsonRpcMetrics {
             get_stake_sui_result_size_total: register_int_counter_with_registry!(
                 "json_rpc_get_stake_sui_result_size_total",
                 "The total return size for get_stake_sui",
+                registry
+            )
+            .unwrap(),
+            get_balance_in_flight: register_int_gauge_with_registry!(
+                "json_rpc_get_balance_in_flight",
+                "The number of get_balance inflight request after getting semaphore",
+                registry,
+            )
+            .unwrap(),
+            get_all_balances_in_flight: register_int_gauge_with_registry!(
+                "json_rpc_get_all_balance_in_flight",
+                "The number of get_all_balances inflight request after getting semaphore",
+                registry
+            )
+            .unwrap(),
+            get_balance_timeout_count: register_int_counter_with_registry!(
+                "json_rpc_get_balance_timeout_count",
+                "The number of timeout in get_balance or get_all_balances",
                 registry
             )
             .unwrap(),

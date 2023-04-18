@@ -2,16 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
-use itertools::Itertools;
-use std::collections::HashMap;
-use std::sync::Arc;
-
 use async_trait::async_trait;
+use itertools::Itertools;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 use move_core_types::language_storage::{StructTag, TypeTag};
-use tracing::debug;
-
+use mysten_metrics::GaugeGuardFutureExt;
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::Duration;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{Balance, Coin as SuiCoin};
 use sui_json_rpc_types::{CoinPage, SuiCoinMetadata};
@@ -24,6 +23,10 @@ use sui_types::gas_coin::GAS;
 use sui_types::messages::TransactionEffectsAPI;
 use sui_types::object::{Object, Owner};
 use sui_types::parse_sui_struct_tag;
+use tokio::sync::{Semaphore, SemaphorePermit};
+use tokio::task::spawn_blocking;
+use tokio::time::Instant;
+use tracing::debug;
 
 use crate::api::{cap_page_limit, CoinReadApiServer, JsonRpcMetrics};
 use crate::error::Error;
@@ -32,11 +35,22 @@ use crate::SuiRpcModule;
 pub struct CoinReadApi {
     state: Arc<AuthorityState>,
     pub metrics: Arc<JsonRpcMetrics>,
+    semaphore: Semaphore,
 }
+
+const TIME_OUT_DURATION: Duration = Duration::from_secs(20);
 
 impl CoinReadApi {
     pub fn new(state: Arc<AuthorityState>, metrics: Arc<JsonRpcMetrics>) -> Self {
-        Self { state, metrics }
+        let max_inflight: usize = std::env::var("COIN_INDEX_MAX_INFLIGHT")
+            .unwrap_or("100".to_string())
+            .parse()
+            .unwrap();
+        Self {
+            state,
+            metrics,
+            semaphore: Semaphore::new(max_inflight),
+        }
     }
 
     fn get_coins_iterator(
@@ -80,16 +94,34 @@ impl CoinReadApi {
         })
     }
 
-    fn get_balance_iterator(
+    async fn get_balance_iterator(
         &self,
         owner: SuiAddress,
         coin_type: String,
     ) -> anyhow::Result<Balance> {
-        let coins = self
-            .state
-            .get_owned_coins_iterator(owner, Some(coin_type.clone()))?
-            .map(|(_coin_type, obj_id, coin)| (coin_type.to_string(), obj_id, coin));
-
+        let start = Instant::now();
+        let permit: SemaphorePermit = self
+            .semaphore
+            .acquire()
+            .count_in_flight(&self.metrics.get_balance_in_flight)
+            .await
+            .expect("semaphore should not be closed");
+        if start.elapsed() >= TIME_OUT_DURATION {
+            self.metrics.get_balance_timeout_count.inc();
+            return Err(anyhow!("get_balance_iterator timeout"));
+        }
+        let state = self.state.clone();
+        let coin_type_clone = coin_type.clone();
+        let coins = spawn_blocking(move || {
+            Ok::<_, Error>(
+                state
+                    .get_owned_coins_iterator(owner, Some(coin_type_clone))?
+                    .map(|(coin_type, obj_id, coin)| (coin_type, obj_id, coin))
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .await??;
+        drop(permit);
         let mut total_balance = 0u128;
         let mut coin_object_count = 0;
         for (_coin_type, _obj_id, coin_info) in coins {
@@ -105,12 +137,35 @@ impl CoinReadApi {
         })
     }
 
-    fn get_all_balances_iterator(&self, owner: SuiAddress) -> anyhow::Result<Vec<Balance>> {
-        let coins = self
-            .state
-            .get_owned_coins_iterator(owner, None)?
-            .map(|(coin_type, obj_id, coin)| (coin_type, obj_id, coin))
-            .group_by(|(coin_type, _obj_id, _coin)| coin_type.clone());
+    async fn get_all_balances_iterator(&self, owner: SuiAddress) -> anyhow::Result<Vec<Balance>> {
+        let start = Instant::now();
+        let permit: SemaphorePermit = self
+            .semaphore
+            .acquire()
+            .count_in_flight(&self.metrics.get_all_balances_in_flight)
+            .await
+            .expect("semaphore should not be closed");
+        if start.elapsed() >= TIME_OUT_DURATION {
+            self.metrics.get_balance_timeout_count.inc();
+            return Err(anyhow!("get_all_balances_iterator timeout"));
+        }
+        let state = self.state.clone();
+        let coins = spawn_blocking(move || {
+            let grouped = state
+                .get_owned_coins_iterator(owner, None)?
+                .map(|(coin_type, obj_id, coin)| (coin_type, obj_id, coin))
+                .group_by(|(coin_type, _obj_id, _coin)| coin_type.clone());
+
+            Ok::<_, Error>(
+                grouped
+                    .into_iter()
+                    .map(|(coin_type, coins)| (coin_type, coins.into_iter().collect::<Vec<_>>()))
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .await??;
+
+        drop(permit);
         let mut balances = vec![];
         for (coin_type, coins) in &coins {
             let mut total_balance = 0u128;
@@ -121,7 +176,7 @@ impl CoinReadApi {
             }
 
             balances.push(Balance {
-                coin_type,
+                coin_type: coin_type.to_string(),
                 coin_object_count,
                 total_balance,
                 locked_balance: HashMap::new(),
@@ -247,19 +302,25 @@ impl CoinReadApiServer for CoinReadApi {
         Ok(coins)
     }
 
-    fn get_balance(&self, owner: SuiAddress, coin_type: Option<String>) -> RpcResult<Balance> {
+    async fn get_balance(
+        &self,
+        owner: SuiAddress,
+        coin_type: Option<String>,
+    ) -> RpcResult<Balance> {
         let coin_type_tag = TypeTag::Struct(Box::new(match coin_type {
             Some(c) => parse_sui_struct_tag(&c)?,
             None => GAS::type_(),
         }));
 
-        let balance = self.get_balance_iterator(owner, coin_type_tag.to_string())?;
+        let balance = self
+            .get_balance_iterator(owner, coin_type_tag.to_string())
+            .await?;
 
         Ok(balance)
     }
 
-    fn get_all_balances(&self, owner: SuiAddress) -> RpcResult<Vec<Balance>> {
-        let all_balances = self.get_all_balances_iterator(owner)?;
+    async fn get_all_balances(&self, owner: SuiAddress) -> RpcResult<Vec<Balance>> {
+        let all_balances = self.get_all_balances_iterator(owner).await?;
 
         Ok(all_balances)
     }
