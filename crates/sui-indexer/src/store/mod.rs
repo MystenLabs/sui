@@ -21,31 +21,6 @@ mod diesel_marco {
         }};
     }
 
-    macro_rules! read_only {
-        ($pool:expr, $query:expr) => {{
-            let mut pg_pool_conn = crate::get_async_pg_pool_connection($pool).await?;
-            pg_pool_conn
-                .build_transaction()
-                .read_only()
-                .run($query)
-                .await
-                .map_err(|e| IndexerError::PostgresReadError(e.to_string()))
-        }};
-    }
-
-    macro_rules! transactional {
-        ($pool:expr, $query:expr) => {{
-            let mut pg_pool_conn = crate::get_async_pg_pool_connection($pool).await?;
-            pg_pool_conn
-                .build_transaction()
-                .serializable()
-                .read_write()
-                .run($query)
-                .await
-                .map_err(|e| IndexerError::PostgresWriteError(e.to_string()))
-        }};
-    }
-
     macro_rules! transactional_blocking {
         ($pool:expr, $query:expr) => {{
             let mut pg_pool_conn = crate::get_pg_pool_connection($pool)?;
@@ -57,8 +32,6 @@ mod diesel_marco {
                 .map_err(|e| IndexerError::PostgresWriteError(e.to_string()))
         }};
     }
-    pub(crate) use read_only;
     pub(crate) use read_only_blocking;
-    pub(crate) use transactional;
     pub(crate) use transactional_blocking;
 }
