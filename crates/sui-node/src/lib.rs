@@ -260,7 +260,10 @@ impl SuiNode {
         );
 
         let index_store = if is_full_node && config.enable_index_processing {
-            Some(Arc::new(IndexStore::new(config.db_path().join("indexes"))))
+            Some(Arc::new(IndexStore::new(
+                config.db_path().join("indexes"),
+                &prometheus_registry,
+            )))
         } else {
             None
         };
