@@ -89,6 +89,7 @@ pub struct SafeClientMetrics {
     handle_certificate_latency: Histogram,
     handle_obj_info_latency: Histogram,
     handle_tx_info_latency: Histogram,
+    potentially_temporarily_invalid_signatures: IntCounter,
 }
 
 impl SafeClientMetrics {
@@ -121,6 +122,10 @@ impl SafeClientMetrics {
         let handle_tx_info_latency = metrics_base
             .latency
             .with_label_values(&[&validator_address, "handle_transaction_info_request"]);
+        let potentially_temporarily_invalid_signatures = metrics_base
+            .potentially_temporarily_invalid_signatures
+            .clone();
+
         Self {
             total_requests_handle_transaction_info_request,
             total_ok_responses_handle_transaction_info_request,
@@ -130,6 +135,7 @@ impl SafeClientMetrics {
             handle_certificate_latency,
             handle_obj_info_latency,
             handle_tx_info_latency,
+            potentially_temporarily_invalid_signatures,
         }
     }
 
@@ -267,6 +273,9 @@ impl<C> SafeClient<C> {
                             .map_err(|e| match e {
                                 // TODO: Remove as well once incident #267 is resolved.
                                 SuiError::InvalidSignature { error } => {
+                                    self.metrics
+                                        .potentially_temporarily_invalid_signatures
+                                        .inc();
                                     SuiError::PotentiallyTemporarilyInvalidSignature { error }
                                 }
                                 _ => e,
