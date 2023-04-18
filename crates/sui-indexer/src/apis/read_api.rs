@@ -128,6 +128,8 @@ impl<S> ReadApiServer for ReadApi<S>
 where
     S: IndexerStore + Sync + Send + 'static,
 {
+    // TODO: remove this after `futures::executor::block_on` is removed. @Ge @Chris
+    #[allow(clippy::disallowed_methods)]
     fn get_object(
         &self,
         object_id: ObjectID,
@@ -147,6 +149,8 @@ where
         Ok(block_on(self.get_object_internal(object_id, options))?)
     }
 
+    // TODO: remove this after `futures::executor::block_on` is removed. @Ge @Chris
+    #[allow(clippy::disallowed_methods)]
     fn multi_get_objects(
         &self,
         object_ids: Vec<ObjectID>,
@@ -203,6 +207,8 @@ where
             .await?)
     }
 
+    // TODO: remove this after `futures::executor::block_on` is removed. @Ge @Chris
+    #[allow(clippy::disallowed_methods)]
     fn multi_get_transaction_blocks(
         &self,
         digests: Vec<TransactionDigest>,
@@ -227,6 +233,8 @@ where
         )?)
     }
 
+    // TODO: remove this after `futures::executor::block_on` is removed. @Ge @Chris
+    #[allow(clippy::disallowed_methods)]
     fn try_get_past_object(
         &self,
         object_id: ObjectID,
@@ -246,6 +254,8 @@ where
         past_obj_resp
     }
 
+    // TODO: remove this after `futures::executor::block_on` is removed. @Ge @Chris
+    #[allow(clippy::disallowed_methods)]
     fn try_multi_get_past_objects(
         &self,
         past_objects: Vec<SuiGetPastObjectRequest>,
@@ -301,6 +311,8 @@ where
         Ok(self.state.get_checkpoint(id).await?)
     }
 
+    // TODO: remove this after `futures::executor::block_on` is removed. @Ge @Chris
+    #[allow(clippy::disallowed_methods)]
     fn get_checkpoints(
         &self,
         cursor: Option<BigInt<u64>>,
@@ -320,6 +332,8 @@ where
         cps_resp
     }
 
+    // TODO: remove this after `futures::executor::block_on` is removed. @Ge @Chris
+    #[allow(clippy::disallowed_methods)]
     fn get_checkpoints_deprecated_limit(
         &self,
         cursor: Option<BigInt<u64>>,
@@ -329,6 +343,8 @@ where
         self.get_checkpoints(cursor, limit.map(|l| *l as usize), descending_order)
     }
 
+    // TODO: remove this after `futures::executor::block_on` is removed. @Ge @Chris
+    #[allow(clippy::disallowed_methods)]
     fn get_events(&self, transaction_digest: TransactionDigest) -> RpcResult<Vec<SuiEvent>> {
         let events_guard = self
             .state
@@ -339,7 +355,8 @@ where
         events_guard.stop_and_record();
         events_resp
     }
-
+    // TODO: remove this after `futures::executor::block_on` is removed. @Ge @Chris
+    #[allow(clippy::disallowed_methods)]
     fn get_loaded_child_objects(
         &self,
         digest: TransactionDigest,

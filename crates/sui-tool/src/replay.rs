@@ -388,7 +388,8 @@ impl LocalExec {
             .collect::<Result<Vec<_>, _>>()?;
         Ok(objects)
     }
-
+    // TODO: remove this after `futures::executor::block_on` is removed.
+    #[allow(clippy::disallowed_methods)]
     pub fn download_object(
         &self,
         object_id: &ObjectID,
@@ -436,24 +437,54 @@ impl LocalExec {
         Ok(o)
     }
 
-    pub fn download_latest_object(&self, object_id: &ObjectID) -> Result<Object, LocalExecError> {
-        // TODO: replace use of `block_on`
-        block_on(self.download_latest_object_impl(object_id))
+    // TODO: remove this after `futures::executor::block_on` is removed.
+    #[allow(clippy::disallowed_methods)]
+    pub fn download_latest_object(
+        &self,
+        object_id: &ObjectID,
+    ) -> Result<Option<Object>, LocalExecError> {
+        block_on({
+            info!("Downloading latest object {object_id}");
+            self.download_latest_object_impl(object_id)
+        })
     }
 
     pub async fn download_latest_object_impl(
         &self,
         object_id: &ObjectID,
-    ) -> Result<Object, LocalExecError> {
+    ) -> Result<Option<Object>, LocalExecError> {
         let options = SuiObjectDataOptions::bcs_lossless();
-        let object = self
+
+        match self
             .client
             .read_api()
             .get_object_with_options(*object_id, options)
             .await
-            .map_err(|q| LocalExecError::SuiRpcError { err: q.to_string() })?;
-
-        obj_from_sui_obj_response(&object)
+        {
+            Ok(obj) => match obj_from_sui_obj_response(&obj) {
+                Ok(w) => Ok(Some(w)),
+                Err(err) => {
+                    if err.to_string().contains("NotExists") {
+                        error!("Could not find object {object_id} on RPC server. It might have been pruned, deleted, or never existed.");
+                        Ok(None)
+                    } else {
+                        Err(LocalExecError::SuiRpcError {
+                            err: err.to_string(),
+                        })
+                    }
+                }
+            },
+            Err(err) => {
+                if err.to_string().contains("NotExists") {
+                    error!("Could not find object {object_id} on RPC server. It might have been pruned, deleted, or never existed.");
+                    Ok(None)
+                } else {
+                    Err(LocalExecError::SuiRpcError {
+                        err: err.to_string(),
+                    })
+                }
+            }
+        }
     }
 
     pub async fn execute_all_in_checkpoint(
@@ -624,13 +655,16 @@ impl LocalExec {
         Ok(())
     }
 
-    pub fn get_or_download_object(&self, obj_id: &ObjectID) -> Result<Object, LocalExecError> {
+    pub fn get_or_download_object(
+        &self,
+        obj_id: &ObjectID,
+    ) -> Result<Option<Object>, LocalExecError> {
         if let Some(obj) = self.package_cache.lock().expect("Cannot lock").get(obj_id) {
-            return Ok(obj.clone());
+            return Ok(Some(obj.clone()));
         };
 
         let o = match self.store.get(obj_id) {
-            Some(obj) => obj.clone(),
+            Some(obj) => Some(obj.clone()),
             None => {
                 assert!(
                     !self.system_package_ids().contains(obj_id),
@@ -639,6 +673,10 @@ impl LocalExec {
                 self.download_latest_object(obj_id)?
             }
         };
+        if o.is_none() {
+            return Ok(None);
+        }
+        let o = o.unwrap();
 
         if o.is_package() {
             self.package_cache
@@ -651,7 +689,7 @@ impl LocalExec {
             .lock()
             .expect("Cannot lock")
             .insert((o_ref.0, o_ref.1), o.clone());
-        Ok(o)
+        Ok(Some(o))
     }
 
     /// Must be called after `populate_protocol_version_tables`
@@ -1061,8 +1099,7 @@ impl BackingPackageStore for LocalExec {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
         // If package not present fetch it from the network
         self.get_or_download_object(package_id)
-            .map(Some)
-            .map_err(|e| e.into())
+            .map_err(|e| SuiError::GenericStorageError(e.to_string()))
     }
 }
 
@@ -1101,7 +1138,13 @@ impl ResourceResolver for LocalExec {
         address: &AccountAddress,
         typ: &StructTag,
     ) -> Result<Option<Vec<u8>>, Self::Error> {
-        let object: Object = self.get_or_download_object(&ObjectID::from(*address))?;
+        let object: Object = match self
+            .get_or_download_object(&ObjectID::from(*address))
+            .map_err(|e| SuiError::GenericStorageError(e.to_string()))?
+        {
+            None => return Ok(None),
+            Some(o) => o,
+        };
 
         match &object.data {
             Data::Move(m) => {
