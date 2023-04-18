@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::genesis::{TokenAllocation, TokenDistributionScheduleBuilder};
+use crate::genesis_config::AccountConfig;
 use crate::node::{
     default_enable_index_processing, default_end_of_epoch_broadcast_channel_capacity,
     AuthorityKeyPairWithPath, DBCheckpointConfig, KeyPairWithPath,
@@ -71,13 +72,10 @@ pub struct ConfigBuilder<R = OsRng> {
     config_directory: PathBuf,
     randomize_ports: bool,
     committee: Option<CommitteeConfig>,
-    initial_accounts_config: Option<GenesisConfig>,
+    genesis_config: Option<GenesisConfig>,
     additional_objects: Vec<Object>,
     with_swarm: bool,
     validator_ip_sel: ValidatorIpSelection,
-    // the initial protocol version
-    pub protocol_version: ProtocolVersion,
-
     // the versions that are supported by each validator
     supported_protocol_versions_config: ProtocolVersionsConfig,
 
@@ -91,7 +89,7 @@ impl ConfigBuilder {
             config_directory: config_directory.as_ref().into(),
             randomize_ports: true,
             committee: Some(CommitteeConfig::Size(NonZeroUsize::new(1).unwrap())),
-            initial_accounts_config: None,
+            genesis_config: None,
             additional_objects: vec![],
             with_swarm: false,
             // Set a sensible default here so that most tests can run with or without the
@@ -101,7 +99,6 @@ impl ConfigBuilder {
             } else {
                 ValidatorIpSelection::Localhost
             },
-            protocol_version: ProtocolVersion::MAX,
             supported_protocol_versions_config: ProtocolVersionsConfig::Default,
             db_checkpoint_config: DBCheckpointConfig::default(),
         }
@@ -143,8 +140,14 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
-    pub fn initial_accounts_config(mut self, initial_accounts_config: GenesisConfig) -> Self {
-        self.initial_accounts_config = Some(initial_accounts_config);
+    pub fn with_genesis_config(mut self, genesis_config: GenesisConfig) -> Self {
+        assert!(self.genesis_config.is_none(), "Genesis config already set");
+        self.genesis_config = Some(genesis_config);
+        self
+    }
+
+    pub fn with_accounts(mut self, accounts: Vec<AccountConfig>) -> Self {
+        self.get_or_init_genesis_config().accounts = accounts;
         self
     }
 
@@ -154,16 +157,16 @@ impl<R> ConfigBuilder<R> {
     }
 
     pub fn with_epoch_duration(mut self, epoch_duration_ms: u64) -> Self {
-        let mut initial_accounts_config = self
-            .initial_accounts_config
-            .unwrap_or_else(GenesisConfig::for_local_testing);
-        initial_accounts_config.parameters.epoch_duration_ms = epoch_duration_ms;
-        self.initial_accounts_config = Some(initial_accounts_config);
+        self.get_or_init_genesis_config()
+            .parameters
+            .epoch_duration_ms = epoch_duration_ms;
         self
     }
 
     pub fn with_protocol_version(mut self, protocol_version: ProtocolVersion) -> Self {
-        self.protocol_version = protocol_version;
+        self.get_or_init_genesis_config()
+            .parameters
+            .protocol_version = protocol_version;
         self
     }
 
@@ -196,14 +199,20 @@ impl<R> ConfigBuilder<R> {
             config_directory: self.config_directory,
             randomize_ports: self.randomize_ports,
             committee: self.committee,
-            initial_accounts_config: self.initial_accounts_config,
+            genesis_config: self.genesis_config,
             additional_objects: self.additional_objects,
             with_swarm: self.with_swarm,
             validator_ip_sel: self.validator_ip_sel,
-            protocol_version: self.protocol_version,
             supported_protocol_versions_config: self.supported_protocol_versions_config,
             db_checkpoint_config: self.db_checkpoint_config,
         }
+    }
+
+    fn get_or_init_genesis_config(&mut self) -> &mut GenesisConfig {
+        if self.genesis_config.is_none() {
+            self.genesis_config = Some(GenesisConfig::for_local_testing());
+        }
+        self.genesis_config.as_mut().unwrap()
     }
 }
 
@@ -317,7 +326,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
     }
 
     fn build_with_validators(
-        self,
+        mut self,
         mut rng: R,
         validators: Vec<ValidatorConfigInfo>,
     ) -> NetworkConfig {
@@ -367,14 +376,10 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
             })
             .collect::<Vec<_>>();
 
-        let mut initial_accounts_config = self
-            .initial_accounts_config
-            .unwrap_or_else(GenesisConfig::for_local_testing);
+        self.get_or_init_genesis_config();
+        let genesis_config = self.genesis_config.unwrap();
 
-        initial_accounts_config.parameters.protocol_version = self.protocol_version;
-
-        let (account_keys, allocations) =
-            initial_accounts_config.generate_accounts(&mut rng).unwrap();
+        let (account_keys, allocations) = genesis_config.generate_accounts(&mut rng).unwrap();
 
         let token_distribution_schedule = {
             let mut builder = TokenDistributionScheduleBuilder::new();
@@ -397,7 +402,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
 
         let genesis = {
             let mut builder = genesis::Builder::new()
-                .with_parameters(initial_accounts_config.parameters)
+                .with_parameters(genesis_config.parameters)
                 .add_objects(self.additional_objects);
 
             for (validator, proof_of_possession) in validator_set {
@@ -502,8 +507,8 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     enable_event_processing: false,
                     enable_index_processing: default_enable_index_processing(),
                     genesis: crate::node::Genesis::new(genesis.clone()),
-                    grpc_load_shed: initial_accounts_config.grpc_load_shed,
-                    grpc_concurrency_limit: initial_accounts_config.grpc_concurrency_limit,
+                    grpc_load_shed: genesis_config.grpc_load_shed,
+                    grpc_concurrency_limit: genesis_config.grpc_concurrency_limit,
                     p2p_config,
                     authority_store_pruning_config: AuthorityStorePruningConfig::validator_config(),
                     end_of_epoch_broadcast_channel_capacity:

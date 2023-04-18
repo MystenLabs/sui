@@ -420,7 +420,7 @@ async fn genesis(
             );
         }
         builder
-            .initial_accounts_config(genesis_conf)
+            .with_genesis_config(genesis_conf)
             .with_validators(validators)
             .build()
     } else {
@@ -433,7 +433,7 @@ async fn genesis(
                 })
                 .unwrap(),
             )
-            .initial_accounts_config(genesis_conf)
+            .with_genesis_config(genesis_conf)
             .build()
     };
 
