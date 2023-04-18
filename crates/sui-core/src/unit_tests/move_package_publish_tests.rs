@@ -198,7 +198,9 @@ async fn test_generate_lock_file() {
 
     let mut build_config = BuildConfig::new_for_testing();
     build_config.config.lock_file = Some(lock_file_path.clone());
-    sui_framework::build_move_package(&path, build_config).expect("Move package did not build");
+    build_config
+        .build(path)
+        .expect("Move package did not build");
 
     let mut lock_file_contents = String::new();
     File::open(lock_file_path)
@@ -247,7 +249,9 @@ async fn test_custom_property_parse_published_at() {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["src", "unit_tests", "data", "custom_properties_in_manifest"]);
 
-    sui_framework::build_move_package(&path, build_config).expect("Move package did not build");
+    build_config
+        .build(path.clone())
+        .expect("Move package did not build");
     let manifest = manifest_parser::parse_move_manifest_from_file(path.as_path())
         .expect("Could not parse Move.toml");
     let properties = manifest

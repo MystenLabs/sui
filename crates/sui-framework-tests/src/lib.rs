@@ -5,8 +5,7 @@
 mod test {
     use move_cli::base::test::UnitTestResult;
     use move_unit_test::UnitTestingConfig;
-    use std::path::{Path, PathBuf};
-    use sui_framework::build_move_package;
+    use std::path::PathBuf;
     use sui_framework_build::compiled_package::BuildConfig;
     use sui_move::unit_test::run_move_unit_tests;
 
@@ -14,7 +13,7 @@ mod test {
     #[cfg_attr(msim, ignore)]
     fn run_framework_move_unit_tests() {
         for package in ["sui-framework", "sui-system"] {
-            check_move_unit_tests(&{
+            check_move_unit_tests({
                 let mut buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
                 buf.extend(["..", "sui-framework", "packages", package]);
                 buf
@@ -35,7 +34,7 @@ mod test {
             "nfts",
             "objects_tutorial",
         ] {
-            check_move_unit_tests(&{
+            check_move_unit_tests({
                 let mut buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
                 buf.extend(["..", "..", "sui_programmability", "examples", example]);
                 buf
@@ -46,14 +45,14 @@ mod test {
     #[test]
     #[cfg_attr(msim, ignore)]
     fn run_book_examples_move_unit_tests() {
-        check_move_unit_tests(&{
+        check_move_unit_tests({
             let mut buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
             buf.extend(["..", "..", "doc", "book", "examples"]);
             buf
         });
     }
 
-    fn check_move_unit_tests(path: &Path) {
+    fn check_move_unit_tests(path: PathBuf) {
         let mut config = BuildConfig::new_for_testing();
         // Make sure to verify tests
         config.config.dev_mode = true;
@@ -64,7 +63,8 @@ mod test {
         let testing_config = UnitTestingConfig::default_with_bound(Some(3_000_000));
 
         // build tests first to enable Sui-specific test code verification
-        build_move_package(path, config)
+        config
+            .build(path.clone())
             .unwrap_or_else(|e| panic!("Building tests at {}.\nWith error {e}", path.display()));
 
         assert_eq!(

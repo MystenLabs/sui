@@ -9,7 +9,7 @@ export function NoActivityCard() {
     return (
         <div className="flex flex-col gap-4 justify-center items-center text-center h-full px-10">
             <TransferObject16 className="text-gray-45 text-3xl" />
-            <Text variant="p1" weight="medium" color="steel">
+            <Text variant="pBody" weight="medium" color="steel">
                 When available, your Sui network transactions will show up here.
             </Text>
         </div>

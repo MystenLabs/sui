@@ -311,7 +311,6 @@ pub struct TestClusterBuilder {
     num_validators: Option<usize>,
     fullnode_rpc_port: Option<u16>,
     enable_fullnode_events: bool,
-    initial_protocol_version: ProtocolVersion,
     validator_supported_protocol_versions_config: ProtocolVersionsConfig,
     // Default to validator_supported_protocol_versions_config, but can be overridden.
     fullnode_supported_protocol_versions_config: Option<ProtocolVersionsConfig>,
@@ -327,7 +326,6 @@ impl TestClusterBuilder {
             fullnode_rpc_port: None,
             num_validators: None,
             enable_fullnode_events: false,
-            initial_protocol_version: SupportedProtocolVersions::SYSTEM_DEFAULT.max,
             validator_supported_protocol_versions_config: ProtocolVersionsConfig::Default,
             fullnode_supported_protocol_versions_config: None,
             db_checkpoint_config_validators: DBCheckpointConfig::default(),
@@ -341,6 +339,7 @@ impl TestClusterBuilder {
     }
 
     pub fn set_genesis_config(mut self, genesis_config: GenesisConfig) -> Self {
+        assert!(self.genesis_config.is_none());
         self.genesis_config = Some(genesis_config);
         self
     }
@@ -381,11 +380,9 @@ impl TestClusterBuilder {
     }
 
     pub fn with_epoch_duration_ms(mut self, epoch_duration_ms: u64) -> Self {
-        let mut genesis_config = self
-            .genesis_config
-            .unwrap_or_else(GenesisConfig::for_local_testing);
-        genesis_config.parameters.epoch_duration_ms = epoch_duration_ms;
-        self.genesis_config = Some(genesis_config);
+        self.get_or_init_genesis_config()
+            .parameters
+            .epoch_duration_ms = epoch_duration_ms;
         self
     }
 
@@ -403,7 +400,9 @@ impl TestClusterBuilder {
     }
 
     pub fn with_protocol_version(mut self, v: ProtocolVersion) -> Self {
-        self.initial_protocol_version = v;
+        self.get_or_init_genesis_config()
+            .parameters
+            .protocol_version = v;
         self
     }
 
@@ -477,14 +476,13 @@ impl TestClusterBuilder {
                 NonZeroUsize::new(self.num_validators.unwrap_or(NUM_VALIDAOTR)).unwrap(),
             )
             .with_objects(self.additional_objects.clone())
-            .with_protocol_version(self.initial_protocol_version)
             .with_db_checkpoint_config(self.db_checkpoint_config_validators.clone())
             .with_supported_protocol_versions_config(
                 self.validator_supported_protocol_versions_config.clone(),
             );
 
         if let Some(genesis_config) = self.genesis_config.take() {
-            builder = builder.initial_accounts_config(genesis_config);
+            builder = builder.with_genesis_config(genesis_config);
         }
 
         let mut swarm = builder.build();
@@ -515,6 +513,13 @@ impl TestClusterBuilder {
 
         // Return network handle
         Ok(swarm)
+    }
+
+    fn get_or_init_genesis_config(&mut self) -> &mut GenesisConfig {
+        if self.genesis_config.is_none() {
+            self.genesis_config = Some(GenesisConfig::for_local_testing());
+        }
+        self.genesis_config.as_mut().unwrap()
     }
 }
 

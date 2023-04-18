@@ -120,7 +120,7 @@ impl TestAuthorityBuilder {
         ));
 
         let checkpoint_store = CheckpointStore::new(&path.join("checkpoints"));
-        let index_store = Some(Arc::new(IndexStore::new(path.join("indexes"))));
+        let index_store = Some(Arc::new(IndexStore::new(path.join("indexes"), &registry)));
         AuthorityState::new(
             name,
             secret,

@@ -431,10 +431,9 @@ fn test_fail_on_upgrade_missing_type() {
 }
 
 pub fn build_test_package(test_dir: &str) -> CompiledPackage {
-    let build_config = BuildConfig::new_for_testing();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["src", "unit_tests", "data", "move_package", test_dir]);
-    sui_framework::build_move_package(&path, build_config).unwrap()
+    BuildConfig::new_for_testing().build(path).unwrap()
 }
 
 pub fn build_test_modules(test_dir: &str) -> Vec<CompiledModule> {
@@ -448,8 +447,7 @@ pub fn build_test_modules(test_dir: &str) -> Vec<CompiledModule> {
 async fn test_metered_move_bytecode_verifier() {
     let path =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../sui-framework/packages/sui-framework");
-    let compiled_package =
-        sui_framework::build_move_package(&path, BuildConfig::new_for_testing()).unwrap();
+    let compiled_package = BuildConfig::new_for_testing().build(path).unwrap();
     let compiled_modules_bytes: Vec<_> = compiled_package.get_modules().cloned().collect();
 
     let mut metered_verifier_config = default_verifier_config(

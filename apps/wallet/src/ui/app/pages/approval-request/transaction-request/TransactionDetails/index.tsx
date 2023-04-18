@@ -36,7 +36,7 @@ export function TransactionDetails({ sender, transaction }: Props) {
     return (
         <SummaryCard header="Transaction Details" initialExpanded>
             {isLoading || isError ? (
-                <div className="ml-0 text-steel-darker text-p2 font-medium">
+                <div className="ml-0 text-steel-darker text-pBodySmall font-medium">
                     {isLoading ? 'Gathering data...' : "Couldn't gather data"}
                 </div>
             ) : transactionData ? (

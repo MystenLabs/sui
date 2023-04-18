@@ -46,11 +46,10 @@ macro_rules! move_call {
 }
 
 fn build_upgrade_test_modules(test_dir: &str) -> (Vec<u8>, Vec<Vec<u8>>) {
-    let build_config = BuildConfig::new_for_testing();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["src", "unit_tests", "data", "move_upgrade", test_dir]);
     let with_unpublished_deps = false;
-    let package = sui_framework::build_move_package(&path, build_config).unwrap();
+    let package = BuildConfig::new_for_testing().build(path).unwrap();
     (
         package.get_package_digest(with_unpublished_deps).to_vec(),
         package.get_package_bytes(with_unpublished_deps),
@@ -71,8 +70,7 @@ pub fn build_upgrade_test_modules_with_dep_addr(
     }
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["src", "unit_tests", "data", "move_upgrade", test_dir]);
-    let with_unpublished_deps = false;
-    let mut package = sui_framework::build_move_package(&path, build_config).unwrap();
+    let mut package = build_config.build(path).unwrap();
 
     let dep_id_mapping: BTreeMap<_, _> = dep_ids
         .into_iter()
@@ -94,6 +92,7 @@ pub fn build_upgrade_test_modules_with_dep_addr(
     }
 
     // No unpublished deps
+    let with_unpublished_deps = false;
     package.dependency_ids.unpublished = BTreeSet::new();
 
     (

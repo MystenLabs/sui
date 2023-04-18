@@ -172,7 +172,7 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
                                                             </Text>
 
                                                             <Text
-                                                                variant="p3/normal"
+                                                                variant="pSubtitle/normal"
                                                                 color="steel"
                                                                 truncate
                                                             >

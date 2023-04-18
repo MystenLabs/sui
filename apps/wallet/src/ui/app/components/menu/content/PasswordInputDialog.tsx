@@ -73,7 +73,7 @@ export function PasswordInputDialog({
                         </FieldLabel>
                         <div className="text-center mt-4">
                             <Text
-                                variant="p2"
+                                variant="pBodySmall"
                                 color="steel-dark"
                                 weight="normal"
                             >

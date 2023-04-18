@@ -14,7 +14,7 @@ export function EpochTimer() {
             <div className="w-5 text-steel-darker">
                 <ProgressCircle progress={progress} />
             </div>
-            <Text variant="p2/medium" color="steel-darker">
+            <Text variant="pBodySmall/medium" color="steel-darker">
                 Epoch {epoch} in progress. {label}
             </Text>
         </div>

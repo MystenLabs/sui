@@ -23,7 +23,7 @@ export function Input({ input }: InputProps) {
 
     return (
         <div className="break-all">
-            <Text variant="p2" weight="medium" color="steel-dark" mono>
+            <Text variant="pBodySmall" weight="medium" color="steel-dark" mono>
                 {is(input.value, BuilderCallArg) ? (
                     'Pure' in input.value ? (
                         `${toB64(new Uint8Array(input.value.Pure))}`

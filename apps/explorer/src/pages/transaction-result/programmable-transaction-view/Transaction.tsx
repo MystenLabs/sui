@@ -27,7 +27,7 @@ function TransactionContent({
 }) {
     return (
         <>
-            <div className="text-heading6 font-semibold text-steel-darker">
+            <div className="break-all text-heading6 font-semibold text-steel-darker">
                 {type}
             </div>
             {children && (
@@ -45,7 +45,9 @@ function ArrayArgument({
 }: TransactionProps<(SuiArgument | SuiArgument[])[] | undefined>) {
     return (
         <TransactionContent type={type}>
-            {data && <>({flattenSuiArguments(data)})</>}
+            {data && (
+                <span className="break-all">({flattenSuiArguments(data)})</span>
+            )}
         </TransactionContent>
     );
 }
@@ -65,9 +67,16 @@ function MoveCall({ type, data }: TransactionProps<MoveCallSuiTransaction>) {
                 objectId={`${movePackage}?module=${module}`}
                 label={`'${module}'`}
             />
-            , function: <span className="text-sui-dark">{func}</span>
-            {args && <>, arguments: [{flattenSuiArguments(args!)}]</>}
-            {typeArgs && <>, type_arguments: {typeArgs}</>})
+            , function: <span className="break-all text-sui-dark">{func}</span>
+            {args && (
+                <span className="break-all">
+                    , arguments: [{flattenSuiArguments(args!)}]
+                </span>
+            )}
+            {typeArgs && (
+                <span className="break-all">, type_arguments: {typeArgs}</span>
+            )}
+            )
         </TransactionContent>
     );
 }

@@ -283,8 +283,9 @@ fn effects_with_tx(digest: TransactionDigest) -> TransactionEffects {
 async fn test_quorum_map_and_reduce_timeout() {
     let build_config = BuildConfig::new_for_testing();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("src/unit_tests/data/object_basics");
-    let modules: Vec<_> = sui_framework::build_move_package(&path, build_config)
+    path.extend(["src", "unit_tests", "data", "object_basics"]);
+    let modules: Vec<_> = build_config
+        .build(path)
         .unwrap()
         .get_modules()
         .cloned()

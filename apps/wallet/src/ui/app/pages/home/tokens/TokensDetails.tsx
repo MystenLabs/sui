@@ -60,7 +60,7 @@ function MyTokens() {
             {noSuiToken ? (
                 <div className="flex flex-col flex-nowrap justify-center items-center gap-2 text-center mt-6 px-2.5">
                     <FaucetRequestButton trackEventSource="home" />
-                    <Text variant="p2" color="gray-80" weight="normal">
+                    <Text variant="pBodySmall" color="gray-80" weight="normal">
                         To conduct transactions on the Sui network, you need SUI
                         in your wallet.
                     </Text>
@@ -96,7 +96,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                 <div className="rounded-2xl bg-warning-light border border-solid border-warning-dark/20 text-warning-dark flex items-center py-2 px-3">
                     <Info12 className="shrink-0" />
                     <div className="ml-2">
-                        <Text variant="p2" weight="medium">
+                        <Text variant="pBodySmall" weight="medium">
                             We're sorry that the app is running slower than
                             usual. We're working to fix the issue and appreciate
                             your patience.

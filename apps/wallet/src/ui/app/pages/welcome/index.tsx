@@ -38,7 +38,7 @@ const WelcomePage = () => {
                                     </Heading>
                                     <div className="mt-5">
                                         <Text
-                                            variant="p1"
+                                            variant="pBody"
                                             color="steel-dark"
                                             weight="medium"
                                         >

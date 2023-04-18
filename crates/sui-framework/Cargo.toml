@@ -19,7 +19,6 @@ tracing = "0.1.36"
 fastcrypto.workspace = true
 fastcrypto-zkp.workspace = true
 
-sui-framework-build = { path = "../sui-framework-build" }
 sui-types = { path = "../sui-types" }
 
 move-binary-format.workspace = true

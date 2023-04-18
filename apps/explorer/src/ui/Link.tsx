@@ -12,7 +12,7 @@ const linkStyles = cva([], {
             text: 'text-body font-semibold text-steel-dark hover:text-steel-darker active:text-steel disabled:text-gray-60',
             mono: 'font-mono text-bodySmall font-medium text-hero-dark hover:text-hero-darkest break-all',
             textHeroDark:
-                'text-p1 font-medium text-hero-dark hover:text-hero-darkest',
+                'text-pBody font-medium text-hero-dark hover:text-hero-darkest',
         },
         uppercase: {
             true: 'uppercase',
