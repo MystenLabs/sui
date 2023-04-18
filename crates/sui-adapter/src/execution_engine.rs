@@ -55,7 +55,6 @@ use self::advance_epoch_result_injection::maybe_modify_result;
 checked_arithmetic! {
 
 #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
-
 pub fn execute_transaction_to_effects<
     Mode: ExecutionMode,
     S: BackingPackageStore + ParentSync + ChildObjectResolver + ObjectStore + GetModule,

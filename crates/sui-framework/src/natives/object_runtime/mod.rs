@@ -409,7 +409,6 @@ impl ObjectRuntimeState {
         loaded_child_objects_fixed: bool,
     ) -> Result<RuntimeResults, ExecutionError> {
         let mut wrapped_children = BTreeSet::new();
-
         if !loaded_child_objects_fixed {
             loaded_child_objects = BTreeMap::new();
             for (child, child_object_effect) in &child_object_effects {
