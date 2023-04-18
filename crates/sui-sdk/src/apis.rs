@@ -16,6 +16,7 @@ use sui_json_rpc::api::GovernanceReadApiClient;
 use sui_json_rpc::api::{
     CoinReadApiClient, IndexerApiClient, MoveUtilsClient, ReadApiClient, WriteApiClient,
 };
+use sui_json_rpc_types::SuiLoadedChildObjectsResponse;
 use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, Coin, CoinPage, DelegatedStake,
     DryRunTransactionBlockResponse, DynamicFieldPage, EventFilter, EventPage, ObjectsPage,
@@ -241,6 +242,13 @@ impl ReadApi {
             .http
             .dry_run_transaction_block(Base64::from_bytes(&bcs::to_bytes(&tx)?))
             .await?)
+    }
+
+    pub async fn get_loaded_child_objects(
+        &self,
+        digest: TransactionDigest,
+    ) -> SuiRpcResult<SuiLoadedChildObjectsResponse> {
+        Ok(self.api.http.get_loaded_child_objects(digest).await?)
     }
 }
 
