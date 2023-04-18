@@ -175,6 +175,36 @@ impl CheckpointExecutor {
             self.metrics
                 .checkpoint_exec_inflight
                 .set(pending.len() as i64);
+
+            loop {
+                let next = pending.next();
+                futures::pin_mut!(next);
+                match futures::poll!(next) {
+                    std::task::Poll::Ready(Some(Ok(checkpoint))) => {
+                        self.process_executed_checkpoint(&checkpoint);
+                        highest_executed = Some(checkpoint);
+
+                        // Estimate TPS every 10k transactions or 30 sec
+                        let elapsed = now_time.elapsed().as_millis();
+                        let current_transaction_num = highest_executed
+                            .as_ref()
+                            .map(|c| c.network_total_transactions)
+                            .unwrap_or(0);
+                        if current_transaction_num - now_transaction_num > 10_000
+                            || elapsed > 30_000
+                        {
+                            let tps = (1000.0
+                                * (current_transaction_num - now_transaction_num) as f64
+                                / elapsed as f64) as i32;
+                            self.metrics.checkpoint_exec_sync_tps.set(tps as i64);
+                            now_time = Instant::now();
+                            now_transaction_num = current_transaction_num;
+                        }
+                    }
+                    _ => break,
+                }
+            }
+
             tokio::select! {
                 // Check for completed workers and ratchet the highest_checkpoint_executed
                 // watermark accordingly. Note that given that checkpoints are guaranteed to
@@ -278,6 +308,7 @@ impl CheckpointExecutor {
             return;
         };
 
+        debug!(pending = ?pending.len(), "schedule loop begin");
         while *next_to_schedule <= *latest_synced_checkpoint.sequence_number()
             && pending.len() < self.config.checkpoint_execution_max_concurrency
         {
@@ -299,6 +330,13 @@ impl CheckpointExecutor {
                 .await;
             *next_to_schedule += 1;
         }
+        debug!(
+            ?next_to_schedule,
+            latest_synced_checkpoint = ?latest_synced_checkpoint.sequence_number(),
+            pending = ?pending.len(),
+            ?self.config.checkpoint_execution_max_concurrency,
+            "schedule loop finished"
+        );
     }
 
     #[instrument(level = "error", skip_all, fields(seq = ?checkpoint.sequence_number(), epoch = ?epoch_store.epoch()))]
@@ -477,6 +515,7 @@ impl CheckpointExecutor {
             if checkpoint.sequence_number % CHECKPOINT_PROGRESS_LOG_COUNT_INTERVAL == 0 {
                 info!(seq = ?checkpoint.sequence_number(), "Checkpoint execution took {:?}", exec_elapsed);
             }
+            debug!("Finished executing checkpoint {}", checkpoint.sequence_number());
             checkpoint
         }));
 
