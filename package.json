@@ -12,6 +12,7 @@
     "wallet-kit-site": "pnpm --filter wallet-kit-site",
     "sdk": "pnpm --filter ./sdk/typescript",
     "bcs": "pnpm --filter ./sdk/bcs",
+    "kiosk": "pnpm --filter ./sdk/kiosk",
     "changeset-version": "pnpm changeset version && pnpm sdk codegen:version"
   },
   "pnpm": {
