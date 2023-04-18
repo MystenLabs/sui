@@ -13,13 +13,13 @@ interface Props {
 export function MetricGroup({ label, children }: Props) {
     return (
         <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2.5 px-8">
                 <Text variant="caption/semibold" color="steel-darker">
                     {label}
                 </Text>
                 <div className="h-px flex-1 bg-steel/30" />
             </div>
-            <div className="flex items-start gap-10 overflow-x-auto overflow-y-hidden pb-1">
+            <div className="flex items-start gap-6 overflow-x-auto overflow-y-hidden pb-1 pl-8 md:gap-8">
                 {children}
             </div>
         </div>
