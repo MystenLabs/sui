@@ -12,7 +12,7 @@ import time
 from datetime import datetime
 
 
-NUM_RETRIES = 5
+NUM_RETRIES = 10
 CHECKPOINT_TIMEOUT_SEC = 120
 STARTUP_TIMEOUT_SEC = 60
 RETRY_BASE_TIME_SEC = 3

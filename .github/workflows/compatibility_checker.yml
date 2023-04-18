@@ -118,6 +118,15 @@ jobs:
         run: |
           tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 720 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && echo "Running compatibility checker against binary built at commit hash ${{ steps.get-ci-tag.outputs.CI_COMMIT_HASH }}" && CARGO_TERM_COLOR=always ./scripts/compatibility/fullnode-sync.sh -p /opt/sui/bin/sui-node -n testnet -e ${{ matrix.shard_manifest.end_epoch }} ${{ github.event.inputs.verbose == true && '-v' || '' }}"
 
+      # When a job is cancelled, e.g. due to another job in the workflow failing, the job is marked as cancelled and the sync script and sui-node process are
+      # orphaned. These remain bound to the sui-node ports, and thus cause the next run attempt to fail. This step kills the orphaned processes. Note that
+      # in the fail case, either the monitor script notices that the sui-node is no longer responding to polls, or the monitor script itself fails. In either
+      # case, cleanup is run by trapping EXIT
+      - name: Cleanup
+        if: ${{ cancelled() }}
+        run: |
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 720 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "pkill .*fullnode; pkill .*sui-node"
+
   notify:
     name: Notify
     needs: [genesis-sync-test]
