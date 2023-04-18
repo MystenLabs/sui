@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::Parser;
+use futures::executor::block_on;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::account_address::AccountAddress;
@@ -41,7 +42,6 @@ use sui_types::storage::get_module_by_id;
 use sui_types::storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync};
 use sui_types::DEEPBOOK_OBJECT_ID;
 use thiserror::Error;
-use tokio::runtime::Runtime;
 use tracing::{error, info};
 
 // TODO: add persistent cache. But perf is good enough already.
@@ -389,6 +389,8 @@ impl LocalExec {
         Ok(objects)
     }
 
+    // TODO: remove this after `futures::executor::block_on` is removed.
+    #[allow(clippy::disallowed_methods)]
     pub fn download_object(
         &self,
         object_id: &ObjectID,
@@ -413,17 +415,13 @@ impl LocalExec {
         }
 
         let options = SuiObjectDataOptions::bcs_lossless();
-        let rt: Runtime =
-            Runtime::new().map_err(|e| LocalExecError::GeneralError { err: e.to_string() })?;
-
-        let object = rt
-            .block_on(async {
-                self.client
-                    .read_api()
-                    .try_get_parsed_past_object(*object_id, version, options)
-                    .await
-            })
-            .map_err(|q| LocalExecError::SuiRpcError { err: q.to_string() })?;
+        // TODO: replace use of `block_on`
+        let object = block_on({
+            self.client
+                .read_api()
+                .try_get_parsed_past_object(*object_id, version, options)
+        })
+        .map_err(|q| LocalExecError::SuiRpcError { err: q.to_string() })?;
 
         let o = match object {
             sui_json_rpc_types::SuiPastObjectResponse::VersionFound(o) => obj_from_sui_obj_data(&o),
@@ -440,16 +438,15 @@ impl LocalExec {
         Ok(o)
     }
 
+    // TODO: remove this after `futures::executor::block_on` is removed.
+    #[allow(clippy::disallowed_methods)]
     pub fn download_latest_object(
         &self,
         object_id: &ObjectID,
     ) -> Result<Option<Object>, LocalExecError> {
-        let rt: Runtime =
-            Runtime::new().map_err(|e| LocalExecError::GeneralError { err: e.to_string() })?;
-
-        rt.block_on(async {
+        block_on({
             info!("Downloading latest object {object_id}");
-            self.download_latest_object_impl(object_id).await
+            self.download_latest_object_impl(object_id)
         })
     }
 
