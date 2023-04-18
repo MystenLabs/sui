@@ -7,7 +7,10 @@ use crate::epoch::committee_store::CommitteeStore;
 use fastcrypto::encoding::Encoding;
 use mysten_metrics::histogram::{Histogram, HistogramVec};
 use prometheus::core::GenericCounter;
-use prometheus::{register_int_counter_vec_with_registry, IntCounterVec, Registry};
+use prometheus::{
+    register_int_counter_vec_with_registry, register_int_counter_with_registry, IntCounter,
+    IntCounterVec, Registry,
+};
 use std::sync::Arc;
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::messages_checkpoint::{
@@ -39,6 +42,7 @@ pub struct SafeClientMetricsBase {
     total_requests_by_address_method: IntCounterVec,
     total_responses_by_address_method: IntCounterVec,
     latency: HistogramVec,
+    potentially_temporarily_invalid_signatures: IntCounter,
 }
 
 impl SafeClientMetricsBase {
@@ -64,6 +68,12 @@ impl SafeClientMetricsBase {
                 &["address", "method"],
                 registry,
             ),
+            potentially_temporarily_invalid_signatures: register_int_counter_with_registry!(
+                "safe_client_potentially_temporarily_invalid_signatures",
+                "Number of PotentiallyTemporarilyInvalidSignature errors",
+                registry,
+            )
+            .unwrap(),
         }
     }
 }
