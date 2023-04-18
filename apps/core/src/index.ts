@@ -15,6 +15,8 @@ export * from './hooks/useGetObject';
 export * from './hooks/useGetDynamicFieldObject';
 export * from './hooks/useGetDynamicFields';
 export * from './hooks/useGetNormalizedMoveStruct';
+export * from './hooks/useGetEpochs';
+export * from './hooks/useGetValidatorsMeta';
 export * from './PostHogAnalyticsProvider';
 export * from './utils/formatPercentageDisplay';
 export * from './hooks/useGetSystemState';
