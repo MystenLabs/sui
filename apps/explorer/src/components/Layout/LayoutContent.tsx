@@ -4,8 +4,8 @@
 import { useFeatureIsOn } from '@growthbook/growthbook-react';
 import { RpcClientContext } from '@mysten/core';
 import { WalletKitProvider } from '@mysten/wallet-kit';
-import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { Fragment, useMemo } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { Outlet, ScrollRestoration } from 'react-router-dom';
@@ -17,7 +17,7 @@ import Header from '../header/Header';
 import { NetworkContext, useNetwork } from '~/context';
 import { Banner } from '~/ui/Banner';
 import { DefaultRpcClient } from '~/utils/api/DefaultRpcClient';
-import { queryClient } from '~/utils/queryClient';
+import { queryClient, persister } from '~/utils/queryClient';
 
 export function LayoutContent() {
     const [network, setNetwork] = useNetwork();
@@ -34,7 +34,10 @@ export function LayoutContent() {
                 /*autoConnect={false}*/
                 enableUnsafeBurner={import.meta.env.DEV}
             >
-                <QueryClientProvider client={queryClient}>
+                <PersistQueryClientProvider
+                    client={queryClient}
+                    persistOptions={{ persister }}
+                >
                     <RpcClientContext.Provider value={jsonRpcProvider}>
                         <NetworkContext.Provider value={[network, setNetwork]}>
                             <div className="w-full">
@@ -88,7 +91,7 @@ export function LayoutContent() {
                             <ReactQueryDevtools />
                         </NetworkContext.Provider>
                     </RpcClientContext.Provider>
-                </QueryClientProvider>
+                </PersistQueryClientProvider>
             </WalletKitProvider>
         </Fragment>
     );

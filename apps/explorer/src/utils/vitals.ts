@@ -43,7 +43,7 @@ function sendToVercelAnalytics(metric: Metric) {
 
 export function reportWebVitals() {
     if (import.meta.env.DEV) {
-        console.warn('Skipping web-vitals report in dev.');
+        console.log('Skipping web-vitals report in dev.');
         return;
     }
 

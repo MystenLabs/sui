@@ -57,7 +57,7 @@ export function HomeMetrics() {
         { cacheTime: 24 * 60 * 60 * 1000, staleTime: Infinity, retry: 5 }
     );
 
-    const { data: networkMetrics } = useQuery(
+    const { data: networkMetrics, ...rest } = useQuery(
         ['home', 'metrics'],
         () => enhancedRpc.getNetworkMetrics(),
         { cacheTime: 24 * 60 * 60 * 1000, staleTime: Infinity, retry: 5 }

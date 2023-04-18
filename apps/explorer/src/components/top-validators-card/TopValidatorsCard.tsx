@@ -32,9 +32,7 @@ const validatorsTable = (
     limit?: number,
     showIcon?: boolean
 ) => {
-    const validators = processValidators(validatorsData).sort((a, b) =>
-        Math.random() > 0.5 ? -1 : 1
-    );
+    const validators = processValidators(validatorsData);
 
     const validatorsItems = limit ? validators.splice(0, limit) : validators;
 
