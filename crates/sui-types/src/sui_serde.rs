@@ -149,41 +149,6 @@ impl<'de> DeserializeAs<'de, roaring::RoaringBitmap> for SuiBitmap {
     }
 }
 
-/// Macro for implementing serde Serialize/Deserialize for a type that implements AsRef<[u8]>.
-/// To be used only for non-fixed-size types (see `serialize_deserialize_with_to_from_bytes` in
-/// FastCrypto for fixed-size types).
-#[macro_export]
-macro_rules! serde_to_from_bytes {
-    ($type:ty) => {
-        impl ::serde::Serialize for $type {
-            fn serialize<S: ::serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-                match serializer.is_human_readable() {
-                    true => serializer.serialize_str(&self.encode_base64()),
-                    false => self.as_ref().serialize(serializer),
-                }
-            }
-        }
-
-        impl<'de> ::serde::Deserialize<'de> for $type {
-            fn deserialize<D: ::serde::Deserializer<'de>>(
-                deserializer: D,
-            ) -> Result<Self, D::Error> {
-                use serde::de::Error;
-                match deserializer.is_human_readable() {
-                    true => {
-                        let s = <String as ::serde::Deserialize>::deserialize(deserializer)?;
-                        Self::decode_base64(&s).map_err(::serde::de::Error::custom)
-                    }
-                    false => {
-                        let data: Vec<u8> = Vec::deserialize(deserializer)?;
-                        Self::from_bytes(&data).map_err(|e| Error::custom(e.to_string()))
-                    }
-                }
-            }
-        }
-    };
-}
-
 pub struct SuiStructTag;
 
 impl SerializeAs<StructTag> for SuiStructTag {
