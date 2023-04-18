@@ -176,6 +176,12 @@ CompressedSignature:
           TUPLEARRAY:
             CONTENT: U8
             SIZE: 64
+    1:
+      Secp256k1:
+        NEWTYPE:
+          TUPLEARRAY:
+            CONTENT: U8
+            SIZE: 64
 ConsensusCommitPrologue:
   STRUCT:
     - epoch: U64
