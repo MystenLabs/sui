@@ -11,10 +11,7 @@ use move_package::BuildConfig;
 use move_unit_test::{extensions::set_extension_hook, UnitTestingConfig};
 use move_vm_runtime::native_extensions::NativeContextExtensions;
 use once_cell::sync::Lazy;
-use std::{
-    collections::BTreeMap,
-    path::{Path, PathBuf},
-};
+use std::{collections::BTreeMap, path::PathBuf};
 use sui_core::authority::TemporaryStore;
 use sui_cost_tables::bytecode_tables::initial_cost_schedule_for_unit_tests;
 use sui_framework::natives::{self, object_runtime::ObjectRuntime, NativesCostTable};
@@ -47,7 +44,7 @@ impl Test {
         let generate_struct_layouts: bool = false;
         let dump_package_digest = false;
         build::Build::execute_internal(
-            &rerooted_path,
+            rerooted_path.clone(),
             BuildConfig {
                 test_mode: true, // make sure to verify tests
                 ..build_config.clone()
@@ -58,7 +55,7 @@ impl Test {
             dump_package_digest,
         )?;
         run_move_unit_tests(
-            &rerooted_path,
+            rerooted_path,
             build_config,
             Some(unit_test_config),
             self.test.compute_coverage,
@@ -72,7 +69,7 @@ static SET_EXTENSION_HOOK: Lazy<()> =
 /// This function returns a result of UnitTestResult. The outer result indicates whether it
 /// successfully started running the test, and the inner result indicatests whether all tests pass.
 pub fn run_move_unit_tests(
-    path: &Path,
+    path: PathBuf,
     build_config: BuildConfig,
     config: Option<UnitTestingConfig>,
     compute_coverage: bool,
@@ -84,7 +81,7 @@ pub fn run_move_unit_tests(
         .unwrap_or_else(|| UnitTestingConfig::default_with_bound(Some(MAX_UNIT_TEST_INSTRUCTIONS)));
 
     move_cli::base::test::run_move_unit_tests(
-        path,
+        &path,
         build_config,
         UnitTestingConfig {
             report_stacktrace_on_abort: true,

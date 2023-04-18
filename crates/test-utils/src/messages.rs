@@ -292,8 +292,7 @@ pub fn create_publish_move_package_transaction(
     gas_budget: u64,
     gas_price: u64,
 ) -> VerifiedTransaction {
-    let build_config = BuildConfig::new_for_testing();
-    let compiled_package = sui_framework::build_move_package(&path, build_config).unwrap();
+    let compiled_package = BuildConfig::new_for_testing().build(path).unwrap();
     let all_module_bytes =
         compiled_package.get_package_bytes(/* with_unpublished_deps */ false);
     let dependencies = compiled_package.get_dependency_original_package_ids();
