@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useGetValidatorsMeta } from '@mysten/core';
 import { formatAddress, type SuiAddress } from '@mysten/sui.js';
 import cl from 'classnames';
 import { useMemo } from 'react';
@@ -21,6 +22,7 @@ interface ValidatorLogoProps {
     size: 'body' | 'subtitle';
     iconSize: 'sm' | 'md';
     showActiveStatus?: boolean;
+    epoch?: number;
 }
 
 export function ValidatorLogo({
@@ -31,8 +33,10 @@ export function ValidatorLogo({
     size,
     stacked,
     showActiveStatus = false,
+    epoch,
 }: ValidatorLogoProps) {
     const { data, isLoading } = useSystemState();
+    const { data: validators } = useGetValidatorsMeta(748);
 
     const validatorMeta = useMemo(() => {
         if (!data) return null;
