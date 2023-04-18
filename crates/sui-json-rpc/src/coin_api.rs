@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
+
 use anyhow::anyhow;
 
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 use move_core_types::language_storage::{StructTag, TypeTag};
-use std::collections::{BTreeMap, HashMap};
-use std::sync::Arc;
 use tracing::debug;
 
 use mysten_metrics::spawn_monitored_task;

@@ -155,6 +155,7 @@ impl JsonRpcServerBuilder {
 
             let rt = tokio::runtime::Builder::new_multi_thread()
                 .thread_name("sui-node-jsonrpc-worker")
+                .worker_threads(num_cpus::get() / 2)
                 .enable_all()
                 .build()
                 .unwrap();

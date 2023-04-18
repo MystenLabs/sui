@@ -9,6 +9,7 @@ use async_trait::async_trait;
 use futures::future::try_join_all;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
+use mysten_metrics::spawn_monitored_task;
 
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::SuiCommittee;
@@ -44,10 +45,14 @@ impl GovernanceReadApi {
     }
 
     async fn get_staked_sui(&self, owner: SuiAddress) -> Result<Vec<StakedSui>, Error> {
-        let result = self
-            .state
-            .get_move_objects(owner, MoveObjectType::staked_sui())
-            .await?;
+        let state = self.state.clone();
+        let result = spawn_monitored_task!(async move {
+            state
+                .get_move_objects(owner, MoveObjectType::staked_sui())
+                .await
+        })
+        .await??;
+
         self.metrics
             .get_stake_sui_result_size
             .report(result.len() as u64);
