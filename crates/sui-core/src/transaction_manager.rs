@@ -25,6 +25,7 @@ use crate::authority::{
     authority_store::{InputKey, LockMode},
 };
 use crate::authority::{AuthorityMetrics, AuthorityStore};
+use mysten_metrics::scoped_timer::ScopedTimer;
 
 #[cfg(test)]
 #[path = "unit_tests/transaction_manager_tests.rs"]
@@ -351,6 +352,10 @@ impl TransactionManager {
         certs: Vec<(VerifiedExecutableTransaction, TransactionEffectsDigest)>,
         epoch_store: &AuthorityPerEpochStore,
     ) -> SuiResult<()> {
+        let logger = ScopedTimer::new_with_count(
+            "TransactionManager::enqueue_with_expected_effects_digest",
+            certs.len(),
+        );
         let certs = certs
             .into_iter()
             .map(|(cert, fx)| (cert, Some(fx)))
@@ -416,20 +421,24 @@ impl TransactionManager {
             })
             .collect();
 
-        let mut inner = self.inner.write();
-        for (key, value) in object_availability.iter_mut() {
-            if let Some(available) = inner.available_objects_cache.is_object_available(key) {
-                self.metrics.transaction_manager_object_cache_hits.inc();
-                trace!(?key, ?available, "initial cache availability");
-                *value = Some(available);
-            } else {
-                self.metrics.transaction_manager_object_cache_misses.inc();
+        {
+            let l1 = ScopedTimer::new("TransactionManager::enqueue_impl::crit-sec-1");
+            let mut inner = self.inner.write();
+            let l2 = ScopedTimer::new("TransactionManager::enqueue_impl::crit-sec-1-post-lock");
+            for (key, value) in object_availability.iter_mut() {
+                if let Some(available) = inner.available_objects_cache.is_object_available(key) {
+                    self.metrics.transaction_manager_object_cache_hits.inc();
+                    trace!(?key, ?available, "initial cache availability");
+                    *value = Some(available);
+                } else {
+                    self.metrics.transaction_manager_object_cache_misses.inc();
+                }
             }
+            // make sure we don't miss any cache entries while the lock is not held.
+            inner.available_objects_cache.enable_complete_cache();
         }
-        // make sure we don't miss any cache entries while the lock is not held.
-        inner.available_objects_cache.enable_complete_cache();
-        drop(inner);
 
+        let l3 = ScopedTimer::new("TransactionManager::enqueue_impl::db-reads");
         let input_object_cache_misses = object_availability
             .iter()
             .filter_map(|(key, value)| if value.is_none() { Some(*key) } else { None })
@@ -450,7 +459,10 @@ impl TransactionManager {
         // executed.
 
         // Internal lock is held only for updating the internal state.
+        drop(l3);
+        let l4 = ScopedTimer::new("TransactionManager::enqueue_impl::crit-sec-2");
         let mut inner = self.inner.write();
+        let l5 = ScopedTimer::new("TransactionManager::enqueue_impl::crit-sec-2-post-lock");
         let _scope = monitored_scope("TransactionManager::enqueue::wlock");
 
         for (available, key) in cache_miss_availibility {
