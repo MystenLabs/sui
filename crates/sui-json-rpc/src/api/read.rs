@@ -87,8 +87,8 @@ pub trait ReadApi {
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiPastObjectResponse>>;
 
-    #[method(name = "getLoadedChildObjects", blocking)]
-    fn get_loaded_child_objects(
+    #[method(name = "getLoadedChildObjects")]
+    async fn get_loaded_child_objects(
         &self,
         digest: TransactionDigest,
     ) -> RpcResult<SuiLoadedChildObjectsResponse>;
