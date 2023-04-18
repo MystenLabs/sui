@@ -6,7 +6,7 @@
 
 use crate::executor::{ExecutionResult, Executor};
 use once_cell::sync::Lazy;
-use proptest::prelude::*;
+use proptest::{prelude::*, strategy::Union};
 use std::{fmt, sync::Arc};
 use sui_types::{messages::VerifiedTransaction, storage::ObjectStore};
 
@@ -19,25 +19,21 @@ pub use transfer_gen::*;
 pub use universe::*;
 
 static UNIVERSE_SIZE: Lazy<usize> = Lazy::new(|| {
-    use std::{env, process::abort};
+    use std::env;
 
     match env::var("UNIVERSE_SIZE") {
         Ok(s) => match s.parse::<usize>() {
             Ok(val) => val,
             Err(err) => {
-                println!("Could not parse universe size, aborting: {:?}", err);
-                // Abort because Lazy with panics causes poisoning and isn't very
-                // helpful overall.
-                abort();
+                panic!("Could not parse universe size, aborting: {:?}", err);
             }
         },
         Err(env::VarError::NotPresent) => 20,
         Err(err) => {
-            println!(
+            panic!(
                 "Could not read universe size from the environment, aborting: {:?}",
                 err
             );
-            abort();
         }
     }
 });
@@ -67,6 +63,37 @@ pub trait AUTransactionGen: fmt::Debug {
     {
         Arc::new(self)
     }
+}
+
+impl AUTransactionGen for Arc<dyn AUTransactionGen> {
+    fn apply(
+        &self,
+        universe: &mut AccountUniverse,
+        exec: &mut Executor,
+    ) -> (VerifiedTransaction, ExecutionResult) {
+        (**self).apply(universe, exec)
+    }
+}
+
+/// Returns a [`Strategy`] that provides a variety of balances (or transfer amounts) over a roughly
+/// logarithmic distribution.
+pub fn log_balance_strategy(min_balance: u64, max_balance: u64) -> impl Strategy<Value = u64> {
+    // The logarithmic distribution is modeled by uniformly picking from ranges of powers of 2.
+    assert!(max_balance >= min_balance, "minimum to make sense");
+    let mut strategies = vec![];
+    // Balances below and around the minimum are interesting but don't cover *every* power of 2,
+    // just those starting from the minimum.
+    let mut lower_bound: u64 = 0;
+    let mut upper_bound: u64 = min_balance;
+    loop {
+        strategies.push(lower_bound..upper_bound);
+        if upper_bound >= max_balance {
+            break;
+        }
+        lower_bound = upper_bound;
+        upper_bound = (upper_bound * 2).min(max_balance);
+    }
+    Union::new(strategies)
 }
 
 /// Run these transactions and verify the expected output.
