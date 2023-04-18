@@ -7,9 +7,7 @@ use move_cli::base::{self, build};
 use move_package::BuildConfig as MoveBuildConfig;
 use serde_json::json;
 use std::{fs, path::PathBuf};
-use sui_framework_build::compiled_package::{
-    check_invalid_dependencies, check_unpublished_dependencies, BuildConfig,
-};
+use sui_move_build::{check_invalid_dependencies, check_unpublished_dependencies, BuildConfig};
 
 const LAYOUTS_DIR: &str = "layouts";
 const STRUCT_LAYOUTS_FILENAME: &str = "struct_layouts.yaml";

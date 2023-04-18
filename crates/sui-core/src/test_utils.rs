@@ -20,7 +20,7 @@ use std::time::Duration;
 use sui_config::genesis::Genesis;
 use sui_config::ValidatorInfo;
 use sui_framework::BuiltInFramework;
-use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage, SuiPackageHooks};
+use sui_move_build::{BuildConfig, CompiledPackage, SuiPackageHooks};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{random_object_ref, ObjectID};
 use sui_types::crypto::{

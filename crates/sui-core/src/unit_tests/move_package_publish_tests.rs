@@ -18,9 +18,7 @@ use sui_types::{
 };
 
 use move_package::source_package::manifest_parser;
-use sui_framework_build::compiled_package::{
-    check_unpublished_dependencies, gather_published_ids, BuildConfig,
-};
+use sui_move_build::{check_unpublished_dependencies, gather_published_ids, BuildConfig};
 use sui_types::{
     crypto::{get_key_pair, AccountKeyPair},
     error::SuiError,

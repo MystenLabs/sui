@@ -31,10 +31,6 @@ use sui_types::digests::TransactionDigest;
 use sui_types::error::SuiError;
 
 use shared_crypto::intent::Intent;
-use sui_framework_build::compiled_package::{
-    build_from_resolution_graph, check_invalid_dependencies, check_unpublished_dependencies,
-    gather_published_ids, BuildConfig, CompiledPackage, PackageDependencies, PublishedAtError,
-};
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     DynamicFieldPage, SuiData, SuiObjectData, SuiObjectDataFilter, SuiObjectResponse,
@@ -43,6 +39,10 @@ use sui_json_rpc_types::{
 };
 use sui_json_rpc_types::{SuiExecutionStatus, SuiObjectDataOptions};
 use sui_keys::keystore::AccountKeystore;
+use sui_move_build::{
+    build_from_resolution_graph, check_invalid_dependencies, check_unpublished_dependencies,
+    gather_published_ids, BuildConfig, CompiledPackage, PackageDependencies, PublishedAtError,
+};
 use sui_sdk::SuiClient;
 use sui_types::crypto::SignatureScheme;
 use sui_types::dynamic_field::DynamicFieldType;

@@ -52,7 +52,7 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
                     // Initialize the static initializers here:
                     // https://github.com/move-language/move/blob/652badf6fd67e1d4cc2aa6dc69d63ad14083b673/language/tools/move-package/src/package_lock.rs#L12
                     use std::path::PathBuf;
-                    use sui_simulator::sui_framework_build::compiled_package::{BuildConfig, SuiPackageHooks};
+                    use sui_simulator::sui_move_build::{BuildConfig, SuiPackageHooks};
                     use sui_simulator::tempfile::TempDir;
                     use sui_simulator::move_package::package_hooks::register_package_hooks;
 

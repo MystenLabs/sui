@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use sui_framework_build::compiled_package::BuildConfig;
+use sui_move_build::BuildConfig;
 use sui_types::crypto::get_key_pair_from_rng;
 use sui_types::crypto::{get_key_pair, AccountKeyPair, AuthorityKeyPair};
 use sui_types::crypto::{AuthoritySignature, Signer};

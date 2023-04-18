@@ -21,7 +21,7 @@ use sui_types::{
 
 use move_core_types::language_storage::TypeTag;
 
-use sui_framework_build::compiled_package::BuildConfig;
+use sui_move_build::BuildConfig;
 use sui_types::{
     crypto::{get_key_pair, AccountKeyPair},
     error::SuiError,

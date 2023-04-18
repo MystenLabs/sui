@@ -3,7 +3,7 @@
 
 use move_core_types::{account_address::AccountAddress, ident_str, language_storage::StructTag};
 use move_symbol_pool::Symbol;
-use sui_framework_build::compiled_package::BuildConfig;
+use sui_move_build::BuildConfig;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},

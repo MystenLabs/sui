@@ -19,7 +19,7 @@ once_cell = { version = "1.16", optional = true }
 
 sui-core = { path = "../sui-core", optional = true }
 sui-framework = { path = "../sui-framework" }
-sui-framework-build = { path = "../sui-framework-build" }
+sui-move-build = { path = "../sui-move-build" }
 sui-protocol-config = { path = "../sui-protocol-config" }
 sui-types = { path = "../sui-types" }
 sui-cost-tables = { path = "../sui-cost-tables" }

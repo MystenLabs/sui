@@ -4043,7 +4043,7 @@ pub async fn init_state_with_ids_and_object_basics<
 }
 
 async fn publish_object_basics(state: Arc<AuthorityState>) -> (Arc<AuthorityState>, ObjectRef) {
-    use sui_framework_build::compiled_package::BuildConfig;
+    use sui_move_build::BuildConfig;
 
     // add object_basics package object to genesis, since lots of test use it
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -4072,7 +4072,7 @@ pub async fn init_state_with_ids_and_object_basics_with_fullnode<
 >(
     objects: I,
 ) -> (Arc<AuthorityState>, Arc<AuthorityState>, ObjectRef) {
-    use sui_framework_build::compiled_package::BuildConfig;
+    use sui_move_build::BuildConfig;
 
     let (validator, fullnode) = init_state_validator_with_fullnode().await;
     for (address, object_id) in objects {
@@ -5134,7 +5134,7 @@ async fn test_gas_smashing() {
 
 #[tokio::test]
 async fn test_for_inc_201_dev_inspect() {
-    use sui_framework_build::compiled_package::BuildConfig;
+    use sui_move_build::BuildConfig;
 
     let (sender, _sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
@@ -5170,7 +5170,7 @@ async fn test_for_inc_201_dev_inspect() {
 
 #[tokio::test]
 async fn test_for_inc_201_dry_run() {
-    use sui_framework_build::compiled_package::BuildConfig;
+    use sui_move_build::BuildConfig;
 
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
@@ -5210,7 +5210,7 @@ async fn test_for_inc_201_dry_run() {
 
 #[tokio::test]
 async fn test_publish_transitive_dependencies_ok() {
-    use sui_framework_build::compiled_package::BuildConfig;
+    use sui_move_build::BuildConfig;
 
     let (sender, key): (_, AccountKeyPair) = get_key_pair();
     let gas_id = ObjectID::random();
@@ -5383,7 +5383,7 @@ async fn test_publish_transitive_dependencies_ok() {
 
 #[tokio::test]
 async fn test_publish_missing_dependency() {
-    use sui_framework_build::compiled_package::BuildConfig;
+    use sui_move_build::BuildConfig;
 
     let (sender, key): (_, AccountKeyPair) = get_key_pair();
     let gas_id = ObjectID::random();
@@ -5425,7 +5425,7 @@ async fn test_publish_missing_dependency() {
 
 #[tokio::test]
 async fn test_publish_missing_transitive_dependency() {
-    use sui_framework_build::compiled_package::BuildConfig;
+    use sui_move_build::BuildConfig;
 
     let (sender, key): (_, AccountKeyPair) = get_key_pair();
     let gas_id = ObjectID::random();
@@ -5467,7 +5467,7 @@ async fn test_publish_missing_transitive_dependency() {
 
 #[tokio::test]
 async fn test_publish_not_a_package_dependency() {
-    use sui_framework_build::compiled_package::BuildConfig;
+    use sui_move_build::BuildConfig;
 
     let (sender, key): (_, AccountKeyPair) = get_key_pair();
     let gas_id = ObjectID::random();

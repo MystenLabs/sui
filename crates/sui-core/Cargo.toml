@@ -38,7 +38,7 @@ rand = "0.8.5"
 expect-test = "1.4.0"
 sui-adapter = { path = "../sui-adapter" }
 sui-framework = { path = "../sui-framework" }
-sui-framework-build = { path = "../sui-framework-build" }
+sui-move-build = { path = "../sui-move-build" }
 sui-network = { path = "../sui-network" }
 sui-types = { path = "../sui-types" }
 sui-storage = { path = "../sui-storage" }

@@ -9,7 +9,7 @@ publish = false
 
 [dev-dependencies]
 sui-move = { path = "../sui-move", features = ["unit_test"] }
-sui-framework-build = { path = "../sui-framework-build" }
+sui-move-build = { path = "../sui-move-build" }
 
 move-cli.workspace = true
 move-package.workspace = true

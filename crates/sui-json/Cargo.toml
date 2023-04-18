@@ -30,4 +30,4 @@ workspace-hack.workspace = true
 sui-types = { path = "../sui-types", features = ["test-utils"] }
 
 sui-adapter = { path = "../sui-adapter" }
-sui-framework-build = { path = "../sui-framework-build" }
+sui-move-build = { path = "../sui-move-build" }

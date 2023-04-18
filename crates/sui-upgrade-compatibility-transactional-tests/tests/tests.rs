@@ -7,7 +7,7 @@ use move_binary_format::{
     compatibility::{Compatibility, InclusionCheck},
     normalized, CompiledModule,
 };
-use sui_framework_build::compiled_package::{BuildConfig, SuiPackageHooks};
+use sui_move_build::{BuildConfig, SuiPackageHooks};
 
 pub const TEST_DIR: &str = "tests";
 

@@ -30,7 +30,6 @@ inquire = "0.6.0"
 
 sui-adapter = { path = "../sui-adapter" }
 sui-core = { path = "../sui-core" }
-sui-framework-build = { path = "../sui-framework-build" }
 sui-framework-snapshot = { path = "../sui-framework-snapshot" }
 sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }
@@ -41,6 +40,7 @@ sui-sdk = { path = "../sui-sdk" }
 sui-keys = { path = "../sui-keys" }
 sui-source-validation = { path = "../sui-source-validation" }
 sui-move = { path = "../sui-move", features = ["all"] }
+sui-move-build = { path = "../sui-move-build" }
 sui-protocol-config = { path = "../sui-protocol-config" }
 shared-crypto = { path = "../shared-crypto" }
 
