@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
+import { useGetSystemState } from '@mysten/core';
 import { Plus12 } from '@mysten/icons';
 import { useMemo } from 'react';
 
@@ -10,7 +11,6 @@ import { getAllStakeSui } from '../getAllStakeSui';
 import { StakeAmount } from '../home/StakeAmount';
 import { StakeCard } from '../home/StakedCard';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
-import { useSystemState } from '../useSystemState';
 import { Button } from '_app/shared/ButtonUI';
 import BottomMenuLayout, {
     Menu,
@@ -31,7 +31,7 @@ export function ValidatorsCard() {
         error,
     } = useGetDelegatedStake(accountAddress || '');
 
-    const { data: system } = useSystemState();
+    const { data: system } = useGetSystemState();
     const activeValidators = system?.activeValidators;
 
     // Total active stake for all Staked validators

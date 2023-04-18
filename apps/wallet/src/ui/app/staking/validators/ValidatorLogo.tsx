@@ -1,12 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
-import { useGetValidatorsMeta } from '@mysten/core';
+import { useGetSystemState } from '@mysten/core';
 import { formatAddress, type SuiAddress } from '@mysten/sui.js';
 import cl from 'classnames';
 import { useMemo } from 'react';
 
-import { useSystemState } from '../useSystemState';
 import { Heading } from '_app/shared/heading';
 import { ImageIcon } from '_app/shared/image-icon';
 import { Text } from '_app/shared/text';
@@ -22,7 +20,7 @@ interface ValidatorLogoProps {
     size: 'body' | 'subtitle';
     iconSize: 'sm' | 'md';
     showActiveStatus?: boolean;
-    epoch?: number;
+    activeEpoch?: string;
 }
 
 export function ValidatorLogo({
@@ -33,10 +31,9 @@ export function ValidatorLogo({
     size,
     stacked,
     showActiveStatus = false,
-    epoch,
+    activeEpoch,
 }: ValidatorLogoProps) {
-    const { data, isLoading } = useSystemState();
-    const { data: validators } = useGetValidatorsMeta(748);
+    const { data, isLoading } = useGetSystemState();
 
     const validatorMeta = useMemo(() => {
         if (!data) return null;
@@ -66,8 +63,13 @@ export function ValidatorLogo({
     if (isLoading) {
         return <div className="flex justify-center items-center">...</div>;
     }
+    // for invalid validators, show the epoch number
+    const fallBackText = activeEpoch
+        ? `Staked ${Number(data?.epoch) - Number(activeEpoch)} epochs ago`
+        : '';
+    const validatorName = validatorMeta?.name || fallBackText;
 
-    return validatorMeta ? (
+    return (
         <div
             className={cl(
                 'w-full flex justify-start font-semibold',
@@ -76,9 +78,9 @@ export function ValidatorLogo({
             )}
         >
             <ImageIcon
-                src={validatorMeta.imageUrl}
-                label={validatorMeta.name}
-                fallback={validatorMeta.name}
+                src={validatorMeta?.imageUrl || null}
+                label={validatorMeta?.name || ''}
+                fallback={validatorMeta?.name || ''}
                 size={iconSize}
                 circle
             />
@@ -91,11 +93,11 @@ export function ValidatorLogo({
                             color="steel-darker"
                             truncate
                         >
-                            {validatorMeta.name}
+                            {validatorName}
                         </Heading>
                     ) : (
                         <Text color="gray-90" variant={size} weight="semibold">
-                            {validatorMeta.name}
+                            {validatorName}
                         </Text>
                     )}
 
@@ -122,5 +124,5 @@ export function ValidatorLogo({
                 )}
             </div>
         </div>
-    ) : null;
+    );
 }

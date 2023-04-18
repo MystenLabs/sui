@@ -187,6 +187,7 @@ export function StakeCard({
                         size="subtitle"
                         iconSize="md"
                         stacked
+                        activeEpoch={delegationObject.stakeRequestEpoch}
                     />
 
                     <div className="text-steel text-pBody opacity-0 group-hover:opacity-100">

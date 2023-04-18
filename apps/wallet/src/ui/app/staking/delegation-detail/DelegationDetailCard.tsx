@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
-import { useGetRollingAverageApys } from '@mysten/core';
+import { useGetRollingAverageApys, useGetSystemState } from '@mysten/core';
 import { ArrowLeft16, StakeAdd16, StakeRemove16 } from '@mysten/icons';
 import { useMemo } from 'react';
 
@@ -11,7 +11,6 @@ import { Heading } from '../../shared/heading';
 import { getDelegationDataByStakeId } from '../getDelegationByStakeId';
 import { StakeAmount } from '../home/StakeAmount';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
-import { useSystemState } from '../useSystemState';
 import { Button } from '_app/shared/ButtonUI';
 import BottomMenuLayout, { Content } from '_app/shared/bottom-menu-layout';
 import { Card } from '_app/shared/card';
@@ -35,7 +34,7 @@ export function DelegationDetailCard({
         data: system,
         isLoading: loadingValidators,
         isError: errorValidators,
-    } = useSystemState();
+    } = useGetSystemState();
 
     const accountAddress = useActiveAddress();
 
