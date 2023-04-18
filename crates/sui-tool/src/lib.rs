@@ -21,6 +21,7 @@ use anyhow::anyhow;
 
 pub mod commands;
 pub mod db_tool;
+pub mod replay;
 
 fn make_clients(
     genesis: PathBuf,

@@ -1,0 +1,47 @@
+processed 10 tasks
+
+init:
+A: object(0,0)
+
+task 1 'publish'. lines 6-16:
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5928000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'upgrade'. lines 18-28:
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5928000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 3 'upgrade'. lines 30-42:
+created: object(3,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5928000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 4 'upgrade'. lines 44-54:
+Error: Transaction Effects Status: Invalid package upgrade. New package is incompatible with previous version
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PackageUpgradeError { upgrade_error: IncompatibleUpgrade }, source: Some(PartialVMError { major_status: BACKWARD_INCOMPATIBLE_MODULE_UPDATE, sub_status: None, message: None, exec_state: None, indices: [], offsets: [] }), command: Some(1) } }
+
+task 5 'upgrade'. lines 56-68:
+Error: Transaction Effects Status: Invalid package upgrade. New package is incompatible with previous version
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PackageUpgradeError { upgrade_error: IncompatibleUpgrade }, source: Some(PartialVMError { major_status: BACKWARD_INCOMPATIBLE_MODULE_UPDATE, sub_status: None, message: None, exec_state: None, indices: [], offsets: [] }), command: Some(1) } }
+
+task 6 'upgrade'. lines 69-87:
+created: object(6,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6368800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 7 'upgrade'. lines 88-103:
+created: object(7,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6292800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 8 'upgrade'. lines 104-118:
+created: object(8,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6209200,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 9 'upgrade'. lines 119-132:
+created: object(9,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6292800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220

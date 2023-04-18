@@ -7,7 +7,7 @@ set -e
 DEFAULT_NETWORK="testnet"
 CLEAN=0
 LOG_LEVEL="info"
-SUI_RUN_PATH="/var/lib/sui"
+SUI_RUN_PATH="/opt/sui"
 VERBOSE=""
 
 function cleanup {
@@ -17,7 +17,7 @@ function cleanup {
 
 trap cleanup EXIT
 
-while getopts "hvn:e:p:" OPT; do
+while getopts "hvn:e:p:t:" OPT; do
     case $OPT in
         p) 
             SUI_BIN_PATH=$OPTARG ;;
@@ -40,7 +40,7 @@ while getopts "hvn:e:p:" OPT; do
             >&2 echo " -n NETWORK         The network to run the fullnode on."
             >&2 echo "                    (Default: ${DEFAULT_NETWORK})"
             >&2 echo " -e END_EPOCH       EpochID at which to stop syncing and declare success."
-            >&2 echo "                    If unspecified, will use current epoch of NETWORK."
+            >&2 echo "                    If unspecified or -1, will use current epoch of NETWORK."
             >&2 echo " -t EPOCH_TIMEOUT   Number of minutes to wait until epoch advancement before timing out."
             >&2 exit 0
             ;;
@@ -74,7 +74,7 @@ if [[ ! -f "${SUI_RUN_PATH}/fullnode.yaml" ]]; then
     sed -i "s|suidb|${SUI_RUN_PATH}/suidb|g" ${SUI_RUN_PATH}/fullnode.yaml
 
     if [[ $NETWORK != "devnet" ]]; then
-        cat >> "$SUI_RUN_PATH/fullnode.yaml" <<- EOM
+        cat >> "${SUI_RUN_PATH}/fullnode.yaml" <<- EOM
 
 p2p-config:
   seed-peers:
@@ -106,7 +106,7 @@ SUI_NODE_PID=$!
 
 # start monitoring script
 END_EPOCH_ARG=""
-if [[ ! -z $END_EPOCH ]]; then
+if [[ ! -z $END_EPOCH && $END_EPOCH != -1 ]]; then
     END_EPOCH_ARG="--end-epoch $END_EPOCH"
 fi
 
@@ -115,7 +115,7 @@ if [[ ! -z $EPOCH_TIMEOUT ]]; then
     EPOCH_TIMEOUT_ARG="--epoch-timeout $EPOCH_TIMEOUT"
 fi
 
-./scripts/monitor_synced.py $END_EPOCH_ARG $EPOCH_TIMEOUT_ARG --env $NETWORK $VERBOSE
+./scripts/compatibility/monitor_synced.py $END_EPOCH_ARG $EPOCH_TIMEOUT_ARG --env $NETWORK $VERBOSE
 
 kill $SUI_NODE_PID
 exit 0

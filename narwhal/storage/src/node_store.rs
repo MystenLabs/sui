@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use crate::payload_store::PayloadStore;
 use crate::proposer_store::ProposerKey;
 use crate::vote_digest_store::VoteDigestStore;
@@ -13,8 +14,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use store::metrics::SamplingInterval;
 use store::reopen;
-use store::rocks::DBMap;
-use store::rocks::{open_cf, MetricConf, ReadWriteOptions};
+use store::rocks::{default_db_options, open_cf_opts, DBMap, MetricConf, ReadWriteOptions};
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, CommittedSubDagShell, ConsensusCommit,
     Header, HeaderDigest, Round, SequenceNumber, VoteInfo,
@@ -59,25 +59,46 @@ impl NodeStorage {
         store_path: Path,
         certificate_store_cache_metrics: Option<CertificateStoreCacheMetrics>,
     ) -> Self {
+        let db_options = default_db_options().optimize_db_for_write_throughput(2);
         let mut metrics_conf = MetricConf::with_db_name("consensus_epoch");
         metrics_conf.read_sample_interval = SamplingInterval::new(Duration::from_secs(60), 0);
-        let rocksdb = open_cf(
-            store_path,
-            None,
-            metrics_conf,
-            &[
-                Self::LAST_PROPOSED_CF,
-                Self::VOTES_CF,
+        let cf_options = db_options.options.clone();
+        let column_family_options = vec![
+            (Self::LAST_PROPOSED_CF, cf_options.clone()),
+            (Self::VOTES_CF, cf_options.clone()),
+            (
                 Self::HEADERS_CF,
+                default_db_options()
+                    .optimize_for_write_throughput()
+                    .optimize_for_large_values_no_scan()
+                    .options,
+            ),
+            (
                 Self::CERTIFICATES_CF,
-                Self::CERTIFICATE_DIGEST_BY_ROUND_CF,
-                Self::CERTIFICATE_DIGEST_BY_ORIGIN_CF,
-                Self::PAYLOAD_CF,
+                default_db_options()
+                    .optimize_for_write_throughput()
+                    .optimize_for_large_values_no_scan()
+                    .options,
+            ),
+            (Self::CERTIFICATE_DIGEST_BY_ROUND_CF, cf_options.clone()),
+            (Self::CERTIFICATE_DIGEST_BY_ORIGIN_CF, cf_options.clone()),
+            (Self::PAYLOAD_CF, cf_options.clone()),
+            (
                 Self::BATCHES_CF,
-                Self::LAST_COMMITTED_CF,
-                Self::SUB_DAG_INDEX_CF,
-                Self::COMMITTED_SUB_DAG_INDEX_CF,
-            ],
+                default_db_options()
+                    .optimize_for_write_throughput()
+                    .optimize_for_large_values_no_scan()
+                    .options,
+            ),
+            (Self::LAST_COMMITTED_CF, cf_options.clone()),
+            (Self::SUB_DAG_INDEX_CF, cf_options.clone()),
+            (Self::COMMITTED_SUB_DAG_INDEX_CF, cf_options),
+        ];
+        let rocksdb = open_cf_opts(
+            store_path,
+            Some(db_options.options),
+            metrics_conf,
+            &column_family_options,
         )
         .expect("Cannot open database");
 

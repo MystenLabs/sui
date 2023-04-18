@@ -12,6 +12,7 @@ use move_core_types::value::{MoveStruct, MoveValue};
 use move_transactional_test_runner::tasks::SyntaxChoice;
 use sui_types::base_types::SuiAddress;
 use sui_types::messages::{Argument, CallArg, ObjectArg};
+use sui_types::move_package::UpgradePolicy;
 use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 
@@ -116,6 +117,8 @@ pub struct UpgradePackageCommand {
     pub gas_budget: Option<u64>,
     #[clap(long = "syntax")]
     pub syntax: Option<SyntaxChoice>,
+    #[clap(long = "policy", default_value="compatible", parse(try_from_str = parse_policy))]
+    pub policy: u8,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -304,5 +307,14 @@ fn parse_fake_id(s: &str) -> anyhow::Result<FakeID> {
         u256_bytes.reverse();
         let address: SuiAddress = SuiAddress::from_bytes(&u256_bytes).unwrap();
         FakeID::Known(address.into())
+    })
+}
+
+fn parse_policy(x: &str) -> anyhow::Result<u8> {
+    Ok(match x {
+            "compatible" => UpgradePolicy::COMPATIBLE,
+            "additive" => UpgradePolicy::ADDITIVE,
+            "dep_only" => UpgradePolicy::DEP_ONLY,
+        _ => bail!("Invalid upgrade policy {x}. Policy must be one of 'compatible', 'additive', or 'dep_only'")
     })
 }

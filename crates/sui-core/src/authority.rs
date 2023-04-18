@@ -12,7 +12,6 @@ use arc_swap::{ArcSwap, Guard};
 use chrono::prelude::*;
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
-use fastcrypto::traits::KeyPair;
 use itertools::Itertools;
 use move_binary_format::CompiledModule;
 use move_core_types::language_storage::ModuleId;
@@ -45,12 +44,12 @@ use sui_config::genesis::Genesis;
 use sui_config::node::{
     AuthorityStorePruningConfig, DBCheckpointConfig, ExpensiveSafetyCheckConfig,
 };
-use sui_framework::BuiltInFramework;
+use sui_framework::{BuiltInFramework, SystemPackage};
 use sui_json_rpc_types::{
     Checkpoint, DevInspectResults, DryRunTransactionBlockResponse, EventFilter, SuiEvent,
     SuiMoveValue, SuiObjectDataFilter, SuiTransactionBlockData, SuiTransactionBlockEvents,
 };
-use sui_macros::{fail_point, fail_point_async, nondeterministic};
+use sui_macros::{fail_point, fail_point_async};
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_storage::indexes::{CoinInfo, ObjectIndexChanges};
 use sui_storage::IndexStore;
@@ -101,11 +100,9 @@ use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::checkpoints::checkpoint_executor::CheckpointExecutor;
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
-use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::event_handler::EventHandler;
 use crate::execution_driver::execution_process;
 use crate::module_cache_metrics::ResolverMetrics;
-use crate::signature_verifier::SignatureVerifierMetrics;
 use crate::stake_aggregator::StakeAggregator;
 use crate::state_accumulator::StateAccumulator;
 use crate::{transaction_input_checker, transaction_manager::TransactionManager};
@@ -137,6 +134,7 @@ pub mod authority_store_pruner;
 pub mod authority_store_tables;
 pub mod authority_store_types;
 pub mod epoch_start_configuration;
+pub mod test_authority_builder;
 
 pub(crate) mod authority_notify_read;
 pub(crate) mod authority_store;
@@ -713,10 +711,8 @@ impl AuthorityState {
 
         if !certificate.contains_shared_object() {
             // Shared object transactions need to be sequenced by Narwhal before enqueueing
-            // for execution.
-            // They are done in AuthorityPerEpochStore::handle_consensus_transaction(),
-            // which will enqueue this certificate for execution.
-            // For owned object transactions, we can enqueue the certificate for execution immediately.
+            // for execution, done in AuthorityPerEpochStore::handle_consensus_transaction().
+            // For owned object transactions, they can be enqueued for execution immediately.
             self.enqueue_certificates_for_execution(vec![certificate.clone()], epoch_store)?;
         }
 
@@ -739,6 +735,7 @@ impl AuthorityState {
     pub async fn try_execute_immediately(
         &self,
         certificate: &VerifiedExecutableTransaction,
+        expected_effects_digest: Option<TransactionEffectsDigest>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
         let _metrics_guard = self.metrics.internal_execution_latency.start_timer();
@@ -751,7 +748,7 @@ impl AuthorityState {
         // may as well hold the lock and save the cpu time for other requests.
         let tx_guard = epoch_store.acquire_tx_guard(certificate).await?;
 
-        self.process_certificate(tx_guard, certificate, epoch_store)
+        self.process_certificate(tx_guard, certificate, expected_effects_digest, epoch_store)
             .await
             .tap_err(|e| info!(?tx_digest, "process_certificate failed: {e}"))
     }
@@ -766,6 +763,7 @@ impl AuthorityState {
         let (effects, execution_error_opt) = self
             .try_execute_immediately(
                 &VerifiedExecutableTransaction::new_from_certificate(certificate.clone()),
+                None,
                 &epoch_store,
             )
             .await?;
@@ -796,6 +794,7 @@ impl AuthorityState {
         &self,
         tx_guard: CertTxGuard,
         certificate: &VerifiedExecutableTransaction,
+        expected_effects_digest: Option<TransactionEffectsDigest>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
         let digest = *certificate.digest();
@@ -847,6 +846,23 @@ impl AuthorityState {
             Ok(res) => res,
         };
 
+        if let Some(expected_effects_digest) = expected_effects_digest {
+            if effects.digest() != expected_effects_digest {
+                error!(
+                    tx_digest = ?digest,
+                    ?expected_effects_digest,
+                    actual_effects = ?effects,
+                    "fork detected!"
+                );
+                panic!(
+                    "Transaction {} is expected to have effects digest {}, but got {}!",
+                    digest,
+                    expected_effects_digest,
+                    effects.digest(),
+                );
+            }
+        }
+
         fail_point_async!("crash");
 
         self.commit_cert_and_notify(
@@ -884,6 +900,13 @@ impl AuthorityState {
 
         let events = inner_temporary_store.events.clone();
 
+        let loaded_child_objects = if self.is_fullnode(epoch_store) {
+            // We only care about this for full nodes
+            inner_temporary_store.loaded_child_objects.clone()
+        } else {
+            BTreeMap::new()
+        };
+
         let tx_coins = self
             .commit_certificate(inner_temporary_store, certificate, effects, epoch_store)
             .await?;
@@ -903,7 +926,14 @@ impl AuthorityState {
 
         // index certificate
         let _ = self
-            .post_process_one_tx(certificate, effects, &events, epoch_store, tx_coins)
+            .post_process_one_tx(
+                certificate,
+                effects,
+                &events,
+                epoch_store,
+                tx_coins,
+                loaded_child_objects,
+            )
             .await
             .tap_err(|e| error!("tx post processing failed: {e}"));
 
@@ -1250,6 +1280,7 @@ impl AuthorityState {
         timestamp_ms: u64,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         tx_coins: Option<TxCoins>,
+        loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
     ) -> SuiResult<u64> {
         let changes = self
             .process_object_index(effects, epoch_store)
@@ -1280,6 +1311,7 @@ impl AuthorityState {
             digest,
             timestamp_ms,
             tx_coins,
+            loaded_child_objects,
         )
     }
 
@@ -1459,6 +1491,7 @@ impl AuthorityState {
         events: &TransactionEvents,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         tx_coins: Option<TxCoins>,
+        loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
     ) -> SuiResult {
         if self.indexes.is_none() {
             return Ok(());
@@ -1478,6 +1511,7 @@ impl AuthorityState {
                     timestamp_ms,
                     epoch_store,
                     tx_coins,
+                    loaded_child_objects,
                 )
                 .tap_ok(|_| self.metrics.post_processing_total_tx_indexed.inc())
                 .tap_err(|e| error!(?tx_digest, "Post processing - Couldn't index tx: {e}"));
@@ -1706,102 +1740,18 @@ impl AuthorityState {
         state
     }
 
-    // TODO: Technically genesis_committee can be derived from genesis.
-    pub async fn new_for_testing(
-        genesis_committee: Committee,
-        key: &AuthorityKeyPair,
-        store_base_path: Option<PathBuf>,
-        genesis: &Genesis,
-    ) -> Arc<Self> {
-        let secret = Arc::pin(key.copy());
-        let name: AuthorityName = secret.public().into();
-        let path = match store_base_path {
-            Some(path) => path,
-            None => {
-                let dir = std::env::temp_dir();
-                let path = dir.join(format!("DB_{:?}", nondeterministic!(ObjectID::random())));
-                std::fs::create_dir(&path).unwrap();
-                path
-            }
-        };
-
-        // unwrap ok - for testing only.
-        let store = AuthorityStore::open_with_committee_for_testing(
-            &path.join("store"),
-            None,
-            &genesis_committee,
-            genesis,
-            0,
-        )
-        .await
-        .unwrap();
-        let registry = Registry::new();
-        let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
-        let signature_verifier_metrics = SignatureVerifierMetrics::new(&registry);
-        let epoch_store = AuthorityPerEpochStore::new(
-            name,
-            Arc::new(genesis_committee.clone()),
-            &path.join("store"),
-            None,
-            EpochMetrics::new(&registry),
-            EpochStartConfiguration::new_for_testing(),
-            store.clone(),
-            cache_metrics,
-            signature_verifier_metrics,
-            &ExpensiveSafetyCheckConfig::default(),
-        );
-
-        let epochs = Arc::new(CommitteeStore::new(
-            path.join("epochs"),
-            &genesis_committee,
-            None,
-        ));
-
-        let checkpoint_store = CheckpointStore::new(&path.join("checkpoints"));
-        let index_store = Some(Arc::new(IndexStore::new(path.join("indexes"))));
-
-        let state = AuthorityState::new(
-            secret.public().into(),
-            secret.clone(),
-            SupportedProtocolVersions::SYSTEM_DEFAULT,
-            store,
-            epoch_store,
-            epochs,
-            index_store,
-            checkpoint_store,
-            &registry,
-            AuthorityStorePruningConfig::default(),
-            genesis.objects(),
-            &DBCheckpointConfig::default(),
-            ExpensiveSafetyCheckConfig::new_enable_all(),
-        )
-        .await;
-
-        let epoch_store = state.epoch_store_for_testing();
-        state
-            .create_owner_index_if_empty(genesis.objects(), &epoch_store)
-            .unwrap();
-
-        state
-    }
-
     pub fn transaction_manager(&self) -> &Arc<TransactionManager> {
         &self.transaction_manager
     }
 
-    /// Adds certificates to the pending certificate store and transaction manager for ordered execution.
+    /// Adds certificates to transaction manager for ordered execution.
+    /// It is unnecessary to persist the certificates into the pending_execution table,
+    /// because only Narwhal output needs to be persisted.
     pub fn enqueue_certificates_for_execution(
         &self,
         certs: Vec<VerifiedCertificate>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<()> {
-        let executable_txns: Vec<_> = certs
-            .clone()
-            .into_iter()
-            .map(VerifiedExecutableTransaction::new_from_certificate)
-            .map(VerifiedExecutableTransaction::serializable)
-            .collect();
-        epoch_store.insert_pending_execution(&executable_txns)?;
         self.transaction_manager
             .enqueue_certificates(certs, epoch_store)
     }
@@ -2007,7 +1957,7 @@ impl AuthorityState {
     }
 
     pub fn clone_committee_for_testing(&self) -> Committee {
-        self.epoch_store_for_testing().committee().clone()
+        Committee::clone(self.epoch_store_for_testing().committee())
     }
 
     pub async fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
@@ -2136,7 +2086,7 @@ impl AuthorityState {
     /// Depending on the object pruning policies that will be enforced in the
     /// future there is no software-level guarantee/SLA to retrieve an object
     /// with an old version even if it exists/existed.
-    pub async fn get_past_object_read(
+    pub fn get_past_object_read(
         &self,
         object_id: &ObjectID,
         version: SequenceNumber,
@@ -2420,6 +2370,14 @@ impl AuthorityState {
                 error: "extended object indexing is not enabled on this server".into(),
             }),
         }
+    }
+
+    pub fn loaded_child_object_versions(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> SuiResult<Option<Vec<(ObjectID, SequenceNumber)>>> {
+        self.get_indexes()?
+            .loaded_child_object_versions(transaction_digest)
     }
 
     pub fn get_transactions(
@@ -3104,7 +3062,16 @@ impl AuthorityState {
         max_binary_format_version: u32,
     ) -> Vec<ObjectRef> {
         let mut results = vec![];
-        for system_package in BuiltInFramework::iter_system_packages() {
+
+        let system_packages = BuiltInFramework::iter_system_packages();
+
+        // Add extra framework packages during simtest
+        #[cfg(msim)]
+        let extra_packages = framework_injection::get_extra_packages(self.name);
+        #[cfg(msim)]
+        let system_packages = system_packages.map(|p| p).chain(extra_packages.iter());
+
+        for system_package in system_packages {
             let modules = system_package.modules().to_vec();
             // In simtests, we could override the current built-in framework packages.
             #[cfg(msim)]
@@ -3122,6 +3089,7 @@ impl AuthorityState {
             };
             results.push(obj_ref);
         }
+
         results
     }
 
@@ -3148,21 +3116,33 @@ impl AuthorityState {
 
         let mut res = Vec::with_capacity(system_packages.len());
         for (system_package_ref, object) in system_packages.into_iter().zip(objects.iter()) {
-            let cur_object = object
-                .as_ref()
-                .unwrap_or_else(|| panic!("system package {:?} must exist", system_package_ref.0));
+            let prev_transaction = match object {
+                Some(cur_object) if cur_object.compute_object_reference() == system_package_ref => {
+                    // Skip this one because it doesn't need to be upgraded.
+                    info!("Framework {} does not need updating", system_package_ref.0);
+                    continue;
+                }
 
-            if cur_object.compute_object_reference() == system_package_ref {
-                // Skip this one because it doesn't need to be upgraded.
-                info!("Framework {} does not need updating", system_package_ref.0);
-                continue;
-            }
+                Some(cur_object) => cur_object.previous_transaction,
+                None => TransactionDigest::genesis(),
+            };
 
-            let system_package = BuiltInFramework::get_package_by_id(&system_package_ref.0);
-            let bytes = system_package.bytes().to_vec();
             #[cfg(msim)]
-            let bytes = framework_injection::get_override_bytes(&system_package_ref.0, self.name)
-                .unwrap_or(bytes);
+            let SystemPackage {
+                id: _,
+                bytes,
+                dependencies,
+            } = framework_injection::get_override_system_package(&system_package_ref.0, self.name)
+                .unwrap_or_else(|| {
+                    BuiltInFramework::get_package_by_id(&system_package_ref.0).clone()
+                });
+
+            #[cfg(not(msim))]
+            let SystemPackage {
+                id: _,
+                bytes,
+                dependencies,
+            } = BuiltInFramework::get_package_by_id(&system_package_ref.0).clone();
 
             let modules: Vec<_> = bytes
                 .iter()
@@ -3175,8 +3155,8 @@ impl AuthorityState {
             let new_object = Object::new_system_package(
                 &modules,
                 system_package_ref.1,
-                system_package.dependencies().to_vec(),
-                cur_object.previous_transaction,
+                dependencies.clone(),
+                prev_transaction,
             );
 
             let new_ref = new_object.compute_object_reference();
@@ -3187,11 +3167,7 @@ impl AuthorityState {
                 return None;
             }
 
-            res.push((
-                system_package_ref.1,
-                bytes,
-                system_package.dependencies().to_vec(),
-            ));
+            res.push((system_package_ref.1, bytes, dependencies));
         }
 
         Some(res)
@@ -3613,9 +3589,11 @@ mod tests {
 #[cfg(msim)]
 pub mod framework_injection {
     use move_binary_format::CompiledModule;
-    use std::cell::RefCell;
     use std::collections::BTreeMap;
+    use std::{cell::RefCell, collections::BTreeSet};
+    use sui_framework::{BuiltInFramework, SystemPackage};
     use sui_types::base_types::{AuthorityName, ObjectID};
+    use sui_types::is_system_package;
 
     type FrameworkOverrideConfig = BTreeMap<ObjectID, PackageOverrideConfig>;
 
@@ -3682,5 +3660,44 @@ pub mod framework_injection {
                 PackageOverrideConfig::PerValidator(func) => func(name),
             })
         })
+    }
+
+    pub fn get_override_system_package(
+        package_id: &ObjectID,
+        name: AuthorityName,
+    ) -> Option<SystemPackage> {
+        let bytes = get_override_bytes(package_id, name)?;
+        let dependencies = if is_system_package(*package_id) {
+            BuiltInFramework::get_package_by_id(package_id)
+                .dependencies()
+                .to_vec()
+        } else {
+            // Assume that entirely new injected packages depend on all existing system packages.
+            BuiltInFramework::all_package_ids()
+        };
+        Some(SystemPackage {
+            id: *package_id,
+            bytes,
+            dependencies,
+        })
+    }
+
+    pub fn get_extra_packages(name: AuthorityName) -> Vec<SystemPackage> {
+        let built_in = BTreeSet::from_iter(BuiltInFramework::all_package_ids().into_iter());
+        let extra: Vec<ObjectID> = OVERRIDE.with(|cfg| {
+            cfg.borrow()
+                .keys()
+                .filter_map(|package| (!built_in.contains(package)).then_some(*package))
+                .collect()
+        });
+
+        extra
+            .into_iter()
+            .map(|package| SystemPackage {
+                id: package,
+                bytes: get_override_bytes(&package, name).unwrap(),
+                dependencies: BuiltInFramework::all_package_ids(),
+            })
+            .collect()
     }
 }

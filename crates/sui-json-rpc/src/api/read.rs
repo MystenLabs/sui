@@ -4,6 +4,7 @@
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 
+use sui_json_rpc_types::SuiLoadedChildObjectsResponse;
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, CheckpointPage, SuiEvent, SuiGetPastObjectRequest,
     SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse, SuiTransactionBlockResponse,
@@ -62,8 +63,8 @@ pub trait ReadApi {
     /// can be retrieved by this API, even if the object and version exists/existed.
     /// The result may vary across nodes depending on their pruning policies.
     /// Return the object information for a specified version
-    #[method(name = "tryGetPastObject")]
-    async fn try_get_past_object(
+    #[method(name = "tryGetPastObject", blocking)]
+    fn try_get_past_object(
         &self,
         /// the ID of the queried object
         object_id: ObjectID,
@@ -86,6 +87,12 @@ pub trait ReadApi {
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiPastObjectResponse>>;
 
+    #[method(name = "getLoadedChildObjects", blocking)]
+    fn get_loaded_child_objects(
+        &self,
+        digest: TransactionDigest,
+    ) -> RpcResult<SuiLoadedChildObjectsResponse>;
+
     /// Return a checkpoint
     #[method(name = "getCheckpoint")]
     async fn get_checkpoint(
@@ -97,6 +104,17 @@ pub trait ReadApi {
     /// Return paginated list of checkpoints
     #[method(name = "getCheckpoints", blocking)]
     fn get_checkpoints(
+        &self,
+        /// An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.
+        cursor: Option<BigInt<u64>>,
+        /// Maximum item returned per page, default to [QUERY_MAX_RESULT_LIMIT_CHECKPOINTS] if not specified.
+        limit: Option<usize>,
+        /// query result ordering, default to false (ascending order), oldest record first.
+        descending_order: bool,
+    ) -> RpcResult<CheckpointPage>;
+
+    #[method(name = "getCheckpoints", version <= "0.31", blocking)]
+    fn get_checkpoints_deprecated_limit(
         &self,
         /// An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.
         cursor: Option<BigInt<u64>>,

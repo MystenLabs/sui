@@ -51,31 +51,28 @@ export function DynamicFieldsCard({ id }: { id: string }) {
                 </TabList>
                 <TabPanels>
                     <TabPanel>
-                        <div className="mt-4 flex max-h-600 flex-col gap-5 overflow-auto overflow-x-scroll">
+                        <div className="mt-4 flex max-h-600 flex-col gap-5 overflow-auto">
                             {data.pages.map(({ data }) =>
                                 // Show the field name and type is it is not an object
                                 data.map((result) => (
                                     <DisclosureBox
                                         title={
                                             <div className="flex items-center gap-1 truncate break-words text-body font-medium leading-relaxed text-steel-dark">
-                                                {typeof result.name?.value ===
-                                                'object' ? (
-                                                    <div className="block w-8/12 truncate break-words">
-                                                        Struct{' '}
-                                                        {formatAddress(
-                                                            result.objectType
-                                                        )}
-                                                    </div>
-                                                ) : (
-                                                    <div className="block w-8/12 truncate break-words">
-                                                        {result.name?.value
-                                                            ? String(
-                                                                  result.name
-                                                                      .value
-                                                              )
-                                                            : null}
-                                                    </div>
-                                                )}
+                                                <div className="block w-8/12 truncate break-words">
+                                                    {typeof result.name
+                                                        ?.value === 'object' ? (
+                                                        <>
+                                                            Struct{' '}
+                                                            {formatAddress(
+                                                                result.objectType
+                                                            )}
+                                                        </>
+                                                    ) : result.name?.value ? (
+                                                        String(
+                                                            result.name.value
+                                                        )
+                                                    ) : null}
+                                                </div>
                                                 <ObjectLink
                                                     objectId={result.objectId}
                                                 />

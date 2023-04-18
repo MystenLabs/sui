@@ -41,15 +41,15 @@ export function EpochsTable({
         ['epochs', { limit, cursor: pagination.cursor }],
         async () =>
             enhancedRpc.getEpochs({
-                limit: limit.toString(),
+                limit,
                 cursor: pagination.cursor?.toString(),
                 descendingOrder: true,
             }),
         {
             keepPreviousData: true,
+            retry: 5,
             // Disable refetching if not on the first page:
             // refetchInterval: pagination.cursor ? undefined : refetchInterval,
-            retry: false,
             staleTime: Infinity,
             cacheTime: 24 * 60 * 60 * 1000,
         }

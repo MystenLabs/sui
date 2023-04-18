@@ -186,7 +186,7 @@ async fn check_gas(
             }
             .into());
         }
-        if gas_price >= protocol_config.max_gas_price() {
+        if protocol_config.gas_model_version() >= 4 && gas_price >= protocol_config.max_gas_price() {
             return Err(UserInputError::GasPriceTooHigh {
                 max_gas_price: protocol_config.max_gas_price(),
             }

@@ -47,13 +47,6 @@ export function extractSerializationType(
     }
 
     if ('Struct' in type) {
-        const theType = type.Struct;
-        const theTypeArgs = theType.typeArguments;
-
-        if (theTypeArgs && theTypeArgs.length > 0) {
-            return extractSerializationType(theTypeArgs[0]);
-        }
-
         return type.Struct;
     }
 
@@ -84,9 +77,21 @@ export function getFieldTypeValue(
         };
     }
 
+    // For nested Structs type.typeArguments  append the typeArguments to the name
+    // Balance<XUS> || Balance<LSP<SUI, USDT>>
     const { address, module, name } = normalizedType;
+    let typeParam = '';
+
+    if (normalizedType.typeArguments?.length) {
+        typeParam = `<${normalizedType.typeArguments
+            .map(
+                (typeArg) => getFieldTypeValue(typeArg, objectType).displayName
+            )
+            .join(', ')}>`;
+    }
+
     return {
-        displayName: normalizedType.name,
+        displayName: `${normalizedType.name}${typeParam}`,
         normalizedType: `${address}::${module}::${name}`,
     };
 }

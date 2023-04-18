@@ -77,6 +77,11 @@ pub trait Storage {
     fn read_object(&self, id: &ObjectID) -> Option<&Object>;
 
     fn apply_object_changes(&mut self, changes: BTreeMap<ObjectID, ObjectChange>);
+
+    fn save_loaded_child_objects(
+        &mut self,
+        loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
+    );
 }
 
 pub type PackageFetchResults<Package> = Result<Vec<Package>, Vec<ObjectID>>;

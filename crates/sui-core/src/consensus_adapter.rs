@@ -506,7 +506,8 @@ impl ConsensusAdapter {
         let async_stage = self
             .clone()
             .submit_and_wait(transaction, epoch_store.clone());
-        // Number of this tasks is limited by `sequencing_certificate_inflight` limit
+        // Number of these tasks is weakly limited based on `num_inflight_transactions`.
+        // (Limit is not applied atomically, and only to user transactions.)
         let join_handle = spawn_monitored_task!(async_stage);
         join_handle
     }

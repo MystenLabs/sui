@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::AuthorityState;
+use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::narwhal_manager::{NarwhalConfiguration, NarwhalManager, NarwhalManagerMetrics};
 use bytes::Bytes;
 use fastcrypto::bls12381;
@@ -98,8 +98,9 @@ async fn test_narwhal_manager() {
         let genesis = config.genesis().unwrap();
         let genesis_committee = genesis.committee().unwrap();
 
-        let state =
-            AuthorityState::new_for_testing(genesis_committee, &secret, None, genesis).await;
+        let state = TestAuthorityBuilder::new()
+            .build(genesis_committee, &secret, genesis)
+            .await;
 
         let system_state = state
             .get_sui_system_state_object_for_testing()

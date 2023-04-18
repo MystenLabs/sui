@@ -7,6 +7,7 @@ use crate::authority_client::{
     AuthorityAPI, NetworkAuthorityClient,
 };
 use crate::safe_client::{SafeClient, SafeClientMetrics, SafeClientMetricsBase};
+use fastcrypto::encoding::Encoding;
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
 use mysten_metrics::monitored_future;
 use mysten_network::config::Config;
@@ -1402,16 +1403,23 @@ where
         let cert_ref = &certificate;
         let threshold = self.committee.quorum_threshold();
         let validity = self.committee.validity_threshold();
-        let cert_bytes = bcs::to_bytes(cert_ref);
-        debug!(
+
+        info!(
             ?tx_digest,
             quorum_threshold = threshold,
             validity_threshold = validity,
             ?timeout_after_quorum,
             ?cert_ref,
-            ?cert_bytes,
             "Broadcasting certificate to authorities"
         );
+        // TODO: We show the below messages for debugging purposes re. incident #267. When this is fixed, we should remove them again.
+        let cert_bytes = fastcrypto::encoding::Base64::encode(bcs::to_bytes(cert_ref).unwrap());
+        info!(
+            ?tx_digest,
+            ?cert_bytes,
+            "Broadcasting certificate (serialized) to authorities"
+        );
+
         self.quorum_map_then_reduce_with_timeout(
             state,
             |name, client| {

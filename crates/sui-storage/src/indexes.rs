@@ -12,9 +12,7 @@ use anyhow::anyhow;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{ModuleId, StructTag};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use sui_types::temporary_store::TxCoins;
-use tracing::{debug, trace};
-
+use std::collections::BTreeMap;
 use sui_json_rpc_types::SuiObjectDataFilter;
 use sui_types::base_types::{
     ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxSequenceNumber,
@@ -26,9 +24,10 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::TransactionEvents;
 use sui_types::object::Owner;
 use sui_types::query::TransactionFilter;
-use typed_store::rocks::{default_db_options, point_lookup_db_options, DBBatch, DBMap, MetricConf};
+use sui_types::temporary_store::TxCoins;
+use tracing::{debug, trace};
 use typed_store::rocks::{
-    optimized_for_high_throughput_options, read_size_from_env, DBOptions, ReadWriteOptions,
+    default_db_options, read_size_from_env, DBBatch, DBMap, DBOptions, MetricConf, ReadWriteOptions,
 };
 use typed_store::traits::Map;
 use typed_store::traits::{TableSummary, TypedStoreDebug};
@@ -116,6 +115,9 @@ pub struct IndexStoreTables {
     #[default_options_override_fn = "dynamic_field_index_table_default_config"]
     dynamic_field_index: DBMap<DynamicFieldKey, DynamicFieldInfo>,
 
+    /// This is an index of all the versions of loaded child objects
+    loaded_child_object_versions: DBMap<TransactionDigest, Vec<(ObjectID, SequenceNumber)>>,
+
     #[default_options_override_fn = "index_table_default_config"]
     event_order: DBMap<EventId, EventIndex>,
     #[default_options_override_fn = "index_table_default_config"]
@@ -156,7 +158,7 @@ fn transactions_by_move_function_table_default_config() -> DBOptions {
     default_db_options()
 }
 fn timestamps_table_default_config() -> DBOptions {
-    point_lookup_db_options()
+    default_db_options().optimize_for_point_lookup(64)
 }
 fn owner_index_table_default_config() -> DBOptions {
     default_db_options()
@@ -169,11 +171,12 @@ fn index_table_default_config() -> DBOptions {
 }
 fn coin_index_table_default_config() -> DBOptions {
     DBOptions {
-        options: optimized_for_high_throughput_options(
-            read_size_from_env(ENV_VAR_COIN_INDEX_BLOCK_CACHE_SIZE_MB).unwrap_or(5 * 1024),
-            false,
-        )
-        .options,
+        options: default_db_options()
+            .optimize_for_write_throughput()
+            .optimize_for_read(
+                read_size_from_env(ENV_VAR_COIN_INDEX_BLOCK_CACHE_SIZE_MB).unwrap_or(5 * 1024),
+            )
+            .options,
         rw_options: ReadWriteOptions {
             ignore_range_deletions: true,
         },
@@ -288,6 +291,7 @@ impl IndexStore {
         digest: &TransactionDigest,
         timestamp_ms: u64,
         tx_coins: Option<TxCoins>,
+        loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
     ) -> SuiResult<u64> {
         let sequence = self.next_sequence_number.fetch_add(1, Ordering::SeqCst);
 
@@ -419,6 +423,13 @@ impl IndexStore {
             }),
         )?;
 
+        // Loaded child objects table
+        let loaded_child_objects: Vec<_> = loaded_child_objects.into_iter().collect();
+        batch.insert_batch(
+            &self.tables.loaded_child_object_versions,
+            std::iter::once((*digest, loaded_child_objects)),
+        )?;
+
         batch.write()?;
         Ok(sequence)
     }
@@ -493,6 +504,17 @@ impl IndexStore {
                 }
             }
         }
+    }
+
+    /// Return loaded child objects table for a tx
+    pub fn loaded_child_object_versions(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> SuiResult<Option<Vec<(ObjectID, SequenceNumber)>>> {
+        self.tables
+            .loaded_child_object_versions
+            .get(transaction_digest)
+            .map_err(|err| err.into())
     }
 
     /// Returns unix timestamp for a transaction if it exists

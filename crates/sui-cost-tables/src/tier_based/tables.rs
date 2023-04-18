@@ -47,6 +47,7 @@ pub static INITIAL_COST_SCHEDULE: Lazy<CostTable> = Lazy::new(initial_cost_sched
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct GasStatus {
+    pub gas_model_version: u64,
     cost_table: CostTable,
     gas_left: InternalGas,
     gas_price: u64,
@@ -77,7 +78,12 @@ impl GasStatus {
     /// Charge for every operation and fail when there is no more gas to pay for operations.
     /// This is the instantiation that must be used when executing a user script.
 
-    pub fn new_v2(cost_table: CostTable, budget: u64, gas_price: u64) -> Self {
+    pub fn new_v2(
+        cost_table: CostTable,
+        budget: u64,
+        gas_price: u64,
+        gas_model_version: u64,
+    ) -> Self {
         assert!(gas_price > 0, "gas price cannot be 0");
         let budget_in_unit = budget / gas_price;
         let gas_left = Self::to_internal_units(budget_in_unit);
@@ -88,6 +94,7 @@ impl GasStatus {
         let (instructions_current_tier_mult, instructions_next_tier_start) =
             cost_table.instruction_tier(0);
         Self {
+            gas_model_version,
             gas_left,
             gas_price,
             initial_budget: gas_left,
@@ -115,6 +122,7 @@ impl GasStatus {
         let (instructions_current_tier_mult, instructions_next_tier_start) =
             cost_table.instruction_tier(0);
         Self {
+            gas_model_version: 1,
             gas_left: gas_left.to_unit(),
             gas_price: 1,
             initial_budget: InternalGas::new(0),
@@ -140,6 +148,7 @@ impl GasStatus {
     /// code that does not have to charge the user.
     pub fn new_unmetered() -> Self {
         Self {
+            gas_model_version: 4,
             gas_left: InternalGas::new(0),
             gas_price: 1,
             initial_budget: InternalGas::new(0),
@@ -333,8 +342,12 @@ impl GasStatus {
     // Charge the number of bytes with the cost per byte value
     // As more bytes are read throughout the computation the cost per bytes is increased.
     pub fn charge_bytes(&mut self, size: usize, cost_per_byte: u64) -> PartialVMResult<()> {
-        self.increase_stack_size(size as u64)?;
-        let computation_cost = self.stack_size_current_tier_mult * size as u64 * cost_per_byte;
+        let computation_cost = if self.gas_model_version < 4 {
+            size as u64 * cost_per_byte
+        } else {
+            self.increase_stack_size(size as u64)?;
+            self.stack_size_current_tier_mult * size as u64 * cost_per_byte
+        };
         self.deduct_units(computation_cost)
     }
 }

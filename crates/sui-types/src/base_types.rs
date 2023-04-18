@@ -74,6 +74,7 @@ mod base_types_tests;
     Deserialize,
     JsonSchema,
 )]
+#[cfg_attr(feature = "fuzzing", derive(proptest_derive::Arbitrary))]
 pub struct SequenceNumber(u64);
 
 impl SequenceNumber {
@@ -395,25 +396,20 @@ impl ObjectInfo {
 const PACKAGE: &str = "package";
 impl ObjectType {
     pub fn is_gas_coin(&self) -> bool {
-        match self {
-            ObjectType::Struct(s) => s.is_gas_coin(),
-            ObjectType::Package => false,
-        }
+        matches!(self, ObjectType::Struct(s) if s.is_gas_coin())
     }
 
     pub fn is_coin(&self) -> bool {
-        match self {
-            ObjectType::Struct(s) => s.is_coin(),
-            ObjectType::Package => false,
-        }
+        matches!(self, ObjectType::Struct(s) if s.is_coin())
     }
 
     /// Return true if `self` is `0x2::coin::Coin<t>`
     pub fn is_coin_t(&self, t: &TypeTag) -> bool {
-        match self {
-            ObjectType::Struct(s) => s.is_coin_t(t),
-            ObjectType::Package => false,
-        }
+        matches!(self, ObjectType::Struct(s) if s.is_coin_t(t))
+    }
+
+    pub fn is_package(&self) -> bool {
+        matches!(self, ObjectType::Package)
     }
 }
 
@@ -435,6 +431,7 @@ pub const SUI_ADDRESS_LENGTH: usize = ObjectID::LENGTH;
 #[derive(
     Eq, Default, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema,
 )]
+#[cfg_attr(feature = "fuzzing", derive(proptest_derive::Arbitrary))]
 pub struct SuiAddress(
     #[schemars(with = "Hex")]
     #[serde_as(as = "Readable<Hex, _>")]
@@ -718,11 +715,25 @@ pub struct TxContext {
 
 impl TxContext {
     pub fn new(sender: &SuiAddress, digest: &TransactionDigest, epoch_data: &EpochData) -> Self {
+        Self::new_from_components(
+            sender,
+            digest,
+            &epoch_data.epoch_id(),
+            epoch_data.epoch_start_timestamp(),
+        )
+    }
+
+    pub fn new_from_components(
+        sender: &SuiAddress,
+        digest: &TransactionDigest,
+        epoch_id: &EpochId,
+        epoch_timestamp_ms: u64,
+    ) -> Self {
         Self {
             sender: AccountAddress::new(sender.0),
             digest: digest.into_inner().to_vec(),
-            epoch: epoch_data.epoch_id(),
-            epoch_timestamp_ms: epoch_data.epoch_start_timestamp(),
+            epoch: *epoch_id,
+            epoch_timestamp_ms,
             ids_created: 0,
         }
     }

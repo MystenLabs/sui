@@ -7,6 +7,7 @@ use std::{
     time::Duration,
 };
 
+use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::{authority::AuthorityState, authority_client::AuthorityAPI};
 use async_trait::async_trait;
 use mysten_metrics::spawn_monitored_task;
@@ -114,7 +115,9 @@ impl AuthorityAPI for LocalAuthorityClient {
 
 impl LocalAuthorityClient {
     pub async fn new(committee: Committee, secret: AuthorityKeyPair, genesis: &Genesis) -> Self {
-        let state = AuthorityState::new_for_testing(committee, &secret, None, genesis).await;
+        let state = TestAuthorityBuilder::new()
+            .build(committee, &secret, genesis)
+            .await;
         Self {
             state,
             fault_config: LocalAuthorityClientFaultConfig::default(),

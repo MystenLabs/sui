@@ -7,6 +7,7 @@ import { useParams } from 'react-router-dom';
 
 import { CheckpointTransactionBlocks } from './CheckpointTransactionBlocks';
 
+import { SuiAmount } from '~/components/Table/SuiAmount';
 import { Banner } from '~/ui/Banner';
 import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
 import { EpochLink } from '~/ui/InternalLink';
@@ -106,33 +107,36 @@ export default function CheckpointDetail() {
                 </TabGroup>
                 <TabGroup as="div" size="lg">
                     <TabList>
-                        <Tab>Gas & Storage Fee</Tab>
+                        <Tab>Gas & Storage Fees</Tab>
                     </TabList>
                     <TabPanels>
                         <DescriptionList>
                             <DescriptionItem title="Computation Fee">
-                                <Text variant="p1/medium" color="steel-darker">
-                                    {
+                                <SuiAmount
+                                    full
+                                    amount={
                                         data.epochRollingGasCostSummary
                                             .computationCost
                                     }
-                                </Text>
+                                />
                             </DescriptionItem>
                             <DescriptionItem title="Storage Fee">
-                                <Text variant="p1/medium" color="steel-darker">
-                                    {
+                                <SuiAmount
+                                    full
+                                    amount={
                                         data.epochRollingGasCostSummary
                                             .storageCost
                                     }
-                                </Text>
+                                />
                             </DescriptionItem>
                             <DescriptionItem title="Storage Rebate">
-                                <Text variant="p1/medium" color="steel-darker">
-                                    {
+                                <SuiAmount
+                                    full
+                                    amount={
                                         data.epochRollingGasCostSummary
                                             .storageRebate
                                     }
-                                </Text>
+                                />
                             </DescriptionItem>
                         </DescriptionList>
                     </TabPanels>

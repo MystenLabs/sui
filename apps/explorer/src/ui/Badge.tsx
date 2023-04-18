@@ -9,7 +9,7 @@ import { ReactComponent as XIcon } from './icons/x.svg';
 
 const badgeStyles = cva(
     [
-        'inline-flex justify-center items-center gap-1.5 py-1 px-2 rounded-md text-body font-medium',
+        'inline-flex justify-center items-center gap-1.5 py-1 px-2 rounded-xl text-body font-medium',
     ],
     {
         variants: {

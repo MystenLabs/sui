@@ -22,13 +22,30 @@ eyre = "0.6.8"
 ron = "0.8.0"
 comfy-table = "6.1.3"
 hex = "0.4.3"
+bcs = "0.1.4"
+tracing = "0.1.36"
+similar = "2.2.0"
 
+sui-protocol-config = { path = "../sui-protocol-config" }
+sui-framework = { path = "../sui-framework" }
 narwhal-types = { path = "../../narwhal/types" }
 sui-storage = { path = "../sui-storage" }
 sui-core = { path = "../sui-core" }
 sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }
 sui-network = { path = "../sui-network" }
+sui-json-rpc = { path = "../sui-json-rpc" }
+sui-json-rpc-types = { path = "../sui-json-rpc-types" }
+sui-sdk = { path = "../sui-sdk" }
+sui-adapter = { path = "../sui-adapter" }
+serde = { version = "1.0.144", features = ["derive"] }
+serde_json = "1.0.88"
+thiserror = "1.0.34"
+
+move-core-types.workspace = true
+move-bytecode-utils.workspace = true
+move-package.workspace = true
+move-binary-format.workspace = true
 
 anemo-cli.workspace = true
 telemetry-subscribers.workspace = true

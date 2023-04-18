@@ -471,6 +471,7 @@ impl Data {
 #[derive(
     Eq, PartialEq, Debug, Clone, Copy, Deserialize, Serialize, Hash, JsonSchema, Ord, PartialOrd,
 )]
+#[cfg_attr(feature = "fuzzing", derive(proptest_derive::Arbitrary))]
 pub enum Owner {
     /// Object is exclusively owned by a single address, and is mutable.
     AddressOwner(SuiAddress),
@@ -592,7 +593,9 @@ impl Object {
             previous_transaction,
         );
 
+        #[cfg(not(msim))]
         assert!(ret.is_system_package());
+
         ret
     }
 

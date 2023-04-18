@@ -29,6 +29,7 @@ sui-macros = { path = "../sui-macros" }
 ouroboros = "0.15.5"
 rand = "0.8.5"
 async-trait = "0.1.57"
+itertools = "0.10.5"
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]

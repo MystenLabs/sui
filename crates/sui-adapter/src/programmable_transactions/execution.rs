@@ -24,6 +24,7 @@ use move_vm_runtime::{
 };
 use move_vm_types::loaded_data::runtime_types::{StructType, Type};
 use serde::{de::DeserializeSeed, Deserialize};
+use sui_framework::natives::object_runtime::ObjectRuntime;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::{
@@ -81,14 +82,30 @@ pub fn execute<S: StorageView, Mode: ExecutionMode>(
     // execute commands
     let mut mode_results = Mode::empty_results();
     for (idx, command) in commands.into_iter().enumerate() {
-        execute_command::<_, Mode>(&mut context, &mut mode_results, command)
-            .map_err(|e| e.with_command_index(idx))?
+        if let Err(err) = execute_command::<_, Mode>(&mut context, &mut mode_results, command) {
+                let object_runtime: &ObjectRuntime = context.session.get_native_extensions().get();
+                // We still need to record the loaded child objects for replay
+                let loaded_child_objects = object_runtime.loaded_child_objects();
+                drop(context);
+                state_view.save_loaded_child_objects(loaded_child_objects);
+                return Err(err.with_command_index(idx));
+        };
     }
+
+    // Save loaded objects table in case we fail in post execution
+    let object_runtime: &ObjectRuntime = context.session.get_native_extensions().get();
+    // We still need to record the loaded child objects for replay
+    let loaded_child_objects = object_runtime.loaded_child_objects();
+
     // apply changes
+    let finished  = context.finish::<Mode>();
+    // Save loaded objects for debug. We dont want to lose the info
+    state_view.save_loaded_child_objects(loaded_child_objects);
+
     let ExecutionResults {
         object_changes,
         user_events,
-    } = context.finish::<Mode>()?;
+    } =  finished?;
     state_view.apply_object_changes(object_changes);
     for (module_id, tag, contents) in user_events {
         state_view.log_event(Event::new(

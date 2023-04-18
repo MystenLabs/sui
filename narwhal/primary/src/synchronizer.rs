@@ -9,7 +9,7 @@ use crypto::NetworkPublicKey;
 use fastcrypto::hash::Hash as _;
 use futures::{stream::FuturesOrdered, StreamExt};
 use mysten_common::sync::notify_once::NotifyOnce;
-use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use network::{
     anemo_ext::{NetworkExt, WaitingPeer},
     client::NetworkClient,
@@ -32,7 +32,7 @@ use tokio::{
     task::JoinSet,
     time::sleep,
 };
-use tracing::{debug, error, trace, warn};
+use tracing::{debug, error, instrument, trace, warn};
 use types::{
     ensure,
     error::{AcceptNotification, DagError, DagResult},
@@ -49,7 +49,8 @@ pub mod synchronizer_tests;
 
 /// Only try to accept or suspend a certificate, if it is within this limit above the
 /// locally highest processed round.
-const NEW_CERTIFICATE_ROUND_LIMIT: Round = 100;
+/// Expected max memory usage with 100 nodes: 100 nodes * 1000 rounds * 3.3KB per certificate = 330MB.
+const NEW_CERTIFICATE_ROUND_LIMIT: Round = 1000;
 
 struct Inner {
     /// The id of this primary.
@@ -139,11 +140,16 @@ impl Inner {
     }
 
     // State lock must be held when calling this function.
+    #[instrument(level = "debug", skip_all)]
     async fn accept_certificate_internal(
         &self,
         _lock: &MutexGuard<'_, State>,
         certificate: Certificate,
     ) -> DagResult<()> {
+        let _scope = monitored_scope("accept_certificate_internal");
+
+        debug!("Processing certificate {:?}", certificate);
+
         let digest = certificate.digest();
 
         // TODO: remove this validation later to reduce rocksdb access.
@@ -653,11 +659,16 @@ impl Synchronizer {
     ///
     /// Because of the atomicity requirement, this function cannot be made cancellation safe.
     /// So it is run in a loop inside a separate task, connected to `Synchronizer` via a channel.
+    #[instrument(level = "debug", skip_all)]
     async fn process_certificate_with_lock(
         inner: &Inner,
         certificate: Certificate,
         early_suspend: bool,
     ) -> DagResult<()> {
+        let _scope = monitored_scope("process_certificate_with_lock");
+
+        debug!("Processing certificate {:?}", certificate);
+
         // The state lock must be held for the rest of the function, to ensure updating state,
         // writing certificates into storage and sending certificates to consensus are atomic.
         // The atomicity makes sure the internal state is consistent with DAG in certificate store,

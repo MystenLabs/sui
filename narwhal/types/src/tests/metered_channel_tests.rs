@@ -3,54 +3,53 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::{channel, channel_with_total};
 use futures::{
-    executor::block_on,
     task::{noop_waker, Context, Poll},
     FutureExt,
 };
 use prometheus::{IntCounter, IntGauge};
 use tokio::sync::mpsc::error::TrySendError;
 
-#[test]
-fn test_send() {
+#[tokio::test]
+async fn test_send() {
     let counter = IntGauge::new("TEST_COUNTER", "test").unwrap();
     let (tx, mut rx) = channel(8, &counter);
 
     assert_eq!(counter.get(), 0);
     let item = 42;
-    block_on(tx.send(item)).unwrap();
+    tx.send(item).await.unwrap();
     assert_eq!(counter.get(), 1);
-    let received_item = block_on(rx.recv()).unwrap();
+    let received_item = rx.recv().await.unwrap();
     assert_eq!(received_item, item);
     assert_eq!(counter.get(), 0);
 }
 
-#[test]
-fn test_total() {
+#[tokio::test]
+async fn test_total() {
     let counter = IntGauge::new("TEST_COUNTER", "test").unwrap();
     let counter_total = IntCounter::new("TEST_TOTAL", "test_total").unwrap();
     let (tx, mut rx) = channel_with_total(8, &counter, &counter_total);
 
     assert_eq!(counter.get(), 0);
     let item = 42;
-    block_on(tx.send(item)).unwrap();
+    tx.send(item).await.unwrap();
     assert_eq!(counter.get(), 1);
-    let received_item = block_on(rx.recv()).unwrap();
+    let received_item = rx.recv().await.unwrap();
     assert_eq!(received_item, item);
     assert_eq!(counter.get(), 0);
     assert_eq!(counter_total.get(), 1);
 }
 
-#[test]
-fn test_empty_closed_channel() {
+#[tokio::test]
+async fn test_empty_closed_channel() {
     let counter = IntGauge::new("TEST_COUNTER", "test").unwrap();
     let (tx, mut rx) = channel(8, &counter);
 
     assert_eq!(counter.get(), 0);
     let item = 42;
-    block_on(tx.send(item)).unwrap();
+    tx.send(item).await.unwrap();
     assert_eq!(counter.get(), 1);
 
-    let received_item = block_on(rx.recv()).unwrap();
+    let received_item = rx.recv().await.unwrap();
     assert_eq!(received_item, item);
     assert_eq!(counter.get(), 0);
 
@@ -66,31 +65,31 @@ fn test_empty_closed_channel() {
     assert_eq!(counter.get(), 0);
 }
 
-#[test]
-fn test_reserve() {
+#[tokio::test]
+async fn test_reserve() {
     let counter = IntGauge::new("TEST_COUNTER", "test").unwrap();
     let (tx, mut rx) = channel(8, &counter);
 
     assert_eq!(counter.get(), 0);
     let item = 42;
-    let permit = block_on(tx.reserve()).unwrap();
+    let permit = tx.reserve().await.unwrap();
     assert_eq!(counter.get(), 1);
 
     permit.send(item);
-    let received_item = block_on(rx.recv()).unwrap();
+    let received_item = rx.recv().await.unwrap();
 
     assert_eq!(received_item, item);
     assert_eq!(counter.get(), 0);
 }
 
-#[test]
-fn test_reserve_and_drop() {
+#[tokio::test]
+async fn test_reserve_and_drop() {
     let counter = IntGauge::new("TEST_COUNTER", "test").unwrap();
     let (tx, _rx) = channel::<i32>(8, &counter);
 
     assert_eq!(counter.get(), 0);
 
-    let permit = block_on(tx.reserve()).unwrap();
+    let permit = tx.reserve().await.unwrap();
     assert_eq!(counter.get(), 1);
 
     drop(permit);
@@ -98,8 +97,8 @@ fn test_reserve_and_drop() {
     assert_eq!(counter.get(), 0);
 }
 
-#[test]
-fn test_send_backpressure() {
+#[tokio::test]
+async fn test_send_backpressure() {
     let waker = noop_waker();
     let mut cx = Context::from_waker(&waker);
 
@@ -107,20 +106,20 @@ fn test_send_backpressure() {
     let (tx, mut rx) = channel(1, &counter);
 
     assert_eq!(counter.get(), 0);
-    block_on(tx.send(1)).unwrap();
+    tx.send(1).await.unwrap();
     assert_eq!(counter.get(), 1);
 
     let mut task = Box::pin(tx.send(2));
     assert!(matches!(task.poll_unpin(&mut cx), Poll::Pending));
-    let item = block_on(rx.recv()).unwrap();
+    let item = rx.recv().await.unwrap();
     assert_eq!(item, 1);
     assert_eq!(counter.get(), 0);
     assert!(task.now_or_never().is_some());
     assert_eq!(counter.get(), 1);
 }
 
-#[test]
-fn test_reserve_backpressure() {
+#[tokio::test]
+async fn test_reserve_backpressure() {
     let waker = noop_waker();
     let mut cx = Context::from_waker(&waker);
 
@@ -128,43 +127,43 @@ fn test_reserve_backpressure() {
     let (tx, mut rx) = channel(1, &counter);
 
     assert_eq!(counter.get(), 0);
-    let permit = block_on(tx.reserve()).unwrap();
+    let permit = tx.reserve().await.unwrap();
     assert_eq!(counter.get(), 1);
 
     let mut task = Box::pin(tx.send(2));
     assert!(matches!(task.poll_unpin(&mut cx), Poll::Pending));
 
     permit.send(1);
-    let item = block_on(rx.recv()).unwrap();
+    let item = rx.recv().await.unwrap();
     assert_eq!(item, 1);
     assert_eq!(counter.get(), 0);
     assert!(task.now_or_never().is_some());
     assert_eq!(counter.get(), 1);
 }
 
-#[test]
-fn test_send_backpressure_multi_senders() {
+#[tokio::test]
+async fn test_send_backpressure_multi_senders() {
     let waker = noop_waker();
     let mut cx = Context::from_waker(&waker);
     let counter = IntGauge::new("TEST_COUNTER", "test").unwrap();
     let (tx1, mut rx) = channel(1, &counter);
 
     assert_eq!(counter.get(), 0);
-    block_on(tx1.send(1)).unwrap();
+    tx1.send(1).await.unwrap();
     assert_eq!(counter.get(), 1);
 
     let tx2 = tx1;
     let mut task = Box::pin(tx2.send(2));
     assert!(matches!(task.poll_unpin(&mut cx), Poll::Pending));
-    let item = block_on(rx.recv()).unwrap();
+    let item = rx.recv().await.unwrap();
     assert_eq!(item, 1);
     assert_eq!(counter.get(), 0);
     assert!(task.now_or_never().is_some());
     assert_eq!(counter.get(), 1);
 }
 
-#[test]
-fn test_try_send() {
+#[tokio::test]
+async fn test_try_send() {
     let counter = IntGauge::new("TEST_COUNTER", "test").unwrap();
     let (tx, mut rx) = channel(1, &counter);
 
@@ -172,13 +171,13 @@ fn test_try_send() {
     let item = 42;
     tx.try_send(item).unwrap();
     assert_eq!(counter.get(), 1);
-    let received_item = block_on(rx.recv()).unwrap();
+    let received_item = rx.recv().await.unwrap();
     assert_eq!(received_item, item);
     assert_eq!(counter.get(), 0);
 }
 
-#[test]
-fn test_try_send_full() {
+#[tokio::test]
+async fn test_try_send_full() {
     let counter = IntGauge::new("TEST_COUNTER", "test").unwrap();
     let (tx, mut rx) = channel(2, &counter);
 
@@ -194,10 +193,10 @@ fn test_try_send_full() {
         panic!("Expect try_send return channel being full error");
     }
 
-    let received_item = block_on(rx.recv()).unwrap();
+    let received_item = rx.recv().await.unwrap();
     assert_eq!(received_item, item);
     assert_eq!(counter.get(), 1);
-    let received_item = block_on(rx.recv()).unwrap();
+    let received_item = rx.recv().await.unwrap();
     assert_eq!(received_item, item);
     assert_eq!(counter.get(), 0);
 }

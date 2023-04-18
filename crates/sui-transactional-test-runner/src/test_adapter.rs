@@ -43,8 +43,7 @@ use sui_core::transaction_input_checker::check_objects;
 use sui_framework::BuiltInFramework;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_protocol_config::ProtocolConfig;
-use sui_types::id::UID;
-use sui_types::move_package::UpgradePolicy;
+use sui_types::DEEPBOOK_OBJECT_ID;
 use sui_types::MOVE_STDLIB_OBJECT_ID;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, SUI_ADDRESS_LENGTH},
@@ -66,6 +65,7 @@ use sui_types::{
     gas::{GasCostSummary, SuiCostTable},
     object::GAS_VALUE_FOR_TESTING,
 };
+use sui_types::{id::UID, DEEPBOOK_ADDRESS};
 use sui_types::{in_memory_storage::InMemoryStorage, messages::ProgrammableTransaction};
 use sui_types::{
     messages::{Argument, CallArg},
@@ -84,6 +84,7 @@ pub enum FakeID {
 
 const WELL_KNOWN_OBJECTS: &[ObjectID] = &[
     MOVE_STDLIB_OBJECT_ID,
+    DEEPBOOK_OBJECT_ID,
     SUI_FRAMEWORK_OBJECT_ID,
     SUI_SYSTEM_PACKAGE_ID,
     SUI_SYSTEM_STATE_OBJECT_ID,
@@ -388,9 +389,9 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             })
             .collect::<Result<_, _>>()?;
         let gas_price = self.gas_price;
-        // we are assuming that all packages depend on the system packages, so these don't have to
-        // be provided explicitly as parameters
-        dependencies.extend(BuiltInFramework::iter_system_packages().map(|p| p.id()));
+        // we are assuming that all packages depend on Move Stdlib and Sui Framework, so these
+        // don't have to be provided explicitly as parameters
+        dependencies.extend([MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID]);
         let data = |sender, gas| {
             let mut builder = ProgrammableTransactionBuilder::new();
             if upgradeable {
@@ -678,6 +679,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 sender,
                 gas_budget,
                 syntax,
+                policy,
             }) => {
                 let syntax = syntax.unwrap_or_else(|| self.default_syntax());
                 let data = data.ok_or_else(|| {
@@ -723,6 +725,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     dependencies,
                     sender,
                     gas_budget,
+                    policy,
                 )?;
                 match syntax {
                     SyntaxChoice::Source => {
@@ -762,6 +765,7 @@ impl<'a> SuiTestAdapter<'a> {
         dependencies: Vec<String>,
         sender: String,
         gas_budget: Option<u64>,
+        policy: u8,
     ) -> anyhow::Result<Option<String>> {
         let modules_bytes = modules
             .iter()
@@ -783,12 +787,14 @@ impl<'a> SuiTestAdapter<'a> {
                 Ok(id)
             })
             .collect::<Result<_, _>>()?;
-        dependencies.extend(BuiltInFramework::all_package_ids());
+        // we are assuming that all packages depend on Move Stdlib and Sui Framework, so these
+        // don't have to be provided explicitly as parameters
+        dependencies.extend([MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID]);
 
         let mut builder = ProgrammableTransactionBuilder::new();
 
         SuiValue::Object(upgrade_capability).into_argument(&mut builder, self)?; // Argument::Input(0)
-        let upgrade_arg = builder.pure(UpgradePolicy::COMPATIBLE).unwrap();
+        let upgrade_arg = builder.pure(policy).unwrap();
         let digest: Vec<u8> =
             MovePackage::compute_digest_for_modules_and_deps(&modules_bytes, &dependencies).into();
         let digest_arg = builder.pure(digest).unwrap();
@@ -1285,37 +1291,43 @@ static NAMED_ADDRESSES: Lazy<BTreeMap<String, NumericalAddress>> = Lazy::new(|| 
             move_compiler::shared::NumberFormat::Hex,
         ),
     );
+    map.insert(
+        "deepbook".to_string(),
+        NumericalAddress::new(
+            DEEPBOOK_ADDRESS.into_bytes(),
+            move_compiler::shared::NumberFormat::Hex,
+        ),
+    );
     map
 });
 
 pub(crate) static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
     // TODO invoke package system?
     let sui_files: &Path = Path::new(DEFAULT_FRAMEWORK_PATH);
-    let sui_system_sources: String = {
+    let sui_system_sources = {
         let mut buf = sui_files.to_path_buf();
-        buf.push("packages");
-        buf.push("sui-system");
-        buf.push("sources");
+        buf.extend(["packages", "sui-system", "sources"]);
         buf.to_string_lossy().to_string()
     };
-    let sui_sources: String = {
+    let sui_sources = {
         let mut buf = sui_files.to_path_buf();
-        buf.push("packages");
-        buf.push("sui-framework");
-        buf.push("sources");
+        buf.extend(["packages", "sui-framework", "sources"]);
         buf.to_string_lossy().to_string()
     };
     let sui_deps = {
         let mut buf = sui_files.to_path_buf();
-        buf.push("packages");
-        buf.push("move-stdlib");
-        buf.push("sources");
+        buf.extend(["packages", "move-stdlib", "sources"]);
+        buf.to_string_lossy().to_string()
+    };
+    let deepbook_sources = {
+        let mut buf = sui_files.to_path_buf();
+        buf.extend(["packages", "deepbook", "sources"]);
         buf.to_string_lossy().to_string()
     };
     let fully_compiled_res = move_compiler::construct_pre_compiled_lib(
         vec![PackagePaths {
             name: None,
-            paths: vec![sui_system_sources, sui_sources, sui_deps],
+            paths: vec![sui_system_sources, sui_sources, sui_deps, deepbook_sources],
             named_address_map: NAMED_ADDRESSES.clone(),
         }],
         None,

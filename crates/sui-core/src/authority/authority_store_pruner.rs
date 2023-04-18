@@ -13,6 +13,7 @@ use std::collections::HashMap;
 use std::{sync::Arc, time::Duration};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_storage::mutex_table::RwLockTable;
+use sui_types::base_types::SequenceNumber;
 use sui_types::messages::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::{
@@ -22,7 +23,7 @@ use sui_types::{
 use tokio::sync::oneshot::{self, Sender};
 use tokio::time::Instant;
 use tracing::log::{debug, error};
-use typed_store::Map;
+use typed_store::{Map, TypedStoreError};
 
 use super::authority_store_tables::AuthorityPerpetualTables;
 
@@ -288,11 +289,17 @@ impl AuthorityStorePruner {
             ),
         }
     }
+
+    pub fn compact(perpetual_db: &Arc<AuthorityPerpetualTables>) -> Result<(), TypedStoreError> {
+        perpetual_db.objects.compact_range(
+            &ObjectKey(ObjectID::ZERO, SequenceNumber::MIN),
+            &ObjectKey(ObjectID::MAX, SequenceNumber::MAX),
+        )
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use fs_extra::dir::get_size;
     use more_asserts as ma;
     use std::path::Path;
     use std::time::Duration;
@@ -539,7 +546,7 @@ mod tests {
     async fn test_db_size_after_compaction() -> Result<(), anyhow::Error> {
         let primary_path = tempfile::tempdir()?.into_path();
         let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&primary_path, None));
-        let total_unique_object_ids = 200_000;
+        let total_unique_object_ids = 10_000;
         let num_versions_per_object = 10;
         let ids = ObjectID::in_range(ObjectID::ZERO, total_unique_object_ids)?;
         let mut to_delete = vec![];
@@ -554,8 +561,29 @@ mod tests {
                     .insert(&ObjectKey(id, SequenceNumber::from(i)), &obj)?;
             }
         }
+
+        fn get_sst_size(path: &Path) -> u64 {
+            let mut size = 0;
+            for entry in std::fs::read_dir(path).unwrap() {
+                let entry = entry.unwrap();
+                let path = entry.path();
+                if let Some(ext) = path.extension() {
+                    if ext != "sst" {
+                        continue;
+                    }
+                    size += std::fs::metadata(path).unwrap().len();
+                }
+            }
+            size
+        }
+
+        let db_path = primary_path.clone().join("perpetual");
+        let start = ObjectKey(ObjectID::ZERO, SequenceNumber::MIN);
+        let end = ObjectKey(ObjectID::MAX, SequenceNumber::MAX);
+
         perpetual_db.objects.rocksdb.flush()?;
-        let before_compaction_size = get_size(primary_path.clone()).unwrap();
+        perpetual_db.objects.compact_range_to_bottom(&start, &end)?;
+        let before_compaction_size = get_sst_size(&db_path);
 
         let mut effects = TransactionEffects::default();
         *effects.modified_at_versions_mut_for_testing() = to_delete;
@@ -571,11 +599,10 @@ mod tests {
         )
         .await;
         info!("Total pruned keys = {:?}", total_pruned);
-        let start = ObjectKey(ObjectID::ZERO, SequenceNumber::MIN);
-        let end = ObjectKey(ObjectID::MAX, SequenceNumber::MAX);
-        perpetual_db.objects.compact_range(&start, &end)?;
 
-        let after_compaction_size = get_size(primary_path).unwrap();
+        perpetual_db.objects.rocksdb.flush()?;
+        perpetual_db.objects.compact_range_to_bottom(&start, &end)?;
+        let after_compaction_size = get_sst_size(&db_path);
 
         info!(
             "Before compaction disk size = {:?}, after compaction disk size = {:?}",

@@ -50,6 +50,7 @@ pub struct InnerTemporaryStore {
     pub written: WrittenObjects,
     // deleted or wrapped or unwrap-then-delete
     pub deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
+    pub loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
     pub events: TransactionEvents,
     pub max_binary_format_version: u32,
 }
@@ -148,6 +149,9 @@ pub struct TemporaryStore<S> {
     written: BTreeMap<ObjectID, (Object, WriteKind)>, // Objects written
     /// Objects actively deleted.
     deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
+    /// Child objects loaded during dynamic field opers
+    /// Currently onply populated for full nodes, not for validators
+    loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
     /// Ordered sequence of events emitted by execution
     events: Vec<Event>,
     gas_charged: Option<(ObjectID, GasCostSummary)>,
@@ -179,6 +183,7 @@ impl<S> TemporaryStore<S> {
             gas_charged: None,
             storage_rebate_rate: protocol_config.storage_rebate_rate(),
             protocol_config: protocol_config.clone(),
+            loaded_child_objects: BTreeMap::new(),
         }
     }
 
@@ -209,6 +214,7 @@ impl<S> TemporaryStore<S> {
             gas_charged: None,
             storage_rebate_rate: protocol_config.storage_rebate_rate(),
             protocol_config: protocol_config.clone(),
+            loaded_child_objects: BTreeMap::new(),
         }
     }
 
@@ -279,6 +285,7 @@ impl<S> TemporaryStore<S> {
             deleted,
             events: TransactionEvents { data: self.events },
             max_binary_format_version: self.protocol_config.move_binary_format_version(),
+            loaded_child_objects: self.loaded_child_objects,
         }
     }
 
@@ -564,6 +571,12 @@ impl<S> TemporaryStore<S> {
                 ObjectChange::Delete(version, kind) => self.delete_object(&id, version, kind),
             }
         }
+    }
+    pub fn save_loaded_child_objects(
+        &mut self,
+        loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
+    ) {
+        self.loaded_child_objects = loaded_child_objects;
     }
 
     pub fn estimate_effects_size_upperbound(&self) -> usize {
@@ -1465,6 +1478,13 @@ impl<S: ChildObjectResolver> Storage for TemporaryStore<S> {
 
     fn apply_object_changes(&mut self, changes: BTreeMap<ObjectID, ObjectChange>) {
         TemporaryStore::apply_object_changes(self, changes)
+    }
+
+    fn save_loaded_child_objects(
+        &mut self,
+        loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
+    ) {
+        TemporaryStore::save_loaded_child_objects(self, loaded_child_objects)
     }
 }
 

@@ -372,6 +372,14 @@ impl<'a> ObjectRuntime<'a> {
     ) -> impl Iterator<Item = (&ObjectID, &Type, Value)> {
         self.object_store.all_active_objects()
     }
+
+    pub fn loaded_child_objects(&self) -> BTreeMap<ObjectID, SequenceNumber> {
+        self.object_store
+            .cached_objects()
+            .iter()
+            .filter_map(|(id, obj_opt)| Some((*id, obj_opt.as_ref()?.version())))
+            .collect()
+    }
 }
 
 pub fn max_event_error(max_events: u64) -> PartialVMError {

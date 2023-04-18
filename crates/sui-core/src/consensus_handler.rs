@@ -164,6 +164,7 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             consensus_output.sub_dag.reputation_score.clone(),
             self.authority_names_to_hostnames.clone(),
             &self.metrics,
+            self.epoch_store.protocol_config(),
         );
 
         self.metrics

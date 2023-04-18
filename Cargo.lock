@@ -123,7 +123,7 @@ dependencies = [
 [[package]]
 name = "anemo"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=40e3bf357313fe5caa924673711af8be4dc4096e#40e3bf357313fe5caa924673711af8be4dc4096e"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=691e43c3f4df5e33b898a91cb1a808f68f76f52e#691e43c3f4df5e33b898a91cb1a808f68f76f52e"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -156,7 +156,7 @@ dependencies = [
 [[package]]
 name = "anemo-build"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=40e3bf357313fe5caa924673711af8be4dc4096e#40e3bf357313fe5caa924673711af8be4dc4096e"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=691e43c3f4df5e33b898a91cb1a808f68f76f52e#691e43c3f4df5e33b898a91cb1a808f68f76f52e"
 dependencies = [
  "prettyplease",
  "proc-macro2 1.0.54",
@@ -167,7 +167,7 @@ dependencies = [
 [[package]]
 name = "anemo-cli"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=40e3bf357313fe5caa924673711af8be4dc4096e#40e3bf357313fe5caa924673711af8be4dc4096e"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=691e43c3f4df5e33b898a91cb1a808f68f76f52e#691e43c3f4df5e33b898a91cb1a808f68f76f52e"
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -183,7 +183,7 @@ dependencies = [
 [[package]]
 name = "anemo-tower"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=40e3bf357313fe5caa924673711af8be4dc4096e#40e3bf357313fe5caa924673711af8be4dc4096e"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=691e43c3f4df5e33b898a91cb1a808f68f76f52e#691e43c3f4df5e33b898a91cb1a808f68f76f52e"
 dependencies = [
  "anemo",
  "bytes",
@@ -7104,9 +7104,9 @@ dependencies = [
 
 [[package]]
 name = "proptest"
-version = "1.0.0"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e0d9cc07f18492d879586c92b485def06bc850da3118075cd45d50e9c95b0e5"
+checksum = "29f1b898011ce9595050a68e60f90bad083ff2987a695a42357134c8381fba70"
 dependencies = [
  "bit-set",
  "bitflags",
@@ -7120,6 +7120,7 @@ dependencies = [
  "regex-syntax",
  "rusty-fork",
  "tempfile",
+ "unarray",
 ]
 
 [[package]]
@@ -8766,7 +8767,7 @@ checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
 
 [[package]]
 name = "sui"
-version = "0.32.0"
+version = "0.33.0"
 dependencies = [
  "anemo",
  "anyhow",
@@ -8878,6 +8879,7 @@ dependencies = [
  "clap 3.2.23",
  "comfy-table",
  "duration-str",
+ "fastcrypto",
  "futures",
  "hdrhistogram",
  "indicatif",
@@ -8991,7 +8993,7 @@ dependencies = [
 
 [[package]]
 name = "sui-core"
-version = "0.32.0"
+version = "0.33.0"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -9110,7 +9112,7 @@ dependencies = [
 
 [[package]]
 name = "sui-faucet"
-version = "0.32.0"
+version = "0.33.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9222,7 +9224,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer"
-version = "0.32.0"
+version = "0.33.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9402,7 +9404,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move"
-version = "0.32.0"
+version = "0.33.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -9477,7 +9479,7 @@ dependencies = [
 
 [[package]]
 name = "sui-node"
-version = "0.32.0"
+version = "0.33.0"
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -9678,7 +9680,7 @@ dependencies = [
 
 [[package]]
 name = "sui-rpc-loadgen"
-version = "0.32.0"
+version = "0.33.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9727,7 +9729,7 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk"
-version = "0.32.0"
+version = "0.33.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -9917,11 +9919,12 @@ dependencies = [
 
 [[package]]
 name = "sui-tool"
-version = "0.32.0"
+version = "0.33.0"
 dependencies = [
  "anemo",
  "anemo-cli",
  "anyhow",
+ "bcs",
  "clap 4.1.4",
  "colored",
  "comfy-table",
@@ -9929,19 +9932,34 @@ dependencies = [
  "futures",
  "hex",
  "itertools",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-core-types",
+ "move-package",
  "narwhal-types",
  "rocksdb",
  "ron",
+ "serde 1.0.152",
+ "serde_json",
+ "similar",
  "strum",
  "strum_macros",
+ "sui-adapter",
  "sui-config",
  "sui-core",
+ "sui-framework",
+ "sui-json-rpc",
+ "sui-json-rpc-types",
  "sui-network",
+ "sui-protocol-config",
+ "sui-sdk",
  "sui-storage",
  "sui-types",
  "telemetry-subscribers",
  "tempfile",
+ "thiserror",
  "tokio",
+ "tracing",
  "typed-store",
  "workspace-hack",
 ]
@@ -10020,6 +10038,7 @@ dependencies = [
  "narwhal-crypto",
  "once_cell",
  "proptest",
+ "proptest-derive",
  "rand 0.8.5",
  "roaring",
  "schemars",
@@ -10976,6 +10995,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "transaction-fuzzer"
+version = "0.1.0"
+dependencies = [
+ "move-core-types",
+ "proptest",
+ "proptest-derive",
+ "rand 0.8.5",
+ "sui-core",
+ "sui-protocol-config",
+ "sui-types",
+ "tokio",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "try-lock"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11021,6 +11056,7 @@ dependencies = [
  "eyre",
  "fdlimit",
  "hdrhistogram",
+ "itertools",
  "msim",
  "num_cpus",
  "once_cell",
@@ -11081,6 +11117,12 @@ dependencies = [
  "hex",
  "static_assertions",
 ]
+
+[[package]]
+name = "unarray"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eaea85b334db583fe3274d12b4cd1880032beab409c0d774be044d4480ab9a94"
 
 [[package]]
 name = "uncased"
@@ -12403,6 +12445,7 @@ dependencies = [
  "typenum",
  "ucd-trie",
  "uint",
+ "unarray",
  "uncased",
  "unescape",
  "unic-char-property",

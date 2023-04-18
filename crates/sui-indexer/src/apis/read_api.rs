@@ -23,6 +23,7 @@ use sui_types::sui_serde::BigInt;
 use crate::errors::IndexerError;
 use crate::store::IndexerStore;
 use crate::types::SuiTransactionBlockResponseWithOptions;
+use sui_json_rpc_types::SuiLoadedChildObjectsResponse;
 
 pub(crate) struct ReadApi<S> {
     fullnode: HttpClient,
@@ -226,7 +227,7 @@ where
         )?)
     }
 
-    async fn try_get_past_object(
+    fn try_get_past_object(
         &self,
         object_id: ObjectID,
         version: SequenceNumber,
@@ -237,10 +238,10 @@ where
             .indexer_metrics()
             .try_get_past_object_latency
             .start_timer();
-        let past_obj_resp = self
-            .fullnode
-            .try_get_past_object(object_id, version, options)
-            .await;
+        let past_obj_resp = block_on(
+            self.fullnode
+                .try_get_past_object(object_id, version, options),
+        );
         past_obj_guard.stop_and_record();
         past_obj_resp
     }
@@ -303,7 +304,7 @@ where
     fn get_checkpoints(
         &self,
         cursor: Option<BigInt<u64>>,
-        limit: Option<BigInt<u64>>,
+        limit: Option<usize>,
         descending_order: bool,
     ) -> RpcResult<CheckpointPage> {
         let cps_guard = self
@@ -319,6 +320,15 @@ where
         cps_resp
     }
 
+    fn get_checkpoints_deprecated_limit(
+        &self,
+        cursor: Option<BigInt<u64>>,
+        limit: Option<BigInt<u64>>,
+        descending_order: bool,
+    ) -> RpcResult<CheckpointPage> {
+        self.get_checkpoints(cursor, limit.map(|l| *l as usize), descending_order)
+    }
+
     fn get_events(&self, transaction_digest: TransactionDigest) -> RpcResult<Vec<SuiEvent>> {
         let events_guard = self
             .state
@@ -328,6 +338,20 @@ where
         let events_resp = block_on(self.fullnode.get_events(transaction_digest));
         events_guard.stop_and_record();
         events_resp
+    }
+
+    fn get_loaded_child_objects(
+        &self,
+        digest: TransactionDigest,
+    ) -> RpcResult<SuiLoadedChildObjectsResponse> {
+        let dynamic_fields_load_obj_guard = self
+            .state
+            .indexer_metrics()
+            .get_loaded_child_objects_latency
+            .start_timer();
+        let dyn_fields_resp = block_on(self.fullnode.get_loaded_child_objects(digest));
+        dynamic_fields_load_obj_guard.stop_and_record();
+        dyn_fields_resp
     }
 }
 
