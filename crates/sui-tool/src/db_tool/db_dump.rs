@@ -13,7 +13,7 @@ use strum_macros::EnumString;
 use sui_core::authority::authority_per_epoch_store::AuthorityEpochTables;
 use sui_core::authority::authority_store_pruner::AuthorityStorePruner;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
-use sui_core::authority::authority_store_types::{StoreData, StoreObject};
+use sui_core::authority::authority_store_types::StoreObject;
 use sui_core::epoch::committee_store::CommitteeStoreTables;
 use sui_storage::IndexStoreTables;
 use sui_types::base_types::{EpochId, ObjectID};
@@ -159,20 +159,19 @@ pub fn duplicate_objects_summary(db_path: PathBuf) -> (usize, usize, usize, usiz
     let mut data: HashMap<Vec<u8>, usize> = HashMap::new();
 
     for (key, value) in iter {
-        if let StoreObject::Value(store_object) = value.migrate().into_inner() {
-            if let StoreData::Move(object) = store_object.data {
-                if object_id != key.0 {
-                    for (k, cnt) in data.iter() {
-                        total_bytes += k.len() * cnt;
-                        duplicated_bytes += k.len() * (cnt - 1);
-                        total_count += cnt;
-                        duplicate_count += cnt - 1;
-                    }
-                    object_id = key.0;
-                    data.clear();
+        let content = bcs::to_bytes(&value).unwrap();
+        if let StoreObject::Value(_) = value.migrate().into_inner() {
+            if object_id != key.0 {
+                for (k, cnt) in data.iter() {
+                    total_bytes += k.len() * cnt;
+                    duplicated_bytes += k.len() * (cnt - 1);
+                    total_count += cnt;
+                    duplicate_count += cnt - 1;
                 }
-                *data.entry(object.contents().to_vec()).or_default() += 1;
+                object_id = key.0;
+                data.clear();
             }
+            *data.entry(content).or_default() += 1;
         }
     }
     (total_count, duplicate_count, total_bytes, duplicated_bytes)
