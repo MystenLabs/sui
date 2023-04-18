@@ -63,7 +63,7 @@ export function ValidatorLogo({
     if (isLoading) {
         return <div className="flex justify-center items-center">...</div>;
     }
-    // for invalid validators, show the epoch number
+    // for inactive validators, show the epoch number
     const fallBackText = activeEpoch
         ? `Staked ${Number(data?.epoch) - Number(activeEpoch)} epochs ago`
         : '';
