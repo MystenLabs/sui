@@ -8,6 +8,7 @@ import { LOCK_ALARM_NAME } from './Alarms';
 import FeatureGating from './FeatureGating';
 import NetworkEnv from './NetworkEnv';
 import Permissions from './Permissions';
+import * as Qredo from './Qredo';
 import { Connections } from './connections';
 import Keyring from './keyring';
 import { isSessionStorageSupported } from './storage-utils';
@@ -123,4 +124,8 @@ NetworkEnv.on('changed', async (network) => {
         event: 'walletStatusChange',
         change: { network },
     });
+});
+
+Browser.windows.onRemoved.addListener(async (id) => {
+    await Qredo.handleOnWindowClosed(id, connections);
 });
