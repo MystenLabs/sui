@@ -27,7 +27,7 @@ function TransactionContent({
 }) {
     return (
         <>
-            <div className="text-heading6 font-semibold text-steel-darker">
+            <div className="break-all text-heading6 font-semibold text-steel-darker">
                 {type}
             </div>
             {children && (
