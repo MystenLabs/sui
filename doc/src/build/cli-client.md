@@ -46,7 +46,7 @@ Use `sui client -h` to see a list of supported commands.
 
 Use `sui help <command>` to see more information on each command.
 
-You can start the client in two modes: interactive shell or command line interface [Configure Sui client](../build/devnet.md#configure-sui-client).
+You can start the client in two modes: interactive shell or command line interface [Configure Sui client](../build/connect-sui-network.md#configure-sui-client).
 
 ### Interactive shell
 

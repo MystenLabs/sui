@@ -8,7 +8,7 @@ This directory contains examples of interacting with a Move language smart contr
 
 #### 1. Prepare the environment 
    1. Install `sui` binary following the [Sui installation](https://github.com/MystenLabs/sui/blob/main/doc/src/build/install.md##install-sui-binaries) docs.
-   1. [Connect to Sui Devnet](https://github.com/MystenLabs/sui/blob/main/doc/src/build/devnet.md).
+   1. [Connect to Sui Devnet](https://github.com/MystenLabs/sui/blob/main/doc/src/build/connect-sui-network.md).
    1. [Make sure you have two addresses with gas](https://github.com/MystenLabs/sui/blob/main/doc/src/build/cli-client.md#add-existing-accounts-to-clientyaml) by using the `new-address` command to create new addresses:
       ```shell
       sui client new-address ed25519

@@ -10,7 +10,7 @@ This topic lists the significant updates to the [Sui documentation](https://docs
 | :------ | :------- |
 | Numerous topics. | Updates to reflect the changes included in Sui releases .28 and .29. |
 | [Sui Local Network](../build/sui-local-network.md) | Updated installation instructions to include the sui-test-validator, which lets you use a local faucet, wallet, and explorer on your local network. |
-| [Connect to a Sui Network](../build/devnet.md) | Updated the topic to include instructions for connecting to Sui Testnet. Topic title changed from "Connect to Sui Devnet". |
+| [Connect to a Sui Network](../build/connect-sui-network.md) | Updated the topic to include instructions for connecting to Sui Testnet. Topic title changed from "Connect to Sui Devnet". |
 | [Sui Full Node](../build/fullnode.md) | Updated to include instructions for using Sui Indexer. |
 | [Sui Object Display Standard](../build/sui-object-display.md) | New topic about using the Sui Object Display standard. |
 | [Sui Programmable Transaction Blocks](../build/prog-trans-ts-sdk.md) | New topic about how to use the new Programmable Transaction blocks. |
@@ -57,7 +57,7 @@ This topic lists the significant updates to the [Sui documentation](https://docs
 | :------ | :------- |
 | [Explore Sui](../explore/index.md) | Added [Sui Capys](https://docs.sui.io/) and [Satoshi Flip](https://satoshi-flip.sui.io/) apps. |
 | [Event API](../build/event_api.md) | [Copyedit and reformat for readability](https://github.com/MystenLabs/sui/pull/6718). |
-| [Connect to Devnet](../build/devnet.md) | [Copyedit and updates for style consistency](https://github.com/MystenLabs/sui/pull/6715/files#diff-33791b72aa9e90e09f1b9f85972b29b605e388dff5130b2cdd9417a6946c8012).
+| [Connect to a Sui Network](../build/connect-sui-network.md) | [Copyedit and updates for style consistency](https://github.com/MystenLabs/sui/pull/6715/files#diff-33791b72aa9e90e09f1b9f85972b29b605e388dff5130b2cdd9417a6946c8012).
 | Multiple | Removed $ from example commands. Changed style for keyboard key names to use **bold** instead of `code` format. |
 
 
