@@ -15,7 +15,6 @@ from datetime import datetime
 NUM_RETRIES = 5
 CHECKPOINT_TIMEOUT_SEC = 120
 STARTUP_TIMEOUT_SEC = 60
-DEFAULT_EPOCH_TIMEOUT = 90
 RETRY_BASE_TIME_SEC = 3
 AVAILABLE_NETWORKS = ['testnet', 'devnet']
 
@@ -94,7 +93,7 @@ def usage():
     print(
         f'  --env=<env>            Environment to sync against (one of {AVAILABLE_NETWORKS.join(", ")}')
     print('  --end-epoch=<epoch>    Epoch to sync to (default: current network epoch)')
-    print('  --epoch-timeout=<timeout>  Timeout IN MINUTES for syncing to the next epoch (default: 90 minutes)')
+    print('  --epoch-timeout=<timeout>  Timeout IN MINUTES for syncing to the next epoch (default: None)')
     print('  --verbose              Print verbose output')
     print('  --help                 Print this help message')
 
@@ -113,7 +112,7 @@ def main(argv):
 
     env = 'testnet'
     end_epoch = None
-    epoch_timeout = DEFAULT_EPOCH_TIMEOUT
+    epoch_timeout = None
     verbose = False
     for opt, arg in opts:
         if opt == '--help':
@@ -150,7 +149,6 @@ def main(argv):
 
     current_time = datetime.now()
     start_time = current_time
-    epoch_timeout_secs = epoch_timeout * 60
     while current_epoch < end_epoch:
         # check that we are making progress
         time.sleep(CHECKPOINT_TIMEOUT_SEC)
@@ -169,7 +167,7 @@ def main(argv):
             current_time = datetime.now()
         else:
             # check if we've been stuck on the same epoch for too long
-            if (datetime.now() - current_time).total_seconds() > epoch_timeout_secs:
+            if epoch_timeout is not None and (datetime.now() - current_time).total_seconds() // 60 > epoch_timeout:
                 print(
                     f'Epoch is stuck at {current_epoch} for over {epoch_timeout} minutes')
                 exit(1)
