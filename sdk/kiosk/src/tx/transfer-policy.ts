@@ -2,16 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { TransactionArgument, TransactionBlock } from '@mysten/sui.js';
-import { ObjectArgument, objArg } from './utils';
+import { ObjectArgument, objArg } from '../utils';
 
 /**
  * Call the `transfer_policy::new` function to create a new transfer policy.
  */
-export function createPolicy(
+export function createTransferPolicy(
+    tx: TransactionBlock,
     itemType: string,
     publisher: ObjectArgument,
-    tx = new TransactionBlock(),
-): [TransactionBlock, TransactionArgument] {
+): TransactionArgument {
     let [transferPolicy, transferPolicyCap] = tx.moveCall({
         target: `0x2::transfer_policy::new`,
         typeArguments: [],
@@ -24,19 +24,19 @@ export function createPolicy(
         arguments: [transferPolicy],
     });
 
-    return [tx, transferPolicyCap];
+    return transferPolicyCap;
 }
 
 /**
  * Call the `transfer_policy::withdraw` function to withdraw profits from a transfer policy.
  */
 export function withdrawFromPolicy(
+    tx: TransactionBlock,
     itemType: string,
     policy: ObjectArgument,
     policyCap: ObjectArgument,
     amount: string | bigint | null,
-    tx = new TransactionBlock(),
-): [TransactionBlock, TransactionArgument] {
+): TransactionArgument {
     let amountArg = amount !== null
         ? tx.pure([], 'vector<u64>')
         : tx.pure([amount], 'vector<u64>');
@@ -51,5 +51,5 @@ export function withdrawFromPolicy(
         ],
     });
 
-    return [tx, profits];
+    return profits;
 }

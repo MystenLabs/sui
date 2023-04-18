@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { TransactionArgument, TransactionBlock } from '@mysten/sui.js';
-import { ObjectArgument, objArg } from './utils';
+import { ObjectArgument, objArg } from '../utils';
 
 /**
  * A Hot Potato struct that is returned in the `kiosk::purchase` function.
@@ -20,9 +20,9 @@ export type TransferRequest = {
  * transaction.
  */
 export function confirmRequest(
+  tx: TransactionBlock,
   policy: ObjectArgument,
   request: TransferRequest,
-  tx: TransactionBlock,
 ): TransactionBlock {
   tx.moveCall({
     target: `0x2::transfer_policy::confirm_request`,
