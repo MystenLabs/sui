@@ -100,7 +100,7 @@ impl CoinReadApi {
         coin_type: String,
     ) -> anyhow::Result<Balance> {
         let start = Instant::now();
-        let permit: SemaphorePermit = self
+        let _permit: SemaphorePermit = self
             .semaphore
             .acquire()
             .count_in_flight(&self.metrics.get_balance_in_flight)
@@ -112,34 +112,31 @@ impl CoinReadApi {
         }
         let state = self.state.clone();
         let coin_type_clone = coin_type.clone();
-        let coins = spawn_blocking(move || {
-            Ok::<_, Error>(
-                state
-                    .get_owned_coins_iterator(owner, Some(coin_type_clone))?
-                    .map(|(coin_type, obj_id, coin)| (coin_type, obj_id, coin))
-                    .collect::<Vec<_>>(),
-            )
-        })
-        .await??;
-        drop(permit);
-        let mut total_balance = 0u128;
-        let mut coin_object_count = 0;
-        for (_coin_type, _obj_id, coin_info) in coins {
-            total_balance += coin_info.balance as u128;
-            coin_object_count += 1;
-        }
+        spawn_blocking(move || {
+            let coins = state
+                .get_owned_coins_iterator(owner, Some(coin_type_clone))?
+                .map(|(coin_type, obj_id, coin)| (coin_type, obj_id, coin));
+            let mut total_balance = 0u128;
+            let mut coin_object_count = 0;
+            for (_coin_type, _obj_id, coin_info) in coins {
+                total_balance += coin_info.balance as u128;
+                coin_object_count += 1;
+            }
 
-        Ok(Balance {
-            coin_type,
-            coin_object_count,
-            total_balance,
-            locked_balance: HashMap::new(),
+            Ok::<_, Error>(Balance {
+                coin_type,
+                coin_object_count,
+                total_balance,
+                locked_balance: HashMap::new(),
+            })
         })
+        .await?
+        .map_err(|e| anyhow!("get_balance_iterator error: {:?}", e))
     }
 
     async fn get_all_balances_iterator(&self, owner: SuiAddress) -> anyhow::Result<Vec<Balance>> {
         let start = Instant::now();
-        let permit: SemaphorePermit = self
+        let _permit: SemaphorePermit = self
             .semaphore
             .acquire()
             .count_in_flight(&self.metrics.get_all_balances_in_flight)
@@ -150,38 +147,33 @@ impl CoinReadApi {
             return Err(anyhow!("get_all_balances_iterator timeout"));
         }
         let state = self.state.clone();
-        let coins = spawn_blocking(move || {
-            let grouped = state
+        let balances = spawn_blocking(move || {
+            let coins = state
                 .get_owned_coins_iterator(owner, None)?
                 .map(|(coin_type, obj_id, coin)| (coin_type, obj_id, coin))
                 .group_by(|(coin_type, _obj_id, _coin)| coin_type.clone());
 
-            Ok::<_, Error>(
-                grouped
-                    .into_iter()
-                    .map(|(coin_type, coins)| (coin_type, coins.into_iter().collect::<Vec<_>>()))
-                    .collect::<Vec<_>>(),
-            )
+            let mut balances = vec![];
+            for (coin_type, coins) in &coins {
+                let mut total_balance = 0u128;
+                let mut coin_object_count = 0;
+                for (_coin_type, _obj_id, coin_info) in coins {
+                    total_balance += coin_info.balance as u128;
+                    coin_object_count += 1;
+                }
+
+                balances.push(Balance {
+                    coin_type: coin_type.to_string(),
+                    coin_object_count,
+                    total_balance,
+                    locked_balance: HashMap::new(),
+                });
+            }
+
+            Ok::<_, Error>(balances)
         })
         .await??;
 
-        drop(permit);
-        let mut balances = vec![];
-        for (coin_type, coins) in &coins {
-            let mut total_balance = 0u128;
-            let mut coin_object_count = 0;
-            for (_coin_type, _obj_id, coin_info) in coins {
-                total_balance += coin_info.balance as u128;
-                coin_object_count += 1;
-            }
-
-            balances.push(Balance {
-                coin_type: coin_type.to_string(),
-                coin_object_count,
-                total_balance,
-                locked_balance: HashMap::new(),
-            });
-        }
         Ok(balances)
     }
 
