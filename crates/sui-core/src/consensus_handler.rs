@@ -492,7 +492,6 @@ impl VerifiedSequencedConsensusTransaction {
     }
 }
 
-#[cfg(test)]
 impl SequencedConsensusTransaction {
     pub fn new_test(transaction: ConsensusTransaction) -> Self {
         Self {

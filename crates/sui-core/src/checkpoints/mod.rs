@@ -1286,9 +1286,8 @@ impl CheckpointServiceNotify for CheckpointService {
     }
 }
 
-#[cfg(test)]
+// test helper
 pub struct CheckpointServiceNoop {}
-#[cfg(test)]
 impl CheckpointServiceNotify for CheckpointServiceNoop {
     fn notify_checkpoint_signature(
         &self,
