@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::env;
 use std::net::SocketAddr;
 use std::str::FromStr;
 
@@ -12,6 +11,8 @@ pub use jsonrpsee::server::ServerHandle;
 use jsonrpsee::server::{AllowHosts, ServerBuilder};
 use jsonrpsee::RpcModule;
 use prometheus::Registry;
+use std::thread::JoinHandle;
+use std::{env, thread};
 use tap::TapFallible;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tracing::{info, warn};
@@ -88,7 +89,7 @@ impl JsonRpcServerBuilder {
         Ok(self.module.merge(module.rpc())?)
     }
 
-    pub async fn start(mut self, listen_address: SocketAddr) -> Result<ServerHandle, Error> {
+    pub async fn start(mut self, listen_address: SocketAddr) -> Result<JoinHandle<()>, Error> {
         let acl = match env::var("ACCESS_CONTROL_ALLOW_ORIGIN") {
             Ok(value) => {
                 let allow_hosts = value
@@ -129,8 +130,6 @@ impl JsonRpcServerBuilder {
             })
             .unwrap_or(u32::MAX);
 
-        let metrics_logger = MetricsLogger::new(&self.registry, &methods_names);
-
         let disable_routing = env::var("DISABLE_BACKWARD_COMPATIBILITY")
             .ok()
             .and_then(|v| bool::from_str(&v).ok())
@@ -143,28 +142,42 @@ impl JsonRpcServerBuilder {
                 "enabled"
             }
         );
-        // We need to use the routing layer to block access to the old methods when routing is disabled.
-        let routing_layer = RoutingLayer::new(routing, disable_routing);
+        let handle = thread::spawn(move || {
+            // We need to use the routing layer to block access to the old methods when routing is disabled.
+            let routing_layer = RoutingLayer::new(routing, disable_routing);
 
-        let middleware = tower::ServiceBuilder::new()
-            .layer(cors)
-            .layer(routing_layer);
+            let middleware = tower::ServiceBuilder::new()
+                .layer(cors)
+                .layer(routing_layer);
 
-        let server = ServerBuilder::default()
-            .batch_requests_supported(false)
-            .max_response_body_size(MAX_REQUEST_SIZE)
-            .max_connections(max_connection)
-            .set_host_filtering(AllowHosts::Any)
-            .set_middleware(middleware)
-            .set_logger(metrics_logger)
-            .build(listen_address)
-            .await?;
-        let addr = server.local_addr()?;
-        let handle = server.start(self.module)?;
+            let metrics_logger = MetricsLogger::new(&self.registry, &methods_names);
 
-        info!(local_addr =? addr, "Sui JSON-RPC server listening on {addr}");
-        info!("Available JSON-RPC methods : {:?}", methods_names);
+            let rt = tokio::runtime::Builder::new_multi_thread()
+                .thread_name("sui-node-jsonrpc-worker")
+                .enable_all()
+                .build()
+                .unwrap();
 
+            let server = rt
+                .block_on(
+                    ServerBuilder::default()
+                        .batch_requests_supported(false)
+                        .max_response_body_size(MAX_REQUEST_SIZE)
+                        .max_connections(max_connection)
+                        .set_host_filtering(AllowHosts::Any)
+                        .set_middleware(middleware)
+                        .custom_tokio_runtime(rt.handle().clone())
+                        .set_logger(metrics_logger)
+                        .build(listen_address),
+                )
+                .unwrap();
+
+            let addr = server.local_addr().unwrap();
+            let handle = server.start(self.module).unwrap();
+            info!(local_addr =? addr, "Sui JSON-RPC server listening on {addr}");
+            info!("Available JSON-RPC methods : {:?}", methods_names);
+            rt.block_on(handle.stopped());
+        });
         Ok(handle)
     }
 }

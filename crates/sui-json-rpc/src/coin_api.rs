@@ -36,9 +36,8 @@ pub struct CoinReadApi {
     state: Arc<AuthorityState>,
     pub metrics: Arc<JsonRpcMetrics>,
     semaphore: Semaphore,
+    time_out_duration: Duration,
 }
-
-const TIME_OUT_DURATION: Duration = Duration::from_secs(20);
 
 impl CoinReadApi {
     pub fn new(state: Arc<AuthorityState>, metrics: Arc<JsonRpcMetrics>) -> Self {
@@ -46,10 +45,17 @@ impl CoinReadApi {
             .unwrap_or("100".to_string())
             .parse()
             .unwrap();
+        let time_out_duration = Duration::from_secs(
+            std::env::var("COIN_INDEX_TIME_OUT_DURATION")
+                .unwrap_or("10".to_string())
+                .parse()
+                .unwrap(),
+        );
         Self {
             state,
             metrics,
             semaphore: Semaphore::new(max_inflight),
+            time_out_duration,
         }
     }
 
@@ -106,7 +112,7 @@ impl CoinReadApi {
             .count_in_flight(&self.metrics.get_balance_in_flight)
             .await
             .expect("semaphore should not be closed");
-        if start.elapsed() >= TIME_OUT_DURATION {
+        if start.elapsed() >= self.time_out_duration {
             self.metrics.get_balance_timeout_count.inc();
             return Err(anyhow!("get_balance_iterator timeout"));
         }
@@ -142,7 +148,7 @@ impl CoinReadApi {
             .count_in_flight(&self.metrics.get_all_balances_in_flight)
             .await
             .expect("semaphore should not be closed");
-        if start.elapsed() >= TIME_OUT_DURATION {
+        if start.elapsed() >= self.time_out_duration {
             self.metrics.get_balance_timeout_count.inc();
             return Err(anyhow!("get_all_balances_iterator timeout"));
         }

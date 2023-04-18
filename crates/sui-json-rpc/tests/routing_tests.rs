@@ -97,7 +97,7 @@ async fn test_rpc_backward_compatibility() {
         .unwrap();
     assert_eq!("Some string from old method", response);
 
-    handle.stop().unwrap()
+    handle.join().unwrap()
 }
 
 #[tokio::test]
@@ -138,7 +138,7 @@ async fn test_disable_routing() {
         .await;
     assert!(response.is_err());
 
-    handle.stop().unwrap()
+    handle.join().unwrap()
 }
 
 // TODO(chris): clean up this after March 27th, 2023

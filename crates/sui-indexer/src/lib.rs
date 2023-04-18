@@ -37,10 +37,10 @@ use apis::{
 };
 use errors::IndexerError;
 use handlers::checkpoint_handler::CheckpointHandler;
-use mysten_metrics::{spawn_monitored_task, RegistryService};
+use mysten_metrics::RegistryService;
 use store::IndexerStore;
 use sui_core::event_handler::EventHandler;
-use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle, CLIENT_SDK_TYPE_HEADER};
+use sui_json_rpc::{JsonRpcServerBuilder, CLIENT_SDK_TYPE_HEADER};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 
 use crate::apis::MoveUtilsApi;
@@ -170,8 +170,6 @@ impl Indexer {
                 build_json_rpc_server(registry, store.clone(), event_handler.clone(), config)
                     .await
                     .expect("Json rpc server should not run into errors upon start.");
-            // let JSON RPC server run forever.
-            spawn_monitored_task!(handle.stopped());
 
             backoff::future::retry(ExponentialBackoff::default(), || async {
                 let event_handler_clone = event_handler.clone();
@@ -189,14 +187,16 @@ impl Indexer {
                     .expect("Indexer main should not run into errors.");
                 Ok(())
             })
-            .await
+            .await?;
+            handle.join().unwrap();
+            Ok(())
         } else if config.rpc_server_worker {
             info!("Starting indexer with only RPC server");
             let handle =
                 build_json_rpc_server(registry, store.clone(), event_handler.clone(), config)
                     .await
                     .expect("Json rpc server should not run into errors upon start.");
-            handle.stopped().await;
+            handle.join().unwrap();
             Ok(())
         } else if config.fullnode_sync_worker {
             info!("Starting indexer with only fullnode sync");
@@ -365,7 +365,7 @@ pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clo
     state: S,
     event_handler: Arc<EventHandler>,
     config: &IndexerConfig,
-) -> Result<ServerHandle, IndexerError> {
+) -> Result<std::thread::JoinHandle<()>, IndexerError> {
     let mut builder = JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry);
     let http_client = get_http_client(config.rpc_client_url.as_str())?;
 
