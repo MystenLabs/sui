@@ -318,6 +318,8 @@ impl<S> IndexerApiServer for IndexerApi<S>
 where
     S: IndexerStore + Sync + Send + 'static,
 {
+    // TODO: remove this after `futures::executor::block_on` is removed. @Ge @Chris
+    #[allow(clippy::disallowed_methods)]
     fn get_owned_objects(
         &self,
         address: SuiAddress,
@@ -343,7 +345,8 @@ where
         }
         block_on(self.get_owned_objects_internal(address, query, cursor, limit))
     }
-
+    // TODO: remove this after `futures::executor::block_on` is removed. @Ge @Chris
+    #[allow(clippy::disallowed_methods)]
     fn query_transaction_blocks(
         &self,
         query: SuiTransactionBlockResponseQuery,
@@ -377,6 +380,8 @@ where
         ))?)
     }
 
+    // TODO: remove this after `futures::executor::block_on` is removed. @Ge @Chris
+    #[allow(clippy::disallowed_methods)]
     fn query_events(
         &self,
         query: EventFilter,
@@ -407,6 +412,8 @@ where
         ))?)
     }
 
+    // TODO: remove this after `futures::executor::block_on` is removed. @Ge @Chris
+    #[allow(clippy::disallowed_methods)]
     fn get_dynamic_fields(
         &self,
         parent_object_id: ObjectID,
@@ -426,6 +433,8 @@ where
         df_resp
     }
 
+    // TODO: remove this after `futures::executor::block_on` is removed. @Ge @Chris
+    #[allow(clippy::disallowed_methods)]
     fn get_dynamic_field_object(
         &self,
         parent_object_id: ObjectID,

@@ -37,7 +37,7 @@ fn indexer_benchmark(c: &mut Criterion) {
     let pw = env::var("POSTGRES_PASSWORD").unwrap_or_else(|_| "postgrespw".into());
     let db_url = format!("postgres://postgres:{pw}@{pg_host}:{pg_port}");
 
-    let rt = Runtime::new().unwrap();
+    let rt: Runtime = Runtime::new().unwrap();
     let (mut checkpoints, store) = rt.block_on(async {
         let (blocking_cp, async_cp) = new_pg_connection_pool(&db_url).await.unwrap();
         reset_database(&mut blocking_cp.get().unwrap(), true).unwrap();

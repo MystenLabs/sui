@@ -201,6 +201,41 @@ pub enum LocalExecError {
 
     #[error("GeneralError: {:#?}", err)]
     GeneralError { err: String },
+
+    #[error("ObjectNotExist: {:#?}", id)]
+    ObjectNotExist { id: ObjectID },
+
+    #[error(
+        "ObjectDeleted: {:#?} at version {:#?} digest {:#?}",
+        id,
+        version,
+        digest
+    )]
+    ObjectDeleted {
+        id: ObjectID,
+        version: SequenceNumber,
+        digest: ObjectDigest,
+    },
+}
+
+impl From<SuiObjectResponseError> for LocalExecError {
+    fn from(err: SuiObjectResponseError) -> Self {
+        match err {
+            SuiObjectResponseError::NotExists { object_id } => {
+                LocalExecError::ObjectNotExist { id: object_id }
+            }
+            SuiObjectResponseError::Deleted {
+                object_id,
+                digest,
+                version,
+            } => LocalExecError::ObjectDeleted {
+                id: object_id,
+                version,
+                digest,
+            },
+            _ => LocalExecError::SuiObjectResponseError { err },
+        }
+    }
 }
 
 impl From<LocalExecError> for SuiError {
@@ -389,6 +424,8 @@ impl LocalExec {
         Ok(objects)
     }
 
+    // TODO: remove this after `futures::executor::block_on` is removed.
+    #[allow(clippy::disallowed_methods)]
     pub fn download_object(
         &self,
         object_id: &ObjectID,
@@ -436,24 +473,42 @@ impl LocalExec {
         Ok(o)
     }
 
-    pub fn download_latest_object(&self, object_id: &ObjectID) -> Result<Object, LocalExecError> {
-        // TODO: replace use of `block_on`
-        block_on(self.download_latest_object_impl(object_id))
+    // TODO: remove this after `futures::executor::block_on` is removed.
+    #[allow(clippy::disallowed_methods)]
+    pub fn download_latest_object(
+        &self,
+        object_id: &ObjectID,
+    ) -> Result<Option<Object>, LocalExecError> {
+        block_on({
+            info!("Downloading latest object {object_id}");
+            self.download_latest_object_impl(object_id)
+        })
     }
 
     pub async fn download_latest_object_impl(
         &self,
         object_id: &ObjectID,
-    ) -> Result<Object, LocalExecError> {
+    ) -> Result<Option<Object>, LocalExecError> {
         let options = SuiObjectDataOptions::bcs_lossless();
-        let object = self
-            .client
-            .read_api()
-            .get_object_with_options(*object_id, options)
-            .await
-            .map_err(|q| LocalExecError::SuiRpcError { err: q.to_string() })?;
 
-        obj_from_sui_obj_response(&object)
+        self
+        .client
+        .read_api()
+        .get_object_with_options(*object_id, options)
+        .await.map(|q| match obj_from_sui_obj_response(&q){
+            Ok(v) => Ok(Some(v)),
+            Err(LocalExecError::ObjectNotExist { id }) => {
+                error!("Could not find object {id} on RPC server. It might have been pruned, deleted, or never existed.");
+                Ok(None)
+            }
+            Err(LocalExecError::ObjectDeleted { id, version, digest }) => {
+                error!("Object {id} {version} {digest} was deleted on RPC server.");
+                Ok(None)
+            },
+            Err(err) => Err(LocalExecError::SuiRpcError {
+                err: err.to_string(),
+            })
+        })?
     }
 
     pub async fn execute_all_in_checkpoint(
@@ -624,13 +679,16 @@ impl LocalExec {
         Ok(())
     }
 
-    pub fn get_or_download_object(&self, obj_id: &ObjectID) -> Result<Object, LocalExecError> {
+    pub fn get_or_download_object(
+        &self,
+        obj_id: &ObjectID,
+    ) -> Result<Option<Object>, LocalExecError> {
         if let Some(obj) = self.package_cache.lock().expect("Cannot lock").get(obj_id) {
-            return Ok(obj.clone());
+            return Ok(Some(obj.clone()));
         };
 
         let o = match self.store.get(obj_id) {
-            Some(obj) => obj.clone(),
+            Some(obj) => Some(obj.clone()),
             None => {
                 assert!(
                     !self.system_package_ids().contains(obj_id),
@@ -639,6 +697,7 @@ impl LocalExec {
                 self.download_latest_object(obj_id)?
             }
         };
+        let Some(o) = o else { return Ok(None) };
 
         if o.is_package() {
             self.package_cache
@@ -651,7 +710,7 @@ impl LocalExec {
             .lock()
             .expect("Cannot lock")
             .insert((o_ref.0, o_ref.1), o.clone());
-        Ok(o)
+        Ok(Some(o))
     }
 
     /// Must be called after `populate_protocol_version_tables`
@@ -1061,8 +1120,7 @@ impl BackingPackageStore for LocalExec {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
         // If package not present fetch it from the network
         self.get_or_download_object(package_id)
-            .map(Some)
-            .map_err(|e| e.into())
+            .map_err(|e| SuiError::GenericStorageError(e.to_string()))
     }
 }
 
@@ -1101,7 +1159,9 @@ impl ResourceResolver for LocalExec {
         address: &AccountAddress,
         typ: &StructTag,
     ) -> Result<Option<Vec<u8>>, Self::Error> {
-        let object: Object = self.get_or_download_object(&ObjectID::from(*address))?;
+        let Some(object) = self.get_or_download_object(&ObjectID::from(*address))? else {
+            return Ok(None);
+        };
 
         match &object.data {
             Data::Move(m) => {
@@ -1189,12 +1249,8 @@ impl GetModule for LocalExec {
 }
 
 fn obj_from_sui_obj_response(o: &SuiObjectResponse) -> Result<Object, LocalExecError> {
-    let o: Result<SuiObjectData, anyhow::Error> = Ok(o
-        .object()
-        .map_err(|q| LocalExecError::SuiObjectResponseError { err: q })?
-        .clone());
-
-    obj_from_sui_obj_data(&o.map_err(|q| LocalExecError::GeneralError { err: q.to_string() })?)
+    let o = o.object().map_err(LocalExecError::from)?.clone();
+    obj_from_sui_obj_data(&o)
 }
 
 fn obj_from_sui_obj_data(o: &SuiObjectData) -> Result<Object, LocalExecError> {
