@@ -12,8 +12,8 @@ import { genTableDataFromTxData } from '../transactions/TxCardUtils';
 
 import {
     DEFAULT_TRANSACTIONS_LIMIT,
-    useGetTransactionBlocksForAddress,
-} from '~/hooks/useGetTransactionBlocksForAddress';
+    useGetTransactionBlocks,
+} from '~/hooks/useGetTransactionBlocks';
 import { Heading } from '~/ui/Heading';
 import { Pagination } from '~/ui/Pagination';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
@@ -102,21 +102,20 @@ function TransactionBlocksForAddress({
         isFetchingNextPage,
         fetchNextPage,
         hasNextPage,
-    } = useGetTransactionBlocksForAddress(
-        address,
+    } = useGetTransactionBlocks(
         filterValue !== FILTER_VALUES.UNFILTERED
             ? ({
                   [filterValue]: address,
               } as TransactionFilter)
-            : undefined
+            : undefined,
     );
 
     const generateTableCard = (
         currentPage: number,
         data?: InfiniteData<PaginatedTransactionResponse>
-    ) => {
+    ): JSX.Element | null => {
         if (!data) {
-            return;
+            return null;
         }
         const cardData = genTableDataFromTxData(data?.pages[currentPage].data);
         return <TableCard data={cardData.data} columns={cardData.columns} />;

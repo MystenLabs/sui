@@ -16,7 +16,7 @@ interface Props {
     label: string;
     count?: number;
     disablePagination?: boolean;
-    pagination: ReturnType<typeof usePaginationStack>;
+    pagination?: ReturnType<typeof usePaginationStack>;
     data?: PaginationResponse<any>;
     limit: number;
     onLimitChange(value: number): void;
@@ -46,7 +46,7 @@ export function TableFooter({
                 </>
             ) : (
                 <>
-                    <Pagination {...pagination.props(data)} />
+                    {pagination && <Pagination {...pagination.props(data)} />}
 
                     <div className="flex items-center gap-4">
                         <Text variant="body/medium" color="steel-dark">

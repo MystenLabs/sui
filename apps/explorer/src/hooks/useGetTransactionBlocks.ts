@@ -2,21 +2,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useRpcClient } from '@mysten/core';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
-import type { SuiAddress, TransactionFilter } from '@mysten/sui.js';
+import type { TransactionFilter } from '@mysten/sui.js';
 
 export const DEFAULT_TRANSACTIONS_LIMIT = 20;
 
-// Fetch transaction blocks for an address, w/ toggle for to/from filter
-export function useGetTransactionBlocksForAddress(
-    address: SuiAddress,
+// Fetch transaction blocks
+export function useGetTransactionBlocks(
     filter?: TransactionFilter,
     limit = DEFAULT_TRANSACTIONS_LIMIT
 ) {
     const rpc = useRpcClient();
+
     return useInfiniteQuery(
-        ['get-transaction-blocks', address],
+        ['get-transaction-blocks', filter, limit],
         async ({ pageParam }) =>
             await rpc.queryTransactionBlocks({
                 filter,
@@ -33,10 +33,15 @@ export function useGetTransactionBlocksForAddress(
             getNextPageParam: (lastPage) =>
                 lastPage?.hasNextPage
                     ? {
-                          cursor: lastPage.nextCursor,
-                      }
+                        cursor: lastPage.nextCursor,
+                    }
                     : false,
-            enabled: !!address,
-        }
+                    staleTime: Infinity,
+            cacheTime: 24 * 60 * 60 * 1000,
+            retry: false,
+            keepPreviousData: true,
+
+        },
+        
     );
 }
