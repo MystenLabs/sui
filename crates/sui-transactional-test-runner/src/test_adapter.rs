@@ -74,7 +74,7 @@ use sui_types::{
 use sui_types::{
     programmable_transaction_builder::ProgrammableTransactionBuilder, SUI_FRAMEWORK_OBJECT_ID,
 };
-use sui_types::{utils::to_sender_signed_transaction, SUI_SYSTEM_PACKAGE_ID};
+use sui_types::{utils::to_sender_signed_transaction, SUI_SYSTEM_OBJECT_ID};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum FakeID {
@@ -86,7 +86,7 @@ const WELL_KNOWN_OBJECTS: &[ObjectID] = &[
     MOVE_STDLIB_OBJECT_ID,
     DEEPBOOK_OBJECT_ID,
     SUI_FRAMEWORK_OBJECT_ID,
-    SUI_SYSTEM_PACKAGE_ID,
+    SUI_SYSTEM_OBJECT_ID,
     SUI_SYSTEM_STATE_OBJECT_ID,
     SUI_CLOCK_OBJECT_ID,
 ];

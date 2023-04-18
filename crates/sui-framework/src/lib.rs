@@ -15,7 +15,7 @@ use sui_types::{
     digests::TransactionDigest,
     move_package::MovePackage,
     object::{Object, OBJECT_START_VERSION},
-    MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_PACKAGE_ID,
+    MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_OBJECT_ID,
 };
 use tracing::error;
 
@@ -115,7 +115,7 @@ impl BuiltInFramework {
                 [MOVE_STDLIB_OBJECT_ID]
             ),
             (
-                SUI_SYSTEM_PACKAGE_ID,
+                SUI_SYSTEM_OBJECT_ID,
                 "sui-system",
                 [MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID]
             ),

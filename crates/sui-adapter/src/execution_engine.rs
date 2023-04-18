@@ -44,7 +44,7 @@ use sui_types::{
 };
 use sui_types::{
     is_system_package, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
-    SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_PACKAGE_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+    SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 
 use sui_types::temporary_store::TemporaryStore;
@@ -539,7 +539,7 @@ pub fn construct_advance_epoch_pt(
     );
 
     let storage_rebates = builder.programmable_move_call(
-        SUI_SYSTEM_PACKAGE_ID,
+        SUI_SYSTEM_OBJECT_ID,
         SUI_SYSTEM_MODULE_NAME.to_owned(),
         ADVANCE_EPOCH_FUNCTION_NAME.to_owned(),
         vec![],
@@ -605,7 +605,7 @@ pub fn construct_advance_epoch_safe_mode_pt(
     );
 
     builder.programmable_move_call(
-        SUI_SYSTEM_PACKAGE_ID,
+        SUI_SYSTEM_OBJECT_ID,
         SUI_SYSTEM_MODULE_NAME.to_owned(),
         ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME.to_owned(),
         vec![],

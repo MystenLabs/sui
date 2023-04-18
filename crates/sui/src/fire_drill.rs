@@ -30,7 +30,7 @@ use sui_types::messages::{
     CallArg, ObjectArg, Transaction, TransactionData, TEST_ONLY_GAS_UNIT_FOR_GENERIC,
 };
 use sui_types::multiaddr::{Multiaddr, Protocol};
-use sui_types::{committee::EpochId, crypto::get_authority_key_pair, SUI_SYSTEM_PACKAGE_ID};
+use sui_types::{committee::EpochId, crypto::get_authority_key_pair, SUI_SYSTEM_OBJECT_ID};
 use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION};
 use tracing::info;
 
@@ -321,7 +321,7 @@ async fn update_metadata_on_chain(
     args.extend(call_args);
     let tx_data = TransactionData::new_move_call(
         sui_address,
-        SUI_SYSTEM_PACKAGE_ID,
+        SUI_SYSTEM_OBJECT_ID,
         ident_str!("sui_system").to_owned(),
         ident_str!(function).to_owned(),
         vec![],

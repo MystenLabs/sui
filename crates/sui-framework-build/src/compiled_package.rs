@@ -43,12 +43,11 @@ use serde_reflection::Registry;
 use sui_types::{
     base_types::ObjectID,
     error::{SuiError, SuiResult},
+    is_system_package,
     move_package::{FnInfo, FnInfoKey, FnInfoMap, MovePackage},
     DEEPBOOK_ADDRESS, MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS,
 };
 use sui_verifier::verifier as sui_bytecode_verifier;
-
-use crate::{MOVE_STDLIB_PACKAGE_NAME, SUI_PACKAGE_NAME, SUI_SYSTEM_PACKAGE_NAME};
 
 /// Wrapper around the core Move `CompiledPackage` with some Sui-specific traits and info
 #[derive(Debug)]
@@ -440,10 +439,11 @@ impl CompiledPackage {
 
     /// Checks whether this package corresponds to a built-in framework
     pub fn is_system_package(&self) -> bool {
-        let package_name = self.package.compiled_package_info.package_name.as_str();
-        package_name == SUI_SYSTEM_PACKAGE_NAME
-            || package_name == SUI_PACKAGE_NAME
-            || package_name == MOVE_STDLIB_PACKAGE_NAME
+        let Ok(published_at) = self.published_at else {
+            return false
+        };
+
+        is_system_package(published_at)
     }
 
     /// Checks for root modules with non-zero package addresses.  Returns an arbitrary one, if one

@@ -74,7 +74,7 @@ pub const SUI_FRAMEWORK_OBJECT_ID: ObjectID = ObjectID::from_address(SUI_FRAMEWO
 /// 0x3-- account address where sui system modules are stored
 /// Same as the ObjectID
 pub const SUI_SYSTEM_ADDRESS: AccountAddress = address_from_single_byte(3);
-pub const SUI_SYSTEM_PACKAGE_ID: ObjectID = ObjectID::from_address(SUI_SYSTEM_ADDRESS);
+pub const SUI_SYSTEM_OBJECT_ID: ObjectID = ObjectID::from_address(SUI_SYSTEM_ADDRESS);
 
 /// 0xdee9-- account address where DeepBook modules are stored
 /// Same as the ObjectID
@@ -100,10 +100,7 @@ pub const SUI_CLOCK_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION
 pub fn is_system_package(id: ObjectID) -> bool {
     matches!(
         id,
-        MOVE_STDLIB_OBJECT_ID
-            | SUI_FRAMEWORK_OBJECT_ID
-            | SUI_SYSTEM_PACKAGE_ID
-            | DEEPBOOK_OBJECT_ID
+        MOVE_STDLIB_OBJECT_ID | SUI_FRAMEWORK_OBJECT_ID | SUI_SYSTEM_OBJECT_ID | DEEPBOOK_OBJECT_ID
     )
 }
 

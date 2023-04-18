@@ -35,7 +35,7 @@ use sui_types::{
         SuiSystemStateTrait,
     },
     utils::to_sender_signed_transaction,
-    SUI_SYSTEM_PACKAGE_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+    SUI_SYSTEM_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 use test_utils::authority::spawn_test_authorities;
 use test_utils::authority::test_authority_configs_with_objects;
@@ -390,7 +390,7 @@ mod add_stake {
                 let coin = StressTestRunner::split_off(&mut builder, self.stake_amount);
                 move_call! {
                     builder,
-                    (SUI_SYSTEM_PACKAGE_ID)::sui_system::request_add_stake(Argument::Input(0), coin, Argument::Input(1))
+                    (SUI_SYSTEM_OBJECT_ID)::sui_system::request_add_stake(Argument::Input(0), coin, Argument::Input(1))
                 };
                 builder.finish()
             };

@@ -35,7 +35,7 @@ use sui_types::object::{Object, Owner};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::{
-    coin, fp_ensure, SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_PACKAGE_ID, SUI_SYSTEM_STATE_OBJECT_ID,
+    coin, fp_ensure, SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
     SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 
@@ -730,7 +730,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
                     .unwrap(),
             ];
             builder.command(Command::move_call(
-                SUI_SYSTEM_PACKAGE_ID,
+                SUI_SYSTEM_OBJECT_ID,
                 SUI_SYSTEM_MODULE_NAME.to_owned(),
                 ADD_STAKE_MUL_COIN_FUN_NAME.to_owned(),
                 vec![],
@@ -761,7 +761,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             .await?;
         TransactionData::new_move_call(
             signer,
-            SUI_SYSTEM_PACKAGE_ID,
+            SUI_SYSTEM_OBJECT_ID,
             SUI_SYSTEM_MODULE_NAME.to_owned(),
             WITHDRAW_STAKE_FUN_NAME.to_owned(),
             vec![],
