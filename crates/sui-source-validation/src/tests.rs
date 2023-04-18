@@ -572,7 +572,9 @@ async fn multiple_failures() -> anyhow::Result<()> {
 /// Compile the package at absolute path `package`.
 fn compile_package(package: impl AsRef<Path>) -> CompiledPackage {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
-    sui_framework::build_move_package(package.as_ref(), BuildConfig::new_for_testing()).unwrap()
+    BuildConfig::new_for_testing()
+        .build(package.as_ref().to_path_buf())
+        .unwrap()
 }
 
 fn sanitize_id(mut message: String, m: &HashMap<SuiAddress, &str>) -> String {

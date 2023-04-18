@@ -2775,21 +2775,18 @@ async fn test_object_no_id_error() {
     // in this package object struct (NotObject) is defined incorrectly and publishing should
     // fail (it's defined in test-only code hence cannot be checked by transactional testing
     // framework which goes through "normal" publishing path which excludes tests).
-    path.push("src/unit_tests/data/object_no_id/");
-    let res = sui_framework::build_move_package(&path, build_config);
+    path.extend(["src", "unit_tests", "data", "object_no_id"]);
+    let res = build_config.build(path);
 
     matches!(res.err(), Some(SuiError::ExecutionError(err_str)) if
                  err_str.contains("SuiMoveVerificationError")
                  && err_str.contains("First field of struct NotObject must be 'id'"));
 }
 pub fn build_test_package(test_dir: &str, with_unpublished_deps: bool) -> Vec<Vec<u8>> {
-    let build_config = BuildConfig::new_for_testing();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("src");
-    path.push("unit_tests");
-    path.push("data");
-    path.push(test_dir);
-    sui_framework::build_move_package(&path, build_config)
+    path.extend(["src", "unit_tests", "data", test_dir]);
+    BuildConfig::new_for_testing()
+        .build(path)
         .unwrap()
         .get_package_bytes(with_unpublished_deps)
 }
@@ -2804,11 +2801,10 @@ pub async fn build_and_try_publish_test_package(
     gas_price: u64,
     with_unpublished_deps: bool,
 ) -> (Transaction, SignedTransactionEffects) {
-    let build_config = BuildConfig::new_for_testing();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("src/unit_tests/data/");
-    path.push(test_dir);
-    let compiled_package = sui_framework::build_move_package(&path, build_config).unwrap();
+    path.extend(["src", "unit_tests", "data", test_dir]);
+
+    let compiled_package = BuildConfig::new_for_testing().build(path).unwrap();
     let all_module_bytes = compiled_package.get_package_bytes(with_unpublished_deps);
     let dependencies = compiled_package.get_dependency_original_package_ids();
 

@@ -208,8 +208,7 @@ pub fn compile_example_package(relative_path: &str) -> CompiledPackage {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push(relative_path);
 
-    let build_config = BuildConfig::new_for_testing();
-    sui_framework::build_move_package(&path, build_config).unwrap()
+    BuildConfig::new_for_testing().build(path).unwrap()
 }
 
 async fn init_genesis(

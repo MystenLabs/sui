@@ -14,7 +14,7 @@ use move_binary_format::{
     normalized::{self, Type},
     CompiledModule,
 };
-use move_bytecode_utils::{layout::SerdeLayoutBuilder, module_cache::GetModule, Modules};
+use move_bytecode_utils::{layout::SerdeLayoutBuilder, module_cache::GetModule};
 use move_compiler::{
     compiled_unit::{
         AnnotatedCompiledModule, AnnotatedCompiledScript, CompiledUnitEnum, NamedCompiledModule,
@@ -370,86 +370,6 @@ impl CompiledPackage {
     pub fn get_stdlib_modules(&self) -> impl Iterator<Item = &CompiledModule> {
         self.get_modules_and_deps()
             .filter(|m| *m.self_id().address() == MOVE_STDLIB_ADDRESS)
-    }
-
-    /// Version of the framework code that the binary used for compilation expects should be the same as
-    /// version of the framework code bundled as compiled package's dependency and this function
-    /// verifies this.
-    // TODO: replace this with actual versioning checks instead of hacky byte-for-byte comparisons
-    pub fn verify_framework_version(
-        &self,
-        ext_sui_system: Vec<CompiledModule>,
-        ext_sui_framework: Vec<CompiledModule>,
-        ext_move_stdlib: Vec<CompiledModule>,
-    ) -> SuiResult<()> {
-        // We stash compiled modules in the Modules map which is sorted so that we can compare sets of
-        // compiled modules directly.
-        let ext_sui_system_modules = Modules::new(ext_sui_system.iter());
-        let pkg_sui_system_modules: Vec<&CompiledModule> = self.get_sui_system_modules().collect();
-
-        // compare sui-system modules pulled as dependencies (if any - a developer may choose to use only
-        // stdlib) with sui-system modules bundled with the distribution
-        if !pkg_sui_system_modules.is_empty()
-            && ext_sui_system_modules != Modules::new(pkg_sui_system_modules)
-        {
-            return Err(SuiError::ModuleVerificationFailure {
-            error: "Sui system package version mismatch detected.\
-		    Make sure that you are using a GitHub dep in your Move.toml:\
-		    \
-                    [dependencies]
-                    Sui = { git = \"https://github.com/MystenLabs/sui.git\", subdir = \"crates/sui-framework/packages/sui-system\", rev = \"devnet\" }
-`                   \
-                    If that does not fix the issue, your `sui` binary is likely out of date--try \
-                    cargo install --locked --git https://github.com/MystenLabs/sui.git --branch devnet sui"
-                .to_string(),
-        });
-        }
-
-        // We stash compiled modules in the Modules map which is sorted so that we can compare sets of
-        // compiled modules directly.
-        let ext_sui_framework_modules = Modules::new(ext_sui_framework.iter());
-        let pkg_sui_framework_modules: Vec<&CompiledModule> =
-            self.get_sui_framework_modules().collect();
-
-        // compare framework modules pulled as dependencies (if any - a developer may choose to use only
-        // stdlib) with framework modules bundled with the distribution
-        if !pkg_sui_framework_modules.is_empty()
-            && ext_sui_framework_modules != Modules::new(pkg_sui_framework_modules)
-        {
-            // note: this advice is overfitted to the most common failure modes we see:
-            // user is trying to publish to testnet, but has a `sui` binary and Sui Framework
-            // sources that are not in sync. the first part of the advice ensures that the
-            // user's project is always pointing at the devnet copy of the `Sui` Framework.
-            // the second ensures that the `sui` binary matches the devnet framework
-            return Err(SuiError::ModuleVerificationFailure {
-            error: "Sui framework version mismatch detected.\
-		    Make sure that you are using a GitHub dep in your Move.toml:\
-		    \
-                    [dependencies]
-                    Sui = { git = \"https://github.com/MystenLabs/sui.git\", subdir = \"crates/sui-framework/packages/sui-framework\", rev = \"devnet\" }
-`                   \
-                    If that does not fix the issue, your `sui` binary is likely out of date--try \
-                    cargo install --locked --git https://github.com/MystenLabs/sui.git --branch devnet sui"
-                .to_string(),
-        });
-        }
-
-        let ext_stdlib_modules = Modules::new(ext_move_stdlib.iter());
-        let pkg_stdlib_modules: Vec<&CompiledModule> = self.get_stdlib_modules().collect();
-
-        // compare stdlib modules pulled as dependencies (if any) with stdlib modules bundled with the
-        // distribution
-        if !pkg_stdlib_modules.is_empty() && ext_stdlib_modules != Modules::new(pkg_stdlib_modules)
-        {
-            return Err(SuiError::ModuleVerificationFailure {
-                error: "Move stdlib version mismatch detected.\
-                    Make sure that the sui command line tool and the Move standard library code\
-                    used as a dependency correspond to the same git commit"
-                    .to_string(),
-            });
-        }
-
-        Ok(())
     }
 
     /// Generate layout schemas for all types declared by this package, as well as
