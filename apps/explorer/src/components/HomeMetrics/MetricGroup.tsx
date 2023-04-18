@@ -19,7 +19,7 @@ export function MetricGroup({ label, children }: Props) {
                 </Text>
                 <div className="h-px flex-1 bg-steel/30" />
             </div>
-            <div className="flex items-start gap-8 overflow-x-auto overflow-y-hidden pb-1 [&>*:first-child]:pl-8">
+            <div className="flex items-start gap-6 overflow-x-auto overflow-y-hidden pb-1 pl-8 md:gap-8">
                 {children}
             </div>
         </div>
