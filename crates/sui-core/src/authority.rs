@@ -900,6 +900,13 @@ impl AuthorityState {
 
         let events = inner_temporary_store.events.clone();
 
+        let loaded_child_objects = if self.is_fullnode(epoch_store) {
+            // We only care about this for full nodes
+            inner_temporary_store.loaded_child_objects.clone()
+        } else {
+            BTreeMap::new()
+        };
+
         let tx_coins = self
             .commit_certificate(inner_temporary_store, certificate, effects, epoch_store)
             .await?;
@@ -919,7 +926,14 @@ impl AuthorityState {
 
         // index certificate
         let _ = self
-            .post_process_one_tx(certificate, effects, &events, epoch_store, tx_coins)
+            .post_process_one_tx(
+                certificate,
+                effects,
+                &events,
+                epoch_store,
+                tx_coins,
+                loaded_child_objects,
+            )
             .await
             .tap_err(|e| error!("tx post processing failed: {e}"));
 
@@ -1266,6 +1280,7 @@ impl AuthorityState {
         timestamp_ms: u64,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         tx_coins: Option<TxCoins>,
+        loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
     ) -> SuiResult<u64> {
         let changes = self
             .process_object_index(effects, epoch_store)
@@ -1296,6 +1311,7 @@ impl AuthorityState {
             digest,
             timestamp_ms,
             tx_coins,
+            loaded_child_objects,
         )
     }
 
@@ -1475,6 +1491,7 @@ impl AuthorityState {
         events: &TransactionEvents,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         tx_coins: Option<TxCoins>,
+        loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
     ) -> SuiResult {
         if self.indexes.is_none() {
             return Ok(());
@@ -1494,6 +1511,7 @@ impl AuthorityState {
                     timestamp_ms,
                     epoch_store,
                     tx_coins,
+                    loaded_child_objects,
                 )
                 .tap_ok(|_| self.metrics.post_processing_total_tx_indexed.inc())
                 .tap_err(|e| error!(?tx_digest, "Post processing - Couldn't index tx: {e}"));
@@ -2352,6 +2370,14 @@ impl AuthorityState {
                 error: "extended object indexing is not enabled on this server".into(),
             }),
         }
+    }
+
+    pub fn loaded_child_object_versions(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> SuiResult<Option<Vec<(ObjectID, SequenceNumber)>>> {
+        self.get_indexes()?
+            .loaded_child_object_versions(transaction_digest)
     }
 
     pub fn get_transactions(

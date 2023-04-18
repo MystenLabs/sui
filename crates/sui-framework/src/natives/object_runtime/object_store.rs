@@ -355,6 +355,10 @@ impl<'a> ObjectStore<'a> {
         Ok(())
     }
 
+    pub(super) fn cached_objects(&self) -> &BTreeMap<ObjectID, Option<MoveObject>> {
+        &self.inner.cached_objects
+    }
+
     // retrieve the `Op` effects for the child objects
     pub(super) fn take_effects(
         &mut self,

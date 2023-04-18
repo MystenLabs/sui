@@ -715,11 +715,25 @@ pub struct TxContext {
 
 impl TxContext {
     pub fn new(sender: &SuiAddress, digest: &TransactionDigest, epoch_data: &EpochData) -> Self {
+        Self::new_from_components(
+            sender,
+            digest,
+            &epoch_data.epoch_id(),
+            epoch_data.epoch_start_timestamp(),
+        )
+    }
+
+    pub fn new_from_components(
+        sender: &SuiAddress,
+        digest: &TransactionDigest,
+        epoch_id: &EpochId,
+        epoch_timestamp_ms: u64,
+    ) -> Self {
         Self {
             sender: AccountAddress::new(sender.0),
             digest: digest.into_inner().to_vec(),
-            epoch: epoch_data.epoch_id(),
-            epoch_timestamp_ms: epoch_data.epoch_start_timestamp(),
+            epoch: *epoch_id,
+            epoch_timestamp_ms,
             ids_created: 0,
         }
     }
