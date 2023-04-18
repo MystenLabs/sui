@@ -59,10 +59,10 @@ async fn basic_read_cmd_snapshot_tests() -> Result<(), anyhow::Error> {
     let cmds = vec![
         "sui client objects {ME}", // valid addr
         "sui client objects 0x0000000000000000000000000000000000000000000000000000000000000000", // empty addr
-        "sui client object 0xf0eeb3838dd35213759daeb9dce88ede333c16963d32f3df35fe528bb8da91a0", // valid object
-        "sui client object 0xf0eeb3838dd35213759daeb9dce88ede333c16963d32f3df35fe528bb8da91a0 --bcs", // valid object BCS
+        "sui client object 0xf589a6fc0efa84a5bb08f05e8f23f137a1276ab65f16d8f1abaa8faa9410daaa", // valid object
+        "sui client object 0xf589a6fc0efa84a5bb08f05e8f23f137a1276ab65f16d8f1abaa8faa9410daaa --bcs", // valid object BCS
         "sui client object 0x0000000000000000000000000000000000000000000000000000000000000000", // non-existent object
-        "sui client tx-block DgMTHQygMi6SRsBqrPHAEKZCNrpShXurCp9rcb9qbSg8", // valid tx digest
+        "sui client tx-block Cr2veqXy91vypqGgU3oJueugzCQbycNJtaCcCSqC7ksy", // valid tx digest
         "sui client tx-block EgMTHQygMi6SRsBqrPHAEKZCNrpShXurCp9rcb9qbSg8", // non-existent tx digest
     ];
     assert_json_snapshot!(run_one(cmds, context).await?);
