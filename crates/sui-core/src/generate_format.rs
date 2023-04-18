@@ -16,7 +16,11 @@ use std::{fs::File, io::Write};
 use sui_types::{
     base_types::MoveObjectType_,
     crypto::Signer,
-    messages_checkpoint::{CheckpointContentsDigest, CheckpointDigest, CheckpointSummary},
+    messages::TransactionExpiration,
+    messages_checkpoint::{
+        CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSummary,
+        FullCheckpointContents,
+    },
 };
 use sui_types::{
     base_types::{
@@ -143,10 +147,11 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<CommandArgumentError>(&samples)?;
     tracer.trace_type::<TypeArgumentError>(&samples)?;
     tracer.trace_type::<PackageUpgradeError>(&samples)?;
+    tracer.trace_type::<TransactionExpiration>(&samples)?;
 
     // uncomment once GenericSignature is added
-    // tracer.trace_type::<FullCheckpointContents>(&samples)?;
-    // tracer.trace_type::<CheckpointContents>(&samples)?;
+    tracer.trace_type::<FullCheckpointContents>(&samples)?;
+    tracer.trace_type::<CheckpointContents>(&samples)?;
     tracer.trace_type::<CheckpointSummary>(&samples)?;
 
     tracer.registry()

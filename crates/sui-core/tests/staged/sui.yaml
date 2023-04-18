@@ -63,9 +63,24 @@ CheckpointCommitment:
       ECMHLiveObjectSetDigest:
         NEWTYPE:
           TYPENAME: ECMHLiveObjectSetDigest
+CheckpointContents:
+  ENUM:
+    0:
+      V1:
+        NEWTYPE:
+          TYPENAME: CheckpointContentsV1
 CheckpointContentsDigest:
   NEWTYPESTRUCT:
     TYPENAME: Digest
+CheckpointContentsV1:
+  STRUCT:
+    - transactions:
+        SEQ:
+          TYPENAME: ExecutionDigests
+    - user_signatures:
+        SEQ:
+          SEQ:
+            TYPENAME: GenericSignature
 CheckpointDigest:
   NEWTYPESTRUCT:
     TYPENAME: Digest
@@ -211,6 +226,8 @@ ECMHLiveObjectSetDigest:
   STRUCT:
     - digest:
         TYPENAME: Digest
+EmptySignInfo:
+  STRUCT: []
 EndOfEpochData:
   STRUCT:
     - nextEpochCommittee:
@@ -223,6 +240,24 @@ EndOfEpochData:
     - epochCommitments:
         SEQ:
           TYPENAME: CheckpointCommitment
+Envelope:
+  STRUCT:
+    - data:
+        TYPENAME: SenderSignedData
+    - auth_signature:
+        TYPENAME: EmptySignInfo
+ExecutionData:
+  STRUCT:
+    - transaction:
+        TYPENAME: Envelope
+    - effects:
+        TYPENAME: TransactionEffects
+ExecutionDigests:
+  STRUCT:
+    - transaction:
+        TYPENAME: TransactionDigest
+    - effects:
+        TYPENAME: TransactionEffectsDigest
 ExecutionFailureStatus:
   ENUM:
     0:
@@ -330,12 +365,36 @@ ExecutionStatus:
               TYPENAME: ExecutionFailureStatus
           - command:
               OPTION: U64
+FullCheckpointContents:
+  STRUCT:
+    - transactions:
+        SEQ:
+          TYPENAME: ExecutionData
+    - user_signatures:
+        SEQ:
+          SEQ:
+            TYPENAME: GenericSignature
 GasCostSummary:
   STRUCT:
     - computationCost: U64
     - storageCost: U64
     - storageRebate: U64
     - nonRefundableStorageFee: U64
+GasData:
+  STRUCT:
+    - payment:
+        SEQ:
+          TUPLE:
+            - TYPENAME: ObjectID
+            - TYPENAME: SequenceNumber
+            - TYPENAME: ObjectDigest
+    - owner:
+        TYPENAME: SuiAddress
+    - price: U64
+    - budget: U64
+GenericSignature:
+  NEWTYPESTRUCT:
+    SEQ: U8
 GenesisObject:
   ENUM:
     0:
@@ -352,6 +411,17 @@ GenesisTransaction:
           TYPENAME: GenesisObject
 Identifier:
   NEWTYPESTRUCT: STR
+Intent:
+  STRUCT:
+    - scope: U8
+    - version: U8
+    - app_id: U8
+IntentMessage:
+  STRUCT:
+    - intent:
+        TYPENAME: Intent
+    - value:
+        TYPENAME: TransactionData
 ModuleId:
   STRUCT:
     - address:
@@ -586,6 +656,17 @@ ProgrammableTransaction:
           TYPENAME: Command
 ProtocolVersion:
   NEWTYPESTRUCT: U64
+SenderSignedData:
+  NEWTYPESTRUCT:
+    SEQ:
+      TYPENAME: SenderSignedTransaction
+SenderSignedTransaction:
+  STRUCT:
+    - intent_message:
+        TYPENAME: IntentMessage
+    - tx_signatures:
+        SEQ:
+          TYPENAME: GenericSignature
 SequenceNumber:
   NEWTYPESTRUCT: U64
 StructTag:
@@ -604,12 +685,119 @@ SuiAddress:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
+TransactionData:
+  ENUM:
+    0:
+      V1:
+        NEWTYPE:
+          TYPENAME: TransactionDataV1
+TransactionDataV1:
+  STRUCT:
+    - kind:
+        TYPENAME: TransactionKind
+    - sender:
+        TYPENAME: SuiAddress
+    - gas_data:
+        TYPENAME: GasData
+    - expiration:
+        TYPENAME: TransactionExpiration
 TransactionDigest:
   NEWTYPESTRUCT:
     TYPENAME: Digest
+TransactionEffects:
+  ENUM:
+    0:
+      V1:
+        NEWTYPE:
+          TYPENAME: TransactionEffectsV1
 TransactionEffectsDigest:
   NEWTYPESTRUCT:
     TYPENAME: Digest
+TransactionEffectsV1:
+  STRUCT:
+    - status:
+        TYPENAME: ExecutionStatus
+    - executed_epoch: U64
+    - gas_used:
+        TYPENAME: GasCostSummary
+    - modified_at_versions:
+        SEQ:
+          TUPLE:
+            - TYPENAME: ObjectID
+            - TYPENAME: SequenceNumber
+    - shared_objects:
+        SEQ:
+          TUPLE:
+            - TYPENAME: ObjectID
+            - TYPENAME: SequenceNumber
+            - TYPENAME: ObjectDigest
+    - transaction_digest:
+        TYPENAME: TransactionDigest
+    - created:
+        SEQ:
+          TUPLE:
+            - TUPLE:
+                - TYPENAME: ObjectID
+                - TYPENAME: SequenceNumber
+                - TYPENAME: ObjectDigest
+            - TYPENAME: Owner
+    - mutated:
+        SEQ:
+          TUPLE:
+            - TUPLE:
+                - TYPENAME: ObjectID
+                - TYPENAME: SequenceNumber
+                - TYPENAME: ObjectDigest
+            - TYPENAME: Owner
+    - unwrapped:
+        SEQ:
+          TUPLE:
+            - TUPLE:
+                - TYPENAME: ObjectID
+                - TYPENAME: SequenceNumber
+                - TYPENAME: ObjectDigest
+            - TYPENAME: Owner
+    - deleted:
+        SEQ:
+          TUPLE:
+            - TYPENAME: ObjectID
+            - TYPENAME: SequenceNumber
+            - TYPENAME: ObjectDigest
+    - unwrapped_then_deleted:
+        SEQ:
+          TUPLE:
+            - TYPENAME: ObjectID
+            - TYPENAME: SequenceNumber
+            - TYPENAME: ObjectDigest
+    - wrapped:
+        SEQ:
+          TUPLE:
+            - TYPENAME: ObjectID
+            - TYPENAME: SequenceNumber
+            - TYPENAME: ObjectDigest
+    - gas_object:
+        TUPLE:
+          - TUPLE:
+              - TYPENAME: ObjectID
+              - TYPENAME: SequenceNumber
+              - TYPENAME: ObjectDigest
+          - TYPENAME: Owner
+    - events_digest:
+        OPTION:
+          TYPENAME: TransactionEventsDigest
+    - dependencies:
+        SEQ:
+          TYPENAME: TransactionDigest
+TransactionEventsDigest:
+  NEWTYPESTRUCT:
+    TYPENAME: Digest
+TransactionExpiration:
+  ENUM:
+    0:
+      None: UNIT
+    1:
+      Epoch:
+        NEWTYPE: U64
 TransactionKind:
   ENUM:
     0:
