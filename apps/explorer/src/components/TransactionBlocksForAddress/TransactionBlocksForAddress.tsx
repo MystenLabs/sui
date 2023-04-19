@@ -1,12 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    type TransactionFilter,
-    type PaginatedTransactionResponse,
-} from '@mysten/sui.js';
-import { type InfiniteData } from '@tanstack/react-query';
-import { useEffect, useReducer, useState } from 'react';
+import { type TransactionFilter } from '@mysten/sui.js';
+import { useReducer, useState } from 'react';
 
 import { genTableDataFromTxData } from '../transactions/TxCardUtils';
 
@@ -32,7 +28,6 @@ enum PAGE_ACTIONS {
 }
 
 enum FILTER_VALUES {
-    UNFILTERED = 'Unfiltered',
     INPUT = 'InputObject',
     CHANGED = 'ChangedObject',
 }
@@ -43,7 +38,6 @@ type TransactionBlocksForAddressActionType = {
 };
 
 type PageStateByFilterMap = {
-    Unfiltered: number;
     InputObject: number;
     ChangedObject: number;
 };
@@ -82,18 +76,11 @@ function TransactionBlocksForAddress({
     address,
     isObject = false,
 }: TransactionBlocksForAddressProps) {
-    const [filterValue, setFilterValue] = useState(FILTER_VALUES.UNFILTERED);
+    const [filterValue, setFilterValue] = useState(FILTER_VALUES.CHANGED);
     const [currentPageState, dispatch] = useReducer(reducer, {
-        Unfiltered: 0,
         InputObject: 0,
         ChangedObject: 0,
     });
-
-    useEffect(() => {
-        if (isObject) {
-            setFilterValue(FILTER_VALUES.CHANGED);
-        }
-    }, [isObject]);
 
     const {
         data,
@@ -102,25 +89,14 @@ function TransactionBlocksForAddress({
         isFetchingNextPage,
         fetchNextPage,
         hasNextPage,
-    } = useGetTransactionBlocksForAddress(
-        address,
-        filterValue !== FILTER_VALUES.UNFILTERED
-            ? ({
-                  [filterValue]: address,
-              } as TransactionFilter)
-            : undefined
-    );
+    } = useGetTransactionBlocksForAddress(address, {
+        [filterValue]: address,
+    } as TransactionFilter);
 
-    const generateTableCard = (
-        currentPage: number,
-        data?: InfiniteData<PaginatedTransactionResponse>
-    ) => {
-        if (!data) {
-            return;
-        }
-        const cardData = genTableDataFromTxData(data?.pages[currentPage].data);
-        return <TableCard data={cardData.data} columns={cardData.columns} />;
-    };
+    const currentPage = currentPageState[filterValue];
+    const cardData = data
+        ? genTableDataFromTxData(data.pages[currentPage].data)
+        : undefined;
 
     return (
         <div data-testid="tx">
@@ -148,7 +124,7 @@ function TransactionBlocksForAddress({
             </div>
 
             <div className="flex flex-col space-y-5 pt-5 text-left xl:pr-10">
-                {isLoading || isFetching || isFetchingNextPage ? (
+                {isLoading || isFetching || isFetchingNextPage || !cardData ? (
                     <PlaceholderTable
                         rowCount={DEFAULT_TRANSACTIONS_LIMIT}
                         rowHeight="16px"
@@ -163,7 +139,10 @@ function TransactionBlocksForAddress({
                     />
                 ) : (
                     <div>
-                        {generateTableCard(currentPageState[filterValue], data)}
+                        <TableCard
+                            data={cardData.data}
+                            columns={cardData.columns}
+                        />
                     </div>
                 )}
 
