@@ -958,7 +958,7 @@ impl CheckpointAggregator {
     async fn run(mut self) {
         info!("Starting CheckpointAggregator");
         loop {
-            if let Err(e) = self.run_inner().await {
+            if let Err(e) = self.run_and_notify().await {
                 error!(
                     "Error while aggregating checkpoint, will retry in 1s: {:?}",
                     e
@@ -984,8 +984,17 @@ impl CheckpointAggregator {
         }
     }
 
-    async fn run_inner(&mut self) -> SuiResult {
+    async fn run_and_notify(&mut self) -> SuiResult {
+        let summaries = self.run_inner()?;
+        for summary in summaries {
+            self.output.certified_checkpoint_created(&summary).await?;
+        }
+        Ok(())
+    }
+
+    fn run_inner(&mut self) -> SuiResult<Vec<CertifiedCheckpointSummary>> {
         let _scope = monitored_scope("CheckpointAggregator");
+        let mut result = vec![];
         'outer: loop {
             let next_to_certify = self.next_checkpoint_to_certify();
             let current = if let Some(current) = &mut self.current {
@@ -1000,7 +1009,7 @@ impl CheckpointAggregator {
                 }
                 current
             } else {
-                let Some(summary) = self.epoch_store.get_built_checkpoint_summary(next_to_certify)? else { return Ok(()); };
+                let Some(summary) = self.epoch_store.get_built_checkpoint_summary(next_to_certify)? else { return Ok(result); };
                 self.current = Some(CheckpointSignatureAggregator {
                     next_index: 0,
                     digest: summary.digest(),
@@ -1021,7 +1030,7 @@ impl CheckpointAggregator {
                         current.summary.sequence_number
                     );
                     // No more signatures (yet) for this checkpoint
-                    return Ok(());
+                    return Ok(result);
                 }
                 debug!(
                     "Processing signature for checkpoint {} (digest: {:?}) from {:?}",
@@ -1048,7 +1057,7 @@ impl CheckpointAggregator {
                     self.metrics
                         .last_certified_checkpoint
                         .set(current.summary.sequence_number as i64);
-                    self.output.certified_checkpoint_created(&summary).await?;
+                    result.push(summary.into_inner());
                     self.current = None;
                     continue 'outer;
                 } else {
@@ -1057,7 +1066,7 @@ impl CheckpointAggregator {
             }
             break;
         }
-        Ok(())
+        Ok(result)
     }
 
     fn next_checkpoint_to_certify(&self) -> CheckpointSequenceNumber {
