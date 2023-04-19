@@ -13,7 +13,6 @@ use move_command_line_common::{
     address::ParsedAddress, files::verify_and_create_named_address_mapping,
 };
 use move_compiler::{
-    compiled_unit::AnnotatedCompiledUnit,
     shared::{NumberFormat, NumericalAddress, PackagePaths},
     Flags, FullyCompiledProgram,
 };
@@ -26,7 +25,7 @@ use move_core_types::{
 };
 use move_symbol_pool::Symbol;
 use move_transactional_test_runner::{
-    framework::{compile_ir_module, compile_source_units, CompiledState, MoveTestAdapter},
+    framework::{compile_any, store_modules, CompiledState, MoveTestAdapter},
     tasks::{InitCommand, SyntaxChoice, TaskInput},
 };
 use move_vm_runtime::{move_vm::MoveVM, session::SerializedReturnValues};
@@ -550,11 +549,11 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         self.next_task();
         let TaskInput {
             command,
-            name: _,
+            name,
             number,
             start_line,
             command_lines_stop,
-            stop_line: _,
+            stop_line,
             data,
         } = task;
         macro_rules! get_obj {
@@ -690,63 +689,52 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 policy,
             }) => {
                 let syntax = syntax.unwrap_or_else(|| self.default_syntax());
-                let data = data.ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "Expected a module text block following 'upgrade' starting on lines {}-{}",
-                        start_line,
-                        command_lines_stop
-                    )
-                })?;
-
-                let state = self.compiled_state();
-                let (mut modules, warnings_opt) = match syntax {
-                    SyntaxChoice::Source => {
-                        let (units, warnings_opt) =
-                            compile_source_units(state, data.path(), Some(package.clone()))?;
-                        let modules = units
-                            .into_iter()
-                            .map(|unit| match unit {
-                                AnnotatedCompiledUnit::Module(annot_module) => {
-                                    let (named_addr_opt, _id) = annot_module.module_id();
-                                    let named_addr_opt = named_addr_opt.map(|n| n.value);
-                                    let module = annot_module.named_module.module;
-                                    (named_addr_opt, module)
-                                }
-                                AnnotatedCompiledUnit::Script(_) => panic!(
-                                    "Expected a module text block, not a script, \
-                                    following 'upgrade' starting on lines {}-{}",
-                                    start_line, command_lines_stop
-                                ),
-                            })
-                            .collect();
-                        (modules, warnings_opt)
-                    }
-                    SyntaxChoice::IR => {
-                        let module = compile_ir_module(state, data.path())?;
-                        (vec![(None, module)], None)
-                    }
+                // zero out the package name
+                let zero =
+                    NumericalAddress::new(AccountAddress::ZERO.into_bytes(), NumberFormat::Hex);
+                let Some(before_upgrade) = self
+                    .compiled_state
+                    .named_address_mapping
+                    .insert(package.clone(), zero)
+                else {
+                    panic!("Unbound package '{package}' for upgrade");
                 };
-                let output = self.upgrade_package(
-                    package,
-                    &modules,
-                    upgrade_capability,
-                    dependencies,
-                    sender,
-                    gas_budget,
-                    policy,
-                )?;
-                match syntax {
-                    SyntaxChoice::Source => {
-                        let path = data.path().to_str().unwrap().to_owned();
-                        self.compiled_state()
-                            .add_with_source_file(modules, (path, data))
-                    }
-                    SyntaxChoice::IR => {
-                        let module = modules.pop().unwrap().1;
-                        self.compiled_state()
-                            .add_and_generate_interface_file(module);
-                    }
-                };
+                let result = compile_any(
+                    self,
+                    "upgrade",
+                    syntax,
+                    name,
+                    number,
+                    start_line,
+                    command_lines_stop,
+                    stop_line,
+                    data,
+                    |adapter, modules| {
+                        let output = adapter.upgrade_package(
+                            before_upgrade,
+                            &modules,
+                            upgrade_capability,
+                            dependencies,
+                            sender,
+                            gas_budget,
+                            policy,
+                        )?;
+                        Ok((output, modules))
+                    },
+                );
+                // if the package name was not updated, reset it to the value before the upgrade
+                let package_addr = self
+                    .compiled_state
+                    .named_address_mapping
+                    .get(&package)
+                    .unwrap();
+                if package_addr == &zero {
+                    self.compiled_state
+                        .named_address_mapping
+                        .insert(package, before_upgrade);
+                }
+                let (warnings_opt, output, data, modules) = result?;
+                store_modules(self, syntax, data, modules);
                 Ok(merge_output(warnings_opt, output))
             }
         }
@@ -782,7 +770,7 @@ fn accumulate_in_memory_store(store: &InMemoryStorage) -> Accumulator {
 impl<'a> SuiTestAdapter<'a> {
     fn upgrade_package(
         &mut self,
-        package: String,
+        before_upgrade: NumericalAddress,
         modules: &[(Option<Symbol>, CompiledModule)],
         upgrade_capability: FakeID,
         dependencies: Vec<String>,
@@ -834,10 +822,7 @@ impl<'a> SuiTestAdapter<'a> {
             vec![Argument::Input(0), upgrade_arg, digest_arg],
         );
 
-        let package_id = self
-            .compiled_state
-            .resolve_named_address(package.as_str())
-            .into();
+        let package_id = before_upgrade.into_inner().into();
         let upgrade_receipt =
             builder.upgrade(package_id, upgrade_ticket, dependencies, modules_bytes);
 
