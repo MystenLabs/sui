@@ -4,7 +4,7 @@ We appreciate your participation in keeping the Sui network secure. Please read 
 
 The program is run in partnership with [Immunefi](https://immunefi.com/). More information is available on [their site](https://immunefi.com/bounty/sui/).
 
-If you have any questions or concerns, please contact support@immunefi.com.
+If you have any questions or concerns, please contact [support@immunefi.com](mailto:support@immunefi.com).
 
 # Reporting and response process
 
