@@ -119,6 +119,7 @@ export function SendTokenForm({
                 validationSchema={validationSchemaStepOne}
                 enableReinitialize
                 validateOnMount
+                validateOnChange
                 onSubmit={({ to, amount, isPayAllSui }: FormValues) => {
                     if (!coins || !suiCoins) return;
                     const coinsIDs = [...coins]
