@@ -2101,6 +2101,11 @@ gas coins.
         <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_EBpsTooLarge">EBpsTooLarge</a>,
     );
 
+    // TODO: remove this in later upgrade.
+    <b>if</b> (self.parameters.stake_subsidy_start_epoch &gt; 0) {
+        self.parameters.stake_subsidy_start_epoch = 20;
+    };
+
     // Accumulate the gas summary during safe_mode before processing any rewards:
     <b>let</b> safe_mode_storage_rewards = <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_withdraw_all">balance::withdraw_all</a>(&<b>mut</b> self.safe_mode_storage_rewards);
     <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> storage_reward, safe_mode_storage_rewards);
