@@ -41,7 +41,7 @@ pub fn is_ref_count_value(value: &[u8]) -> bool {
     value.is_empty() || value.len() == 8
 }
 
-fn deserialize_ref_count_value(bytes: &[u8]) -> (Option<&[u8]>, i64) {
+pub fn deserialize_ref_count_value(bytes: &[u8]) -> (Option<&[u8]>, i64) {
     if bytes.is_empty() {
         return (None, 0);
     }
