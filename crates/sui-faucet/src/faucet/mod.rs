@@ -36,8 +36,8 @@ pub trait Faucet {
     ) -> Result<FaucetReceipt, FaucetError>;
 }
 
-pub const DEFAULT_AMOUNT: u64 = 200_000_000;
-pub const DEFAULT_NUM_OF_COINS: usize = 5;
+pub const DEFAULT_AMOUNT: u64 = 1_000_000_000;
+pub const DEFAULT_NUM_OF_COINS: usize = 1;
 
 #[derive(Parser, Clone)]
 #[clap(
@@ -79,8 +79,8 @@ impl Default for FaucetConfig {
         Self {
             port: 5003,
             host_ip: Ipv4Addr::new(127, 0, 0, 1),
-            amount: 200_000_000,
-            num_coins: 5,
+            amount: 1_000_000_000,
+            num_coins: 1,
             request_buffer_size: 10,
             max_request_per_second: 10,
             wallet_client_timeout_secs: 60,
