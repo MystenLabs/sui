@@ -16,7 +16,7 @@ fn main() -> Result<()> {
         PathBuf::from(env::var("OUT_DIR")?)
     };
 
-    let codec_path = "mysten_network::codec::BcsCodec";
+    let codec_path = "mysten_network::codec::BcsSnappyCodec";
 
     let validator_service = Service::builder()
         .name("Validator")
