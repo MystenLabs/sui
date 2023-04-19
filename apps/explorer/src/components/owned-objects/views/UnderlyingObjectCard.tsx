@@ -18,14 +18,13 @@ interface UnderlyingObjectCardProps {
         type: string;
         value?: string;
     };
-    // For dynamic field object add the key
-    isDynamicObjectType?: boolean;
+    dynamicFieldType: 'DynamicField' | 'DynamicObject';
 }
 
 export function UnderlyingObjectCard({
     parentId,
     name,
-    isDynamicObjectType,
+    dynamicFieldType,
 }: UnderlyingObjectCardProps) {
     const { data, isLoading, isError, isFetched } = useGetDynamicFieldObject(
         parentId,
@@ -66,7 +65,8 @@ export function UnderlyingObjectCard({
         return null;
     }
     // For dynamicObject type show the entire object
-    const fieldData = isDynamicObjectType ? fieldsData : fieldsData?.value;
+    const fieldData =
+        dynamicFieldType === 'DynamicObject' ? fieldsData : fieldsData?.value;
 
     const dynamicFieldsData =
         // show name if it is a struct
