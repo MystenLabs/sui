@@ -4,8 +4,9 @@ concurrency:
   group: ${{ github.workflow }}
 
 on:
+  pull_request:
   schedule:
-    - cron: "0 6 * * *" # UTC timing is every day at 10pm PST
+    - cron: "0 6 * * *" # UTC timing is every day at 11pm PST
   workflow_dispatch:
     inputs:
       verbose:
@@ -67,10 +68,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Get latest CI-tagged binary commit hash
-        run: echo "CI_COMMIT_HASH=$(git for-each-ref --sort=creatordate refs/tags | grep -E 'sui_v(.*)_ci' | tail -1 | awk '{ print $1 }')" >> $GITHUB_OUTPUT
-        id: get-ci-tag
-
       # Cargo clean and git restore on any left over files from git checkout
       - name: Environment clean
         run: |
@@ -78,11 +75,49 @@ jobs:
 
       - name: Checkout sui repo
         run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 10 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && git fetch origin main && git rebase origin/main"
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 10 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && git fetch origin && git rebase origin/main"
+
+      ##### SCHEDULED RUNS ######
+
+      - name: Get latest CI-tagged binary commit hash
+        id: get-ci-tag
+        if: ${{ github.event_name == 'schedule' }}
+        run: echo "CI_COMMIT_HASH=$(git for-each-ref --sort=creatordate refs/tags | grep -E 'sui_v(.*)_ci' | tail -1 | awk '{ print $1 }')" >> $GITHUB_OUTPUT
 
       - name: Fetch sui-node binary
+        if: ${{ github.event_name == 'schedule' }}
         run: |
           tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 30 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && rm -rf /opt/sui/bin && mkdir -p /opt/sui/bin && cd /opt/sui/bin && wget https://sui-releases.s3.us-east-1.amazonaws.com/${{ steps.get-ci-tag.outputs.CI_COMMIT_HASH }}/sui-node && chmod +x sui-node"
+
+      ###########################
+
+      ### NON-SCHEDULED RUNS ####
+
+      - name: Get workflow run ref commit hash
+        id: get-ref-commit
+        if: ${{ github.event_name != 'schedule' }}
+        run: |
+          echo ${{ github.head_ref }} && echo "CI_COMMIT_HASH=$(git ls-remote -q | grep ${{ github.head_ref }} | awk '{print $1}')" >> $GITHUB_OUTPUT
+
+      # TODO TESTING ONLY!!!!!!!!!!!!!!!!!!!!!!!!!!!
+      - name: TEST COMMIT HASH GENERATION
+        if: ${{ github.event_name != 'schedule' }}
+        run: echo ${{ github.head_ref }} && echo ${{ steps.get-ref-commit.outputs.CI_COMMIT_HASH }}
+
+      - name: Build and setup sui-node binary
+        if: ${{ github.event_name != 'schedule' }}
+        run: |
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 30 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && rm -rf /opt/sui/bin && mkdir -p /opt/sui/bin && cd ~/sui && git checkout ${{ steps.get-ref-commit.outputs.CI_COMMIT_HASH }} && cargo build --release --bin sui-node && cp target/release/sui-node /opt/sui/bin/ && chmod +x /opt/sui/bin/sui-node"
+
+      ###########################
+
+      - name: Generate commit hash output
+        uses: haya14busa/action-cond@v1.0.0
+        id: cond-commit-hash
+        with:
+          cond: ${{ (matrix.shard_manifest.start_epoch == 0) }}
+          if_true: ${{ steps.get-ci-tag.outputs.CI_COMMIT_HASH }}
+          if_false: ${{ steps.get-ref-commit.outputs.CI_COMMIT_HASH }}
 
       # Wipe database from previous runs
       - name: Wipe SuiDB
@@ -116,7 +151,7 @@ jobs:
 
       - name: Run sync script
         run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 720 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && echo "Running compatibility checker against binary built at commit hash ${{ steps.get-ci-tag.outputs.CI_COMMIT_HASH }}" && CARGO_TERM_COLOR=always ./scripts/compatibility/fullnode-sync.sh -p /opt/sui/bin/sui-node -n testnet -e ${{ matrix.shard_manifest.end_epoch }} ${{ github.event.inputs.verbose == true && '-v' || '' }}"
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 720 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && echo "Running compatibility checker against commit hash ${{ steps.cond-commit-hash.outputs.value }}" && CARGO_TERM_COLOR=always ./scripts/compatibility/fullnode-sync.sh -p /opt/sui/bin/sui-node -n testnet -e ${{ matrix.shard_manifest.end_epoch }} ${{ github.event.inputs.verbose == true && '-v' || '' }}"
 
       # When a job is cancelled, e.g. due to another job in the workflow failing, the job is marked as cancelled and the sync script and sui-node process are
       # orphaned. These remain bound to the sui-node ports, and thus cause the next run attempt to fail. This step kills the orphaned processes. Note that
@@ -127,70 +162,73 @@ jobs:
         run: |
           tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 720 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "pkill .*fullnode; pkill .*sui-node"
 
-  notify:
-    name: Notify
-    needs: [genesis-sync-test]
-    runs-on: ubuntu-latest
-    if: always() # always notify
+    outputs:
+      commit_hash: ${{ steps.cond-commit-hash.outputs.value }}
 
-    steps:
-      - uses: technote-space/workflow-conclusion-action@v3
+  # notify:
+  #   name: Notify
+  #   needs: [genesis-sync-test]
+  #   runs-on: ubuntu-latest
+  #   if: always() # always notify
 
-      - name: Checkout sui repo main branch
-        uses: actions/checkout@755da8c3cf115ac066823e79a1e1788f8940201b # pin@v3
+  #   steps:
+  #     - uses: technote-space/workflow-conclusion-action@v3
 
-      - name: Get sui commit
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          export sui_sha=$(git rev-parse HEAD)
-          echo "sui_sha=${sui_sha}" >> $GITHUB_ENV
+  #     - name: Checkout sui repo main branch
+  #       uses: actions/checkout@755da8c3cf115ac066823e79a1e1788f8940201b # pin@v3
 
-      - name: Get link to logs
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh_job_link=$(gh api -X GET 'repos/MystenLabs/sui/actions/runs/${{ github.run_id }}/jobs' --jq '.jobs.[0].html_url')
-          echo "gh_job_link=${gh_job_link}" >> $GITHUB_ENV
+  #     - name: Get sui commit
+  #       env:
+  #         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #       run: |
+  #         export sui_sha=$(git rev-parse HEAD)
+  #         echo "sui_sha=${sui_sha}" >> $GITHUB_ENV
 
-      - name: Post to slack
-        uses: slackapi/slack-github-action@936158bbe252e9a6062e793ea4609642c966e302 # pin@v1.21.0
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-          SUI_SHA: ${{ env.sui_sha }}
-          GH_JOB_LINK: ${{ env.gh_job_link }}
-        with: # TODO fix commit hash below, as we are reunning on last commit that passed CI
-          channel-id: "compatibility-test-nightly"
-          payload: |
-            {
-              "text": "*${{ github.workflow }}* workflow status: `${{ env.WORKFLOW_CONCLUSION }}`",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*${{ github.workflow }}* workflow status: `${{ env.WORKFLOW_CONCLUSION }}`"
-                  }
-                },
-                {
-                  "type": "divider"
-                },
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}> \nRun: <${{ env.GH_JOB_LINK }}|${{ github.run_id }}>"
-                  }
-                },
-                {
-                  "type": "divider"
-                },
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "To debug failures: See run logs; Rerun with `verbose` logging enabled; `tsh ssh ubuntu@fullnode-compat-test-01` if needed (or -02, -03). \nMetrics can be viewed at https://metrics.sui.io/d/_nu1mWC7zx/sui-fullnode?orgId=1&refresh=1m&var-Environment=mysten-metrics-internal&var-network=testnet&var-host=fullnode-compat-test-01"
-                  }
-                }
-              ]
-            }
+  #     - name: Get link to logs
+  #       env:
+  #         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #       run: |
+  #         gh_job_link=$(gh api -X GET 'repos/MystenLabs/sui/actions/runs/${{ github.run_id }}/jobs' --jq '.jobs.[0].html_url')
+  #         echo "gh_job_link=${gh_job_link}" >> $GITHUB_ENV
+
+  #     - name: Post to slack
+  #       uses: slackapi/slack-github-action@936158bbe252e9a6062e793ea4609642c966e302 # pin@v1.21.0
+  #       env:
+  #         SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+  #         SUI_SHA: ${{ env.sui_sha }}
+  #         GH_JOB_LINK: ${{ env.gh_job_link }}
+  #       with:
+  #         channel-id: "compatibility-test-nightly"
+  #         payload: |
+  #           {
+  #             "text": "*${{ github.workflow }}* workflow status: `${{ env.WORKFLOW_CONCLUSION }}`",
+  #             "blocks": [
+  #               {
+  #                 "type": "section",
+  #                 "text": {
+  #                   "type": "mrkdwn",
+  #                   "text": "*${{ github.workflow }}* workflow status: `${{ env.WORKFLOW_CONCLUSION }}`"
+  #                 }
+  #               },
+  #               {
+  #                 "type": "divider"
+  #               },
+  #               {
+  #                 "type": "section",
+  #                 "text": {
+  #                   "type": "mrkdwn",
+  #                   "text": "Sui commit: <https://github.com/MystenLabs/sui/commit/${{ needs.genesis-sync-test.outputs.commit_hash }}|${{ needs.genesis-sync-test.outputs.commit_hash }}> \nRun: <${{ env.GH_JOB_LINK }}|${{ github.run_id }}>"
+  #                 }
+  #               },
+  #               {
+  #                 "type": "divider"
+  #               },
+  #               {
+  #                 "type": "section",
+  #                 "text": {
+  #                   "type": "mrkdwn",
+  #                   "text": "To debug failures: See run logs; Rerun with `verbose` logging enabled; `tsh ssh ubuntu@fullnode-compat-test-01` if needed (or -02, -03). \nMetrics can be viewed at https://metrics.sui.io/d/_nu1mWC7zx/sui-fullnode?orgId=1&refresh=1m&var-Environment=mysten-metrics-internal&var-network=testnet&var-host=fullnode-compat-test-01"
+  #                 }
+  #               }
+  #             ]
+  #           }

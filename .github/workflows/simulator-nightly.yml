@@ -5,7 +5,7 @@ concurrency:
 
 on:
   schedule:
-    - cron: '0 9 * * *' # UTC timing is every day at 1am PST
+    - cron: "0 9 * * *" # UTC timing is every day at 1am PST
   workflow_dispatch:
 
 jobs:
@@ -35,14 +35,14 @@ jobs:
           # valid for. This is optional and defaults to "1h"
           certificate-ttl: 2h
 
-      # Cargo clean and git restore on any left over files from git checkout      
+      # Cargo clean and git restore on any left over files from git checkout
       - name: Environment clean
-        run: | 
+        run: |
           tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && cargo clean && git restore ."
- 
+
       # Deleting files in tmpfs that usually fill up pretty quickly after each run
       - name: Tmpfs clean
-        run: |  
+        run: |
           tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@simtest-01 "sudo rm -rfd /tmp/*"
 
       # Checkout out the latest sui repo
@@ -64,71 +64,71 @@ jobs:
       - name: Run simtest
         run: |
           tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 120 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && RUSTUP_MAX_RETRIES=10 CARGO_TERM_COLOR=always CARGO_INCREMENTAL=0 CARGO_NET_RETRY=10 RUST_BACKTRACE=short RUST_LOG=off USE_MOCK_CRYPTO=1 NUM_CPUS=12 ./scripts/simtest/simtest-run.sh"
-  
-  notify:
-    name: Notify
-    needs: [simtest]
-    runs-on: ubuntu-latest
-    if: always() # always notify
 
-    steps:
-    - uses: technote-space/workflow-conclusion-action@v3
+  # notify:
+  #   name: Notify
+  #   needs: [simtest]
+  #   runs-on: ubuntu-latest
+  #   if: always() # always notify
 
-    - name: Checkout sui repo main branch
-      uses: actions/checkout@755da8c3cf115ac066823e79a1e1788f8940201b # pin@v3
-    
-    - name: Get sui commit
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        export sui_sha=$(git rev-parse HEAD)
-        echo "sui_sha=${sui_sha}" >> $GITHUB_ENV
+  #   steps:
+  #   - uses: technote-space/workflow-conclusion-action@v3
 
-    - name: Get link to logs
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        gh_job_link=$(gh api -X GET 'repos/MystenLabs/sui/actions/runs/${{ github.run_id }}/jobs' --jq '.jobs.[0].html_url')
-        echo "gh_job_link=${gh_job_link}" >> $GITHUB_ENV        
+  #   - name: Checkout sui repo main branch
+  #     uses: actions/checkout@755da8c3cf115ac066823e79a1e1788f8940201b # pin@v3
 
-    - name: Post to slack
-      uses: slackapi/slack-github-action@936158bbe252e9a6062e793ea4609642c966e302 # pin@v1.21.0
-      env:
-        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-        SUI_SHA: ${{ env.sui_sha }}
-        GH_JOB_LINK: ${{ env.gh_job_link }}
-      with:
-        channel-id: 'simtest-nightly'
-        payload: |
-          {
-            "text": "*${{ github.workflow }}* workflow status: `${{ env.WORKFLOW_CONCLUSION }}`",
-            "blocks": [
-              {
-                "type": "section",
-                "text": {
-                  "type": "mrkdwn",
-                  "text": "*${{ github.workflow }}* workflow status: `${{ env.WORKFLOW_CONCLUSION }}`"
-                }
-              },
-              {
-                "type": "divider"
-              },
-              {
-                "type": "section",
-                "text": {
-                  "type": "mrkdwn",
-                  "text": "Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}> \nRun: <${{ env.GH_JOB_LINK }}|${{ github.run_id }}>"
-                }
-              },
-              {
-                "type": "divider"
-              },
-              {
-                "type": "section",
-                "text": {
-                  "type": "mrkdwn",
-                  "text": "To debug failures: `tsh ssh ubuntu@simtest-01` and look in the `/home/ubuntu/simtest_logs/{date}` folder for test results"
-                }
-              }
-            ]
-          }
+  #   - name: Get sui commit
+  #     env:
+  #       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #     run: |
+  #       export sui_sha=$(git rev-parse HEAD)
+  #       echo "sui_sha=${sui_sha}" >> $GITHUB_ENV
+
+  #   - name: Get link to logs
+  #     env:
+  #       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #     run: |
+  #       gh_job_link=$(gh api -X GET 'repos/MystenLabs/sui/actions/runs/${{ github.run_id }}/jobs' --jq '.jobs.[0].html_url')
+  #       echo "gh_job_link=${gh_job_link}" >> $GITHUB_ENV
+
+  #   - name: Post to slack
+  #     uses: slackapi/slack-github-action@936158bbe252e9a6062e793ea4609642c966e302 # pin@v1.21.0
+  #     env:
+  #       SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+  #       SUI_SHA: ${{ env.sui_sha }}
+  #       GH_JOB_LINK: ${{ env.gh_job_link }}
+  #     with:
+  #       channel-id: 'simtest-nightly'
+  #       payload: |
+  #         {
+  #           "text": "*${{ github.workflow }}* workflow status: `${{ env.WORKFLOW_CONCLUSION }}`",
+  #           "blocks": [
+  #             {
+  #               "type": "section",
+  #               "text": {
+  #                 "type": "mrkdwn",
+  #                 "text": "*${{ github.workflow }}* workflow status: `${{ env.WORKFLOW_CONCLUSION }}`"
+  #               }
+  #             },
+  #             {
+  #               "type": "divider"
+  #             },
+  #             {
+  #               "type": "section",
+  #               "text": {
+  #                 "type": "mrkdwn",
+  #                 "text": "Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}> \nRun: <${{ env.GH_JOB_LINK }}|${{ github.run_id }}>"
+  #               }
+  #             },
+  #             {
+  #               "type": "divider"
+  #             },
+  #             {
+  #               "type": "section",
+  #               "text": {
+  #                 "type": "mrkdwn",
+  #                 "text": "To debug failures: `tsh ssh ubuntu@simtest-01` and look in the `/home/ubuntu/simtest_logs/{date}` folder for test results"
+  #               }
+  #             }
+  #           ]
+  #         }
