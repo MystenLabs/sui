@@ -1866,36 +1866,34 @@ impl DBOptions {
     // Optimize write and lookup perf for tables which are rarely scanned, and have large values.
     // https://rocksdb.org/blog/2021/05/26/integrated-blob-db.html
     // REQUIRED: table must set optimize_for_write_throughput() earlier.
-    pub fn optimize_for_large_values_no_scan(self) -> DBOptions {
-        info!("Large value blob storage optimization is disabled via env var.");
-        return self;
-        // if env::var(ENV_VAR_DISABLE_BLOB_STORAGE).is_ok() {
-        //     info!("Large value blob storage optimization is disabled via env var.");
-        //     return self;
-        // }
+    pub fn optimize_for_large_values_no_scan(mut self) -> DBOptions {
+        if env::var(ENV_VAR_DISABLE_BLOB_STORAGE).is_ok() {
+            info!("Large value blob storage optimization is disabled via env var.");
+            return self;
+        }
 
-        // // Blob settings.
-        // self.options.set_enable_blob_files(true);
-        // self.options
-        //     .set_blob_compression_type(rocksdb::DBCompressionType::Lz4);
-        // self.options.set_enable_blob_gc(true);
-        // // Not setting a min_blob_size, to avoid additional behavior variance when workload changes.
-        // // Most transactions and effects are > 300B, which makes blob storage worthwhile for
-        // // saving write cost.
+        // Blob settings.
+        self.options.set_enable_blob_files(true);
+        self.options
+            .set_blob_compression_type(rocksdb::DBCompressionType::Lz4);
+        self.options.set_enable_blob_gc(true);
+        // Not setting a min_blob_size, to avoid additional behavior variance when workload changes.
+        // Most transactions and effects are > 300B, which makes blob storage worthwhile for
+        // saving write cost.
 
-        // // Since large blobs are not in sst files, reduce the target file size and base level
-        // // target size.
-        // // Keep sst file size at 64MiB.
-        // let target_file_size_base = 64 << 20;
-        // self.options
-        //     .set_target_file_size_base(target_file_size_base);
-        // // Level 1 default to 64MiB * 6 ~ 384MiB.
-        // let max_level_zero_file_num = read_size_from_env(ENV_VAR_L0_NUM_FILES_COMPACTION_TRIGGER)
-        //     .unwrap_or(DEFAULT_L0_NUM_FILES_COMPACTION_TRIGGER);
-        // self.options
-        //     .set_max_bytes_for_level_base(target_file_size_base * max_level_zero_file_num as u64);
+        // Since large blobs are not in sst files, reduce the target file size and base level
+        // target size.
+        // Keep sst file size at 64MiB.
+        let target_file_size_base = 64 << 20;
+        self.options
+            .set_target_file_size_base(target_file_size_base);
+        // Level 1 default to 64MiB * 6 ~ 384MiB.
+        let max_level_zero_file_num = read_size_from_env(ENV_VAR_L0_NUM_FILES_COMPACTION_TRIGGER)
+            .unwrap_or(DEFAULT_L0_NUM_FILES_COMPACTION_TRIGGER);
+        self.options
+            .set_max_bytes_for_level_base(target_file_size_base * max_level_zero_file_num as u64);
 
-        // self
+        self
     }
 
     // Optimize tables with a mix of lookup and scan workloads.
