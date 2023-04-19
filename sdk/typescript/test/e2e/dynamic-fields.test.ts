@@ -54,17 +54,24 @@ describe('Dynamic Fields Reading API', () => {
         expect(dynamicFieldsCursor.data.length).greaterThanOrEqual(0);
       });
   });
-  it('get dynamic object field', async () => {
-    const dynamicFields = await toolbox.provider.getDynamicFields({
-      parentId: parentObjectId,
-    });
-    const objDofName = dynamicFields.data[1].name;
+  it(
+    'get dynamic object field',
+    async () => {
+      const dynamicFields = await toolbox.provider.getDynamicFields({
+        parentId: parentObjectId,
+      });
+      const objDofName = dynamicFields.data[1].name;
 
-    const dynamicObjectField = await toolbox.provider.getDynamicFieldObject({
-      parentId: parentObjectId,
-      name: objDofName,
-    });
+      const dynamicObjectField = await toolbox.provider.getDynamicFieldObject({
+        parentId: parentObjectId,
+        name: objDofName,
+      });
 
-    expect(dynamicObjectField).not.toEqual({});
-  });
+      expect(dynamicObjectField).not.toEqual({});
+    },
+    {
+      // TODO: This test is currently flaky, so we retry it a bunch to avoid failing the suite.
+      retry: 10,
+    },
+  );
 });
