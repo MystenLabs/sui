@@ -65,11 +65,13 @@ export function DynamicFieldsCard({ id }: { id: string }) {
                                                             Struct{' '}
                                                             <Tooltip
                                                                 tip={
-                                                                    result.objectType
+                                                                    result.name
+                                                                        .type
                                                                 }
                                                             >
                                                                 {
-                                                                    result.objectType
+                                                                    result.name
+                                                                        .type
                                                                 }
                                                             </Tooltip>
                                                         </div>
