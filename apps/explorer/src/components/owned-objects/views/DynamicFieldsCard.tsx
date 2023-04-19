@@ -11,7 +11,6 @@ import { DisclosureBox } from '~/ui/DisclosureBox';
 import { ObjectLink } from '~/ui/InternalLink';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
-import { Tooltip } from '~/ui/Tooltip';
 
 export function DynamicFieldsCard({ id }: { id: string }) {
     const {
@@ -61,20 +60,10 @@ export function DynamicFieldsCard({ id }: { id: string }) {
                                                 <div className="block w-full truncate break-words">
                                                     {typeof result.name
                                                         ?.value === 'object' ? (
-                                                        <div className="flex gap-1">
+                                                        <>
                                                             Struct{' '}
-                                                            <Tooltip
-                                                                tip={
-                                                                    result.name
-                                                                        .type
-                                                                }
-                                                            >
-                                                                {
-                                                                    result.name
-                                                                        .type
-                                                                }
-                                                            </Tooltip>
-                                                        </div>
+                                                            {result.name.type}
+                                                        </>
                                                     ) : result.name?.value ? (
                                                         String(
                                                             result.name.value
