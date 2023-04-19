@@ -3,6 +3,7 @@
 use rusoto_core::Region;
 use rusoto_kms::{Kms, KmsClient, SignRequest, GetPublicKeyRequest};
 use openssl::ecdsa::EcdsaSig;
+use secp256k1::ecdsa::Signature as secpSig;
 
 use anyhow::anyhow;
 use bip32::DerivationPath;
@@ -284,18 +285,19 @@ impl KeyToolCommand {
 
                 let sig_bytes_der = response.signature.map(|b| b.to_vec()).unwrap_or_default();
                 
-                let sig_ecdsa = EcdsaSig::from_der(&sig_bytes_der).unwrap();
+                //let sig_ecdsa = EcdsaSig::from_der(&sig_bytes_der).unwrap();
+                let sig_bytes = secpSig::from_der(&sig_bytes_der).unwrap();
 
-                let mut sig_bytes = Vec::with_capacity(64);
+                // let mut sig_bytes = Vec::with_capacity(64);
   
-                // Adds r, pads remaining of s and then adds s
-                sig_bytes.extend_from_slice(sig_ecdsa.r().to_vec().as_slice());
-                let s_bytes = sig_ecdsa.s().to_vec();
-                let padding_len = 32 - s_bytes.len();
-                for _ in 0..padding_len {
-                    sig_bytes.push(0);
-                }
-                sig_bytes.extend_from_slice(s_bytes.as_slice());
+                // // Adds r, pads remaining of s and then adds s
+                // sig_bytes.extend_from_slice(sig_ecdsa.r().to_vec().as_slice());
+                // let s_bytes = sig_ecdsa.s().to_vec();
+                // let padding_len = 32 - s_bytes.len();
+                // for _ in 0..padding_len {
+                //     sig_bytes.push(0);
+                // }
+                // sig_bytes.extend_from_slice(s_bytes.as_slice());
 
 
                 println!("Sig Bytes {:?}", sig_bytes);
