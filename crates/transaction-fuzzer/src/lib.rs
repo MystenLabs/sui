@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod account_universe;
-mod executor;
+pub mod executor;
+pub mod type_arg_fuzzer;
 
 use proptest::collection::vec;
 use sui_protocol_config::ProtocolConfig;

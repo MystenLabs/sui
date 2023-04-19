@@ -11,12 +11,28 @@ use sui_core::{
 };
 use sui_types::{
     error::SuiError,
-    messages::{ExecutionStatus, TransactionEffectsAPI, VerifiedTransaction},
+    messages::{
+        ExecutionFailureStatus, ExecutionStatus, TransactionEffectsAPI, VerifiedTransaction,
+    },
     object::Object,
 };
 use tokio::runtime::Runtime;
 
 pub type ExecutionResult = Result<ExecutionStatus, SuiError>;
+
+// We want to look for either panics (in which case we won't hit this) or invariant violations in
+// which case we want to panic.
+pub fn assert_is_acceptable_result(result: &ExecutionResult) {
+    if let Ok(
+        e @ ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::InvariantViolation,
+            command: _,
+        },
+    ) = result
+    {
+        panic!("Invariant violation: {e:#?}")
+    }
+}
 
 pub struct Executor {
     pub state: Arc<AuthorityState>,
