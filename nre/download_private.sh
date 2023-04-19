@@ -1,4 +1,7 @@
 #!/bin/sh
+# Copyright (c) 2023, Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 if ! cosign version &> /dev/null
 then
     echo "cosign in not installed, Please install cosign for binary verification."
