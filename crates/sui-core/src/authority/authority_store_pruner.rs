@@ -130,9 +130,12 @@ impl AuthorityStorePruner {
         perpetual_db.set_highest_pruned_checkpoint(&mut wb, checkpoint_number)?;
         metrics.last_pruned_checkpoint.set(checkpoint_number as i64);
 
-        let _locks = objects_lock_table
-            .acquire_locks(indirect_objects.into_keys())
-            .await;
+        let mut _locks = vec![];
+        if !indirect_objects.is_empty() {
+            _locks = objects_lock_table
+                .acquire_locks(indirect_objects.into_keys())
+                .await;
+        }
         wb.write()?;
         Ok(())
     }
