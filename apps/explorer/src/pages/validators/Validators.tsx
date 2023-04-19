@@ -243,11 +243,11 @@ function ValidatorPageResult() {
             Object.keys(rollingAverageApys)?.length === 0
         )
             return null;
-        const apys = Object.values(rollingAverageApys);
-        const averageAPY = apys?.reduce((acc, cur) => acc + cur, 0);
+
         // exclude validators with no apy
-        const numberOfValidatorsWithAPY = apys?.filter((a) => a > 0).length;
-        return roundFloat(averageAPY / numberOfValidatorsWithAPY);
+        const apys = Object.values(rollingAverageApys)?.filter((a) => a > 0);
+        const averageAPY = apys?.reduce((acc, cur) => acc + cur, 0);
+        return roundFloat(averageAPY / apys.length);
     }, [rollingAverageApys]);
 
     const lastEpochRewardOnAllValidators = useMemo(() => {
