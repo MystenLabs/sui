@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Heading } from './Heading';
-import { Text } from './Text';
 
 export interface RingChartProps {
     data: {
@@ -17,20 +16,23 @@ export interface RingChartProps {
 
 function Legend({ data, title }: Pick<RingChartProps, 'data' | 'title'>) {
     return (
-        <div className="flex flex-col gap-5">
-            <Heading variant="heading4/semibold" color="steel-darker">
+        <div className="flex flex-col gap-2">
+            <Heading variant="heading5/semibold" color="steel-darker">
                 {title}
             </Heading>
             <div className="flex flex-col items-start justify-center gap-2">
-                {data.map(({ color, label }) => (
+                {data.map(({ color, label, value }) => (
                     <div className="flex items-center gap-1.5" key={label}>
                         <div
                             style={{ backgroundColor: color }}
                             className="h-3 w-3 rounded-sm"
                         />
-                        <Text variant="body/medium" color="steel-darker">
-                            {label}
-                        </Text>
+                        <div
+                            style={{ color: color }}
+                            className="text-body font-medium"
+                        >
+                            {value} {label}
+                        </div>
                     </div>
                 ))}
             </div>
@@ -38,12 +40,7 @@ function Legend({ data, title }: Pick<RingChartProps, 'data' | 'title'>) {
     );
 }
 
-export function RingChart({
-    data,
-    radius = 20,
-    suffix,
-    title,
-}: RingChartProps) {
+export function RingChart({ data, radius = 20, title }: RingChartProps) {
     const cx = 25;
     const cy = 25;
     const dashArray = 2 * Math.PI * radius;
@@ -63,7 +60,7 @@ export function RingChart({
                 r={radius}
                 fill="transparent"
                 stroke={color}
-                strokeWidth={4}
+                strokeWidth={5}
                 strokeDasharray={dashArray}
                 strokeDashoffset={offset}
                 transform={`rotate(${angle} ${cx} ${cy})`}
@@ -72,25 +69,22 @@ export function RingChart({
     });
 
     return (
-        <div className="grid grid-flow-row items-center justify-start xl:grid-cols-2 xl:justify-center">
-            <div className="self-start">
-                <Legend data={data} title={title} />
-            </div>
-
-            <div className="relative">
+        <div className="flex items-center gap-5">
+            <div className="relative h-24 min-h-[96px] w-24 min-w-[96px]">
                 <svg viewBox="0 0 50 50" strokeLinecap="butt">
                     {segments}
                 </svg>
                 <div className="absolute inset-0 mx-auto flex items-center justify-center">
                     <div className="flex flex-col items-center gap-1.5">
-                        <Heading variant="heading4/semibold" color="sui-dark">
+                        <Heading variant="heading2/semibold" color="sui-dark">
                             {total}
                         </Heading>
-                        <Text variant="bodySmall/medium" color="steel-dark">
-                            {suffix}
-                        </Text>
                     </div>
                 </div>
+            </div>
+
+            <div className="self-start">
+                <Legend data={data} title={title} />
             </div>
         </div>
     );

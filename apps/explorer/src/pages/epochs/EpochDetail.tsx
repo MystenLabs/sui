@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFormatCoin, useGetSystemState } from '@mysten/core';
+import { getRefGasPrice, useFormatCoin, useGetSystemState } from '@mysten/core';
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
@@ -16,11 +16,13 @@ import { ValidatorStatus } from './stats/ValidatorStatus';
 import { useEnhancedRpcClient } from '~/hooks/useEnhancedRpc';
 import { Banner } from '~/ui/Banner';
 import { Card } from '~/ui/Card';
+import { Heading } from '~/ui/Heading';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Stats, type StatsProps } from '~/ui/Stats';
 import { TableCard } from '~/ui/TableCard';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { getEpochStorageFundFlow } from '~/utils/getStorageFundFlow';
+import { Text } from '~/ui/Text';
 
 function SuiStats({
     amount,
@@ -47,6 +49,11 @@ export default function EpochDetail() {
             cursor: id === '0' ? undefined : (Number(id!) - 1).toString(),
             limit: 1,
         })
+    );
+
+    const nextRefGasPrice = useMemo(
+        () => getRefGasPrice(systemState?.activeValidators),
+        [systemState?.activeValidators]
     );
 
     const [epochData] = data?.data ?? [];
@@ -128,8 +135,39 @@ export default function EpochDetail() {
                 </EpochStats>
 
                 {isCurrentEpoch ? (
-                    <Card spacing="lg">
+                    <Card spacing="lg" bg="white">
                         <ValidatorStatus />
+
+                        <div className="mt-8 flex items-center justify-between rounded-lg border border-solid border-steel px-3 py-2">
+                            <div>
+                                <Text
+                                    variant="pSubtitle/semibold"
+                                    color="steel-darker"
+                                >
+                                    Estimated Next Epoch
+                                </Text>
+                                <Text
+                                    variant="pSubtitle/semibold"
+                                    color="steel-darker"
+                                >
+                                    Reference Gas Price
+                                </Text>
+                            </div>
+                            <div>
+                                <Heading
+                                    variant="heading4/semibold"
+                                    color="steel-darker"
+                                >
+                                    {nextRefGasPrice}
+                                </Heading>
+                                <Text
+                                    variant="pBody/medium"
+                                    color="steel-darker"
+                                >
+                                    MIST
+                                </Text>
+                            </div>
+                        </div>
                     </Card>
                 ) : null}
             </div>

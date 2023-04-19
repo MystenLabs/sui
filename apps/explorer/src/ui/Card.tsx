@@ -10,6 +10,7 @@ const cardStyles = cva(null, {
             default: 'bg-gray-40',
             highlight: 'bg-success-light',
             lightBlue: 'bg-sui/10',
+            white: 'bg-white border border-steel',
         },
         rounded: {
             lg: 'rounded-lg',

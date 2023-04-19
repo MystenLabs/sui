@@ -7,9 +7,12 @@ import { RingChart } from '~/ui/RingChart';
 export function ValidatorStatus() {
     const { data } = useGetSystemState();
     if (!data) return null;
+
+    const nextEpoch = Number(data.epoch || 0) + 1;
+
     return (
         <RingChart
-            title="Validators in Next Epoch"
+            title={`Validators in Epoch ${nextEpoch}`}
             suffix="validators"
             data={[
                 {
@@ -20,7 +23,7 @@ export function ValidatorStatus() {
                 {
                     value: Number(data.pendingActiveValidatorsSize ?? 0),
                     label: 'New',
-                    color: '#6FBCF0',
+                    color: '#F2BD24',
                 },
                 {
                     value: data.atRiskValidators.length,
