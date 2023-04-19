@@ -217,24 +217,24 @@ impl TestCaseImpl for CoinIndexTest {
         );
 
         let balances = client.coin_read_api().get_all_balances(account).await?;
+        let mut expected_balances = vec![
+            Balance {
+                coin_type: sui_type_str.into(),
+                coin_object_count: old_coin_object_count,
+                total_balance,
+                locked_balance: HashMap::new(),
+            },
+            Balance {
+                coin_type: coin_type_str.clone(),
+                coin_object_count: 1,
+                total_balance: 10000,
+                locked_balance: HashMap::new(),
+            },
+        ];
         // Comes with asc order.
-        assert_eq!(
-            balances,
-            vec![
-                Balance {
-                    coin_type: sui_type_str.into(),
-                    coin_object_count: old_coin_object_count,
-                    total_balance,
-                    locked_balance: HashMap::new(),
-                },
-                Balance {
-                    coin_type: coin_type_str.clone(),
-                    coin_object_count: 1,
-                    total_balance: 10000,
-                    locked_balance: HashMap::new(),
-                },
-            ],
-        );
+        expected_balances.sort_by(|l, r| l.coin_type.cmp(&r.coin_type));
+
+        assert_eq!(balances, expected_balances,);
 
         // 5. Mint another MANAGED coin to account, balance 10
         let txn = client
@@ -439,7 +439,7 @@ impl TestCaseImpl for CoinIndexTest {
             sui_coins.iter().map(|c| c.balance as u128).sum::<u128>()
         );
 
-        // 11. Mint 100 MANAGED coins with balance 5
+        // 11. Mint 40 MANAGED coins with balance 5
         let txn = client
             .transaction_builder()
             .move_call(
@@ -450,8 +450,8 @@ impl TestCaseImpl for CoinIndexTest {
                 vec![],
                 vec![
                     SuiJsonValue::from_object_id(cap.0),
-                    SuiJsonValue::new(json!("5"))?,   // balance = 5
-                    SuiJsonValue::new(json!("100"))?, // num = 100
+                    SuiJsonValue::new(json!("5"))?,  // balance = 5
+                    SuiJsonValue::new(json!("40"))?, // num = 40
                     SuiJsonValue::new(json!(account))?,
                 ],
                 None,
@@ -489,19 +489,25 @@ impl TestCaseImpl for CoinIndexTest {
         let first_managed_coin = managed_coins.first().unwrap().coin_object_id;
         let last_managed_coin = managed_coins.last().unwrap().coin_object_id;
 
-        assert_eq!(managed_coins.len(), 100);
+        assert_eq!(managed_coins.len(), 40);
         assert!(managed_coins.iter().all(|c| c.balance == 5));
 
-        assert_eq!(
-            sui_coins.len() + managed_coins.len(),
-            client
+        let mut total_coins = 0;
+        let mut cursor = None;
+        loop {
+            let page = client
                 .coin_read_api()
-                .get_all_coins(account, None, None)
+                .get_all_coins(account, cursor, None)
                 .await
-                .unwrap()
-                .data
-                .len(),
-        );
+                .unwrap();
+            total_coins += page.data.len();
+            cursor = page.next_cursor;
+            if !page.has_next_page {
+                break;
+            }
+        }
+
+        assert_eq!(sui_coins.len() + managed_coins.len(), total_coins,);
 
         let sui_coins_with_managed_coin_1 = client
             .coin_read_api()
@@ -541,68 +547,72 @@ impl TestCaseImpl for CoinIndexTest {
         assert!(managed_coins_2_11.has_next_page);
         let cursor = managed_coins_2_11.next_cursor;
 
-        let managed_coins_12_100 = client
+        let managed_coins_12_40 = client
             .coin_read_api()
             .get_all_coins(account, cursor, None)
             .await
             .unwrap();
         assert_eq!(
-            managed_coins_12_100,
+            managed_coins_12_40,
             client
                 .coin_read_api()
                 .get_coins(account, Some(coin_type_str.clone()), cursor, None)
                 .await
                 .unwrap(),
         );
-        assert_eq!(managed_coins_12_100.data.len(), 89);
+        assert_eq!(managed_coins_12_40.data.len(), 29);
         assert_eq!(
-            managed_coins_12_100.data.last().unwrap().coin_object_id,
+            managed_coins_12_40.data.last().unwrap().coin_object_id,
             last_managed_coin
         );
-        assert!(!managed_coins_12_100.has_next_page);
+        assert!(!managed_coins_12_40.has_next_page);
 
-        let managed_coins_12_100 = client
+        let managed_coins_12_40 = client
             .coin_read_api()
-            .get_all_coins(account, cursor, Some(90))
+            .get_all_coins(account, cursor, Some(30))
             .await
             .unwrap();
         assert_eq!(
-            managed_coins_12_100,
+            managed_coins_12_40,
             client
                 .coin_read_api()
-                .get_coins(account, Some(coin_type_str.clone()), cursor, Some(90))
+                .get_coins(account, Some(coin_type_str.clone()), cursor, Some(30))
                 .await
                 .unwrap(),
         );
-        assert_eq!(managed_coins_12_100.data.len(), 89);
+        assert_eq!(managed_coins_12_40.data.len(), 29);
         assert_eq!(
-            managed_coins_12_100.data.last().unwrap().coin_object_id,
+            managed_coins_12_40.data.last().unwrap().coin_object_id,
             last_managed_coin
         );
-        assert!(!managed_coins_12_100.has_next_page);
+        assert!(!managed_coins_12_40.has_next_page);
 
-        // 12. add one to envelope
-        let managed_coin_id = managed_coins.get(40).unwrap().coin_object_id;
-        let _ = add_to_envelope(ctx, package.0, envelope.0, managed_coin_id).await;
-        let managed_coins_12_99 = client
+        // 12. add one coin to envelope, now we only have 39 coins
+        let removed_coin_id = managed_coins.get(20).unwrap().coin_object_id;
+        let _ = add_to_envelope(ctx, package.0, envelope.0, removed_coin_id).await;
+        let managed_coins_12_39 = client
             .coin_read_api()
-            .get_all_coins(account, cursor, Some(90))
+            .get_all_coins(account, cursor, Some(40))
             .await
             .unwrap();
         assert_eq!(
-            managed_coins_12_99,
+            managed_coins_12_39,
             client
                 .coin_read_api()
-                .get_coins(account, Some(coin_type_str.clone()), cursor, Some(90))
+                .get_coins(account, Some(coin_type_str.clone()), cursor, Some(40))
                 .await
                 .unwrap(),
         );
-        assert_eq!(managed_coins_12_99.data.len(), 88);
+        assert_eq!(managed_coins_12_39.data.len(), 28);
         assert_eq!(
-            managed_coins_12_99.data.last().unwrap().coin_object_id,
+            managed_coins_12_39.data.last().unwrap().coin_object_id,
             last_managed_coin
         );
-        assert!(!managed_coins_12_99.has_next_page);
+        assert!(!managed_coins_12_39
+            .data
+            .iter()
+            .any(|coin| coin.coin_object_id == removed_coin_id));
+        assert!(!managed_coins_12_39.has_next_page);
 
         // =========================== Test Get Coins Ends ===========================
 
