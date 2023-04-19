@@ -62,14 +62,10 @@ export function UnderlyingObjectCard({
     if (!fieldsData || !normalizedStruct?.fields || !objectType) {
         return null;
     }
+
     return (
         <FieldItem
-            value={
-                // show name if it is a struct
-                typeof fieldsData?.name === 'object'
-                    ? { name: fieldsData.name, value: fieldsData.value }
-                    : fieldsData?.value
-            }
+            value={fieldsData}
             objectType={objectType}
             // add the struct type to the value
             type={

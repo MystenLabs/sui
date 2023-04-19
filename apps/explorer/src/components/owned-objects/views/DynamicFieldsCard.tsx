@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useGetDynamicFields } from '@mysten/core';
-import { formatAddress } from '@mysten/sui.js';
 import { useRef, useEffect } from 'react';
 
 import { UnderlyingObjectCard } from './UnderlyingObjectCard';
@@ -12,6 +11,7 @@ import { DisclosureBox } from '~/ui/DisclosureBox';
 import { ObjectLink } from '~/ui/InternalLink';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
+import { Tooltip } from '~/ui/Tooltip';
 
 export function DynamicFieldsCard({ id }: { id: string }) {
     const {
@@ -58,15 +58,21 @@ export function DynamicFieldsCard({ id }: { id: string }) {
                                     <DisclosureBox
                                         title={
                                             <div className="flex items-center gap-1 truncate break-words text-body font-medium leading-relaxed text-steel-dark">
-                                                <div className="block w-8/12 truncate break-words">
+                                                <div className="block w-full truncate break-words">
                                                     {typeof result.name
                                                         ?.value === 'object' ? (
-                                                        <>
+                                                        <div className="flex gap-1">
                                                             Struct{' '}
-                                                            {formatAddress(
-                                                                result.objectType
-                                                            )}
-                                                        </>
+                                                            <Tooltip
+                                                                tip={
+                                                                    result.objectType
+                                                                }
+                                                            >
+                                                                {
+                                                                    result.objectType
+                                                                }
+                                                            </Tooltip>
+                                                        </div>
                                                     ) : result.name?.value ? (
                                                         String(
                                                             result.name.value
