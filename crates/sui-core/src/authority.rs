@@ -109,6 +109,7 @@ use crate::state_accumulator::StateAccumulator;
 use crate::{transaction_input_checker, transaction_manager::TransactionManager};
 
 #[cfg(test)]
+#[cfg(feature = "test-utils")]
 #[path = "unit_tests/authority_tests.rs"]
 pub mod authority_tests;
 
@@ -128,13 +129,15 @@ mod gas_tests;
 #[path = "unit_tests/batch_verification_tests.rs"]
 mod batch_verification_tests;
 
+#[cfg(feature = "test-utils")]
+pub mod authority_test_utils;
+
 pub mod authority_per_epoch_store;
 pub mod authority_per_epoch_store_pruner;
 
 pub mod authority_store_pruner;
 pub mod authority_store_tables;
 pub mod authority_store_types;
-pub mod authority_test_utils;
 pub mod epoch_start_configuration;
 pub mod test_authority_builder;
 
