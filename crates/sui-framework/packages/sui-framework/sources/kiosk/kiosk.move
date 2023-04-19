@@ -209,8 +209,6 @@ module sui::kiosk {
 
     /// Place any object into a Kiosk.
     /// Performs an authorization check to make sure only owner can do that.
-    /// Makes sure a `TransferPolicy` exists for `T`, otherwise assets can be
-    /// locked in the `Kiosk` forever.
     public fun place<T: key + store>(
         self: &mut Kiosk, cap: &KioskOwnerCap, item: T
     ) {

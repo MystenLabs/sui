@@ -5,7 +5,7 @@
 /// Test illustrating how an asset can be forever locked in the Kiosk.
 module sui::kiosk_locked_test {
     use sui::kiosk;
-    use sui::item_locked_policy as locked_policy;
+    use sui::kiosk_lock_rule as locked_policy;
     use sui::kiosk_test_utils::{Self as test, Asset};
     use sui::transfer_policy as policy;
     use sui::transfer;
@@ -23,7 +23,7 @@ module sui::kiosk_locked_test {
         // - disallow taking from the Kiosk
         // - require "PlacedWitness" on purchase
         // - place an asset into the Kiosk so it can only be sold
-        locked_policy::set(&mut policy, &policy_cap);
+        locked_policy::add(&mut policy, &policy_cap);
         kiosk::lock(&mut kiosk, &kiosk_cap, &policy, item);
         kiosk::list<Asset>(&mut kiosk, &kiosk_cap, item_id, 1000);
 

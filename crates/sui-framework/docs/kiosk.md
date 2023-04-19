@@ -674,8 +674,6 @@ implementing a custom logic that relies on the <code><a href="kiosk.md#0x2_kiosk
 
 Place any object into a Kiosk.
 Performs an authorization check to make sure only owner can do that.
-Makes sure a <code>TransferPolicy</code> exists for <code>T</code>, otherwise assets can be
-locked in the <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code> forever.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_place">place</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, item: T)
