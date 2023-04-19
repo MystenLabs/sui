@@ -230,9 +230,11 @@ impl Env {
                 ))
             })?;
 
-        let current_gas = if use_fullnode_for_execution {
+        let current_gas = if !use_fullnode_for_execution {
             // Go through fullnode to get the current gas object.
-            let mut gas_objects = proxy
+            let fullnode_rpc_url: &String = &fullnode_rpc_urls[0];
+            let fn_proxy = Arc::new(FullNodeProxy::from_url(fullnode_rpc_url).await?);
+            let mut gas_objects = fn_proxy
                 .get_owned_objects(primary_gas_owner_addr.into())
                 .await?;
             gas_objects.sort_by_key(|&(gas, _)| std::cmp::Reverse(gas));
