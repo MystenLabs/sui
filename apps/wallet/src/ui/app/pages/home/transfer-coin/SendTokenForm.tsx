@@ -143,7 +143,6 @@ export function SendTokenForm({
                     values,
                     submitForm,
                     validateField,
-                    setFieldTouched,
                 }) => {
                     const newPaySuiAll =
                         parseAmount(values.amount, coinDecimals) ===
