@@ -230,19 +230,19 @@ impl CoinReadApiServer for CoinReadApi {
             .indexes
             .as_ref()
             .ok_or(Error::SuiError(SuiError::IndexStoreNotAvailable))?
-            .get_all_balance(owner)
+            .get_all_balance_2(owner)
             .await
             .map_err(|e: SuiError| {
                 debug!(?owner, "Failed to get all balance with error: {:?}", e);
                 Error::from(e)
             })?;
         Ok(all_balance
-            .iter()
-            .map(|(coin_type, balance)| {
+            .into_iter()
+            .map(|(coin_type, balance, count)| {
                 Balance {
-                    coin_type: coin_type.to_string(),
-                    coin_object_count: balance.num_coins,
-                    total_balance: balance.balance,
+                    coin_type,
+                    coin_object_count: count,
+                    total_balance: balance,
                     // note: LockedCoin is deprecated
                     locked_balance: Default::default(),
                 }

@@ -46,7 +46,7 @@ impl TestCaseImpl for CoinIndexTest {
             ..
         } = client.coin_read_api().get_balance(account, None).await?;
 
-        // 1. Exeute one transfer coin transation (to another address)
+        // 1. Exeute one transfer sui transation (to another address)
         let txn = ctx.make_transactions(1).await.swap_remove(0);
         let response = client
             .quorum_driver()

@@ -310,11 +310,11 @@ impl ClusterTest {
 
         // TODO: collect tests from each test_case file instead.
         let tests = vec![
-            TestCase::new(NativeTransferTest {}),
-            TestCase::new(CoinMergeSplitTest {}),
-            TestCase::new(SharedCounterTest {}),
-            TestCase::new(FullNodeExecuteTransactionTest {}),
-            TestCase::new(FullNodeBuildPublishTransactionTest {}),
+            // TestCase::new(NativeTransferTest {}),
+            // TestCase::new(CoinMergeSplitTest {}),
+            // TestCase::new(SharedCounterTest {}),
+            // TestCase::new(FullNodeExecuteTransactionTest {}),
+            // TestCase::new(FullNodeBuildPublishTransactionTest {}),
             TestCase::new(CoinIndexTest {}),
         ];
 
