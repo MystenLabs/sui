@@ -29,6 +29,20 @@ pub fn reference_count_merge_operator(
     }
 }
 
+pub fn balance_merge_operator(
+    _key: &[u8],
+    stored_value: Option<&[u8]>,
+    operands: &MergeOperands,
+) -> Option<Vec<u8>> {
+    let (mut balance, mut count) = stored_value.map_or((0, 0), deserialize_balance);
+    for operand in operands {
+        let (delta_balance, delta_count) = deserialize_balance(operand);
+        balance += delta_balance;
+        count += delta_count;
+    }
+    Some(serialize_balance_tuple(balance, count))
+}
+
 pub fn empty_compaction_filter(_level: u32, _key: &[u8], value: &[u8]) -> CompactionDecision {
     if value.is_empty() {
         CompactionDecision::Remove
@@ -49,6 +63,21 @@ fn deserialize_ref_count_value(bytes: &[u8]) -> (Option<&[u8]>, i64) {
     let (value, rc_bytes) = bytes.split_at(bytes.len() - 8);
     let ref_count = i64::from_le_bytes(rc_bytes.try_into().unwrap());
     (if value.is_empty() { None } else { Some(value) }, ref_count)
+}
+
+fn deserialize_balance(bytes: &[u8]) -> (i64, i64) {
+    if bytes.is_empty() {
+        return (0, 0);
+    }
+    assert_eq!(bytes.len(), 16);
+    let (balance_bytes, count_bytes) = bytes.split_at(8);
+    let balance = i64::from_le_bytes(balance_bytes.try_into().unwrap());
+    let count = i64::from_le_bytes(count_bytes.try_into().unwrap());
+    (balance, count)
+}
+
+pub fn serialize_balance_tuple(balance: i64, count: i64) -> Vec<u8> {
+    [balance.to_le_bytes().to_vec(), count.to_le_bytes().to_vec()].concat()
 }
 
 #[cfg(test)]

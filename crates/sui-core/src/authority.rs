@@ -2188,6 +2188,17 @@ impl AuthorityState {
         }
     }
 
+    pub fn get_total_balance_and_count(
+        &self,
+        owner: SuiAddress,
+        coin_type_tag: String,
+    ) -> SuiResult<(u64, u64)> {
+        self.indexes
+            .as_ref()
+            .map(|indexes| indexes.get_total_balance_and_count(owner, coin_type_tag))
+            .unwrap_or(Err(SuiError::IndexStoreNotAvailable))
+    }
+
     pub fn get_owned_coins_iterator_with_cursor(
         &self,
         owner: SuiAddress,

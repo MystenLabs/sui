@@ -27,6 +27,8 @@ use crate::api::{cap_page_limit, CoinReadApiServer, JsonRpcMetrics};
 use crate::error::Error;
 use crate::SuiRpcModule;
 
+const ENV_VAR_ENABLE_READS_FROM_BALANCE_INDEX: &str = "ENABLE_READS_FROM_BALANCE_INDEX";
+
 pub struct CoinReadApi {
     state: Arc<AuthorityState>,
     pub metrics: Arc<JsonRpcMetrics>,
@@ -75,6 +77,22 @@ impl CoinReadApi {
             data,
             next_cursor,
             has_next_page,
+        })
+    }
+
+    fn get_balance_from_balance_index(
+        &self,
+        owner: SuiAddress,
+        coin_type: String,
+    ) -> anyhow::Result<Balance> {
+        let (total_balance, coin_object_count) = self
+            .state
+            .get_total_balance_and_count(owner, coin_type.clone())?;
+        Ok(Balance {
+            coin_type,
+            coin_object_count: coin_object_count as usize,
+            total_balance: total_balance.into(),
+            locked_balance: Default::default(),
         })
     }
 
@@ -204,6 +222,14 @@ impl CoinReadApiServer for CoinReadApi {
             Some(c) => parse_sui_struct_tag(&c)?,
             None => GAS::type_(),
         }));
+
+        if std::env::var(ENV_VAR_ENABLE_READS_FROM_BALANCE_INDEX).is_ok()
+            || cfg!(msim)
+            || cfg!(test)
+        {
+            return Ok(self.get_balance_from_balance_index(owner, coin_type.to_string())?);
+        }
+
         let balance = self
             .state
             .indexes

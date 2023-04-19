@@ -34,6 +34,7 @@ use sui_types::query::TransactionFilter;
 use sui_types::temporary_store::TxCoins;
 use tokio::task::spawn_blocking;
 use tracing::{debug, trace};
+use typed_store::rocks::util::{balance_merge_operator, serialize_balance_tuple};
 use typed_store::rocks::{
     default_db_options, read_size_from_env, DBBatch, DBMap, DBOptions, MetricConf, ReadWriteOptions,
 };
@@ -43,6 +44,7 @@ use typed_store_derive::DBMapUtils;
 
 type OwnerIndexKey = (SuiAddress, ObjectID);
 type CoinIndexKey = (SuiAddress, String, ObjectID);
+type BalanceIndexKey = (SuiAddress, String);
 type DynamicFieldKey = (ObjectID, ObjectID);
 type EventId = (TxSequenceNumber, usize);
 type EventIndex = (TransactionEventsDigest, TransactionDigest, u64);
@@ -166,6 +168,9 @@ pub struct IndexStoreTables {
     #[default_options_override_fn = "coin_index_table_default_config"]
     coin_index: DBMap<CoinIndexKey, CoinInfo>,
 
+    #[default_options_override_fn = "balance_index_table_default_config"]
+    balance_index: DBMap<BalanceIndexKey, (u64, u64)>,
+
     /// This is an index of object references to currently existing dynamic field object, indexed by the
     /// composite key of the object ID of their parent and the object ID of the dynamic field object.
     /// This composite index allows an efficient iterator to list all objects currently owned
@@ -229,6 +234,15 @@ fn dynamic_field_index_table_default_config() -> DBOptions {
 fn index_table_default_config() -> DBOptions {
     default_db_options()
 }
+fn balance_index_table_default_config() -> DBOptions {
+    let mut options = default_db_options();
+    options.options.set_merge_operator(
+        "balance operator",
+        balance_merge_operator,
+        balance_merge_operator,
+    );
+    options
+}
 fn coin_index_table_default_config() -> DBOptions {
     DBOptions {
         options: default_db_options()
@@ -283,6 +297,8 @@ impl IndexStore {
             return Ok(());
         }
 
+        let mut balance_updates: HashMap<_, (i64, i64)> = HashMap::new();
+
         // Index coin info
         let (input_coins, written_coins) = tx_coins.unwrap();
         let mut address_coin_type_to_invalidate: HashSet<(SuiAddress, TypeTag)> = HashSet::new();
@@ -306,6 +322,20 @@ impl IndexStore {
                 });
                 address_coin_type_to_invalidate.insert((*owner, coin_type_tag.clone()));
                 addresses_to_invalidate.insert(*owner);
+
+                let coin = input_coins.get(obj_id)?.as_coin_maybe().unwrap_or_else(|| {
+                    panic!(
+                        "object_id: {:?} in input_coins cannot be deserialzied as a Coin, input_coins: {:?}, tx_digest: {:?}",
+                        obj_id, input_coins, digest
+                    )
+                });
+                balance_updates
+                    .entry((*owner, coin_type_tag.to_string()))
+                    .and_modify(|(balance, count)| {
+                        *balance -= coin.balance.value() as i64;
+                        *count -= 1;
+                    })
+                    .or_insert((-(coin.balance.value() as i64), -1));
                 Some((*owner, coin_type_tag.to_string(), *obj_id))
             }).collect::<Vec<_>>();
         trace!(
@@ -341,6 +371,14 @@ impl IndexStore {
             });
             address_coin_type_to_invalidate.insert((*owner, coin_type_tag.clone()));
             addresses_to_invalidate.insert(*owner);
+
+            balance_updates
+                .entry((*owner, coin_type_tag.to_string()))
+                .and_modify(|(balance, count)| {
+                    *balance += coin.balance.value() as i64;
+                    *count += 1;
+                })
+                .or_insert((coin.balance.value() as i64, 1));
             Some(((*owner, coin_type_tag.to_string(), *obj_id), (CoinInfo {version: obj_info.version, digest: obj_info.digest, balance: coin.balance.value(), previous_transaction: *digest})))
         }).collect::<Vec<_>>();
         trace!(
@@ -348,6 +386,12 @@ impl IndexStore {
             "coin_add_keys: {:?}",
             coin_add_keys,
         );
+        batch.partial_merge_batch(
+            &self.tables.balance_index,
+            balance_updates
+                .into_iter()
+                .map(|(key, (balance, count))| (key, serialize_balance_tuple(balance, count))),
+        )?;
         batch.insert_batch(&self.tables.coin_index, coin_add_keys.into_iter())?;
         self.invalidate_per_coin_type_cache(address_coin_type_to_invalidate.into_iter())
             .await?;
@@ -1065,6 +1109,18 @@ impl IndexStore {
                 true
             })
             .map(|((_, coin_type, obj_id), coin)| (coin_type, obj_id, coin)))
+    }
+
+    pub fn get_total_balance_and_count(
+        &self,
+        owner: SuiAddress,
+        coin_type_tag: String,
+    ) -> SuiResult<(u64, u64)> {
+        Ok(self
+            .tables
+            .balance_index
+            .get(&(owner, coin_type_tag))?
+            .unwrap_or((0, 0)))
     }
 
     pub fn get_owned_coins_iterator_with_cursor(
