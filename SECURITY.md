@@ -18,7 +18,7 @@ If you are reporting something outside the scope of Immunefi's Bug Bounty Progra
 
 # Bug bounties
 
-The Sui Foundation offers bug bounties for security issues found at different levels of severity. If a vulnerability is found, follow the process detailed above to report the issue. All bug reports must come with a runnable [testnet](https://github.com/MystenLabs/sui/tree/testnet) or [mainnet](https://github.com/MystenLabs/sui/tree/mainnet) Proof-of-Concept with an end-effect impacting an asset-in-scope in order to be considered for a reward. You do not need to have a fix in order to submit a report or receive a bounty. By your participation in Sui Foundation’s bug bounty program you agree to be bound and abide by our [terms of service](https://sui.io/terms) and [privacy policy](https://sui.io/policy) .
+The Sui Foundation offers bug bounties for security issues found at different levels of severity. If a vulnerability is found, follow the process detailed above to report the issue. All bug reports must come with a runnable [testnet](https://github.com/MystenLabs/sui/tree/testnet) Proof-of-Concept with an end-effect impacting an asset-in-scope in order to be considered for a reward. You do not need to have a fix in order to submit a report or receive a bounty. By your participation in Sui Foundation’s bug bounty program you agree to be bound and abide by our [terms of service](https://sui.io/terms) and [privacy policy](https://sui.io/policy) .
 
 ## Assets in scope
 
