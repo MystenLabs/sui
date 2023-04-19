@@ -22,16 +22,12 @@ cosign verify-blob --insecure-ignore-tlog --key $pub_key --signature $url/sui-in
 
 echo "[+] Downloading sui binaries for $randomstring ..."
 curl $url/sui -o sui
-curl $url/sui-faucet -o sui-faucet
 curl $url/sui-indexer -o sui-indexer
 curl $url/sui-node -o sui-node
 curl $url/sui-tool -o sui-tool
-curl $url/sui-proxy -o sui-proxy
 
 echo "[+] Verifying sui binaries for $randomstring ..."
 cosign verify-blob --insecure-ignore-tlog --key $pub_key --signature $url/sui.sig sui
-cosign verify-blob --insecure-ignore-tlog --key $pub_key --signature $url/sui-faucet.sig sui-faucet
 cosign verify-blob --insecure-ignore-tlog --key $pub_key --signature $url/sui-indexer.sig sui-indexer
 cosign verify-blob --insecure-ignore-tlog --key $pub_key --signature $url/sui-node.sig sui-node
-cosign verify-blob --insecure-ignore-tlog --key $pub_key --signature $url/sui-proxy.sig sui-proxy
 
