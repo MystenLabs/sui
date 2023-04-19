@@ -104,7 +104,7 @@ The following vulnerabilities are excluded from the bug bounty program:
 ### Websites and Apps
 
 -   Theoretical impacts without any proof or demonstration
--   Content spoofing / Text injection issues
+-   Content spoofing / text injection issues
 -   Self-XSS
 -   Captcha bypass using OCR
 -   CSRF with no security impact (logout CSRF, change language, etc.)
