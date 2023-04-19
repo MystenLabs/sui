@@ -18,6 +18,8 @@ pub enum ReplayToolCommand {
     ReplayTransaction {
         #[clap(long, short)]
         tx_digest: String,
+        #[clap(long, short)]
+        show_effects: bool,
     },
 
     #[clap(name = "checkpoints")]
@@ -45,16 +47,24 @@ pub async fn execute_replay_command(
         ExpensiveSafetyCheckConfig::default()
     };
     match cmd {
-        ReplayToolCommand::ReplayTransaction { tx_digest } => {
+        ReplayToolCommand::ReplayTransaction {
+            tx_digest,
+            show_effects,
+        } => {
             let tx_digest = TransactionDigest::from_str(&tx_digest)?;
             info!("Executing tx: {}", tx_digest);
-            LocalExec::new_from_fn_url(&rpc_url)
+            let effects = LocalExec::new_from_fn_url(&rpc_url)
                 .await?
                 .init_for_execution()
                 .await?
                 .execute(&tx_digest, safety)
                 .await?;
-            info!("Execution finished");
+
+            if show_effects {
+                println!("{:#?}", effects)
+            }
+
+            info!("Execution finished successfully. Local and on-chain effects match.");
         }
         ReplayToolCommand::ReplayCheckpoints {
             start,
