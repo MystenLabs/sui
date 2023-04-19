@@ -85,9 +85,9 @@ async fn bullshark_randomised_tests() {
     // A range of rounds for which we will create DAGs
     const DAG_ROUNDS: RangeInclusive<Round> = 7..=15;
     // The number of different execution plans to be created and tested against for every generated DAG
-    const EXECUTION_PLANS: u64 = 500;
+    const EXECUTION_PLANS: u64 = 400;
     // The number of DAGs that should be generated and tested against for every set of properties.
-    const DAGS_PER_SETUP: u64 = 300;
+    const DAGS_PER_SETUP: u64 = 400;
     // DAGs will be created for these failure modes
     let failure_modes: Vec<FailureModes> = vec![
         // Some failures
