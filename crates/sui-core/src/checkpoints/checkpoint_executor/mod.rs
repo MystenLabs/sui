@@ -308,9 +308,11 @@ impl CheckpointExecutor {
             return;
         };
 
+        let checkpoint_execution_max_concurrency = 2000;
+
         debug!(pending = ?pending.len(), "schedule loop begin");
         while *next_to_schedule <= *latest_synced_checkpoint.sequence_number()
-            && pending.len() < self.config.checkpoint_execution_max_concurrency
+            && pending.len() < checkpoint_execution_max_concurrency
         {
             let checkpoint = self
                 .checkpoint_store
@@ -334,7 +336,7 @@ impl CheckpointExecutor {
             ?next_to_schedule,
             latest_synced_checkpoint = ?latest_synced_checkpoint.sequence_number(),
             pending = ?pending.len(),
-            ?self.config.checkpoint_execution_max_concurrency,
+            ?checkpoint_execution_max_concurrency,
             "schedule loop finished"
         );
     }
