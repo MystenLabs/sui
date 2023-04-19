@@ -5,7 +5,6 @@
 use crate::checkpoints::CheckpointServiceNoop;
 use crate::consensus_handler::SequencedConsensusTransaction;
 use fastcrypto::hash::MultisetHash;
-use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
     crypto::{AccountKeyPair, AuthorityKeyPair, KeypairTraits},
     messages::VerifiedTransaction,
@@ -161,6 +160,7 @@ pub async fn init_state_with_ids_and_versions<
     state
 }
 
+#[cfg(feature = "test-utils")]
 pub async fn init_state_with_objects<I: IntoIterator<Item = Object>>(
     objects: I,
 ) -> Arc<AuthorityState> {
@@ -173,6 +173,7 @@ pub async fn init_state_with_objects<I: IntoIterator<Item = Object>>(
     init_state_with_objects_and_committee(objects, &genesis, &keypair).await
 }
 
+#[cfg(feature = "test-utils")]
 pub async fn init_state_with_objects_and_committee<I: IntoIterator<Item = Object>>(
     objects: I,
     genesis: &Genesis,
@@ -184,7 +185,7 @@ pub async fn init_state_with_objects_and_committee<I: IntoIterator<Item = Object
     }
     state
 }
-
+#[cfg(feature = "test-utils")]
 pub async fn init_state_with_object_id(
     address: SuiAddress,
     object: ObjectID,
@@ -192,6 +193,7 @@ pub async fn init_state_with_object_id(
     init_state_with_ids(std::iter::once((address, object))).await
 }
 
+#[cfg(feature = "test-utils")]
 pub fn init_transfer_transaction(
     sender: SuiAddress,
     secret: &AccountKeyPair,
@@ -201,6 +203,7 @@ pub fn init_transfer_transaction(
     gas_budget: u64,
     gas_price: u64,
 ) -> VerifiedTransaction {
+    use sui_types::utils::to_sender_signed_transaction;
     let data = TransactionData::new_transfer(
         recipient,
         object_ref,
@@ -212,6 +215,7 @@ pub fn init_transfer_transaction(
     to_sender_signed_transaction(data, secret)
 }
 
+#[cfg(feature = "test-utils")]
 pub fn init_certified_transfer_transaction(
     sender: SuiAddress,
     secret: &AccountKeyPair,
