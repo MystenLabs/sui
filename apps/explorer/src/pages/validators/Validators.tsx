@@ -247,7 +247,8 @@ function ValidatorPageResult() {
         // exclude validators with no apy
         const apys = Object.values(rollingAverageApys)?.filter((a) => a > 0);
         const averageAPY = apys?.reduce((acc, cur) => acc + cur, 0);
-        return roundFloat(averageAPY / apys.length);
+        // in case of no apy, return 0
+        return apys.length > 0 ? roundFloat(averageAPY / apys.length) : 0;
     }, [rollingAverageApys]);
 
     const lastEpochRewardOnAllValidators = useMemo(() => {
@@ -301,7 +302,7 @@ function ValidatorPageResult() {
                                 />
 
                                 <Stats
-                                    label="Last Epoch SUI Rewards"
+                                    label="Last Epoch Rewards"
                                     tooltip="The stake rewards collected during the last epoch."
                                     unavailable={
                                         lastEpochRewardOnAllValidators <= 0

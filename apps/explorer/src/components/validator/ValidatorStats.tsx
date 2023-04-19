@@ -96,7 +96,7 @@ export function ValidatorStats({
                         </Heading>
                         <div className="flex flex-col gap-8">
                             <Stats
-                                label="Last Epoch SUI Rewards"
+                                label="Last Epoch Rewards"
                                 tooltip="The stake rewards collected during the last epoch."
                                 unavailable={Number(epochRewards) <= 0}
                             >
