@@ -1,24 +1,24 @@
 # Introduction
 
-We appreciate your participation in keeping the Sui network secure. Please read all details on how to report an issue, what bug bounties are available, and who is eligible for bounties.
+We appreciate your participation in keeping the Sui network secure. This doc includes details on Sui's Bug Bounty Program, including information on how to report an issue, what bug bounties are available, and who is eligible for bounties.
 
 The program is run in partnership with [Immunefi](https://immunefi.com/). More information is available on [their site](https://immunefi.com/bounty/sui/).
 
-If you have any questions or concerns, please contact [support@immunefi.com](mailto:support@immunefi.com).
+If you have any questions or concerns, contact [support@immunefi.com](mailto:support@immunefi.com).
 
 # Reporting and response process
 
-All reports must be sent using Immunefi’s [secure dashboard](https://bugs.immunefi.com/). **Please DO NOT report a security issue using GitHub, email, or Discord.**
+All reports must be sent using Immunefi’s [secure dashboard](https://bugs.immunefi.com/). **DO NOT report a security issue using GitHub, email, or Discord.**
 
 You should receive an acknowledgement of your report within 48 hours for critical vulnerabilities and 96 hours for all other vulnerabilities.
 
-If you do not get a response, please contact support@immunefi.com. Please DO NOT include attachments or provide detail regarding the security issue.
+If you do not get a response, contact support@immunefi.com. DO NOT include attachments or provide detail regarding the security issue.
 
-If you are reporting something outside the scope of Immunefi's Bug Bounty Program for Sui, please contact security@sui.io
+If you are reporting something outside the scope of Immunefi's Bug Bounty Program for Sui, contact [security@sui.io](mailto:security@sui.io)
 
 # Bug bounties
 
-The Sui Foundation offers bug bounties for security issues found at different levels of severity. If a vulnerability is found, please follow the process detailed above to report the issue. All bug reports must come with a [testnet](https://github.com/MystenLabs/sui/tree/testnet) Proof-of-Concept with an end-effect impacting an asset-in-scope in order to be considered for a reward. You do not need to have a fix in order to submit a report or receive a bounty.
+The Sui Foundation offers bug bounties for security issues found at different levels of severity. If a vulnerability is found, follow the process detailed above to report the issue. All bug reports must come with a [testnet](https://github.com/MystenLabs/sui/tree/testnet) Proof-of-Concept with an end-effect impacting an asset-in-scope in order to be considered for a reward. You do not need to have a fix in order to submit a report or receive a bounty.
 
 ## Assets in scope
 
@@ -37,7 +37,7 @@ Impacts only apply to assets in active use by Sui.
 ## Impacts in Scope
 
 
-The following impacts are accepted within this bug bounty program--please refer to [Sui's Immunefi Bug Bounty Program Page](https://immunefi.com/bounty/sui/) for an official and up-to-date listing.
+The following impacts are accepted within this bug bounty program--refer to [Sui's Immunefi Bug Bounty Program Page](https://immunefi.com/bounty/sui/) for an official and up-to-date listing.
 All other impacts are considered out-of-scope and ineligible for payout.
 
 
@@ -157,7 +157,7 @@ _If you find a bug or vulnerability, report it using the [Immunefi dashboard](ht
 
 _Sui and Immunefi will be conducting Office Hours to answer questions. A date will be announced on Twitter by [@SuiNetwork](https://twitter.com/suinetwork). If you are not able to attend, you can email questions to support@immunefi.com._ with questions regarding the Bug Bounty Program.
 
-For additional security concerns/questions/comments outside the scope of the Immunefi Bug Bounty Program, please reach out to Sui's Community [Discord](https://discord.gg/sui), [Forums](https://forums.sui.io/), or e-mail us at _security@sui.io_
+For additional security concerns/questions/comments outside the scope of the Immunefi Bug Bounty Program, reach out to Sui's Community [Discord](https://discord.gg/sui), [Forums](https://forums.sui.io/), or e-mail us at _security@sui.io_
 
 **Who is behind this program?**
 
