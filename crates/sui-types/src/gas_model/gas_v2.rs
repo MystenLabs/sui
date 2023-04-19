@@ -152,7 +152,7 @@ impl SuiCostTable {
 fn cost_table_for_version(config: &ProtocolConfig) -> CostTable {
     match config.gas_model_version() {
         1 | 2 | 3 => initial_cost_schedule_v1(),
-        4 => initial_cost_schedule_v2(),
+        4 | 5 => initial_cost_schedule_v2(),
         _ => panic!("Unknown gas cost table version"),
     }
 }

@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 5;
+const MAX_PROTOCOL_VERSION: u64 = 6;
 
 // Record history of protocol version allocations here:
 //
@@ -23,6 +23,7 @@ const MAX_PROTOCOL_VERSION: u64 = 5;
 //            length is short.
 // Version 5: Package upgrade compatibility error fix. New gas cost table. New scoring decision
 //            mechanism that includes up to f scoring authorities.
+// Version 6: Change to how bytes are charged in the gas meter.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1014,6 +1015,11 @@ impl ProtocolConfig {
                 cfg.feature_flags.scoring_decision_with_validity_cutoff = true;
                 cfg.scoring_decision_mad_divisor = Some(2.3);
                 cfg.scoring_decision_cutoff_value = Some(2.5);
+                cfg
+            }
+            6 => {
+                let mut cfg = Self::get_for_version_impl(version - 1);
+                cfg.gas_model_version = Some(5);
                 cfg
             }
             // Use this template when making changes:
