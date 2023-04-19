@@ -23,7 +23,7 @@ const MAX_PROTOCOL_VERSION: u64 = 6;
 //            length is short.
 // Version 5: Package upgrade compatibility error fix. New gas cost table. New scoring decision
 //            mechanism that includes up to f scoring authorities.
-// Version 6: Change to how bytes are charged in the gas meter.
+// Version 6: Change to how bytes are charged in the gas meter, increase buffer stake to 0.5f
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1020,6 +1020,7 @@ impl ProtocolConfig {
             6 => {
                 let mut cfg = Self::get_for_version_impl(version - 1);
                 cfg.gas_model_version = Some(5);
+                cfg.buffer_stake_for_protocol_upgrade_bps = Some(5000);
                 cfg
             }
             // Use this template when making changes:

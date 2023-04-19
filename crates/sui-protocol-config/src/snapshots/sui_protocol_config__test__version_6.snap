@@ -73,7 +73,7 @@ reward_slashing_rate: 10000
 storage_gas_price: 76
 max_transactions_per_checkpoint: 10000
 max_checkpoint_size_bytes: 31457280
-buffer_stake_for_protocol_upgrade_bps: 0
+buffer_stake_for_protocol_upgrade_bps: 5000
 address_from_bytes_cost_base: 52
 address_to_u256_cost_base: 52
 address_from_u256_cost_base: 52
