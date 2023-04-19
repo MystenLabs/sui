@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use clap::Parser;
 use futures::executor::block_on;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
@@ -12,6 +11,7 @@ use move_core_types::resolver::{ModuleResolver, ResourceResolver};
 use serde::{Deserialize, Serialize};
 use similar::{ChangeTag, TextDiff};
 use std::collections::BTreeMap;
+use std::fmt::Debug;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use sui_adapter::adapter;
@@ -53,107 +53,6 @@ const SAFE_MODETX_1_DIGEST: &str = "AGBCaUGj4iGpGYyQvto9Bke1EwouY8LGMoTzzuPMx4nd
 
 const EPOCH_CHANGE_STRUCT_TAG: &str = "0x3::sui_system_state_inner::SystemEpochInfoEvent";
 
-#[derive(Parser, Clone)]
-#[clap(rename_all = "kebab-case")]
-pub enum ReplayToolCommand {
-    #[clap(name = "tx")]
-    ReplayTransaction {
-        #[clap(long, short)]
-        tx_digest: String,
-    },
-
-    #[clap(name = "checkpoints")]
-    ReplayCheckpoints {
-        #[clap(long, short)]
-        start: u64,
-        #[clap(long, short)]
-        end: u64,
-        #[clap(long, short)]
-        terminate_early: bool,
-    },
-
-    #[clap(name = "report")]
-    Report,
-}
-
-pub async fn execute_replay_command(
-    rpc_url: String,
-    safety_checks: bool,
-    cmd: ReplayToolCommand,
-) -> anyhow::Result<()> {
-    let safety = if safety_checks {
-        ExpensiveSafetyCheckConfig::new_enable_all()
-    } else {
-        ExpensiveSafetyCheckConfig::default()
-    };
-    match cmd {
-        ReplayToolCommand::ReplayTransaction { tx_digest } => {
-            let tx_digest = TransactionDigest::from_str(&tx_digest)?;
-            info!("Executing tx: {}", tx_digest);
-            LocalExec::new_from_fn_url(&rpc_url)
-                .await?
-                .init_for_execution()
-                .await?
-                .execute(&tx_digest, safety)
-                .await?;
-            info!("Execution finished");
-        }
-        ReplayToolCommand::ReplayCheckpoints {
-            start,
-            end,
-            terminate_early,
-        } => {
-            let mut total_tx = 0;
-            info!("Executing checkpoints starting at {}", start,);
-            for checkpoint in start..=end {
-                total_tx += LocalExec::new_from_fn_url(&rpc_url)
-                    .await?
-                    .init_for_execution()
-                    .await?
-                    .execute_all_in_checkpoint(checkpoint, safety.clone(), terminate_early)
-                    .await?;
-                if checkpoint % 10 == 0 {
-                    info!(
-                        "Executed {} checkpoints @ {} total transactions",
-                        checkpoint - start + 1,
-                        total_tx
-                    );
-                }
-            }
-            info!(
-                "Executing checkpoints ended at {}. Ran {} total transactions",
-                end, total_tx
-            );
-        }
-        ReplayToolCommand::Report => {
-            let mut lx = LocalExec::new_from_fn_url(&rpc_url).await?;
-            let epoch_table = lx.protocol_ver_to_epoch_map().await?;
-
-            // We need this for other activities in this session
-            lx.current_protocol_version = *epoch_table.keys().peekable().last().unwrap();
-
-            println!("  Protocol Version  |                Epoch Change TX               |      Epoch Range");
-            println!("-------------------------------------------------------------------------------------");
-
-            for (protocol_version, (tx_digest, start_epoch, end_epoch)) in epoch_table {
-                println!(
-                    " {:^16}   | {:^32} | {:^10}-{:^10}",
-                    protocol_version, tx_digest, start_epoch, end_epoch
-                );
-            }
-
-            lx.populate_protocol_version_tables().await?;
-            for x in lx.protocol_version_system_package_table {
-                println!("Protocol version: {}", x.0);
-                for (package_id, seq_num) in x.1 {
-                    println!("Package: {} Seq: {}", package_id, seq_num);
-                }
-            }
-        }
-    }
-    Ok(())
-}
-
 pub struct LocalExec {
     pub client: SuiClient,
     // For a given protocol version, what TX created it, and what is the valid range of epochs
@@ -167,6 +66,8 @@ pub struct LocalExec {
     pub store: BTreeMap<ObjectID, Object>,
     pub package_cache: Arc<Mutex<BTreeMap<ObjectID, Object>>>,
     pub object_version_cache: Arc<Mutex<BTreeMap<(ObjectID, SequenceNumber), Object>>>,
+
+    pub exec_store_events: Arc<Mutex<Vec<ExecutionStoreEvent>>>,
 }
 
 #[derive(Clone, Debug)]
@@ -185,7 +86,8 @@ struct TxInfo {
     pub protocol_config: ProtocolConfig,
 }
 
-#[derive(Debug, Serialize, Deserialize, Error, Hash)]
+#[allow(clippy::large_enum_variant)]
+#[derive(Debug, Serialize, Deserialize, Error, Clone)]
 pub enum LocalExecError {
     #[error("SuiError: {:#?}", err)]
     SuiError { err: SuiError },
@@ -215,6 +117,18 @@ pub enum LocalExecError {
         id: ObjectID,
         version: SequenceNumber,
         digest: ObjectDigest,
+    },
+
+    #[error(
+        "EffectsForked: Effects for digest {} forked with diff {}",
+        digest,
+        diff
+    )]
+    EffectsForked {
+        digest: TransactionDigest,
+        diff: String,
+        on_chain: Box<SuiTransactionBlockEffectsV1>,
+        local: Box<SuiTransactionBlockEffectsV1>,
     },
 }
 
@@ -292,9 +206,11 @@ impl LocalExec {
             protocol_version_epoch_table: BTreeMap::new(),
             protocol_version_system_package_table: BTreeMap::new(),
             current_protocol_version: 0,
+            exec_store_events: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
+    #[allow(clippy::wrong_self_convention)]
     pub fn to_temporary_store(
         &mut self,
         tx_digest: &TransactionDigest,
@@ -616,24 +532,14 @@ impl LocalExec {
 
         if tx_info.effects != new_effects {
             error!("Replay tool forked {}", tx_digest);
-
-            let on_chain_str = format!("\n{:#?}", tx_info.effects);
-            let local_chain_str = format!("\n{:#?}", new_effects);
-
-            let diff = TextDiff::from_lines(&on_chain_str, &local_chain_str);
-            println!("On-chain vs local diff");
-            for change in diff.iter_all_changes() {
-                let sign = match change.tag() {
-                    ChangeTag::Delete => "---",
-                    ChangeTag::Insert => "+++",
-                    ChangeTag::Equal => "   ",
-                };
-                println!("{}{}", sign, change);
-            }
-            return Err(LocalExecError::GeneralError {
-                err: format!("Effects differ for tx: {}", tx_digest),
+            return Err(LocalExecError::EffectsForked {
+                digest: *tx_digest,
+                diff: format!("\n{}", diff_effects(&tx_info.effects, &new_effects)),
+                on_chain: Box::new(tx_info.effects),
+                local: Box::new(new_effects),
             });
         }
+
         Ok(new_effects.dependencies)
     }
 
@@ -1118,36 +1024,81 @@ impl LocalExec {
 
 impl BackingPackageStore for LocalExec {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
-        // If package not present fetch it from the network
-        self.get_or_download_object(package_id)
-            .map_err(|e| SuiError::GenericStorageError(e.to_string()))
+        fn inner(self_: &LocalExec, package_id: &ObjectID) -> SuiResult<Option<Object>> {
+            // If package not present fetch it from the network
+            self_
+                .get_or_download_object(package_id)
+                .map_err(|e| SuiError::GenericStorageError(e.to_string()))
+        }
+
+        let res = inner(self, package_id);
+        self.exec_store_events
+            .lock()
+            .expect("Unable to lock events list")
+            .push(ExecutionStoreEvent::BackingPackageGetPackageObject {
+                package_id: *package_id,
+                result: res.clone(),
+            });
+        res
     }
 }
 
 impl ChildObjectResolver for LocalExec {
     fn read_child_object(&self, parent: &ObjectID, child: &ObjectID) -> SuiResult<Option<Object>> {
-        let child_object = match self.get_object(child)? {
-            None => return Ok(None),
-            Some(o) => o,
-        };
-        let parent = *parent;
-        if child_object.owner != Owner::ObjectOwner(parent.into()) {
-            return Err(SuiError::InvalidChildObjectAccess {
-                object: *child,
-                given_parent: parent,
-                actual_owner: child_object.owner,
-            });
+        fn inner(
+            self_: &LocalExec,
+            parent: &ObjectID,
+            child: &ObjectID,
+        ) -> SuiResult<Option<Object>> {
+            let child_object = match self_.get_object(child)? {
+                None => return Ok(None),
+                Some(o) => o,
+            };
+            let parent = *parent;
+            if child_object.owner != Owner::ObjectOwner(parent.into()) {
+                return Err(SuiError::InvalidChildObjectAccess {
+                    object: *child,
+                    given_parent: parent,
+                    actual_owner: child_object.owner,
+                });
+            }
+            Ok(Some(child_object))
         }
-        Ok(Some(child_object))
+
+        let res = inner(self, parent, child);
+        self.exec_store_events
+            .lock()
+            .expect("Unable to lock events list")
+            .push(
+                ExecutionStoreEvent::ChildObjectResolverStoreReadChildObject {
+                    parent: *parent,
+                    child: *child,
+                    result: res.clone(),
+                },
+            );
+        res
     }
 }
 
 impl ParentSync for LocalExec {
     fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
-        if let Some(v) = self.store.get(&object_id) {
-            return Ok(Some(v.compute_object_reference()));
+        fn inner(self_: &LocalExec, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
+            if let Some(v) = self_.store.get(&object_id) {
+                return Ok(Some(v.compute_object_reference()));
+            }
+            Ok(None)
         }
-        Ok(None)
+        let res = inner(self, object_id);
+        self.exec_store_events
+            .lock()
+            .expect("Unable to lock events list")
+            .push(
+                ExecutionStoreEvent::ParentSyncStoreGetLatestParentEntryRef {
+                    object_id,
+                    result: res.clone(),
+                },
+            );
+        res
     }
 }
 
@@ -1159,24 +1110,41 @@ impl ResourceResolver for LocalExec {
         address: &AccountAddress,
         typ: &StructTag,
     ) -> Result<Option<Vec<u8>>, Self::Error> {
-        let Some(object) = self.get_or_download_object(&ObjectID::from(*address))? else {
-            return Ok(None);
-        };
+        fn inner(
+            self_: &LocalExec,
+            address: &AccountAddress,
+            typ: &StructTag,
+        ) -> Result<Option<Vec<u8>>, LocalExecError> {
+            let Some(object) = self_.get_or_download_object(&ObjectID::from(*address))? else {
+                return Ok(None);
+            };
 
-        match &object.data {
-            Data::Move(m) => {
-                assert!(
-                    m.is_type(typ),
-                    "Invariant violation: ill-typed object in storage \
-                    or bad object request from caller"
-                );
-                Ok(Some(m.contents().to_vec()))
+            match &object.data {
+                Data::Move(m) => {
+                    assert!(
+                        m.is_type(typ),
+                        "Invariant violation: ill-typed object in storage \
+                        or bad object request from caller"
+                    );
+                    Ok(Some(m.contents().to_vec()))
+                }
+                other => unimplemented!(
+                    "Bad object lookup: expected Move object, but got {:#?}",
+                    other
+                ),
             }
-            other => unimplemented!(
-                "Bad object lookup: expected Move object, but got {:#?}",
-                other
-            ),
         }
+
+        let res = inner(self, address, typ);
+        self.exec_store_events
+            .lock()
+            .expect("Unable to lock events list")
+            .push(ExecutionStoreEvent::ResourceResolverGetResource {
+                address: *address,
+                typ: typ.clone(),
+                result: res.clone(),
+            });
+        res
     }
 }
 
@@ -1184,15 +1152,30 @@ impl ModuleResolver for LocalExec {
     type Error = LocalExecError;
 
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        Ok(self
-            .get_package(&ObjectID::from(*module_id.address()))
-            .map_err(LocalExecError::from)?
-            .and_then(|package| {
-                package
-                    .serialized_module_map()
-                    .get(module_id.name().as_str())
-                    .cloned()
-            }))
+        fn inner(
+            self_: &LocalExec,
+            module_id: &ModuleId,
+        ) -> Result<Option<Vec<u8>>, LocalExecError> {
+            Ok(self_
+                .get_package(&ObjectID::from(*module_id.address()))
+                .map_err(LocalExecError::from)?
+                .and_then(|package| {
+                    package
+                        .serialized_module_map()
+                        .get(module_id.name().as_str())
+                        .cloned()
+                }))
+        }
+
+        let res = inner(self, module_id);
+        self.exec_store_events
+            .lock()
+            .expect("Unable to lock events list")
+            .push(ExecutionStoreEvent::ModuleResolverGetModule {
+                module_id: module_id.clone(),
+                result: res.clone(),
+            });
+        res
     }
 }
 
@@ -1200,14 +1183,22 @@ impl ModuleResolver for &mut LocalExec {
     type Error = LocalExecError;
 
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
+        // Recording event here will be double-counting since its already recorded in the get_module fn
         (**self).get_module(module_id)
     }
 }
 
 impl ObjectStore for LocalExec {
     fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
-        Ok(self.store.get(object_id).cloned())
-        //        Ok(self.get_or_download_object(object_id).ok())
+        let res = Ok(self.store.get(object_id).cloned());
+        self.exec_store_events
+            .lock()
+            .expect("Unable to lock events list")
+            .push(ExecutionStoreEvent::ObjectStoreGetObject {
+                object_id: *object_id,
+                result: res.clone(),
+            });
+        res
     }
 
     fn get_object_by_key(
@@ -1215,18 +1206,30 @@ impl ObjectStore for LocalExec {
         object_id: &ObjectID,
         version: VersionNumber,
     ) -> Result<Option<Object>, SuiError> {
-        Ok(self.store.get(object_id).and_then(|obj| {
+        let res = Ok(self.store.get(object_id).and_then(|obj| {
             if obj.version() == version {
                 Some(obj.clone())
             } else {
                 None
             }
-        }))
+        }));
+
+        self.exec_store_events
+            .lock()
+            .expect("Unable to lock events list")
+            .push(ExecutionStoreEvent::ObjectStoreGetObjectByKey {
+                object_id: *object_id,
+                version,
+                result: res.clone(),
+            });
+
+        res
     }
 }
 
 impl ObjectStore for &mut LocalExec {
     fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+        // Recording event here will be double-counting since its already recorded in the get_module fn
         (**self).get_object(object_id)
     }
 
@@ -1235,6 +1238,7 @@ impl ObjectStore for &mut LocalExec {
         object_id: &ObjectID,
         version: VersionNumber,
     ) -> Result<Option<Object>, SuiError> {
+        // Recording event here will be double-counting since its already recorded in the get_module fn
         (**self).get_object_by_key(object_id, version)
     }
 }
@@ -1244,7 +1248,16 @@ impl GetModule for LocalExec {
     type Item = CompiledModule;
 
     fn get_module_by_id(&self, id: &ModuleId) -> anyhow::Result<Option<Self::Item>, Self::Error> {
-        get_module_by_id(self, id).map_err(|e| e.into())
+        let res = get_module_by_id(self, id).map_err(|e| e.into());
+
+        self.exec_store_events
+            .lock()
+            .expect("Unable to lock events list")
+            .push(ExecutionStoreEvent::GetModuleGetModuleByModuleId {
+                id: id.clone(),
+                result: res.clone(),
+            });
+        res
     }
 }
 
@@ -1286,4 +1299,66 @@ fn extract_epoch_and_version(ev: SuiEvent) -> Result<(u64, u64), LocalExecError>
     Err(LocalExecError::GeneralError {
         err: "Unexpected event format".to_string(),
     })
+}
+
+fn diff_effects(
+    eff1: &SuiTransactionBlockEffectsV1,
+    eff2: &SuiTransactionBlockEffectsV1,
+) -> String {
+    let on_chain_str = format!("{:#?}", eff1);
+    let local_chain_str = format!("{:#?}", eff2);
+    let mut res = vec![];
+
+    let diff = TextDiff::from_lines(&on_chain_str, &local_chain_str);
+    println!("On-chain vs local diff");
+    for change in diff.iter_all_changes() {
+        let sign = match change.tag() {
+            ChangeTag::Delete => "---",
+            ChangeTag::Insert => "+++",
+            ChangeTag::Equal => "   ",
+        };
+        res.push(format!("{}{}", sign, change));
+    }
+
+    res.join("\n")
+}
+
+/// TODO: Limited set but will add more
+#[derive(Debug)]
+pub enum ExecutionStoreEvent {
+    BackingPackageGetPackageObject {
+        package_id: ObjectID,
+        result: SuiResult<Option<Object>>,
+    },
+    ChildObjectResolverStoreReadChildObject {
+        parent: ObjectID,
+        child: ObjectID,
+        result: SuiResult<Option<Object>>,
+    },
+    ParentSyncStoreGetLatestParentEntryRef {
+        object_id: ObjectID,
+        result: SuiResult<Option<ObjectRef>>,
+    },
+    ResourceResolverGetResource {
+        address: AccountAddress,
+        typ: StructTag,
+        result: Result<Option<Vec<u8>>, LocalExecError>,
+    },
+    ModuleResolverGetModule {
+        module_id: ModuleId,
+        result: Result<Option<Vec<u8>>, LocalExecError>,
+    },
+    ObjectStoreGetObject {
+        object_id: ObjectID,
+        result: SuiResult<Option<Object>>,
+    },
+    ObjectStoreGetObjectByKey {
+        object_id: ObjectID,
+        version: VersionNumber,
+        result: SuiResult<Option<Object>>,
+    },
+    GetModuleGetModuleByModuleId {
+        id: ModuleId,
+        result: Result<Option<CompiledModule>, LocalExecError>,
+    },
 }

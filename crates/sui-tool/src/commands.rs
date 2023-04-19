@@ -3,14 +3,14 @@
 
 use crate::{
     db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand},
-    get_object, get_transaction_block, make_clients,
-    replay::{execute_replay_command, ReplayToolCommand},
-    restore_from_db_checkpoint, ConciseObjectOutput, GroupedObjectOutput, VerboseObjectOutput,
+    get_object, get_transaction_block, make_clients, restore_from_db_checkpoint,
+    ConciseObjectOutput, GroupedObjectOutput, VerboseObjectOutput,
 };
 use anyhow::Result;
 use std::path::PathBuf;
 use sui_config::genesis::Genesis;
 use sui_core::authority_client::AuthorityAPI;
+use sui_replay::{execute_replay_command, ReplayToolCommand};
 
 use sui_types::{base_types::*, object::Owner};
 
