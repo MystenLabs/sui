@@ -119,7 +119,6 @@ export function SendTokenForm({
                 validationSchema={validationSchemaStepOne}
                 enableReinitialize
                 validateOnMount
-                validateOnChange
                 onSubmit={({ to, amount, isPayAllSui }: FormValues) => {
                     if (!coins || !suiCoins) return;
                     const coinsIDs = [...coins]
@@ -181,13 +180,11 @@ export function SendTokenForm({
                                             decimals
                                             rounded="lg"
                                             dark
-                                            onActionClicked={() => {
-                                                // useFormat coin
-                                                setFieldTouched('amount', true);
-                                                setFieldValue(
+                                            onActionClicked={async () => {
+                                                // using await to make sure the value is set before the validation
+                                                await setFieldValue(
                                                     'amount',
-                                                    formattedTokenBalance,
-                                                    true
+                                                    formattedTokenBalance
                                                 );
                                                 validateField('amount');
                                             }}
