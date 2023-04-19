@@ -7,7 +7,10 @@ use crate::epoch::committee_store::CommitteeStore;
 use fastcrypto::encoding::Encoding;
 use mysten_metrics::histogram::{Histogram, HistogramVec};
 use prometheus::core::GenericCounter;
-use prometheus::{register_int_counter_vec_with_registry, IntCounterVec, Registry};
+use prometheus::{
+    register_int_counter_vec_with_registry, register_int_counter_with_registry, IntCounter,
+    IntCounterVec, Registry,
+};
 use std::sync::Arc;
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::messages_checkpoint::{
@@ -39,6 +42,7 @@ pub struct SafeClientMetricsBase {
     total_requests_by_address_method: IntCounterVec,
     total_responses_by_address_method: IntCounterVec,
     latency: HistogramVec,
+    potentially_temporarily_invalid_signatures: IntCounter,
 }
 
 impl SafeClientMetricsBase {
@@ -64,6 +68,12 @@ impl SafeClientMetricsBase {
                 &["address", "method"],
                 registry,
             ),
+            potentially_temporarily_invalid_signatures: register_int_counter_with_registry!(
+                "safe_client_potentially_temporarily_invalid_signatures",
+                "Number of PotentiallyTemporarilyInvalidSignature errors",
+                registry,
+            )
+            .unwrap(),
         }
     }
 }
@@ -79,6 +89,7 @@ pub struct SafeClientMetrics {
     handle_certificate_latency: Histogram,
     handle_obj_info_latency: Histogram,
     handle_tx_info_latency: Histogram,
+    potentially_temporarily_invalid_signatures: IntCounter,
 }
 
 impl SafeClientMetrics {
@@ -111,6 +122,10 @@ impl SafeClientMetrics {
         let handle_tx_info_latency = metrics_base
             .latency
             .with_label_values(&[&validator_address, "handle_transaction_info_request"]);
+        let potentially_temporarily_invalid_signatures = metrics_base
+            .potentially_temporarily_invalid_signatures
+            .clone();
+
         Self {
             total_requests_handle_transaction_info_request,
             total_ok_responses_handle_transaction_info_request,
@@ -120,6 +135,7 @@ impl SafeClientMetrics {
             handle_certificate_latency,
             handle_obj_info_latency,
             handle_tx_info_latency,
+            potentially_temporarily_invalid_signatures,
         }
     }
 
@@ -240,18 +256,30 @@ impl<C> SafeClient<C> {
                             transaction.into_message(),
                             cert,
                         );
-                        ct.verify_signature(&committee).tap_err(|e| {
-                            // TODO: We show the below messages for debugging purposes re. incident #267. When this is fixed, we should remove them again.
-                            warn!(?digest, ?ct, "Received invalid tx cert: {}", e);
-                            let ct_bytes =
-                                fastcrypto::encoding::Base64::encode(bcs::to_bytes(&ct).unwrap());
-                            warn!(
-                                ?digest,
-                                ?ct_bytes,
-                                "Received invalid tx cert (serialized): {}",
-                                e
-                            );
-                        })?;
+                        ct.verify_signature(&committee)
+                            .tap_err(|e| {
+                                // TODO: We show the below messages for debugging purposes re. incident #267. When this is fixed, we should remove them again.
+                                warn!(?digest, ?ct, "Received invalid tx cert: {}", e);
+                                let ct_bytes = fastcrypto::encoding::Base64::encode(
+                                    bcs::to_bytes(&ct).unwrap(),
+                                );
+                                warn!(
+                                    ?digest,
+                                    ?ct_bytes,
+                                    "Received invalid tx cert (serialized): {}",
+                                    e
+                                );
+                            })
+                            .map_err(|e| match e {
+                                // TODO: Remove as well once incident #267 is resolved.
+                                SuiError::InvalidSignature { error } => {
+                                    self.metrics
+                                        .potentially_temporarily_invalid_signatures
+                                        .inc();
+                                    SuiError::PotentiallyTemporarilyInvalidSignature { error }
+                                }
+                                _ => e,
+                            })?;
                         let ct = VerifiedCertificate::new_from_verified(ct);
                         Ok(PlainTransactionInfoResponse::ExecutedWithCert(
                             ct,
