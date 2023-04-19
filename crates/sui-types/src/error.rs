@@ -275,6 +275,12 @@ pub enum SuiError {
         signer: AuthorityName,
         conflicting_sig: bool,
     },
+    // TODO: Used for distinguishing between different occurrences of invalid signatures, to allow retries in some cases.
+    #[error(
+        "Signature is not valid, but a retry may result in a valid one: {}",
+        error
+    )]
+    PotentiallyTemporarilyInvalidSignature { error: String },
 
     // Certificate verification and execution
     #[error(
@@ -637,6 +643,8 @@ impl SuiError {
                     _ => (false, true),
                 }
             }
+
+            SuiError::PotentiallyTemporarilyInvalidSignature { .. } => (true, true),
 
             // Overload errors
             SuiError::TooManyTransactionsPendingExecution { .. } => (true, true),
