@@ -341,7 +341,7 @@ async fn test_oog_computation_oog_storage() -> SuiResult {
 // - computation ok, OOG for storage, minimal storage ok
 #[tokio::test]
 async fn test_computation_ok_oog_storage_minimal_ok() -> SuiResult {
-    const GAS_PRICE: u64 = 1000;
+    const GAS_PRICE: u64 = 1001;
     const BUDGET: u64 = 1_100_000;
     let (sender, sender_key) = get_key_pair();
     check_oog_transaction(
@@ -373,7 +373,7 @@ async fn test_computation_ok_oog_storage_minimal_ok() -> SuiResult {
 // - computation ok, OOG for storage, OOG for minimal storage (e.g. computation is entire budget)
 #[tokio::test]
 async fn test_computation_ok_oog_storage() -> SuiResult {
-    const GAS_PRICE: u64 = 1000;
+    const GAS_PRICE: u64 = 1001;
     const BUDGET: u64 = 35_000;
     let (sender, sender_key) = get_key_pair();
     check_oog_transaction(
@@ -588,7 +588,7 @@ async fn test_invalid_gas_owners() {
             sender,
             vec![good_gas_object, bad_gas_object],
             *MAX_GAS_BUDGET,
-            1000,
+            1111,
         );
         let tx = to_sender_signed_transaction(data, sender_key);
 

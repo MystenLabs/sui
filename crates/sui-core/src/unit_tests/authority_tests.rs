@@ -5006,7 +5006,7 @@ async fn test_for_inc_201_dry_run() {
         kind,
         sender,
         vec![],
-        TEST_ONLY_GAS_UNIT_FOR_GENERIC * 10,
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC * rgp,
         rgp,
     );
 
