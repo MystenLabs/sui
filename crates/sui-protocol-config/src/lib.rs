@@ -141,6 +141,9 @@ struct FeatureFlags {
     // f low scoring authorities, but it will simply flag as low scoring only up to f authorities.
     #[serde(skip_serializing_if = "is_false")]
     scoring_decision_with_validity_cutoff: bool,
+    // Re-order end of epoch messages to the end of the commit
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_order_end_of_epoch_last: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -626,6 +629,10 @@ impl ProtocolConfig {
     pub fn scoring_decision_with_validity_cutoff(&self) -> bool {
         self.feature_flags.scoring_decision_with_validity_cutoff
     }
+
+    pub fn consensus_order_end_of_epoch_last(&self) -> bool {
+        self.feature_flags.consensus_order_end_of_epoch_last
+    }
 }
 
 // Special getters
@@ -1021,6 +1028,7 @@ impl ProtocolConfig {
                 let mut cfg = Self::get_for_version_impl(version - 1);
                 cfg.gas_model_version = Some(5);
                 cfg.buffer_stake_for_protocol_upgrade_bps = Some(5000);
+                cfg.feature_flags.consensus_order_end_of_epoch_last = true;
                 cfg
             }
             // Use this template when making changes:
