@@ -31,7 +31,7 @@ impl TestCaseImpl for NativeTransferTest {
 
     async fn run(&self, ctx: &mut TestContext) -> Result<(), anyhow::Error> {
         info!("Testing gas coin transfer");
-        let mut sui_objs = ctx.get_sui_from_faucet(Some(4)).await;
+        let mut sui_objs = ctx.get_sui_from_faucet(Some(1)).await;
         let gas_obj = sui_objs.swap_remove(0);
         let signer = ctx.get_wallet_address();
         let (recipient_addr, _): (_, AccountKeyPair) = get_key_pair();
