@@ -231,20 +231,6 @@ impl Container {
         }
     }
 
-    fn rc_count(&self) -> usize {
-        match self {
-            Self::Locals(r) | Self::Struct(r) | Self::Vec(r) => Rc::strong_count(r),
-            Self::VecU8(r) => Rc::strong_count(r),
-            Self::VecU16(r) => Rc::strong_count(r),
-            Self::VecU32(r) => Rc::strong_count(r),
-            Self::VecU64(r) => Rc::strong_count(r),
-            Self::VecU128(r) => Rc::strong_count(r),
-            Self::VecU256(r) => Rc::strong_count(r),
-            Self::VecBool(r) => Rc::strong_count(r),
-            Self::VecAddress(r) => Rc::strong_count(r),
-        }
-    }
-
     fn signer(x: AccountAddress) -> Self {
         Container::Struct(Rc::new(RefCell::new(vec![ValueImpl::Address(x)])))
     }
@@ -998,17 +984,7 @@ impl Locals {
     fn swap_loc(&mut self, idx: usize, x: Value) -> PartialVMResult<Value> {
         let mut v = self.0.borrow_mut();
         match v.get_mut(idx) {
-            Some(v) => {
-                if let ValueImpl::Container(c) = v {
-                    if c.rc_count() > 1 {
-                        return Err(PartialVMError::new(
-                            StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                        )
-                        .with_message("moving container with dangling references".to_string()));
-                    }
-                }
-                Ok(Value(std::mem::replace(v, x.0)))
-            }
+            Some(v) => Ok(Value(std::mem::replace(v, x.0))),
             None => Err(
                 PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION).with_message(
                     format!("local index out of bounds: got {}, len: {}", idx, v.len()),
