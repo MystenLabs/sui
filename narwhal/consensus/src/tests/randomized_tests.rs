@@ -80,14 +80,14 @@ async fn bullshark_randomised_tests() {
 
     // A range of gc_depth to be used
     const GC_DEPTH: RangeInclusive<Round> = 7..=10;
-    // A range of the committee size to be used
-    const COMMITTEE_SIZE: RangeInclusive<usize> = 4..=10;
+    // A the committee size values to be used
+    const COMMITTEE_SIZE: [usize; 3] = [4, 7, 10];
     // A range of rounds for which we will create DAGs
     const DAG_ROUNDS: RangeInclusive<Round> = 7..=15;
     // The number of different execution plans to be created and tested against for every generated DAG
-    const EXECUTION_PLANS: u64 = 400;
+    const EXECUTION_PLANS: u64 = 500;
     // The number of DAGs that should be generated and tested against for every set of properties.
-    const DAGS_PER_SETUP: u64 = 400;
+    const DAGS_PER_SETUP: u64 = 500;
     // DAGs will be created for these failure modes
     let failure_modes: Vec<FailureModes> = vec![
         // Some failures
@@ -97,7 +97,7 @@ async fn bullshark_randomised_tests() {
             nodes_failure_probability: 0.10,     // 10%
             slow_nodes_percentage: 0.10,         // 10%
             slow_nodes_failure_probability: 0.3, // 30%
-            minimum_committee_size: Some(6), // no reason to test this failure mode for smaller committee size, as we'll end up to similar
+            minimum_committee_size: Some(7), // no reason to test this failure mode for smaller committee size, as we'll end up to similar
                                              // failures as the "severe failures" section
         },
         // Severe failures
