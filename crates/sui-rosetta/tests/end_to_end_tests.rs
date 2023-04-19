@@ -167,6 +167,7 @@ async fn test_stake() {
                 .with_events(),
         )
         .await
+        .unwrap()
         .unwrap();
 
     println!("Sui TX: {tx:?}");
@@ -230,6 +231,7 @@ async fn test_stake_all() {
                 .with_events(),
         )
         .await
+        .unwrap()
         .unwrap();
 
     println!("Sui TX: {tx:?}");
@@ -299,6 +301,7 @@ async fn test_withdraw_stake() {
                 .with_events(),
         )
         .await
+        .unwrap()
         .unwrap();
 
     println!("Sui TX: {tx:?}");
@@ -349,6 +352,7 @@ async fn test_withdraw_stake() {
                 .with_events(),
         )
         .await
+        .unwrap()
         .unwrap();
 
     assert_eq!(
@@ -419,6 +423,7 @@ async fn test_pay_sui() {
                 .with_events(),
         )
         .await
+        .unwrap()
         .unwrap();
 
     assert_eq!(
@@ -480,6 +485,7 @@ async fn test_pay_sui_multiple_times() {
                     .with_events(),
             )
             .await
+            .unwrap()
             .unwrap();
         println!("Sui TX: {tx:?}");
         assert_eq!(

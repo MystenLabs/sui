@@ -565,8 +565,19 @@ impl ReadApiServer for ReadApi {
         &self,
         digest: TransactionDigest,
         opts: Option<SuiTransactionBlockResponseOptions>,
+    ) -> RpcResult<Option<SuiTransactionBlockResponse>> {
+        Ok(self
+            .get_transaction_block_non_option(digest, opts)
+            .await
+            .ok())
+    }
+
+    async fn get_transaction_block_non_option(
+        &self,
+        digest: TransactionDigest,
+        opts: Option<SuiTransactionBlockResponseOptions>,
     ) -> RpcResult<SuiTransactionBlockResponse> {
-        let opts = opts.unwrap_or_default();
+        let opts: SuiTransactionBlockResponseOptions = opts.unwrap_or_default();
         let mut temp_response = IntermediateTransactionResponse::new(digest);
 
         // Fetch transaction to determine existence

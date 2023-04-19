@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use clap::Parser;
 use tracing::{error, info, warn};
 
@@ -40,7 +40,7 @@ async fn main() -> Result<()> {
             check_checkpoint(&config, &fn_rpc_client, &indexer_rpc_client, checkpoint).await?;
         }
     } else {
-        error!("Start checkpoint is not available in both FN and Indexer, start: {}, FN latest: {}, indexer latest: {}", 
+        error!("Start checkpoint is not available in both FN and Indexer, start: {}, FN latest: {}, indexer latest: {}",
         end_checkpoint, fn_latest_checkpoint, indexer_latest_checkpoint);
     }
     Ok(())
@@ -91,11 +91,13 @@ pub async fn check_transactions(
         let fn_sui_tx_response = fn_client
             .read_api()
             .get_transaction_with_options(digest, fetch_options.clone())
-            .await?;
+            .await?
+            .ok_or_else(|| anyhow!("Transaction not found in FN"))?;
         let indexer_sui_tx_response = indexer_client
             .read_api()
             .get_transaction_with_options(digest, fetch_options)
-            .await?;
+            .await?
+            .ok_or_else(|| anyhow!("Transaction not found in indexer"))?;
         if fn_sui_tx_response != indexer_sui_tx_response {
             error!("Checkpoint transactions mismatch found in {}", digest);
             warn!(

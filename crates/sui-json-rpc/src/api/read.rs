@@ -18,6 +18,16 @@ use sui_types::sui_serde::BigInt;
 #[rpc(server, client, namespace = "sui")]
 pub trait ReadApi {
     /// Return the transaction response object.
+    #[method(name = "getTransactionBlock", version <= "0.32")]
+    async fn get_transaction_block_non_option(
+        &self,
+        /// the digest of the queried transaction
+        digest: TransactionDigest,
+        /// options for specifying the content to be returned
+        options: Option<SuiTransactionBlockResponseOptions>,
+    ) -> RpcResult<SuiTransactionBlockResponse>;
+
+    /// Return the transaction response object.
     #[method(name = "getTransactionBlock")]
     async fn get_transaction_block(
         &self,
@@ -25,7 +35,7 @@ pub trait ReadApi {
         digest: TransactionDigest,
         /// options for specifying the content to be returned
         options: Option<SuiTransactionBlockResponseOptions>,
-    ) -> RpcResult<SuiTransactionBlockResponse>;
+    ) -> RpcResult<Option<SuiTransactionBlockResponse>>;
 
     /// Returns an ordered list of transaction responses
     /// The method will throw an error if the input contains any duplicate or

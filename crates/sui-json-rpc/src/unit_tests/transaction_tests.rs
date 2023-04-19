@@ -319,6 +319,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
             .read_api()
             .get_transaction_with_options(tx_resp.digest, SuiTransactionBlockResponseOptions::new())
             .await
+            .unwrap()
             .unwrap();
         assert!(tx_responses
             .iter()

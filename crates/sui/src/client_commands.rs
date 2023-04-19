@@ -653,7 +653,8 @@ impl SuiClientCommands {
                         digest,
                         SuiTransactionBlockResponseOptions::full_content(),
                     )
-                    .await?;
+                    .await?
+                    .ok_or_else(|| anyhow!("Transaction block not found"))?;
                 SuiClientCommandResult::TransactionBlock(tx_read)
             }
 

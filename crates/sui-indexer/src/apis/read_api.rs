@@ -188,6 +188,17 @@ where
         &self,
         digest: TransactionDigest,
         options: Option<SuiTransactionBlockResponseOptions>,
+    ) -> RpcResult<Option<SuiTransactionBlockResponse>> {
+        Ok(self
+            .get_transaction_block_non_option(digest, options)
+            .await
+            .ok())
+    }
+
+    async fn get_transaction_block_non_option(
+        &self,
+        digest: TransactionDigest,
+        options: Option<SuiTransactionBlockResponseOptions>,
     ) -> RpcResult<SuiTransactionBlockResponse> {
         if !self
             .migrated_methods
@@ -198,7 +209,17 @@ where
                 .indexer_metrics()
                 .get_transaction_block_latency
                 .start_timer();
-            let tx_resp = self.fullnode.get_transaction_block(digest, options).await;
+            let tx_resp = self
+                .fullnode
+                .get_transaction_block(digest, options)
+                .await?
+                .ok_or_else(|| {
+                    IndexerError::FullNodeReadingError(format!(
+                        "Failed to get transaction {:?}",
+                        digest.clone()
+                    ))
+                    .into()
+                });
             tx_guard.stop_and_record();
             return tx_resp;
         }

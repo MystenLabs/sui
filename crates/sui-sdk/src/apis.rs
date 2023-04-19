@@ -127,7 +127,7 @@ impl ReadApi {
         &self,
         digest: TransactionDigest,
         options: SuiTransactionBlockResponseOptions,
-    ) -> SuiRpcResult<SuiTransactionBlockResponse> {
+    ) -> SuiRpcResult<Option<SuiTransactionBlockResponse>> {
         Ok(self
             .api
             .http

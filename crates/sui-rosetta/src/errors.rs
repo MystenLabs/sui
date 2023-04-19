@@ -78,6 +78,8 @@ pub enum Error {
     DBError(#[from] TypedStoreError),
     #[error(transparent)]
     JsonExtractorRejection(#[from] JsonRejection),
+    #[error("Missing transaction")]
+    MissingTransaction,
 }
 
 impl Serialize for ErrorType {

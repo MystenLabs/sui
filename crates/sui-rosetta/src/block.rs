@@ -54,7 +54,8 @@ pub async fn transaction(
                 .with_effects()
                 .with_balance_changes(),
         )
-        .await?;
+        .await?
+        .ok_or(Error::MissingTransaction)?;
     let hash = response.digest;
 
     let operations = response.try_into()?;

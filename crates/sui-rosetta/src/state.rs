@@ -243,7 +243,8 @@ impl CheckpointBlockProvider {
                         .with_balance_changes()
                         .with_events(),
                 )
-                .await?;
+                .await?
+                .ok_or(Error::MissingTransaction)?;
             transactions.push(Transaction {
                 transaction_identifier: TransactionIdentifier { hash: tx.digest },
                 operations: Operations::try_from(tx)?,

@@ -814,7 +814,6 @@
       ],
       "result": {
         "name": "SuiTransactionBlockResponse",
-        "required": true,
         "schema": {
           "$ref": "#/components/schemas/TransactionBlockResponse"
         }

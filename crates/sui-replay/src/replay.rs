@@ -905,7 +905,10 @@ impl LocalExec {
             .read_api()
             .get_transaction_with_options(epoch_change_tx, tx_fetch_opts)
             .await
-            .map_err(LocalExecError::from)?;
+            .map_err(LocalExecError::from)?
+            .ok_or(LocalExecError::GeneralError {
+                err: format!("Unable to find transaction {}", epoch_change_tx),
+            })?;
 
         let orig_tx: SenderSignedData = bcs::from_bytes(&tx_info.raw_transaction).unwrap();
         let tx_kind_orig = orig_tx.transaction_data().kind();
@@ -932,7 +935,10 @@ impl LocalExec {
             .read_api()
             .get_transaction_with_options(*tx_digest, tx_fetch_opts)
             .await
-            .map_err(LocalExecError::from)?;
+            .map_err(LocalExecError::from)?
+            .ok_or(LocalExecError::GeneralError {
+                err: format!("Unable to find transaction {}", tx_digest),
+            })?;
         let sender = match tx_info.clone().transaction.unwrap().data {
             sui_json_rpc_types::SuiTransactionBlockData::V1(tx) => tx.sender,
         };
