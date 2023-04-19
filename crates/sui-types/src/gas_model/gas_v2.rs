@@ -2,6 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::digests::TransactionDigest;
 use crate::error::{UserInputError, UserInputResult};
 use crate::gas::{self, GasCostSummary, SuiGasStatusAPI};
 use crate::{
@@ -9,6 +10,7 @@ use crate::{
     object::{Object, Owner},
 };
 use move_core_types::vm_status::StatusCode;
+use once_cell::sync::Lazy;
 use std::iter;
 use sui_cost_tables::bytecode_tables::{
     initial_cost_schedule_v1, initial_cost_schedule_v2, initial_cost_schedule_v3, GasStatus,
@@ -29,6 +31,17 @@ macro_rules! ok_or_gas_balance_error {
         }
     };
 }
+
+static LOGGING_FILE: Lazy<std::sync::Mutex<std::fs::File>> = Lazy::new(|| {
+    std::sync::Mutex::new(
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .append(true)
+            .open("/Users/timothyzakian/work/gas_costs")
+            .unwrap(),
+    )
+});
 
 sui_macros::checked_arithmetic! {
 
@@ -312,7 +325,27 @@ impl SuiGasStatusAPI for SuiGasStatus {
         &mut self.gas_status
     }
 
-    fn bucketize_computation(&mut self) -> Result<(), ExecutionError> {
+    fn bucketize_computation(&mut self, txn_digest: &TransactionDigest) -> Result<(), ExecutionError> {
+        // if self.gas_status.current.is_metered() {
+            let f = &mut *LOGGING_FILE.lock().unwrap();
+            use std::io::Write;
+            let current = u64::from(self.gas_status.current.gas_used_pre_gas_price());
+            let new = u64::from(self.gas_status.new.gas_used_pre_gas_price());
+            // tx_digest,time,current,new,bucket_bytecode,bucket_tiered,instrs,stack_size,stack_height
+            writeln!(
+                f,
+                "{},{},{},{},{},{},{},{},{}",
+                txn_digest,
+                self.gas_status.time(),
+                current,
+                new,
+                get_bucket_cost(&self.cost_table.computation_bucket, current),
+                get_bucket_cost(&self.cost_table.computation_bucket, new),
+                self.gas_status.new.instructions_executed,
+                self.gas_status.new.stack_size_high_water_mark,
+                self.gas_status.new.stack_height_high_water_mark,
+            );
+        // }
         let gas_used = self.gas_status.gas_used_pre_gas_price();
         let bucket_cost = get_bucket_cost(&self.cost_table.computation_bucket, gas_used);
         // charge extra on top of `computation_cost` to make the total computation

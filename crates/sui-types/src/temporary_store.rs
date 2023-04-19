@@ -791,7 +791,7 @@ impl<S: ObjectStore> TemporaryStore<S> {
         assert!(gas_status.storage_gas_units() == 0);
 
         // bucketize computation cost
-        if let Err(err) = gas_status.bucketize_computation() {
+        if let Err(err) = gas_status.bucketize_computation(&self.tx_digest) {
             if execution_result.is_ok() {
                 *execution_result = Err(err);
             }
@@ -986,7 +986,7 @@ impl<S: ObjectStore> TemporaryStore<S> {
 
         if gas_object_id.is_some() {
             // bucketize computation cost
-            if let Err(err) = gas_status.bucketize_computation() {
+            if let Err(err) = gas_status.bucketize_computation(&self.tx_digest) {
                 if execution_result.is_ok() {
                     *execution_result = Err(err);
                 }

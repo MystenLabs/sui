@@ -2,6 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::digests::TransactionDigest;
 use crate::error::{UserInputError, UserInputResult};
 use crate::{
     error::{ExecutionError, ExecutionErrorKind},
@@ -365,7 +366,7 @@ impl SuiGasStatusAPI for SuiGasStatus {
         &mut self.gas_status
     }
 
-    fn bucketize_computation(&mut self) -> Result<(), ExecutionError> {
+    fn bucketize_computation(&mut self, _txn_digest: &TransactionDigest) -> Result<(), ExecutionError> {
         let computation_cost: u64 = self.gas_used();
         let bucket_cost = get_bucket_cost(&COMPUTATION_BUCKETS, computation_cost);
         // charge extra on top of `computation_cost` to make the total computation

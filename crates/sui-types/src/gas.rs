@@ -2,6 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::digests::TransactionDigest;
 use crate::sui_serde::BigInt;
 use crate::sui_serde::Readable;
 use crate::{
@@ -25,7 +26,7 @@ sui_macros::checked_arithmetic! {
 pub trait SuiGasStatusAPI {
     fn is_unmetered(&self) -> bool;
     fn move_gas_status(&mut self) -> &mut GasStatus;
-    fn bucketize_computation(&mut self) -> Result<(), ExecutionError>;
+    fn bucketize_computation(&mut self, txn_digest: &TransactionDigest) -> Result<(), ExecutionError>;
     fn summary(&self) -> GasCostSummary;
     fn gas_budget(&self) -> u64;
     fn storage_gas_units(&self) -> u64;

@@ -11,8 +11,10 @@ pub use bytecode_based::tables as bytecode_tables;
 pub use bytecode_based::units_types;
 
 #[cfg(feature = "tiered-gas")]
+pub mod double_meter;
+#[cfg(feature = "tiered-gas")]
 pub mod tier_based;
 #[cfg(feature = "tiered-gas")]
-pub use tier_based::tables as bytecode_tables;
+pub use double_meter as bytecode_tables;
 #[cfg(feature = "tiered-gas")]
 pub use tier_based::units_types;

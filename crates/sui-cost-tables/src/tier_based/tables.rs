@@ -48,28 +48,28 @@ pub static INITIAL_COST_SCHEDULE: Lazy<CostTable> = Lazy::new(initial_cost_sched
 #[derive(Debug)]
 pub struct GasStatus {
     pub gas_model_version: u64,
-    cost_table: CostTable,
-    gas_left: InternalGas,
-    gas_price: u64,
-    initial_budget: InternalGas,
-    charge: bool,
+    pub cost_table: CostTable,
+    pub gas_left: InternalGas,
+    pub gas_price: u64,
+    pub initial_budget: InternalGas,
+    pub charge: bool,
 
     // The current height of the operand stack, and the maximal height that it has reached.
-    stack_height_high_water_mark: u64,
-    stack_height_current: u64,
-    stack_height_next_tier_start: Option<u64>,
-    stack_height_current_tier_mult: u64,
+    pub stack_height_high_water_mark: u64,
+    pub stack_height_current: u64,
+    pub stack_height_next_tier_start: Option<u64>,
+    pub stack_height_current_tier_mult: u64,
 
     // The current (abstract) size  of the operand stack and the maximal size that it has reached.
-    stack_size_high_water_mark: u64,
-    stack_size_current: u64,
-    stack_size_next_tier_start: Option<u64>,
-    stack_size_current_tier_mult: u64,
+    pub stack_size_high_water_mark: u64,
+    pub stack_size_current: u64,
+    pub stack_size_next_tier_start: Option<u64>,
+    pub stack_size_current_tier_mult: u64,
 
     // The total number of bytecode instructions that have been executed in the transaction.
-    instructions_executed: u64,
-    instructions_next_tier_start: Option<u64>,
-    instructions_current_tier_mult: u64,
+    pub instructions_executed: u64,
+    pub instructions_next_tier_start: Option<u64>,
+    pub instructions_current_tier_mult: u64,
 }
 
 impl GasStatus {
@@ -170,12 +170,12 @@ impl GasStatus {
 
     const INTERNAL_UNIT_MULTIPLIER: u64 = 1000;
 
-    fn to_internal_units(val: u64) -> InternalGas {
+    pub(crate) fn to_internal_units(val: u64) -> InternalGas {
         InternalGas::new(val * Self::INTERNAL_UNIT_MULTIPLIER)
     }
 
     #[allow(dead_code)]
-    fn to_mist(&self, val: InternalGas) -> u64 {
+    pub(crate) fn to_mist(&self, val: InternalGas) -> u64 {
         let gas: Gas = InternalGas::to_unit_round_down(val);
         u64::from(gas) * self.gas_price
     }
@@ -322,7 +322,7 @@ impl GasStatus {
     }
 
     // Deduct the amount provided with no conversion, as if it was InternalGasUnit
-    fn deduct_units(&mut self, amount: u64) -> PartialVMResult<()> {
+    pub(crate) fn deduct_units(&mut self, amount: u64) -> PartialVMResult<()> {
         self.deduct_gas(InternalGas::new(amount))
     }
 

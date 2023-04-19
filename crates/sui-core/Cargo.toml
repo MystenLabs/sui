@@ -72,7 +72,7 @@ sui-network = { path = "../sui-network" }
 sui-protocol-config = { path = "../sui-protocol-config" }
 sui-simulator = { path = "../sui-simulator" }
 sui-storage = { path = "../sui-storage" }
-sui-types = { path = "../sui-types" }
+sui-types = { path = "../sui-types", features = ["test-utils"] }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
