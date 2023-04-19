@@ -853,6 +853,11 @@ module sui_system::sui_system_state_inner {
             EBpsTooLarge,
         );
 
+        // TODO: remove this in later upgrade.
+        if (self.parameters.stake_subsidy_start_epoch > 0) {
+            self.parameters.stake_subsidy_start_epoch = 20;
+        };
+
         // Accumulate the gas summary during safe_mode before processing any rewards:
         let safe_mode_storage_rewards = balance::withdraw_all(&mut self.safe_mode_storage_rewards);
         balance::join(&mut storage_reward, safe_mode_storage_rewards);

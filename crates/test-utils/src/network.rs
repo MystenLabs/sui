@@ -389,6 +389,15 @@ impl TestClusterBuilder {
         self
     }
 
+    pub fn with_stake_subsidy_start_epoch(mut self, stake_subsidy_start_epoch: u64) -> Self {
+        let mut genesis_config = self
+            .genesis_config
+            .unwrap_or_else(GenesisConfig::for_local_testing);
+        genesis_config.parameters.stake_subsidy_start_epoch = stake_subsidy_start_epoch;
+        self.genesis_config = Some(genesis_config);
+        self
+    }
+
     pub fn with_supported_protocol_versions(mut self, c: SupportedProtocolVersions) -> Self {
         self.validator_supported_protocol_versions_config = ProtocolVersionsConfig::Global(c);
         self
