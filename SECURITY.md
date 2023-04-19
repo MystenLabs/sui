@@ -14,6 +14,8 @@ You should receive an acknowledgement of your report within 48 hours for critica
 
 If you do not get a response, please contact support@immunefi.com. Please DO NOT include attachments or provide detail regarding the security issue.
 
+If you are reporting something outside the scope of Immunefi's Bug Bounty Program for Sui, please contact security@sui.io
+
 # Bug bounties
 
 The Sui Foundation offers bug bounties for security issues found at different levels of severity. If a vulnerability is found, please follow the process detailed above to report the issue. All bug reports must come with a testnet Proof of Concept with an end-effect impacting an asset-in-scope in order to be considered for a reward. You do not need to have a fix in order to submit a report or receive a bounty.
