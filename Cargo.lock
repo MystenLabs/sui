@@ -461,6 +461,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8da52d66c7071e2e3fa2a1e5c6d088fec47b593032b254f5e980de8ea54454d6"
 
 [[package]]
+name = "asn1"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce848fd2d6385bf7a731bbc7816079dd877b8d0c0b995d5990a01412bd2c13d6"
+dependencies = [
+ "asn1_derive",
+ "chrono",
+]
+
+[[package]]
 name = "asn1-rs"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -493,6 +503,17 @@ name = "asn1-rs-impl"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2777730b2039ac0f95f093556e61b6d26cebed5393ca6f152717777cec3a42ed"
+dependencies = [
+ "proc-macro2 1.0.54",
+ "quote 1.0.26",
+ "syn 1.0.107",
+]
+
+[[package]]
+name = "asn1_derive"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d5ea4f2cb9cb2e223b2c68a2256a56b8b9c5104946318e68de9d9fd3568f056"
 dependencies = [
  "proc-macro2 1.0.54",
  "quote 1.0.26",
@@ -2717,9 +2738,9 @@ dependencies = [
 
 [[package]]
 name = "der"
-version = "0.7.1"
+version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc906908ea6458456e5eaa160a9c08543ec3d1e6f71e2235cedd660cb65f9df0"
+checksum = "82b10af9f9f9f2134a42d3f8aa74658660f2e0234b0eb81bd171df8aa32779ed"
 dependencies = [
  "const-oid",
  "zeroize",
@@ -3070,12 +3091,13 @@ dependencies = [
 
 [[package]]
 name = "ecdsa"
-version = "0.16.2"
+version = "0.16.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "644d3b8674a5fc5b929ae435bca85c2323d85ccb013a5509c2ac9ee11a6284ba"
+checksum = "a48e5d537b8a30c0b023116d981b16334be1485af7ca68db3a2b7024cbc957fd"
 dependencies = [
- "der 0.7.1",
- "elliptic-curve 0.13.2",
+ "der 0.7.3",
+ "digest 0.10.6",
+ "elliptic-curve 0.13.4",
  "rfc6979 0.4.0",
  "signature 2.0.0",
 ]
@@ -3149,9 +3171,9 @@ dependencies = [
 
 [[package]]
 name = "elliptic-curve"
-version = "0.13.2"
+version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ea5a92946e8614bb585254898bb7dd1ddad241ace60c52149e3765e34cc039d"
+checksum = "75c71eaa367f2e5d556414a8eea812bc62985c879748d6403edabd9cb03f16e7"
 dependencies = [
  "base16ct 0.2.0",
  "crypto-bigint 0.5.1",
@@ -3159,7 +3181,7 @@ dependencies = [
  "ff 0.13.0",
  "generic-array",
  "group 0.13.0",
- "pkcs8 0.10.1",
+ "pkcs8 0.10.2",
  "rand_core 0.6.4",
  "sec1 0.7.1",
  "subtle",
@@ -3328,9 +3350,9 @@ dependencies = [
  "curve25519-dalek-ng",
  "derive_more",
  "digest 0.10.6",
- "ecdsa 0.16.2",
+ "ecdsa 0.16.6",
  "ed25519-consensus",
- "elliptic-curve 0.13.2",
+ "elliptic-curve 0.13.4",
  "eyre",
  "fastcrypto-derive",
  "generic-array",
@@ -6918,8 +6940,8 @@ version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7270da3e5caa82afd3deb054cc237905853813aea3859544bc082c3fe55b8d47"
 dependencies = [
- "ecdsa 0.16.2",
- "elliptic-curve 0.13.2",
+ "ecdsa 0.16.6",
+ "elliptic-curve 0.13.4",
  "primeorder",
  "sha2 0.10.6",
 ]
@@ -7226,12 +7248,12 @@ dependencies = [
 
 [[package]]
 name = "pkcs8"
-version = "0.10.1"
+version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d2820d87d2b008616e5c27212dd9e0e694fb4c6b522de06094106813328cb49"
+checksum = "f950b2377845cebe5cf8b5165cb3cc1a5e0fa5cfa3e1f7f55707d8fd82e0a7b7"
 dependencies = [
- "der 0.7.1",
- "spki 0.7.0",
+ "der 0.7.3",
+ "spki 0.7.1",
 ]
 
 [[package]]
@@ -7434,7 +7456,7 @@ version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7613fdcc0831c10060fa69833ea8fa2caa94b6456f51e25356a885b530a2e3d0"
 dependencies = [
- "elliptic-curve 0.13.2",
+ "elliptic-curve 0.13.4",
 ]
 
 [[package]]
@@ -8575,9 +8597,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48518a2b5775ba8ca5b46596aae011caa431e6ce7e4a67ead66d92f08884220e"
 dependencies = [
  "base16ct 0.2.0",
- "der 0.7.1",
+ "der 0.7.3",
  "generic-array",
- "pkcs8 0.10.1",
+ "pkcs8 0.10.2",
  "subtle",
  "zeroize",
 ]
@@ -9152,12 +9174,12 @@ dependencies = [
 
 [[package]]
 name = "spki"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0445c905640145c7ea8c1993555957f65e7c46d0535b91ba501bc9bfc85522f"
+checksum = "37a5be806ab6f127c3da44b7378837ebf01dadca8510a0e572460216b228bd0e"
 dependencies = [
  "base64ct",
- "der 0.7.1",
+ "der 0.7.3",
 ]
 
 [[package]]
@@ -9289,9 +9311,11 @@ version = "0.31.0"
 dependencies = [
  "anemo",
  "anyhow",
+ "asn1",
  "assert_cmd",
  "async-trait",
  "aws-config 0.55.1",
+ "base64 0.13.1",
  "bcs",
  "bip32",
  "camino",
@@ -9299,6 +9323,7 @@ dependencies = [
  "colored",
  "const-str",
  "csv",
+ "ecdsa 0.16.6",
  "expect-test",
  "fastcrypto",
  "fs_extra",
@@ -9312,6 +9337,7 @@ dependencies = [
  "move-core-types",
  "move-package",
  "mysten-metrics",
+ "openssl",
  "prettytable-rs",
  "prometheus",
  "rand 0.8.5",
@@ -12304,7 +12330,7 @@ dependencies = [
  "debug-ignore",
  "debugid",
  "der 0.6.1",
- "der 0.7.1",
+ "der 0.7.3",
  "der-parser",
  "derivative",
  "derive-syn-parse",
@@ -12338,13 +12364,13 @@ dependencies = [
  "duration-str",
  "dyn-clone",
  "ecdsa 0.14.8",
- "ecdsa 0.16.2",
+ "ecdsa 0.16.6",
  "ed25519",
  "ed25519-consensus",
  "ed25519-dalek-fiat",
  "either",
  "elliptic-curve 0.12.3",
- "elliptic-curve 0.13.2",
+ "elliptic-curve 0.13.4",
  "encode_unicode 0.3.6",
  "encode_unicode 1.0.0",
  "encoding_rs",
@@ -12631,7 +12657,7 @@ dependencies = [
  "pin-project-lite",
  "pin-utils",
  "pkcs1",
- "pkcs8 0.10.1",
+ "pkcs8 0.10.2",
  "pkcs8 0.9.0",
  "pkg-config",
  "plotters",
@@ -12795,7 +12821,7 @@ dependencies = [
  "soketto",
  "spin",
  "spki 0.6.0",
- "spki 0.7.0",
+ "spki 0.7.1",
  "stable_deref_trait",
  "static_assertions",
  "str-buf",

@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use rusoto_core::Region;
-use rusoto_kms::{Kms, KmsClient, SignRequest};
+use rusoto_kms::{Kms, KmsClient, SignRequest, GetPublicKeyRequest};
+use openssl::ecdsa::EcdsaSig;
 
 use anyhow::anyhow;
 use bip32::DerivationPath;
@@ -88,10 +89,7 @@ pub enum KeyToolCommand {
         #[clap(long)]
         keyid: String,
         #[clap(long)]
-        intent: Option<Intent>,
-        #[clap(long)]
-        pubkey: String,
-        
+        intent: Option<Intent>        
     },
     /// Add a new key to sui.key based on the input mnemonic phrase, the key scheme flag {ed25519 | secp256k1 | secp256r1}
     /// and an optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1
@@ -236,9 +234,9 @@ impl KeyToolCommand {
                 address,
                 data,
                 keyid,
-                intent,
-                pubkey
+                intent
             } => {
+                // TODO generate "address" from KMS key id
                 println!("Signer address: {}", address);
                 println!("Raw tx_bytes to execute: {}", data);
                 let intent = intent.unwrap_or_else(Intent::sui_transaction);
@@ -259,48 +257,61 @@ impl KeyToolCommand {
                
                 // Set up the KMS client, expect to use env vars or whatever the AWS
                 // SDK prefers.
+                // Length of Pubkey - 33, sig - 64
                 let region = Region::default();
                 let kms = KmsClient::new(region);
+
+                // Get Pub key from keyid
+                let req = GetPublicKeyRequest { grant_tokens: None, key_id: keyid.to_string() };
+                let pubkey_resp = kms.get_public_key(req).await.unwrap();
+
+                let public_key_bytes = pubkey_resp.public_key.unwrap_or_default();
+                let public_key: &[u8] = &*public_key_bytes.to_vec(); // Vec of bytes
 
                 // Construct the signing request
                 let request = SignRequest {
                     key_id: keyid.to_string() ,
                     message: digest.to_vec().into(),
-                    message_type: Some("RAW".to_string()),
+                    message_type: Some("DIGEST".to_string()),
                     signing_algorithm: "ECDSA_SHA_256".to_string(),
                     ..Default::default()
                 };
 
                 // Sign the message
                 let response = kms.sign(request).await.unwrap();
+                // Print the signature
+                //println!("{:?}", response.signature);
 
+                let sig_bytes_der = response.signature.map(|b| b.to_vec()).unwrap_or_default();
+                
+                let sig_ecdsa = EcdsaSig::from_der(&sig_bytes_der).unwrap();
+
+                let mut sig_bytes = Vec::with_capacity(64);
+  
+                // Adds r, pads remaining of s and then adds s
+                sig_bytes.extend_from_slice(sig_ecdsa.r().to_vec().as_slice());
+                let s_bytes = sig_ecdsa.s().to_vec();
+                let padding_len = 32 - s_bytes.len();
+                for _ in 0..padding_len {
+                    sig_bytes.push(0);
+                }
+                sig_bytes.extend_from_slice(s_bytes.as_slice());
+
+
+                println!("Sig Bytes {:?}", sig_bytes);
+                println!("Public Key bytes {:?}", public_key);
+            
                 // TODO, just plopping more things into flag
                 let mut flag = vec![0x01];
-
-
-                // Print the signature
-                println!("{:?}", response.signature);
-
-                let sig_bytes = response.signature.map(|b| b.to_vec()).unwrap_or_default();
-                let pubkey_bytes = &Base64::decode(&pubkey).map_err(|e| {
-                    anyhow!("Cannot decode pubkey {:?}", e)
-                })?;
-                // Concatenate serialized sig
-
                 flag.extend(&sig_bytes);
+                flag.extend(&public_key_bytes);
                 
-                flag.extend(&pubkey_bytes.to_vec());
-                
-                // let pub_key = sig.public_key.hex_bytes.to_vec()?;
-                // let sui_signature =
-                //     keystore.sign_secure(&address, &intent_msg.value, intent_msg.intent)?;
-            
-                
+                // let pub_key = sig.public_key.hex_bytes.to_vec()?;         
                
-                let bcs_serialized_sig =   Base64::encode(bcs::to_bytes(&flag)?);
+                let serialized_sig =   Base64::encode(&flag);
                     println!(
                     "Serialized signature (`flag || sig || pk` in Base64): {:?}",
-                    bcs_serialized_sig
+                    serialized_sig
                 );
             }    
 
