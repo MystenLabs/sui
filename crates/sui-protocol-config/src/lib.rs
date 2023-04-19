@@ -1143,16 +1143,26 @@ macro_rules! check_limit {
 /// metered_limit is always less than or equal to unmetered_hard_limit
 #[macro_export]
 macro_rules! check_limit_by_meter {
-    ($is_metered:expr, $x:expr, $metered_limit:expr, $unmetered_hard_limit:expr) => {{
+    ($is_metered:expr, $x:expr, $metered_limit:expr, $unmetered_hard_limit:expr, $metric:expr) => {{
         // If this is metered, we use the metered_limit limit as the upper bound
-        let h = if $is_metered {
-            $metered_limit
+        let (h, metered_str) = if $is_metered {
+            ($metered_limit, "metered")
         } else {
             // Unmetered gets more headroom
-            $unmetered_hard_limit
+            ($unmetered_hard_limit, "unmetered")
         };
         use sui_protocol_config::check_limit_in_range;
-        check_limit_in_range($x as u64, $metered_limit, h)
+        let result = check_limit_in_range($x as u64, $metered_limit, h);
+        match result {
+            LimitThresholdCrossed::None => {}
+            LimitThresholdCrossed::Soft(_, _) => {
+                $metric.with_label_values(&[metered_str, "soft"]).inc();
+            }
+            LimitThresholdCrossed::Hard(_, _) => {
+                $metric.with_label_values(&[metered_str, "hard"]).inc();
+            }
+        };
+        result
     }};
 }
 

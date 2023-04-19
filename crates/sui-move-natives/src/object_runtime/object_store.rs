@@ -8,11 +8,15 @@ use move_vm_types::{
     loaded_data::runtime_types::Type,
     values::{GlobalValue, StructRef, Value},
 };
-use std::collections::{btree_map, BTreeMap};
+use std::{
+    collections::{btree_map, BTreeMap},
+    sync::Arc,
+};
 use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed};
 use sui_types::{
     base_types::{MoveObjectType, ObjectID, SequenceNumber},
     error::VMMemoryLimitExceededSubStatusCode,
+    metrics::LimitsMetrics,
     object::{Data, MoveObject, Owner},
     storage::ChildObjectResolver,
 };
@@ -42,6 +46,8 @@ struct Inner<'a> {
     is_metered: bool,
     // Local protocol config used to enforce limits
     constants: LocalProtocolConfig,
+    // Metrics for reporting exceeded limits
+    metrics: Arc<LimitsMetrics>,
 }
 
 // maintains the runtime GlobalValues for child objects and manages the fetching of objects
@@ -114,26 +120,23 @@ impl<'a> Inner<'a> {
                 None
             };
 
-            match check_limit_by_meter!(
+            if let LimitThresholdCrossed::Hard(_, lim) = check_limit_by_meter!(
                 self.is_metered,
                 cached_objects_count,
                 self.constants.object_runtime_max_num_cached_objects,
                 self.constants
-                    .object_runtime_max_num_cached_objects_system_tx
+                    .object_runtime_max_num_cached_objects_system_tx,
+                self.metrics.excessive_object_runtime_cached_objects
             ) {
-                LimitThresholdCrossed::None => (),
-                LimitThresholdCrossed::Soft(_, _) => (), /* TODO: add alerting */
-                LimitThresholdCrossed::Hard(_, lim) => {
-                    return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
-                        .with_message(format!(
-                            "Object runtime cached objects limit ({} entries) reached",
-                            lim
-                        ))
-                        .with_sub_status(
-                            VMMemoryLimitExceededSubStatusCode::OBJECT_RUNTIME_CACHE_LIMIT_EXCEEDED
-                                as u64,
-                        ))
-                }
+                return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
+                    .with_message(format!(
+                        "Object runtime cached objects limit ({} entries) reached",
+                        lim
+                    ))
+                    .with_sub_status(
+                        VMMemoryLimitExceededSubStatusCode::OBJECT_RUNTIME_CACHE_LIMIT_EXCEEDED
+                            as u64,
+                    ));
             };
 
             e.insert(obj_opt);
@@ -191,8 +194,9 @@ impl<'a> Inner<'a> {
 impl<'a> ObjectStore<'a> {
     pub(super) fn new(
         resolver: Box<dyn ChildObjectResolver + 'a>,
-        constants: LocalProtocolConfig,
         is_metered: bool,
+        constants: LocalProtocolConfig,
+        metrics: Arc<LimitsMetrics>,
     ) -> Self {
         Self {
             inner: Inner {
@@ -200,6 +204,7 @@ impl<'a> ObjectStore<'a> {
                 cached_objects: BTreeMap::new(),
                 is_metered,
                 constants: constants.clone(),
+                metrics,
             },
             store: BTreeMap::new(),
             is_metered,
@@ -260,26 +265,23 @@ impl<'a> ObjectStore<'a> {
                     ObjectResult::Loaded(res) => res,
                 };
 
-                match check_limit_by_meter!(
+                if let LimitThresholdCrossed::Hard(_, lim) = check_limit_by_meter!(
                     self.is_metered,
                     store_entries_count,
                     self.constants.object_runtime_max_num_store_entries,
                     self.constants
-                        .object_runtime_max_num_store_entries_system_tx
+                        .object_runtime_max_num_store_entries_system_tx,
+                    self.inner.metrics.excessive_object_runtime_store_entries
                 ) {
-                    LimitThresholdCrossed::None => (),
-                    LimitThresholdCrossed::Soft(_, _) => (), /* TODO: add alerting */
-                    LimitThresholdCrossed::Hard(_, lim) => return Err(PartialVMError::new(
-                        StatusCode::MEMORY_LIMIT_EXCEEDED,
-                    )
-                    .with_message(format!(
-                        "Object runtime store limit ({} entries) reached",
-                        lim
-                    ))
-                    .with_sub_status(
-                        VMMemoryLimitExceededSubStatusCode::OBJECT_RUNTIME_STORE_LIMIT_EXCEEDED
-                            as u64,
-                    )),
+                    return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
+                        .with_message(format!(
+                            "Object runtime store limit ({} entries) reached",
+                            lim
+                        ))
+                        .with_sub_status(
+                            VMMemoryLimitExceededSubStatusCode::OBJECT_RUNTIME_STORE_LIMIT_EXCEEDED
+                                as u64,
+                        ));
                 };
 
                 e.insert(ChildObject {
@@ -316,26 +318,22 @@ impl<'a> ObjectStore<'a> {
         };
         child_object.value.move_to(child_value).unwrap();
 
-        match check_limit_by_meter!(
+        if let LimitThresholdCrossed::Hard(_, lim) = check_limit_by_meter!(
             self.is_metered,
             self.store.len(),
             self.constants.object_runtime_max_num_store_entries,
             self.constants
-                .object_runtime_max_num_store_entries_system_tx
+                .object_runtime_max_num_store_entries_system_tx,
+            self.inner.metrics.excessive_object_runtime_store_entries
         ) {
-            LimitThresholdCrossed::None => (),
-            LimitThresholdCrossed::Soft(_, _) => (), /* TODO: add alerting */
-            LimitThresholdCrossed::Hard(_, lim) => {
-                return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
-                    .with_message(format!(
-                        "Object runtime store limit ({} entries) reached",
-                        lim
-                    ))
-                    .with_sub_status(
-                        VMMemoryLimitExceededSubStatusCode::OBJECT_RUNTIME_STORE_LIMIT_EXCEEDED
-                            as u64,
-                    ))
-            }
+            return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
+                .with_message(format!(
+                    "Object runtime store limit ({} entries) reached",
+                    lim
+                ))
+                .with_sub_status(
+                    VMMemoryLimitExceededSubStatusCode::OBJECT_RUNTIME_STORE_LIMIT_EXCEEDED as u64,
+                ));
         };
 
         if let Some(prev) = self.store.insert(child, child_object) {

@@ -4,6 +4,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt,
+    sync::Arc,
 };
 
 use move_binary_format::{
@@ -40,6 +41,7 @@ use sui_types::{
         Argument, Command, CommandArgumentError, PackageUpgradeError, ProgrammableMoveCall,
         ProgrammableTransaction,
     },
+    metrics::LimitsMetrics,
     move_package::{
         normalize_deserialized_modules, MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt,
         UpgradeTicket,
@@ -62,6 +64,7 @@ sui_macros::checked_arithmetic! {
 
 pub fn execute<S: StorageView, Mode: ExecutionMode>(
     protocol_config: &ProtocolConfig,
+    metrics: Arc<LimitsMetrics>,
     vm: &MoveVM,
     state_view: &mut S,
     tx_context: &mut TxContext,
@@ -72,6 +75,7 @@ pub fn execute<S: StorageView, Mode: ExecutionMode>(
     let ProgrammableTransaction { inputs, commands } = pt;
     let mut context = ExecutionContext::new(
         protocol_config,
+        metrics,
         vm,
         state_view,
         tx_context,

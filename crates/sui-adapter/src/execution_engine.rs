@@ -14,6 +14,7 @@ use sui_types::balance::{
 };
 use sui_types::base_types::ObjectID;
 use sui_types::gas_coin::GAS;
+use sui_types::metrics::LimitsMetrics;
 use sui_types::object::OBJECT_START_VERSION;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use tracing::{info, instrument, trace, warn};
@@ -70,6 +71,7 @@ pub fn execute_transaction_to_effects<
     gas_status: SuiGasStatus,
     epoch_data: &EpochData,
     protocol_config: &ProtocolConfig,
+    metrics: Arc<LimitsMetrics>,
     enable_expensive_checks: bool
 ) -> (
     InnerTemporaryStore,
@@ -90,6 +92,7 @@ pub fn execute_transaction_to_effects<
         &epoch_data.epoch_id(),
         epoch_data.epoch_start_timestamp(),
         protocol_config,
+        metrics,
         enable_expensive_checks
     )
 }
@@ -111,6 +114,7 @@ pub fn execute_transaction_to_effects_impl<
     epoch_id: &EpochId,
     epoch_timestamp_ms: u64,
     protocol_config: &ProtocolConfig,
+    metrics: Arc<LimitsMetrics>,
     enable_expensive_checks: bool
 ) -> (
     InnerTemporaryStore,
@@ -130,6 +134,7 @@ pub fn execute_transaction_to_effects_impl<
         move_vm,
         gas_status,
         protocol_config,
+        metrics,
         enable_expensive_checks
     );
 
@@ -239,6 +244,7 @@ fn execute_transaction<
     move_vm: &Arc<MoveVM>,
     mut gas_status: SuiGasStatus,
     protocol_config: &ProtocolConfig,
+    metrics: Arc<LimitsMetrics>,
     enable_expensive_checks: bool
 ) -> (
     GasCostSummary,
@@ -271,6 +277,7 @@ fn execute_transaction<
             move_vm,
             &mut gas_status,
             protocol_config,
+            metrics.clone(),
         );
 
         let effects_estimated_size = temporary_store.estimate_effects_size_upperbound();
@@ -282,11 +289,11 @@ fn execute_transaction<
             !gas_status.is_unmetered(),
             effects_estimated_size,
             protocol_config.max_serialized_tx_effects_size_bytes(),
-            protocol_config.max_serialized_tx_effects_size_bytes_system_tx()
+            protocol_config.max_serialized_tx_effects_size_bytes_system_tx(),
+            metrics.excessive_estimated_effects_size
         ) {
             LimitThresholdCrossed::None => (),
             LimitThresholdCrossed::Soft(_, limit) => {
-                /* TODO: add more alerting */
                 warn!(
                     effects_estimated_size = effects_estimated_size,
                     soft_limit = limit,
@@ -315,11 +322,11 @@ fn execute_transaction<
                     !gas_status.is_unmetered(),
                     written_objects_size,
                     normal_lim,
-                    system_lim
+                    system_lim,
+                    metrics.excessive_written_objects_size
                 ) {
                     LimitThresholdCrossed::None => (),
                     LimitThresholdCrossed::Soft(_, limit) => {
-                        /* TODO: add more alerting */
                         warn!(
                             written_objects_size = written_objects_size,
                             soft_limit = limit,
@@ -406,6 +413,7 @@ fn execution_loop<
     move_vm: &Arc<MoveVM>,
     gas_status: &mut SuiGasStatus,
     protocol_config: &ProtocolConfig,
+    metrics: Arc<LimitsMetrics>,
 ) -> Result<Mode::ExecutionResults, ExecutionError> {
     match transaction_kind {
         TransactionKind::ChangeEpoch(change_epoch) => {
@@ -416,6 +424,7 @@ fn execution_loop<
                 move_vm,
                 gas_status,
                 protocol_config,
+                metrics,
             )?;
             Ok(Mode::empty_results())
         }
@@ -447,12 +456,14 @@ fn execution_loop<
                 move_vm,
                 gas_status,
                 protocol_config,
+                metrics,
             ).expect("ConsensusCommitPrologue cannot fail");
             Ok(Mode::empty_results())
         }
         TransactionKind::ProgrammableTransaction(pt) => {
             programmable_transactions::execution::execute::<_, Mode>(
                 protocol_config,
+                metrics,
                 move_vm,
                 temporary_store,
                 tx_ctx,
@@ -622,6 +633,7 @@ fn advance_epoch<S: ObjectStore + BackingPackageStore + ParentSync + ChildObject
     move_vm: &Arc<MoveVM>,
     gas_status: &mut SuiGasStatus,
     protocol_config: &ProtocolConfig,
+    metrics: Arc<LimitsMetrics>,
 ) -> Result<(), ExecutionError> {
     let params = AdvanceEpochParams {
         epoch: change_epoch.epoch,
@@ -637,6 +649,7 @@ fn advance_epoch<S: ObjectStore + BackingPackageStore + ParentSync + ChildObject
     let advance_epoch_pt = construct_advance_epoch_pt(&params)?;
     let result = programmable_transactions::execution::execute::<_, execution_mode::System>(
         protocol_config,
+        metrics.clone(),
         move_vm,
         temporary_store,
         tx_ctx,
@@ -666,6 +679,7 @@ fn advance_epoch<S: ObjectStore + BackingPackageStore + ParentSync + ChildObject
                 construct_advance_epoch_safe_mode_pt(&params, protocol_config)?;
             programmable_transactions::execution::execute::<_, execution_mode::System>(
                 protocol_config,
+                metrics.clone(),
                 move_vm,
                 temporary_store,
                 tx_ctx,
@@ -696,6 +710,7 @@ fn advance_epoch<S: ObjectStore + BackingPackageStore + ParentSync + ChildObject
 
             programmable_transactions::execution::execute::<_, execution_mode::System>(
                 protocol_config,
+                metrics.clone(),
                 move_vm,
                 temporary_store,
                 tx_ctx,
@@ -741,6 +756,7 @@ fn setup_consensus_commit<S: BackingPackageStore + ParentSync + ChildObjectResol
     move_vm: &Arc<MoveVM>,
     gas_status: &mut SuiGasStatus,
     protocol_config: &ProtocolConfig,
+    metrics: Arc<LimitsMetrics>,
 ) -> Result<(), ExecutionError> {
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
@@ -766,6 +782,7 @@ fn setup_consensus_commit<S: BackingPackageStore + ParentSync + ChildObjectResol
     };
     programmable_transactions::execution::execute::<_, execution_mode::System>(
         protocol_config,
+        metrics,
         move_vm,
         temporary_store,
         tx_ctx,
