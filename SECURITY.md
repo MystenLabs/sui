@@ -34,62 +34,48 @@ Impacts only apply to assets in active use by Sui.
 
 -   Sui Framework
 
-## Impacts in scope
+## Impacts in Scope
 
-Only the following impacts are accepted within this bug bounty program. All other impacts are considered out-of-scope and ineligible for payout.
 
-### Coin and object integrity bugs
+The following impacts are accepted within this bug bounty program--please refer to [Sui's Immunefi Bug Bounty Program Page](https://immunefi.com/bounty/sui/) for an official and up-to-date listing.
+All other impacts are considered out-of-scope and ineligible for payout.
+
+
 
 CRITICAL [$500,000 USD]
+1. Exceeding the maximum supply of 10 billion SUI + allowing the attacker to claim the excess funds
+2. Loss of Funds which includes
+    * Unauthorized creation, copying, transfer or destruction of objects via bypass of or exploit of bugs in the Move or Sui bytecode verifier
+    * Address Collision – creating two distinct authentication schemes that hash to the same SUI address in a manner that lead to significant loss of funds
+    * Object ID collision—creating two distinct objects with the same ID in a manner that leads to significant loss of funds.
+    * Unauthorized use of an owned object as a transaction input, resulting in significant loss of funds due to the inability to verify ownership and permission to transfer
+    * Dynamically loading an object that is not directly or transitively owned by the transaction sender, in a manner that leads to significant loss of funds
+    * Unauthorized upgrade of a Move package, in a manner that leads to significant loss of funds
+    * Stealing staking rewards that belong to another user, or claiming more than a user’s share of staking rewards, not including rounding errors that result in a minor, financially insignificant discrepancy
+3. Violating BFT assumptions, acquiring voting power vastly disproportionate to stake, or any other issue that can meaningfully compromise the integrity of the blockchain’s proof of stake governance does not include the following: 
+    * Voting power that is redistributed because one or more other validators already has max voting power
+    * Rounding errors that result in minor voting power discrepancies
+4. Unintended permanent chain split requiring hard fork (network partition requiring hard fork)
+5. Network not being able to confirm new transactions (total network shutdown)
+6. Arbitrary, non-Move remote code execution on unmodified validator software
 
--   Exceeding the maximum token supply of 10B SUI and allowing attacker to claim the excess funds
--   Unauthorized creation, copying, transfer or destruction of objects via bypass of or exploit of bugs in the Move or Sui bytecode verifier
--   Address collision—creating two distinct authentication schemes that hash to the same SUI address
--   Object ID collision—creating two distinct objects with the same ID, with financial consequences
+
+HIGH [$50,000 USD]
+
+1. Unintended chain split (network partition)
+2. Temporary Total Network Shutdown (greater than 10 minutes of network downtime)
 
 MEDIUM [$10,000 USD]
 
--   Going under the maximum supply of SUI by sending a transaction that burns SUI that will not be re-minted into validator rewards or the storage fund at at the next epoch
+1. A bug that results in unintended and harmful smart contract behavior with no concrete funds at direct risk
+2. Unintended, permanent burning of SUI under the max cap.
+3. Shutdown of greater than or equal to 30% of network processing nodes without brute force actions, but does not shut down the network
+
 
 LOW [$5,000 USD]
 
 -   Sending a transaction that triggers invariant violation error code in unmodified validator software
 
-Other vulnerabilities leading to theft or loss of valuable objects will have their severity determined depending upon the consequences of the issue and the preconditions for exploiting it.
-
-### Bypassing authentication
-
-CRITICAL [$500,000 USD]
-
--   Including an owned object as a transaction input without a valid signature from the object’s owner, in a manner that leads to significant loss of funds
--   Dynamically loading an object that is not directly or transitively owned by the transaction sender, in a manner that leads to significant loss of funds
--   Unauthorized upgrade of a Move package, in a manner that leads to significant loss of funds
--   Locking an owned object without a valid signature from the object’s owner
-
-### Staking
-
-CRITICAL [$500,000 USD]
-
--   Acquiring voting power vastly disproportionate to stake, not including:
-    -   Voting power that is redistributed because one or more other validators already has max voting power
-    -   Rounding errors that result in minor voting power discrepancies
--   Approve a transaction or checkpoint with less than ⅔ voting power
--   Stealing staking rewards that belong to another user, or claiming more than a user’s share of staking rewards, not including
-    -   Rounding errors that result in a minor, financially insignificant discrepancy
-
-Any other issue leading that undermines proof of stake governance or staking rewards, with severity depending on the consequences of the issue and the preconditions for exploiting it
-
-### Operational
-
-CRITICAL [$500,000 USD]
-
--   Cause an unrecoverable network halt that must be fixed via a hard fork
--   Arbitrary, non-Move remote code execution on unmodified validator software
--   Send a transaction that causes an uncaught panic in unmodified validator software
-
-HIGH [$50,000 USD]
-
--   Any other issue leading to non-recoverable network downtime, with severity depending on the consequences of the issue and the preconditions for exploiting it
 
 # Payment of bounties
 
