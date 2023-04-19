@@ -1,4 +1,4 @@
-# Intro
+# Introduction
 
 We appreciate your participation in keeping the Sui network secure. Please read all details on how to report an issue, what bug bounties are available, and who is eligible for bounties.
 
