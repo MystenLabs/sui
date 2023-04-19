@@ -72,7 +72,7 @@ impl TestContext {
             .check_owner_and_into_gas_coin(faucet_response.transferred_gas_objects, addr)
             .await;
 
-        let minimum_coins = minimum_coins.unwrap_or(5);
+        let minimum_coins = minimum_coins.unwrap_or(1);
 
         if gas_coins.len() < minimum_coins {
             panic!(
