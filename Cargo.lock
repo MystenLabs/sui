@@ -9668,6 +9668,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-replay"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "clap 4.1.4",
+ "colored",
+ "futures",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-core-types",
+ "move-package",
+ "serde 1.0.152",
+ "serde_json",
+ "similar",
+ "sui-adapter",
+ "sui-config",
+ "sui-core",
+ "sui-framework",
+ "sui-json-rpc",
+ "sui-json-rpc-types",
+ "sui-protocol-config",
+ "sui-sdk",
+ "sui-storage",
+ "sui-types",
+ "thiserror",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sui-rosetta"
 version = "0.1.0"
 dependencies = [
@@ -9961,7 +9992,6 @@ dependencies = [
  "anemo",
  "anemo-cli",
  "anyhow",
- "bcs",
  "clap 4.1.4",
  "colored",
  "comfy-table",
@@ -9969,34 +9999,20 @@ dependencies = [
  "futures",
  "hex",
  "itertools",
- "move-binary-format",
- "move-bytecode-utils",
- "move-core-types",
- "move-package",
  "narwhal-types",
  "rocksdb",
  "ron",
- "serde 1.0.152",
- "serde_json",
- "similar",
  "strum",
  "strum_macros",
- "sui-adapter",
  "sui-config",
  "sui-core",
- "sui-framework",
- "sui-json-rpc",
- "sui-json-rpc-types",
  "sui-network",
- "sui-protocol-config",
- "sui-sdk",
+ "sui-replay",
  "sui-storage",
  "sui-types",
  "telemetry-subscribers",
  "tempfile",
- "thiserror",
  "tokio",
- "tracing",
  "typed-store",
  "workspace-hack",
 ]
