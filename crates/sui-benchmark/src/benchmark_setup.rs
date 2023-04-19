@@ -8,6 +8,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use prometheus::Registry;
 use rand::seq::SliceRandom;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -230,7 +231,7 @@ impl Env {
                 ))
             })?;
 
-        let current_gas = if !use_fullnode_for_execution {
+        let current_gas = if use_fullnode_for_execution {
             // Go through fullnode to get the current gas object.
             let fullnode_rpc_url: &String = &fullnode_rpc_urls[0];
             let fn_proxy = Arc::new(FullNodeProxy::from_url(fullnode_rpc_url).await?);
@@ -266,23 +267,49 @@ impl Env {
             )
         } else {
             // Go through local proxy to get the current gas object.
-            let mut genesis_gas_objects = Vec::new();
+            // let mut genesis_gas_objects = Vec::new();
 
-            for obj in genesis.objects().iter() {
-                let owner = &obj.owner;
-                if let Owner::AddressOwner(addr) = owner {
-                    if *addr == primary_gas_owner_addr.into() {
-                        genesis_gas_objects.push(obj.clone());
-                    }
-                }
-            }
+            let custom_gas_object_ids = vec![
+                "0x06b9977c52fa395b60d91a8deef70f474a24c2c046be6e448ab2e536f66c25ed",
+                "0x10b847ecdbcd164632d605099041e27d2dea2736846865c0b45f986cd647adf2",
+                "0x122c23c57b2fec02c0550910fc5eef0f1c59553a44aa9007e1253d1c07da912e",
+                "0x138046f4273d1f05407874e712c3f27135183d35800e77987d50d7bc6d7d615a",
+                "0x1c978a7a09d8432d65900f58c2a3e9293c17cba460b3e94d1bdf2dfc6a1d0685",
+                "0x21e0153041770519442e8cfdbdf088f5db5afa329b1c65fc782d95000124c8bc",
+                "0x25d3b250a868b64815be3a61269aa40634f1dd263d9f1c9021c39539ee7f2933",
+                "0x49e283a42c78d49f0ca93dcf69ea913bb5bcf29ca25cff12127b4fd487bc6b23",
+                "0x5c427cdf9aeb8a29ab63f42e0270f8fe24bb38b96929b98272a6a9e6d59b9973",
+                "0x5f85d2aaa8712de3c11d5db8d64952f064f0ad419b50fdc1ee1b298f6e859ea5",
+                "0x75ebf54316094610f6221d67bd50680b8abf62fa56c53f463d8685515c0e5c91",
+                "0x832a178ec3dffc5cc2e0e8c55405f2d03d45518c9adc7155e51369744c24947f",
+                "0xfad8c80ba5555a488b113547d15612d7b1c2d733cabbe9e1106b3c23c77ef21c",
+                "0x92364710f541181e0534895515412f30b37600a056b3d6cbd674cb119624b5f7",
+                "0x9aa902dd01ef574908f7fba3d71a1a37810ffd0d7f19748bca008caf74c80f04",
+                "0xc6f0555f63544afbbb6b97eb1519f9e451576257ad0eadc0c85dfd1db51e79c7",
+                "0xe5f5e91d7ec1b4d74e5446ff5335ee5ba12ea8c092ef061854d0c64a776fc82d",
+            ];
+            // for obj in genesis.objects().iter() {
+            //     let owner = &obj.owner;
+            //     if let Owner::AddressOwner(addr) = owner {
+            //         if *addr == primary_gas_owner_addr.into() {
+            //             genesis_gas_objects.push(obj.clone());
+            //         }
+            //     }
+            // }
 
-            let genesis_gas_obj = genesis_gas_objects
+            // let genesis_gas_obj = genesis_gas_objects
+            //     .choose(&mut rand::thread_rng())
+            //     .context("Failed to choose a random primary gas")?
+            //     .clone();
+
+            let genesis_gas_obj_id = custom_gas_object_ids
                 .choose(&mut rand::thread_rng())
                 .context("Failed to choose a random primary gas")?
                 .clone();
 
-            let current_gas_object = proxy.get_object(genesis_gas_obj.id()).await?;
+            let current_gas_object = proxy
+                .get_object(ObjectID::from_str(genesis_gas_obj_id).unwrap())
+                .await?;
             let current_gas_account = current_gas_object.owner.get_owner_address()?;
 
             let keypair = Arc::new(get_ed25519_keypair_from_keystore(
