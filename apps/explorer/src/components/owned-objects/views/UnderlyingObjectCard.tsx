@@ -65,19 +65,12 @@ export function UnderlyingObjectCard({
     if (!fieldsData || !normalizedStruct?.fields || !objectType) {
         return null;
     }
+    // For dynamicObject type show the entire object
+    const fieldData = isDynamicObjectType ? fieldsData : fieldsData?.value;
 
     const dynamicFieldsData =
-        // for type DynamicObject add the key
-        isDynamicObjectType
-            ? {
-                  name,
-                  // value is the dynamic fields data
-                  value: fieldsData,
-              }
-            : // show name if it is a struct
-            typeof fieldsData?.name === 'object'
-            ? { name: fieldsData.name, value: fieldsData.value }
-            : fieldsData?.value;
+        // show name if it is a struct
+        typeof name.value === 'object' ? { name, value: fieldData } : fieldData;
 
     return (
         <FieldItem
