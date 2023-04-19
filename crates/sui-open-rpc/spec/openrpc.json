@@ -1298,7 +1298,6 @@
       ],
       "result": {
         "name": "SuiCoinMetadata",
-        "required": true,
         "schema": {
           "$ref": "#/components/schemas/SuiCoinMetadata"
         }

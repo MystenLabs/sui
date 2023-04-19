@@ -353,7 +353,10 @@ impl CoinReadApi {
         Ok(self.api.http.get_all_balances(owner).await?)
     }
 
-    pub async fn get_coin_metadata(&self, coin_type: String) -> SuiRpcResult<SuiCoinMetadata> {
+    pub async fn get_coin_metadata(
+        &self,
+        coin_type: String,
+    ) -> SuiRpcResult<Option<SuiCoinMetadata>> {
         Ok(self.api.http.get_coin_metadata(coin_type).await?)
     }
 
