@@ -1,0 +1,29 @@
+name: Build docker images and binaries
+
+on:
+  push:
+     branches: [ devnet, testnet ]
+  workflow_dispatch:
+
+jobs:
+  docker-images:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch Docker Builds in MystenLabs/sui-operations
+        uses: peter-evans/repository-dispatch@26b39ed245ab8f31526069329e112ab2fb224588 # pin@v2
+        with:
+          repository: MystenLabs/sui-operations
+          token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
+          event-type: build-docker-images
+          client-payload: '{"sui_commit": "${{ github.sha }}", "additional_tag": ""}'
+
+  release-binaries:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch Release binaries builds in MystenLabs/sui-operations
+        uses: peter-evans/repository-dispatch@26b39ed245ab8f31526069329e112ab2fb224588 # pin@v2
+        with:
+          repository: MystenLabs/sui-operations
+          token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
+          event-type: build-release-binaries
+          client-payload: '{"sui_commit": "${{ github.sha }}"}'
