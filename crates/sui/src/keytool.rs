@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 use rusoto_core::Region;
 use rusoto_kms::{Kms, KmsClient, SignRequest, GetPublicKeyRequest};
-use openssl::ecdsa::EcdsaSig;
 use secp256k1::ecdsa::Signature as secpSig;
+use openssl::ec::{EcGroup, PointConversionForm};
+use openssl::nid::Nid;
+use openssl::pkey::PKey;
 
 use anyhow::anyhow;
 use bip32::DerivationPath;
@@ -269,6 +271,14 @@ impl KeyToolCommand {
                 let public_key_bytes = pubkey_resp.public_key.unwrap_or_default();
                 let public_key: &[u8] = &*public_key_bytes.to_vec(); // Vec of bytes
 
+                // Parse the PEM-encoded public key and extract the raw bytes
+                let group = EcGroup::from_curve_name(Nid::SECP256K1).unwrap();
+                let pkey = PKey::public_key_from_der(&public_key).unwrap();
+                let pkey_compact = pkey.ec_key().unwrap().public_key().to_bytes(&group,
+                    PointConversionForm::COMPRESSED,
+                    &mut openssl::bn::BigNumContext::new().unwrap(),);
+
+
                 // Construct the signing request
                 let request = SignRequest {
                     key_id: keyid.to_string() ,
@@ -286,29 +296,19 @@ impl KeyToolCommand {
                 let sig_bytes_der = response.signature.map(|b| b.to_vec()).unwrap_or_default();
                 
                 //let sig_ecdsa = EcdsaSig::from_der(&sig_bytes_der).unwrap();
-                let sig_bytes = secpSig::from_der(&sig_bytes_der).unwrap();
-
-                // let mut sig_bytes = Vec::with_capacity(64);
-  
-                // // Adds r, pads remaining of s and then adds s
-                // sig_bytes.extend_from_slice(sig_ecdsa.r().to_vec().as_slice());
-                // let s_bytes = sig_ecdsa.s().to_vec();
-                // let padding_len = 32 - s_bytes.len();
-                // for _ in 0..padding_len {
-                //     sig_bytes.push(0);
-                // }
-                // sig_bytes.extend_from_slice(s_bytes.as_slice());
-
+                //let sig_bytes = secpSig::from_der(&sig_bytes_der).unwrap();
+             
+                let sig = secpSig::from_der(&sig_bytes_der).unwrap();
+                let sig_bytes = secpSig::serialize_compact(&sig);
 
                 println!("Sig Bytes {:?}", sig_bytes);
-                println!("Public Key bytes {:?}", public_key);
+                println!("Public Key Com[act bytes {:?}", pkey_compact);
             
                 // TODO, just plopping more things into flag
                 let mut flag = vec![0x01];
                 flag.extend(&sig_bytes);
-                flag.extend(&public_key_bytes);
+                flag.extend(pkey_compact.unwrap());
                 
-                // let pub_key = sig.public_key.hex_bytes.to_vec()?;         
                
                 let serialized_sig =   Base64::encode(&flag);
                     println!(
