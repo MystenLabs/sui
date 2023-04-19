@@ -77,6 +77,7 @@ use sui_types::{
     programmable_transaction_builder::ProgrammableTransactionBuilder, SUI_FRAMEWORK_OBJECT_ID,
 };
 use sui_types::{utils::to_sender_signed_transaction, SUI_SYSTEM_OBJECT_ID};
+use tempfile::NamedTempFile;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum FakeID {
@@ -114,6 +115,12 @@ pub struct SuiTestAdapter<'a> {
     gas_price: u64,
     protocol_config: ProtocolConfig,
     metrics: Arc<LimitsMetrics>,
+    staged_modules: BTreeMap<Symbol, StagedPackage>,
+}
+
+struct StagedPackage {
+    file: NamedTempFile,
+    modules: Vec<(Option<Symbol>, CompiledModule)>,
 }
 
 struct TestAccount {
@@ -331,6 +338,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             gas_price: 1000,
             protocol_config,
             metrics,
+            staged_modules: BTreeMap::new(),
         };
         for well_known in WELL_KNOWN_OBJECTS.iter().copied() {
             test_adapter
@@ -735,6 +743,45 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 }
                 let (warnings_opt, output, data, modules) = result?;
                 store_modules(self, syntax, data, modules);
+                Ok(merge_output(warnings_opt, output))
+            }
+            SuiSubcommand::StagePackage(StagePackageCommand { syntax }) => {
+                let syntax = syntax.unwrap_or_else(|| self.default_syntax());
+                let (warnings_opt, output, data, modules) = compile_any(
+                    self,
+                    "upgrade",
+                    syntax,
+                    name,
+                    number,
+                    start_line,
+                    command_lines_stop,
+                    stop_line,
+                    data,
+                    |_adapter, modules| Ok((None, modules)),
+                )?;
+                assert!(!modules.is_empty());
+                let Some(package_name) = modules.first().unwrap().0 else {
+                    bail!("Staged modules must have a named address")
+                };
+                for (named_addr, _) in &modules {
+                    let Some(named_addr) = named_addr else {
+                        bail!("Staged modules must have a named address")
+                    };
+                    if named_addr != &package_name {
+                        bail!(
+                            "Staged modules must have the same named address, \
+                            {package_name} != {named_addr}"
+                        );
+                    }
+                }
+                let staged = StagedPackage {
+                    file: data,
+                    modules,
+                };
+                let prev = self.staged_modules.insert(package_name, staged);
+                if prev.is_some() {
+                    panic!("Package '{package_name}' already staged")
+                }
                 Ok(merge_output(warnings_opt, output))
             }
         }

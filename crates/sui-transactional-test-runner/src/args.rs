@@ -122,6 +122,12 @@ pub struct UpgradePackageCommand {
 }
 
 #[derive(Debug, clap::Parser)]
+pub struct StagePackageCommand {
+    #[clap(long = "syntax")]
+    pub syntax: Option<SyntaxChoice>,
+}
+
+#[derive(Debug, clap::Parser)]
 pub enum SuiSubcommand {
     #[clap(name = "view-object")]
     ViewObject(ViewObjectCommand),
@@ -133,6 +139,8 @@ pub enum SuiSubcommand {
     ProgrammableTransaction(ProgrammableTransactionCommand),
     #[clap(name = "upgrade")]
     UpgradePackage(UpgradePackageCommand),
+    #[clap(name = "package")]
+    StagePackage(StagePackageCommand),
 }
 
 #[derive(Debug)]
