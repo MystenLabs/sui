@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::natives::NativesCostTable;
+use crate::NativesCostTable;
 use fastcrypto::{
     error::FastCryptoError,
     hash::{Keccak256, Sha256},

@@ -1333,7 +1333,7 @@ pub fn get_vm(
     protocol_config: &ProtocolConfig,
     expensive_safety_check_config: ExpensiveSafetyCheckConfig,
 ) -> Result<Arc<adapter::MoveVM>, LocalExecError> {
-    let native_functions = sui_framework::natives::all_natives(/* disable silent */ false);
+    let native_functions = sui_move_natives::all_natives(/* disable silent */ false);
     let move_vm = Arc::new(
         adapter::new_move_vm(
             native_functions.clone(),

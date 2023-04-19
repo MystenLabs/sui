@@ -14,7 +14,7 @@ use once_cell::sync::Lazy;
 use std::{collections::BTreeMap, path::PathBuf};
 use sui_core::authority::TemporaryStore;
 use sui_cost_tables::bytecode_tables::initial_cost_schedule_for_unit_tests;
-use sui_framework::natives::{self, object_runtime::ObjectRuntime, NativesCostTable};
+use sui_move_natives::{object_runtime::ObjectRuntime, NativesCostTable};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     digests::TransactionDigest, in_memory_storage::InMemoryStorage, messages::InputObjects,
@@ -87,7 +87,7 @@ pub fn run_move_unit_tests(
             report_stacktrace_on_abort: true,
             ..config
         },
-        natives::all_natives(/* silent */ false),
+        sui_move_natives::all_natives(/* silent */ false),
         Some(initial_cost_schedule_for_unit_tests()),
         compute_coverage,
         &mut std::io::stdout(),

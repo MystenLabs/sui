@@ -7,34 +7,48 @@ publish = false
 edition = "2021"
 
 [dependencies]
-anemo.workspace = true
 anyhow = { version = "1.0.64", features = ["backtrace"] }
-tokio = { workspace = true, features = ["full"] }
+bcs = "0.1.4"
 clap = { version = "4.1.4", features = ["derive"] }
-
-itertools = { version = "0.10.3", features = ["use_alloc"] }
-futures = "0.3.23"
-rocksdb = "0.20.1"
-tempfile = "3.3.0"
-strum_macros = "^0.24"
-strum = "0.24.1"
-eyre = "0.6.8"
-ron = "0.8.0"
+colored = "2.0.0"
 comfy-table = "6.1.3"
+eyre = "0.6.8"
+futures = "0.3.23"
 hex = "0.4.3"
-
-narwhal-types = { path = "../../narwhal/types" }
-sui-storage = { path = "../sui-storage" }
-sui-core = { path = "../sui-core" }
-sui-config = { path = "../sui-config" }
-sui-types = { path = "../sui-types" }
-sui-network = { path = "../sui-network" }
-sui-replay = { path = "../sui-replay" }
-
+itertools = { version = "0.10.3", features = ["use_alloc"] }
+rocksdb = "0.20.1"
+ron = "0.8.0"
+serde = { version = "1.0.144", features = ["derive"] }
+serde_json = "1.0.88"
+similar = "2.2.0"
+strum = "0.24.1"
+strum_macros = "^0.24"
+tempfile = "3.3.0"
+thiserror = "1.0.34"
+tracing = "0.1.36"
 
 anemo-cli.workspace = true
+anemo.workspace = true
+move-binary-format.workspace = true
+move-bytecode-utils.workspace = true
+move-core-types.workspace = true
+move-package.workspace = true
 telemetry-subscribers.workspace = true
+tokio = { workspace = true, features = ["full"] }
 typed-store.workspace = true
 
-colored = "2.0.0"
+narwhal-types = { path = "../../narwhal/types" }
+sui-adapter = { path = "../sui-adapter" }
+sui-config = { path = "../sui-config" }
+sui-core = { path = "../sui-core" }
+sui-framework = { path = "../sui-framework" }
+sui-json-rpc = { path = "../sui-json-rpc" }
+sui-json-rpc-types = { path = "../sui-json-rpc-types" }
+sui-network = { path = "../sui-network" }
+sui-protocol-config = { path = "../sui-protocol-config" }
+sui-replay = { path = "../sui-replay" }
+sui-sdk = { path = "../sui-sdk" }
+sui-storage = { path = "../sui-storage" }
+sui-types = { path = "../sui-types" }
+
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

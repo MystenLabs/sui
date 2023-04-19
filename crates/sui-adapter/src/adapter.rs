@@ -32,7 +32,7 @@ use crate::{
     execution_mode::ExecutionMode,
     programmable_transactions::execution::{bcs_argument_validate, PrimitiveArgumentLayout},
 };
-use sui_framework::natives::{object_runtime::ObjectRuntime, NativesCostTable};
+use sui_move_natives::{object_runtime::ObjectRuntime, NativesCostTable};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::*,

@@ -7,31 +7,32 @@ publish = false
 edition = "2021"
 
 [dependencies]
-bcs = "0.1.4"
-tracing = "0.1.36"
-similar = "2.2.0"
-futures = "0.3.23"
 anyhow = { version = "1.0.64", features = ["backtrace"] }
-
+bcs = "0.1.4"
 clap = { version = "4.1.4", features = ["derive"] }
-sui-json-rpc = { path = "../sui-json-rpc" }
-sui-json-rpc-types = { path = "../sui-json-rpc-types" }
-sui-sdk = { path = "../sui-sdk" }
-sui-adapter = { path = "../sui-adapter" }
+colored = "2.0.0"
+futures = "0.3.23"
 serde = { version = "1.0.144", features = ["derive"] }
 serde_json = "1.0.88"
+similar = "2.2.0"
 thiserror = "1.0.34"
-sui-protocol-config = { path = "../sui-protocol-config" }
-sui-framework = { path = "../sui-framework" }
-sui-storage = { path = "../sui-storage" }
-sui-core = { path = "../sui-core" }
+tracing = "0.1.36"
+
+move-binary-format.workspace = true
+move-bytecode-utils.workspace = true
+move-core-types.workspace = true
+move-package.workspace = true
+
+sui-adapter = { path = "../sui-adapter" }
 sui-config = { path = "../sui-config" }
+sui-core = { path = "../sui-core" }
+sui-framework = { path = "../sui-framework" }
+sui-json-rpc = { path = "../sui-json-rpc" }
+sui-json-rpc-types = { path = "../sui-json-rpc-types" }
+sui-move-natives = { path = "../sui-move-natives" }
+sui-protocol-config = { path = "../sui-protocol-config" }
+sui-sdk = { path = "../sui-sdk" }
+sui-storage = { path = "../sui-storage" }
 sui-types = { path = "../sui-types" }
 
-move-core-types.workspace = true
-move-bytecode-utils.workspace = true
-move-package.workspace = true
-move-binary-format.workspace = true
-
-colored = "2.0.0"
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

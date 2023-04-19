@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::natives::object_runtime::LocalProtocolConfig;
+use crate::object_runtime::LocalProtocolConfig;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{effects::Op, value::MoveTypeLayout, vm_status::StatusCode};
 use move_vm_types::{
