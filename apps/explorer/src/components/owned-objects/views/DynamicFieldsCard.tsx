@@ -93,6 +93,10 @@ export function DynamicFieldsCard({ id }: { id: string }) {
                                             <UnderlyingObjectCard
                                                 parentId={id}
                                                 name={result.name}
+                                                isDynamicObjectType={
+                                                    result.type ===
+                                                    'DynamicObject'
+                                                }
                                             />
                                         </div>
                                     </DisclosureBox>
