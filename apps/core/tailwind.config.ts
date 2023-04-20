@@ -93,6 +93,7 @@ export default {
                 blurXl: '0 0 20px 0 rgba(0, 0, 0, 0.3)',
                 button: '0px 1px 2px rgba(16, 24, 40, 0.05)',
                 xs: '0px 1px 2px rgba(16, 24, 40, 0.05)',
+                glow: '0 0 10px 10px rgba(255, 255, 255, 1)',
             },
             fontSize: {
                 // Text sizes:
