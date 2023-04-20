@@ -6,7 +6,7 @@ import { ArrowRight12 } from '@mysten/icons';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 
-import { genTableDataFromTxData } from '../../transactions/TxCardUtils';
+import { genTableDataFromTxData } from '../transactions/TxCardUtils';
 
 import { useGetTransactionBlocks } from '~/hooks/useGetTransactionBlocks';
 import { Link } from '~/ui/Link';

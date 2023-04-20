@@ -4,7 +4,7 @@
 import { useState } from 'react';
 // import toast from 'react-hot-toast';
 
-import { TransactionsActivityTable } from './components/TransactionsActivityTable';
+import { TransactionsActivityTable } from './TransactionsActivityTable';
 
 import { CheckpointsTable } from '~/pages/checkpoints/CheckpointsTable';
 import { EpochsTable } from '~/pages/epochs/EpochsTable';
