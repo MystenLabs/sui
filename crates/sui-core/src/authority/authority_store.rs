@@ -629,10 +629,8 @@ impl AuthorityStore {
         &self,
         keys: impl Iterator<Item = InputKey> + Clone,
     ) -> Result<Vec<bool>, SuiError> {
-        let (keys_with_version, keys_without_version): (Vec<_>, Vec<_>) = keys
-            .clone()
-            .enumerate()
-            .partition(|(_, key)| key.1.is_some());
+        let (keys_with_version, keys_without_version): (Vec<_>, Vec<_>) =
+            keys.enumerate().partition(|(_, key)| key.1.is_some());
 
         let versioned_results = keys_with_version.iter().map(|(idx, _)| *idx).zip(
             self.perpetual_tables

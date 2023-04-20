@@ -3,7 +3,7 @@
 
 use std::{
     cmp::max,
-    collections::{hash_map, BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{hash_map, BTreeMap, BTreeSet, HashMap},
     sync::Arc,
 };
 
@@ -352,7 +352,7 @@ impl TransactionManager {
         certs: Vec<(VerifiedExecutableTransaction, TransactionEffectsDigest)>,
         epoch_store: &AuthorityPerEpochStore,
     ) -> SuiResult<()> {
-        let logger = ScopedTimer::new_with_count(
+        let _logger = ScopedTimer::new_with_count(
             "TransactionManager::enqueue_with_expected_effects_digest",
             certs.len(),
         );

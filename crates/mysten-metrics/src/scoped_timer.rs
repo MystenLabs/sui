@@ -8,6 +8,8 @@ use std::time::{Duration, Instant};
 
 pub struct ScopedTimer;
 
+use tracing::trace;
+
 thread_local! {
     static SCOPE_LOGGER: RefCell<ScopeLoggerState> = RefCell::new(ScopeLoggerState::new());
 }
@@ -33,7 +35,7 @@ impl ScopeLoggerState {
 
     fn print_indented(&self, message: &str) {
         let indent = self.indent.load(Ordering::SeqCst);
-        println!("{}{}", "  ".repeat(indent), message);
+        trace!("{}{}", "  ".repeat(indent), message);
     }
 }
 
