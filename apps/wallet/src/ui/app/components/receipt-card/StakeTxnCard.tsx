@@ -64,7 +64,7 @@ export function StakeTxnCard({ event }: StakeTxnCardProps) {
                 />
             )}
             <div className="flex flex-col">
-                <div className="flex justify-between w-full py-3.5">
+                <div className="flex justify-between w-full pt-3.5">
                     <div className="flex gap-1 items-baseline text-steel">
                         <Text
                             variant="body"
