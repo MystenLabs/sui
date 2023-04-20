@@ -24,7 +24,6 @@ use rocksdb::{
     WriteBatch, WriteBatchWithTransaction, WriteOptions,
 };
 use serde::{de::DeserializeOwned, Serialize};
-use std::collections::HashSet;
 use std::{
     borrow::Borrow,
     collections::BTreeMap,
@@ -34,6 +33,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
+use std::{collections::HashSet, ffi::CStr};
 use tap::TapFallible;
 use tokio::sync::oneshot;
 use tracing::{error, info, instrument, warn};
@@ -67,6 +67,11 @@ const DEFAULT_TARGET_FILE_SIZE_BASE_MB: usize = 128;
 const ENV_VAR_DISABLE_BLOB_STORAGE: &str = "DISABLE_BLOB_STORAGE";
 
 const ENV_VAR_MAX_BACKGROUND_JOBS: &str = "MAX_BACKGROUND_JOBS";
+
+// TODO: remove this after Rust rocksdb has the TOTAL_BLOB_FILES_SIZE property built-in.
+// From https://github.com/facebook/rocksdb/blob/bd80433c73691031ba7baa65c16c63a83aef201a/include/rocksdb/db.h#L1169
+const ROCKSDB_PROPERTY_TOTAL_BLOB_FILES_SIZE: &CStr =
+    unsafe { CStr::from_bytes_with_nul_unchecked("rocksdb.total-blob-file-size\0".as_bytes()) };
 
 #[cfg(test)]
 mod tests;
@@ -827,6 +832,14 @@ impl<K, V> DBMap<K, V> {
             .with_label_values(&[cf_name])
             .set(
                 Self::get_int_property(rocksdb, &cf, properties::TOTAL_SST_FILES_SIZE)
+                    .unwrap_or(METRICS_ERROR),
+            );
+        db_metrics
+            .cf_metrics
+            .rocksdb_total_blob_files_size
+            .with_label_values(&[cf_name])
+            .set(
+                Self::get_int_property(rocksdb, &cf, ROCKSDB_PROPERTY_TOTAL_BLOB_FILES_SIZE)
                     .unwrap_or(METRICS_ERROR),
             );
         db_metrics
