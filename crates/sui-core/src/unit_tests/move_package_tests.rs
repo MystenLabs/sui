@@ -462,8 +462,11 @@ async fn test_metered_move_bytecode_verifier() {
     );
 
     // Default case should pass
-    let r =
-        run_metered_move_bytecode_verifier_impl(&compiled_modules_bytes, &metered_verifier_config);
+    let r = run_metered_move_bytecode_verifier_impl(
+        &compiled_modules_bytes,
+        &ProtocolConfig::get_for_max_version(),
+        &metered_verifier_config,
+    );
     assert!(r.is_ok());
 
     // Use low limits. Should fail
@@ -472,8 +475,11 @@ async fn test_metered_move_bytecode_verifier() {
     metered_verifier_config.max_per_mod_meter_units = Some(10_000);
     metered_verifier_config.max_per_fun_meter_units = Some(10_000);
 
-    let r =
-        run_metered_move_bytecode_verifier_impl(&compiled_modules_bytes, &metered_verifier_config);
+    let r = run_metered_move_bytecode_verifier_impl(
+        &compiled_modules_bytes,
+        &ProtocolConfig::get_for_max_version(),
+        &metered_verifier_config,
+    );
 
     assert!(
         r.unwrap_err()

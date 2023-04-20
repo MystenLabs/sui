@@ -4276,18 +4276,6 @@
           }
         ]
       },
-      "MovePackage": {
-        "type": "object",
-        "required": [
-          "disassembled"
-        ],
-        "properties": {
-          "disassembled": {
-            "type": "object",
-            "additionalProperties": true
-          }
-        }
-      },
       "MoveStruct": {
         "anyOf": [
           {
@@ -6912,19 +6900,9 @@
             "properties": {
               "Publish": {
                 "type": "array",
-                "items": [
-                  {
-                    "$ref": "#/components/schemas/MovePackage"
-                  },
-                  {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/ObjectID"
-                    }
-                  }
-                ],
-                "maxItems": 2,
-                "minItems": 2
+                "items": {
+                  "$ref": "#/components/schemas/ObjectID"
+                }
               }
             },
             "additionalProperties": false
@@ -6940,9 +6918,6 @@
                 "type": "array",
                 "items": [
                   {
-                    "$ref": "#/components/schemas/MovePackage"
-                  },
-                  {
                     "type": "array",
                     "items": {
                       "$ref": "#/components/schemas/ObjectID"
@@ -6955,8 +6930,8 @@
                     "$ref": "#/components/schemas/SuiArgument"
                   }
                 ],
-                "maxItems": 4,
-                "minItems": 4
+                "maxItems": 3,
+                "minItems": 3
               }
             },
             "additionalProperties": false
