@@ -251,7 +251,7 @@ Created new keypair for address with scheme ED25519: [0xa01cd0c520f12a1e9d57bf3c
 Secret Recovery Phrase : [sunny tip element salad frequent february amount notice chair kite race push noise ketchup that same cannon bench mirror please dinosaur indicate violin sunset]
 ```
 
-To create a sword and transfer it to another player, we use the following command to call the `sword_create` [function](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/move_tutorial/sources/my_module.move#L47) in the `my_module` [module](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/move_tutorial/sources/my_module.move#L4) of the package we previously published.
+To create a sword and transfer it to another player, use the following command to call the `sword_create` [function](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/move_tutorial/sources/my_module.move#L47) in the `my_module` [module](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/move_tutorial/sources/my_module.move#L4) of the package you previously published.
 
 You must use the same format for the command and function parameters as the example shown.
 

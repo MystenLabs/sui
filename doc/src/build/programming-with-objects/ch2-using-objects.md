@@ -10,7 +10,7 @@ Sui authentication mechanisms ensure only you can use objects owned by you in Su
 
 There are two ways to pass objects by reference: read-only references (`&T`) and mutable references (`&mut T`). Read-only references allow you to read data from the object, while mutable references allow you to mutate the data in the object. To add a function that allows you to update one of the values of `ColorObject` with another value of `ColorObject`. This exercises both using read-only references and mutable references.
 
-The `ColorObject` we defined in the previous chapter looks like:
+The `ColorObject` defined in the previous chapter looks like:
 ```rust
 struct ColorObject has key {
     id: UID,
@@ -102,7 +102,7 @@ There are two ways to handle a pass-by-value Sui object in Move:
 
 If the intention is to actually delete the object, unpack it. You can do this only in the module that defined the struct type, due to Move's [privileged struct operations rules](https://github.com/move-language/move/blob/main/language/documentation/book/src/structs-and-resources.md#privileged-struct-operations). If any field is also of struct type, you must use recursive unpacking and deletion when you unpack the object.
 
-However, the `id` field of a Sui object requires special handling. You must call the following API in the [object](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/object.move) module to signal Sui that we intend to delete this object:
+However, the `id` field of a Sui object requires special handling. You must call the following API in the [object](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/object.move) module to signal Sui that you intend to delete this object:
 
 ```rust
 public fun delete(id: UID) { ... }
@@ -130,7 +130,7 @@ let scenario = &mut scenario_val;
     let ctx = test_scenario::ctx(scenario);
     color_object::create(255, 0, 255, ctx);
 };
-// Delete the ColorObject we just created.
+// Delete the ColorObject just created.
 test_scenario::next_tx(scenario, owner);
 {
     let object = test_scenario::take_from_sender<ColorObject>(scenario);

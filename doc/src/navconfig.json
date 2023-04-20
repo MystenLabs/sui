@@ -1,10 +1,7 @@
 {
 	"sideMenu": {
 		"title": "QUICK LINKS",
-		"items": [{
-				"label": "Sui Migration Guide",
-				"link": "doc-updates/sui-migration-guide"
-			},
+		"items": [
 			{
 				"label": "Sui Doc Updates",
 				"link": "doc-updates"

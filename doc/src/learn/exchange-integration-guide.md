@@ -13,7 +13,7 @@ The requirements to configure a SUI integration include:
     * RAM: 32 GB
     * Storage: 2 TB SSD
 
-We recommend running Sui Full nodes on Linux. Sui supports the Ubuntu and Debian distributions.
+For best results, run Sui Full nodes on Linux. Sui supports the Ubuntu and Debian distributions. You can also fun a Full node on macOS.
 
 ## Configure a Sui Full node
 
