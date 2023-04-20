@@ -281,6 +281,7 @@ mod test {
                 SupportedProtocolVersions::new_for_testing(min_ver, max_ver),
             )
             .with_objects(init_framework.into_iter().map(|p| p.genesis_object()))
+            .with_stake_subsidy_start_epoch(10)
             .build()
             .await
             .unwrap();
@@ -298,6 +299,14 @@ mod test {
                 // Let all nodes run for a bit at this version.
                 tokio::time::sleep(Duration::from_secs(50)).await;
                 if version == max_ver {
+                    let stake_subsidy_start_epoch = test_cluster
+                        .sui_client()
+                        .governance_api()
+                        .get_latest_sui_system_state()
+                        .await
+                        .unwrap()
+                        .stake_subsidy_start_epoch;
+                    assert_eq!(stake_subsidy_start_epoch, 20);
                     break;
                 }
                 let next_version = version + 1;
