@@ -1,0 +1,92 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+import { type EpochPage } from '@mysten/sui.js/src/types/epochs';
+
+import { SuiAmount } from '../Table/SuiAmount';
+import { TxTableCol, TxTableHeader } from '../transactions/TxCardUtils';
+import { TxTimeType } from '../tx-time/TxTimeType';
+
+import { CheckpointSequenceLink, EpochLink } from '~/ui/InternalLink';
+import { Text } from '~/ui/Text';
+
+// Generate table data from the transaction data
+export const genTableDataFromEpochsData = (results: EpochPage) => ({
+    data: results?.data.map((epoch) => ({
+        epoch: (
+            <TxTableCol isHighlightedOnHover>
+                <EpochLink epoch={epoch.epoch.toString()} />
+            </TxTableCol>
+        ),
+        transactions: (
+            <TxTableCol>
+                <Text variant="bodySmall/medium">
+                    {epoch.epochTotalTransactions}
+                </Text>
+            </TxTableCol>
+        ),
+        stakeRewards: (
+            <TxTableCol>
+                <SuiAmount
+                    amount={epoch.endOfEpochInfo?.totalStakeRewardsDistributed}
+                />
+            </TxTableCol>
+        ),
+        checkpointSet: (
+            <div>
+                <CheckpointSequenceLink
+                    sequence={epoch.firstCheckpointId.toString()}
+                />
+                {` - `}
+                <CheckpointSequenceLink
+                    sequence={
+                        epoch.endOfEpochInfo?.lastCheckpointId.toString() ?? ''
+                    }
+                />
+            </div>
+        ),
+        storageRevenue: (
+            <TxTableCol>
+                <SuiAmount amount={epoch.endOfEpochInfo?.storageCharge} />
+            </TxTableCol>
+        ),
+        time: (
+            <TxTableCol>
+                <TxTimeType
+                    timestamp={Number(
+                        epoch.endOfEpochInfo?.epochEndTimestamp ?? 0
+                    )}
+                />
+            </TxTableCol>
+        ),
+    })),
+    columns: [
+        {
+            // header: () => <TxTableHeader label="Sender" />,
+
+            header: () => <TxTableHeader label="Epoch" />,
+            accessorKey: 'epoch',
+        },
+        {
+            header: () => <TxTableHeader label="Transaction Blocks" />,
+            accessorKey: 'transactions',
+        },
+        {
+            header: () => <TxTableHeader label="Stake Rewards" />,
+            accessorKey: 'stakeRewards',
+        },
+        {
+            header: () => <TxTableHeader label="Checkpoint Set" />,
+            accessorKey: 'checkpointSet',
+        },
+        {
+            header: () => <TxTableHeader label="Storage Revenue" />,
+
+            accessorKey: 'storageRevenue',
+        },
+        {
+            header: () => <TxTableHeader label="Epoch End" />,
+
+            accessorKey: 'time',
+        },
+    ],
+});

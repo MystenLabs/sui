@@ -7,7 +7,6 @@ import { useState } from 'react';
 import { Transactions } from '../transactions';
 
 import { CheckpointsTable } from '~/pages/checkpoints/CheckpointsTable';
-import { EpochsTable } from '~/pages/epochs/EpochsTable';
 // import { PlayPause } from '~/ui/PlayPause';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
@@ -81,7 +80,7 @@ export function Activity({
                         />
                     </TabPanel>
                     <TabPanel>
-                        <EpochsTable
+                        <EpochsActivityTable
                             refetchInterval={refetchInterval}
                             initialLimit={initialLimit}
                             disablePagination={disablePagination}
