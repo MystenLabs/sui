@@ -36,7 +36,7 @@ export function UnderlyingObjectCard({
         objectType?.split('<')[0]?.split('::') || [];
 
     // Get the normalized struct for the object
-    const { data: normalizedStruct, isFetched: isFetchNormalizedStruct } =
+    const { data: normalizedStruct, isFetched: normalizedStructFetched } =
         useGetNormalizedMoveStruct({
             packageId,
             module: moduleName,
@@ -55,7 +55,7 @@ export function UnderlyingObjectCard({
         isError ||
         data.error ||
         (isFetched && !data) ||
-        (!normalizedStruct && isFetchNormalizedStruct)
+        (!normalizedStruct && normalizedStructFetched)
     ) {
         return (
             <Banner variant="error" spacing="lg" fullWidth>
