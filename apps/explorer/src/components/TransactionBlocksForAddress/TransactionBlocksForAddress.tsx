@@ -169,9 +169,11 @@ function TransactionBlocksForAddress({
 
                                 filterValue,
                             });
-                            // setCurrentPage(currentPage + 1);
                         }}
-                        hasNext={Boolean(hasNextPage)}
+                        hasNext={
+                            Boolean(hasNextPage) &&
+                            Boolean(data?.pages[currentPage])
+                        }
                         hasPrev={currentPageState[filterValue] !== 0}
                         onPrev={() =>
                             dispatch({

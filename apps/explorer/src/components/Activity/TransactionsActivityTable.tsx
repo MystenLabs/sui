@@ -96,7 +96,10 @@ export function TransactionsActivityTable({
                                 }
                                 setCurrentPage(currentPage + 1);
                             }}
-                            hasNext={Boolean(hasNextPage)}
+                            hasNext={
+                                Boolean(hasNextPage) &&
+                                Boolean(data?.pages[currentPage])
+                            }
                             hasPrev={currentPage !== 0}
                             onPrev={() => setCurrentPage(currentPage - 1)}
                             onFirst={() => setCurrentPage(0)}
