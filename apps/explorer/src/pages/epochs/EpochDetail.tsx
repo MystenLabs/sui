@@ -20,6 +20,7 @@ import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Stats, type StatsProps } from '~/ui/Stats';
 import { TableCard } from '~/ui/TableCard';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
+import { CheckpointsActivityTable } from '~/components/Activity/CheckpointsActivityTable';
 
 function SuiStats({
     amount,
@@ -147,7 +148,7 @@ export default function EpochDetail() {
                 </TabList>
                 <TabPanels className="mt-4">
                     <TabPanel>
-                        <CheckpointsTable
+                        <CheckpointsActivityTable
                             initialCursor={
                                 epochData.endOfEpochInfo?.lastCheckpointId
                             }

@@ -7,7 +7,7 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 export const DEFAULT_EPOCHS_LIMIT = 20;
 
 // Fetch transaction blocks
-export function useGetCheckpoints(limit = DEFAULT_EPOCHS_LIMIT) {
+export function useGetCheckpoints(cursor?: string, limit = DEFAULT_EPOCHS_LIMIT) {
     const rpc = useRpcClient();
 
     return useInfiniteQuery(
@@ -15,13 +15,13 @@ export function useGetCheckpoints(limit = DEFAULT_EPOCHS_LIMIT) {
         async ({ pageParam }) =>
             await rpc.getCheckpoints({
                 descendingOrder: true,
-                cursor: pageParam,
+                cursor: pageParam ?? cursor,
                 limit,
             }),
         {
             getNextPageParam: (lastPage) =>
                 lastPage?.hasNextPage ? lastPage.nextCursor : false,
-            staleTime: Infinity,
+            staleTime: 10 * 1000,
             cacheTime: 24 * 60 * 60 * 1000,
             retry: false,
             keepPreviousData: true,

@@ -4,7 +4,7 @@
 import { useRpcClient } from '@mysten/core';
 import { ArrowRight12 } from '@mysten/icons';
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { genTableDataFromCheckpointsData } from './utils';
 
@@ -22,11 +22,15 @@ interface Props {
     disablePagination?: boolean;
     refetchInterval?: number;
     initialLimit?: number;
+    initialCursor?: string;
+    maxCursor?: string;
 }
 
 export function CheckpointsActivityTable({
     disablePagination,
     initialLimit = DEFAULT_CHECKPOINTS_LIMIT,
+    initialCursor,
+    maxCursor,
 }: Props) {
     const [currentPage, setCurrentPage] = useState(0);
     const [limit, setLimit] = useState(initialLimit);
@@ -38,11 +42,17 @@ export function CheckpointsActivityTable({
         isFetchingNextPage,
         fetchNextPage,
         hasNextPage,
-    } = useGetCheckpoints(limit);
+    } = useGetCheckpoints(initialCursor, limit);
 
     const countQuery = useQuery(['checkpoints', 'count'], () =>
         rpc.getLatestCheckpointSequenceNumber()
     );
+
+    const count = useMemo(() => {
+        if (maxCursor && initialCursor)
+            return Number(initialCursor) - Number(maxCursor);
+        return Number(countQuery.data ?? 0);
+    }, [countQuery.data, initialCursor, maxCursor]);
 
     const cardData =
         data && Boolean(data.pages[currentPage])
@@ -93,7 +103,8 @@ export function CheckpointsActivityTable({
                         }}
                         hasNext={
                             Boolean(hasNextPage) &&
-                            Boolean(data?.pages[currentPage])
+                            Boolean(data?.pages[currentPage]) &&
+                            Number(data?.pages[currentPage].nextCursor) > Number(maxCursor)
                         }
                         hasPrev={currentPage !== 0}
                         onPrev={() => setCurrentPage(currentPage - 1)}
@@ -112,8 +123,8 @@ export function CheckpointsActivityTable({
 
                 <div className="flex items-center space-x-3">
                     <Text variant="body/medium" color="steel-dark">
-                        {countQuery.data
-                            ? numberSuffix(Number(countQuery.data))
+                        {count
+                            ? numberSuffix(Number(count))
                             : '-'}
                         {` Checkpoints`}
                     </Text>
