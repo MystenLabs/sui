@@ -323,11 +323,11 @@ function StakingCard() {
                                                 color="steel-dark"
                                                 weight="normal"
                                             >
-                                                Staked SUI start counting as
+                                                Staked SUI starts counting as
                                                 validator’s stake at the end of
                                                 the Epoch in which it was
                                                 staked. Rewards are earned
-                                                separately for Each epoch and
+                                                separately for each epoch and
                                                 become available at the end of
                                                 each Epoch.
                                             </Text>
