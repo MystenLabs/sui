@@ -3,6 +3,7 @@
 
 use crate::genesis;
 use crate::p2p::P2pConfig;
+use crate::transaction_deny_config::TransactionDenyConfig;
 use crate::Config;
 use anyhow::Result;
 use narwhal_config::Parameters as ConsensusParameters;
@@ -112,6 +113,9 @@ pub struct NodeConfig {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name_service_resolver_object_id: Option<ObjectID>,
+
+    #[serde(default)]
+    pub transaction_deny_config: TransactionDenyConfig,
 }
 
 fn default_authority_store_pruning_config() -> AuthorityStorePruningConfig {

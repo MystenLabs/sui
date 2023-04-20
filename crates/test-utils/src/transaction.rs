@@ -51,13 +51,13 @@ use crate::messages::{
 };
 
 pub fn make_publish_package(
-    gas_object: Object,
+    gas_object: ObjectRef,
     path: PathBuf,
     gas_price: u64,
 ) -> VerifiedTransaction {
     let (sender, keypair) = deterministic_random_account_key();
     create_publish_move_package_transaction(
-        gas_object.compute_object_reference(),
+        gas_object,
         path,
         sender,
         &keypair,
@@ -84,7 +84,7 @@ pub async fn publish_package_for_effects(
     gas_price: u64,
 ) -> (TransactionEffects, TransactionEvents) {
     submit_single_owner_transaction(
-        make_publish_package(gas_object, path, gas_price),
+        make_publish_package(gas_object.compute_object_reference(), path, gas_price),
         net_addresses,
     )
     .await

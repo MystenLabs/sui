@@ -125,7 +125,11 @@ async fn create_txes(
     //
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("dummy_modules_publish");
-    let publish_tx = make_publish_package(gas_objects.pop().unwrap(), package_path, gas_price);
+    let publish_tx = make_publish_package(
+        gas_objects.pop().unwrap().compute_object_reference(),
+        package_path,
+        gas_price,
+    );
     ret.insert(CommonTransactionCosts::Publish, publish_tx);
 
     //

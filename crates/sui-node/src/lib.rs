@@ -322,6 +322,7 @@ impl SuiNode {
             genesis.objects(),
             &db_checkpoint_config,
             config.expensive_safety_check_config.clone(),
+            config.transaction_deny_config.clone(),
         )
         .await;
         // ensure genesis txn was executed
