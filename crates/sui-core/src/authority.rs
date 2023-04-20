@@ -24,7 +24,6 @@ use prometheus::{
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use sui_types::TypeTag;
 use tap::TapFallible;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::oneshot;
@@ -2272,11 +2271,10 @@ impl AuthorityState {
     pub fn get_dynamic_field_object_id(
         &self,
         owner: ObjectID,
-        name_type: TypeTag,
-        name_bcs_bytes: &[u8],
+        name: &DynamicFieldName,
     ) -> SuiResult<Option<ObjectID>> {
         if let Some(indexes) = &self.indexes {
-            indexes.get_dynamic_field_object_id(owner, name_type, name_bcs_bytes)
+            indexes.get_dynamic_field_object_id(owner, name)
         } else {
             Err(SuiError::IndexStoreNotAvailable)
         }

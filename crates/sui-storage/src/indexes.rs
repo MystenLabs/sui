@@ -25,7 +25,7 @@ use sui_types::base_types::{
 };
 use sui_types::base_types::{ObjectInfo, ObjectRef};
 use sui_types::digests::TransactionEventsDigest;
-use sui_types::dynamic_field::{self, DynamicFieldInfo};
+use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::TransactionEvents;
 use sui_types::object::Owner;
@@ -983,48 +983,21 @@ impl IndexStore {
     pub fn get_dynamic_field_object_id(
         &self,
         object: ObjectID,
-        name_type: TypeTag,
-        name_bcs_bytes: &[u8],
+        name: &DynamicFieldName,
     ) -> SuiResult<Option<ObjectID>> {
         debug!(?object, "get_dynamic_field_object_id");
-        let dynamic_field_id =
-            dynamic_field::derive_dynamic_field_id(object, &name_type, name_bcs_bytes).map_err(
-                |e| {
-                    SuiError::Unknown(format!(
-                        "Unable to generate dynamic field id. Got error: {e:?}"
-                    ))
-                },
-            )?;
-
-        if self
+        Ok(self
             .tables
             .dynamic_field_index
-            .contains_key(&(object, dynamic_field_id))?
-        {
-            return Ok(Some(dynamic_field_id));
-        }
-
-        let dynamic_object_field_struct = DynamicFieldInfo::dynamic_object_field_wrapper(name_type);
-        let dynamic_object_field_type = TypeTag::Struct(Box::new(dynamic_object_field_struct));
-        let dynamic_object_field_id = dynamic_field::derive_dynamic_field_id(
-            object,
-            &dynamic_object_field_type,
-            name_bcs_bytes,
-        )
-        .map_err(|e| {
-            SuiError::Unknown(format!(
-                "Unable to generate dynamic field id. Got error: {e:?}"
-            ))
-        })?;
-        if let Some(info) = self
-            .tables
-            .dynamic_field_index
-            .get(&(object, dynamic_object_field_id))?
-        {
-            return Ok(Some(info.object_id));
-        }
-
-        Ok(None)
+            .iter()
+            // The object id 0 is the smallest possible
+            .skip_to(&(object, ObjectID::ZERO))?
+            .find(|((object_owner, _), info)| {
+                object_owner == &object
+                    && info.name.type_ == name.type_
+                    && info.name.value == name.value
+            })
+            .map(|(_, object_info)| object_info.object_id))
     }
 
     pub fn get_owner_objects(
