@@ -5,7 +5,7 @@ import BigNumber from 'bignumber.js';
 export const calculateStakeShare = (
     validatorStake: bigint,
     totalStake: bigint,
-    decimalPlaces = 3
+    decimalPlaces = 2
 ) => {
     const bn = new BigNumber(validatorStake.toString());
     const bd = new BigNumber(totalStake.toString());
