@@ -162,7 +162,7 @@ impl<'vm, 'state, 'a, S: StorageView> ExecutionContext<'vm, 'state, 'a, S> {
         // exist. Plus, Sui Move does not use these changes or events
         let (res, linkage) = tmp_session.finish();
         let (change_set, move_events) =
-            res.map_err(|e| sui_types::error::convert_vm_error(e, vm, &linkage))?;
+            res.map_err(|e| crate::error::convert_vm_error(e, vm, &linkage))?;
         assert_invariant!(change_set.accounts().is_empty(), "Change set must be empty");
         assert_invariant!(move_events.is_empty(), "Events must be empty");
         // make the real session
@@ -503,7 +503,7 @@ impl<'vm, 'state, 'a, S: StorageView> ExecutionContext<'vm, 'state, 'a, S> {
 
     /// Determine the object changes and collect all user events
     pub fn finish<Mode: ExecutionMode>(self) -> Result<ExecutionResults, ExecutionError> {
-        use sui_types::error::convert_vm_error;
+        use crate::error::convert_vm_error;
         let Self {
             protocol_config,
             vm,
@@ -751,7 +751,7 @@ impl<'vm, 'state, 'a, S: StorageView> ExecutionContext<'vm, 'state, 'a, S> {
 
     /// Convert a VM Error to an execution one
     pub fn convert_vm_error(&self, error: VMError) -> ExecutionError {
-        sui_types::error::convert_vm_error(error, self.vm, self.session.get_resolver())
+        crate::error::convert_vm_error(error, self.vm, self.session.get_resolver())
     }
 
     /// Special case errors for type arguments to Move functions
@@ -1160,7 +1160,7 @@ unsafe fn create_written_object<S: StorageView>(
 
     let type_tag = session
         .get_type_tag(&type_)
-        .map_err(|e| sui_types::error::convert_vm_error(e, vm, session.get_resolver()))?;
+        .map_err(|e| crate::error::convert_vm_error(e, vm, session.get_resolver()))?;
 
     let struct_tag = match type_tag {
         TypeTag::Struct(inner) => *inner,
