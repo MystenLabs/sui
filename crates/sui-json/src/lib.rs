@@ -96,7 +96,12 @@ pub enum ResolvedCallArg {
 pub struct SuiJsonValue(JsonValue);
 impl SuiJsonValue {
     pub fn new(json_value: JsonValue) -> Result<SuiJsonValue, anyhow::Error> {
-        match json_value.clone() {
+        Self::check_value(&json_value)?;
+        Ok(Self(json_value))
+    }
+
+    fn check_value(json_value: &JsonValue) -> Result<(), anyhow::Error> {
+        match json_value {
             // No checks needed for Bool and String
             JsonValue::Bool(_) | JsonValue::String(_) => (),
             JsonValue::Number(n) => {
@@ -110,11 +115,16 @@ impl SuiJsonValue {
             // Must be homogeneous
             JsonValue::Array(a) => {
                 // Fail if not homogeneous
-                check_valid_homogeneous(&JsonValue::Array(a))?
+                check_valid_homogeneous(&JsonValue::Array(a.to_vec()))?
             }
-            _ => bail!("{json_value} not allowed."),
+            JsonValue::Object(v) => {
+                for (_, value) in v {
+                    Self::check_value(value)?;
+                }
+            }
+            JsonValue::Null => bail!("Null not allowed."),
         };
-        Ok(Self(json_value))
+        Ok(())
     }
 
     pub fn from_object_id(id: ObjectID) -> SuiJsonValue {
@@ -122,7 +132,7 @@ impl SuiJsonValue {
     }
 
     pub fn to_bcs_bytes(&self, ty: &MoveTypeLayout) -> Result<Vec<u8>, anyhow::Error> {
-        let move_value = Self::to_move_value(&self.0, ty)?;
+        let move_value = Self::to_move_value(&self.0, ty)?.undecorate();
         MoveValue::simple_serialize(&move_value)
             .ok_or_else(|| anyhow!("Unable to serialize {:?}. Expected {}", move_value, ty))
     }
@@ -327,7 +337,36 @@ impl SuiJsonValue {
                 let addr = json_value_to_sui_address(v)?;
                 MoveValue::Address(addr.into())
             }
-            _ => bail!("Unexpected arg {val:?} for expected type {ty}"),
+
+            (
+                JsonValue::Object(o),
+                MoveTypeLayout::Struct(MoveStructLayout::WithTypes { fields, .. }),
+            )
+            | (
+                JsonValue::Object(o),
+                MoveTypeLayout::Struct(MoveStructLayout::WithFields(fields)),
+            ) => {
+                let mut field_values = vec![];
+                for layout in fields {
+                    let field = o
+                        .get(layout.name.as_str())
+                        .ok_or_else(|| anyhow!("Missing field {} for struct {ty}", layout.name))?;
+                    field_values.push((
+                        layout.name.clone(),
+                        Self::to_move_value(field, &layout.layout)?,
+                    ));
+                }
+                MoveValue::Struct(MoveStruct::WithFields(field_values))
+            }
+            // Unnest fields
+            (value, MoveTypeLayout::Struct(MoveStructLayout::WithTypes { fields, .. }))
+            | (value, MoveTypeLayout::Struct(MoveStructLayout::WithFields(fields)))
+                if fields.len() == 1 =>
+            {
+                Self::to_move_value(value, &fields[0].layout)?
+            }
+
+            _ => bail!("Unexpected arg {val:?} for expected type {ty:?}"),
         })
     }
 }
