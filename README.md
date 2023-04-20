@@ -2,7 +2,7 @@
 <img src="https://github.com/MystenLabs/sui/blob/main/doc/static/Sui_Icon_Brand.png" alt="Logo" width="100" height="100">
 </p>
 
-# Welcome to Sui
+# Welcome to Suiss
 
 Sui is a next-generation smart contract platform with high throughput, low latency, and an asset-oriented programming model powered by the [Move programming language](https://github.com/MystenLabs/awesome-move).
 
