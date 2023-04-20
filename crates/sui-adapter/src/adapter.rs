@@ -40,14 +40,12 @@ use sui_types::{
     base_types::*,
     error::ExecutionError,
     error::{ExecutionErrorKind, SuiError},
+    id::RESOLVED_SUI_ID,
+    is_primitive,
     messages::{InputObjectKind, ObjectArg},
     metrics::LimitsMetrics,
     object::{Data, Object, Owner},
     storage::ChildObjectResolver,
-};
-use sui_verifier::entry_points_verifier::{
-    self, is_tx_context, TxContextKind, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_SUI_ID,
-    RESOLVED_UTF8_STR,
 };
 
 sui_macros::checked_arithmetic! {
@@ -238,7 +236,7 @@ pub fn resolve_and_type_check<Mode: ExecutionMode>(
     let parameters = &module.signature_at(fhandle.parameters).0;
     let tx_ctx_kind = parameters
         .last()
-        .map(|t| is_tx_context(view, t))
+        .map(|t| TxContext::kind(view, t))
         .unwrap_or(TxContextKind::None);
 
     let num_args = if tx_ctx_kind != TxContextKind::None {
@@ -275,9 +273,7 @@ pub fn resolve_and_type_check<Mode: ExecutionMode>(
                     .iter()
                     .map(|_| AbilitySet::PRIMITIVES)
                     .collect::<Vec<_>>();
-                let is_primitive =
-                    entry_points_verifier::is_primitive(view, type_arg_abilities, param_type);
-                if !is_primitive {
+                if !is_primitive(view, type_arg_abilities, param_type) {
                     anyhow::bail!(
                         "Non-primitive argument at index {}. If it is an object, it must be \
                         populated by an object ID",

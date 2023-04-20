@@ -33,6 +33,7 @@ use crate::parse_sui_struct_tag;
 use crate::signature::GenericSignature;
 use crate::sui_serde::HexAccountAddress;
 use crate::sui_serde::Readable;
+use crate::MOVE_STDLIB_ADDRESS;
 use crate::SUI_FRAMEWORK_ADDRESS;
 use crate::SUI_SYSTEM_ADDRESS;
 use anyhow::anyhow;
@@ -40,6 +41,9 @@ use fastcrypto::encoding::decode_bytes_hex;
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::hash::HashFunction;
 use fastcrypto::traits::AllowedRng;
+use move_binary_format::binary_views::BinaryIndexedView;
+use move_binary_format::file_format::SignatureToken;
+use move_bytecode_utils::resolve_struct;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
@@ -689,12 +693,27 @@ impl VerifiedExecutionData {
 
 pub const STD_OPTION_MODULE_NAME: &IdentStr = ident_str!("option");
 pub const STD_OPTION_STRUCT_NAME: &IdentStr = ident_str!("Option");
+pub const RESOLVED_STD_OPTION: (&AccountAddress, &IdentStr, &IdentStr) = (
+    &MOVE_STDLIB_ADDRESS,
+    STD_OPTION_MODULE_NAME,
+    STD_OPTION_STRUCT_NAME,
+);
 
 pub const STD_ASCII_MODULE_NAME: &IdentStr = ident_str!("ascii");
 pub const STD_ASCII_STRUCT_NAME: &IdentStr = ident_str!("String");
+pub const RESOLVED_ASCII_STR: (&AccountAddress, &IdentStr, &IdentStr) = (
+    &MOVE_STDLIB_ADDRESS,
+    STD_ASCII_MODULE_NAME,
+    STD_ASCII_STRUCT_NAME,
+);
 
 pub const STD_UTF8_MODULE_NAME: &IdentStr = ident_str!("string");
 pub const STD_UTF8_STRUCT_NAME: &IdentStr = ident_str!("String");
+pub const RESOLVED_UTF8_STR: (&AccountAddress, &IdentStr, &IdentStr) = (
+    &MOVE_STDLIB_ADDRESS,
+    STD_UTF8_MODULE_NAME,
+    STD_UTF8_STRUCT_NAME,
+);
 
 pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("tx_context");
 pub const TX_CONTEXT_STRUCT_NAME: &IdentStr = ident_str!("TxContext");
@@ -711,6 +730,16 @@ pub struct TxContext {
     epoch_timestamp_ms: CheckpointTimestamp,
     /// Number of `ObjectID`'s generated during execution of the current transaction
     ids_created: u64,
+}
+
+#[derive(PartialEq, Eq, Clone, Copy)]
+pub enum TxContextKind {
+    // No TxContext
+    None,
+    // &mut TxContext
+    Mutable,
+    // &TxContext
+    Immutable,
 }
 
 impl TxContext {
@@ -735,6 +764,31 @@ impl TxContext {
             epoch: *epoch_id,
             epoch_timestamp_ms,
             ids_created: 0,
+        }
+    }
+
+    /// Returns whether the type signature is &mut TxContext, &TxContext, or none of the above.
+    pub fn kind(view: &BinaryIndexedView<'_>, s: &SignatureToken) -> TxContextKind {
+        use SignatureToken as S;
+        let (kind, s) = match s {
+            S::MutableReference(s) => (TxContextKind::Mutable, s),
+            S::Reference(s) => (TxContextKind::Immutable, s),
+            _ => return TxContextKind::None,
+        };
+
+        let S::Struct(idx) = &**s else {
+            return TxContextKind::None;
+        };
+
+        let (module_addr, module_name, struct_name) = resolve_struct(view, *idx);
+        let is_tx_context_type = module_name == TX_CONTEXT_MODULE_NAME
+            && module_addr == &SUI_FRAMEWORK_ADDRESS
+            && struct_name == TX_CONTEXT_STRUCT_NAME;
+
+        if is_tx_context_type {
+            kind
+        } else {
+            TxContextKind::None
         }
     }
 

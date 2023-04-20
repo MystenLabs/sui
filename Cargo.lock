@@ -9328,7 +9328,6 @@ dependencies = [
  "sui-move-build",
  "sui-protocol-config",
  "sui-types",
- "sui-verifier",
  "test-fuzz",
  "workspace-hack",
 ]
