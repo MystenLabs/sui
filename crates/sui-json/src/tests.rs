@@ -12,11 +12,10 @@ use move_core_types::{
     account_address::AccountAddress, ident_str, identifier::Identifier, value::MoveTypeLayout,
 };
 use serde_json::{json, Value};
-use sui_framework::BuiltInFramework;
-use sui_move_build::BuildConfig;
 use test_fuzz::runtime::num_traits::ToPrimitive;
 
-use crate::ResolvedCallArg;
+use sui_framework::BuiltInFramework;
+use sui_move_build::BuildConfig;
 use sui_types::base_types::{
     ObjectID, SuiAddress, TransactionDigest, STD_ASCII_MODULE_NAME, STD_ASCII_STRUCT_NAME,
     STD_OPTION_MODULE_NAME, STD_OPTION_STRUCT_NAME,
@@ -24,6 +23,8 @@ use sui_types::base_types::{
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::Object;
 use sui_types::MOVE_STDLIB_ADDRESS;
+
+use crate::ResolvedCallArg;
 
 use super::{check_valid_homogeneous, HEX_PREFIX};
 use super::{resolve_move_function_args, SuiJsonValue};
@@ -81,6 +82,15 @@ fn test_json_is_homogeneous() {
     for arg in checks {
         assert!(check_valid_homogeneous(&arg).is_ok());
     }
+}
+
+#[test]
+fn test_json_struct_homogeneous() {
+    let positive = json!({"inner_vec":[1, 2, 3, 4, 5, 6, 7]});
+    assert!(SuiJsonValue::new(positive).is_ok());
+
+    let negative = json!({"inner_vec":[1, 2, 3, true, 5, 6, 7]});
+    assert!(SuiJsonValue::new(negative).is_err());
 }
 
 #[test]

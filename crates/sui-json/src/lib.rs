@@ -350,7 +350,7 @@ impl SuiJsonValue {
                 for layout in fields {
                     let field = o
                         .get(layout.name.as_str())
-                        .ok_or_else(|| anyhow!("Missing field {} for struct {ty}", layout.name,))?;
+                        .ok_or_else(|| anyhow!("Missing field {} for struct {ty}", layout.name))?;
                     field_values.push((
                         layout.name.clone(),
                         Self::to_move_value(field, &layout.layout)?,
