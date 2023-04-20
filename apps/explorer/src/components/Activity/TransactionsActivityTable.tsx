@@ -77,7 +77,7 @@ export function TransactionsActivityTable({
                 )}
 
                 <div className="flex justify-between">
-                    {hasNextPage || data?.pages.length ? (
+                    {(hasNextPage || data?.pages.length) && !disablePagination ? (
                         <Pagination
                             onNext={() => {
                                 if (isLoading || isFetching) {
