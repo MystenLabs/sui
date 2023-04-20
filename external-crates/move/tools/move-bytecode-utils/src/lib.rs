@@ -7,8 +7,14 @@ pub mod layout;
 pub mod module_cache;
 
 use crate::dependency_graph::DependencyGraph;
-use move_binary_format::{access::ModuleAccess, file_format::{CompiledModule, StructHandleIndex, SignatureToken}, binary_views::BinaryIndexedView};
-use move_core_types::{language_storage::ModuleId, identifier::IdentStr, account_address::AccountAddress};
+use move_binary_format::{
+    access::ModuleAccess,
+    binary_views::BinaryIndexedView,
+    file_format::{CompiledModule, SignatureToken, StructHandleIndex},
+};
+use move_core_types::{
+    account_address::AccountAddress, identifier::IdentStr, language_storage::ModuleId,
+};
 
 use anyhow::{anyhow, Result};
 use std::collections::BTreeMap;
