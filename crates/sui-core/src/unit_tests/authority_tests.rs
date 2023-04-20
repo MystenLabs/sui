@@ -2620,7 +2620,7 @@ async fn test_move_call_delete() {
 
 #[tokio::test]
 async fn test_get_latest_parent_entry_genesis() {
-    let authority_state = init_state().await;
+    let authority_state = TestAuthorityBuilder::new().build().await;
     // There should not be any object with ID zero
     assert!(authority_state
         .get_object_or_tombstone(ObjectID::ZERO)
@@ -2764,12 +2764,14 @@ async fn test_account_state_unknown_account() {
 #[tokio::test]
 async fn test_authority_persist() {
     async fn init_state(
-        committee: Committee,
+        genesis: &Genesis,
         authority_key: AuthorityKeyPair,
         store: Arc<AuthorityStore>,
     ) -> Arc<AuthorityState> {
         TestAuthorityBuilder::new()
-            .build_with_store(committee, &authority_key, store, &[])
+            .with_genesis_and_keypair(genesis, &authority_key)
+            .with_store(store)
+            .build()
             .await
     }
 
@@ -2787,7 +2789,7 @@ async fn test_authority_persist() {
         AuthorityStore::open_with_committee_for_testing(&path, None, &committee, &genesis, 0)
             .await
             .unwrap();
-    let authority = init_state(committee, authority_key, store).await;
+    let authority = init_state(&genesis, authority_key, store).await;
 
     // Create an object
     let recipient = dbg_addr(2);
@@ -2812,7 +2814,7 @@ async fn test_authority_persist() {
         AuthorityStore::open_with_committee_for_testing(&path, None, &committee, &genesis, 0)
             .await
             .unwrap();
-    let authority2 = init_state(committee, authority_key, store).await;
+    let authority2 = init_state(&genesis, authority_key, store).await;
     let obj2 = authority2.get_object(&object_id).await.unwrap().unwrap();
 
     // Check the object is present
@@ -2983,7 +2985,7 @@ async fn test_valid_immutable_clock_parameter() {
 async fn test_genesis_sui_system_state_object() {
     // This test verifies that we can read the genesis SuiSystemState object.
     // And its Move layout matches the definition in Rust (so that we can deserialize it).
-    let authority_state = init_state().await;
+    let authority_state = TestAuthorityBuilder::new().build().await;
     let wrapper = authority_state
         .get_object(&SUI_SYSTEM_STATE_OBJECT_ID)
         .await
@@ -3907,7 +3909,7 @@ pub fn find_by_id(fx: &[(ObjectRef, Owner)], id: ObjectID) -> Option<ObjectRef> 
 pub async fn init_state_with_objects_and_object_basics<I: IntoIterator<Item = Object>>(
     objects: I,
 ) -> (Arc<AuthorityState>, ObjectRef) {
-    let state = init_state().await;
+    let state = TestAuthorityBuilder::new().build().await;
     for obj in objects {
         state.insert_genesis_object(obj).await;
     }
@@ -3920,7 +3922,7 @@ pub async fn init_state_with_ids_and_object_basics<
 >(
     objects: I,
 ) -> (Arc<AuthorityState>, ObjectRef) {
-    let state = init_state().await;
+    let state = TestAuthorityBuilder::new().build().await;
     for (address, object_id) in objects {
         let obj = Object::with_id_owner_for_testing(object_id, address);
         state.insert_genesis_object(obj).await;

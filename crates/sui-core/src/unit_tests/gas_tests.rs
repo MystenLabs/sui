@@ -5,7 +5,8 @@ use super::*;
 
 use super::authority_tests::{init_state_with_ids, send_and_confirm_transaction};
 use super::move_integration_tests::build_and_try_publish_test_package;
-use crate::authority::authority_tests::{init_state, init_state_with_ids_and_object_basics};
+use crate::authority::authority_tests::init_state_with_ids_and_object_basics;
+use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use once_cell::sync::Lazy;
@@ -126,7 +127,7 @@ where
     const GAS_AMOUNT: u64 = 10_000_000_000;
     let gas_coins = make_gas_coins(sender, GAS_AMOUNT, coin_num);
     let gas_coin_ids: Vec<_> = gas_coins.iter().map(|obj| obj.id()).collect();
-    let authority_state = init_state().await;
+    let authority_state = TestAuthorityBuilder::new().build().await;
     for obj in gas_coins {
         authority_state.insert_genesis_object(obj).await;
     }
@@ -510,7 +511,7 @@ async fn test_transfer_sui_insufficient_gas() {
     let gas_object_id = ObjectID::random();
     let gas_object = Object::with_id_owner_gas_for_testing(gas_object_id, sender, *MIN_GAS_BUDGET);
     let gas_object_ref = gas_object.compute_object_reference();
-    let authority_state = init_state().await;
+    let authority_state = TestAuthorityBuilder::new().build().await;
     authority_state.insert_genesis_object(gas_object).await;
 
     let pt = {
@@ -541,7 +542,7 @@ async fn test_transfer_sui_insufficient_gas() {
 #[tokio::test]
 async fn test_invalid_gas_owners() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let authority_state = init_state().await;
+    let authority_state = TestAuthorityBuilder::new().build().await;
 
     let init_object = |o: Object| async {
         let obj_ref = o.compute_object_reference();
