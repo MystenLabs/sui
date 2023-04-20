@@ -76,7 +76,7 @@ export function DelegationDetailCard({
     }).toString()}`;
 
     // check if the validator is in the active validator list, if not, is inactive validator
-    const isValidatorInactive = !system?.activeValidators?.find(
+    const hasInactiveValidatorDelegation = !system?.activeValidators?.find(
         ({ stakingPoolId }) => stakingPoolId === validatorData?.stakingPoolId
     );
 
@@ -110,7 +110,7 @@ export function DelegationDetailCard({
             <BottomMenuLayout>
                 <Content>
                     <div className="justify-center w-full flex flex-col items-center">
-                        {isValidatorInactive ? (
+                        {hasInactiveValidatorDelegation ? (
                             <Alert className="mb-3">
                                 Unstake SUI from this inactive validator and
                                 stake on an active validator to start earning
@@ -209,7 +209,7 @@ export function DelegationDetailCard({
                             </Card>
                         </div>
                         <div className="flex gap-2.5 w-full my-3.75">
-                            {!isValidatorInactive ? (
+                            {!hasInactiveValidatorDelegation ? (
                                 <Button
                                     size="tall"
                                     variant="outline"

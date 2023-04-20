@@ -56,7 +56,7 @@ export function ValidatorsCard() {
     }, [activeValidators, delegatedStake]);
 
     // Check if there are any inactive validators
-    const isInActiveValidator = delegations?.some(
+    const hasInactiveValidatorDelegation = delegations?.some(
         ({ inactiveValidator }) => inactiveValidator
     );
 
@@ -103,7 +103,7 @@ export function ValidatorsCard() {
             <BottomMenuLayout>
                 <Content>
                     <div className="mb-4">
-                        {isInActiveValidator ? (
+                        {hasInactiveValidatorDelegation ? (
                             <Alert className="mb-3">
                                 Unstake SUI from the inactive validators and
                                 stake on an active validator to start earning
