@@ -32,8 +32,7 @@ export function useGetTransactionBlocks(
         {
             getNextPageParam: (lastPage) =>
                 lastPage?.hasNextPage ? lastPage.nextCursor : false,
-            staleTime: Infinity,
-            cacheTime: 24 * 60 * 60 * 1000,
+            staleTime: 10 * 1000,
             retry: false,
             keepPreviousData: true,
         }
