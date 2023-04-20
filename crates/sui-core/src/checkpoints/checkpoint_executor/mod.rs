@@ -55,7 +55,7 @@ use crate::transaction_manager::TransactionManager;
 use crate::{authority::EffectsNotifyRead, checkpoints::CheckpointStore};
 
 use self::metrics::CheckpointExecutorMetrics;
-use mysten_metrics::scoped_timer::ScopedTimer;
+// use mysten_metrics::scoped_timer::ScopedTimer;
 
 mod metrics;
 #[cfg(test)]
@@ -385,7 +385,7 @@ impl CheckpointExecutor {
         epoch_store: Arc<AuthorityPerEpochStore>,
         pending: &mut CheckpointExecutionBuffer,
     ) -> SuiResult {
-        let logger = ScopedTimer::new("execute_checkpoint");
+        // let logger = ScopedTimer::new("execute_checkpoint");
         debug!("Preparing checkpoint for execution",);
         let prepare_start = Instant::now();
 
@@ -403,7 +403,7 @@ impl CheckpointExecutor {
         );
 
         let tx_count = execution_digests.len();
-        logger.set_count(tx_count);
+        // logger.set_count(tx_count);
         debug!("Number of transactions in the checkpoint: {:?}", tx_count);
         self.metrics
             .checkpoint_transaction_count
@@ -434,7 +434,7 @@ impl CheckpointExecutor {
         pending: &mut CheckpointExecutionBuffer,
         prepare_start: Instant,
     ) -> SuiResult {
-        let _logger = ScopedTimer::new_with_count("execute_transactions", execution_digests.len());
+        // let _logger = ScopedTimer::new_with_count("execute_transactions", execution_digests.len());
         let effects_digests: HashMap<_, _> = execution_digests
             .iter()
             .map(|digest| (digest.transaction, digest.effects))
