@@ -618,6 +618,47 @@ impl AuthorityStore {
         }
     }
 
+    /// Checks if the input object identified by the InputKey exists, with support for non-system
+    /// packages i.e. when version is None.
+    pub fn input_object_multi_exists(
+        &self,
+        keys: impl Iterator<Item = InputKey> + Clone,
+    ) -> Result<Vec<bool>, SuiError> {
+        let (keys_with_version, keys_without_version): (Vec<_>, Vec<_>) =
+            keys.enumerate().partition(|(_, key)| key.1.is_some());
+
+        let versioned_results = keys_with_version.iter().map(|(idx, _)| *idx).zip(
+            self.perpetual_tables
+                .objects
+                .multi_get(
+                    keys_with_version
+                        .iter()
+                        .map(|(_, k)| ObjectKey(k.0, k.1.unwrap())),
+                )?
+                .into_iter()
+                .map(|o| o.is_some()),
+        );
+
+        let unversioned_results = keys_without_version.into_iter().map(|(idx, key)| {
+            (
+                idx,
+                match self
+                    .get_object_or_tombstone(key.0)
+                    .expect("read cannot fail")
+                {
+                    None => false,
+                    Some(entry) => entry.2.is_alive(),
+                },
+            )
+        });
+
+        let mut results = versioned_results
+            .chain(unversioned_results)
+            .collect::<Vec<_>>();
+        results.sort_by_key(|(idx, _)| *idx);
+        Ok(results.into_iter().map(|(_, result)| result).collect())
+    }
+
     /// Attempts to acquire execution lock for an executable transaction.
     /// Returns the lock if the transaction is matching current executed epoch
     /// Returns None otherwise

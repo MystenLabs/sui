@@ -209,6 +209,12 @@ pub struct AuthorityMetrics {
     pub(crate) transaction_manager_num_pending_certificates: IntGauge,
     pub(crate) transaction_manager_num_executing_certificates: IntGauge,
     pub(crate) transaction_manager_num_ready: IntGauge,
+    pub(crate) transaction_manager_object_cache_hits: IntCounter,
+    pub(crate) transaction_manager_object_cache_misses: IntCounter,
+    pub(crate) transaction_manager_object_cache_evictions: IntCounter,
+    pub(crate) transaction_manager_package_cache_hits: IntCounter,
+    pub(crate) transaction_manager_package_cache_misses: IntCounter,
+    pub(crate) transaction_manager_package_cache_evictions: IntCounter,
 
     pub(crate) execution_driver_executed_transactions: IntCounter,
     pub(crate) execution_driver_dispatch_queue: IntGauge,
@@ -403,6 +409,42 @@ impl AuthorityMetrics {
             transaction_manager_num_ready: register_int_gauge_with_registry!(
                 "transaction_manager_num_ready",
                 "Number of ready transactions in TransactionManager",
+                registry,
+            )
+            .unwrap(),
+            transaction_manager_object_cache_hits: register_int_counter_with_registry!(
+                "transaction_manager_object_cache_hits",
+                "Number of object-availability cache hits in TransactionManager",
+                registry,
+            )
+            .unwrap(),
+            transaction_manager_object_cache_misses: register_int_counter_with_registry!(
+                "transaction_manager_object_cache_misses",
+                "Number of object-availability cache misses in TransactionManager",
+                registry,
+            )
+            .unwrap(),
+            transaction_manager_object_cache_evictions: register_int_counter_with_registry!(
+                "transaction_manager_object_cache_evictions",
+                "Number of object-availability cache evictions in TransactionManager",
+                registry,
+            )
+            .unwrap(),
+            transaction_manager_package_cache_hits: register_int_counter_with_registry!(
+                "transaction_manager_package_cache_hits",
+                "Number of package-availability cache hits in TransactionManager",
+                registry,
+            )
+            .unwrap(),
+            transaction_manager_package_cache_misses: register_int_counter_with_registry!(
+                "transaction_manager_package_cache_misses",
+                "Number of package-availability cache misses in TransactionManager",
+                registry,
+            )
+            .unwrap(),
+            transaction_manager_package_cache_evictions: register_int_counter_with_registry!(
+                "transaction_manager_package_cache_evictions",
+                "Number of package-availability cache evictions in TransactionManager",
                 registry,
             )
             .unwrap(),
