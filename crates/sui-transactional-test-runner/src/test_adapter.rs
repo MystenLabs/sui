@@ -453,6 +453,10 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 )
             })
             .collect();
+        println!(
+            "published: {:#?}",
+            self.compiled_state.named_address_mapping
+        );
         Ok((output, published_modules))
     }
 
@@ -853,6 +857,7 @@ impl<'a> SuiTestAdapter<'a> {
             }
         }
         let output = self.object_summary_output(&summary);
+        println!("upgraded: {:#?}", self.compiled_state.named_address_mapping);
         Ok(output)
     }
 
