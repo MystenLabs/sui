@@ -706,7 +706,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     let named_address_mapping = &mut state.named_address_mapping;
                     // Set Test_DepV1 to 0xB727750DB26014E56ECF92CD32E4D068238821623C04698D962908D120A516D0.
                     named_address_mapping.insert(
-			"Test_DepV2".into(),
+			"Test_DepV1".into(),
 			NumericalAddress::new(
                         AccountAddress::from_hex_literal(
                             "0xB727750DB26014E56ECF92CD32E4D068238821623C04698D962908D120A516D0",
@@ -717,7 +717,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     ),
                     );
                     named_address_mapping.insert(
-                        "Test_DepV1".into(),
+                        "Test_DepV2".into(),
                         NumericalAddress::new(
                             AccountAddress::from_hex_literal("0x0")
                                 .unwrap()
@@ -807,11 +807,11 @@ impl<'a> SuiTestAdapter<'a> {
         policy: u8,
     ) -> anyhow::Result<Option<String>> {
         println!("[self.upgrade_package]");
-        let dependencies = vec![String::from("Test_DepV1")];
+        // let dependencies = vec![String::from("Test_DepV1")];
         if package == "Test_V1" {
             let named_address_mapping = &mut self.compiled_state.named_address_mapping;
             named_address_mapping.insert(
-                "Test_DepV1".into(),
+                "Test_DepV2".into(),
                 NumericalAddress::new(
                     AccountAddress::from_hex_literal(
                         "0x9B04E42926E70668CE82A4C2388BE4E2D4C5B661BE024B58E1518E71C7689236",
@@ -823,11 +823,11 @@ impl<'a> SuiTestAdapter<'a> {
                 ),
             );
             println!(
-                "[upgrade] FIXUP ++: compile state named_address_mapping {:#?}",
+                "[self.upgrade_package] compile state named_address_mapping {:#?}",
                 self.compiled_state.named_address_mapping
             );
         }
-        println!("[upgrade] dependencies: {:#?}", dependencies);
+        println!("[self.upgrade_package] dependencies: {:#?}", dependencies);
         let modules_bytes = modules
             .iter()
             .map(|(_, module)| {
@@ -845,7 +845,7 @@ impl<'a> SuiTestAdapter<'a> {
                     bail!("There is no published module address corresponding to name address {d}");
                 };
                 let id: ObjectID = addr.into_inner().into();
-                println!("[upgrade] resolved dep {d} -> {id}");
+                println!("[self.upgrade_package] resolved dep {d} -> {id}");
                 Ok(id)
             })
             .collect::<Result<_, _>>()?;

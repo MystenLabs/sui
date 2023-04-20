@@ -32,7 +32,7 @@ module Test_V1::M1 {
     }
 }
 
-//# upgrade --package Test_V1 --upgrade-capability 3,1 --dependencies Test_DepV1 --sender A
+//# upgrade --package Test_V1 --upgrade-capability 3,1 --dependencies Test_DepV2 --sender A
 module Test_V2::M1 {
     use Test_DepV2::DepM1;
 
