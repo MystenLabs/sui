@@ -5,7 +5,15 @@ pub mod account_universe;
 pub mod executor;
 pub mod type_arg_fuzzer;
 
+use std::fmt::Debug;
+use std::fmt::Formatter;
+use std::sync::Arc;
+
+use proptest::arbitrary::StrategyFor;
 use proptest::collection::vec;
+use proptest::test_runner::TestRunner;
+use sui_core::authority::AuthorityState;
+use sui_core::test_utils::init_state;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::get_key_pair;
@@ -16,6 +24,7 @@ use sui_types::{gas_coin::TOTAL_SUPPLY_MIST, messages::GasData};
 
 use proptest::prelude::*;
 use rand::{rngs::StdRng, SeedableRng};
+use tokio::runtime::Runtime;
 
 fn new_gas_coin_with_balance_and_owner(balance: u64, owner: Owner) -> Object {
     Object::new_move(
@@ -132,5 +141,49 @@ impl proptest::arbitrary::Arbitrary for GasDataWithObjects {
                 generate_random_gas_data(seed, owners, params.owned_by_sender)
             })
             .boxed()
+    }
+}
+
+#[derive(Clone)]
+pub struct TestAuthorityWrapper {
+    pub state: Arc<AuthorityState>,
+}
+
+// A dummy Debug implementation
+impl Debug for TestAuthorityWrapper {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "TestAuthorityWrapper")
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct TestData<D: Arbitrary> {
+    pub data: D,
+    pub authority: TestAuthorityWrapper,
+}
+
+/// Run a proptest test with give number of test cases, a strategy for something and a test function testing that something
+/// with an Arc<AuthorityState>.
+pub fn run_proptest<D>(
+    num_test_cases: u32,
+    strategy: StrategyFor<D>,
+    test_fn: impl Fn(D, Arc<AuthorityState>) -> (),
+) where
+    D: Arbitrary + 'static,
+{
+    let mut runner = TestRunner::new(ProptestConfig::with_cases(num_test_cases));
+    let authority = Runtime::new().unwrap().block_on(init_state());
+    let strategy_with_authority = strategy.prop_map(|data| TestData {
+        data,
+        authority: TestAuthorityWrapper {
+            state: authority.clone(),
+        },
+    });
+    let result = runner.run(&strategy_with_authority, |test_data| {
+        test_fn(test_data.data, test_data.authority.state);
+        Ok(())
+    });
+    if result.is_err() {
+        panic!("test failed: {:?}", result);
     }
 }
