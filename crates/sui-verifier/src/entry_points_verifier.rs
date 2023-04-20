@@ -7,6 +7,7 @@ use move_binary_format::{
     file_format::{AbilitySet, Bytecode, FunctionDefinition, SignatureToken, Visibility},
     CompiledModule,
 };
+use move_bytecode_utils::{format_signature_token, resolve_struct};
 use move_core_types::{account_address::AccountAddress, identifier::IdentStr};
 use sui_types::{
     base_types::{
@@ -17,13 +18,11 @@ use sui_types::{
     clock::{CLOCK_MODULE_NAME, CLOCK_STRUCT_NAME},
     error::ExecutionError,
     id::{ID_STRUCT_NAME, OBJECT_MODULE_NAME},
-    move_package::FnInfoMap,
+    move_package::{is_test_fun, FnInfoMap},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 
-use crate::{
-    format_signature_token, is_test_fun, resolve_struct, verification_failure, INIT_FN_NAME,
-};
+use crate::{verification_failure, INIT_FN_NAME};
 
 /// Checks valid rules rules for entry points, both for module initialization and transactions
 ///
