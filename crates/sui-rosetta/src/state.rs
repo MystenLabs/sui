@@ -231,24 +231,20 @@ impl CheckpointBlockProvider {
         let index = checkpoint.sequence_number;
         let hash = checkpoint.digest;
         let mut transactions = vec![];
-        for digest in checkpoint.transactions.iter() {
-            let tx = self
-                .client
-                .read_api()
-                .get_transaction_with_options(
-                    *digest,
-                    SuiTransactionBlockResponseOptions::new()
-                        .with_input()
-                        .with_effects()
-                        .with_balance_changes()
-                        .with_events(),
-                )
-                .await?;
-            transactions.push(Transaction {
-                transaction_identifier: TransactionIdentifier { hash: tx.digest },
-                operations: Operations::try_from(tx)?,
-                related_transactions: vec![],
-                metadata: None,
+        let tx_block_responses = self.client.read_api().multi_get_transactions_with_options(
+            checkpoint.transactions, 
+            SuiTransactionBlockResponseOptions::new()
+                .with_input()
+                .with_effects()
+                .with_balance_changes()
+                .with_events()
+            ).await?;
+        for block_response in tx_block_responses.iter() {
+            transactions.push(Transaction { 
+                transaction_identifier: TransactionIdentifier { hash: block_response.digest }, 
+                operations: Operations::try_from(block_response), 
+                related_transactions: vec![], 
+                metadata: None
             })
         }
 
