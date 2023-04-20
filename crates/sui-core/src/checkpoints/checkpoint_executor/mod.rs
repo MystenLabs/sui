@@ -19,7 +19,7 @@
 //! end of epoch. This allows us to use it as a signal for reconfig.
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::Arc,
     time::{Duration, Instant, SystemTime},
 };
@@ -34,7 +34,7 @@ use sui_types::message_envelope::Message;
 use sui_types::messages::VerifiedExecutableTransaction;
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest, TransactionEffectsDigest},
-    messages::{TransactionEffects, TransactionEffectsAPI},
+    messages::{TransactionEffects, TransactionEffectsAPI, VerifiedTransaction},
     messages_checkpoint::{CheckpointSequenceNumber, VerifiedCheckpoint},
 };
 use sui_types::{error::SuiResult, messages::TransactionDataAPI};
@@ -55,6 +55,7 @@ use crate::transaction_manager::TransactionManager;
 use crate::{authority::EffectsNotifyRead, checkpoints::CheckpointStore};
 
 use self::metrics::CheckpointExecutorMetrics;
+use mysten_metrics::scoped_timer::ScopedTimer;
 
 mod metrics;
 #[cfg(test)]
@@ -174,6 +175,36 @@ impl CheckpointExecutor {
             self.metrics
                 .checkpoint_exec_inflight
                 .set(pending.len() as i64);
+
+            loop {
+                let next = pending.next();
+                futures::pin_mut!(next);
+                match futures::poll!(next) {
+                    std::task::Poll::Ready(Some(Ok(checkpoint))) => {
+                        self.process_executed_checkpoint(&checkpoint);
+                        highest_executed = Some(checkpoint);
+
+                        // Estimate TPS every 10k transactions or 30 sec
+                        let elapsed = now_time.elapsed().as_millis();
+                        let current_transaction_num = highest_executed
+                            .as_ref()
+                            .map(|c| c.network_total_transactions)
+                            .unwrap_or(0);
+                        if current_transaction_num - now_transaction_num > 10_000
+                            || elapsed > 30_000
+                        {
+                            let tps = (1000.0
+                                * (current_transaction_num - now_transaction_num) as f64
+                                / elapsed as f64) as i32;
+                            self.metrics.checkpoint_exec_sync_tps.set(tps as i64);
+                            now_time = Instant::now();
+                            now_transaction_num = current_transaction_num;
+                        }
+                    }
+                    _ => break,
+                }
+            }
+
             tokio::select! {
                 // Check for completed workers and ratchet the highest_checkpoint_executed
                 // watermark accordingly. Note that given that checkpoints are guaranteed to
@@ -252,6 +283,10 @@ impl CheckpointExecutor {
         fail_point!("highest-executed-checkpoint");
 
         self.checkpoint_store
+            .delete_full_checkpoint_contents(seq)
+            .expect("Failed to delete full checkpoint contents");
+
+        self.checkpoint_store
             .update_highest_executed_checkpoint(checkpoint)
             .unwrap();
         self.metrics.last_executed_checkpoint.set(seq as i64);
@@ -273,8 +308,11 @@ impl CheckpointExecutor {
             return;
         };
 
+        let checkpoint_execution_max_concurrency = 2000;
+
+        debug!(pending = ?pending.len(), "schedule loop begin");
         while *next_to_schedule <= *latest_synced_checkpoint.sequence_number()
-            && pending.len() < self.config.checkpoint_execution_max_concurrency
+            && pending.len() < checkpoint_execution_max_concurrency
         {
             let checkpoint = self
                 .checkpoint_store
@@ -294,6 +332,13 @@ impl CheckpointExecutor {
                 .await;
             *next_to_schedule += 1;
         }
+        debug!(
+            ?next_to_schedule,
+            latest_synced_checkpoint = ?latest_synced_checkpoint.sequence_number(),
+            pending = ?pending.len(),
+            ?checkpoint_execution_max_concurrency,
+            "schedule loop finished"
+        );
     }
 
     #[instrument(level = "error", skip_all, fields(seq = ?checkpoint.sequence_number(), epoch = ?epoch_store.epoch()))]
@@ -340,6 +385,7 @@ impl CheckpointExecutor {
         epoch_store: Arc<AuthorityPerEpochStore>,
         pending: &mut CheckpointExecutionBuffer,
     ) -> SuiResult {
+        let logger = ScopedTimer::new("execute_checkpoint");
         debug!("Preparing checkpoint for execution",);
         let prepare_start = Instant::now();
 
@@ -357,6 +403,7 @@ impl CheckpointExecutor {
         );
 
         let tx_count = execution_digests.len();
+        logger.set_count(tx_count);
         debug!("Number of transactions in the checkpoint: {:?}", tx_count);
         self.metrics
             .checkpoint_transaction_count
@@ -387,13 +434,26 @@ impl CheckpointExecutor {
         pending: &mut CheckpointExecutionBuffer,
         prepare_start: Instant,
     ) -> SuiResult {
-        let effects_digests = execution_digests.iter().map(|digest| digest.effects);
+        let _logger = ScopedTimer::new_with_count("execute_transactions", execution_digests.len());
+        let effects_digests: HashMap<_, _> = execution_digests
+            .iter()
+            .map(|digest| (digest.transaction, digest.effects))
+            .collect();
+
+        let shared_effects_digests = executable_txns
+            .iter()
+            .filter(|(tx, _)| tx.contains_shared_object())
+            .map(|(tx, _)| {
+                effects_digests
+                    .get(tx.digest())
+                    .expect("Transaction digest not found in effects_digests")
+            });
 
         let digest_to_effects: HashMap<TransactionDigest, TransactionEffects> = self
             .authority_store
             .perpetual_tables
             .effects
-            .multi_get(effects_digests)?
+            .multi_get(shared_effects_digests)?
             .into_iter()
             .map(|fx| {
                 if fx.is_none() {
@@ -457,6 +517,7 @@ impl CheckpointExecutor {
             if checkpoint.sequence_number % CHECKPOINT_PROGRESS_LOG_COUNT_INTERVAL == 0 {
                 info!(seq = ?checkpoint.sequence_number(), "Checkpoint execution took {:?}", exec_elapsed);
             }
+            debug!("Finished executing checkpoint {}", checkpoint.sequence_number());
             checkpoint
         }));
 
@@ -649,7 +710,7 @@ async fn handle_execution_effects(
                 // Only log details when the checkpoint is next to execute, but has not finished
                 // execution within log_timeout_sec.
                 let missing_digests: Vec<TransactionDigest> = authority_store
-                    .multi_get_executed_effects(&all_tx_digests)
+                    .multi_get_executed_effects_digests(&all_tx_digests)
                     .expect("multi_get_executed_effects cannot fail")
                     .iter()
                     .zip(all_tx_digests.clone())
@@ -695,7 +756,8 @@ async fn handle_execution_effects(
                         &checkpoint,
                         tx_digest,
                         expected_effects_digest,
-                        actual_effects,
+                        &actual_effects.digest(),
+                        authority_store.clone(),
                     );
                 }
 
@@ -724,9 +786,15 @@ fn assert_not_forked(
     checkpoint: &VerifiedCheckpoint,
     tx_digest: &TransactionDigest,
     expected_digest: &TransactionEffectsDigest,
-    actual_effects: &TransactionEffects,
+    actual_effects_digest: &TransactionEffectsDigest,
+    authority_store: Arc<AuthorityStore>,
 ) {
-    if *expected_digest != actual_effects.digest() {
+    if *expected_digest != *actual_effects_digest {
+        let actual_effects = authority_store
+            .get_executed_effects(tx_digest)
+            .expect("get_executed_effects cannot fail")
+            .expect("actual effects should exist");
+
         // log observed effects (too big for panic message) and then panic.
         error!(
             ?checkpoint,
@@ -741,7 +809,7 @@ fn assert_not_forked(
             checkpoint.sequence_number(),
             tx_digest,
             expected_digest,
-            actual_effects.digest(),
+            actual_effects_digest,
         );
     }
 }
@@ -810,6 +878,16 @@ fn get_unexecuted_transactions(
     Vec<(VerifiedExecutableTransaction, TransactionEffectsDigest)>,
 ) {
     let checkpoint_sequence = checkpoint.sequence_number();
+    let full_contents = checkpoint_store
+        .get_full_checkpoint_contents_by_sequence_number(*checkpoint_sequence)
+        .expect("Failed to get checkpoint contents from store")
+        .tap_some(|_| {
+            debug!(
+                "loaded full checkpoint contents in bulk for sequence {}",
+                checkpoint_sequence
+            )
+        });
+
     let mut execution_digests = checkpoint_store
         .get_checkpoint_contents(&checkpoint.content_digest)
         .expect("Failed to get checkpoint contents from store")
@@ -820,6 +898,14 @@ fn get_unexecuted_transactions(
             )
         })
         .into_inner();
+
+    let full_contents_txns = full_contents.map(|c| {
+        c.transactions
+            .into_iter()
+            .zip(execution_digests.iter())
+            .map(|(txn, digests)| (digests.transaction, txn))
+            .collect::<HashMap<_, _>>()
+    });
 
     // Remove the change epoch transaction so that we can special case its execution.
     checkpoint.end_of_epoch_data.as_ref().tap_some(|_| {
@@ -843,59 +929,77 @@ fn get_unexecuted_transactions(
     let all_tx_digests: Vec<TransactionDigest> =
         execution_digests.iter().map(|tx| tx.transaction).collect();
 
-    let executed_effects = authority_store
-        .multi_get_executed_effects(&all_tx_digests)
+    let executed_effects_digests = authority_store
+        .multi_get_executed_effects_digests(&all_tx_digests)
         .expect("failed to read executed_effects from store");
 
     let (unexecuted_txns, expected_effects_digests): (Vec<_>, Vec<_>) =
-        izip!(execution_digests.iter(), executed_effects.iter())
-            .filter_map(|(digests, effects)| match effects {
-                None => Some((Some(digests.transaction), Some(digests.effects))),
-                Some(actual_effects) => {
+        izip!(execution_digests.iter(), executed_effects_digests.iter())
+            .filter_map(|(digests, effects_digest)| match effects_digest {
+                None => Some((digests.transaction, digests.effects)),
+                Some(actual_effects_digest) => {
                     let tx_digest = &digests.transaction;
                     let effects_digest = &digests.effects;
                     trace!(
                         "Transaction with digest {:?} has already been executed",
                         tx_digest
                     );
-                    assert_not_forked(&checkpoint, tx_digest, effects_digest, actual_effects);
+                    assert_not_forked(
+                        &checkpoint,
+                        tx_digest,
+                        effects_digest,
+                        actual_effects_digest,
+                        authority_store.clone(),
+                    );
                     None
                 }
             })
             .unzip();
 
-    let unexecuted_txns: Vec<_> = unexecuted_txns.into_iter().map(|x| x.unwrap()).collect();
-    let expected_effects_digests: Vec<_> = expected_effects_digests
-        .into_iter()
-        .map(|x| x.unwrap())
-        .collect();
-
     // read remaining unexecuted transactions from store
-    let executable_txns: Vec<_> = authority_store
-        .multi_get_transaction_blocks(&unexecuted_txns)
-        .expect("Failed to get checkpoint txes from store")
-        .into_iter()
-        .zip(expected_effects_digests.into_iter())
-        .enumerate()
-        .map(|(i, (tx, expected_effects_digest))| {
-            let tx = tx.unwrap_or_else(||
-                panic!(
-                    "state-sync should have ensured that transaction with digest {:?} exists for checkpoint: {checkpoint:?}",
-                    unexecuted_txns[i]
+    let executable_txns: Vec<_> = if let Some(full_contents_txns) = full_contents_txns {
+        unexecuted_txns
+            .into_iter()
+            .zip(expected_effects_digests.into_iter())
+            .map(|(tx_digest, expected_effects_digest)| {
+                let tx = &full_contents_txns.get(&tx_digest).unwrap().transaction;
+                (
+                    VerifiedExecutableTransaction::new_from_checkpoint(
+                        VerifiedTransaction::new_unchecked(tx.clone()),
+                        epoch_store.epoch(),
+                        *checkpoint_sequence,
+                    ),
+                    expected_effects_digest,
                 )
-            );
-            // change epoch tx is handled specially in check_epoch_last_checkpoint
-            assert!(!tx.data().intent_message().value.is_change_epoch_tx());
-            (
-                VerifiedExecutableTransaction::new_from_checkpoint(
-                    tx,
-                    epoch_store.epoch(),
-                    *checkpoint_sequence,
-                ),
-                expected_effects_digest
-            )
-        })
-        .collect();
+            })
+            .collect()
+    } else {
+        authority_store
+            .multi_get_transaction_blocks(&unexecuted_txns)
+            .expect("Failed to get checkpoint txes from store")
+            .into_iter()
+            .zip(expected_effects_digests.into_iter())
+            .enumerate()
+            .map(|(i, (tx, expected_effects_digest))| {
+                let tx = tx.unwrap_or_else(||
+                    panic!(
+                        "state-sync should have ensured that transaction with digest {:?} exists for checkpoint: {checkpoint:?}",
+                        unexecuted_txns[i]
+                    )
+                );
+                // change epoch tx is handled specially in check_epoch_last_checkpoint
+                assert!(!tx.data().intent_message().value.is_change_epoch_tx());
+                (
+                    VerifiedExecutableTransaction::new_from_checkpoint(
+                        tx,
+                        epoch_store.epoch(),
+                        *checkpoint_sequence,
+                    ),
+                    expected_effects_digest
+                )
+            })
+            .collect()
+    };
 
     (execution_digests, all_tx_digests, executable_txns)
 }
