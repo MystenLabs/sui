@@ -703,8 +703,9 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     state.named_address_mapping
                 );
                 if package == "Test_V1" {
+                    // If we're upgrading Test_V1
                     let named_address_mapping = &mut state.named_address_mapping;
-                    // Set Test_DepV1 to 0xB727750DB26014E56ECF92CD32E4D068238821623C04698D962908D120A516D0.
+                    // Set Test_DepV1 address to Test_DepV2
                     named_address_mapping.insert(
 			"Test_DepV1".into(),
 			NumericalAddress::new(
@@ -716,6 +717,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                         NumberFormat::Hex,
                     ),
                     );
+                    // Temporarily clear Test_DepV2, since we will get "Duplicate definition of module M1".
                     named_address_mapping.insert(
                         "Test_DepV2".into(),
                         NumericalAddress::new(
@@ -809,6 +811,7 @@ impl<'a> SuiTestAdapter<'a> {
         println!("[self.upgrade_package]");
         // let dependencies = vec![String::from("Test_DepV1")];
         if package == "Test_V1" {
+            // If we're upgrading Test_V1, publish/reactivate Test_DepV2
             let named_address_mapping = &mut self.compiled_state.named_address_mapping;
             named_address_mapping.insert(
                 "Test_DepV2".into(),
