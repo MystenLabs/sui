@@ -1230,7 +1230,9 @@ module deepbook::clob {
         account_cap: &AccountCap
     ): &Order {
         let user = object::id(account_cap);
+        assert!(table::contains(&pool.usr_open_orders, user), EInvalidUser);
         let usr_open_order_ids = table::borrow(&pool.usr_open_orders, user);
+        assert!(linked_table::contains(usr_open_order_ids, order_id), EInvalidOrderId);
         let order_price = *linked_table::borrow(usr_open_order_ids, order_id);
         let open_orders =
             if (order_id < MIN_ASK_ORDER_ID) { &pool.bids }
