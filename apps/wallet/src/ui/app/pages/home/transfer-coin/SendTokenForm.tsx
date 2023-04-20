@@ -142,6 +142,7 @@ export function SendTokenForm({
                     setFieldValue,
                     values,
                     submitForm,
+                    validateField,
                 }) => {
                     const newPaySuiAll =
                         parseAmount(values.amount, coinDecimals) ===
@@ -179,14 +180,14 @@ export function SendTokenForm({
                                             decimals
                                             rounded="lg"
                                             dark
-                                            onActionClicked={() =>
-                                                // useFormat coin
-                                                setFieldValue(
+                                            onActionClicked={async () => {
+                                                // using await to make sure the value is set before the validation
+                                                await setFieldValue(
                                                     'amount',
-                                                    formattedTokenBalance,
-                                                    true
-                                                )
-                                            }
+                                                    formattedTokenBalance
+                                                );
+                                                validateField('amount');
+                                            }}
                                             actionDisabled={
                                                 parseAmount(
                                                     values?.amount,

@@ -28,7 +28,7 @@ def get_current_network_epoch(env='testnet'):
     for i in range(NUM_RETRIES):
         cmd = ['curl', '--location', '--request', 'POST', f'https://explorer-rpc.{env}.sui.io/',
                '--header', 'Content-Type: application/json', '--data-raw',
-               '{"jsonrpc":"2.0", "method":"suix_getEpochs", "params":[null, "1", true], "id":1}']
+               '{"jsonrpc":"2.0", "method":"suix_getCurrentEpoch", "params":[], "id":1}']
         try:
             result = subprocess.check_output(cmd, stderr=subprocess.PIPE)
         except subprocess.CalledProcessError as e:
@@ -39,12 +39,13 @@ def get_current_network_epoch(env='testnet'):
         try:
             result = json.loads(result)
             if 'error' in result:
-                print(f'suix_getEpochs rpc request failed: {result["error"]}')
+                print(
+                    f'suix_getCurrentEpoch rpc request failed: {result["error"]}')
                 time.sleep(3)
                 continue
-            return int(result['result']['data'][0]['epoch'])
+            return int(result['result']['epoch'])
         except (KeyError, IndexError, json.JSONDecodeError):
-            print(f'suix_getEpochs rpc request failed: {result}')
+            print(f'suix_getCurrentEpoch rpc request failed: {result}')
             time.sleep(RETRY_BASE_TIME_SEC * 2**i)  # exponential backoff
             continue
     print(f"Failed to get current network epoch after {NUM_RETRIES} tries")

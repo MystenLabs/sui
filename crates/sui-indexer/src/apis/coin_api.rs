@@ -60,7 +60,7 @@ impl CoinReadApiServer for CoinReadApi {
         self.fullnode.get_all_balances(owner).await
     }
 
-    async fn get_coin_metadata(&self, coin_type: String) -> RpcResult<SuiCoinMetadata> {
+    async fn get_coin_metadata(&self, coin_type: String) -> RpcResult<Option<SuiCoinMetadata>> {
         self.fullnode.get_coin_metadata(coin_type).await
     }
 

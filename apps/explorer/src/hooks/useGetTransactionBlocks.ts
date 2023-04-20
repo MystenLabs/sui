@@ -16,11 +16,15 @@ export function useGetTransactionBlocks(
     const rpc = useRpcClient();
 
     return useInfiniteQuery(
+<<<<<<< HEAD:apps/explorer/src/hooks/useGetTransactionBlocks.ts
         ['get-transaction-blocks', filter, limit],
+=======
+        ['get-transaction-blocks', address, filter, limit],
+>>>>>>> main:apps/explorer/src/hooks/useGetTransactionBlocksForAddress.ts
         async ({ pageParam }) =>
             await rpc.queryTransactionBlocks({
                 filter,
-                cursor: pageParam ? pageParam.cursor : null,
+                cursor: pageParam,
                 order: 'descending',
                 limit,
                 options: {
@@ -32,10 +36,14 @@ export function useGetTransactionBlocks(
         {
             getNextPageParam: (lastPage) =>
                 lastPage?.hasNextPage ? lastPage.nextCursor : false,
+<<<<<<< HEAD:apps/explorer/src/hooks/useGetTransactionBlocks.ts
             staleTime: Infinity,
             cacheTime: 24 * 60 * 60 * 1000,
             retry: false,
             keepPreviousData: true,
+=======
+            enabled: !!address,
+>>>>>>> main:apps/explorer/src/hooks/useGetTransactionBlocksForAddress.ts
         }
     );
 }

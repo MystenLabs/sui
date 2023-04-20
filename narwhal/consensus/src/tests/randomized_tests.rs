@@ -9,6 +9,8 @@ use crate::metrics::ConsensusMetrics;
 use config::{Authority, AuthorityIdentifier, Committee, Stake};
 use fastcrypto::hash::Hash;
 use fastcrypto::hash::HashFunction;
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
 use prometheus::Registry;
 use rand::distributions::Bernoulli;
 use rand::distributions::Distribution;
@@ -20,6 +22,7 @@ use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 use std::num::NonZeroUsize;
 use std::ops::RangeInclusive;
 use std::sync::Arc;
+use storage::ConsensusStore;
 use test_utils::mock_certificate_with_rand;
 use test_utils::CommitteeFixture;
 #[allow(unused_imports)]
@@ -48,6 +51,11 @@ pub struct FailureModes {
     // round. For example a value of 0.1 means that 10% of the time fail get referenced by the
     // certificates of the next round.
     pub slow_nodes_failure_probability: f64,
+
+    // The minimum committee size to apply the failure modes. If None then the failure mode will be
+    // applied to any committee size. If Some is given and the committee size is smaller than this
+    // number then the failure mode will be skipped.
+    pub minimum_committee_size: Option<usize>,
 }
 
 struct ExecutionPlan {
@@ -65,71 +73,133 @@ impl ExecutionPlan {
 }
 
 #[ignore]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
 async fn bullshark_randomised_tests() {
     // Configuration regarding the randomized tests. The tests will run for different values
     // on the below parameters to increase the different cases we can generate.
 
     // A range of gc_depth to be used
-    const GC_DEPTH: RangeInclusive<Round> = 7..=8;
-    // A range of the committee size to be used
-    const COMMITTEE_SIZE: RangeInclusive<usize> = 4..=4;
+    const GC_DEPTH: RangeInclusive<Round> = 7..=10;
+    // A the committee size values to be used
+    const COMMITTEE_SIZE: [usize; 3] = [4, 7, 10];
     // A range of rounds for which we will create DAGs
     const DAG_ROUNDS: RangeInclusive<Round> = 7..=15;
     // The number of different execution plans to be created and tested against for every generated DAG
-    const EXECUTION_PLANS: u64 = 400;
+    const EXECUTION_PLANS: u64 = 500;
     // The number of DAGs that should be generated and tested against for every set of properties.
-    const DAGS_PER_SETUP: u64 = 50;
+    const DAGS_PER_SETUP: u64 = 500;
     // DAGs will be created for these failure modes
     let failure_modes: Vec<FailureModes> = vec![
         // Some failures
         // TODO: re-enable once we do have parallel testing - now it worth testing the most severe
         // edge cases
-        /*
         FailureModes {
-            nodes_failure_probability: 0.05,     // 5%
-            slow_nodes_percentage: 0.20,         // 20%
+            nodes_failure_probability: 0.10,     // 10%
+            slow_nodes_percentage: 0.10,         // 10%
             slow_nodes_failure_probability: 0.3, // 30%
+            minimum_committee_size: Some(7), // no reason to test this failure mode for smaller committee size, as we'll end up to similar
+                                             // failures as the "severe failures" section
         },
-         */
         // Severe failures
         FailureModes {
             nodes_failure_probability: 0.0,      // 0%
             slow_nodes_percentage: 0.33,         // 33%
             slow_nodes_failure_probability: 0.7, // 70%
+            minimum_committee_size: None,
         },
     ];
 
-    let mut run_id = 0;
-    for committee_size in COMMITTEE_SIZE {
-        for gc_depth in GC_DEPTH {
-            for dag_rounds in DAG_ROUNDS {
-                for _ in 0..DAGS_PER_SETUP {
-                    for mode in &failure_modes {
-                        // we want to skip this test as gc_depth will never be enforced
-                        if gc_depth > dag_rounds {
-                            continue;
+    let mut test_execution_list = FuturesUnordered::new();
+    let (tx, mut rx) = channel(1000);
+
+    #[derive(Debug)]
+    struct TestData {
+        dag_rounds: Round,
+        gc_depth: Round,
+        run_id: u64,
+        committee_size: usize,
+        mode: FailureModes,
+    }
+
+    tokio::spawn(async move {
+        let mut run_id = 0;
+        for committee_size in COMMITTEE_SIZE {
+            for gc_depth in GC_DEPTH {
+                for dag_rounds in DAG_ROUNDS {
+                    for _ in 0..DAGS_PER_SETUP {
+                        for mode in &failure_modes {
+                            if mode.minimum_committee_size.unwrap_or_default() > committee_size {
+                                continue;
+                            }
+
+                            // we want to skip this test as gc_depth will never be enforced
+                            if gc_depth > dag_rounds {
+                                continue;
+                            }
+
+                            run_id += 1;
+
+                            tx.send(TestData {
+                                dag_rounds,
+                                gc_depth,
+                                run_id,
+                                committee_size,
+                                mode: *mode,
+                            })
+                            .await
+                            .unwrap();
                         }
-
-                        run_id += 1;
-
-                        // Create a randomized DAG
-                        let (certificates, committee) =
-                            generate_randomised_dag(committee_size, dag_rounds, run_id, *mode);
-
-                        // Now provide the DAG to create execution plans, run them via consensus
-                        // and compare output against each other to ensure they are the same.
-                        generate_and_run_execution_plans(
-                            certificates,
-                            EXECUTION_PLANS,
-                            committee,
-                            gc_depth,
-                            dag_rounds,
-                            run_id,
-                            *mode,
-                        );
                     }
                 }
+            }
+        }
+    });
+
+    // Create a single store to be re-used across Bullshark instances to avoid hitting
+    // a "too many files open" issue.
+    let store = make_consensus_store(&test_utils::temp_dir());
+
+    // Run the actual tests via separate tasks
+    loop {
+        tokio::select! {
+            Some(data) = rx.recv(), if test_execution_list.len() < 20 => {
+                let TestData{
+                    dag_rounds,
+                    gc_depth,
+                    run_id,
+                    committee_size,
+                    mode
+                } = data;
+
+                let consensus_store = store.clone();
+
+                let handle = tokio::spawn(async move {
+                    // Create a randomized DAG
+                    let (certificates, committee) =
+                        generate_randomised_dag(committee_size, dag_rounds, run_id, mode);
+
+                    // Now provide the DAG to create execution plans, run them via consensus
+                    // and compare output against each other to ensure they are the same.
+                    generate_and_run_execution_plans(
+                        certificates,
+                        EXECUTION_PLANS,
+                        committee,
+                        gc_depth,
+                        dag_rounds,
+                        run_id,
+                        mode,
+                        consensus_store
+                    );
+                });
+
+                test_execution_list.push(handle);
+            },
+            Some(result) = test_execution_list.next() => {
+
+                result.unwrap();
+            },
+            else => {
+                break;
             }
         }
     }
@@ -147,6 +217,7 @@ fn test_determinism() {
         nodes_failure_probability: 0.0,
         slow_nodes_percentage: 0.33,
         slow_nodes_failure_probability: 0.5,
+        minimum_committee_size: None,
     };
 
     for seed in 0..=10 {
@@ -390,6 +461,7 @@ fn generate_and_run_execution_plans(
     dag_rounds: Round,
     run_id: u64,
     modes: FailureModes,
+    store: Arc<ConsensusStore>,
 ) {
     println!(
         "Running execution plans for run_id {} for rounds={}, committee={}, gc_depth={}, modes={:?}",
@@ -403,14 +475,7 @@ fn generate_and_run_execution_plans(
     let mut executed_plans = HashSet::new();
     let mut committed_certificates = Vec::new();
 
-    // Create a single store to be re-used across Bullshark instances to avoid hitting
-    // a "too many files open" issue.
-    let store = make_consensus_store(&test_utils::temp_dir());
-
     for i in 0..test_iterations {
-        // clear store before using for next test
-        store.clear().unwrap();
-
         let seed = (i + 1) + run_id;
 
         let plan = create_execution_plan(original_certificates.clone(), seed);
@@ -469,6 +534,8 @@ fn generate_and_run_execution_plans(
             );
         }
     }
+
+    println!("Successfully run {}", run_id);
 }
 
 /// This method is accepting a list of certificates that have been created to represent a valid

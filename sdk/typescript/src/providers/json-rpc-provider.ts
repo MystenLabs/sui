@@ -235,7 +235,9 @@ export class JsonRpcProvider {
   /**
    * Fetch CoinMetadata for a given coin type
    */
-  async getCoinMetadata(input: { coinType: string }): Promise<CoinMetadata> {
+  async getCoinMetadata(input: {
+    coinType: string;
+  }): Promise<CoinMetadata | null> {
     return await this.client.requestWithType(
       'suix_getCoinMetadata',
       [input.coinType],

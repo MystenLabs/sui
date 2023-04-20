@@ -24,7 +24,7 @@ use move_vm_runtime::{
 };
 use move_vm_types::loaded_data::runtime_types::{StructType, Type};
 use serde::{de::DeserializeSeed, Deserialize};
-use sui_framework::natives::object_runtime::ObjectRuntime;
+use sui_move_natives::object_runtime::ObjectRuntime;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::{

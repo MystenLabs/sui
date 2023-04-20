@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useGetDynamicFields } from '@mysten/core';
-import { formatAddress } from '@mysten/sui.js';
 import { useRef, useEffect } from 'react';
 
 import { UnderlyingObjectCard } from './UnderlyingObjectCard';
@@ -58,14 +57,12 @@ export function DynamicFieldsCard({ id }: { id: string }) {
                                     <DisclosureBox
                                         title={
                                             <div className="flex items-center gap-1 truncate break-words text-body font-medium leading-relaxed text-steel-dark">
-                                                <div className="block w-8/12 truncate break-words">
+                                                <div className="block w-full truncate break-words">
                                                     {typeof result.name
                                                         ?.value === 'object' ? (
                                                         <>
                                                             Struct{' '}
-                                                            {formatAddress(
-                                                                result.objectType
-                                                            )}
+                                                            {result.name.type}
                                                         </>
                                                     ) : result.name?.value ? (
                                                         String(
@@ -85,6 +82,7 @@ export function DynamicFieldsCard({ id }: { id: string }) {
                                             <UnderlyingObjectCard
                                                 parentId={id}
                                                 name={result.name}
+                                                dynamicFieldType={result.type}
                                             />
                                         </div>
                                     </DisclosureBox>

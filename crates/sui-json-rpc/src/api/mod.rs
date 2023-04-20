@@ -39,15 +39,11 @@ mod read;
 mod transaction_builder;
 mod write;
 
-/// Maximum number of events returned in an event query.
-/// This is equivalent to EVENT_QUERY_MAX_LIMIT in `sui-storage` crate.
-/// To avoid unnecessary dependency on that crate, we have a reference here
-/// for document purposes.
-pub const QUERY_MAX_RESULT_LIMIT: usize = 1000;
+pub const QUERY_MAX_RESULT_LIMIT: usize = 50;
 // TODOD(chris): make this configurable
 pub const QUERY_MAX_RESULT_LIMIT_CHECKPOINTS: usize = 100;
 
-pub const QUERY_MAX_RESULT_LIMIT_OBJECTS: usize = 256;
+pub const QUERY_MAX_RESULT_LIMIT_OBJECTS: usize = 50;
 
 pub fn cap_page_limit(limit: Option<usize>) -> usize {
     let limit = limit.unwrap_or_default();

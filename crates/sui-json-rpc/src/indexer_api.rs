@@ -1,20 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::str::FromStr;
 use std::sync::Arc;
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use async_trait::async_trait;
 use futures::Stream;
 use jsonrpsee::core::error::SubscriptionClosed;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::types::SubscriptionResult;
 use jsonrpsee::{RpcModule, SubscriptionSink};
+use move_bytecode_utils::layout::TypeLayoutBuilder;
 use serde::Serialize;
+use sui_json::SuiJsonValue;
+use sui_types::MOVE_STDLIB_ADDRESS;
 use tracing::{debug, warn};
 
-use move_core_types::language_storage::TypeTag;
+use move_core_types::language_storage::{StructTag, TypeTag};
 use mysten_metrics::spawn_monitored_task;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
@@ -23,7 +25,7 @@ use sui_json_rpc_types::{
     SuiTransactionBlockResponse, SuiTransactionBlockResponseQuery, TransactionBlocksPage,
 };
 use sui_open_rpc::Module;
-use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::base_types::{ObjectID, SuiAddress, STD_UTF8_MODULE_NAME, STD_UTF8_STRUCT_NAME};
 use sui_types::digests::TransactionDigest;
 use sui_types::dynamic_field::DynamicFieldName;
 use sui_types::event::EventID;
@@ -39,7 +41,6 @@ const NAME_SERVICE_REVERSE_LOOKUP_KEY: &str = "reverse";
 const NAME_SERVICE_VALUE: &str = "value";
 const NAME_SERVICE_ID: &str = "id";
 const NAME_SERVICE_MARKER: &str = "marker";
-const STRING_TYPE_TAG: &str = "0x1::string::String";
 
 pub fn spawn_subscription<S, T>(mut sink: SubscriptionSink, rx: S)
 where
@@ -255,9 +256,16 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         parent_object_id: ObjectID,
         name: DynamicFieldName,
     ) -> RpcResult<SuiObjectResponse> {
+        let DynamicFieldName {
+            type_: name_type,
+            value,
+        } = name.clone();
+        let layout = TypeLayoutBuilder::build_with_types(&name_type, &self.state.database)?;
+        let sui_json_value = SuiJsonValue::new(value)?;
+        let name_bcs_value = sui_json_value.to_bcs_bytes(&layout)?;
         let id = self
             .state
-            .get_dynamic_field_object_id(parent_object_id, &name)
+            .get_dynamic_field_object_id(parent_object_id, name_type, &name_bcs_value)
             .map_err(|e| anyhow!("{e}"))?
             .ok_or_else(|| {
                 anyhow!("Cannot find dynamic field [{name:?}] for object [{parent_object_id}].")
@@ -270,16 +278,22 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
     async fn resolve_name_service_address(&self, name: String) -> RpcResult<SuiAddress> {
         let dynmaic_field_table_object_id =
             self.get_name_service_dynamic_field_table_object_id(/* reverse_lookup */ false)?;
-        // NOTE: 0x1::string::String is the type tag of fields in dynmaic_field_table
-        let ns_type_tag = TypeTag::from_str(STRING_TYPE_TAG)?;
-        let ns_dynamic_field_name = DynamicFieldName {
-            type_: ns_type_tag,
-            value: name.clone().into(),
-        };
+        // NOTE: 0x1::string::String is the type tag of fields in dynamic_field_table
+        let name_type_tag = TypeTag::Struct(Box::new(StructTag {
+            address: MOVE_STDLIB_ADDRESS,
+            module: STD_UTF8_MODULE_NAME.to_owned(),
+            name: STD_UTF8_STRUCT_NAME.to_owned(),
+            type_params: vec![],
+        }));
+        let name_bcs_value = bcs::to_bytes(&name).context("Unable to serialize name")?;
         // record of the input `name`
         let record_object_id = self
             .state
-            .get_dynamic_field_object_id(dynmaic_field_table_object_id, &ns_dynamic_field_name)
+            .get_dynamic_field_object_id(
+                dynmaic_field_table_object_id,
+                name_type_tag,
+                &name_bcs_value,
+            )
             .map_err(|e| {
                 anyhow!(
                     "Read name service dynamic field table failed with error: {:?}",
@@ -331,15 +345,15 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
     ) -> RpcResult<Page<String, ObjectID>> {
         let dynmaic_field_table_object_id =
             self.get_name_service_dynamic_field_table_object_id(/* reverse_lookup */ true)?;
-        let addr_type_tag = TypeTag::Address;
-        let ns_dynamic_field_name = DynamicFieldName {
-            type_: addr_type_tag,
-            value: address.to_string().into(),
-        };
-
+        let name_type_tag = TypeTag::Address;
+        let name_bcs_value = bcs::to_bytes(&address).context("Unable to serialize address")?;
         let addr_object_id = self
             .state
-            .get_dynamic_field_object_id(dynmaic_field_table_object_id, &ns_dynamic_field_name)
+            .get_dynamic_field_object_id(
+                dynmaic_field_table_object_id,
+                name_type_tag,
+                &name_bcs_value,
+            )
             .map_err(|e| {
                 anyhow!(
                     "Read name service reverse dynamic field table failed with error: {:?}",

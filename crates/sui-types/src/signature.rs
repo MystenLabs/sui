@@ -1,11 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::crypto::{SignatureScheme, SuiSignature};
 use crate::{base_types::SuiAddress, crypto::Signature, error::SuiError, multisig::MultiSig};
-use crate::{
-    crypto::{SignatureScheme, SuiSignature},
-    serde_to_from_bytes,
-};
 pub use enum_dispatch::enum_dispatch;
 use fastcrypto::{
     error::FastCryptoError,
@@ -78,8 +75,38 @@ impl AsRef<[u8]> for GenericSignature {
     }
 }
 
-// A macro to implement [trait Serialize] and [trait Deserialize] for [enum GenericSignature] using its bytes representation.
-serde_to_from_bytes!(GenericSignature);
+impl ::serde::Serialize for GenericSignature {
+    fn serialize<S: ::serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        if serializer.is_human_readable() {
+            #[derive(serde::Serialize)]
+            struct GenericSignature(String);
+            GenericSignature(self.encode_base64()).serialize(serializer)
+        } else {
+            #[derive(serde::Serialize)]
+            struct GenericSignature<'a>(&'a [u8]);
+            GenericSignature(self.as_ref()).serialize(serializer)
+        }
+    }
+}
+
+impl<'de> ::serde::Deserialize<'de> for GenericSignature {
+    fn deserialize<D: ::serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        use serde::de::Error;
+
+        if deserializer.is_human_readable() {
+            #[derive(serde::Deserialize)]
+            struct GenericSignature(String);
+            let s = GenericSignature::deserialize(deserializer)?;
+            Self::decode_base64(&s.0).map_err(::serde::de::Error::custom)
+        } else {
+            #[derive(serde::Deserialize)]
+            struct GenericSignature(Vec<u8>);
+
+            let data = GenericSignature::deserialize(deserializer)?;
+            Self::from_bytes(&data.0).map_err(|e| Error::custom(e.to_string()))
+        }
+    }
+}
 
 /// This ports the wrapper trait to the verify_secure defined on [enum Signature].
 impl AuthenticatorTrait for Signature {

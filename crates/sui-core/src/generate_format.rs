@@ -16,7 +16,11 @@ use std::{fs::File, io::Write};
 use sui_types::{
     base_types::MoveObjectType_,
     crypto::Signer,
-    messages_checkpoint::{CheckpointContentsDigest, CheckpointDigest, CheckpointSummary},
+    messages::TransactionExpiration,
+    messages_checkpoint::{
+        CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSummary,
+        FullCheckpointContents,
+    },
 };
 use sui_types::{
     base_types::{
@@ -32,6 +36,7 @@ use sui_types::{
     },
     multisig::{MultiSig, MultiSigPublicKey},
     object::{Data, Owner},
+    signature::GenericSignature,
     storage::DeleteKind,
 };
 use typed_store::rocks::TypedStoreError;
@@ -69,7 +74,9 @@ fn get_registry() -> Result<Registry> {
     let kp1: SuiKeyPair =
         SuiKeyPair::Ed25519(get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1);
     let kp2: SuiKeyPair =
-        SuiKeyPair::Ed25519(get_key_pair_from_rng(&mut StdRng::from_seed([1; 32])).1);
+        SuiKeyPair::Secp256k1(get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1);
+    let kp3: SuiKeyPair =
+        SuiKeyPair::Secp256r1(get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1);
 
     let multisig_pk =
         MultiSigPublicKey::new(vec![kp1.public(), kp2.public()], vec![1, 1], 2).unwrap();
@@ -82,10 +89,21 @@ fn get_registry() -> Result<Registry> {
     );
 
     let sig1 = Signature::new_secure(&msg, &kp1);
-    let sig2 = Signature::new_secure(&msg, &kp1);
+    let sig2 = Signature::new_secure(&msg, &kp2);
+    let sig3 = Signature::new_secure(&msg, &kp3);
 
-    let multi_sig = MultiSig::combine(vec![sig1, sig2], multisig_pk).unwrap();
+    let multi_sig = MultiSig::combine(vec![sig1.clone(), sig2.clone()], multisig_pk).unwrap();
     tracer.trace_value(&mut samples, &multi_sig)?;
+
+    let generic_sig_multi = GenericSignature::MultiSig(multi_sig);
+    tracer.trace_value(&mut samples, &generic_sig_multi)?;
+
+    let generic_sig_1 = GenericSignature::Signature(sig1);
+    tracer.trace_value(&mut samples, &generic_sig_1)?;
+    let generic_sig_2 = GenericSignature::Signature(sig2);
+    tracer.trace_value(&mut samples, &generic_sig_2)?;
+    let generic_sig_3 = GenericSignature::Signature(sig3);
+    tracer.trace_value(&mut samples, &generic_sig_3)?;
 
     // ObjectID and SuiAddress are the same length
     let oid: ObjectID = addr.into();
@@ -129,10 +147,11 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<CommandArgumentError>(&samples)?;
     tracer.trace_type::<TypeArgumentError>(&samples)?;
     tracer.trace_type::<PackageUpgradeError>(&samples)?;
+    tracer.trace_type::<TransactionExpiration>(&samples)?;
 
     // uncomment once GenericSignature is added
-    // tracer.trace_type::<FullCheckpointContents>(&samples)?;
-    // tracer.trace_type::<CheckpointContents>(&samples)?;
+    tracer.trace_type::<FullCheckpointContents>(&samples)?;
+    tracer.trace_type::<CheckpointContents>(&samples)?;
     tracer.trace_type::<CheckpointSummary>(&samples)?;
 
     tracer.registry()

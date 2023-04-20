@@ -12,7 +12,7 @@ Follow the instructions to [install Sui binaries](install.md#install-sui-binarie
 
 ## Connect to a Sui network
 
-You can connect to a Sui Full node on a Sui network. Follow the guidance in the [Connect to Sui Devnet](../build/devnet.md) topic to start making RPC calls to the Sui network.
+You can connect to a Sui Full node on a Sui network. Follow the guidance in the [Connect to a Sui Network](../build/connect-sui-network.md) topic to start making RPC calls to the Sui network.
 
 To configure your own Sui Full node, see [Configure a Sui Full node](fullnode.md).
 

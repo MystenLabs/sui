@@ -3010,7 +3010,7 @@ checksum = "4443176a9f2c162692bd3d352d745ef9413eec5782a80d8fd6f8a1ac692a07f7"
 [[package]]
 name = "fastcrypto"
 version = "0.1.4"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=84fd7c7428c5f59185aecc56a2e0a006e8e07de1#84fd7c7428c5f59185aecc56a2e0a006e8e07de1"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=19540b8550685173f4998ae64d0291ddbdc93868#19540b8550685173f4998ae64d0291ddbdc93868"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -3060,7 +3060,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.2"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=84fd7c7428c5f59185aecc56a2e0a006e8e07de1#84fd7c7428c5f59185aecc56a2e0a006e8e07de1"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=19540b8550685173f4998ae64d0291ddbdc93868#19540b8550685173f4998ae64d0291ddbdc93868"
 dependencies = [
  "convert_case 0.6.0",
  "proc-macro2 1.0.54",
@@ -3071,7 +3071,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=84fd7c7428c5f59185aecc56a2e0a006e8e07de1#84fd7c7428c5f59185aecc56a2e0a006e8e07de1"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=19540b8550685173f4998ae64d0291ddbdc93868#19540b8550685173f4998ae64d0291ddbdc93868"
 dependencies = [
  "ark-bls12-381",
  "ark-bn254",
@@ -3083,6 +3083,7 @@ dependencies = [
  "ark-serialize",
  "blst",
  "byte-slice-cast",
+ "derive_more",
  "fastcrypto",
 ]
 
@@ -8888,8 +8889,8 @@ dependencies = [
  "move-vm-runtime",
  "move-vm-types",
  "serde 1.0.152",
- "sui-framework",
  "sui-macros",
+ "sui-move-natives",
  "sui-protocol-config",
  "sui-types",
  "sui-verifier",
@@ -9019,6 +9020,7 @@ dependencies = [
  "sui-adapter",
  "sui-framework",
  "sui-keys",
+ "sui-move-natives",
  "sui-protocol-config",
  "sui-simulator",
  "sui-storage",
@@ -9091,6 +9093,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-macros",
  "sui-move-build",
+ "sui-move-natives",
  "sui-network",
  "sui-protocol-config",
  "sui-simulator",
@@ -9191,21 +9194,12 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
- "better_any",
- "fastcrypto",
- "fastcrypto-zkp",
- "linked-hash-map",
  "move-binary-format",
  "move-core-types",
  "move-package",
- "move-stdlib",
- "move-vm-runtime",
- "move-vm-types",
  "once_cell",
  "serde 1.0.152",
- "smallvec",
  "sui-move-build",
- "sui-protocol-config",
  "sui-types",
  "tracing",
  "workspace-hack",
@@ -9450,9 +9444,9 @@ dependencies = [
  "serde_yaml",
  "sui-core",
  "sui-cost-tables",
- "sui-framework",
  "sui-macros",
  "sui-move-build",
+ "sui-move-natives",
  "sui-node",
  "sui-protocol-config",
  "sui-simulator",
@@ -9481,6 +9475,26 @@ dependencies = [
  "sui-types",
  "sui-verifier",
  "tempfile",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-move-natives"
+version = "0.1.0"
+dependencies = [
+ "bcs",
+ "better_any",
+ "fastcrypto",
+ "fastcrypto-zkp",
+ "linked-hash-map",
+ "move-binary-format",
+ "move-core-types",
+ "move-stdlib",
+ "move-vm-runtime",
+ "move-vm-types",
+ "smallvec",
+ "sui-protocol-config",
+ "sui-types",
  "workspace-hack",
 ]
 
@@ -9663,6 +9677,38 @@ dependencies = [
  "tokio",
  "tower",
  "tower-http 0.4.0",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-replay"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "clap 4.1.4",
+ "colored",
+ "futures",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-core-types",
+ "move-package",
+ "serde 1.0.152",
+ "serde_json",
+ "similar",
+ "sui-adapter",
+ "sui-config",
+ "sui-core",
+ "sui-framework",
+ "sui-json-rpc",
+ "sui-json-rpc-types",
+ "sui-move-natives",
+ "sui-protocol-config",
+ "sui-sdk",
+ "sui-storage",
+ "sui-types",
+ "thiserror",
  "tracing",
  "workspace-hack",
 ]
@@ -9989,6 +10035,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-network",
  "sui-protocol-config",
+ "sui-replay",
  "sui-sdk",
  "sui-storage",
  "sui-types",
@@ -10041,6 +10088,7 @@ dependencies = [
  "sui-adapter",
  "sui-core",
  "sui-framework",
+ "sui-move-natives",
  "sui-protocol-config",
  "sui-types",
  "workspace-hack",
@@ -11036,12 +11084,14 @@ name = "transaction-fuzzer"
 version = "0.1.0"
 dependencies = [
  "move-core-types",
+ "once_cell",
  "proptest",
  "proptest-derive",
  "rand 0.8.5",
  "sui-core",
  "sui-protocol-config",
  "sui-types",
+ "test-utils",
  "tokio",
  "tracing",
  "workspace-hack",

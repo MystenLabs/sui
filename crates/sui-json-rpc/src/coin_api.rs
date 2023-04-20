@@ -250,36 +250,18 @@ impl CoinReadApiServer for CoinReadApi {
             .collect())
     }
 
-    async fn get_coin_metadata(&self, coin_type: String) -> RpcResult<SuiCoinMetadata> {
+    async fn get_coin_metadata(&self, coin_type: String) -> RpcResult<Option<SuiCoinMetadata>> {
         let coin_struct = parse_sui_struct_tag(&coin_type)?;
-        if GAS::is_gas(&coin_struct) {
-            // TODO: We need to special case for `CoinMetadata<0x2::sui::SUI> because `get_transaction`
-            // will fail for genesis transaction. However, instead of hardcoding the values here, We
-            // can store the object id for `CoinMetadata<0x2::sui::SUI>` in the Sui System object
-            return Ok(SuiCoinMetadata {
-                id: None,
-                decimals: 9,
-                symbol: "SUI".to_string(),
-                name: "Sui".to_string(),
-                description: "".to_string(),
-                icon_url: None,
-            });
-        }
 
         let metadata_object = self
             .find_package_object(
                 &coin_struct.address.into(),
                 CoinMetadata::type_(coin_struct),
             )
-            .await?;
-        let metadata_object_id = metadata_object.id();
-        Ok(metadata_object.try_into().map_err(|e: SuiError| {
-            debug!(
-                ?metadata_object_id,
-                "Failed to convert object to CoinMetadata: {:?}", e
-            );
-            Error::from(e)
-        })?)
+            .await
+            .ok();
+
+        Ok(metadata_object.and_then(|v: Object| v.try_into().ok()))
     }
 
     async fn get_total_supply(&self, coin_type: String) -> RpcResult<Supply> {
