@@ -48,6 +48,7 @@ whoami = { version = "1.2.1" }
 
 [dev-dependencies]
 datatest-stable = "0.1.1"
+proptest = "1.0.0"
 
 [[test]]
 name = "test_runner"

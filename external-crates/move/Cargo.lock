@@ -3249,6 +3249,7 @@ dependencies = [
  "named-lock",
  "once_cell",
  "petgraph 0.5.1",
+ "proptest",
  "ptree",
  "regex",
  "reqwest",
