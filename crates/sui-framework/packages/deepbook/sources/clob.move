@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module deepbook::clob {
-    use std::option;
+    use std::option::{Self, Option};
     use std::type_name::{Self, TypeName};
     use std::vector;
 
@@ -832,7 +832,7 @@ module deepbook::clob {
         clock: &Clock,
         account_cap: &AccountCap,
         ctx: &mut TxContext
-    ): (u64, u64, bool, u64) {
+    ): (u64, u64, bool, Option<u64>) {
         // If limit bid order, check whether the price is lower than the lowest ask order by checking the min_leaf of asks Critbit Tree.
         // If so, assign the sequence id of the order to be next_bid_order_id and increment next_bid_order_id by 1.
         // Inject the new order to the bids Critbit Tree according to the price and order id.
@@ -908,28 +908,31 @@ module deepbook::clob {
 
         let order_id;
         if (restriction == IMMEDIATE_OR_CANCEL) {
-            return (base_quantity_filled, quote_quantity_filled, false, 0)
+            return (base_quantity_filled, quote_quantity_filled, false, option::none<u64>())
         };
         if (restriction == FILL_OR_KILL) {
             assert!(base_quantity_filled == quantity, EOrderCannotBeFullyFilled);
-            return (base_quantity_filled, quote_quantity_filled, false, 0)
+            return (base_quantity_filled, quote_quantity_filled, false, option::none<u64>())
         };
         if (restriction == POST_OR_ABORT) {
             assert!(base_quantity_filled == 0, EOrderCannotBeFullyPassive);
             order_id = inject_limit_order(pool, price, quantity, is_bid, expire_timestamp, account_cap, ctx);
-            return (base_quantity_filled, quote_quantity_filled, true, order_id)
+            return (base_quantity_filled, quote_quantity_filled, true, option::some(order_id))
         } else {
             assert!(restriction == NO_RESTRICTION, EInvalidRestriction);
-            order_id = inject_limit_order(
-                pool,
-                price,
-                quantity - base_quantity_filled,
-                is_bid,
-                expire_timestamp,
-                account_cap,
-                ctx
-            );
-            return (base_quantity_filled, quote_quantity_filled, true, order_id)
+            if(quantity - base_quantity_filled > 0){
+                order_id = inject_limit_order(
+                    pool,
+                    price,
+                    quantity - base_quantity_filled,
+                    is_bid,
+                    expire_timestamp,
+                    account_cap,
+                    ctx
+                );
+                return (base_quantity_filled, quote_quantity_filled, true, option::some(order_id))
+            };
+            return (base_quantity_filled, quote_quantity_filled, false, option::none<u64>())
         }
     }
 
@@ -1893,7 +1896,7 @@ module deepbook::clob {
             assert!(base_filled == 0, E_NULL);
             assert!(quote_filled == 0, E_NULL);
             assert!(maker_injected, E_NULL);
-            assert!(maker_order_id == order_id(0, false), E_NULL);
+            assert!(*option::borrow(&maker_order_id) == order_id(0, false), E_NULL);
 
             let (next_bid_order_id, next_ask_order_id, _, _) = get_pool_stat(&pool);
             assert!(next_bid_order_id == order_id(3, true), 0);
