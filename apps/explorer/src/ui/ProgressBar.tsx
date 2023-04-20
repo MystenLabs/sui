@@ -5,9 +5,17 @@ import { motion } from 'framer-motion';
 
 export interface ProgressBarProps {
     progress: number;
+    repeatDelay: number;
+    ease: any;
+    movingDistance: number;
 }
 
-export function ProgressBar({ progress }: ProgressBarProps) {
+export function ProgressBar({
+    progress,
+    repeatDelay = 0.25,
+    ease,
+    movingDistance = 95,
+}: ProgressBarProps) {
     return (
         <div className="w-full rounded-full bg-gray-45">
             <motion.div
@@ -22,9 +30,11 @@ export function ProgressBar({ progress }: ProgressBarProps) {
                 <motion.div
                     className="absolute left-1/2 top-1/2 h-1 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white opacity-80 shadow-glow"
                     animate={{
-                        left: '95%',
+                        left: `${movingDistance}%`,
                         transition: {
-                            delay: 0.25,
+                            repeatDelay,
+                            ease,
+                            delay: 1,
                             duration: 1,
                             repeat: Infinity,
                         },

@@ -11,7 +11,10 @@ export default {
 
 export const Default: StoryObj<ProgressBarProps> = {
     args: {
-        progress: 25,
+        progress: 75,
+        repeatDelay: 0.1,
+        ease: 'linear',
+        movingDistance: 95,
     },
     render: (args) => (
         <div className="flex w-1/5">
