@@ -59,7 +59,7 @@ function MyTokens() {
             ) : null}
             {noSuiToken ? (
                 <div className="flex flex-col flex-nowrap justify-center items-center gap-2 text-center mt-6 px-2.5">
-                    <FaucetRequestButton trackEventSource="home" />
+                    <FaucetRequestButton />
                     <Text variant="pBodySmall" color="gray-80" weight="normal">
                         To conduct transactions on the Sui network, you need SUI
                         in your wallet.
