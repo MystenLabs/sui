@@ -23,7 +23,7 @@ impl TestCaseImpl for CoinMergeSplitTest {
     }
 
     async fn run(&self, ctx: &mut TestContext) -> Result<(), anyhow::Error> {
-        let mut sui_objs = ctx.get_sui_from_faucet(Some(2)).await;
+        let mut sui_objs = ctx.get_sui_from_faucet(Some(1)).await;
         let gas_obj = sui_objs.swap_remove(0);
 
         let signer = ctx.get_wallet_address();
