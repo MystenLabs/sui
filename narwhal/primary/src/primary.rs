@@ -351,8 +351,8 @@ impl Primary {
             // Set a default timeout of 300s for all RPC requests
             config.inbound_request_timeout_ms = Some(300_000);
             config.outbound_request_timeout_ms = Some(300_000);
-            config.shutdown_idle_timeout_ms = Some(1_000);
-            config.connectivity_check_interval_ms = Some(2_000);
+            config.shutdown_idle_timeout_ms = Some(30_000);
+            config.connectivity_check_interval_ms = Some(30_000);
             config.connection_backoff_ms = Some(1_000);
             config.max_connection_backoff_ms = Some(20_000);
             config
