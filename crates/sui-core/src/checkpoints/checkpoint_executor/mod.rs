@@ -19,7 +19,7 @@
 //! end of epoch. This allows us to use it as a signal for reconfig.
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     sync::Arc,
     time::{Duration, Instant, SystemTime},
 };
