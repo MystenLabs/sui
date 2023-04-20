@@ -31,14 +31,8 @@ export function TransactionsActivityTable({
     const [currentPage, setCurrentPage] = useState(0);
     const [limit, setLimit] = useState(initialLimit);
     const rpc = useRpcClient();
-    const {
-        data,
-        isLoading,
-        isFetching,
-        isFetchingNextPage,
-        fetchNextPage,
-        hasNextPage,
-    } = useGetTransactionBlocks(undefined, limit);
+    const { data, isLoading, isFetching, fetchNextPage, hasNextPage } =
+        useGetTransactionBlocks(undefined, limit);
 
     const countQuery = useQuery(
         ['transactions', 'count'],
@@ -54,7 +48,7 @@ export function TransactionsActivityTable({
     return (
         <div data-testid="tx">
             <div className="flex flex-col space-y-5 text-left xl:pr-10">
-                {isLoading || isFetching || isFetchingNextPage || !cardData ? (
+                {isLoading || isFetching || !cardData ? (
                     <PlaceholderTable
                         rowCount={limit}
                         rowHeight="16px"
@@ -88,9 +82,7 @@ export function TransactionsActivityTable({
                                 // Make sure we are at the end before fetching another page
                                 if (
                                     data &&
-                                    currentPage === data?.pages.length - 1 &&
-                                    !isLoading &&
-                                    !isFetching
+                                    currentPage === data?.pages.length - 1
                                 ) {
                                     fetchNextPage();
                                 }
