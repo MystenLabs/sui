@@ -281,7 +281,7 @@ module deepbook::clob {
         account_cap: &AccountCap,
         ctx: &mut TxContext
     ): Coin<BaseAsset> {
-        custodian::withdraw_base_asset(&mut pool.base_custodian, quantity, account_cap, ctx)
+        custodian::withdraw_asset(&mut pool.base_custodian, quantity, account_cap, ctx)
     }
 
     public fun withdraw_quote<BaseAsset, QuoteAsset>(
@@ -290,7 +290,7 @@ module deepbook::clob {
         account_cap: &AccountCap,
         ctx: &mut TxContext
     ): Coin<QuoteAsset> {
-        custodian::withdraw_quote_asset(&mut pool.quote_custodian, quantity, account_cap, ctx)
+        custodian::withdraw_asset(&mut pool.quote_custodian, quantity, account_cap, ctx)
     }
 
     // for smart routing
