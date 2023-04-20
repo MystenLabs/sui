@@ -36,24 +36,20 @@ export function UnderlyingObjectCard({
         objectType?.split('<')[0]?.split('::') || [];
 
     // Get the normalized struct for the object
-    const { data: normalizedStruct, isFetched: normalizedStructFetched } =
-        useGetNormalizedMoveStruct({
-            packageId,
-            module: moduleName,
-            struct: functionName,
-        });
+    const {
+        data: normalizedStruct,
+        isFetched: normalizedStructFetched,
+        isLoading: loadingNormalizedStruct,
+    } = useGetNormalizedMoveStruct({
+        packageId,
+        module: moduleName,
+        struct: functionName,
+    });
 
-    if (isLoading) {
-        return (
-            <div className="mt-3 flex w-full justify-center pt-3">
-                <LoadingSpinner text="Loading data" />
-            </div>
-        );
-    }
-
+    // Check for error first before showing the loading spinner to avoid infinite loading if GetDynamicFieldObject fails
     if (
         isError ||
-        data.error ||
+        (data && data.error) ||
         (isFetched && !data) ||
         (!normalizedStruct && normalizedStructFetched)
     ) {
@@ -61,6 +57,14 @@ export function UnderlyingObjectCard({
             <Banner variant="error" spacing="lg" fullWidth>
                 Failed to get field data for {parentId}
             </Banner>
+        );
+    }
+
+    if (isLoading || loadingNormalizedStruct) {
+        return (
+            <div className="mt-3 flex w-full justify-center pt-3">
+                <LoadingSpinner text="Loading data" />
+            </div>
         );
     }
 
