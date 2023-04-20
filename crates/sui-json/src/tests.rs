@@ -21,6 +21,7 @@ use sui_types::base_types::{
     ObjectID, SuiAddress, TransactionDigest, STD_ASCII_MODULE_NAME, STD_ASCII_STRUCT_NAME,
     STD_OPTION_MODULE_NAME, STD_OPTION_STRUCT_NAME,
 };
+use sui_types::gas_coin::GasCoin;
 use sui_types::object::Object;
 use sui_types::MOVE_STDLIB_ADDRESS;
 
@@ -859,4 +860,22 @@ fn test_sui_call_arg_option_type() {
 
     let s = SuiJsonValue::from_str("[test, test2]").unwrap();
     println!("{s:?}");
+}
+
+#[test]
+fn test_convert_struct() {
+    let layout = MoveTypeLayout::Struct(GasCoin::layout());
+
+    let value = json!({"id":"0xf1416fe18c7baa1673187375777a7606708481311cb3548509ec91a5871c6b9a", "balance": "1000000"});
+    let sui_json = SuiJsonValue::new(value).unwrap();
+
+    let bcs = sui_json.to_bcs_bytes(&layout).unwrap();
+
+    let coin: GasCoin = bcs::from_bytes(&bcs).unwrap();
+    assert_eq!(
+        coin.0.id.id.bytes,
+        ObjectID::from_str("0xf1416fe18c7baa1673187375777a7606708481311cb3548509ec91a5871c6b9a")
+            .unwrap()
+    );
+    assert_eq!(coin.0.balance.value(), 1000000);
 }
