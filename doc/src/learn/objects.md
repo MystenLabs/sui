@@ -47,7 +47,7 @@ All Sui Move packages are immutable objects: you can't change a Sui Move package
 
 ### Shared
 
-An object can be shared, meaning that anyone can read or write this object. In contrast to mutable owned objects (which are single-writer), shared objects require [consensus](architecture/consensus.md) to sequence reads and writes. For an example of creating and accessing a shared object, see [Shared Object](../explore/move-examples/basics.md#shared-object).
+An object can be shared, meaning that anyone can read or write this object. In contrast to mutable owned objects (which are single-writer), shared objects require [consensus](architecture/consensus.md) to sequence reads and writes. For an example of creating and accessing a shared object, see [Shared Object](https://examples.sui.io/basics/shared-object.html).
 
 In other blockchains, every object is shared. However, Sui programmers often have the choice to implement a particular use-case using shared objects, owned objects, or a combination. This choice can have implications for performance, security, and implementation complexity. The best way to understand these tradeoffs is to look at a few examples of use-cases implemented both ways:
 
