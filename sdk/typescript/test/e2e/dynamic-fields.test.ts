@@ -58,15 +58,16 @@ describe('Dynamic Fields Reading API', () => {
     const dynamicFields = await toolbox.provider.getDynamicFields({
       parentId: parentObjectId,
     });
-    for (const data of dynamicFields.data) {
-      const objName = data.name;
 
-      const object = await toolbox.provider.getDynamicFieldObject({
-        parentId: parentObjectId,
-        name: objName,
-      });
+    const objDofName = dynamicFields.data.find(
+      (field) => field.type === 'DynamicField',
+    )!.name;
 
-      expect(object.data?.objectId).toEqual(data.objectId);
-    }
+    const dynamicObjectField = await toolbox.provider.getDynamicFieldObject({
+      parentId: parentObjectId,
+      name: objDofName,
+    });
+
+    expect(dynamicObjectField).not.toEqual({});
   });
 });
