@@ -494,6 +494,9 @@ module deepbook::clob {
                     let filled_base_quantity =
                         if (taker_base_quantity_remaining >= maker_base_quantity) { maker_base_quantity }
                         else { taker_base_quantity_remaining };
+
+                    maker_base_quantity = maker_base_quantity - filled_base_quantity;
+
                     // filled_quote_quantity to maker,  no need to round up
                     let filled_quote_quantity = clob_math::mul(filled_base_quantity, maker_order.price);
 
@@ -501,8 +504,6 @@ module deepbook::clob {
                     let maker_rebate = clob_math::mul(filled_base_quantity, pool.maker_rebate_rate);
                     let (is_round_down, taker_commission) = clob_math::mul_round(filled_base_quantity, pool.taker_fee_rate);
                     if (is_round_down) taker_commission = taker_commission + 1;
-
-                    maker_base_quantity = maker_base_quantity - filled_base_quantity;
 
                     // maker in ask side, decrease maker's locked base asset, increase maker's available quote asset
                     taker_base_quantity_remaining = taker_base_quantity_remaining - filled_base_quantity;
@@ -613,6 +614,9 @@ module deepbook::clob {
                     let filled_base_quantity =
                         if (taker_base_quantity_remaining >= maker_base_quantity) { maker_base_quantity }
                         else { taker_base_quantity_remaining };
+
+                    maker_base_quantity = maker_base_quantity - filled_base_quantity;
+
                     // filled_quote_quantity from maker, need to round up, but do in decrease stage
                     let filled_quote_quantity = clob_math::mul(filled_base_quantity, maker_order.price);
 
@@ -621,7 +625,6 @@ module deepbook::clob {
                     let (is_round_down, taker_commission) = clob_math::mul_round(filled_quote_quantity, pool.taker_fee_rate);
                     if (is_round_down) taker_commission = taker_commission + 1;
 
-                    maker_base_quantity = maker_base_quantity - filled_base_quantity;
                     // maker in bid side, decrease maker's locked quote asset, increase maker's available base asset
                     let locked_quote_balance = custodian::decrease_user_locked_balance<QuoteAsset>(
                         &mut pool.quote_custodian,
