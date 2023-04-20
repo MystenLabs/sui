@@ -1,0 +1,101 @@
+processed 21 tasks
+
+init:
+A: object(0,0)
+
+task 1 'publish'. lines 10-18:
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6809600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'upgrade'. lines 20-28:
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6809600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 3 'upgrade'. lines 30-41:
+created: object(3,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6809600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 4 'publish'. lines 44-49:
+created: object(4,0), object(4,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6551200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5 'upgrade'. lines 51-59:
+created: object(5,0)
+mutated: object(0,0), object(4,1)
+gas summary: computation_cost: 1000000, storage_cost: 6551200,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 6 'publish'. lines 62-69:
+created: object(6,0), object(6,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 7030000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7 'upgrade'. lines 71-78:
+created: object(7,0)
+mutated: object(0,0), object(6,1)
+gas summary: computation_cost: 1000000, storage_cost: 7030000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 8 'upgrade'. lines 80-85:
+created: object(8,0)
+mutated: object(0,0), object(6,1)
+gas summary: computation_cost: 1000000, storage_cost: 7030000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 9 'run'. lines 87-87:
+created: object(9,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 10 'view-object'. lines 89-89:
+Owner: Shared
+Version: 2
+Contents: Test_DepDepV1::DepDepM1::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(9,0)}}, v: 42u64}
+
+task 11 'run'. lines 91-91:
+created: object(11,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 12 'view-object'. lines 93-93:
+Owner: Shared
+Version: 3
+Contents: Test_DepDepV1::DepDepM1::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(11,0)}}, v: 7u64}
+
+task 13 'run'. lines 95-95:
+created: object(13,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 14 'view-object'. lines 97-100:
+Owner: Shared
+Version: 4
+Contents: Test_DepDepV1::DepDepM1::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(13,0)}}, v: 0u64}
+
+task 15 'programmable'. lines 101-103:
+created: object(15,0), object(15,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3663200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 16 'view-object'. lines 105-105:
+Owner: Shared
+Version: 10
+Contents: Test_DepDepV1::DepDepM1::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(15,0)}}, v: 0u64}
+
+task 17 'view-object'. lines 107-112:
+Owner: Shared
+Version: 10
+Contents: Test_DepDepV1::DepDepM1::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(15,1)}}, v: 7u64}
+
+task 18 'upgrade'. lines 114-120:
+Error: Transaction Effects Status: Publish/Upgrade Error, Missing dependency. A dependency of a published or upgraded package has not been assigned an on-chain address.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PublishUpgradeMissingDependency, source: None, command: Some(1) } }
+
+task 19 'upgrade'. lines 122-128:
+Error: Transaction Effects Status: Publish/Upgrade Error, Missing dependency. A dependency of a published or upgraded package has not been assigned an on-chain address.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PublishUpgradeMissingDependency, source: None, command: Some(1) } }
+
+task 20 'upgrade'. lines 130-134:
+Error: Transaction Effects Status: Publish/Upgrade Error, Dependency downgrade. Indirect (transitive) dependency of published or upgraded package has been assigned an on-chain version that is less than the version required by one of the package's transitive dependencies.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PublishUpgradeDependencyDowngrade, source: None, command: Some(1) } }
