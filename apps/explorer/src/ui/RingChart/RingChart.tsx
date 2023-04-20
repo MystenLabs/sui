@@ -1,0 +1,83 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+import { Fragment } from 'react';
+
+import { Heading } from '~/ui/Heading';
+
+export type Gradient = {
+    deg?: number;
+    values: { percent: number; color: string }[];
+};
+
+export type RingChartData = {
+    value: number;
+    label: string;
+    color?: string;
+    gradient?: Gradient;
+}[];
+
+export interface RingChartProps {
+    data: RingChartData;
+}
+
+export function RingChart({ data }: RingChartProps) {
+    const radius = 20;
+    const cx = 25;
+    const cy = 25;
+    const dashArray = 2 * Math.PI * radius;
+    const startAngle = -90;
+    const total = data.reduce((acc, { value }) => acc + value, 0);
+    let filled = 0;
+
+    const segments = data.map(({ value, label, color, gradient }, idx) => {
+        const gradientId = `gradient-${idx}`;
+        const ratio = (100 / total) * value;
+        const angle = (filled * 360) / 100 + startAngle;
+        const offset = dashArray - (dashArray * ratio) / 100;
+        filled += ratio;
+        return (
+            <Fragment key={label}>
+                {gradient && (
+                    <defs>
+                        <linearGradient id={gradientId}>
+                            {gradient.values.map(({ percent, color }, i) => (
+                                <stop
+                                    key={i}
+                                    offset={percent}
+                                    stopColor={color}
+                                />
+                            ))}
+                        </linearGradient>
+                    </defs>
+                )}
+                <circle
+                    cx={cx}
+                    cy={cy}
+                    r={radius}
+                    fill="transparent"
+                    stroke={gradient ? `url(#${gradientId})` : color}
+                    strokeWidth={5}
+                    strokeDasharray={dashArray}
+                    strokeDashoffset={offset}
+                    transform={`rotate(${angle} ${cx} ${cy})`}
+                />
+            </Fragment>
+        );
+    });
+
+    return (
+        <div className="relative">
+            <svg viewBox="0 0 50 50" strokeLinecap="butt">
+                {segments}
+            </svg>
+            <div className="absolute inset-0 mx-auto flex items-center justify-center">
+                <div className="flex flex-col items-center gap-1.5">
+                    <Heading variant="heading2/semibold" color="sui-dark">
+                        {total}
+                    </Heading>
+                </div>
+            </div>
+        </div>
+    );
+}

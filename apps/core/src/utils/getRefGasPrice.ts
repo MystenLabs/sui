@@ -2,19 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { SuiValidatorSummary } from '@mysten/sui.js';
+import { calculateStakeShare } from './calculateStakeShare';
 
 const REF_THRESHOLD = 66.67;
 
 /**
  * Util to get the Reference Gas Price from a list of validators
  * 1. Sort validators by gas price
- * 2. Calculate the stake threshold at 66.67% of total stake amount
- * 3. Add up the stake amount of each validator until the threshold is reached
- * 4. Return the gas price of the last validator that was added to the sum
+ * 2. Add up stake share from low to high, until reaching REF_THRESHOLD
+ * 3. Return the gas price of the last validator that was added to the sum
  */
 export function getRefGasPrice(validators?: SuiValidatorSummary[]) {
     if (!validators?.length) {
-        return '0';
+        return BigInt(0);
     }
 
     const sortedByGasPrice = [...validators].sort((a, b) => {
@@ -37,25 +37,22 @@ export function getRefGasPrice(validators?: SuiValidatorSummary[]) {
         BigInt(0)
     );
 
-    const sumAtThreshold =
-        (totalStaked * BigInt(Math.round(REF_THRESHOLD))) / BigInt(100);
-
-    let sumOfStakes = BigInt(0);
+    let sumOfStakes = 0;
     let result = '0';
 
     for (let i = 0; i < sortedByGasPrice.length; i++) {
         const validator = sortedByGasPrice[i];
-
-        const currentGasPrice = validator.gasPrice;
         const stake = BigInt(validator?.stakingPoolSuiBalance);
 
-        sumOfStakes += stake;
-        result = currentGasPrice;
+        const stakeShare = calculateStakeShare(stake, totalStaked);
 
-        if (sumOfStakes >= sumAtThreshold) {
+        sumOfStakes += stakeShare;
+
+        if (sumOfStakes >= REF_THRESHOLD) {
+            result = validator.gasPrice;
             break;
         }
     }
 
-    return result;
+    return BigInt(result);
 }

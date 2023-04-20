@@ -15,6 +15,7 @@ const cardStyles = cva(null, {
         rounded: {
             lg: 'rounded-lg',
             xl: 'rounded-xl',
+            '2xl': 'rounded-2xl',
         },
         spacing: {
             none: '',

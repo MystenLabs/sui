@@ -3,7 +3,7 @@
 
 import { type Meta, type StoryObj } from '@storybook/react';
 
-import { RingChart, type RingChartProps } from '../RingChart';
+import { RingChart, type RingChartProps } from '~/ui/RingChart';
 
 export default {
     component: RingChart,
@@ -11,7 +11,6 @@ export default {
 
 export const Default: StoryObj<RingChartProps> = {
     args: {
-        suffix: 'validators',
         data: [
             { value: 63, label: 'Active', color: '#589AEA' },
             { value: 2, label: 'New', color: '#6FBCF0' },
