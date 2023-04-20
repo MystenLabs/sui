@@ -174,25 +174,48 @@ impl CheckpointExecutor {
             self.metrics
                 .checkpoint_exec_inflight
                 .set(pending.len() as i64);
+
+            // Macro for removing duplicated code without angering the borrow-checker.
+            macro_rules! handle_completed_checkpoint {
+                ($checkpoint:ident) => {{
+                    self.process_executed_checkpoint(&$checkpoint);
+                    let highest_executed = Some($checkpoint);
+
+                    // Estimate TPS every 10k transactions or 30 sec
+                    let elapsed = now_time.elapsed().as_millis();
+                    let current_transaction_num = highest_executed
+                        .as_ref()
+                        .map(|c| c.network_total_transactions)
+                        .unwrap_or(0);
+                    if current_transaction_num - now_transaction_num > 10_000 || elapsed > 30_000 {
+                        let tps = (1000.0 * (current_transaction_num - now_transaction_num) as f64
+                            / elapsed as f64) as i32;
+                        self.metrics.checkpoint_exec_sync_tps.set(tps as i64);
+                        now_time = Instant::now();
+                        now_transaction_num = current_transaction_num;
+                    }
+                    highest_executed
+                }};
+            }
+
+            loop {
+                let next = pending.next();
+                futures::pin_mut!(next);
+                match futures::poll!(next) {
+                    std::task::Poll::Ready(Some(Ok(checkpoint))) => {
+                        highest_executed = handle_completed_checkpoint!(checkpoint);
+                    }
+                    _ => break,
+                }
+            }
+
             tokio::select! {
                 // Check for completed workers and ratchet the highest_checkpoint_executed
                 // watermark accordingly. Note that given that checkpoints are guaranteed to
                 // be processed (added to FuturesOrdered) in seq_number order, using FuturesOrdered
                 // guarantees that we will also ratchet the watermarks in order.
                 Some(Ok(checkpoint)) = pending.next() => {
-                    self.process_executed_checkpoint(&checkpoint);
-                    highest_executed = Some(checkpoint);
-
-                    // Estimate TPS every 10k transactions or 30 sec
-                    let elapsed = now_time.elapsed().as_millis();
-                    let current_transaction_num =  highest_executed.as_ref().map(|c| c.network_total_transactions).unwrap_or(0);
-                    if current_transaction_num - now_transaction_num > 10_000 || elapsed > 30_000{
-                        let tps = (1000.0 * (current_transaction_num - now_transaction_num) as f64 / elapsed as f64) as i32;
-                        self.metrics.checkpoint_exec_sync_tps.set(tps as i64);
-                        now_time = Instant::now();
-                        now_transaction_num = current_transaction_num;
-                    }
-
+                    highest_executed = handle_completed_checkpoint!(checkpoint);
                 }
                 // Check for newly synced checkpoints from StateSync.
                 received = self.mailbox.recv() => match received {
