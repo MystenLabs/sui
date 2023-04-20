@@ -1755,6 +1755,7 @@ impl AuthorityState {
             rx_execution_shutdown
         ));
 
+        // TODO: This doesn't belong to the constructor of AuthorityState.
         state
             .create_owner_index_if_empty(genesis_objects, &epoch_store)
             .expect("Error indexing genesis objects.");

@@ -4,7 +4,8 @@
 use proptest::arbitrary::*;
 use proptest::prelude::*;
 use proptest::proptest;
-use sui_core::test_utils::{init_state, send_and_confirm_transaction};
+use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
+use sui_core::test_utils::send_and_confirm_transaction;
 use sui_types::base_types::dbg_addr;
 use sui_types::crypto::KeypairTraits;
 use sui_types::messages::TransactionData;
@@ -22,7 +23,7 @@ async fn test_with_random_gas_data(gas_data_test: GasDataWithObjects) {
     let objects = gas_data_test.objects;
     let sender = gas_data_test.sender_key.public().into();
 
-    let authority_state = init_state().await;
+    let authority_state = TestAuthorityBuilder::new().build().await;
     // Insert the random gas objects into genesis.
     authority_state.insert_genesis_objects(&objects).await;
     let pt = {

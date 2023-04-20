@@ -39,11 +39,10 @@ async fn setup_test(deny_config: TransactionDenyConfig) -> (NetworkConfig, Arc<A
             ACCOUNT_NUM
         ])
         .build();
-    let genesis = &network_config.genesis;
-    let keypair = network_config.validator_configs[0].protocol_key_pair();
     let state = TestAuthorityBuilder::new()
         .with_transaction_deny_config(deny_config)
-        .build(genesis.committee().unwrap(), keypair, genesis)
+        .with_network_config(&network_config)
+        .build()
         .await;
     (network_config, state)
 }
@@ -55,12 +54,9 @@ async fn reload_state_with_new_deny_config(
 ) -> Arc<AuthorityState> {
     TestAuthorityBuilder::new()
         .with_transaction_deny_config(config)
-        .build_with_store(
-            network_config.genesis.committee().unwrap(),
-            network_config.validator_configs[0].protocol_key_pair(),
-            state.db(),
-            &[],
-        )
+        .with_network_config(network_config)
+        .with_store(state.db())
+        .build()
         .await
 }
 

@@ -1323,30 +1323,19 @@ mod tests {
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
     use crate::state_accumulator::StateAccumulator;
     use async_trait::async_trait;
-    use fastcrypto::traits::KeyPair;
     use std::collections::{BTreeMap, HashMap};
+    use std::ops::Deref;
     use sui_types::base_types::{ObjectID, SequenceNumber};
     use sui_types::crypto::Signature;
     use sui_types::messages::{GenesisObject, VerifiedTransaction};
     use sui_types::messages_checkpoint::SignedCheckpointSummary;
     use sui_types::move_package::MovePackage;
     use sui_types::object;
-    use tempfile::tempdir;
     use tokio::sync::mpsc;
 
     #[tokio::test]
     pub async fn checkpoint_builder_test() {
-        let tempdir = tempdir().unwrap();
-        let dir = tempfile::TempDir::new().unwrap();
-        let network_config = sui_config::builder::ConfigBuilder::new(&dir).build();
-        let genesis = network_config.genesis;
-        let committee = genesis.committee().unwrap();
-        let keypair = network_config.validator_configs[0]
-            .protocol_key_pair()
-            .copy();
-        let state = TestAuthorityBuilder::new()
-            .build(committee.clone(), &keypair, &genesis)
-            .await;
+        let state = TestAuthorityBuilder::new().build().await;
 
         let dummy_tx = VerifiedTransaction::new_genesis_transaction(vec![]);
         let dummy_tx_with_data =
@@ -1413,7 +1402,7 @@ mod tests {
             mpsc::channel::<CertifiedCheckpointSummary>(10);
         let store = Box::new(store);
 
-        let checkpoint_store = CheckpointStore::new(tempdir.path());
+        let checkpoint_store = CheckpointStore::new(&std::env::temp_dir());
 
         let accumulator = StateAccumulator::new(state.database.clone());
 
@@ -1495,8 +1484,8 @@ mod tests {
         assert_eq!(c5t, vec![d(15), d(16)]);
         assert_eq!(c6t, vec![d(17)]);
 
-        let c1ss = SignedCheckpointSummary::new(c1s.epoch, c1s, &keypair, keypair.public().into());
-        let c2ss = SignedCheckpointSummary::new(c2s.epoch, c2s, &keypair, keypair.public().into());
+        let c1ss = SignedCheckpointSummary::new(c1s.epoch, c1s, state.secret.deref(), state.name);
+        let c2ss = SignedCheckpointSummary::new(c2s.epoch, c2s, state.secret.deref(), state.name);
 
         checkpoint_service
             .notify_checkpoint_signature(
