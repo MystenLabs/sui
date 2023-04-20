@@ -465,18 +465,7 @@ impl TransactionManager {
         {
             let mut inner = self.inner.write();
             for (key, value) in object_availability.iter_mut() {
-                if inner.input_objects.get(&key.0).cloned().unwrap_or(0) > 0 {
-                    // Objects that are already being awaited on by other transactions are known to
-                    // not be available.
-                    *value = Some(false);
-                    if key.1.is_some() {
-                        self.metrics.transaction_manager_object_cache_hits.inc();
-                    } else {
-                        self.metrics.transaction_manager_package_cache_hits.inc();
-                    }
-                } else if let Some(available) =
-                    inner.available_objects_cache.is_object_available(key)
-                {
+                if let Some(available) = inner.available_objects_cache.is_object_available(key) {
                     *value = Some(available);
                 }
             }
