@@ -34,7 +34,7 @@ pub fn check_transaction_for_signing(
 ) -> SuiResult {
     check_disabled_features(filter_config, tx_data)?;
 
-    check_singers(filter_config, tx_data)?;
+    check_signers(filter_config, tx_data)?;
 
     check_input_objects(filter_config, input_objects)?;
 
@@ -68,7 +68,7 @@ fn check_disabled_features(
     Ok(())
 }
 
-fn check_singers(filter_config: &TransactionDenyConfig, tx_data: &TransactionData) -> SuiResult {
+fn check_signers(filter_config: &TransactionDenyConfig, tx_data: &TransactionData) -> SuiResult {
     let deny_map = filter_config.get_address_deny_map();
     if deny_map.is_empty() {
         return Ok(());
