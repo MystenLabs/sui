@@ -59,7 +59,6 @@ async fn main() -> Result<(), anyhow::Error> {
         max_request_per_second,
         wallet_client_timeout_secs,
         ref write_ahead_log,
-        wal_retry_interval,
         ..
     } = config;
 
@@ -107,6 +106,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 .into_inner(),
         );
 
+    // TODO (jian):Investigate this issue later.
     // spawn_monitored_task!(async move {
     //     info!("Starting task to clear WAL.");
     //     loop {
