@@ -235,6 +235,7 @@ impl CheckpointExecutor {
     fn process_executed_checkpoint(&self, checkpoint: &VerifiedCheckpoint) {
         // Ensure that we are not skipping checkpoints at any point
         let seq = *checkpoint.sequence_number();
+        let timestamp_ms = checkpoint.timestamp_ms;
         if let Some(prev_highest) = self
             .checkpoint_store
             .get_highest_executed_checkpoint_seq_number()
@@ -255,6 +256,9 @@ impl CheckpointExecutor {
             .update_highest_executed_checkpoint(checkpoint)
             .unwrap();
         self.metrics.last_executed_checkpoint.set(seq as i64);
+        self.metrics
+            .last_executed_checkpoint_timestamp_ms
+            .set(timestamp_ms as i64);
     }
 
     async fn schedule_synced_checkpoints(
