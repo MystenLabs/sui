@@ -385,6 +385,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     bail!("There is no published module address corresponding to name address {d}");
                 };
                 let id: ObjectID = addr.into_inner().into();
+                println!("[publish] resolved dep {d} -> {id}");
                 Ok(id)
             })
             .collect::<Result<_, _>>()?;
@@ -392,6 +393,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         // we are assuming that all packages depend on Move Stdlib and Sui Framework, so these
         // don't have to be provided explicitly as parameters
         dependencies.extend([MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID]);
+        println!("[publish] dependencies: {:#?}", dependencies);
+
         let data = |sender, gas| {
             let mut builder = ProgrammableTransactionBuilder::new();
             if upgradeable {
@@ -454,7 +457,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             })
             .collect();
         println!(
-            "published: {:#?}",
+            "[published] named_address_mapping: {:#?}",
             self.compiled_state.named_address_mapping
         );
         Ok((output, published_modules))
@@ -695,6 +698,10 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 })?;
 
                 let state = self.compiled_state();
+                println!(
+                    "[upgrade] compile state named_address_mapping {:#?}",
+                    state.named_address_mapping
+                );
                 let (mut modules, warnings_opt) = match syntax {
                     SyntaxChoice::Source => {
                         let (units, warnings_opt) =
@@ -771,6 +778,7 @@ impl<'a> SuiTestAdapter<'a> {
         gas_budget: Option<u64>,
         policy: u8,
     ) -> anyhow::Result<Option<String>> {
+        println!("[upgrade] dependencies: {:#?}", dependencies);
         let modules_bytes = modules
             .iter()
             .map(|(_, module)| {
@@ -788,6 +796,7 @@ impl<'a> SuiTestAdapter<'a> {
                     bail!("There is no published module address corresponding to name address {d}");
                 };
                 let id: ObjectID = addr.into_inner().into();
+                println!("[upgrade] resolved dep {d} -> {id}");
                 Ok(id)
             })
             .collect::<Result<_, _>>()?;
@@ -857,7 +866,10 @@ impl<'a> SuiTestAdapter<'a> {
             }
         }
         let output = self.object_summary_output(&summary);
-        println!("upgraded: {:#?}", self.compiled_state.named_address_mapping);
+        println!(
+            "[upgraded] named_address_mapping {:#?}",
+            self.compiled_state.named_address_mapping
+        );
         Ok(output)
     }
 
