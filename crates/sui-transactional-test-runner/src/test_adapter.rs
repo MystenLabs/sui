@@ -807,13 +807,15 @@ impl<'a> SuiTestAdapter<'a> {
         policy: u8,
     ) -> anyhow::Result<Option<String>> {
         println!("[self.upgrade_package]");
+        let dependencies = vec![String::from("Test_DepV1")];
         if package == "Test_V1" {
             let named_address_mapping = &mut self.compiled_state.named_address_mapping;
             named_address_mapping.insert(
                 "Test_DepV1".into(),
                 NumericalAddress::new(
                     AccountAddress::from_hex_literal(
-                        "0xB727750DB26014E56ECF92CD32E4D068238821623C04698D962908D120A516D0",
+                        "0x9B04E42926E70668CE82A4C2388BE4E2D4C5B661BE024B58E1518E71C7689236",
+                        // "0xB727750DB26014E56ECF92CD32E4D068238821623C04698D962908D120A516D0",
                     )
                     .unwrap()
                     .into_bytes(),
