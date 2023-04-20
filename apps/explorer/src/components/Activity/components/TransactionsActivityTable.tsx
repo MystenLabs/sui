@@ -51,9 +51,6 @@ export function TransactionsActivityTable({
             ? genTableDataFromTxData(data.pages[currentPage].data)
             : undefined;
 
-    const isPaginated =
-        (hasNextPage || (data && data?.pages.length > 1)) && !disablePagination;
-
     return (
         <div data-testid="tx">
             <div className="flex flex-col space-y-5 text-left xl:pr-10">
@@ -80,7 +77,7 @@ export function TransactionsActivityTable({
                 )}
 
                 <div className="flex justify-between">
-                    {isPaginated ? (
+                    {(hasNextPage || data?.pages.length) ? (
                         <Pagination
                             onNext={() => {
                                 if (isLoading || isFetching) {
@@ -118,7 +115,7 @@ export function TransactionsActivityTable({
                                 : '-'}
                             {` Transaction Blocks`}
                         </Text>
-                        {isPaginated && (
+                        {!disablePagination && (
                             <select
                                 className="form-select rounded-md border border-gray-45 px-3 py-2 pr-8 text-bodySmall font-medium leading-[1.2] text-steel-dark shadow-button"
                                 value={limit}
