@@ -89,13 +89,14 @@ function TransactionBlocksForAddress({
         isFetchingNextPage,
         fetchNextPage,
         hasNextPage,
+        isPreviousData
     } = useGetTransactionBlocks({
         [filterValue]: address,
     } as TransactionFilter);
 
     const currentPage = currentPageState[filterValue];
     const cardData =
-        data && Boolean(data.pages[currentPage])
+        data
             ? genTableDataFromTxData(data.pages[currentPage].data)
             : undefined;
 
@@ -172,7 +173,7 @@ function TransactionBlocksForAddress({
                         }}
                         hasNext={
                             Boolean(hasNextPage) &&
-                            Boolean(data?.pages[currentPage])
+                            !isPreviousData
                         }
                         hasPrev={currentPageState[filterValue] !== 0}
                         onPrev={() =>
