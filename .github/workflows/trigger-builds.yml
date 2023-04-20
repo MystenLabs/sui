@@ -1,9 +1,11 @@
 name: Build docker images and binaries
 
 on:
+  workflow_dispatch:
   push:
      branches: [ devnet, testnet ]
-  workflow_dispatch:
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 jobs:
   docker-images:
