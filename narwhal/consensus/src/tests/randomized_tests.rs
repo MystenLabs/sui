@@ -51,6 +51,11 @@ pub struct FailureModes {
     // round. For example a value of 0.1 means that 10% of the time fail get referenced by the
     // certificates of the next round.
     pub slow_nodes_failure_probability: f64,
+
+    // The minimum committee size to apply the failure modes. If None then the failure mode will be
+    // applied to any committee size. If Some is given and the committee size is smaller than this
+    // number then the failure mode will be skipped.
+    pub minimum_committee_size: Option<usize>,
 }
 
 struct ExecutionPlan {
@@ -74,32 +79,33 @@ async fn bullshark_randomised_tests() {
     // on the below parameters to increase the different cases we can generate.
 
     // A range of gc_depth to be used
-    const GC_DEPTH: RangeInclusive<Round> = 7..=8;
-    // A range of the committee size to be used
-    const COMMITTEE_SIZE: RangeInclusive<usize> = 4..=4;
+    const GC_DEPTH: RangeInclusive<Round> = 7..=10;
+    // A the committee size values to be used
+    const COMMITTEE_SIZE: [usize; 3] = [4, 7, 10];
     // A range of rounds for which we will create DAGs
     const DAG_ROUNDS: RangeInclusive<Round> = 7..=15;
     // The number of different execution plans to be created and tested against for every generated DAG
-    const EXECUTION_PLANS: u64 = 400;
+    const EXECUTION_PLANS: u64 = 500;
     // The number of DAGs that should be generated and tested against for every set of properties.
-    const DAGS_PER_SETUP: u64 = 50;
+    const DAGS_PER_SETUP: u64 = 500;
     // DAGs will be created for these failure modes
     let failure_modes: Vec<FailureModes> = vec![
         // Some failures
         // TODO: re-enable once we do have parallel testing - now it worth testing the most severe
         // edge cases
-        /*
         FailureModes {
-            nodes_failure_probability: 0.05,     // 5%
-            slow_nodes_percentage: 0.20,         // 20%
+            nodes_failure_probability: 0.10,     // 10%
+            slow_nodes_percentage: 0.10,         // 10%
             slow_nodes_failure_probability: 0.3, // 30%
+            minimum_committee_size: Some(7), // no reason to test this failure mode for smaller committee size, as we'll end up to similar
+                                             // failures as the "severe failures" section
         },
-         */
         // Severe failures
         FailureModes {
             nodes_failure_probability: 0.0,      // 0%
             slow_nodes_percentage: 0.33,         // 33%
             slow_nodes_failure_probability: 0.7, // 70%
+            minimum_committee_size: None,
         },
     ];
 
@@ -122,6 +128,10 @@ async fn bullshark_randomised_tests() {
                 for dag_rounds in DAG_ROUNDS {
                     for _ in 0..DAGS_PER_SETUP {
                         for mode in &failure_modes {
+                            if mode.minimum_committee_size.unwrap_or_default() > committee_size {
+                                continue;
+                            }
+
                             // we want to skip this test as gc_depth will never be enforced
                             if gc_depth > dag_rounds {
                                 continue;
@@ -207,6 +217,7 @@ fn test_determinism() {
         nodes_failure_probability: 0.0,
         slow_nodes_percentage: 0.33,
         slow_nodes_failure_probability: 0.5,
+        minimum_committee_size: None,
     };
 
     for seed in 0..=10 {
