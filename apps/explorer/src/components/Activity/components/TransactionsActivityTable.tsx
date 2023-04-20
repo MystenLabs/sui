@@ -124,9 +124,10 @@ export function TransactionsActivityTable({
                             <select
                                 className="form-select rounded-md border border-gray-45 px-3 py-2 pr-8 text-bodySmall font-medium leading-[1.2] text-steel-dark shadow-button"
                                 value={limit}
-                                onChange={(e) =>
-                                    setLimit(Number(e.target.value))
-                                }
+                                onChange={(e) => {
+                                    setLimit(Number(e.target.value));
+                                    setCurrentPage(0);
+                                }}
                             >
                                 <option value={20}>20 Per Page</option>
                                 <option value={40}>40 Per Page</option>
