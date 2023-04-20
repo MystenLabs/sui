@@ -120,6 +120,7 @@ pub struct SuiTestAdapter<'a> {
 
 struct StagedPackage {
     file: NamedTempFile,
+    syntax: SyntaxChoice,
     modules: Vec<(Option<Symbol>, CompiledModule)>,
 }
 
@@ -667,10 +668,28 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 })?;
                 let contents = std::fs::read_to_string(file.path())?;
                 let commands = ParsedCommand::parse_vec(&contents)?;
+                let staged = &self.staged_modules;
                 let state = &self.compiled_state;
                 let commands = commands
                     .into_iter()
-                    .map(|c| c.into_command(&|s| Some(state.resolve_named_address(s))))
+                    .map(|c| {
+                        c.into_command(
+                            &|p| {
+                                let modules = staged
+                                    .get(&Symbol::from(p))?
+                                    .modules
+                                    .iter()
+                                    .map(|(_n, m)| {
+                                        let mut buf = vec![];
+                                        m.serialize(&mut buf).unwrap();
+                                        buf
+                                    })
+                                    .collect();
+                                Some(modules)
+                            },
+                            &|s| Some(state.resolve_named_address(s)),
+                        )
+                    })
                     .collect::<anyhow::Result<Vec<Command>>>()?;
                 let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
                 let gas_price = gas_price.unwrap_or(self.gas_price);
@@ -776,6 +795,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 }
                 let staged = StagedPackage {
                     file: data,
+                    syntax,
                     modules,
                 };
                 let prev = self.staged_modules.insert(package_name, staged);
