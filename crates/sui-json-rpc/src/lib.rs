@@ -150,9 +150,18 @@ impl JsonRpcServerBuilder {
             .layer(cors)
             .layer(routing_layer);
 
+        let worker_thread = env::var("RPC_WORKER_THREAD")
+            .ok()
+            .and_then(|o| {
+                usize::from_str(&o)
+                    .tap_err(|e| warn!("Cannot parse RPC_WORKER_THREAD to usize: {e}"))
+                    .ok()
+            })
+            .unwrap_or(num_cpus::get() / 2);
+
         let rt = tokio::runtime::Builder::new_multi_thread()
             .thread_name("sui-node-jsonrpc-worker")
-            .worker_threads(num_cpus::get() / 2)
+            .worker_threads(worker_thread)
             .enable_all()
             .build()
             .unwrap();
