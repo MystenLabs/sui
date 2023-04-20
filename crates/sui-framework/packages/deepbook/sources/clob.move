@@ -1010,7 +1010,7 @@ module deepbook::clob {
     ) {
         let pool_id = *object::uid_as_inner(&pool.id);
         let user = object::id(account_cap);
-        assert!(contains(&pool.usr_open_orders, user), 0);
+        assert!(contains(&pool.usr_open_orders, user), EInvalidUser);
         let usr_open_order_ids = table::borrow_mut(&mut pool.usr_open_orders, user);
         while (!linked_table::is_empty(usr_open_order_ids)) {
             let order_id = *option::borrow(linked_table::back(usr_open_order_ids));
