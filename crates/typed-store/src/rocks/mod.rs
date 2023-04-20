@@ -1918,6 +1918,7 @@ impl DBOptions {
         let write_buffer_size = read_size_from_env(ENV_VAR_MAX_WRITE_BUFFER_SIZE_MB)
             .unwrap_or(DEFAULT_MAX_WRITE_BUFFER_SIZE_MB)
             * 1024
+            * 1024
             * 1024;
         self.options.set_write_buffer_size(write_buffer_size);
         // Increase write buffers to keep to 6 before slowing down writes.
