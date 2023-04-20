@@ -38,8 +38,8 @@ impl TestCaseImpl for FullNodeExecuteTransactionTest {
     }
 
     async fn run(&self, ctx: &mut TestContext) -> Result<(), anyhow::Error> {
-        let txn_count = 1;
-        ctx.get_sui_from_faucet(Some(txn_count)).await;
+        let txn_count = 4;
+        ctx.get_sui_from_faucet(Some(1)).await;
 
         let mut txns = ctx.make_transactions(txn_count).await;
         assert!(
