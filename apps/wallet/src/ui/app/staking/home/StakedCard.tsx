@@ -44,7 +44,7 @@ interface DelegationObjectWithValidator extends StakeObject {
 
 const cardStyle = cva(
     [
-        'group flex no-underline flex-col p-3.75 pr-2 py-3 box-border w-full rounded-2xl border border-solid w-stake-card-width h-stake-card-height',
+        'group flex no-underline flex-col p-3.75 pr-2 py-3 box-border w-full rounded-2xl border border-solid h-36',
     ],
     {
         variants: {

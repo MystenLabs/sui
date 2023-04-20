@@ -31,8 +31,6 @@ export default {
                 15: '3.75rem',
                 'popup-height': '600px',
                 'popup-width': '360px',
-                'stake-card-height': '140px',
-                'stake-card-width': '153px',
             },
             boxShadow: {
                 'wallet-content': '0px -5px 20px 5px rgba(160, 182, 195, 0.15)',
