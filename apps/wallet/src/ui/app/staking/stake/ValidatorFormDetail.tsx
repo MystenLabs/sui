@@ -4,12 +4,12 @@
 import {
     formatPercentageDisplay,
     useGetRollingAverageApys,
+    calculateStakeShare,
 } from '@mysten/core';
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { useActiveAddress } from '../../hooks/useActiveAddress';
-import { calculateStakeShare } from '../calculateStakeShare';
 import { getStakeSuiBySuiId } from '../getStakeSuiBySuiId';
 import { getTokenStakeSuiForValidator } from '../getTokenStakeSuiForValidator';
 import { StakeAmount } from '../home/StakeAmount';
@@ -78,12 +78,13 @@ export function ValidatorFormDetail({
     }, [system]);
 
     const totalStakePercentage = useMemo(() => {
-        if (!system || !stakeData) return null;
+        if (!system || !validatorData) return null;
+
         return calculateStakeShare(
-            getTokenStakeSuiForValidator(stakeData, validatorAddress),
+            BigInt(validatorData.stakingPoolSuiBalance),
             BigInt(totalValidatorsStake)
         );
-    }, [stakeData, system, totalValidatorsStake, validatorAddress]);
+    }, [system, totalValidatorsStake, validatorData]);
 
     const apy = rollingAverageApys?.[validatorAddress] ?? null;
 
