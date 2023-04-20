@@ -107,15 +107,15 @@ function TransactionBlocksForAddress({
             ? ({
                   [filterValue]: address,
               } as TransactionFilter)
-            : undefined,
+            : undefined
     );
 
     const generateTableCard = (
         currentPage: number,
         data?: InfiniteData<PaginatedTransactionResponse>
-    ): JSX.Element | null => {
+    ) => {
         if (!data) {
-            return null;
+            return;
         }
         const cardData = genTableDataFromTxData(data?.pages[currentPage].data);
         return <TableCard data={cardData.data} columns={cardData.columns} />;
