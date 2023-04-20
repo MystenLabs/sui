@@ -198,6 +198,11 @@ impl Object {
         })?;
         Ok((object_id, (self.version as u64).into(), digest))
     }
+
+    // MUSTFIX(gegaowp): trim data to reduce short-term storage consumption.
+    pub fn trim_data(&mut self) {
+        self.bcs.clear();
+    }
 }
 
 impl TryFrom<Object> for sui_types::object::Object {

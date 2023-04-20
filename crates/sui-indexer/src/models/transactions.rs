@@ -153,6 +153,22 @@ impl TryFrom<TemporaryTransactionBlockResponseStore> for Transaction {
     }
 }
 
+impl Transaction {
+    // MUSTFIX(gegaowp): trim data to reduce short-term storage consumption.
+    pub fn trim_data(&mut self) {
+        self.created.clear();
+        self.mutated.clear();
+        self.unwrapped.clear();
+        self.wrapped.clear();
+        self.move_calls.clear();
+        self.recipients.clear();
+        // trim BCS and JSON data from transaction
+        self.raw_transaction.clear();
+        self.transaction_content.clear();
+        self.transaction_effects_content.clear();
+    }
+}
+
 fn owned_obj_ref_to_obj_id(owned_obj_ref: &OwnedObjectRef) -> String {
     owned_obj_ref.reference.object_id.to_string()
 }
