@@ -371,7 +371,7 @@ impl PublicKey {
 pub struct AuthorityPublicKeyBytes(
     #[schemars(with = "Base64")]
     #[serde_as(as = "Readable<Base64, Bytes>")]
-    [u8; AuthorityPublicKey::LENGTH],
+    pub [u8; AuthorityPublicKey::LENGTH],
 );
 
 impl AuthorityPublicKeyBytes {
@@ -478,6 +478,12 @@ impl FromStr for AuthorityPublicKeyBytes {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let value = Hex::decode(s).map_err(|e| anyhow!(e))?;
         Self::from_bytes(&value[..]).map_err(|e| anyhow!(e))
+    }
+}
+
+impl Default for AuthorityPublicKeyBytes {
+    fn default() -> Self {
+        Self::ZERO
     }
 }
 
