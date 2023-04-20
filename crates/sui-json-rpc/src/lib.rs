@@ -1,19 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::env;
 use std::net::SocketAddr;
 use std::str::FromStr;
-use std::thread::JoinHandle;
-use std::{env, thread};
 
 use hyper::header::HeaderName;
 use hyper::header::HeaderValue;
 use hyper::Method;
-pub use jsonrpsee::server::ServerHandle;
 use jsonrpsee::server::{AllowHosts, ServerBuilder};
 use jsonrpsee::RpcModule;
 use prometheus::Registry;
 use tap::TapFallible;
+use tokio::runtime::Runtime;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tracing::{info, warn};
 
@@ -89,7 +88,7 @@ impl JsonRpcServerBuilder {
         Ok(self.module.merge(module.rpc())?)
     }
 
-    pub async fn start(mut self, listen_address: SocketAddr) -> Result<JoinHandle<()>, Error> {
+    pub async fn start(mut self, listen_address: SocketAddr) -> Result<ServerHandle, Error> {
         let acl = match env::var("ACCESS_CONTROL_ALLOW_ORIGIN") {
             Ok(value) => {
                 let allow_hosts = value
@@ -130,11 +129,12 @@ impl JsonRpcServerBuilder {
             })
             .unwrap_or(u32::MAX);
 
+        let metrics_logger = MetricsLogger::new(&self.registry, &methods_names);
+
         let disable_routing = env::var("DISABLE_BACKWARD_COMPATIBILITY")
             .ok()
             .and_then(|v| bool::from_str(&v).ok())
             .unwrap_or_default();
-
         info!(
             "Compatibility method routing {}.",
             if disable_routing {
@@ -143,45 +143,45 @@ impl JsonRpcServerBuilder {
                 "enabled"
             }
         );
-        let handle = thread::spawn(move || {
-            // We need to use the routing layer to block access to the old methods when routing is disabled.
-            let routing_layer = RoutingLayer::new(routing, disable_routing);
+        // We need to use the routing layer to block access to the old methods when routing is disabled.
+        let routing_layer = RoutingLayer::new(routing, disable_routing);
 
-            let middleware = tower::ServiceBuilder::new()
-                .layer(cors)
-                .layer(routing_layer);
+        let middleware = tower::ServiceBuilder::new()
+            .layer(cors)
+            .layer(routing_layer);
 
-            let metrics_logger = MetricsLogger::new(&self.registry, &methods_names);
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .thread_name("sui-node-jsonrpc-worker")
+            .worker_threads(num_cpus::get() / 2)
+            .enable_all()
+            .build()
+            .unwrap();
 
-            let rt = tokio::runtime::Builder::new_multi_thread()
-                .thread_name("sui-node-jsonrpc-worker")
-                .worker_threads(num_cpus::get() / 2)
-                .enable_all()
-                .build()
-                .unwrap();
+        let server = ServerBuilder::default()
+            .batch_requests_supported(false)
+            .max_response_body_size(MAX_REQUEST_SIZE)
+            .max_connections(max_connection)
+            .set_host_filtering(AllowHosts::Any)
+            .set_middleware(middleware)
+            .custom_tokio_runtime(rt.handle().clone())
+            .set_logger(metrics_logger)
+            .build(listen_address)
+            .await?;
 
-            let server = rt
-                .block_on(
-                    ServerBuilder::default()
-                        .batch_requests_supported(false)
-                        .max_response_body_size(MAX_REQUEST_SIZE)
-                        .max_connections(max_connection)
-                        .set_host_filtering(AllowHosts::Any)
-                        .set_middleware(middleware)
-                        .custom_tokio_runtime(rt.handle().clone())
-                        .set_logger(metrics_logger)
-                        .build(listen_address),
-                )
-                .unwrap();
-
-            let addr = server.local_addr().unwrap();
-            let handle = server.start(self.module).unwrap();
-            info!(local_addr =? addr, "Sui JSON-RPC server listening on {addr}");
-            info!("Available JSON-RPC methods : {:?}", methods_names);
-            rt.block_on(handle.stopped());
-        });
+        let addr = server.local_addr()?;
+        let handle = ServerHandle {
+            _rt: rt,
+            handle: server.start(self.module)?,
+        };
+        info!(local_addr =? addr, "Sui JSON-RPC server listening on {addr}");
+        info!("Available JSON-RPC methods : {:?}", methods_names);
         Ok(handle)
     }
+}
+
+pub struct ServerHandle {
+    _rt: Runtime,
+    pub handle: jsonrpsee::server::ServerHandle,
 }
 
 pub trait SuiRpcModule

@@ -76,7 +76,7 @@ use sui_json_rpc::move_utils::MoveUtils;
 use sui_json_rpc::read_api::ReadApi;
 use sui_json_rpc::transaction_builder_api::TransactionBuilderApi;
 use sui_json_rpc::transaction_execution_api::TransactionExecutionApi;
-use sui_json_rpc::JsonRpcServerBuilder;
+use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
 use sui_macros::fail_point_async;
 use sui_network::api::ValidatorServer;
 use sui_network::discovery;
@@ -118,7 +118,7 @@ pub struct ValidatorComponents {
 pub struct SuiNode {
     config: NodeConfig,
     validator_components: Mutex<Option<ValidatorComponents>>,
-    _json_rpc_service: Option<std::thread::JoinHandle<()>>,
+    _json_rpc_service: Option<ServerHandle>,
     state: Arc<AuthorityState>,
     transaction_orchestrator: Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
     registry_service: RegistryService,
@@ -1141,7 +1141,7 @@ pub async fn build_server(
     transaction_orchestrator: &Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
     config: &NodeConfig,
     prometheus_registry: &Registry,
-) -> Result<Option<std::thread::JoinHandle<()>>> {
+) -> Result<Option<ServerHandle>> {
     // Validators do not expose these APIs
     if config.consensus_config().is_some() {
         return Ok(None);
