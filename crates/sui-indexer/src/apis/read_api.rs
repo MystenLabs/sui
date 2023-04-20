@@ -340,8 +340,6 @@ where
         events_guard.stop_and_record();
         events_resp
     }
-    // TODO: remove this after `futures::executor::block_on` is removed. @Ge @Chris
-    #[allow(clippy::disallowed_methods)]
     async fn get_loaded_child_objects(
         &self,
         digest: TransactionDigest,

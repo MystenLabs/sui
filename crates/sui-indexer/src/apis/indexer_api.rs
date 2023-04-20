@@ -5,7 +5,6 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use futures::executor::block_on;
 use futures::future::join_all;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::HttpClient;
@@ -334,18 +333,16 @@ where
                 .indexer_metrics()
                 .get_owned_objects_latency
                 .start_timer();
-            let owned_obj_resp = block_on(
-                self.fullnode
-                    .get_owned_objects(address, query, cursor, limit),
-            );
+            let owned_obj_resp = self
+                .fullnode
+                .get_owned_objects(address, query, cursor, limit)
+                .await;
             owned_obj_guard.stop_and_record();
             return owned_obj_resp;
         }
         self.get_owned_objects_internal(address, query, cursor, limit)
             .await
     }
-    // TODO: remove this after `futures::executor::block_on` is removed. @Ge @Chris
-    #[allow(clippy::disallowed_methods)]
     async fn query_transaction_blocks(
         &self,
         query: SuiTransactionBlockResponseQuery,
@@ -362,12 +359,10 @@ where
                 .indexer_metrics()
                 .query_transaction_blocks_latency
                 .start_timer();
-            let query_tx_resp = block_on(self.fullnode.query_transaction_blocks(
-                query,
-                cursor,
-                limit,
-                descending_order,
-            ));
+            let query_tx_resp = self
+                .fullnode
+                .query_transaction_blocks(query, cursor, limit, descending_order)
+                .await;
             query_tx_guard.stop_and_record();
             return query_tx_resp;
         }
@@ -390,11 +385,10 @@ where
                 .indexer_metrics()
                 .query_events_latency
                 .start_timer();
-            let query_events_resp =
-                block_on(
-                    self.fullnode
-                        .query_events(query, cursor, limit, descending_order),
-                );
+            let query_events_resp = self
+                .fullnode
+                .query_events(query, cursor, limit, descending_order)
+                .await;
             query_events_guard.stop_and_record();
             return query_events_resp;
         }
@@ -414,10 +408,10 @@ where
             .indexer_metrics()
             .get_dynamic_fields_latency
             .start_timer();
-        let df_resp = block_on(
-            self.fullnode
-                .get_dynamic_fields(parent_object_id, cursor, limit),
-        );
+        let df_resp = self
+            .fullnode
+            .get_dynamic_fields(parent_object_id, cursor, limit)
+            .await;
         df_guard.stop_and_record();
         df_resp
     }
@@ -432,10 +426,10 @@ where
             .indexer_metrics()
             .get_dynamic_field_object_latency
             .start_timer();
-        let df_obj_resp = block_on(
-            self.fullnode
-                .get_dynamic_field_object(parent_object_id, name),
-        );
+        let df_obj_resp = self
+            .fullnode
+            .get_dynamic_field_object(parent_object_id, name)
+            .await;
         df_obj_guard.stop_and_record();
         df_obj_resp
     }
