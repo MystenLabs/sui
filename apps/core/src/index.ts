@@ -22,3 +22,5 @@ export * from './hooks/useGetTimeBeforeEpochNumber';
 export * from './hooks/useGetLatestCheckpointSequenceNumber';
 export * from './hooks/useGetTotalTransactionBlocks';
 export * from './hooks/useGetReferenceGasPrice';
+export * from './hooks/useTransactionSummary';
+export * from './utils/transaction';
