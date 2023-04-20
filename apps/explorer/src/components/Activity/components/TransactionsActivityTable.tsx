@@ -103,14 +103,12 @@ export function TransactionsActivityTable({
                             onPrev={() => setCurrentPage(currentPage - 1)}
                             onFirst={() => setCurrentPage(0)}
                         />
-                    ) : (
-                        <div>
-                            {disablePagination && (
+                    ) : 
+                            disablePagination && (
                                 <Link to="/recent" after={<ArrowRight12 />}>
                                     More Transaction Blocks
                                 </Link>
-                            )}
-                        </div>
+                            
                     )}
 
                     <div className="flex items-center space-x-3">
