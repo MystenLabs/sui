@@ -104,7 +104,8 @@ export function CheckpointsActivityTable({
                         hasNext={
                             Boolean(hasNextPage) &&
                             Boolean(data?.pages[currentPage]) &&
-                            Number(data?.pages[currentPage].nextCursor) > Number(maxCursor)
+                            Number(data?.pages[currentPage].nextCursor) >
+                                Number(maxCursor)
                         }
                         hasPrev={currentPage !== 0}
                         onPrev={() => setCurrentPage(currentPage - 1)}
@@ -123,9 +124,7 @@ export function CheckpointsActivityTable({
 
                 <div className="flex items-center space-x-3">
                     <Text variant="body/medium" color="steel-dark">
-                        {count
-                            ? numberSuffix(Number(count))
-                            : '-'}
+                        {count ? numberSuffix(Number(count)) : '-'}
                         {` Checkpoints`}
                     </Text>
                     {!disablePagination && (
