@@ -5,6 +5,7 @@ import { useState } from 'react';
 // import toast from 'react-hot-toast';
 
 import { Transactions } from '../transactions';
+import { EpochsActivityTable } from './EpochsActivityTable';
 
 import { CheckpointsTable } from '~/pages/checkpoints/CheckpointsTable';
 // import { PlayPause } from '~/ui/PlayPause';
