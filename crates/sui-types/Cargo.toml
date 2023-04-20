@@ -70,4 +70,4 @@ harness = false
 
 [features]
 test-utils = []
-fuzzing = []
+fuzzing = ["move-core-types/fuzzing"]
