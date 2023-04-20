@@ -117,8 +117,8 @@ export function TransactionsActivityTable({
                         <Text variant="body/medium" color="steel-dark">
                             {countQuery.data
                                 ? numberSuffix(Number(countQuery.data))
-                                : '-'}{' '}
-                            Transaction Blocks
+                                : '-'}
+                            {'Transaction Blocks'}
                         </Text>
                         {isPaginated && (
                             <select
