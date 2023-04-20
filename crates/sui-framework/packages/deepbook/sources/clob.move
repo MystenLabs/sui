@@ -97,7 +97,8 @@ module deepbook::clob {
         /// object ID of the `AccountCap` that placed the order
         owner: ID,
         base_asset_quantity_placed: u64,
-        price: u64
+        price: u64,
+        expire_timestamp: u64
     }
 
     /// Emitted when a maker order is canceled.
@@ -810,7 +811,8 @@ module deepbook::clob {
             is_bid,
             owner: user,
             base_asset_quantity_placed: quantity,
-            price
+            price,
+            expire_timestamp
         });
         if (!contains(&pool.usr_open_orders, user)) {
             add(&mut pool.usr_open_orders, user, linked_table::new(ctx));
