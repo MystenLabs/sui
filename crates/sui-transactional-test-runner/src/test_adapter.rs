@@ -699,9 +699,37 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
 
                 let state = self.compiled_state();
                 println!(
-                    "[upgrade] compile state named_address_mapping {:#?}",
+                    "[upgrade] [package: {package}] compile state named_address_mapping {:#?}",
                     state.named_address_mapping
                 );
+                if package == "Test_V1" {
+                    let named_address_mapping = &mut state.named_address_mapping;
+                    // Set Test_DepV1 to 0xB727750DB26014E56ECF92CD32E4D068238821623C04698D962908D120A516D0.
+                    named_address_mapping.insert(
+			"Test_DepV2".into(),
+			NumericalAddress::new(
+                        AccountAddress::from_hex_literal(
+                            "0xB727750DB26014E56ECF92CD32E4D068238821623C04698D962908D120A516D0",
+                        )
+                        .unwrap()
+                        .into_bytes(),
+                        NumberFormat::Hex,
+                    ),
+                    );
+                    named_address_mapping.insert(
+                        "Test_DepV1".into(),
+                        NumericalAddress::new(
+                            AccountAddress::from_hex_literal("0x0")
+                                .unwrap()
+                                .into_bytes(),
+                            NumberFormat::Hex,
+                        ),
+                    );
+                    println!(
+                        "[upgrade] FIXUP: compile state named_address_mapping {:#?}",
+                        state.named_address_mapping
+                    );
+                }
                 let (mut modules, warnings_opt) = match syntax {
                     SyntaxChoice::Source => {
                         let (units, warnings_opt) =
@@ -778,6 +806,25 @@ impl<'a> SuiTestAdapter<'a> {
         gas_budget: Option<u64>,
         policy: u8,
     ) -> anyhow::Result<Option<String>> {
+        println!("[self.upgrade_package]");
+        if package == "Test_V1" {
+            let named_address_mapping = &mut self.compiled_state.named_address_mapping;
+            named_address_mapping.insert(
+                "Test_DepV1".into(),
+                NumericalAddress::new(
+                    AccountAddress::from_hex_literal(
+                        "0xB727750DB26014E56ECF92CD32E4D068238821623C04698D962908D120A516D0",
+                    )
+                    .unwrap()
+                    .into_bytes(),
+                    NumberFormat::Hex,
+                ),
+            );
+            println!(
+                "[upgrade] FIXUP ++: compile state named_address_mapping {:#?}",
+                self.compiled_state.named_address_mapping
+            );
+        }
         println!("[upgrade] dependencies: {:#?}", dependencies);
         let modules_bytes = modules
             .iter()
