@@ -44,7 +44,7 @@ interface DelegationObjectWithValidator extends StakeObject {
 
 const cardStyle = cva(
     [
-        'group flex no-underline flex-col p-3.75 pr-2 py-3 box-border w-full rounded-2xl border border-solid',
+        'group flex no-underline flex-col p-3.75 pr-2 py-3 box-border w-full rounded-2xl border border-solid w-stake-card-width h-stake-card-height',
     ],
     {
         variants: {
@@ -182,13 +182,15 @@ export function StakeCard({
                 earningRewardEpoch={Number(epochBeforeRewards)}
             >
                 <div className="flex justify-between items-start mb-1">
-                    <ValidatorLogo
-                        validatorAddress={validatorAddress}
-                        size="subtitle"
-                        iconSize="md"
-                        stacked
-                        activeEpoch={delegationObject.stakeRequestEpoch}
-                    />
+                    <div className="">
+                        <ValidatorLogo
+                            validatorAddress={validatorAddress}
+                            size="subtitle"
+                            iconSize="md"
+                            stacked
+                            activeEpoch={delegationObject.stakeRequestEpoch}
+                        />
+                    </div>
 
                     <div className="text-steel text-pBody opacity-0 group-hover:opacity-100">
                         <IconTooltip
@@ -197,7 +199,7 @@ export function StakeCard({
                         />
                     </div>
                 </div>
-                <div className="flex-1 mb-4">
+                <div className="flex-1">
                     <div className="flex items-baseline gap-1">
                         <Text variant="body" weight="semibold" color="gray-90">
                             {principalStaked}
