@@ -250,6 +250,16 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             });
         }
 
+        // (!) Should not add new transactions to sequenced_transactions beyond this point
+
+        if self
+            .epoch_store
+            .protocol_config()
+            .consensus_order_end_of_epoch_last()
+        {
+            reorder_end_of_publish(&mut sequenced_transactions);
+        }
+
         self.metrics
             .consensus_handler_processed_bytes
             .inc_by(bytes as u64);
@@ -346,6 +356,10 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
 
         index_with_hash.index.sub_dag_index
     }
+}
+
+fn reorder_end_of_publish(sequenced_transactions: &mut [SequencedConsensusTransaction]) {
+    sequenced_transactions.sort_by_key(SequencedConsensusTransaction::is_end_of_publish);
 }
 
 struct AsyncTransactionScheduler {
@@ -481,6 +495,14 @@ impl SequencedConsensusTransaction {
     pub fn key(&self) -> SequencedConsensusTransactionKey {
         self.transaction.key()
     }
+
+    pub fn is_end_of_publish(&self) -> bool {
+        if let SequencedConsensusTransactionKind::External(ref transaction) = self.transaction {
+            matches!(transaction.kind, ConsensusTransactionKind::EndOfPublish(..))
+        } else {
+            false
+        }
+    }
 }
 
 pub struct VerifiedSequencedConsensusTransaction(pub SequencedConsensusTransaction);
@@ -503,32 +525,134 @@ impl SequencedConsensusTransaction {
     }
 }
 
-#[test]
-pub fn test_update_hash() {
-    let index0 = ExecutionIndices {
-        sub_dag_index: 0,
-        transaction_index: 0,
-        last_committed_round: 0,
-    };
-    let index1 = ExecutionIndices {
-        sub_dag_index: 0,
-        transaction_index: 1,
-        last_committed_round: 0,
-    };
-    let index2 = ExecutionIndices {
-        sub_dag_index: 1,
-        transaction_index: 0,
-        last_committed_round: 0,
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use narwhal_types::Certificate;
+    use sui_protocol_config::SupportedProtocolVersions;
+    use sui_types::base_types::AuthorityName;
+    use sui_types::messages::{
+        AuthorityCapabilities, ConsensusTransaction, ConsensusTransactionKind,
     };
 
-    let last_seen = ExecutionIndicesWithHash {
-        index: index1,
-        hash: 1000,
-    };
+    #[test]
+    pub fn test_update_hash() {
+        let index0 = ExecutionIndices {
+            sub_dag_index: 0,
+            transaction_index: 0,
+            last_committed_round: 0,
+        };
+        let index1 = ExecutionIndices {
+            sub_dag_index: 0,
+            transaction_index: 1,
+            last_committed_round: 0,
+        };
+        let index2 = ExecutionIndices {
+            sub_dag_index: 1,
+            transaction_index: 0,
+            last_committed_round: 0,
+        };
 
-    let last_seen = Mutex::new(last_seen);
-    let tx = &[0];
-    assert!(update_hash(&last_seen, index0, tx).is_none());
-    assert!(update_hash(&last_seen, index1, tx).is_none());
-    assert!(update_hash(&last_seen, index2, tx).is_some());
+        let last_seen = ExecutionIndicesWithHash {
+            index: index1,
+            hash: 1000,
+        };
+
+        let last_seen = Mutex::new(last_seen);
+        let tx = &[0];
+        assert!(update_hash(&last_seen, index0, tx).is_none());
+        assert!(update_hash(&last_seen, index1, tx).is_none());
+        assert!(update_hash(&last_seen, index2, tx).is_some());
+    }
+
+    #[test]
+    fn test_reorder_end_of_publish() {
+        let mut v = vec![cap_txn(10), cap_txn(1)];
+        reorder_end_of_publish(&mut v);
+        assert_eq!(
+            extract(v),
+            vec!["cap(10)".to_string(), "cap(1)".to_string()]
+        );
+        let mut v = vec![cap_txn(1), cap_txn(10)];
+        reorder_end_of_publish(&mut v);
+        assert_eq!(
+            extract(v),
+            vec!["cap(1)".to_string(), "cap(10)".to_string()]
+        );
+        let mut v = vec![cap_txn(1), eop_txn(1), cap_txn(10), eop_txn(10)];
+        reorder_end_of_publish(&mut v);
+        assert_eq!(
+            extract(v),
+            vec![
+                "cap(1)".to_string(),
+                "cap(10)".to_string(),
+                "eop(1)".to_string(),
+                "eop(10)".to_string()
+            ]
+        );
+        let mut v = vec![cap_txn(1), eop_txn(10), cap_txn(10), eop_txn(1)];
+        reorder_end_of_publish(&mut v);
+        assert_eq!(
+            extract(v),
+            vec![
+                "cap(1)".to_string(),
+                "cap(10)".to_string(),
+                "eop(10)".to_string(),
+                "eop(1)".to_string()
+            ]
+        );
+    }
+
+    fn extract(v: Vec<SequencedConsensusTransaction>) -> Vec<String> {
+        v.into_iter().map(extract_one).collect()
+    }
+
+    fn extract_one(t: SequencedConsensusTransaction) -> String {
+        match t.transaction {
+            SequencedConsensusTransactionKind::External(ext) => match ext.kind {
+                ConsensusTransactionKind::EndOfPublish(authority) => {
+                    format!("eop({})", authority.0[0])
+                }
+                ConsensusTransactionKind::CapabilityNotification(cap) => {
+                    format!("cap({})", cap.generation)
+                }
+                _ => unreachable!(),
+            },
+            SequencedConsensusTransactionKind::System(_) => unreachable!(),
+        }
+    }
+
+    fn eop_txn(a: u8) -> SequencedConsensusTransaction {
+        let mut authority = AuthorityName::default();
+        authority.0[0] = a;
+        txn(ConsensusTransactionKind::EndOfPublish(authority))
+    }
+
+    fn cap_txn(generation: u64) -> SequencedConsensusTransaction {
+        txn(ConsensusTransactionKind::CapabilityNotification(
+            AuthorityCapabilities {
+                authority: Default::default(),
+                generation,
+                supported_protocol_versions: SupportedProtocolVersions::SYSTEM_DEFAULT,
+                available_system_packages: vec![],
+            },
+        ))
+    }
+
+    fn txn(kind: ConsensusTransactionKind) -> SequencedConsensusTransaction {
+        let c = ConsensusTransaction {
+            kind,
+            tracking_id: Default::default(),
+        };
+        let transaction = SequencedConsensusTransactionKind::External(c);
+        let certificate = Arc::new(Certificate::default());
+        let certificate_author = Default::default();
+        let consensus_index = Default::default();
+        SequencedConsensusTransaction {
+            certificate,
+            certificate_author,
+            consensus_index,
+            transaction,
+        }
+    }
 }
