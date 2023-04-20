@@ -9,6 +9,7 @@ feature_flags:
   loaded_child_objects_fixed: true
   missing_type_is_compatibility_error: true
   scoring_decision_with_validity_cutoff: true
+  consensus_order_end_of_epoch_last: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -73,7 +74,7 @@ reward_slashing_rate: 10000
 storage_gas_price: 76
 max_transactions_per_checkpoint: 10000
 max_checkpoint_size_bytes: 31457280
-buffer_stake_for_protocol_upgrade_bps: 0
+buffer_stake_for_protocol_upgrade_bps: 5000
 address_from_bytes_cost_base: 52
 address_to_u256_cost_base: 52
 address_from_u256_cost_base: 52
