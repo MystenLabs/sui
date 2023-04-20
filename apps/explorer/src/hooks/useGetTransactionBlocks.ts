@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useRpcClient } from '@mysten/core';
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 
 import type { TransactionFilter } from '@mysten/sui.js';
 
@@ -31,12 +31,11 @@ export function useGetTransactionBlocks(
             }),
         {
             getNextPageParam: (lastPage) =>
-            lastPage?.hasNextPage ? lastPage.nextCursor : false,
+                lastPage?.hasNextPage ? lastPage.nextCursor : false,
             staleTime: Infinity,
             cacheTime: 24 * 60 * 60 * 1000,
             retry: false,
             keepPreviousData: true,
-
-        },
+        }
     );
 }

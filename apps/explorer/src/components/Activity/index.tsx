@@ -4,13 +4,12 @@
 import { useState } from 'react';
 // import toast from 'react-hot-toast';
 
-import { Transactions } from '../transactions';
+import { TransactionsActivityTable } from './components/TransactionsActivityTable';
 
 import { CheckpointsTable } from '~/pages/checkpoints/CheckpointsTable';
 import { EpochsTable } from '~/pages/epochs/EpochsTable';
 // import { PlayPause } from '~/ui/PlayPause';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
-import { TransactionsActivityTable } from './components/TransactionsActivityTable';
 
 type Props = {
     initialTab?: string | null;
