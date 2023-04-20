@@ -196,7 +196,10 @@ impl TestCluster {
     /// supported versions.
     /// Note that we don't restart the fullnode here, and it is assumed that the fulnode supports
     /// the entire version range.
-    pub async fn upgrade_protocol(&mut self, new_supported_versions: SupportedProtocolVersions) {
+    pub async fn update_validator_supported_versions(
+        &mut self,
+        new_supported_versions: SupportedProtocolVersions,
+    ) {
         for authority in self.get_validator_addresses().into_iter() {
             self.stop_validator(authority);
             tokio::time::sleep(Duration::from_millis(1000)).await;
