@@ -89,19 +89,9 @@ function TransactionBlocksForAddress({
         isFetchingNextPage,
         fetchNextPage,
         hasNextPage,
-<<<<<<< HEAD
-    } = useGetTransactionBlocks(
-        filterValue !== FILTER_VALUES.UNFILTERED
-            ? ({
-                  [filterValue]: address,
-              } as TransactionFilter)
-            : undefined
-    );
-=======
-    } = useGetTransactionBlocksForAddress(address, {
+    } = useGetTransactionBlocks({
         [filterValue]: address,
     } as TransactionFilter);
->>>>>>> main
 
     const currentPage = currentPageState[filterValue];
     const cardData = data
