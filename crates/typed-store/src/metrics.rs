@@ -1,13 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::TypedStoreError;
 use once_cell::sync::OnceCell;
-use prometheus::{
-    register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
-    register_int_gauge_vec_with_registry, HistogramVec, IntCounterVec, IntGaugeVec, Registry,
-};
+use prometheus::{register_histogram_vec_with_registry, register_int_counter_vec_with_registry, register_int_gauge_vec_with_registry, HistogramVec, IntCounterVec, IntGaugeVec, Registry, CounterVec, register_counter_vec_with_registry};
 use rocksdb::perf::set_perf_stats;
 use rocksdb::{PerfContext, PerfMetric, PerfStatsLevel};
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -25,7 +24,7 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
 #[derive(Debug, Clone)]
 // A struct for sampling based on number of operations or duration.
 // Sampling happens if the duration expires and after number of operations
-pub struct SamplingInterval {
+pub struct Sampler {
     // Sample once every time duration
     pub once_every_duration: Duration,
     // Sample once every number of operations
@@ -34,14 +33,14 @@ pub struct SamplingInterval {
     pub counter: Arc<AtomicU64>,
 }
 
-impl Default for SamplingInterval {
+impl Default for Sampler {
     fn default() -> Self {
-        // Enabled with 10 second interval
-        SamplingInterval::new(Duration::ZERO, 100)
+        // Enabled with 1 second interval
+        Sampler::new(Duration::from_secs(10), 100)
     }
 }
 
-impl SamplingInterval {
+impl Sampler {
     pub fn new(once_every_duration: Duration, after_num_ops: u64) -> Self {
         let counter = Arc::new(AtomicU64::new(1));
         if !once_every_duration.is_zero() {
@@ -55,7 +54,7 @@ impl SamplingInterval {
                 }
             });
         }
-        SamplingInterval {
+        Sampler {
             once_every_duration,
             after_num_ops,
             counter,
@@ -232,10 +231,12 @@ impl ColumnFamilyMetrics {
 pub struct OperationMetrics {
     pub rocksdb_iter_latency_seconds: HistogramVec,
     pub rocksdb_iter_bytes: HistogramVec,
+    pub rocksdb_iter_num_keys: CounterVec,
     pub rocksdb_get_latency_seconds: HistogramVec,
     pub rocksdb_get_bytes: HistogramVec,
     pub rocksdb_multiget_latency_seconds: HistogramVec,
     pub rocksdb_multiget_bytes: HistogramVec,
+    pub rocksdb_num_multi_get_keys: CounterVec,
     pub rocksdb_put_latency_seconds: HistogramVec,
     pub rocksdb_put_bytes: HistogramVec,
     pub rocksdb_delete_latency_seconds: HistogramVec,
@@ -262,6 +263,13 @@ impl OperationMetrics {
                 registry,
             )
             .unwrap(),
+            rocksdb_iter_num_keys: register_counter_vec_with_registry!(
+                "rocksdb_iter_num_keys",
+                "Rocksdb iter num keys in bytes",
+                &["cf_name"],
+                registry,
+            )
+                .unwrap(),
             rocksdb_get_latency_seconds: register_histogram_vec_with_registry!(
                 "rocksdb_get_latency_seconds",
                 "Rocksdb get latency in seconds",
@@ -285,6 +293,13 @@ impl OperationMetrics {
                 registry,
             )
             .unwrap(),
+            rocksdb_num_multi_get_keys: register_counter_vec_with_registry!(
+                "rocksdb_num_multi_get_keys",
+                "Rocksdb multi get num keys in bytes",
+                &["cf_name"],
+                registry,
+            )
+                .unwrap(),
             rocksdb_multiget_bytes: register_histogram_vec_with_registry!(
                 "rocksdb_multiget_bytes",
                 "Rocksdb multiget call returned data size in bytes",
@@ -345,7 +360,7 @@ pub struct RocksDBPerfContext;
 
 impl Default for RocksDBPerfContext {
     fn default() -> Self {
-        set_perf_stats(PerfStatsLevel::EnableTime);
+        set_perf_stats(PerfStatsLevel::EnableTimeAndCPUTimeExceptForMutex);
         PER_THREAD_ROCKS_PERF_CONTEXT.with(|perf_context| {
             perf_context.borrow_mut().reset();
         });
@@ -389,6 +404,9 @@ pub struct ReadPerfContextMetrics {
     pub bloom_sst_miss_count: IntCounterVec,
     pub key_lock_wait_time: IntCounterVec,
     pub key_lock_wait_count: IntCounterVec,
+    pub internal_delete_skipped_count: IntCounterVec,
+    pub internal_keys_skipped_count: IntCounterVec,
+    pub internal_recent_skipped_count: IntCounterVec,
 }
 
 impl ReadPerfContextMetrics {
@@ -598,6 +616,27 @@ impl ReadPerfContextMetrics {
                 registry,
             )
             .unwrap(),
+            internal_delete_skipped_count: register_int_counter_vec_with_registry!(
+                "internal_delete_skipped_count",
+                "Number of tombstones skipped during reads",
+                &["cf_name"],
+                registry,
+            )
+                .unwrap(),
+            internal_keys_skipped_count: register_int_counter_vec_with_registry!(
+                "internal_keys_skipped_count",
+                "Number of keys skipped during reads",
+                &["cf_name"],
+                registry,
+            )
+                .unwrap(),
+            internal_recent_skipped_count: register_int_counter_vec_with_registry!(
+                "internal_recent_skipped_count",
+                "How many times iterators skipped over internal keys that are more recent than the snapshot that iterator is using",
+                &["cf_name"],
+                registry,
+            )
+                .unwrap(),
         }
     }
 
@@ -692,6 +731,15 @@ impl ReadPerfContextMetrics {
             self.key_lock_wait_count
                 .with_label_values(&[cf_name])
                 .inc_by(perf_context.metric(PerfMetric::KeyLockWaitCount));
+            self.internal_delete_skipped_count
+                .with_label_values(&[cf_name])
+                .inc_by(perf_context.metric(PerfMetric::InternalDeleteSkippedCount));
+            self.internal_keys_skipped_count
+                .with_label_values(&[cf_name])
+                .inc_by(perf_context.metric(PerfMetric::InternalKeySkippedCount));
+            self.internal_recent_skipped_count
+                .with_label_values(&[cf_name])
+                .inc_by(perf_context.metric(PerfMetric::InternalRecentSkippedCount));
         });
     }
 }

@@ -15,7 +15,10 @@ use anyhow::anyhow;
 use itertools::Itertools;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
-use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
+use prometheus::{
+    register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
+    Registry,
+};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::sharded_lru::ShardedLruCache;
@@ -55,8 +58,8 @@ const ENV_VAR_DISABLE_INDEX_CACHE: &str = "DISABLE_INDEX_CACHE";
 
 #[derive(Default, Copy, Clone, Debug, Eq, PartialEq)]
 pub struct TotalBalance {
-    pub balance: u128,
-    pub num_coins: usize,
+    pub balance: i128,
+    pub num_coins: i64,
 }
 
 #[derive(Debug)]
@@ -75,11 +78,17 @@ pub struct CoinInfo {
     pub previous_transaction: TransactionDigest,
 }
 
+const LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
+];
+
 pub struct IndexStoreMetrics {
     balance_lookup_from_db: IntCounter,
     balance_lookup_from_total: IntCounter,
     all_balance_lookup_from_db: IntCounter,
     all_balance_lookup_from_total: IntCounter,
+    read_balance_from_db_latency: Histogram,
+    read_all_balance_from_db_latency: Histogram,
 }
 
 impl IndexStoreMetrics {
@@ -106,6 +115,20 @@ impl IndexStoreMetrics {
             all_balance_lookup_from_total: register_int_counter_with_registry!(
                 "all_balance_lookup_from_total",
                 "Total number of all balance requests served",
+                registry,
+            )
+            .unwrap(),
+            read_balance_from_db_latency: register_histogram_with_registry!(
+                "read_balance_from_db_latency",
+                "Latency of reading balance from db",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            read_all_balance_from_db_latency: register_histogram_with_registry!(
+                "read_all_balance_from_db_latency",
+                "Latency of reading all balance from db",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
@@ -286,8 +309,7 @@ impl IndexStore {
 
         // Index coin info
         let (input_coins, written_coins) = tx_coins.unwrap();
-        let mut address_coin_type_to_invalidate: HashSet<(SuiAddress, TypeTag)> = HashSet::new();
-        let mut addresses_to_invalidate: HashSet<SuiAddress> = HashSet::new();
+        let mut balance_changes: HashMap<SuiAddress, HashMap<TypeTag, TotalBalance>> = HashMap::new();
         // 1. Delete old owner if the object is deleted or transferred to a new owner,
         // by looking at `object_index_changes.deleted_owners`.
         // Objects in `deleted_owners` must be owned by `Owner::Address` befoer the tx,
@@ -298,15 +320,21 @@ impl IndexStore {
             .iter()
             .filter_map(|(owner, obj_id)| {
                 // If it's not in `input_coins`, then it's not a coin type. Skip.
-                let coin_type_tag = input_coins.get(obj_id)?
-                .coin_type_maybe().unwrap_or_else(|| {
+                let object = input_coins.get(obj_id)?;
+                let coin = object.as_coin_maybe()?;
+                let coin_type_tag = object.coin_type_maybe().unwrap_or_else(|| {
                     panic!(
                         "object_id: {:?} in input_coins is not a coin type, input_coins: {:?}, tx_digest: {:?}",
                         obj_id, input_coins, digest
                     )
                 });
-                address_coin_type_to_invalidate.insert((*owner, coin_type_tag.clone()));
-                addresses_to_invalidate.insert(*owner);
+                let mut map = balance_changes.entry(*owner).or_insert(HashMap::new());
+                let entry = map.entry(coin_type_tag.clone()).or_insert(TotalBalance {
+                    num_coins: 0,
+                    balance: 0
+                });
+                entry.num_coins -= 1;
+                entry.balance -= coin.balance.value() as i128;
                 Some((*owner, coin_type_tag.to_string(), *obj_id))
             }).collect::<Vec<_>>();
         trace!(
@@ -340,8 +368,13 @@ impl IndexStore {
                     obj_id, written_coins, digest
                 )
             });
-            address_coin_type_to_invalidate.insert((*owner, coin_type_tag.clone()));
-            addresses_to_invalidate.insert(*owner);
+            let map = balance_changes.entry(*owner).or_insert(HashMap::new());
+            let entry = map.entry(coin_type_tag.clone()).or_insert(TotalBalance {
+                num_coins: 0,
+                balance: 0
+            });
+            entry.num_coins -= 1;
+            entry.balance -= coin.balance.value() as i128;
             Some(((*owner, coin_type_tag.to_string(), *obj_id), (CoinInfo {version: obj_info.version, digest: obj_info.digest, balance: coin.balance.value(), previous_transaction: *digest})))
         }).collect::<Vec<_>>();
         trace!(
@@ -350,11 +383,14 @@ impl IndexStore {
             coin_add_keys,
         );
         batch.insert_batch(&self.tables.coin_index, coin_add_keys.into_iter())?;
-        self.invalidate_per_coin_type_cache(address_coin_type_to_invalidate.into_iter())
-            .await?;
-        self.invalidate_all_balance_cache(addresses_to_invalidate.into_iter())
-            .await?;
-
+        self.update_per_coin_type_cache(balance_changes.iter().map(|x| {
+            x.1.iter().map(|(tt, balance)| {
+                ((x.0.clone(), tt.clone()), Ok(balance.clone()))
+            })
+        }).flatten()).await?;
+        self.update_all_balance_cache(balance_changes.into_iter().map(|x| {
+            (x.0, Ok(Arc::new(x.1)))
+        })).await?;
         Ok(())
     }
 
@@ -1240,16 +1276,17 @@ impl IndexStore {
         owner: SuiAddress,
         coin_type: TypeTag,
     ) -> SuiResult<TotalBalance> {
+        let _metrics_guard = metrics.read_balance_from_db_latency.start_timer();
         metrics.balance_lookup_from_db.inc();
         let coin_type_str = coin_type.to_string();
         let coins =
             Self::get_owned_coins_iterator(&coin_index, owner, Some(coin_type_str.clone()))?
                 .map(|(_coin_type, obj_id, coin)| (coin_type_str.clone(), obj_id, coin));
 
-        let mut balance = 0u128;
+        let mut balance = 0i128;
         let mut num_coins = 0;
         for (_coin_type, _obj_id, coin_info) in coins {
-            balance += coin_info.balance as u128;
+            balance += coin_info.balance as i128;
             num_coins += 1;
         }
 
@@ -1262,16 +1299,17 @@ impl IndexStore {
         coin_index: DBMap<CoinIndexKey, CoinInfo>,
         owner: SuiAddress,
     ) -> SuiResult<Arc<HashMap<TypeTag, TotalBalance>>> {
+        let _metrics_guard = metrics.read_all_balance_from_db_latency.start_timer();
         metrics.all_balance_lookup_from_db.inc();
         let mut balances: HashMap<TypeTag, TotalBalance> = HashMap::new();
         let coins = Self::get_owned_coins_iterator(&coin_index, owner, None)?
             .map(|(coin_type, obj_id, coin)| (coin_type, obj_id, coin))
             .group_by(|(coin_type, _obj_id, _coin)| coin_type.clone());
         for (coin_type, coins) in &coins {
-            let mut total_balance = 0u128;
+            let mut total_balance = 0i128;
             let mut coin_object_count = 0;
             for (_coin_type, _obj_id, coin_info) in coins {
-                total_balance += coin_info.balance as u128;
+                total_balance += coin_info.balance as i128;
                 coin_object_count += 1;
             }
             let coin_type =
@@ -1290,6 +1328,63 @@ impl IndexStore {
             );
         }
         Ok(Arc::new(balances))
+    }
+
+    fn merge_balance(balance1: &SuiResult<TotalBalance>, balance2: &SuiResult<TotalBalance>) -> SuiResult<TotalBalance> {
+        return if let Ok(balance1) = balance1 {
+            if let Ok(balance2) = balance2 {
+                Ok(TotalBalance {
+                    balance: balance1.balance + balance2.balance,
+                    num_coins: balance1.num_coins + balance2.num_coins,
+                })
+            } else {
+                balance2.clone()
+            }
+        } else {
+            balance1.clone()
+        }
+    }
+
+    fn merge_all_balance(balance1: &SuiResult<Arc<HashMap<TypeTag, TotalBalance>>>, balance2: &SuiResult<Arc<HashMap<TypeTag, TotalBalance>>>) -> SuiResult<Arc<HashMap<TypeTag, TotalBalance>>> {
+        return if let Ok(balance1) = balance1 {
+            if let Ok(balance2) = balance2 {
+                let mut new_balance = HashMap::new();
+                for (key, value) in balance1.iter() {
+                    new_balance.insert(key.clone(), *value);
+                }
+                for (key, value) in balance2.iter() {
+                    let old = new_balance.entry(key.clone()).or_insert(TotalBalance {
+                        balance: 0,
+                        num_coins: 0
+                    });
+                    let new_total = TotalBalance {
+                        balance: old.balance + value.balance,
+                        num_coins: old.num_coins + value.num_coins,
+                    };
+                    new_balance.insert(key.clone(), new_total);
+                }
+                Ok(Arc::new(new_balance))
+            } else {
+                balance2.clone()
+            }
+        } else {
+            balance1.clone()
+        }
+
+    }
+
+    async fn update_per_coin_type_cache(&self,
+        keys: impl IntoIterator<Item = ((SuiAddress, TypeTag), SuiResult<TotalBalance>)>
+    ) -> SuiResult {
+        self.caches.per_coin_type_balance.batch_merge_or_invalidate(keys, Self::merge_balance).await;
+        Ok(())
+    }
+
+    async fn update_all_balance_cache(&self,
+                                        keys: impl IntoIterator<Item = (SuiAddress, SuiResult<Arc<HashMap<TypeTag, TotalBalance>>>)>
+    ) -> SuiResult {
+        self.caches.all_balances.batch_merge_or_invalidate(keys, Self::merge_all_balance).await;
+        Ok(())
     }
 
     async fn invalidate_per_coin_type_cache(

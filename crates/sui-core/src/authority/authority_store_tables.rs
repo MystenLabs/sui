@@ -9,7 +9,7 @@ use sui_types::accumulator::Accumulator;
 use sui_types::base_types::SequenceNumber;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::storage::ObjectStore;
-use typed_store::metrics::SamplingInterval;
+use typed_store::metrics::Sampler;
 use typed_store::rocks::util::{empty_compaction_filter, reference_count_merge_operator};
 use typed_store::rocks::{
     default_db_options, read_size_from_env, DBBatch, DBMap, DBOptions, MetricConf, ReadWriteOptions,
@@ -126,7 +126,7 @@ impl AuthorityPerpetualTables {
     pub fn open(parent_path: &Path, db_options: Option<Options>) -> Self {
         Self::open_tables_read_write(
             Self::path(parent_path),
-            MetricConf::with_sampling(SamplingInterval::new(Duration::from_secs(60), 0)),
+            MetricConf::with_sampling(Sampler::new(Duration::from_secs(60), 0)),
             db_options,
             None,
         )
@@ -265,6 +265,7 @@ impl AuthorityPerpetualTables {
     }
 
     pub fn iter_live_object_set(&self) -> LiveSetIter<'_> {
+        info!("creating live object set iter");
         LiveSetIter {
             iter: self.objects.iter(),
             tables: self,

@@ -3,9 +3,11 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use bincode::Options;
+use prometheus::{Histogram, HistogramTimer};
+use prometheus::core::{AtomicF64, GenericCounter};
 use rocksdb::Direction;
 
-use crate::metrics::{DBMetrics, SamplingInterval};
+use crate::metrics::{DBMetrics, Sampler};
 
 use super::{be_fix_int_ser, errors::TypedStoreError, RocksDBRawIter};
 use serde::{de::DeserializeOwned, Serialize};
@@ -17,8 +19,11 @@ pub struct Iter<'a, K, V> {
     direction: Direction,
     cf: String,
     db_metrics: Arc<DBMetrics>,
-    iter_bytes_sample_interval: SamplingInterval,
+    iter_bytes_sample_interval: Sampler,
     is_initialized: bool,
+    timer: Option<HistogramTimer>,
+    num_keys: Option<GenericCounter<AtomicF64>>,
+    num_keys_counter: u64,
 }
 
 impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iter<'a, K, V> {
@@ -26,7 +31,9 @@ impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iter<'a, K, V> {
         db_iter: RocksDBRawIter<'a>,
         cf: String,
         db_metrics: &Arc<DBMetrics>,
-        iter_bytes_sample_interval: &SamplingInterval,
+        iter_bytes_sample_interval: &Sampler,
+        timer: Option<HistogramTimer>,
+        num_keys: Option<GenericCounter<AtomicF64>>,
     ) -> Self {
         Self {
             db_iter,
@@ -36,6 +43,9 @@ impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iter<'a, K, V> {
             db_metrics: db_metrics.clone(),
             iter_bytes_sample_interval: iter_bytes_sample_interval.clone(),
             is_initialized: false,
+            timer,
+            num_keys,
+            num_keys_counter: 0
         }
     }
 }
@@ -51,6 +61,7 @@ impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iterator for Iter<'a, K, V> {
             self.is_initialized = true;
         }
         if self.db_iter.valid() {
+            self.num_keys_counter += 1;
             let config = bincode::DefaultOptions::new()
                 .with_big_endian()
                 .with_fixint_encoding();
@@ -80,6 +91,17 @@ impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iterator for Iter<'a, K, V> {
             key.and_then(|k| value.map(|v| (k, v)))
         } else {
             None
+        }
+    }
+}
+
+impl<'a, K, V> Drop for Iter<'a, K, V> {
+    fn drop(&mut self) {
+        if let Some(timer) = self.timer.take() {
+            timer.stop_and_record();
+        }
+        if let Some(num_keys) = self.num_keys.take() {
+            num_keys.inc_by(self.num_keys_counter as f64);
         }
     }
 }

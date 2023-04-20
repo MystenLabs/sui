@@ -5,7 +5,7 @@ use std::{marker::PhantomData, sync::Arc};
 use bincode::Options;
 use rocksdb::Direction;
 
-use crate::metrics::{DBMetrics, SamplingInterval};
+use crate::metrics::{DBMetrics, Sampler};
 
 use super::{be_fix_int_ser, errors::TypedStoreError, RocksDBRawIter};
 use serde::{de::DeserializeOwned, Serialize};
@@ -17,7 +17,7 @@ pub struct SafeIter<'a, K, V> {
     direction: Direction,
     cf: String,
     db_metrics: Arc<DBMetrics>,
-    iter_bytes_sample_interval: SamplingInterval,
+    iter_bytes_sample_interval: Sampler,
 }
 
 impl<'a, K: DeserializeOwned, V: DeserializeOwned> SafeIter<'a, K, V> {
@@ -25,7 +25,7 @@ impl<'a, K: DeserializeOwned, V: DeserializeOwned> SafeIter<'a, K, V> {
         db_iter: RocksDBRawIter<'a>,
         cf: String,
         db_metrics: &Arc<DBMetrics>,
-        iter_bytes_sample_interval: &SamplingInterval,
+        iter_bytes_sample_interval: &Sampler,
     ) -> Self {
         Self {
             db_iter,

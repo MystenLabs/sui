@@ -83,6 +83,37 @@ where
         }
     }
 
+    pub async fn merge_or_invalidate(&self, key: K, value: &V, f: fn(&V, &V)-> V) {
+        let mut shard = self.write_shard(&key).await;
+        let old_value = shard.get(&key);
+        if let Some(old_value) = old_value {
+            let new_value = f(old_value, value);
+            shard.push(key, new_value);
+        } else {
+            shard.pop(&key);
+        }
+    }
+
+    pub async fn batch_merge_or_invalidate(&self, key_values: impl IntoIterator<Item = (K, V)>, f: fn(&V, &V)-> V) {
+        let mut grouped = HashMap::new();
+        for (key, value) in key_values.into_iter() {
+            let shard_idx = self.shard_id(&key);
+            grouped.entry(shard_idx).or_insert(vec![]).push((key, value));
+        }
+        for (shard_idx, keys) in grouped.into_iter() {
+            let mut shard = self.shards[shard_idx].write().await;
+            for (key, value) in keys.into_iter() {
+                let old_value = shard.get(&key);
+                if let Some(old_value) = old_value {
+                    let new_value = f(old_value, &value);
+                    shard.push(key, new_value);
+                } else {
+                    shard.pop(&key);
+                }
+            }
+        }
+    }
+
     pub async fn get(&self, key: &K) -> Option<V> {
         self.read_shard(key).await.peek(key).cloned()
     }
