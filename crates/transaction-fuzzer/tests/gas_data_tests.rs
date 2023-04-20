@@ -4,6 +4,8 @@
 use proptest::arbitrary::*;
 use proptest::prelude::*;
 use proptest::proptest;
+use proptest::test_runner::TestRunner;
+use sui_core::authority::AuthorityState;
 use sui_core::test_utils::{init_state, send_and_confirm_transaction};
 use sui_types::base_types::dbg_addr;
 use sui_types::crypto::KeypairTraits;
@@ -17,12 +19,11 @@ use transaction_fuzzer::GasDataGenConfig;
 use transaction_fuzzer::GasDataWithObjects;
 
 /// Send transfer sui txn with provided random gas data and gas objects to an authority.
-async fn test_with_random_gas_data(gas_data_test: GasDataWithObjects) {
+async fn test_with_random_gas_data(authority_state: &AuthorityState, gas_data_test: GasDataWithObjects) {
     let gas_data = gas_data_test.gas_data;
     let objects = gas_data_test.objects;
     let sender = gas_data_test.sender_key.public().into();
 
-    let authority_state = init_state().await;
     // Insert the random gas objects into genesis.
     authority_state.insert_genesis_objects(&objects).await;
     let pt = {
@@ -39,26 +40,38 @@ async fn test_with_random_gas_data(gas_data_test: GasDataWithObjects) {
     debug!("result: {:?}", result);
 }
 
-proptest! {
-    // Stops after 20 test cases.
-    #![proptest_config(ProptestConfig::with_cases(20))]
-    #[test]
-    #[cfg_attr(msim, ignore)]
-    fn test_gas_data(gas_data_test in any_with::<GasDataWithObjects>(GasDataGenConfig::owned_by_sender_or_immut())) {
-        let rt = Runtime::new().unwrap();
-
-        let future = test_with_random_gas_data(gas_data_test);
-        rt.block_on(future);
-
-    }
-
-    #[test]
-    #[cfg_attr(msim, ignore)]
-    fn test_gas_data_any_owner(gas_data_test in any_with::<GasDataWithObjects>(GasDataGenConfig::any_owner())) {
-        let rt = Runtime::new().unwrap();
-
-        let future = test_with_random_gas_data(gas_data_test);
-        rt.block_on(future);
-
+#[tokio::test]
+async fn run_gas_data_tests() {
+    let mut runner = TestRunner::deterministic();
+    let authority_state = init_state().await;
+    let strategy = any_with::<GasDataWithObjects>(GasDataGenConfig::any_owner());
+    for _ in 0..2000 {
+        // Generate a random gas data from the strategy and test it with the existing authority state.
+        let gas_data = strategy.new_tree(&mut runner).unwrap().current();
+        test_with_random_gas_data(&authority_state, gas_data).await;
     }
 }
+
+// proptest! {
+//     // Stops after 20 test cases.
+//     #![proptest_config(ProptestConfig::with_cases(20))]
+//     #[test]
+//     #[cfg_attr(msim, ignore)]
+//     fn test_gas_data(gas_data_test in any_with::<GasDataWithObjects>(GasDataGenConfig::owned_by_sender_or_immut())) {
+//         let rt = Runtime::new().unwrap();
+
+//         let future = test_with_random_gas_data(gas_data_test);
+//         rt.block_on(future);
+
+//     }
+
+//     #[test]
+//     #[cfg_attr(msim, ignore)]
+//     fn test_gas_data_any_owner(gas_data_test in any_with::<GasDataWithObjects>(GasDataGenConfig::any_owner())) {
+//         let rt = Runtime::new().unwrap();
+
+//         let future = test_with_random_gas_data(gas_data_test);
+//         rt.block_on(future);
+
+//     }
+// }
