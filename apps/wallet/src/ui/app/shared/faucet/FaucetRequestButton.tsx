@@ -13,12 +13,10 @@ import { useAppSelector } from '_hooks';
 
 export type FaucetRequestButtonProps = {
     variant?: ButtonProps['variant'];
-    trackEventSource: 'home' | 'settings';
 };
 
 function FaucetRequestButton({
     variant = 'primary',
-    trackEventSource,
 }: FaucetRequestButtonProps) {
     const network = useAppSelector(({ app }) => app.apiEnv);
     const networkName = API_ENV_TO_INFO[network].name.replace(/sui\s*/gi, '');
