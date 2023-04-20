@@ -996,12 +996,17 @@ impl IndexStore {
                 },
             )?;
 
-        if self
+        if let Some(info) = self
             .tables
             .dynamic_field_index
-            .contains_key(&(object, dynamic_field_id))?
+            .get(&(object, dynamic_field_id))?
         {
-            return Ok(Some(dynamic_field_id));
+            // info.object_id != dynamic_field_id ==> is_wrapper
+            debug_assert!(
+                info.object_id == dynamic_field_id
+                    || matches!(name_type, TypeTag::Struct(tag) if DynamicFieldInfo::is_dynamic_object_field_wrapper(&tag))
+            );
+            return Ok(Some(info.object_id));
         }
 
         let dynamic_object_field_struct = DynamicFieldInfo::dynamic_object_field_wrapper(name_type);
