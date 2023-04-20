@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module deepbook::clob {
-    use std::option;
+    use std::option::{Self};
     use std::type_name::{Self, TypeName};
     use std::vector;
 
@@ -52,6 +52,7 @@ module deepbook::clob {
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Constants <<<<<<<<<<<<<<<<<<<<<<<<
+    const FLOAT_SCALING: u64 = 1000000000;
     // Restrictions on limit orders.
     const N_RESTRICTIONS: u8 = 4;
     const NO_RESTRICTION: u8 = 0;
@@ -88,7 +89,7 @@ module deepbook::clob {
     }
 
     /// Emitted when a maker order is injected into the order book.
-    struct OrderPlaced<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
+    struct OrderPlacedV2<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
         /// object ID of the pool the order was placed on
         pool_id: ID,
         /// ID of the order within the pool
@@ -97,7 +98,8 @@ module deepbook::clob {
         /// object ID of the `AccountCap` that placed the order
         owner: ID,
         base_asset_quantity_placed: u64,
-        price: u64
+        price: u64,
+        expire_timestamp: u64
     }
 
     /// Emitted when a maker order is canceled.
@@ -177,11 +179,11 @@ module deepbook::clob {
         // other pool info
         base_custodian: Custodian<BaseAsset>,
         quote_custodian: Custodian<QuoteAsset>,
-        /// Stores the fee paid to create this pool. These funds are not accessible.
+        // Stores the fee paid to create this pool. These funds are not accessible.
         creation_fee: Balance<SUI>,
-        /// Stores the trading fees paid in `BaseAsset`. These funds are not accessible.
+        // Deprecated.
         base_asset_trading_fees: Balance<BaseAsset>,
-         /// Stores the trading fees paid in `QuoteAsset`. These funds are not accessible.
+        // Stores the trading fees paid in `QuoteAsset`. These funds are not accessible.
         quote_asset_trading_fees: Balance<QuoteAsset>,
     }
 
@@ -264,7 +266,11 @@ module deepbook::clob {
         coin: Coin<BaseAsset>,
         account_cap: &AccountCap
     ) {
-        custodian::increase_user_available_balance(&mut pool.base_custodian, object::id(account_cap), coin::into_balance(coin))
+        custodian::increase_user_available_balance(
+            &mut pool.base_custodian,
+            object::id(account_cap),
+            coin::into_balance(coin)
+        )
     }
 
     public fun deposit_quote<BaseAsset, QuoteAsset>(
@@ -272,7 +278,11 @@ module deepbook::clob {
         coin: Coin<QuoteAsset>,
         account_cap: &AccountCap
     ) {
-        custodian::increase_user_available_balance(&mut pool.quote_custodian, object::id(account_cap), coin::into_balance(coin))
+        custodian::increase_user_available_balance(
+            &mut pool.quote_custodian,
+            object::id(account_cap),
+            coin::into_balance(coin)
+        )
     }
 
     public fun withdraw_base<BaseAsset, QuoteAsset>(
@@ -281,7 +291,7 @@ module deepbook::clob {
         account_cap: &AccountCap,
         ctx: &mut TxContext
     ): Coin<BaseAsset> {
-        custodian::withdraw_base_asset(&mut pool.base_custodian, quantity, account_cap, ctx)
+        custodian::withdraw_asset(&mut pool.base_custodian, quantity, account_cap, ctx)
     }
 
     public fun withdraw_quote<BaseAsset, QuoteAsset>(
@@ -290,7 +300,7 @@ module deepbook::clob {
         account_cap: &AccountCap,
         ctx: &mut TxContext
     ): Coin<QuoteAsset> {
-        custodian::withdraw_quote_asset(&mut pool.quote_custodian, quantity, account_cap, ctx)
+        custodian::withdraw_asset(&mut pool.quote_custodian, quantity, account_cap, ctx)
     }
 
     // for smart routing
@@ -344,6 +354,7 @@ module deepbook::clob {
     ): (Balance<BaseAsset>, Balance<QuoteAsset>) {
         // Base balance received by taker, taking into account of taker commission.
         // Need to individually keep track of the remaining base quantity to be filled to avoid infinite loop.
+        let pool_id = *object::uid_as_inner(&pool.id);
         let taker_quote_quantity_remaining = quantity;
         let base_balance_filled = balance::zero<BaseAsset>();
         let quote_balance_left = quote_balance;
@@ -365,21 +376,43 @@ module deepbook::clob {
                 if (maker_order.expire_timestamp <= current_timestamp) {
                     skip_order = true;
                     custodian::unlock_balance(&mut pool.base_custodian, maker_order.owner, maker_order.quantity);
+                    emit_order_canceled<BaseAsset, QuoteAsset>(pool_id, maker_order);
                 } else {
+                    // Calculate how much quote asset (maker_quote_quantity) is required, including the commission, to fill the maker order.
                     let (flag, maker_quote_quantity) = clob_math::mul_round(maker_base_quantity, maker_order.price);
                     if (flag) maker_quote_quantity = maker_quote_quantity + 1;
-                    // filled_quote_quantity, subtract from taker total quote remaining in each loop, round up if needed
-                    let filled_quote_quantity =
-                        if (taker_quote_quantity_remaining >= maker_quote_quantity) { maker_quote_quantity }
-                        else { taker_quote_quantity_remaining };
-                    // filled_base_quantity, subtract from maker locked_base_balance, round up if needed
-                    let (flag, filled_base_quantity) = clob_math::div_round(filled_quote_quantity, maker_order.price);
-                    if (flag) filled_base_quantity = filled_base_quantity + 1;
-                    // rebate_fee to maker, no need to round up
-                    let maker_rebate = clob_math::mul(filled_base_quantity, pool.maker_rebate_rate);
-                    let (is_round_down, taker_commission) = clob_math::mul_round(filled_base_quantity, pool.taker_fee_rate);
-                    if (is_round_down) taker_commission = taker_commission + 1;
+                    (flag, maker_quote_quantity) = clob_math::mul_round(
+                        maker_quote_quantity,
+                        FLOAT_SCALING + pool.taker_fee_rate
+                    );
+                    if (flag) maker_quote_quantity = maker_quote_quantity + 1;
 
+                    // Total base quantity filled.
+                    let filled_base_quantity: u64;
+                    // Total quote quantity filled, excluding commission and rebate.
+                    let filled_quote_quantity: u64;
+                    // Total quote quantity paid by taker.
+                    // filled_quote_quantity_without_commission * (FLOAT_SCALING + taker_fee_rate) = filled_quote_quantity
+                    let filled_quote_quantity_without_commission: u64;
+                    if (taker_quote_quantity_remaining >= maker_quote_quantity) {
+                        filled_quote_quantity = maker_quote_quantity;
+                        (_, filled_quote_quantity_without_commission) = clob_math::div_round(
+                            filled_quote_quantity,
+                            FLOAT_SCALING + pool.taker_fee_rate
+                        );
+                        filled_base_quantity = maker_base_quantity;
+                    } else {
+                        filled_quote_quantity = taker_quote_quantity_remaining;
+                        (_, filled_quote_quantity_without_commission) = clob_math::div_round(
+                            filled_quote_quantity,
+                            FLOAT_SCALING + pool.taker_fee_rate
+                        );
+                        (_, filled_base_quantity) = clob_math::div_round(
+                            filled_quote_quantity_without_commission,
+                            maker_order.price
+                        );
+                    };
+                    let maker_rebate = clob_math::mul(filled_quote_quantity_without_commission, pool.maker_rebate_rate);
                     maker_base_quantity = maker_base_quantity - filled_base_quantity;
 
                     // maker in ask side, decrease maker's locked base asset, increase maker's available quote asset
@@ -389,29 +422,24 @@ module deepbook::clob {
                         maker_order.owner,
                         filled_base_quantity
                     );
-                    let taker_commission_balance = balance::split(
-                        &mut locked_base_balance,
-                        taker_commission,
-                    );
-                    custodian::increase_user_available_balance<BaseAsset>(
-                        &mut pool.base_custodian,
-                        maker_order.owner,
-                        balance::split(
-                            &mut taker_commission_balance,
-                            maker_rebate,
-                        ),
-                    );
-                    balance::join(&mut pool.base_asset_trading_fees, taker_commission_balance);
-                    balance::join(&mut base_balance_filled, locked_base_balance);
 
+                    let quote_balance_filled = balance::split(
+                        &mut quote_balance_left,
+                        filled_quote_quantity,
+                    );
+                    // Send quote asset including rebate to maker.
                     custodian::increase_user_available_balance<QuoteAsset>(
                         &mut pool.quote_custodian,
                         maker_order.owner,
                         balance::split(
-                            &mut quote_balance_left,
-                            filled_quote_quantity,
+                            &mut quote_balance_filled,
+                            maker_rebate + filled_quote_quantity_without_commission,
                         ),
                     );
+                    // Send remaining of commission - rebate to the protocol.
+                    // commission - rebate = filled_quote_quantity_without_commission - filled_quote_quantity - maker_rebate
+                    balance::join(&mut pool.quote_asset_trading_fees, quote_balance_filled);
+                    balance::join(&mut base_balance_filled, locked_base_balance);
 
                     event::emit(OrderFilled<BaseAsset, QuoteAsset> {
                         pool_id: *object::uid_as_inner(&pool.id),
@@ -466,7 +494,7 @@ module deepbook::clob {
         quote_balance: Balance<QuoteAsset>,
     ): (Balance<BaseAsset>, Balance<QuoteAsset>) {
         let pool_id = *object::uid_as_inner(&pool.id);
-        // Base balance received by taker, taking into account of taker commission.
+        // Base balance received by taker.
         // Need to individually keep track of the remaining base quantity to be filled to avoid infinite loop.
         let taker_base_quantity_remaining = quantity;
         let base_balance_filled = balance::zero<BaseAsset>();
@@ -498,8 +526,11 @@ module deepbook::clob {
                     let filled_quote_quantity = clob_math::mul(filled_base_quantity, maker_order.price);
 
                     // rebate_fee to maker, no need to round up
-                    let maker_rebate = clob_math::mul(filled_base_quantity, pool.maker_rebate_rate);
-                    let (is_round_down, taker_commission) = clob_math::mul_round(filled_base_quantity, pool.taker_fee_rate);
+                    let maker_rebate = clob_math::mul(filled_quote_quantity, pool.maker_rebate_rate);
+                    let (is_round_down, taker_commission) = clob_math::mul_round(
+                        filled_quote_quantity,
+                        pool.taker_fee_rate
+                    );
                     if (is_round_down) taker_commission = taker_commission + 1;
 
                     maker_base_quantity = maker_base_quantity - filled_base_quantity;
@@ -512,18 +543,18 @@ module deepbook::clob {
                         filled_base_quantity
                     );
                     let taker_commission_balance = balance::split(
-                        &mut locked_base_balance,
+                        &mut quote_balance_left,
                         taker_commission,
                     );
-                    custodian::increase_user_available_balance<BaseAsset>(
-                        &mut pool.base_custodian,
+                    custodian::increase_user_available_balance<QuoteAsset>(
+                        &mut pool.quote_custodian,
                         maker_order.owner,
                         balance::split(
                             &mut taker_commission_balance,
                             maker_rebate,
                         ),
                     );
-                    balance::join(&mut pool.base_asset_trading_fees, taker_commission_balance);
+                    balance::join(&mut pool.quote_asset_trading_fees, taker_commission_balance);
                     balance::join(&mut base_balance_filled, locked_base_balance);
 
                     custodian::increase_user_available_balance<QuoteAsset>(
@@ -618,7 +649,10 @@ module deepbook::clob {
 
                     // rebate_fee to maker, no need to round up
                     let maker_rebate = clob_math::mul(filled_quote_quantity, pool.maker_rebate_rate);
-                    let (is_round_down, taker_commission) = clob_math::mul_round(filled_quote_quantity, pool.taker_fee_rate);
+                    let (is_round_down, taker_commission) = clob_math::mul_round(
+                        filled_quote_quantity,
+                        pool.taker_fee_rate
+                    );
                     if (is_round_down) taker_commission = taker_commission + 1;
 
                     maker_base_quantity = maker_base_quantity - filled_base_quantity;
@@ -724,6 +758,7 @@ module deepbook::clob {
         // The inner loop for iterating over the open orders in ascending orders of order id is the same as above.
         // Then iterate over the price levels in descending order until the market order is completely filled.
         assert!(quantity % pool.lot_size == 0, EInvalidQuantity);
+        assert!(quantity != 0, EInvalidQuantity);
         if (is_bid) {
             let (base_balance_filled, quote_balance_left) = match_bid(
                 pool,
@@ -801,13 +836,14 @@ module deepbook::clob {
 
         let tick_level = borrow_mut_leaf_by_index(open_orders, tick_index);
         linked_table::push_back(&mut tick_level.open_orders, order_id, order);
-        event::emit(OrderPlaced<BaseAsset, QuoteAsset> {
+        event::emit(OrderPlacedV2<BaseAsset, QuoteAsset> {
             pool_id: *object::uid_as_inner(&pool.id),
             order_id,
             is_bid,
             owner: user,
             base_asset_quantity_placed: quantity,
-            price
+            price,
+            expire_timestamp
         });
         if (!contains(&pool.usr_open_orders, user)) {
             add(&mut pool.usr_open_orders, user, linked_table::new(ctx));
@@ -819,6 +855,9 @@ module deepbook::clob {
 
     /// Place a limit order to the order book.
     /// Returns (base quantity filled, quote quantity filled, whether a maker order is being placed, order id of the maker order).
+    /// When the limit order is not successfully placed, we return false to indicate that and also returns a meaningless order_id 0.
+    /// When the limit order is successfully placed, we return true to indicate that and also the corresponding order_id.
+    /// So please check that boolean value first before using the order id.
     public fun place_limit_order<BaseAsset, QuoteAsset>(
         pool: &mut Pool<BaseAsset, QuoteAsset>,
         price: u64,
@@ -917,16 +956,19 @@ module deepbook::clob {
             return (base_quantity_filled, quote_quantity_filled, true, order_id)
         } else {
             assert!(restriction == NO_RESTRICTION, EInvalidRestriction);
-            order_id = inject_limit_order(
-                pool,
-                price,
-                quantity - base_quantity_filled,
-                is_bid,
-                expire_timestamp,
-                account_cap,
-                ctx
-            );
-            return (base_quantity_filled, quote_quantity_filled, true, order_id)
+            if(quantity > base_quantity_filled){
+                order_id = inject_limit_order(
+                    pool,
+                    price,
+                    quantity - base_quantity_filled,
+                    is_bid,
+                    expire_timestamp,
+                    account_cap,
+                    ctx
+                );
+                return (base_quantity_filled, quote_quantity_filled, true, order_id)
+            };
+            return (base_quantity_filled, quote_quantity_filled, false, 0)
         }
     }
 
@@ -1010,7 +1052,7 @@ module deepbook::clob {
     ) {
         let pool_id = *object::uid_as_inner(&pool.id);
         let user = object::id(account_cap);
-        assert!(contains(&pool.usr_open_orders, user), 0);
+        assert!(contains(&pool.usr_open_orders, user), EInvalidUser);
         let usr_open_order_ids = table::borrow_mut(&mut pool.usr_open_orders, user);
         while (!linked_table::is_empty(usr_open_order_ids)) {
             let order_id = *option::borrow(linked_table::back(usr_open_order_ids));
@@ -1059,8 +1101,7 @@ module deepbook::clob {
         let user = object::id(account_cap);
         assert!(contains(&pool.usr_open_orders, user), 0);
         let tick_index: u64 = 0;
-        let _open_orders = if (!critbit::is_empty(&pool.bids)) { &pool.bids } else { &pool.asks };
-        let tick_price: u64 = borrow_leaf_by_index(_open_orders, tick_index).price;
+        let tick_price: u64 = 0;
         let n_order = vector::length(&order_ids);
         let i_order = 0;
         let usr_open_orders = borrow_mut(&mut pool.usr_open_orders, user);
@@ -1068,7 +1109,6 @@ module deepbook::clob {
             let order_id = *vector::borrow(&order_ids, i_order);
             assert!(linked_table::contains(usr_open_orders, order_id), EInvalidOrderId);
             let new_tick_price = *linked_table::borrow(usr_open_orders, order_id);
-            // let new_tick_price = order.price;
             let is_bid = order_is_bid(order_id);
             if (new_tick_price != tick_price) {
                 tick_price = new_tick_price;
@@ -1228,7 +1268,9 @@ module deepbook::clob {
         account_cap: &AccountCap
     ): &Order {
         let user = object::id(account_cap);
+        assert!(table::contains(&pool.usr_open_orders, user), EInvalidUser);
         let usr_open_order_ids = table::borrow(&pool.usr_open_orders, user);
+        assert!(linked_table::contains(usr_open_order_ids, order_id), EInvalidOrderId);
         let order_price = *linked_table::borrow(usr_open_order_ids, order_id);
         let open_orders =
             if (order_id < MIN_ASK_ORDER_ID) { &pool.bids }
@@ -1339,7 +1381,6 @@ module deepbook::clob {
         user: address,
         ctx: &mut TxContext
     ) {
-
         transfer::public_transfer(create_account(ctx), user);
     }
 
@@ -1544,8 +1585,6 @@ module deepbook::clob {
         };
         order
     }
-
-    const FLOAT_SCALING: u64 = 1000000000;
 
     #[test]
     #[expected_failure(abort_code = EOrderCannotBeFullyFilled)]
@@ -1969,368 +2008,19 @@ module deepbook::clob {
         test_scenario::end(test);
     }
 
-    #[test]
-    fun test_place_market_bid_with_zero_qty() {
-        use sui::test_utils::destroy;
-
-        let owner: address = @0xAAAA;
-        let alice: address = @0xBBBB;
-        let bob: address = @0xCCCC;
-        let ted: address = @0xDDDD;
-
-        let test = test_scenario::begin(owner);
-        test_scenario::next_tx(&mut test, owner);
-        // Create capabilites
-        {
-            setup_test(0, 0, &mut test, owner);
-        };
-        test_scenario::next_tx(&mut test, owner);
-        {
-            mint_account_cap_transfer(alice, test_scenario::ctx(&mut test));
-            mint_account_cap_transfer(bob, test_scenario::ctx(&mut test));
-            mint_account_cap_transfer(ted, test_scenario::ctx(&mut test));
-        };
-
-        // Post Alice limit orders
-        test_scenario::next_tx(&mut test, alice);
-        {
-            let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut test);
-            let clock = test_scenario::take_shared<Clock>(&test);
-            let account_cap = test_scenario::take_from_address<AccountCap>(&test, alice);
-            let account_cap_user = object::id(&account_cap);
-            custodian::deposit(
-                &mut pool.base_custodian,
-                mint_for_testing<SUI>(1000, test_scenario::ctx(&mut test)),
-                account_cap_user
-            );
-            custodian::deposit(
-                &mut pool.quote_custodian,
-                mint_for_testing<USD>(1000, test_scenario::ctx(&mut test)),
-                account_cap_user
-            );
-            place_limit_order<SUI, USD>(
-                &mut pool,
-                9 * FLOAT_SCALING,
-                1,
-                false,
-                clock::timestamp_ms(&clock) + 1,
-                0,
-                &clock,
-                &account_cap,
-                test_scenario::ctx(&mut test)
-            );
-            place_limit_order<SUI, USD>(
-                &mut pool,
-                11 * FLOAT_SCALING,
-                3,
-                false,
-                clock::timestamp_ms(&clock) + 1000000,
-                0,
-                &clock,
-                &account_cap,
-                test_scenario::ctx(&mut test)
-            );
-            test_scenario::return_shared(pool);
-            test_scenario::return_shared(clock);
-            test_scenario::return_to_address<AccountCap>(alice, account_cap);
-        };
-
-        // At this point, the ask book is as follows:
-        // 1: price 9, qty=1, expiry <now>, from Alice
-        // 2: price 11, qty=3, expiry <later>, from Alice
-
-        // Post Bob limit orders
-        test_scenario::next_tx(&mut test, bob);
-        {
-            let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut test);
-            let clock = test_scenario::take_shared<Clock>(&test);
-            let account_cap = test_scenario::take_from_address<AccountCap>(&test, bob);
-            let account_cap_user = object::id(&account_cap);
-            custodian::deposit(
-                &mut pool.base_custodian,
-                mint_for_testing<SUI>(1000, test_scenario::ctx(&mut test)),
-                account_cap_user
-            );
-            custodian::deposit(
-                &mut pool.quote_custodian,
-                mint_for_testing<USD>(1000, test_scenario::ctx(&mut test)),
-                account_cap_user
-            );
-            let (_, _, _, _) = place_limit_order<SUI, USD>(
-                &mut pool,
-                9 * FLOAT_SCALING,
-                2,
-                false,
-                clock::timestamp_ms(&clock) + 1000000,
-                0,
-                &clock,
-                &account_cap,
-                test_scenario::ctx(&mut test)
-            );
-            test_scenario::return_shared(pool);
-            test_scenario::return_shared(clock);
-            test_scenario::return_to_address<AccountCap>(bob, account_cap);
-        };
-
-        // At this point, the ask book is as follows:
-        // 1: price 9, qty=1, expiry <now>, from Alice
-        // 2: price 9, qty=2, expiry <later>, from Bob
-        // 3: price 11, qty=3, expiry <later>, from Alice
-
-        // Send Ted market order
-        test_scenario::next_tx(&mut test, ted);
-        {
-            let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut test);
-            let clock = test_scenario::take_shared<Clock>(&test);
-
-            // Advance clock
-            clock::increment_for_testing(&mut clock, 10);
-
-            let account_cap = test_scenario::take_from_address<AccountCap>(&test, ted);
-            let account_cap_user = object::id(&account_cap);
-            custodian::deposit(
-                &mut pool.base_custodian,
-                mint_for_testing<SUI>(1000, test_scenario::ctx(&mut test)),
-                account_cap_user
-            );
-            custodian::deposit(
-                &mut pool.quote_custodian,
-                mint_for_testing<USD>(1000, test_scenario::ctx(&mut test)),
-                account_cap_user
-            );
-
-            let (base, quote) = place_market_order<SUI, USD>(
-                &mut pool,
-                0,
-                true,
-                mint_for_testing<SUI>(0, test_scenario::ctx(&mut test)),
-                mint_for_testing<USD>(0, test_scenario::ctx(&mut test)),
-                &clock,
-                test_scenario::ctx(&mut test)
-            );
-
-            destroy(base);
-            destroy(quote);
-            test_scenario::return_shared(pool);
-            test_scenario::return_shared(clock);
-            test_scenario::return_to_address<AccountCap>(ted, account_cap);
-        };
-
-        // At this point, the ask should be as follows:
-        // ~~~: price 9, qty=1, expiry <now>, from Alice (removed because expired)
-        // 1: price 9, qty=2, expiry <later>, from Bob
-        // 2: price 11, qty=3, expiry <later>, from Alice
-        test_scenario::next_tx(&mut test, ted);
-        {
-            use std::vector::push_back;
-            use std::vector::empty;
-
-            let bob_account_cap = test_scenario::take_from_address<AccountCap>(&test, bob);
-            let bob_account_cap_user = object::id(&bob_account_cap);
-            let clock = test_scenario::take_shared<Clock>(&test);
-
-            let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut test);
-            let (_, _, _, asks) = get_pool_stat(&pool);
-
-            let orders_expected = empty<Order>();
-            push_back(&mut orders_expected, test_construct_order_with_expiration(
-                2,
-                9 * FLOAT_SCALING,
-                2,
-                false,
-                bob_account_cap_user,
-                clock::timestamp_ms(&clock) + 1000000,
-            ));
-            // Note that the order quantity is 1 instead of the expected 2 and the order was found!
-            check_tick_level(asks, 9 * FLOAT_SCALING, &orders_expected);
-
-            test_scenario::return_shared(pool);
-            test_scenario::return_shared(clock);
-            test_scenario::return_to_address<AccountCap>(bob, bob_account_cap);
-        };
-
-        test_scenario::end(test);
+    // <<<<<<<<<<<<<<<<<<<<<<<< deprecated codes <<<<<<<<<<<<<<<<<<<<<<<<
+    /// Emitted when a maker order is injected into the order book.
+    struct OrderPlaced<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
+        /// object ID of the pool the order was placed on
+        pool_id: ID,
+        /// ID of the order within the pool
+        order_id: u64,
+        is_bid: bool,
+        /// object ID of the `AccountCap` that placed the order
+        owner: ID,
+        base_asset_quantity_placed: u64,
+        price: u64,
     }
 
-    #[test]
-    fun test_place_market_ask_with_zero_qty() {
-        use sui::test_utils::destroy;
-
-        let owner: address = @0xAAAA;
-        let alice: address = @0xBBBB;
-        let bob: address = @0xCCCC;
-        let ted: address = @0xDDDD;
-
-        let test = test_scenario::begin(owner);
-        test_scenario::next_tx(&mut test, owner);
-        // Create capabilites
-        {
-            setup_test(0, 0, &mut test, owner);
-        };
-        test_scenario::next_tx(&mut test, owner);
-        {
-            mint_account_cap_transfer(alice, test_scenario::ctx(&mut test));
-            mint_account_cap_transfer(bob, test_scenario::ctx(&mut test));
-            mint_account_cap_transfer(ted, test_scenario::ctx(&mut test));
-        };
-
-        // Post Alice limit orders
-        test_scenario::next_tx(&mut test, alice);
-        {
-            let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut test);
-            let clock = test_scenario::take_shared<Clock>(&test);
-            let account_cap = test_scenario::take_from_address<AccountCap>(&test, alice);
-            let account_cap_user = object::id(&account_cap);
-            custodian::deposit(
-                &mut pool.base_custodian,
-                mint_for_testing<SUI>(1000, test_scenario::ctx(&mut test)),
-                account_cap_user
-            );
-            custodian::deposit(
-                &mut pool.quote_custodian,
-                mint_for_testing<USD>(1000, test_scenario::ctx(&mut test)),
-                account_cap_user
-            );
-            place_limit_order<SUI, USD>(
-                &mut pool,
-                11 * FLOAT_SCALING,
-                1,
-                true,
-                clock::timestamp_ms(&clock) + 1,
-                0,
-                &clock,
-                &account_cap,
-                test_scenario::ctx(&mut test)
-            );
-            place_limit_order<SUI, USD>(
-                &mut pool,
-                9 * FLOAT_SCALING,
-                3,
-                true,
-                clock::timestamp_ms(&clock) + 1000000,
-                0,
-                &clock,
-                &account_cap,
-                test_scenario::ctx(&mut test)
-            );
-            test_scenario::return_shared(pool);
-            test_scenario::return_shared(clock);
-            test_scenario::return_to_address<AccountCap>(alice, account_cap);
-        };
-
-        // At this point, the ask book is as follows:
-        // 1: price 11, qty=1, expiry <now>, from Alice
-        // 2: price 9, qty=3, expiry <later>, from Alice
-
-        // Post Bob limit orders
-        test_scenario::next_tx(&mut test, bob);
-        {
-            let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut test);
-            let clock = test_scenario::take_shared<Clock>(&test);
-            let account_cap = test_scenario::take_from_address<AccountCap>(&test, bob);
-            let account_cap_user = object::id(&account_cap);
-            custodian::deposit(
-                &mut pool.base_custodian,
-                mint_for_testing<SUI>(1000, test_scenario::ctx(&mut test)),
-                account_cap_user
-            );
-            custodian::deposit(
-                &mut pool.quote_custodian,
-                mint_for_testing<USD>(1000, test_scenario::ctx(&mut test)),
-                account_cap_user
-            );
-            let (_, _, _, _) = place_limit_order<SUI, USD>(
-                &mut pool,
-                11 * FLOAT_SCALING,
-                2,
-                true,
-                clock::timestamp_ms(&clock) + 1000000,
-                0,
-                &clock,
-                &account_cap,
-                test_scenario::ctx(&mut test)
-            );
-            test_scenario::return_shared(pool);
-            test_scenario::return_shared(clock);
-            test_scenario::return_to_address<AccountCap>(bob, account_cap);
-        };
-
-        // At this point, the bid book is as follows:
-        // 1: price 11, qty=1, expiry <now>, from Alice
-        // 2: price 11, qty=2, expiry <later>, from Bob
-        // 3: price 9, qty=3, expiry <later>, from Alice
-
-        // Send Ted market order
-        test_scenario::next_tx(&mut test, ted);
-        {
-            let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut test);
-            let clock = test_scenario::take_shared<Clock>(&test);
-
-            // Advance clock
-            clock::increment_for_testing(&mut clock, 10);
-
-            let account_cap = test_scenario::take_from_address<AccountCap>(&test, ted);
-            let account_cap_user = object::id(&account_cap);
-            custodian::deposit(
-                &mut pool.base_custodian,
-                mint_for_testing<SUI>(1000, test_scenario::ctx(&mut test)),
-                account_cap_user
-            );
-            custodian::deposit(
-                &mut pool.quote_custodian,
-                mint_for_testing<USD>(1000, test_scenario::ctx(&mut test)),
-                account_cap_user
-            );
-
-            let (base, quote) = place_market_order<SUI, USD>(
-                &mut pool,
-                0,
-                false,
-                mint_for_testing<SUI>(0, test_scenario::ctx(&mut test)),
-                mint_for_testing<USD>(0, test_scenario::ctx(&mut test)),
-                &clock,
-                test_scenario::ctx(&mut test)
-            );
-
-            destroy(base);
-            destroy(quote);
-            test_scenario::return_shared(pool);
-            test_scenario::return_shared(clock);
-            test_scenario::return_to_address<AccountCap>(ted, account_cap);
-        };
-
-        // At this point, the ask should be as follows:
-        // ~~~: price 11, qty=1, expiry <now>, from Alice (removed because expired)
-        // 1: price 11, qty=2, expiry <later>, from Bob
-        // 2: price 9, qty=3, expiry <later>, from Alice
-        test_scenario::next_tx(&mut test, ted);
-        {
-            use std::vector::push_back;
-            use std::vector::empty;
-
-            let bob_account_cap = test_scenario::take_from_address<AccountCap>(&test, bob);
-            let bob_account_cap_user = object::id(&bob_account_cap);
-            let clock = test_scenario::take_shared<Clock>(&test);
-
-            let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut test);
-            let (_, _, bids, _) = get_pool_stat(&pool);
-
-            let orders_expected = empty<Order>();
-            push_back(&mut orders_expected, test_construct_order_with_expiration(
-                2,
-                11 * FLOAT_SCALING,
-                2,
-                true,
-                bob_account_cap_user,
-                clock::timestamp_ms(&clock) + 1000000,
-            ));
-            check_tick_level(bids, 11 * FLOAT_SCALING, &orders_expected);
-
-            test_scenario::return_shared(pool);
-            test_scenario::return_shared(clock);
-            test_scenario::return_to_address<AccountCap>(bob, bob_account_cap);
-        };
-
-        test_scenario::end(test);
-    }
+    // <<<<<<<<<<<<<<<<<<<<<<<< deprecated codes <<<<<<<<<<<<<<<<<<<<<<<<
 }
