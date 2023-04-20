@@ -688,7 +688,7 @@ export class JsonRpcProvider {
     /** The ID of the quered parent object */
     parentId: ObjectId;
     /** The name of the dynamic field */
-    name: string | DynamicFieldName;
+    name: DynamicFieldName;
   }): Promise<SuiObjectResponse> {
     return await this.client.requestWithType(
       'suix_getDynamicFieldObject',

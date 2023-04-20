@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 
 type DynamicFieldName = {
     type: string;
-    value?: string;
+    value: {};
 };
 
 export function useGetDynamicFieldObject(
