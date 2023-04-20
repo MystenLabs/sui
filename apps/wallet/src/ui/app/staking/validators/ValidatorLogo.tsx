@@ -84,7 +84,7 @@ export function ValidatorLogo({
                 size={iconSize}
                 circle
             />
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5 overflow-hidden">
                 <div className="flex">
                     {isTitle ? (
                         <Heading
@@ -96,9 +96,15 @@ export function ValidatorLogo({
                             {validatorName}
                         </Heading>
                     ) : (
-                        <Text color="gray-90" variant={size} weight="semibold">
-                            {validatorName}
-                        </Text>
+                        <div className="line-clamp-2 break-all">
+                            <Text
+                                color="gray-90"
+                                variant={size}
+                                weight="semibold"
+                            >
+                                {validatorName}
+                            </Text>
+                        </div>
                     )}
 
                     {showActiveStatus && (

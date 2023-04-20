@@ -181,16 +181,14 @@ export function StakeCard({
                 earnColor={isEarning}
                 earningRewardEpoch={Number(epochBeforeRewards)}
             >
-                <div className="flex justify-between items-start mb-1">
-                    <div className="">
-                        <ValidatorLogo
-                            validatorAddress={validatorAddress}
-                            size="subtitle"
-                            iconSize="md"
-                            stacked
-                            activeEpoch={delegationObject.stakeRequestEpoch}
-                        />
-                    </div>
+                <div className="flex mb-1">
+                    <ValidatorLogo
+                        validatorAddress={validatorAddress}
+                        size="subtitle"
+                        iconSize="md"
+                        stacked
+                        activeEpoch={delegationObject.stakeRequestEpoch}
+                    />
 
                     <div className="text-steel text-pBody opacity-0 group-hover:opacity-100">
                         <IconTooltip

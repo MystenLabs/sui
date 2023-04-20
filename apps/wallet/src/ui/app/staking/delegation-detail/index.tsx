@@ -38,7 +38,7 @@ export function DelegationDetail() {
         <Overlay
             showModal
             title={
-                <div className="flex gap-2 items-center">
+                <div className="flex items-center max-w-full px-4">
                     <ValidatorLogo
                         validatorAddress={validatorAddressParams}
                         isTitle
