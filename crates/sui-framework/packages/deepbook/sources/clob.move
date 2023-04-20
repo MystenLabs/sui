@@ -344,6 +344,7 @@ module deepbook::clob {
     ): (Balance<BaseAsset>, Balance<QuoteAsset>) {
         // Base balance received by taker, taking into account of taker commission.
         // Need to individually keep track of the remaining base quantity to be filled to avoid infinite loop.
+        let pool_id = *object::uid_as_inner(&pool.id);
         let taker_quote_quantity_remaining = quantity;
         let base_balance_filled = balance::zero<BaseAsset>();
         let quote_balance_left = quote_balance;
@@ -365,6 +366,7 @@ module deepbook::clob {
                 if (maker_order.expire_timestamp <= current_timestamp) {
                     skip_order = true;
                     custodian::unlock_balance(&mut pool.base_custodian, maker_order.owner, maker_order.quantity);
+                    emit_order_canceled<BaseAsset, QuoteAsset>(pool_id, maker_order);
                 } else {
                     let (flag, maker_quote_quantity) = clob_math::mul_round(maker_base_quantity, maker_order.price);
                     if (flag) maker_quote_quantity = maker_quote_quantity + 1;
