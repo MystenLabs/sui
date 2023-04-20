@@ -12,7 +12,7 @@ use config::{AuthorityIdentifier, WorkerId};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::time::Duration;
-use store::metrics::SamplingInterval;
+use store::metrics::Sampler;
 use store::reopen;
 use store::rocks::{default_db_options, open_cf_opts, DBMap, MetricConf, ReadWriteOptions};
 use types::{
@@ -61,7 +61,7 @@ impl NodeStorage {
     ) -> Self {
         let db_options = default_db_options().optimize_db_for_write_throughput(2);
         let mut metrics_conf = MetricConf::with_db_name("consensus_epoch");
-        metrics_conf.read_sample_interval = SamplingInterval::new(Duration::from_secs(60), 0);
+        metrics_conf.read_sample_interval = Sampler::new(Duration::from_secs(60), 0);
         let cf_options = db_options.options.clone();
         let column_family_options = vec![
             (Self::LAST_PROPOSED_CF, cf_options.clone()),

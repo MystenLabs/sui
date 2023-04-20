@@ -8,7 +8,7 @@ pub mod util;
 pub(crate) mod values;
 
 use crate::{
-    metrics::{DBMetrics, RocksDBPerfContext, SamplingInterval},
+    metrics::{DBMetrics, RocksDBPerfContext, Sampler},
     traits::{Map, TableSummary},
 };
 use bincode::Options;
@@ -456,28 +456,28 @@ impl RocksDB {
         delegate_call!(self.set_options_cf(cf, opts))
     }
 
-    pub fn read_sampling_interval(&self) -> SamplingInterval {
+    pub fn read_sampling_interval(&self) -> Sampler {
         match self {
             Self::DBWithThreadMode(d) => d.metric_conf.read_sample_interval.clone(),
             Self::OptimisticTransactionDB(d) => d.metric_conf.read_sample_interval.clone(),
         }
     }
 
-    pub fn write_sampling_interval(&self) -> SamplingInterval {
+    pub fn write_sampling_interval(&self) -> Sampler {
         match self {
             Self::DBWithThreadMode(d) => d.metric_conf.write_sample_interval.clone(),
             Self::OptimisticTransactionDB(d) => d.metric_conf.write_sample_interval.clone(),
         }
     }
 
-    pub fn iter_latency_sampling_interval(&self) -> SamplingInterval {
+    pub fn iter_latency_sampling_interval(&self) -> Sampler {
         match self {
             Self::DBWithThreadMode(d) => d.metric_conf.iter_latency_sample_interval.clone(),
             Self::OptimisticTransactionDB(d) => d.metric_conf.iter_latency_sample_interval.clone(),
         }
     }
 
-    pub fn iter_bytes_sampling_interval(&self) -> SamplingInterval {
+    pub fn iter_bytes_sampling_interval(&self) -> Sampler {
         match self {
             Self::DBWithThreadMode(d) => d.metric_conf.iter_bytes_sample_interval.clone(),
             Self::OptimisticTransactionDB(d) => d.metric_conf.iter_bytes_sample_interval.clone(),
@@ -609,29 +609,29 @@ impl RocksDBBatch {
 #[derive(Debug, Default)]
 pub struct MetricConf {
     pub db_name_override: Option<String>,
-    pub read_sample_interval: SamplingInterval,
-    pub write_sample_interval: SamplingInterval,
-    pub iter_latency_sample_interval: SamplingInterval,
-    pub iter_bytes_sample_interval: SamplingInterval,
+    pub read_sample_interval: Sampler,
+    pub write_sample_interval: Sampler,
+    pub iter_latency_sample_interval: Sampler,
+    pub iter_bytes_sample_interval: Sampler,
 }
 
 impl MetricConf {
     pub fn with_db_name(db_name: &str) -> Self {
         Self {
             db_name_override: Some(db_name.to_string()),
-            read_sample_interval: SamplingInterval::default(),
-            write_sample_interval: SamplingInterval::default(),
-            iter_latency_sample_interval: SamplingInterval::default(),
-            iter_bytes_sample_interval: SamplingInterval::default(),
+            read_sample_interval: Sampler::default(),
+            write_sample_interval: Sampler::default(),
+            iter_latency_sample_interval: Sampler::default(),
+            iter_bytes_sample_interval: Sampler::default(),
         }
     }
-    pub fn with_sampling(read_interval: SamplingInterval) -> Self {
+    pub fn with_sampling(read_interval: Sampler) -> Self {
         Self {
             db_name_override: None,
             read_sample_interval: read_interval,
-            write_sample_interval: SamplingInterval::default(),
-            iter_latency_sample_interval: SamplingInterval::default(),
-            iter_bytes_sample_interval: SamplingInterval::default(),
+            write_sample_interval: Sampler::default(),
+            iter_latency_sample_interval: Sampler::default(),
+            iter_bytes_sample_interval: Sampler::default(),
         }
     }
 }
@@ -647,10 +647,10 @@ pub struct DBMap<K, V> {
     cf: String,
     pub opts: ReadWriteOptions,
     db_metrics: Arc<DBMetrics>,
-    read_sample_interval: SamplingInterval,
-    write_sample_interval: SamplingInterval,
-    iter_latency_sample_interval: SamplingInterval,
-    iter_bytes_sample_interval: SamplingInterval,
+    read_sample_interval: Sampler,
+    write_sample_interval: Sampler,
+    iter_latency_sample_interval: Sampler,
+    iter_bytes_sample_interval: Sampler,
     _metrics_task_cancel_handle: Arc<oneshot::Sender<()>>,
 }
 
@@ -1054,7 +1054,7 @@ pub struct DBBatch {
     rocksdb: Arc<RocksDB>,
     batch: RocksDBBatch,
     db_metrics: Arc<DBMetrics>,
-    write_sample_interval: SamplingInterval,
+    write_sample_interval: Sampler,
 }
 
 impl DBBatch {
@@ -1065,7 +1065,7 @@ impl DBBatch {
         dbref: &Arc<RocksDB>,
         batch: RocksDBBatch,
         db_metrics: &Arc<DBMetrics>,
-        write_sample_interval: &SamplingInterval,
+        write_sample_interval: &Sampler,
     ) -> Self {
         DBBatch {
             rocksdb: dbref.clone(),

@@ -10,7 +10,7 @@ use std::collections::HashSet;
 use std::fmt::Debug;
 use std::sync::Mutex;
 use std::time::Duration;
-use typed_store::metrics::SamplingInterval;
+use typed_store::metrics::Sampler;
 use typed_store::rocks::list_tables;
 use typed_store::rocks::DBMap;
 use typed_store::rocks::RocksDBAccessType;
@@ -350,7 +350,7 @@ struct TablesMemUsage {
 
 #[tokio::test]
 async fn test_sampling() {
-    let sampling_interval = SamplingInterval::new(Duration::ZERO, 10);
+    let sampling_interval = Sampler::new(Duration::ZERO, 10);
     for _i in 0..10 {
         assert!(!sampling_interval.sample());
     }
@@ -363,7 +363,7 @@ async fn test_sampling() {
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_sampling_time() {
-    let sampling_interval = SamplingInterval::new(Duration::from_secs(1), 10);
+    let sampling_interval = Sampler::new(Duration::from_secs(1), 10);
     for _i in 0..10 {
         assert!(!sampling_interval.sample());
     }

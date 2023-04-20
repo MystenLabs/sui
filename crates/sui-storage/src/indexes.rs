@@ -14,7 +14,7 @@ use anyhow::anyhow;
 use itertools::Itertools;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
-use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
+use prometheus::{register_int_counter_with_registry, IntCounter, Registry, Histogram, register_histogram_with_registry};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -75,11 +75,17 @@ pub struct CoinInfo {
     pub previous_transaction: TransactionDigest,
 }
 
+const LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
+];
+
 pub struct IndexStoreMetrics {
     balance_lookup_from_db: IntCounter,
     balance_lookup_from_total: IntCounter,
     all_balance_lookup_from_db: IntCounter,
     all_balance_lookup_from_total: IntCounter,
+    read_balance_from_db_latency: Histogram,
+    read_all_balance_from_db_latency: Histogram,
 }
 
 impl IndexStoreMetrics {
@@ -109,6 +115,18 @@ impl IndexStoreMetrics {
                 registry,
             )
             .unwrap(),
+            read_balance_from_db_latency: register_histogram_with_registry!(
+                "read_balance_from_db_latency",
+                "Latency of reading balance from db",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            read_all_balance_from_db_latency: register_histogram_with_registry!(
+                "read_all_balance_from_db_latency",
+                "Latency of reading all balance from db",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
         }
     }
 }
@@ -1266,6 +1284,7 @@ impl IndexStore {
         owner: SuiAddress,
         coin_type: TypeTag,
     ) -> SuiResult<TotalBalance> {
+        let _metrics_guard = metrics.read_balance_from_db_latency.start_timer();
         metrics.balance_lookup_from_db.inc();
         let coin_type_str = coin_type.to_string();
         let coins =
@@ -1288,6 +1307,7 @@ impl IndexStore {
         coin_index: DBMap<CoinIndexKey, CoinInfo>,
         owner: SuiAddress,
     ) -> SuiResult<Arc<HashMap<TypeTag, TotalBalance>>> {
+        let _metrics_guard = metrics.read_all_balance_from_db_latency.start_timer();
         metrics.all_balance_lookup_from_db.inc();
         let mut balances: HashMap<TypeTag, TotalBalance> = HashMap::new();
         let coins = Self::get_owned_coins_iterator(&coin_index, owner, None)?
