@@ -10,6 +10,7 @@ import { CheckpointsTable } from '~/pages/checkpoints/CheckpointsTable';
 import { EpochsTable } from '~/pages/epochs/EpochsTable';
 // import { PlayPause } from '~/ui/PlayPause';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
+import { TransactionsActivityTable } from './components/TransactionsActivityTable';
 
 type Props = {
     initialTab?: string | null;
@@ -74,7 +75,7 @@ export function Activity({
                 </div>
                 <TabPanels>
                     <TabPanel>
-                        <Transactions
+                        <TransactionsActivityTable
                             refetchInterval={refetchInterval}
                             initialLimit={initialLimit}
                             disablePagination={disablePagination}

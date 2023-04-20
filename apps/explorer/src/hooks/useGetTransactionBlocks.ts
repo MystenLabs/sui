@@ -31,17 +31,12 @@ export function useGetTransactionBlocks(
             }),
         {
             getNextPageParam: (lastPage) =>
-                lastPage?.hasNextPage
-                    ? {
-                        cursor: lastPage.nextCursor,
-                    }
-                    : false,
-                    staleTime: Infinity,
+            lastPage?.hasNextPage ? lastPage.nextCursor : false,
+            staleTime: Infinity,
             cacheTime: 24 * 60 * 60 * 1000,
             retry: false,
             keepPreviousData: true,
 
         },
-        
     );
 }
