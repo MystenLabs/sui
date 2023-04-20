@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useEpochProgress } from './useEpochProgress';
-
+import { useEpochProgress } from '~/pages/epochs/utils';
 import { ProgressCircle } from '~/ui/ProgressCircle';
 import { Text } from '~/ui/Text';
 
