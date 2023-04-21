@@ -824,6 +824,9 @@ module deepbook::clob {
 
     /// Place a limit order to the order book.
     /// Returns (base quantity filled, quote quantity filled, whether a maker order is being placed, order id of the maker order).
+    /// When the limit order is not successfully placed, we return false to indicate that and also returns a meaningless order_id 0.
+    /// When the limit order is successfully placed, we return true to indicate that and also the corresponding order_id.
+    /// So please check that boolean value first before using the order id.
     public fun place_limit_order<BaseAsset, QuoteAsset>(
         pool: &mut Pool<BaseAsset, QuoteAsset>,
         price: u64,
@@ -910,9 +913,6 @@ module deepbook::clob {
 
         let order_id;
         if (restriction == IMMEDIATE_OR_CANCEL) {
-            // when the limit order is not successfully placed, we return false to indicate that
-            // And also returns a meaningless order_id 0
-            // so please check that boolean value first before using the order id
             return (base_quantity_filled, quote_quantity_filled, false, 0)
         };
         if (restriction == FILL_OR_KILL) {
@@ -922,12 +922,10 @@ module deepbook::clob {
         if (restriction == POST_OR_ABORT) {
             assert!(base_quantity_filled == 0, EOrderCannotBeFullyPassive);
             order_id = inject_limit_order(pool, price, quantity, is_bid, expire_timestamp, account_cap, ctx);
-            // when the limit order is successfully placed, we return true to indicate that
-            // and also the corresponding order_id
             return (base_quantity_filled, quote_quantity_filled, true, order_id)
         } else {
             assert!(restriction == NO_RESTRICTION, EInvalidRestriction);
-            if(quantity - base_quantity_filled > 0){
+            if(quantity > base_quantity_filled){
                 order_id = inject_limit_order(
                     pool,
                     price,
