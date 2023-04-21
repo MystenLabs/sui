@@ -7,6 +7,9 @@ use openssl::ec::{EcGroup, PointConversionForm};
 use openssl::nid::Nid;
 use openssl::pkey::PKey;
 
+use fastcrypto::traits::{ToFromBytes};
+
+use fastcrypto::secp256k1::{Secp256k1PublicKey};
 use anyhow::anyhow;
 use bip32::DerivationPath;
 use clap::*;
@@ -85,8 +88,6 @@ pub enum KeyToolCommand {
     /// intent is absent, default will be used. See [struct IntentMessage] and [struct Intent]
     /// for more details.
     SignKMS {
-        #[clap(long, parse(try_from_str = decode_bytes_hex))]
-        address: SuiAddress,
         #[clap(long)]
         data: String,
         #[clap(long)]
@@ -234,15 +235,13 @@ impl KeyToolCommand {
             }
 
             KeyToolCommand::SignKMS {
-                address,
                 data,
                 keyid,
                 intent
             } => {
                 // Currently only supports secp256k1 keys
                 // TODO generate "address" from KMS key id
-               
-                println!("Signer address: {}", address);
+                //println!("Signer address: {}", address);
                 println!("Raw tx_bytes to execute: {}", data);
                 let intent = intent.unwrap_or_else(Intent::sui_transaction);
                 println!("Intent: {:?}", intent);
@@ -266,10 +265,9 @@ impl KeyToolCommand {
                 let region = Region::default();
                 let kms = KmsClient::new(region);
 
-                // Get Pub key from keyid
+                // Get Pub key from keyid. This is in DER Format from AWS
                 let req = GetPublicKeyRequest { grant_tokens: None, key_id: keyid.to_string() };
                 let pubkey_resp = kms.get_public_key(req).await.unwrap();
-
                 let public_key_bytes = pubkey_resp.public_key.unwrap_or_default();
                 let public_key: &[u8] = &public_key_bytes.to_vec(); // Vec of bytes
 
@@ -277,10 +275,18 @@ impl KeyToolCommand {
                 // Compresses into 33 bytes
                 let group = EcGroup::from_curve_name(Nid::SECP256K1).unwrap();
                 let pkey = PKey::public_key_from_der(public_key).unwrap();
-                let pkey_compact = pkey.ec_key().unwrap().public_key().to_bytes(&group,
+                let pkey_compact_result = pkey.ec_key().unwrap().public_key().to_bytes(&group,
                     PointConversionForm::COMPRESSED,
                     &mut openssl::bn::BigNumContext::new().unwrap(),);
+                let pkey_compact = pkey_compact_result.unwrap();
 
+                // Generates Corresponding Sui Address from public key
+                let secp_pk = Secp256k1PublicKey::from_bytes(&pkey_compact).unwrap();
+                println!(
+                        "Address For Corresponding KMS Key: {}",
+                        Into::<SuiAddress>::into(&secp_pk),
+                );
+                    
                 // Construct the signing request
                 let request = SignRequest {
                     key_id: keyid.to_string() ,
@@ -291,22 +297,18 @@ impl KeyToolCommand {
                 };
                 // Sign the message
                 let response = kms.sign(request).await.unwrap();
-                // Print the signature
-                //println!("{:?}", response.signature);
-
                 let sig_bytes_der = response.signature.map(|b| b.to_vec()).unwrap_or_default();     
                 let sig = secpSig::from_der(&sig_bytes_der).unwrap();
                 let sig_bytes = secpSig::serialize_compact(&sig);
 
-                println!("Sig Bytes {:?}", sig_bytes);
-                println!("Public Key Compact bytes {:?}", pkey_compact);
+                //println!("Sig Bytes {:?}", sig_bytes);
+                //println!("Public Key Compact bytes {:?}", pkey_compact);
             
                 // TODO, just plopping more things into flag
                 let mut flag = vec![0x01];
                 flag.extend(sig_bytes);
-                flag.extend(pkey_compact.unwrap());
+                flag.extend(pkey_compact);
                 
-               
                 let serialized_sig =  Base64::encode(&flag);
                 println!(
                     "Serialized signature (`flag || sig || pk` in Base64): {:?}",
