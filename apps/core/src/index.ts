@@ -18,3 +18,4 @@ export * from './hooks/useGetNormalizedMoveStruct';
 export * from './PostHogAnalyticsProvider';
 export * from './utils/formatPercentageDisplay';
 export * from './hooks/useGetSystemState';
+export * from './hooks/useGetTimeBeforeEpochNumber';
