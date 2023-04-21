@@ -1857,7 +1857,7 @@ where
     fn batched_multi_get<J>(
         &self,
         keys: impl IntoIterator<Item = J>,
-        sorted_input: bool
+        sorted_input: bool,
     ) -> Result<Vec<Option<V>>, TypedStoreError>
     where
         J: Borrow<K>,
@@ -1870,18 +1870,22 @@ where
 
         let keys_bytes = keys_bytes?;
         let read_opts = self.opts.readopts();
-        let results = self.rocksdb.batched_multi_get_cf(&cf, keys_bytes, sorted_input, &read_opts);
+        let results = self
+            .rocksdb
+            .batched_multi_get_cf(&cf, keys_bytes, sorted_input, &read_opts);
 
-        let results = results
-        .into_iter()
-        .map(|result| {
-            result
-                .map(|opt| opt.map(|pinnable_slice| bcs::from_bytes(&pinnable_slice)))
-                .map_err(TypedStoreError::from)
-        })
-        .collect();
+        let results: Result<Vec<Option<V>>, TypedStoreError> = results
+            .into_iter()
+            .map(|result| {
+                result.map_err(TypedStoreError::from).and_then(|opt| {
+                    opt.map(|pinnable_slice| bcs::from_bytes(&pinnable_slice))
+                        .transpose()
+                        .map_err(TypedStoreError::from)
+                })
+            })
+            .collect();
 
-        Ok(results)
+        results
     }
 
     /// Convenience method for batch insertion

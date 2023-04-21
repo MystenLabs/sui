@@ -106,7 +106,7 @@ where
     fn batched_multi_get<J>(
         &self,
         keys: impl IntoIterator<Item = J>,
-        sorted_input: bool
+        sorted_input: bool,
     ) -> Result<Vec<Option<V>>, Self::Error>
     where
         J: Borrow<K>,
