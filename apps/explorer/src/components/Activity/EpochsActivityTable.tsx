@@ -16,7 +16,7 @@ import { TableCard } from '~/ui/TableCard';
 import { Text } from '~/ui/Text';
 import { numberSuffix } from '~/utils/numberUtil';
 
-const DEFAULT_TRANSACTIONS_LIMIT = 20;
+const DEFAULT_EPOCHS_LIMIT = 20;
 
 interface Props {
     disablePagination?: boolean;
@@ -26,7 +26,7 @@ interface Props {
 
 export function EpochsActivityTable({
     disablePagination,
-    initialLimit = DEFAULT_TRANSACTIONS_LIMIT,
+    initialLimit = DEFAULT_EPOCHS_LIMIT,
 }: Props) {
     const [currentPage, setCurrentPage] = useState(0);
     const [limit, setLimit] = useState(initialLimit);
