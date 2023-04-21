@@ -412,3 +412,30 @@ pub struct AdvanceEpochParams {
     pub reward_slashing_rate: u64,
     pub epoch_start_timestamp_ms: u64,
 }
+
+#[cfg(msim)]
+pub mod advance_epoch_result_injection {
+    use crate::error::{ExecutionError, ExecutionErrorKind};
+    use std::cell::RefCell;
+
+    thread_local! {
+        static OVERRIDE: RefCell<bool>  = RefCell::new(false);
+    }
+
+    pub fn set_override(value: bool) {
+        OVERRIDE.with(|o| *o.borrow_mut() = value);
+    }
+
+    /// This function is used to modify the result of advance_epoch transaction for testing.
+    /// If the override is set, the result will be an execution error, otherwise the original result will be returned.
+    pub fn maybe_modify_result(result: Result<(), ExecutionError>) -> Result<(), ExecutionError> {
+        if OVERRIDE.with(|o| *o.borrow()) {
+            Err::<(), ExecutionError>(ExecutionError::new(
+                ExecutionErrorKind::FunctionNotFound,
+                None,
+            ))
+        } else {
+            result
+        }
+    }
+}
