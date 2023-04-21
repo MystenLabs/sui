@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 use move_core_types::language_storage::{StructTag, TypeTag};
-use tracing::debug;
+use tracing::{debug, info, instrument};
 
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{Balance, Coin as SuiCoin};
@@ -127,6 +127,7 @@ impl SuiRpcModule for CoinReadApi {
 
 #[async_trait]
 impl CoinReadApiServer for CoinReadApi {
+    #[instrument(skip(self))]
     async fn get_coins(
         &self,
         owner: SuiAddress,
@@ -135,6 +136,7 @@ impl CoinReadApiServer for CoinReadApi {
         cursor: Option<ObjectID>,
         limit: Option<usize>,
     ) -> RpcResult<CoinPage> {
+        info!("get_coins");
         let coin_type_tag = TypeTag::Struct(Box::new(match coin_type {
             Some(c) => parse_sui_struct_tag(&c)?,
             None => GAS::type_(),
@@ -153,6 +155,7 @@ impl CoinReadApiServer for CoinReadApi {
         Ok(coins)
     }
 
+    #[instrument(skip(self))]
     async fn get_all_coins(
         &self,
         owner: SuiAddress,
@@ -160,6 +163,7 @@ impl CoinReadApiServer for CoinReadApi {
         cursor: Option<ObjectID>,
         limit: Option<usize>,
     ) -> RpcResult<CoinPage> {
+        info!("get_all_coins");
         let cursor = match cursor {
             Some(object_id) => {
                 let obj = self
@@ -195,11 +199,13 @@ impl CoinReadApiServer for CoinReadApi {
         Ok(coins)
     }
 
+    #[instrument(skip(self))]
     async fn get_balance(
         &self,
         owner: SuiAddress,
         coin_type: Option<String>,
     ) -> RpcResult<Balance> {
+        info!("get_balance");
         let coin_type = TypeTag::Struct(Box::new(match coin_type {
             Some(c) => parse_sui_struct_tag(&c)?,
             None => GAS::type_(),
@@ -224,7 +230,9 @@ impl CoinReadApiServer for CoinReadApi {
         })
     }
 
+    #[instrument(skip(self))]
     async fn get_all_balances(&self, owner: SuiAddress) -> RpcResult<Vec<Balance>> {
+        info!("get_all_balances");
         let all_balance = self
             .state
             .indexes
@@ -250,7 +258,9 @@ impl CoinReadApiServer for CoinReadApi {
             .collect())
     }
 
+    #[instrument(skip(self))]
     async fn get_coin_metadata(&self, coin_type: String) -> RpcResult<Option<SuiCoinMetadata>> {
+        info!("get_coin_metadata");
         let coin_struct = parse_sui_struct_tag(&coin_type)?;
 
         let metadata_object = self
@@ -264,7 +274,9 @@ impl CoinReadApiServer for CoinReadApi {
         Ok(metadata_object.and_then(|v: Object| v.try_into().ok()))
     }
 
+    #[instrument(skip(self))]
     async fn get_total_supply(&self, coin_type: String) -> RpcResult<Supply> {
+        info!("get_total_supply");
         let coin_struct = parse_sui_struct_tag(&coin_type)?;
 
         Ok(if GAS::is_gas(&coin_struct) {
