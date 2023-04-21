@@ -42,6 +42,7 @@ pub mod in_memory_storage;
 pub mod message_envelope;
 pub mod messages;
 pub mod messages_checkpoint;
+pub mod metrics;
 pub mod move_package;
 pub mod multisig;
 pub mod object;

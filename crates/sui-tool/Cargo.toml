@@ -26,6 +26,7 @@ strum_macros = "^0.24"
 tempfile = "3.3.0"
 thiserror = "1.0.34"
 tracing = "0.1.36"
+prometheus = "0.13.3"
 
 anemo-cli.workspace = true
 anemo.workspace = true

@@ -25,6 +25,7 @@ use prometheus::{
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use sui_config::transaction_deny_config::TransactionDenyConfig;
+use sui_types::metrics::LimitsMetrics;
 use sui_types::TypeTag;
 use tap::TapFallible;
 use tokio::sync::mpsc::unbounded_channel;
@@ -208,6 +209,8 @@ pub struct AuthorityMetrics {
     pub consensus_handler_scores: IntGaugeVec,
     pub consensus_committed_subdags: IntCounterVec,
     pub consensus_committed_certificates: IntCounterVec,
+
+    pub limits_metrics: Arc<LimitsMetrics>,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -454,6 +457,7 @@ impl AuthorityMetrics {
                 registry,
             )
                 .unwrap(),
+            limits_metrics: Arc::new(LimitsMetrics::new(registry)),
         }
     }
 }
@@ -1032,6 +1036,7 @@ impl AuthorityState {
                 gas_status,
                 &epoch_store.epoch_start_config().epoch_data(),
                 epoch_store.protocol_config(),
+                self.metrics.limits_metrics.clone(),
                 // TODO: would be nice to pass the whole NodeConfig here, but it creates a
                 // cyclic dependency w/ sui-adapter
                 self.expensive_safety_check_config
@@ -1139,6 +1144,7 @@ impl AuthorityState {
                 gas_status,
                 &epoch_store.epoch_start_config().epoch_data(),
                 epoch_store.protocol_config(),
+                self.metrics.limits_metrics.clone(),
                 false, // enable_expensive_checks
             );
         let tx_digest = *effects.transaction_digest();
@@ -1254,6 +1260,7 @@ impl AuthorityState {
                 gas_status,
                 &epoch_store.epoch_start_config().epoch_data(),
                 protocol_config,
+                self.metrics.limits_metrics.clone(),
                 false, // enable_expensive_checks
             );
 

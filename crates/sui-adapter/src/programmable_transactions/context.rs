@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap},
+    sync::Arc,
+};
 
 use move_binary_format::{
     errors::{Location, VMError, VMResult},
@@ -23,6 +26,7 @@ use sui_types::{
     error::{ExecutionError, ExecutionErrorKind},
     gas::{SuiGasStatus, SuiGasStatusAPI},
     messages::{Argument, CallArg, CommandArgumentError, ObjectArg},
+    metrics::LimitsMetrics,
     move_package::MovePackage,
     object::{MoveObject, Object, Owner},
     storage::{ObjectChange, WriteKind},
@@ -42,6 +46,8 @@ sui_macros::checked_arithmetic! {
 pub struct ExecutionContext<'vm, 'state, 'a, S: StorageView> {
     /// The protocol config
     pub protocol_config: &'a ProtocolConfig,
+    /// Metrics for reporting exceeded limits
+    pub metrics: Arc<LimitsMetrics>,
     /// The MoveVM
     pub vm: &'vm MoveVM,
     /// The global state, used for resolving packages
@@ -88,6 +94,7 @@ struct AdditionalWrite {
 impl<'vm, 'state, 'a, S: StorageView> ExecutionContext<'vm, 'state, 'a, S> {
     pub fn new(
         protocol_config: &'a ProtocolConfig,
+        metrics: Arc<LimitsMetrics>,
         vm: &'vm MoveVM,
         state_view: &'state S,
         tx_context: &'a mut TxContext,
@@ -109,6 +116,7 @@ impl<'vm, 'state, 'a, S: StorageView> ExecutionContext<'vm, 'state, 'a, S> {
             BTreeMap::new(),
             !gas_status.is_unmetered(),
             protocol_config,
+            metrics.clone(),
         );
         let mut object_owner_map = BTreeMap::new();
         let inputs = inputs
@@ -172,9 +180,11 @@ impl<'vm, 'state, 'a, S: StorageView> ExecutionContext<'vm, 'state, 'a, S> {
             object_owner_map,
             !gas_status.is_unmetered(),
             protocol_config,
+            metrics.clone(),
         );
         Ok(Self {
             protocol_config,
+            metrics,
             vm,
             state_view,
             tx_context,
@@ -506,6 +516,7 @@ impl<'vm, 'state, 'a, S: StorageView> ExecutionContext<'vm, 'state, 'a, S> {
         use crate::error::convert_vm_error;
         let Self {
             protocol_config,
+            metrics,
             vm,
             state_view,
             tx_context,
@@ -647,6 +658,7 @@ impl<'vm, 'state, 'a, S: StorageView> ExecutionContext<'vm, 'state, 'a, S> {
             BTreeMap::new(),
             !gas_status.is_unmetered(),
             protocol_config,
+            metrics,
         );
         for (id, additional_write) in additional_writes {
             let AdditionalWrite {
@@ -845,11 +857,12 @@ fn new_session<'state, 'vm, S: StorageView>(
     input_objects: BTreeMap<ObjectID, Owner>,
     is_metered: bool,
     protocol_config: &ProtocolConfig,
+    metrics: Arc<LimitsMetrics>,
 ) -> Session<'state, 'vm, LinkageView<'state, S>> {
     let store = linkage.storage();
     vm.new_session_with_extensions(
         linkage,
-        new_native_extensions(store, input_objects, is_metered, protocol_config),
+        new_native_extensions(store, input_objects, is_metered, protocol_config, metrics),
     )
 }
 

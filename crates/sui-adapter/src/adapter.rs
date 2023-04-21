@@ -5,6 +5,7 @@ use std::{
     borrow::Borrow,
     collections::{BTreeMap, BTreeSet},
     fmt::Debug,
+    sync::Arc,
 };
 
 use anyhow::Result;
@@ -39,6 +40,7 @@ use sui_types::{
     error::ExecutionError,
     error::{ExecutionErrorKind, SuiError},
     messages::{InputObjectKind, ObjectArg},
+    metrics::LimitsMetrics,
     object::{Data, Object, Owner},
     storage::ChildObjectResolver,
 };
@@ -119,6 +121,7 @@ pub fn new_native_extensions<'r>(
     input_objects: BTreeMap<ObjectID, Owner>,
     is_metered: bool,
     protocol_config: &ProtocolConfig,
+    metrics: Arc<LimitsMetrics>,
 ) -> NativeContextExtensions<'r> {
     let mut extensions = NativeContextExtensions::default();
     extensions.add(ObjectRuntime::new(
@@ -126,6 +129,7 @@ pub fn new_native_extensions<'r>(
         input_objects,
         is_metered,
         protocol_config,
+        metrics,
     ));
     extensions.add(NativesCostTable::from_protocol_config(protocol_config));
     extensions
