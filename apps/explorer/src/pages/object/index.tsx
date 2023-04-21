@@ -24,7 +24,7 @@ function Fail({ objID }: { objID: string | undefined }) {
     );
 }
 
-export function ObjectResult() {
+export default function ObjectResult() {
     const { id: objID } = useParams();
     const { data, isLoading, isError, isFetched } = useGetObject(objID!);
 

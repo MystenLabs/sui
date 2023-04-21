@@ -28,7 +28,7 @@ import TxLinks from './TxLinks';
 
 import styles from './TransactionResult.module.css';
 
-import { ProgrammableTransactionView } from '~/pages/transaction-result/programmable-transaction-view';
+import { ProgrammableTransactionView } from '~/pages/txblock/programmable-transaction-view';
 import { Banner } from '~/ui/Banner';
 import { DateCard } from '~/ui/DateCard';
 import { DescriptionItem, DescriptionList } from '~/ui/DescriptionList';

@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { flattenSuiArguments } from '~/pages/transaction-result/programmable-transaction-view/utils';
+import { flattenSuiArguments } from '~/pages/txblock/programmable-transaction-view/utils';
 
 describe('utils.ts', () => {
     describe('flattenCommandData', () => {

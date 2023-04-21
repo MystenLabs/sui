@@ -9,15 +9,15 @@ import {
     useParams,
 } from 'react-router-dom';
 
-import AddressResult from './address-result/AddressResult';
-import CheckpointDetail from './checkpoints/CheckpointDetail';
-import EpochDetail from './epochs/EpochDetail';
+import Address from './address';
+import Checkpoint from './checkpoint';
+import Epoch from './epoch';
 import Home from './home/Home';
-import { ObjectResult } from './object-result/ObjectResult';
-import { Recent } from './recent';
-import TransactionResult from './transaction-result/TransactionResult';
-import { ValidatorDetails } from './validator/ValidatorDetails';
-import { ValidatorPageResult } from './validators/Validators';
+import Object from './object';
+import Recent from './recent';
+import TxBlock from './txblock';
+import Validator from './validator';
+import Validators from './validators';
 
 import { Layout } from '~/components/Layout';
 
@@ -36,21 +36,21 @@ export const router = sentryCreateBrowserRouter([
         children: [
             { path: '/', element: <Home /> },
             { path: 'recent', element: <Recent /> },
-            { path: 'object/:id', element: <ObjectResult /> },
-            { path: 'checkpoint/:id', element: <CheckpointDetail /> },
-            { path: 'epoch/current', element: <EpochDetail /> },
-            { path: 'txblock/:id', element: <TransactionResult /> },
-            { path: 'epoch/:id', element: <EpochDetail /> },
-            { path: 'address/:id', element: <AddressResult /> },
-            { path: 'validators', element: <ValidatorPageResult /> },
-            { path: 'validator/:id', element: <ValidatorDetails /> },
+            { path: 'object/:id', element: <Object /> },
+            { path: 'checkpoint/:id', element: <Checkpoint /> },
+            { path: 'epoch/current', element: <Epoch /> },
+            { path: 'epoch/:id', element: <Epoch /> },
+            { path: 'txblock/:id', element: <TxBlock /> },
+            { path: 'address/:id', element: <Address /> },
+            { path: 'validators', element: <Validators /> },
+            { path: 'validator/:id', element: <Validator /> },
         ],
     },
+    // Support legacy routes:
     {
         path: '/transactions',
         element: <Navigate to="/recent" replace />,
     },
-    // Support legacy routes:
     {
         path: '/objects/:id',
         element: <RedirectWithId base="object" />,

@@ -29,7 +29,7 @@ const getAtRiskRemainingEpochs = (
     return atRisk ? VALIDATOR_LOW_STAKE_GRACE_PERIOD - Number(atRisk[1]) : null;
 };
 
-function ValidatorDetails() {
+export default function ValidatorPage() {
     const { id } = useParams();
     const { data, isLoading } = useGetSystemState();
 
@@ -121,5 +121,3 @@ function ValidatorDetails() {
         </div>
     );
 }
-
-export { ValidatorDetails };

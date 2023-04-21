@@ -6,8 +6,8 @@ import { useState } from 'react';
 
 import { Transactions } from '../transactions';
 
-import { CheckpointsTable } from '~/pages/checkpoints/CheckpointsTable';
-import { EpochsTable } from '~/pages/epochs/EpochsTable';
+import { CheckpointsTable } from '~/pages/checkpoint/CheckpointsTable';
+import { EpochsTable } from '~/pages/epoch/EpochsTable';
 // import { PlayPause } from '~/ui/PlayPause';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 

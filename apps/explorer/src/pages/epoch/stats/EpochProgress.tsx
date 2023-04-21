@@ -4,7 +4,7 @@
 import { formatDate } from '@mysten/core';
 import clsx from 'clsx';
 
-import { getElapsedTime, useEpochProgress } from '~/pages/epochs/utils';
+import { getElapsedTime, useEpochProgress } from '~/pages/epoch/utils';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
 import { ProgressBar } from '~/ui/ProgressBar';

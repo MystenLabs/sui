@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ReactComponent as SuiLogo } from '../../assets/Sui Logo.svg';
-import NetworkSelect from '../network/Network';
-import Search from '../search/Search';
+import NetworkSelect from './Network';
+import Search from './Search';
 
 import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
 
