@@ -372,7 +372,6 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             upgradeable,
             dependencies,
         } = extra;
-
         let named_addr_opt = modules.first().unwrap().0;
         let first_module_name = modules.first().unwrap().1.self_id().name().to_string();
         let modules_bytes = modules

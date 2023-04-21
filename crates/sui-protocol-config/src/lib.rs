@@ -148,6 +148,9 @@ struct FeatureFlags {
     // Disallow adding `key` ability to types during package upgrades.
     #[serde(skip_serializing_if = "is_false")]
     disallow_adding_key_ability: bool,
+    // Disables unnecessary invariant check in the Move VM when swapping the value out of a local
+    #[serde(skip_serializing_if = "is_false")]
+    disable_invariant_violation_check_in_swap_loc: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -641,6 +644,11 @@ impl ProtocolConfig {
     pub fn disallow_adding_key_ability(&self) -> bool {
         self.feature_flags.disallow_adding_key_ability
     }
+
+    pub fn disable_invariant_violation_check_in_swap_loc(&self) -> bool {
+        self.feature_flags
+            .disable_invariant_violation_check_in_swap_loc
+    }
 }
 
 // Special getters
@@ -1042,6 +1050,8 @@ impl ProtocolConfig {
             7 => {
                 let mut cfg = Self::get_for_version_impl(version - 1);
                 cfg.feature_flags.disallow_adding_key_ability = true;
+                cfg.feature_flags
+                    .disable_invariant_violation_check_in_swap_loc = true;
                 cfg
             }
             // Use this template when making changes:
