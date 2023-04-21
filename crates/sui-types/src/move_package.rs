@@ -565,7 +565,7 @@ impl UpgradeReceipt {
     }
 }
 
-/// Checks if a function is annotated with one of the test-related annotations1
+/// Checks if a function is annotated with one of the test-related annotations
 pub fn is_test_fun(name: &IdentStr, module: &CompiledModule, fn_info_map: &FnInfoMap) -> bool {
     let fn_name = name.to_string();
     let mod_handle = module.self_handle();
