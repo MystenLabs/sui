@@ -13,6 +13,7 @@ export function formatAmountParts(
     let postfix = '';
     let bn = new BigNumber(amount.toString());
 
+    // use absolute value to determine the postfix
     if (bn.abs().gte(1_000_000_000)) {
         bn = bn.shiftedBy(-9);
         postfix = 'B';
