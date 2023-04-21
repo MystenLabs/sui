@@ -391,13 +391,25 @@ impl CheckpointExecutor {
         pending: &mut CheckpointExecutionBuffer,
         prepare_start: Instant,
     ) -> SuiResult {
-        let effects_digests = execution_digests.iter().map(|digest| digest.effects);
+        let effects_digests: HashMap<_, _> = execution_digests
+            .iter()
+            .map(|digest| (digest.transaction, digest.effects))
+            .collect();
+
+        let shared_effects_digests = executable_txns
+            .iter()
+            .filter(|(tx, _)| tx.contains_shared_object())
+            .map(|(tx, _)| {
+                effects_digests
+                    .get(tx.digest())
+                    .expect("Transaction digest not found in effects_digests")
+            });
 
         let digest_to_effects: HashMap<TransactionDigest, TransactionEffects> = self
             .authority_store
             .perpetual_tables
             .effects
-            .multi_get(effects_digests)?
+            .multi_get(shared_effects_digests)?
             .into_iter()
             .map(|fx| {
                 if fx.is_none() {
@@ -653,7 +665,7 @@ async fn handle_execution_effects(
                 // Only log details when the checkpoint is next to execute, but has not finished
                 // execution within log_timeout_sec.
                 let missing_digests: Vec<TransactionDigest> = authority_store
-                    .multi_get_executed_effects(&all_tx_digests)
+                    .multi_get_executed_effects_digests(&all_tx_digests)
                     .expect("multi_get_executed_effects cannot fail")
                     .iter()
                     .zip(all_tx_digests.clone())
@@ -699,7 +711,8 @@ async fn handle_execution_effects(
                         &checkpoint,
                         tx_digest,
                         expected_effects_digest,
-                        actual_effects,
+                        &actual_effects.digest(),
+                        authority_store.clone(),
                     );
                 }
 
@@ -728,9 +741,15 @@ fn assert_not_forked(
     checkpoint: &VerifiedCheckpoint,
     tx_digest: &TransactionDigest,
     expected_digest: &TransactionEffectsDigest,
-    actual_effects: &TransactionEffects,
+    actual_effects_digest: &TransactionEffectsDigest,
+    authority_store: Arc<AuthorityStore>,
 ) {
-    if *expected_digest != actual_effects.digest() {
+    if *expected_digest != *actual_effects_digest {
+        let actual_effects = authority_store
+            .get_executed_effects(tx_digest)
+            .expect("get_executed_effects cannot fail")
+            .expect("actual effects should exist");
+
         // log observed effects (too big for panic message) and then panic.
         error!(
             ?checkpoint,
@@ -745,7 +764,7 @@ fn assert_not_forked(
             checkpoint.sequence_number(),
             tx_digest,
             expected_digest,
-            actual_effects.digest(),
+            actual_effects_digest,
         );
     }
 }
@@ -847,32 +866,32 @@ fn get_unexecuted_transactions(
     let all_tx_digests: Vec<TransactionDigest> =
         execution_digests.iter().map(|tx| tx.transaction).collect();
 
-    let executed_effects = authority_store
-        .multi_get_executed_effects(&all_tx_digests)
+    let executed_effects_digests = authority_store
+        .multi_get_executed_effects_digests(&all_tx_digests)
         .expect("failed to read executed_effects from store");
 
     let (unexecuted_txns, expected_effects_digests): (Vec<_>, Vec<_>) =
-        izip!(execution_digests.iter(), executed_effects.iter())
-            .filter_map(|(digests, effects)| match effects {
-                None => Some((Some(digests.transaction), Some(digests.effects))),
-                Some(actual_effects) => {
+        izip!(execution_digests.iter(), executed_effects_digests.iter())
+            .filter_map(|(digests, effects_digest)| match effects_digest {
+                None => Some((digests.transaction, digests.effects)),
+                Some(actual_effects_digest) => {
                     let tx_digest = &digests.transaction;
                     let effects_digest = &digests.effects;
                     trace!(
                         "Transaction with digest {:?} has already been executed",
                         tx_digest
                     );
-                    assert_not_forked(&checkpoint, tx_digest, effects_digest, actual_effects);
+                    assert_not_forked(
+                        &checkpoint,
+                        tx_digest,
+                        effects_digest,
+                        actual_effects_digest,
+                        authority_store.clone(),
+                    );
                     None
                 }
             })
             .unzip();
-
-    let unexecuted_txns: Vec<_> = unexecuted_txns.into_iter().map(|x| x.unwrap()).collect();
-    let expected_effects_digests: Vec<_> = expected_effects_digests
-        .into_iter()
-        .map(|x| x.unwrap())
-        .collect();
 
     // read remaining unexecuted transactions from store
     let executable_txns: Vec<_> = authority_store
