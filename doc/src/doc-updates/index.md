@@ -4,6 +4,12 @@ title: Sui Documentation Updates
 
 This topic lists the significant updates to the [Sui documentation](https://docs.sui.io) site so that you can easily identify new or updated information.
 
+## Week ending 04/22/23
+
+| Topic | Update | 
+| :------ | :------- |
+| [Sui Full Node](../build/fullnode.md#hardware-requirements). | Updated hardware requirements. |
+
 ## Week ending 03/25/23
 
 | Topic | Update | 

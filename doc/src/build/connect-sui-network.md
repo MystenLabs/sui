@@ -4,7 +4,7 @@ title: Connect to a Sui Network
 
 Sui has Testnet and Devnet networks available. Use one of the on-chain networks to experiment with the version of Sui running on that network. You can also spin up a [local Sui network](sui-local-network.md) for local development. 
 
-The Sui networks consist of:
+The Sui Testnet and Devnet networks consist of:
 
  * Four validator nodes operated by Mysten Labs. Clients send transactions and read requests via this endpoint: `https://fullnode.<SUI-NETWORK-VERSION>.sui.io:443` using [JSON-RPC](../build/json-rpc.md).
  * A public network [Sui Explorer](https://explorer.sui.io) for browsing transaction history.
