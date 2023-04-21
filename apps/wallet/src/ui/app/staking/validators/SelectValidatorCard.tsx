@@ -16,7 +16,6 @@ import { Button } from '_app/shared/ButtonUI';
 import { Content, Menu } from '_app/shared/bottom-menu-layout';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
-import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 
 type SortKeys = 'name' | 'stakeShare' | 'apy';
@@ -149,10 +148,9 @@ export function SelectValidatorCard() {
                                             {value}
                                         </Text>
                                         {sortKey === key && (
-                                            <Icon
-                                                icon={SuiIcons.ArrowLeft}
+                                            <ArrowRight16
                                                 className={cl(
-                                                    'text-captionSmall font-thin  text-hero',
+                                                    'text-captionSmall font-thin text-hero',
                                                     sortAscending
                                                         ? 'rotate-90'
                                                         : '-rotate-90'

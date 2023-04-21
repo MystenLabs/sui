@@ -36,7 +36,7 @@ export function ValidatorListItem({
                             {selected && (
                                 <CheckFill16
                                     fill="fillCurrent"
-                                    className="text-success text-heading6 absolute translate-x-4 -translate-y-1"
+                                    className="text-success text-heading6 absolute translate-x-4 -translate-y-1 rounded-full bg-white"
                                 />
                             )}
                             <ValidatorLogo
