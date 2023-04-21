@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 6;
+const MAX_PROTOCOL_VERSION: u64 = 7;
 
 // Record history of protocol version allocations here:
 //
@@ -24,6 +24,7 @@ const MAX_PROTOCOL_VERSION: u64 = 6;
 // Version 5: Package upgrade compatibility error fix. New gas cost table. New scoring decision
 //            mechanism that includes up to f scoring authorities.
 // Version 6: Change to how bytes are charged in the gas meter, increase buffer stake to 0.5f
+// Version 7: Disallow adding `key` ability during package upgrades.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -144,6 +145,9 @@ struct FeatureFlags {
     // Re-order end of epoch messages to the end of the commit
     #[serde(skip_serializing_if = "is_false")]
     consensus_order_end_of_epoch_last: bool,
+    // Disallow adding `key` ability to types during package upgrades.
+    #[serde(skip_serializing_if = "is_false")]
+    disallow_adding_key_ability: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -633,6 +637,10 @@ impl ProtocolConfig {
     pub fn consensus_order_end_of_epoch_last(&self) -> bool {
         self.feature_flags.consensus_order_end_of_epoch_last
     }
+
+    pub fn disallow_adding_key_ability(&self) -> bool {
+        self.feature_flags.disallow_adding_key_ability
+    }
 }
 
 // Special getters
@@ -1029,6 +1037,11 @@ impl ProtocolConfig {
                 cfg.gas_model_version = Some(5);
                 cfg.buffer_stake_for_protocol_upgrade_bps = Some(5000);
                 cfg.feature_flags.consensus_order_end_of_epoch_last = true;
+                cfg
+            }
+            7 => {
+                let mut cfg = Self::get_for_version_impl(version - 1);
+                cfg.feature_flags.disallow_adding_key_ability = true;
                 cfg
             }
             // Use this template when making changes:
