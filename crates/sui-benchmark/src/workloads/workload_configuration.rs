@@ -38,6 +38,9 @@ impl WorkloadConfiguration {
                 shared_counter_hotness_factor,
                 ..
             } => {
+                let health_check_enabled = match opts.run_spec {
+                    RunSpec::Bench { health_check, .. } => health_check,
+                };
                 Self::build_workloads(
                     num_workers,
                     opts.num_transfer_accounts,
@@ -54,6 +57,7 @@ impl WorkloadConfiguration {
                     bank,
                     system_state_observer,
                     opts.gas_request_chunk_size,
+                    health_check_enabled,
                 )
                 .await
             }
@@ -76,6 +80,7 @@ impl WorkloadConfiguration {
         mut bank: BenchmarkBank,
         system_state_observer: Arc<SystemStateObserver>,
         chunk_size: u64,
+        health_check_enabled: bool,
     ) -> Result<Vec<WorkloadInfo>> {
         let total_weight = shared_counter_weight
             + transfer_object_weight
@@ -83,6 +88,11 @@ impl WorkloadConfiguration {
             + batch_payment_weight
             + adversarial_weight;
         let mut workload_builders = vec![];
+        let health_check_acccount = if health_check_enabled {
+            Some((bank.primary_coin.1, bank.primary_coin.2.clone()))
+        } else {
+            None
+        };
         let shared_workload = SharedCounterWorkloadBuilder::from(
             shared_counter_weight as f32 / total_weight as f32,
             target_qps,
@@ -97,6 +107,8 @@ impl WorkloadConfiguration {
             num_workers,
             in_flight_ratio,
             num_transfer_accounts,
+            health_check_acccount,
+            health_check_enabled,
         );
         workload_builders.push(transfer_workload);
         let delegation_workload = DelegationWorkloadBuilder::from(

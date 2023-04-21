@@ -3,7 +3,7 @@
 
 use crate::util::UpdatedAndNewlyMintedGasCoins;
 use crate::workloads::payload::Payload;
-use crate::workloads::workload::{Workload, WorkloadBuilder, MAX_BUDGET};
+use crate::workloads::workload::{Workload, WorkloadBuilder};
 use crate::workloads::{Gas, GasCoinConfig};
 use crate::ValidatorProxy;
 use anyhow::{Error, Result};
@@ -14,6 +14,8 @@ use sui_core::test_utils::{make_pay_sui_transaction, make_transfer_sui_transacti
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::AccountKeyPair;
 use tracing::{debug, info};
+
+const PAY_SUI_BUDGET: u64 = 4000000;
 
 /// Bank is used for generating gas for running the benchmark.
 #[derive(Clone)]
@@ -54,16 +56,20 @@ impl BenchmarkBank {
         // Split off the initlization coin for this workload, to reduce contention
         // of main gas coin used by other instances of this tool.
         let total_gas_needed: u64 = all_coin_configs.iter().map(|c| c.amount).sum();
+        let total_items = chunked_coin_configs
+            .clone()
+            .flat_map(|chunk| chunk.iter())
+            .count();
+        let pay_sui_budget = PAY_SUI_BUDGET * total_items as u64;
         let mut init_coin = self
-            .create_init_coin(
-                total_gas_needed + (MAX_BUDGET * chunked_coin_configs.len() as u64),
-                gas_price,
-            )
+            .create_init_coin(total_gas_needed + pay_sui_budget, gas_price)
             .await?;
 
         debug!("Number of gas requests = {}", chunked_coin_configs.len());
         for chunk in chunked_coin_configs {
-            let gas_coins = self.pay_sui(chunk, &mut init_coin, gas_price).await?;
+            let gas_coins = self
+                .pay_sui(chunk, &mut init_coin, gas_price, pay_sui_budget)
+                .await?;
             new_gas_coins.extend(gas_coins);
         }
         let mut workloads = vec![];
@@ -100,6 +106,7 @@ impl BenchmarkBank {
         coin_configs: &[GasCoinConfig],
         mut init_coin: &mut Gas,
         gas_price: u64,
+        budget: u64,
     ) -> Result<UpdatedAndNewlyMintedGasCoins> {
         let recipient_addresses: Vec<SuiAddress> = coin_configs.iter().map(|g| g.address).collect();
         let amounts: Vec<u64> = coin_configs.iter().map(|c| c.amount).collect();
@@ -118,7 +125,7 @@ impl BenchmarkBank {
             init_coin.1,
             &init_coin.2,
             gas_price,
-            MAX_BUDGET,
+            budget,
         );
 
         let effects = self

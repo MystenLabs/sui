@@ -351,11 +351,8 @@ pub fn make_transfer_object_transaction(
     gas_price: u64,
 ) -> VerifiedTransaction {
     let data = TransactionData::new_transfer(
-        recipient,
-        object_ref,
-        sender,
-        gas_object,
-        gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        recipient, object_ref, sender, gas_object,
+        1100000, //gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
         gas_price,
     );
     to_sender_signed_transaction(data, keypair)

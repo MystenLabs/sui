@@ -34,6 +34,7 @@ pub struct TransferObjectTestPayload {
     transfer_to: SuiAddress,
     gas: Vec<Gas>,
     system_state_observer: Arc<SystemStateObserver>,
+    health_check_enabled: bool,
 }
 
 impl Payload for TransferObjectTestPayload {
@@ -43,7 +44,12 @@ impl Payload for TransferObjectTestPayload {
             error!("Transfer tx failed...");
         }
 
-        let recipient = self.gas.iter().find(|x| x.1 != self.transfer_to).unwrap().1;
+        let recipient = self
+            .gas
+            .iter()
+            .find(|x| self.health_check_enabled || x.1 != self.transfer_to)
+            .unwrap()
+            .1;
         let updated_gas: Vec<Gas> = self
             .gas
             .iter()
@@ -91,6 +97,8 @@ impl std::fmt::Display for TransferObjectTestPayload {
 pub struct TransferObjectWorkloadBuilder {
     num_transfer_accounts: u64,
     num_payloads: u64,
+    account: Option<(SuiAddress, Arc<AccountKeyPair>)>,
+    health_check_enabled: bool,
 }
 
 impl TransferObjectWorkloadBuilder {
@@ -100,6 +108,8 @@ impl TransferObjectWorkloadBuilder {
         num_workers: u64,
         in_flight_ratio: u64,
         num_transfer_accounts: u64,
+        account: Option<(SuiAddress, Arc<AccountKeyPair>)>,
+        health_check_enabled: bool,
     ) -> Option<WorkloadBuilderInfo> {
         let target_qps = (workload_weight * target_qps as f32) as u64;
         let num_workers = (workload_weight * num_workers as f32).ceil() as u64;
@@ -116,6 +126,8 @@ impl TransferObjectWorkloadBuilder {
                 TransferObjectWorkloadBuilder {
                     num_transfer_accounts,
                     num_payloads: max_ops,
+                    account,
+                    health_check_enabled,
                 },
             ));
             let builder_info = WorkloadBuilderInfo {
@@ -136,20 +148,37 @@ impl WorkloadBuilder<dyn Payload> for TransferObjectWorkloadBuilder {
         let mut address_map = HashMap::new();
         // Have to include not just the coins that are going to be created and sent
         // but the coin being used as gas as well.
-        let amount = MAX_GAS_FOR_TESTING
-            + ESTIMATED_COMPUTATION_COST
-            + STORAGE_COST_PER_COIN * (self.num_transfer_accounts + 1);
+        let mut amount =
+            ESTIMATED_COMPUTATION_COST + STORAGE_COST_PER_COIN * (self.num_transfer_accounts + 1);
+        if !self.health_check_enabled {
+            amount = amount + MAX_GAS_FOR_TESTING;
+        }
         // gas for payloads
         let mut payload_configs = vec![];
-        for _i in 0..self.num_transfer_accounts {
-            let (address, keypair) = get_key_pair();
-            let cloned_keypair: Arc<AccountKeyPair> = Arc::new(keypair);
-            address_map.insert(address, cloned_keypair.clone());
-            for _j in 0..self.num_payloads {
+
+        // Sending to a specific account used for health checks where we are
+        // okay sending the coin to ourselves.
+        let account = if self.health_check_enabled && self.account.is_some() {
+            Some(self.account.clone().unwrap())
+        } else {
+            None
+        };
+
+        for _ in 0..self.num_transfer_accounts {
+            let (address, keypair) = account.as_ref().map_or_else(
+                || {
+                    let (address, keypair) = get_key_pair();
+                    (address, Arc::new(keypair))
+                },
+                |(a, k)| (a.clone(), k.clone()),
+            );
+            address_map.insert(address, keypair.clone());
+
+            for _ in 0..self.num_payloads {
                 payload_configs.push(GasCoinConfig {
                     amount,
                     address,
-                    keypair: cloned_keypair.clone(),
+                    keypair: keypair.clone(),
                 });
             }
         }
@@ -178,6 +207,7 @@ impl WorkloadBuilder<dyn Payload> for TransferObjectWorkloadBuilder {
         Box::<dyn Workload<dyn Payload>>::from(Box::new(TransferObjectWorkload {
             num_tokens: self.num_payloads,
             payload_gas,
+            health_check_enabled: self.health_check_enabled,
         }))
     }
 }
@@ -186,6 +216,7 @@ impl WorkloadBuilder<dyn Payload> for TransferObjectWorkloadBuilder {
 pub struct TransferObjectWorkload {
     num_tokens: u64,
     payload_gas: Vec<Gas>,
+    health_check_enabled: bool,
 }
 
 #[async_trait]
@@ -228,13 +259,18 @@ impl Workload<dyn Payload> for TransferObjectWorkload {
         refs.iter()
             .map(|(g, t)| {
                 let from = t.1;
-                let to = g.iter().find(|x| x.1 != from).unwrap().1;
+                let to = g
+                    .iter()
+                    .find(|x| self.health_check_enabled || x.1 != from)
+                    .unwrap()
+                    .1;
                 Box::new(TransferObjectTestPayload {
                     transfer_object: t.0,
                     transfer_from: from,
                     transfer_to: to,
                     gas: g.to_vec(),
                     system_state_observer: system_state_observer.clone(),
+                    health_check_enabled: self.health_check_enabled,
                 })
             })
             .map(|b| Box::<dyn Payload>::from(b))

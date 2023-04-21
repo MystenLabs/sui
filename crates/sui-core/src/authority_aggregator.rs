@@ -1086,10 +1086,10 @@ where
     ) -> Result<ProcessTransactionResult, AggregatorProcessTransactionError> {
         // Now broadcast the transaction to all authorities.
         let tx_digest = transaction.digest();
-        debug!(
-            tx_digest = ?tx_digest,
-            "Broadcasting transaction request to authorities"
-        );
+        // debug!(
+        //     tx_digest = ?tx_digest,
+        //     "Broadcasting transaction request to authorities"
+        // );
         trace!(
             "Transaction data: {:?}",
             transaction.data().intent_message().value
@@ -1533,21 +1533,21 @@ where
         let threshold = self.committee.quorum_threshold();
         let validity = self.committee.validity_threshold();
 
-        info!(
-            ?tx_digest,
-            quorum_threshold = threshold,
-            validity_threshold = validity,
-            ?timeout_after_quorum,
-            ?cert_ref,
-            "Broadcasting certificate to authorities"
-        );
+        // info!(
+        //     ?tx_digest,
+        //     quorum_threshold = threshold,
+        //     validity_threshold = validity,
+        //     ?timeout_after_quorum,
+        //     ?cert_ref,
+        //     "Broadcasting certificate to authorities"
+        // );
         // TODO: We show the below messages for debugging purposes re. incident #267. When this is fixed, we should remove them again.
         let cert_bytes = fastcrypto::encoding::Base64::encode(bcs::to_bytes(&cert_ref).unwrap());
-        info!(
-            ?tx_digest,
-            ?cert_bytes,
-            "Broadcasting certificate (serialized) to authorities"
-        );
+        // info!(
+        //     ?tx_digest,
+        //     ?cert_bytes,
+        //     "Broadcasting certificate (serialized) to authorities"
+        // );
         let committee: Arc<Committee> = self.committee.clone();
         let authority_clients = self.authority_clients.clone();
         let metrics = self.metrics.clone();

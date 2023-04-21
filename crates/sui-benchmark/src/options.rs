@@ -170,6 +170,12 @@ pub enum RunSpec {
         // Default is (0-0.5) implying random load at 50% load. See `AdversarialPayloadType` enum for `adversarial_type`
         #[clap(long, default_value = "0-1.0")]
         adversarial_cfg: String,
+        // Used to specify health check mode for certain workloads. i.e.
+        // Transfer Workload: Send coin to the same account as the primary gas
+        // owner account.
+        // Shared Workload: TBD
+        #[clap(long, parse(try_from_str), default_value = "false", global = true)]
+        health_check: bool,
 
         // --- generic options ---
         // Target qps

@@ -138,9 +138,10 @@ impl BenchmarkStats {
                 "gas used/hr (MIST approx.)",
             ]);
         let mut row = Row::new();
-        row.add_cell(Cell::new(self.duration.as_secs()));
-        row.add_cell(Cell::new(self.num_success_txes / self.duration.as_secs()));
-        row.add_cell(Cell::new(self.num_success_cmds / self.duration.as_secs()));
+        let duration = self.duration.max(Duration::from_secs(1));
+        row.add_cell(Cell::new(duration.as_secs()));
+        row.add_cell(Cell::new(self.num_success_txes / duration.as_secs()));
+        row.add_cell(Cell::new(self.num_success_cmds / duration.as_secs()));
         row.add_cell(Cell::new(
             (100 * self.num_error_txes) as f32
                 / (self.num_error_txes + self.num_success_txes) as f32,
@@ -154,7 +155,7 @@ impl BenchmarkStats {
             ",",
         )));
         row.add_cell(Cell::new(format_num_with_separators(
-            self.total_gas_used * 60 * 60 / self.duration.as_secs(),
+            self.total_gas_used * 60 * 60 / duration.as_secs(),
             3,
             ",",
         )));
