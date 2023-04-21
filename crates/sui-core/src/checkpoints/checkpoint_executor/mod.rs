@@ -841,10 +841,7 @@ fn get_unexecuted_transactions(
         .get_full_checkpoint_contents_by_sequence_number(*checkpoint_sequence)
         .expect("Failed to get checkpoint contents from store")
         .tap_some(|_| {
-            debug!(
-                "loaded full checkpoint contents in bulk for sequence {}",
-                checkpoint_sequence
-            )
+            debug!("loaded full checkpoint contents in bulk for sequence {checkpoint_sequence}")
         });
 
     let mut execution_digests = checkpoint_store
@@ -859,8 +856,7 @@ fn get_unexecuted_transactions(
         .into_inner();
 
     let full_contents_txns = full_contents.map(|c| {
-        c.transactions
-            .into_iter()
+        c.into_iter()
             .zip(execution_digests.iter())
             .map(|(txn, digests)| (digests.transaction, txn))
             .collect::<HashMap<_, _>>()

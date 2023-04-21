@@ -367,7 +367,7 @@ impl CheckpointStore {
         self.full_checkpoint_content
             .insert(checkpoint.sequence_number(), &full_contents)?;
         let contents = full_contents.into_checkpoint_contents();
-        self.checkpoint_content.insert(contents.digest(), &contents)
+        self.insert_checkpoint_contents(contents)
     }
 
     pub fn delete_full_checkpoint_contents(

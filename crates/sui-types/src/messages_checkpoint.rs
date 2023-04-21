@@ -395,11 +395,11 @@ impl CheckpointContents {
 // CheckpointBuilder::split_checkpoint_chunks should also be updated accordingly.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FullCheckpointContents {
-    pub transactions: Vec<ExecutionData>,
+    transactions: Vec<ExecutionData>,
     /// This field 'pins' user signatures for the checkpoint
     /// The length of this vector is same as length of transactions vector
     /// System transactions has empty signatures
-    pub user_signatures: Vec<Vec<GenericSignature>>,
+    user_signatures: Vec<Vec<GenericSignature>>,
 }
 
 impl FullCheckpointContents {
@@ -488,6 +488,15 @@ impl FullCheckpointContents {
 
     pub fn size(&self) -> usize {
         self.transactions.len()
+    }
+}
+
+impl IntoIterator for FullCheckpointContents {
+    type Item = ExecutionData;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.transactions.into_iter()
     }
 }
 
