@@ -9,7 +9,6 @@ import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { SelectValidatorCard } from './SelectValidatorCard';
 import { ValidatorsCard } from './ValidatorsCard';
 import Alert from '_components/alert';
-import { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import Overlay from '_components/overlay';
 
@@ -37,7 +36,6 @@ export function Validators() {
             showModal={showModal}
             setShowModal={setShowModal}
             title={isLoading ? 'Loading' : pageTitle}
-            closeIcon={SuiIcons.Close}
             closeOverlay={close}
         >
             <div className="w-full flex flex-col flex-nowrap">
