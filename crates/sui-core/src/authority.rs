@@ -2613,7 +2613,15 @@ impl AuthorityState {
 
         let limit = limit + 1;
         let mut event_keys = match query {
-            EventFilter::All(..) => index_store.all_events(tx_num, event_num, limit, descending)?,
+            EventFilter::All(filters) => {
+                if filters.is_empty() {
+                    index_store.all_events(tx_num, event_num, limit, descending)?
+                } else {
+                    return Err(anyhow!(
+                        "This query type does not currently support filter combinations."
+                    ));
+                }
+            }
             EventFilter::Transaction(digest) => {
                 index_store.events_by_transaction(&digest, tx_num, event_num, limit, descending)?
             }
