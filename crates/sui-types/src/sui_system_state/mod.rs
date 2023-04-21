@@ -415,8 +415,8 @@ pub struct AdvanceEpochParams {
 
 #[cfg(msim)]
 pub mod advance_epoch_result_injection {
-    use std::cell::RefCell;
     use crate::error::{ExecutionError, ExecutionErrorKind};
+    use std::cell::RefCell;
 
     thread_local! {
         static OVERRIDE: RefCell<bool>  = RefCell::new(false);
