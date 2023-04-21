@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 
-import OwnedCoinView from './components/OwnedCoinView';
+import OwnedCoinView from './OwnedCoinView';
 
 import { useGetAllBalances } from '~/hooks/useGetAllBalances';
 import { Heading } from '~/ui/Heading';
@@ -13,7 +13,7 @@ import { Text } from '~/ui/Text';
 
 export const COINS_PER_PAGE: number = 6;
 
-function OwnedCoins({ id }: { id: string }): JSX.Element {
+export function OwnedCoins({ id }: { id: string }): JSX.Element {
     const [currentSlice, setCurrentSlice] = useState(1);
     const { isLoading, data, isError } = useGetAllBalances(id);
 
@@ -26,12 +26,12 @@ function OwnedCoins({ id }: { id: string }): JSX.Element {
     }
 
     return (
-        <div className="pl-7.5">
+        <div>
             {isLoading ? (
                 <LoadingSpinner />
             ) : (
-                <div className="flex flex-col space-y-5 pt-5 text-left xl:pr-10">
-                    <Heading color="gray-90" variant="heading4/semibold">
+                <div className="flex flex-col gap-4 pt-5 text-left">
+                    <Heading color="steel-darker" variant="heading4/semibold">
                         Coins
                     </Heading>
                     <div className="flex max-h-80 flex-col overflow-auto">
@@ -72,5 +72,3 @@ function OwnedCoins({ id }: { id: string }): JSX.Element {
         </div>
     );
 }
-
-export default OwnedCoins;
