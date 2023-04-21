@@ -134,7 +134,7 @@ pub async fn submit(
 
     let response = context
         .client
-        .quorum_driver()
+        .quorum_driver_api()
         .execute_transaction_block(
             signed_tx,
             SuiTransactionBlockResponseOptions::new()

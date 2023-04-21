@@ -1406,7 +1406,7 @@ impl WalletContext {
     ) -> anyhow::Result<SuiTransactionBlockResponse> {
         let client = self.get_client().await?;
         Ok(client
-            .quorum_driver()
+            .quorum_driver_api()
             .execute_transaction_block(
                 tx,
                 SuiTransactionBlockResponseOptions::new()
