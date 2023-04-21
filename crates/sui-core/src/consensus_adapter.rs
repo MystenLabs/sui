@@ -409,11 +409,19 @@ impl ConsensusAdapter {
     fn submission_position(
         &self,
         committee: &Committee,
-        tx_digest: &TransactionDigest,
+        _tx_digest: &TransactionDigest,
     ) -> (usize, bool) {
-        let positions = order_validators_for_submission(committee, tx_digest);
+        // let positions = order_validators_for_submission(committee, tx_digest);
 
-        self.check_submission_wrt_connectivity_and_scores(positions)
+        //self.check_submission_wrt_connectivity_and_scores(positions)
+        let positions = foo_order_validators_for_submission(committee);
+
+        // If I am the validator on the position 0 - the highest stake one, then return 0 so I should
+        // submit. Everyone else shouldn't submit until very late.
+        if self.authority == positions[0] {
+            return (0, false);
+        }
+        (positions.len(), true)
     }
 
     /// This function runs the following algorithm to decide whether or not to submit a transaction
@@ -436,6 +444,7 @@ impl ConsensusAdapter {
     /// move our positions up one, and submit the transaction. This allows maintaining performance
     /// overall. We will only do this part for authorities that are not low performers themselves to
     /// prevent extra amplification in the case that the positions look like [low_scoring_a1, low_scoring_a2, a3]
+    #[allow(unused)]
     fn check_submission_wrt_connectivity_and_scores(
         &self,
         positions: Vec<AuthorityName>,
@@ -762,6 +771,15 @@ pub fn order_validators_for_submission(
     // permute the validators deterministically, based on the digest
     let mut rng = StdRng::from_seed(digest_bytes);
     committee.shuffle_by_stake_with_rng(None, None, &mut rng)
+}
+
+pub fn foo_order_validators_for_submission(committee: &Committee) -> Vec<AuthorityName> {
+    let mut authorities = committee.voting_rights.clone();
+
+    // sort in stake descending order - validator with highest stake in position 0
+    authorities.sort_by(|a1, a2| a2.1.cmp(&a1.1));
+
+    authorities.iter().map(|(name, _)| *name).collect()
 }
 
 impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
