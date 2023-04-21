@@ -110,9 +110,9 @@ sui move build
 
 ### Writing unit tests
 
-After you define the `create` function, you can test it in Sui Move using unit tests without having to go all the way through sending Sui transactions. Since [Sui manages global storage separately outside of Move](../../learn/sui-move-diffs.md#object-centric-global-storage), there is no direct way to retrieve objects from global storage within Move. This poses a question: after calling the `create` function, how do we check that the object is properly transferred?
+After you define the `create` function, you can test it in Sui Move using unit tests without having to go all the way through sending Sui transactions. Since [Sui manages global storage separately outside of Move](../../learn/sui-move-diffs.md#object-centric-global-storage), there is no direct way to retrieve objects from global storage within Move. This poses a question: after calling the `create` function, how do you check that the object is properly transferred?
 
-To assist easy testing in Sui Move, we provide a comprehensive testing framework in the [test_scenario](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/test/test_scenario.move) module that allows us to interact with objects put into the global storage. This allows us to test the behavior of any function directly in Sui Move unit tests. A lot of this is also covered in our [Move testing](../move/build-test.md#sui-specific-testing) topic.
+To assist easy testing in Sui Move, Sui provides a comprehensive testing framework in the [test_scenario](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/test/test_scenario.move) module that allows us to interact with objects put into the global storage. This allows us to test the behavior of any function directly in Sui Move unit tests. A lot of this is also covered in our [Move testing](../move/build-test.md#sui-specific-testing) topic.
 
 The `test_scenario` emulates a series of Sui transactions, each sent from a particular address. You can start the first transaction using the `test_scenario::begin` function that takes the address of the user sending this transaction as an argument, and returns an instance of the `Scenario` struct representing a test scenario.
 
@@ -147,7 +147,7 @@ test_scenario::next_tx(scenario, not_owner);
 ```
 
 `test_scenario::next_tx` switches the transaction sender to `@0x2`, which is a new address different from the previous one.
-`test_scenario::has_most_recent_for_sender` checks whether an object with the given type actually exists in the global storage owned by the current sender of the transaction. In this code, we assert that we should not be able to remove such an object, because `@0x2` does not own any object.
+`test_scenario::has_most_recent_for_sender` checks whether an object with the given type actually exists in the global storage owned by the current sender of the transaction. This code asserts that you should not be able to remove such an object, because `@0x2` does not own any object.
 
 **Note:** The second parameter of `assert!` is the error code. In non-test code, you usually define a list of dedicated error code constants for each type of error that could happen in production. For unit tests, it's usually unnecessary because there are too many assertions. The stack trace upon error is sufficient to tell where the error happened. You can just put `0` for assertions in unit tests.
 
