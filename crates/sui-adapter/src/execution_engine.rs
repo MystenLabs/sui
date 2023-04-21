@@ -32,8 +32,11 @@ use sui_types::messages::{
     ProgrammableTransaction, TransactionKind,
 };
 use sui_types::storage::{ChildObjectResolver, ObjectStore, ParentSync, WriteKind};
+#[cfg(msim)]
+use sui_types::sui_system_state::advance_epoch_result_injection::maybe_modify_result;
 use sui_types::sui_system_state::{AdvanceEpochParams, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME};
 use sui_types::temporary_store::InnerTemporaryStore;
+use sui_types::temporary_store::TemporaryStore;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
     gas::SuiGasStatus,
@@ -47,11 +50,6 @@ use sui_types::{
     is_system_package, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
     SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
-
-use sui_types::temporary_store::TemporaryStore;
-
-#[cfg(msim)]
-use self::advance_epoch_result_injection::maybe_modify_result;
 
 checked_arithmetic! {
 
@@ -792,31 +790,4 @@ fn setup_consensus_commit<S: BackingPackageStore + ParentSync + ChildObjectResol
     )
 }
 
-}
-
-#[cfg(msim)]
-pub mod advance_epoch_result_injection {
-    use std::cell::RefCell;
-    use sui_types::error::{ExecutionError, ExecutionErrorKind};
-
-    thread_local! {
-        static OVERRIDE: RefCell<bool>  = RefCell::new(false);
-    }
-
-    pub fn set_override(value: bool) {
-        OVERRIDE.with(|o| *o.borrow_mut() = value);
-    }
-
-    /// This function is used to modify the result of advance_epoch transaction for testing.
-    /// If the override is set, the result will be an execution error, otherwise the original result will be returned.
-    pub fn maybe_modify_result(result: Result<(), ExecutionError>) -> Result<(), ExecutionError> {
-        if OVERRIDE.with(|o| *o.borrow()) {
-            Err::<(), ExecutionError>(ExecutionError::new(
-                ExecutionErrorKind::FunctionNotFound,
-                None,
-            ))
-        } else {
-            result
-        }
-    }
 }
