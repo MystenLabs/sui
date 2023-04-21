@@ -1,13 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useCoinDecimals, useFormatCoin } from '@mysten/core';
+import {
+    useCoinDecimals,
+    useFormatCoin,
+    useGetTimeBeforeEpochNumber,
+} from '@mysten/core';
 import { Field, Form, useFormikContext } from 'formik';
 import { memo, useCallback, useMemo } from 'react';
 
 import { parseAmount } from '../../helpers';
 import { useTransactionGasBudget, useActiveAddress } from '../../hooks';
-import { useGetTimeBeforeEpochNumber } from '../useGetTimeBeforeEpochNumber';
 import { type FormValues } from './StakingCard';
 import { createStakeTransaction } from './utils/transaction';
 import { Card } from '_app/shared/card';
