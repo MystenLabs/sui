@@ -21,9 +21,9 @@ import { parseImageURL, extractName } from '../../../utils/objectUtils';
 import { trimStdLibPrefix, genFileTypeMsg } from '../../../utils/stringUtils';
 import { LinkOrTextDescriptionItem } from '../LinkOrTextDescriptionItem';
 
+import { DynamicFieldsCard } from '~/components/Object/DynamicFieldsCard';
+import { ObjectFieldsCard } from '~/components/Object/ObjectFieldsCard';
 import TransactionBlocksForAddress from '~/components/TransactionBlocksForAddress/TransactionBlocksForAddress';
-import { DynamicFieldsCard } from '~/components/owned-objects/views/DynamicFieldsCard';
-import { ObjectFieldsCard } from '~/components/owned-objects/views/ObjectFieldsCard';
 import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
 import { Heading } from '~/ui/Heading';
 import { AddressLink, ObjectLink, TransactionLink } from '~/ui/InternalLink';
