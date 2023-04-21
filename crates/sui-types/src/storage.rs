@@ -432,7 +432,7 @@ impl InMemoryStore {
 
     pub fn insert_checkpoint_contents(
         &mut self,
-        _checkpoint: &VerifiedCheckpoint,
+        checkpoint: &VerifiedCheckpoint,
         contents: VerifiedCheckpointContents,
     ) {
         for tx in contents.iter() {
@@ -441,7 +441,10 @@ impl InMemoryStore {
             self.effects
                 .insert(tx.effects.digest(), tx.effects.to_owned());
         }
-        let contents = contents.into_inner().into_checkpoint_contents();
+        let contents = contents.into_inner();
+        self.full_checkpoint_contents
+            .insert(*checkpoint.sequence_number(), contents.clone());
+        let contents = contents.into_checkpoint_contents();
         self.checkpoint_contents
             .insert(*contents.digest(), contents);
     }
