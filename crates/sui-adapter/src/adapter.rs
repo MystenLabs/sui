@@ -110,6 +110,7 @@ pub fn new_move_vm(
             runtime_limits_config: VMRuntimeLimitsConfig {
                 vector_len_max: protocol_config.max_move_vector_len(),
             },
+            enable_invariant_violation_check_in_swap_loc: true,
         },
     )
     .map_err(|_| SuiError::ExecutionInvariantViolation)
