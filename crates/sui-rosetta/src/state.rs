@@ -231,12 +231,12 @@ impl CheckpointBlockProvider {
         let index = checkpoint.sequence_number;
         let hash = checkpoint.digest;
         let mut transactions = vec![];
-        for digest in checkpoint.transactions.iter() {
-            let tx = self
+        for batch in checkpoint.transactions.chunks(50) {
+            let transaction_responses = self
                 .client
                 .read_api()
-                .get_transaction_with_options(
-                    *digest,
+                .multi_get_transactions_with_options(
+                    batch.to_vec(),
                     SuiTransactionBlockResponseOptions::new()
                         .with_input()
                         .with_effects()
@@ -244,12 +244,14 @@ impl CheckpointBlockProvider {
                         .with_events(),
                 )
                 .await?;
-            transactions.push(Transaction {
-                transaction_identifier: TransactionIdentifier { hash: tx.digest },
-                operations: Operations::try_from(tx)?,
-                related_transactions: vec![],
-                metadata: None,
-            })
+            for tx in transaction_responses.into_iter() {
+                transactions.push(Transaction {
+                    transaction_identifier: TransactionIdentifier { hash: tx.digest },
+                    operations: Operations::try_from(tx)?,
+                    related_transactions: vec![],
+                    metadata: None,
+                })
+            }
         }
 
         // previous digest should only be None for genesis block.
