@@ -8,8 +8,9 @@ use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, VersionNumber};
 use sui_types::committee::EpochId;
 use sui_types::digests::{ObjectDigest, TransactionDigest};
+use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::object::Object;
-use sui_types::storage::ObjectKey;
+use sui_types::storage::{ObjectKey, ObjectStore};
 use tracing::debug;
 use typed_store::Map;
 
@@ -55,18 +56,45 @@ impl AccumulatorReadStore for AuthorityStore {
     }
 }
 
+impl AccumulatorReadStore for InMemoryStorage {
+    fn multi_get_object_by_key(&self, object_keys: &[ObjectKey]) -> SuiResult<Vec<Option<Object>>> {
+        let mut objects = Vec::new();
+        for key in object_keys {
+            objects.push(self.get_object_by_key(&key.0, key.1)?);
+        }
+        Ok(objects)
+    }
+
+    fn get_object_ref_prior_to_key(
+        &self,
+        object_id: &ObjectID,
+        version: VersionNumber,
+    ) -> SuiResult<Option<ObjectRef>> {
+        Ok(if let Some(wrapped_version) = self.get_wrapped(object_id) {
+            assert!(wrapped_version < version);
+            Some((
+                *object_id,
+                wrapped_version,
+                ObjectDigest::OBJECT_DIGEST_WRAPPED,
+            ))
+        } else {
+            None
+        })
+    }
+}
+
 /// Serializable representation of the ObjectRef of an
 /// object that has been wrapped
 /// TODO: This can be replaced with ObjectKey.
-#[derive(Serialize)]
-struct WrappedObject {
+#[derive(Serialize, Debug)]
+pub struct WrappedObject {
     id: ObjectID,
     wrapped_at: SequenceNumber,
     digest: ObjectDigest,
 }
 
 impl WrappedObject {
-    fn new(id: ObjectID, wrapped_at: SequenceNumber) -> Self {
+    pub fn new(id: ObjectID, wrapped_at: SequenceNumber) -> Self {
         Self {
             id,
             wrapped_at,
