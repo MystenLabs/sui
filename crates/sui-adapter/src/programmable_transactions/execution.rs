@@ -4,6 +4,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt,
+    sync::Arc,
 };
 
 use move_binary_format::{
@@ -28,18 +29,19 @@ use sui_move_natives::object_runtime::ObjectRuntime;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::{
-        MoveObjectType, ObjectID, SuiAddress, TxContext, TX_CONTEXT_MODULE_NAME,
-        TX_CONTEXT_STRUCT_NAME,
+        MoveObjectType, ObjectID, SuiAddress, TxContext, TxContextKind, RESOLVED_ASCII_STR,
+        RESOLVED_STD_OPTION, RESOLVED_UTF8_STR, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
     },
     coin::Coin,
     error::{ExecutionError, ExecutionErrorKind},
     event::Event,
     gas::{SuiGasStatus, SuiGasStatusAPI},
-    id::UID,
+    id::{RESOLVED_SUI_ID, UID},
     messages::{
         Argument, Command, CommandArgumentError, PackageUpgradeError, ProgrammableMoveCall,
         ProgrammableTransaction,
     },
+    metrics::LimitsMetrics,
     move_package::{
         normalize_deserialized_modules, MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt,
         UpgradeTicket,
@@ -47,9 +49,6 @@ use sui_types::{
     SUI_FRAMEWORK_ADDRESS,
 };
 use sui_verifier::{
-    entry_points_verifier::{
-        TxContextKind, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_SUI_ID, RESOLVED_UTF8_STR,
-    },
     private_generics::{EVENT_MODULE, PRIVATE_TRANSFER_FUNCTIONS, TRANSFER_MODULE},
     INIT_FN_NAME,
 };
@@ -62,6 +61,7 @@ sui_macros::checked_arithmetic! {
 
 pub fn execute<S: StorageView, Mode: ExecutionMode>(
     protocol_config: &ProtocolConfig,
+    metrics: Arc<LimitsMetrics>,
     vm: &MoveVM,
     state_view: &mut S,
     tx_context: &mut TxContext,
@@ -72,6 +72,7 @@ pub fn execute<S: StorageView, Mode: ExecutionMode>(
     let ProgrammableTransaction { inputs, commands } = pt;
     let mut context = ExecutionContext::new(
         protocol_config,
+        metrics,
         vm,
         state_view,
         tx_context,
@@ -664,7 +665,7 @@ fn check_compatibility<'a, S: StorageView>(
             ));
         };
 
-        if let Err(e) = policy.check_compatibility(&cur_module, &new_module) {
+        if let Err(e) = policy.check_compatibility(&cur_module, &new_module, context.protocol_config) {
             return Err(ExecutionError::new_with_source(
                 ExecutionErrorKind::PackageUpgradeError {
                     upgrade_error: PackageUpgradeError::IncompatibleUpgrade,

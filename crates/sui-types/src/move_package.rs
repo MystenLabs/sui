@@ -12,14 +12,14 @@ use crate::{
 };
 use derive_more::Display;
 use fastcrypto::hash::HashFunction;
-use move_binary_format::binary_views::BinaryIndexedView;
-use move_binary_format::file_format::CompiledModule;
+use move_binary_format::file_format::{Ability, CompiledModule};
 use move_binary_format::normalized;
 use move_binary_format::{
     access::ModuleAccess,
     compatibility::{Compatibility, InclusionCheck},
     errors::PartialVMResult,
 };
+use move_binary_format::{binary_views::BinaryIndexedView, file_format::AbilitySet};
 use move_core_types::{
     account_address::AccountAddress,
     ident_str,
@@ -135,19 +135,30 @@ impl UpgradePolicy {
         Self::try_from(*policy).is_ok()
     }
 
+    fn compatibility_check_for_protocol(protocol_config: &ProtocolConfig) -> Compatibility {
+        let disallowed_new_abilities = if protocol_config.disallow_adding_key_ability() {
+            AbilitySet::singleton(Ability::Key)
+        } else {
+            AbilitySet::EMPTY
+        };
+        Compatibility {
+            check_struct_and_pub_function_linking: true,
+            check_struct_layout: true,
+            check_friend_linking: false,
+            check_private_entry_linking: false,
+            disallowed_new_abilities,
+        }
+    }
+
     pub fn check_compatibility(
         &self,
         old_module: &normalized::Module,
         new_module: &normalized::Module,
+        protocol_config: &ProtocolConfig,
     ) -> PartialVMResult<()> {
         match self {
-            Self::Compatible => Compatibility {
-                check_struct_and_pub_function_linking: true,
-                check_struct_layout: true,
-                check_friend_linking: false,
-                check_private_entry_linking: false,
-            }
-            .check(old_module, new_module),
+            Self::Compatible => Self::compatibility_check_for_protocol(protocol_config)
+                .check(old_module, new_module),
             Self::Additive => InclusionCheck::Subset.check(old_module, new_module),
             Self::DepOnly => InclusionCheck::Equal.check(old_module, new_module),
         }
@@ -551,6 +562,18 @@ impl UpgradeReceipt {
             cap: upgrade_ticket.cap,
             package: ID::new(upgraded_package_id),
         }
+    }
+}
+
+/// Checks if a function is annotated with one of the test-related annotations
+pub fn is_test_fun(name: &IdentStr, module: &CompiledModule, fn_info_map: &FnInfoMap) -> bool {
+    let fn_name = name.to_string();
+    let mod_handle = module.self_handle();
+    let mod_addr = *module.address_identifier_at(mod_handle.address);
+    let fn_info_key = FnInfoKey { fn_name, mod_addr };
+    match fn_info_map.get(&fn_info_key) {
+        Some(fn_info) => fn_info.is_test,
+        None => false,
     }
 }
 

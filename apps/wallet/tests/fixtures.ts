@@ -15,6 +15,7 @@ const LAUNCH_ARGS = [
 export const test = base.extend<{
     context: BrowserContext;
     extensionUrl: string;
+    demoPageUrl: string;
 }>({
     // eslint-disable-next-line no-empty-pattern
     context: async ({}, use) => {
@@ -34,6 +35,10 @@ export const test = base.extend<{
         const extensionId = background.url().split('/')[2];
         const extensionUrl = `chrome-extension://${extensionId}/ui.html`;
         await use(extensionUrl);
+    },
+    // eslint-disable-next-line no-empty-pattern
+    demoPageUrl: async ({}, use) => {
+        await use('http://localhost:5181');
     },
 });
 

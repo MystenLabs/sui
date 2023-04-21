@@ -1,0 +1,1 @@
+Failed to resolve dependencies for package 'Root': Resolving dependencies for package 'B': Incorrect override of D in A (an override should dominate all uses of the overridden package)

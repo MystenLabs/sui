@@ -38,6 +38,7 @@ use sui_types::error::{SuiError, SuiObjectResponseError, SuiResult, UserInputErr
 use sui_types::gas::SuiGasStatus;
 use sui_types::messages::{InputObjectKind, InputObjects, TransactionKind};
 use sui_types::messages::{SenderSignedData, TransactionDataAPI};
+use sui_types::metrics::LimitsMetrics;
 use sui_types::object::{Data, Object, Owner};
 use sui_types::storage::get_module_by_id;
 use sui_types::storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync};
@@ -69,6 +70,8 @@ pub struct LocalExec {
     pub object_version_cache: Arc<Mutex<BTreeMap<(ObjectID, SequenceNumber), Object>>>,
 
     pub exec_store_events: Arc<Mutex<Vec<ExecutionStoreEvent>>>,
+
+    pub metrics: Arc<LimitsMetrics>,
 }
 
 #[derive(Clone, Debug)]
@@ -244,6 +247,9 @@ impl LocalExec {
     }
 
     pub fn new(client: SuiClient) -> Self {
+        // Use a throwaway metrics registry for local execution.
+        let registry = prometheus::Registry::new();
+        let metrics = Arc::new(LimitsMetrics::new(&registry));
         Self {
             client,
             store: BTreeMap::new(),
@@ -253,6 +259,7 @@ impl LocalExec {
             protocol_version_system_package_table: BTreeMap::new(),
             current_protocol_version: 0,
             exec_store_events: Arc::new(Mutex::new(Vec::new())),
+            metrics,
         }
     }
 
@@ -521,6 +528,8 @@ impl LocalExec {
         // This assumes we already initialized the protocol version table `protocol_version_epoch_table`
         let protocol_config = &tx_info.protocol_config;
 
+        let metrics = self.metrics.clone();
+
         // Resolve and download the input objects
         let input_objects = self.resolve_download_input_objects(&tx_info).await?;
 
@@ -557,6 +566,7 @@ impl LocalExec {
             &tx_info.executed_epoch,
             epoch_start_timestamp,
             protocol_config,
+            metrics,
             true,
         );
 

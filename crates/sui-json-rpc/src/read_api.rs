@@ -16,7 +16,7 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::StructTag;
 use move_core_types::value::{MoveStruct, MoveStructLayout, MoveValue};
 use tap::TapFallible;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, instrument, warn};
 
 use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_core::authority::AuthorityState;
@@ -386,11 +386,13 @@ impl ReadApi {
 
 #[async_trait]
 impl ReadApiServer for ReadApi {
+    #[instrument(skip(self))]
     fn get_object(
         &self,
         object_id: ObjectID,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiObjectResponse> {
+        info!("get_object");
         let object_read = self.state.get_object_read(&object_id).map_err(|e| {
             warn!(?object_id, "Failed to get object: {:?}", e);
             anyhow!("{e}")
@@ -430,11 +432,13 @@ impl ReadApiServer for ReadApi {
         }
     }
 
+    #[instrument(skip(self))]
     fn multi_get_objects(
         &self,
         object_ids: Vec<ObjectID>,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiObjectResponse>> {
+        info!("multi_get_objects");
         if object_ids.len() <= QUERY_MAX_RESULT_LIMIT {
             self.metrics
                 .get_objects_limit
@@ -474,12 +478,14 @@ impl ReadApiServer for ReadApi {
         }
     }
 
+    #[instrument(skip(self))]
     fn try_get_past_object(
         &self,
         object_id: ObjectID,
         version: SequenceNumber,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiPastObjectResponse> {
+        info!("try_get_past_object");
         let past_read = self
             .state
             .get_past_object_read(&object_id, version)
@@ -519,11 +525,13 @@ impl ReadApiServer for ReadApi {
         }
     }
 
+    #[instrument(skip(self))]
     fn try_multi_get_past_objects(
         &self,
         past_objects: Vec<SuiGetPastObjectRequest>,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiPastObjectResponse>> {
+        info!("try_multi_get_past_objects");
         if past_objects.len() <= QUERY_MAX_RESULT_LIMIT {
             let results: Vec<_> = past_objects
                 .iter()
@@ -557,15 +565,19 @@ impl ReadApiServer for ReadApi {
         }
     }
 
+    #[instrument(skip(self))]
     async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt<u64>> {
+        info!("get_total_transaction_blocks");
         Ok(self.state.get_total_transaction_blocks()?.into())
     }
 
+    #[instrument(skip(self))]
     async fn get_transaction_block(
         &self,
         digest: TransactionDigest,
         opts: Option<SuiTransactionBlockResponseOptions>,
     ) -> RpcResult<SuiTransactionBlockResponse> {
+        info!("get_transaction_block");
         let opts = opts.unwrap_or_default();
         let mut temp_response = IntermediateTransactionResponse::new(digest);
 
@@ -672,15 +684,19 @@ impl ReadApiServer for ReadApi {
         convert_to_response(temp_response, &opts, epoch_store.module_cache())
     }
 
+    #[instrument(skip(self))]
     fn multi_get_transaction_blocks(
         &self,
         digests: Vec<TransactionDigest>,
         opts: Option<SuiTransactionBlockResponseOptions>,
     ) -> RpcResult<Vec<SuiTransactionBlockResponse>> {
+        info!("multi_get_transaction_blocks");
         Ok(self.multi_get_transaction_blocks_internal(digests, opts)?)
     }
 
+    #[instrument(skip(self))]
     fn get_events(&self, transaction_digest: TransactionDigest) -> RpcResult<Vec<SuiEvent>> {
+        info!("get_events");
         let store = self.state.load_epoch_store_one_call_per_task();
         let effect = self.state.get_executed_effects(transaction_digest)?;
         let events = if let Some(event_digest) = effect.events_digest() {
@@ -711,7 +727,9 @@ impl ReadApiServer for ReadApi {
         Ok(events)
     }
 
+    #[instrument(skip(self))]
     async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<BigInt<u64>> {
+        info!("get_latest_checkpoint_sequence_number");
         Ok(self
             .state
             .get_latest_checkpoint_sequence_number()
@@ -721,10 +739,13 @@ impl ReadApiServer for ReadApi {
             .into())
     }
 
+    #[instrument(skip(self))]
     async fn get_checkpoint(&self, id: CheckpointId) -> RpcResult<Checkpoint> {
+        info!("get_checkpoint");
         Ok(self.get_checkpoint_internal(id)?)
     }
 
+    #[instrument(skip(self))]
     fn get_checkpoints(
         &self,
         // If `Some`, the query will start from the next item after the specified cursor
@@ -732,6 +753,7 @@ impl ReadApiServer for ReadApi {
         limit: Option<usize>,
         descending_order: bool,
     ) -> RpcResult<CheckpointPage> {
+        info!("get_checkpoints");
         let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS)?;
 
         self.metrics.get_checkpoints_limit.report(limit as u64);
@@ -762,19 +784,23 @@ impl ReadApiServer for ReadApi {
         })
     }
 
+    #[instrument(skip(self))]
     fn get_checkpoints_deprecated_limit(
         &self,
         cursor: Option<BigInt<u64>>,
         limit: Option<BigInt<u64>>,
         descending_order: bool,
     ) -> RpcResult<CheckpointPage> {
+        info!("get_checkpoints_deprecated_limit");
         self.get_checkpoints(cursor, limit.map(|l| *l as usize), descending_order)
     }
 
+    #[instrument(skip(self))]
     fn get_loaded_child_objects(
         &self,
         digest: TransactionDigest,
     ) -> RpcResult<SuiLoadedChildObjectsResponse> {
+        info!("get_loaded_child_objects");
         Ok(SuiLoadedChildObjectsResponse {
             loaded_child_objects: match self.state.loaded_child_object_versions(&digest).map_err(
                 |e| {

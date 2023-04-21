@@ -107,30 +107,19 @@ pub async fn send_and_confirm_transaction_with_execution_error(
     ))
 }
 
-pub async fn init_state() -> Arc<AuthorityState> {
-    let dir = tempfile::TempDir::new().unwrap();
-    let network_config = sui_config::builder::ConfigBuilder::new(&dir).build();
-    let genesis = network_config.genesis;
-    let keypair = network_config.validator_configs[0]
-        .protocol_key_pair()
-        .copy();
-
-    init_state_with_committee(&genesis, &keypair).await
-}
-
 pub async fn init_state_validator_with_fullnode() -> (Arc<AuthorityState>, Arc<AuthorityState>) {
     use sui_types::crypto::get_authority_key_pair;
 
-    let dir = tempfile::TempDir::new().unwrap();
-    let network_config = sui_config::builder::ConfigBuilder::new(&dir).build();
-    let genesis = network_config.genesis;
-    let keypair = network_config.validator_configs[0]
-        .protocol_key_pair()
-        .copy();
-
-    let validator = init_state_with_committee(&genesis, &keypair).await;
+    let network_config = sui_config::builder::ConfigBuilder::new_with_temp_dir().build();
+    let validator = TestAuthorityBuilder::new()
+        .with_network_config(&network_config)
+        .build()
+        .await;
     let fullnode_key_pair = get_authority_key_pair().1;
-    let fullnode = init_state_with_committee(&genesis, &fullnode_key_pair).await;
+    let fullnode = TestAuthorityBuilder::new()
+        .with_genesis_and_keypair(&network_config.genesis, &fullnode_key_pair)
+        .build()
+        .await;
     (validator, fullnode)
 }
 
@@ -139,16 +128,18 @@ pub async fn init_state_with_committee(
     authority_key: &AuthorityKeyPair,
 ) -> Arc<AuthorityState> {
     TestAuthorityBuilder::new()
-        .build(genesis.committee().unwrap(), authority_key, genesis)
+        .with_genesis_and_keypair(genesis, authority_key)
+        .build()
         .await
 }
 
 pub async fn init_state_with_ids<I: IntoIterator<Item = (SuiAddress, ObjectID)>>(
     objects: I,
 ) -> Arc<AuthorityState> {
-    let state = init_state().await;
+    let state = TestAuthorityBuilder::new().build().await;
     for (address, object_id) in objects {
         let obj = Object::with_id_owner_for_testing(object_id, address);
+        // TODO: Make this part of genesis initialization instead of explicit insert.
         state.insert_genesis_object(obj).await;
     }
     state
@@ -159,7 +150,7 @@ pub async fn init_state_with_ids_and_versions<
 >(
     objects: I,
 ) -> Arc<AuthorityState> {
-    let state = init_state().await;
+    let state = TestAuthorityBuilder::new().build().await;
     for (address, object_id, version) in objects {
         let obj = Object::with_id_owner_version_for_testing(object_id, version, address);
         state.insert_genesis_object(obj).await;

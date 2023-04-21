@@ -25,6 +25,7 @@ use prometheus::{
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use sui_config::transaction_deny_config::TransactionDenyConfig;
+use sui_types::metrics::LimitsMetrics;
 use sui_types::TypeTag;
 use tap::TapFallible;
 use tokio::sync::mpsc::unbounded_channel;
@@ -208,6 +209,8 @@ pub struct AuthorityMetrics {
     pub consensus_handler_scores: IntGaugeVec,
     pub consensus_committed_subdags: IntCounterVec,
     pub consensus_committed_certificates: IntCounterVec,
+
+    pub limits_metrics: Arc<LimitsMetrics>,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -454,6 +457,7 @@ impl AuthorityMetrics {
                 registry,
             )
                 .unwrap(),
+            limits_metrics: Arc::new(LimitsMetrics::new(registry)),
         }
     }
 }
@@ -1032,6 +1036,7 @@ impl AuthorityState {
                 gas_status,
                 &epoch_store.epoch_start_config().epoch_data(),
                 epoch_store.protocol_config(),
+                self.metrics.limits_metrics.clone(),
                 // TODO: would be nice to pass the whole NodeConfig here, but it creates a
                 // cyclic dependency w/ sui-adapter
                 self.expensive_safety_check_config
@@ -1139,6 +1144,7 @@ impl AuthorityState {
                 gas_status,
                 &epoch_store.epoch_start_config().epoch_data(),
                 epoch_store.protocol_config(),
+                self.metrics.limits_metrics.clone(),
                 false, // enable_expensive_checks
             );
         let tx_digest = *effects.transaction_digest();
@@ -1254,6 +1260,7 @@ impl AuthorityState {
                 gas_status,
                 &epoch_store.epoch_start_config().epoch_data(),
                 protocol_config,
+                self.metrics.limits_metrics.clone(),
                 false, // enable_expensive_checks
             );
 
@@ -1748,6 +1755,7 @@ impl AuthorityState {
             rx_execution_shutdown
         ));
 
+        // TODO: This doesn't belong to the constructor of AuthorityState.
         state
             .create_owner_index_if_empty(genesis_objects, &epoch_store)
             .expect("Error indexing genesis objects.");
@@ -2605,7 +2613,15 @@ impl AuthorityState {
 
         let limit = limit + 1;
         let mut event_keys = match query {
-            EventFilter::All(..) => index_store.all_events(tx_num, event_num, limit, descending)?,
+            EventFilter::All(filters) => {
+                if filters.is_empty() {
+                    index_store.all_events(tx_num, event_num, limit, descending)?
+                } else {
+                    return Err(anyhow!(
+                        "This query type does not currently support filter combinations."
+                    ));
+                }
+            }
             EventFilter::Transaction(digest) => {
                 index_store.events_by_transaction(&digest, tx_num, event_num, limit, descending)?
             }

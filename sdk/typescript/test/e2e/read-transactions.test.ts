@@ -1,11 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi, afterEach } from 'vitest';
 import {
   getTransactionDigest,
   getTransactionKind,
   SuiTransactionBlockResponse,
+  TransactionBlock,
 } from '../../src';
 import { executePaySuiNTimes, setup, TestToolbox } from './utils/setup';
 
@@ -22,6 +23,61 @@ describe('Transaction Reading API', () => {
   it('Get Total Transactions', async () => {
     const numTransactions = await toolbox.provider.getTotalTransactionBlocks();
     expect(numTransactions).toBeGreaterThan(0);
+  });
+
+  describe('waitForTransactionBlock', () => {
+    async function setupTransaction() {
+      const tx = new TransactionBlock();
+      const [coin] = tx.splitCoins(tx.gas, [tx.pure(1)]);
+      tx.transferObjects([coin], tx.pure(toolbox.address()));
+      return toolbox.signer.signAndExecuteTransactionBlock({
+        transactionBlock: tx,
+        requestType: 'WaitForEffectsCert',
+      });
+    }
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('can wait for transactions with WaitForEffectsCert', async () => {
+      const { digest } = await setupTransaction();
+
+      // Should succeed using wait
+      const waited = await toolbox.provider.waitForTransactionBlock({ digest });
+      expect(waited.digest).toEqual(digest);
+    });
+
+    it('can be aborted using the signal', async () => {
+      const { digest } = await setupTransaction();
+
+      const abortController = new AbortController();
+      abortController.abort();
+
+      await expect(
+        toolbox.provider.waitForTransactionBlock({
+          digest,
+          signal: abortController.signal,
+        }),
+      ).rejects.toThrowError();
+    });
+
+    it('times out when provided an invalid digest', async () => {
+      const spy = vi
+        .spyOn(toolbox.provider, 'getTransactionBlock')
+        .mockImplementation(() => Promise.reject());
+
+      await expect(
+        toolbox.provider.waitForTransactionBlock({
+          digest: 'foobar',
+          pollInterval: 10,
+          timeout: 55,
+        }),
+      ).rejects.toThrowError('The operation was aborted due to timeout');
+
+      // Expect it to poll the API at the provided interval
+      expect(spy.mock.calls).toHaveLength(6);
+    });
   });
 
   it('Get Transaction', async () => {

@@ -1,0 +1,27 @@
+# Dependency graph - conflicting dependencies. Even though override in Root eliminates C1's
+# dependency on E's version 2, we still have a conflicting dependency on E from A, which is an
+# override, but an insufficient one.
+#
+#                                  +----+  v2
+#                            +---->| C1 |-------+
+#                            |     +----+       |
+#                            |                  |
+#                 +----+     |       ov(3)      |
+#           +---->| A  |-----+--------------+   |
+#           |     +----+     |              |   |
+#           |                |              |   +->+----+
+# +----+    |     ov(2)      |   +----+ v1  +----->|    |
+# |Root|----+-------------+  +-->| D  |----------->| E  |
+# +----+    |             |      +----+            |    |
+#           |             |                 +----->+----+
+#           |     +----+  +->+----+    v1   |
+#           +---->| B  |---->| C2 |---------+
+#                 +----+     +----+
+[package]
+name = "Root"
+version = "0.0.0"
+
+[dependencies]
+A = { local = "./deps_only/A" }
+B = { local = "./deps_only/B" }
+C = { local = "./deps_only/C2", override = true }

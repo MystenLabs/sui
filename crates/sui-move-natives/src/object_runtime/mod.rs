@@ -12,11 +12,15 @@ use move_vm_types::{
     loaded_data::runtime_types::Type,
     values::{GlobalValue, Value},
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig};
 use sui_types::{
     base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
     error::{ExecutionError, ExecutionErrorKind, VMMemoryLimitExceededSubStatusCode},
+    metrics::LimitsMetrics,
     object::{MoveObject, Owner},
     storage::{ChildObjectResolver, DeleteKind, WriteKind},
     SUI_CLOCK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
@@ -130,6 +134,7 @@ pub struct ObjectRuntime<'a> {
     loaded_child_objects_fixed: bool,
 
     pub(crate) constants: LocalProtocolConfig,
+    pub(crate) metrics: Arc<LimitsMetrics>,
 }
 
 pub enum TransferResult {
@@ -150,12 +155,14 @@ impl<'a> ObjectRuntime<'a> {
         input_objects: BTreeMap<ObjectID, Owner>,
         is_metered: bool,
         protocol_config: &ProtocolConfig,
+        metrics: Arc<LimitsMetrics>,
     ) -> Self {
         Self {
             object_store: ObjectStore::new(
                 object_resolver,
-                LocalProtocolConfig::new(protocol_config),
                 is_metered,
+                LocalProtocolConfig::new(protocol_config),
+                metrics.clone(),
             ),
             test_inventories: TestInventories::new(),
             state: ObjectRuntimeState {
@@ -168,27 +175,25 @@ impl<'a> ObjectRuntime<'a> {
             is_metered,
             loaded_child_objects_fixed: protocol_config.loaded_child_objects_fixed(),
             constants: LocalProtocolConfig::new(protocol_config),
+            metrics,
         }
     }
 
     pub fn new_id(&mut self, id: ObjectID) -> PartialVMResult<()> {
         // If metered, we use the metered limit (non system tx limit) as the hard limit
         // This macro takes care of that
-        match check_limit_by_meter!(
+        if let LimitThresholdCrossed::Hard(_, lim) = check_limit_by_meter!(
             self.is_metered,
             self.state.new_ids.len(),
             self.constants.max_num_new_move_object_ids,
-            self.constants.max_num_new_move_object_ids_system_tx
+            self.constants.max_num_new_move_object_ids_system_tx,
+            self.metrics.excessive_new_move_object_ids
         ) {
-            LimitThresholdCrossed::None => (),
-            LimitThresholdCrossed::Soft(_, _) => (), /* TODO: add alerting */
-            LimitThresholdCrossed::Hard(_, lim) => {
-                return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
-                    .with_message(format!("Creating more than {} IDs is not allowed", lim))
-                    .with_sub_status(
-                        VMMemoryLimitExceededSubStatusCode::NEW_ID_COUNT_LIMIT_EXCEEDED as u64,
-                    ))
-            }
+            return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
+                .with_message(format!("Creating more than {} IDs is not allowed", lim))
+                .with_sub_status(
+                    VMMemoryLimitExceededSubStatusCode::NEW_ID_COUNT_LIMIT_EXCEEDED as u64,
+                ));
         };
 
         // remove from deleted_ids for the case in dynamic fields where the Field object was deleted
@@ -204,21 +209,18 @@ impl<'a> ObjectRuntime<'a> {
         // be called based on the `was_new` flag
         // Metered transactions don't have limits for now
 
-        match check_limit_by_meter!(
+        if let LimitThresholdCrossed::Hard(_, lim) = check_limit_by_meter!(
             self.is_metered,
             self.state.deleted_ids.len(),
             self.constants.max_num_deleted_move_object_ids,
-            self.constants.max_num_deleted_move_object_ids_system_tx
+            self.constants.max_num_deleted_move_object_ids_system_tx,
+            self.metrics.excessive_deleted_move_object_ids
         ) {
-            LimitThresholdCrossed::None => (),
-            LimitThresholdCrossed::Soft(_, _) => (), /* TODO: add alerting */
-            LimitThresholdCrossed::Hard(_, lim) => {
-                return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
-                    .with_message(format!("Deleting more than {} IDs is not allowed", lim))
-                    .with_sub_status(
-                        VMMemoryLimitExceededSubStatusCode::DELETED_ID_COUNT_LIMIT_EXCEEDED as u64,
-                    ))
-            }
+            return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
+                .with_message(format!("Deleting more than {} IDs is not allowed", lim))
+                .with_sub_status(
+                    VMMemoryLimitExceededSubStatusCode::DELETED_ID_COUNT_LIMIT_EXCEEDED as u64,
+                ));
         };
 
         let was_new = self.state.new_ids.remove(&id).is_some();
@@ -262,22 +264,19 @@ impl<'a> ObjectRuntime<'a> {
 
         // Metered transactions don't have limits for now
 
-        match check_limit_by_meter!(
+        if let LimitThresholdCrossed::Hard(_, lim) = check_limit_by_meter!(
             // TODO: is this not redundant? Metered TX implies framework obj cannot be transferred
             self.is_metered && !is_framework_obj, // We have higher limits for unmetered transactions and framework obj
             self.state.transfers.len(),
             self.constants.max_num_transferred_move_object_ids,
-            self.constants.max_num_transferred_move_object_ids_system_tx
+            self.constants.max_num_transferred_move_object_ids_system_tx,
+            self.metrics.excessive_transferred_move_object_ids
         ) {
-            LimitThresholdCrossed::None => (),
-            LimitThresholdCrossed::Soft(_, _) => (), /* TODO: add alerting */
-            LimitThresholdCrossed::Hard(_, lim) => {
-                return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
-                    .with_message(format!("Transferring more than {} IDs is not allowed", lim))
-                    .with_sub_status(
-                        VMMemoryLimitExceededSubStatusCode::TRANSFER_ID_COUNT_LIMIT_EXCEEDED as u64,
-                    ))
-            }
+            return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
+                .with_message(format!("Transferring more than {} IDs is not allowed", lim))
+                .with_sub_status(
+                    VMMemoryLimitExceededSubStatusCode::TRANSFER_ID_COUNT_LIMIT_EXCEEDED as u64,
+                ));
         };
 
         self.state.transfers.insert(id, (owner, ty, obj));

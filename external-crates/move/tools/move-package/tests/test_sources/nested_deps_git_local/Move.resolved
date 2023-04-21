@@ -37,6 +37,7 @@ ResolvedGraph {
                 ),
                 version: None,
                 resolver: None,
+                overridden_path: false,
             },
             "MoveStdlib": Package {
                 kind: Git(
@@ -48,6 +49,7 @@ ResolvedGraph {
                 ),
                 version: None,
                 resolver: None,
+                overridden_path: false,
             },
         },
         always_deps: {
@@ -103,6 +105,7 @@ ResolvedGraph {
                             subst: None,
                             version: None,
                             digest: None,
+                            dep_override: false,
                         },
                     ),
                 },
@@ -184,6 +187,7 @@ ResolvedGraph {
                             subst: None,
                             version: None,
                             digest: None,
+                            dep_override: false,
                         },
                     ),
                 },

@@ -5,18 +5,32 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::Arc;
-use sui_core::{
-    authority::AuthorityState,
-    test_utils::{init_state, send_and_confirm_transaction},
-};
+use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
+use sui_core::{authority::AuthorityState, test_utils::send_and_confirm_transaction};
 use sui_types::{
     error::SuiError,
-    messages::{ExecutionStatus, TransactionEffectsAPI, VerifiedTransaction},
+    messages::{
+        ExecutionFailureStatus, ExecutionStatus, TransactionEffectsAPI, VerifiedTransaction,
+    },
     object::Object,
 };
 use tokio::runtime::Runtime;
 
 pub type ExecutionResult = Result<ExecutionStatus, SuiError>;
+
+// We want to look for either panics (in which case we won't hit this) or invariant violations in
+// which case we want to panic.
+pub fn assert_is_acceptable_result(result: &ExecutionResult) {
+    if let Ok(
+        e @ ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::InvariantViolation,
+            command: _,
+        },
+    ) = result
+    {
+        panic!("Invariant violation: {e:#?}")
+    }
+}
 
 pub struct Executor {
     pub state: Arc<AuthorityState>,
@@ -32,7 +46,7 @@ impl Default for Executor {
 impl Executor {
     pub fn new() -> Self {
         let rt = Runtime::new().unwrap();
-        let state = rt.block_on(init_state());
+        let state = rt.block_on(TestAuthorityBuilder::new().build());
         Self { state, rt }
     }
 

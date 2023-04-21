@@ -1,0 +1,25 @@
+# Dependency graph and and override (ov) - only ov(1) should succeed.
+#                                     +----+
+#                               +---->| C  |--------------+
+#                               |     +----+              |
+#                               |                         |
+#                 +----+        |                         |
+#           +---->| A  |--------+                         |
+#           |     +----+----+   |                         |
+#           |               |   |                         |
+# +----+    |      ov(1)    |   |     +----+              |
+# |Root|----+------------+  |   +---->| D  |------+       |
+# +----+    |            |  |         +----+      |       |
+#           |            |  |  ov2            v1  |       |
+#           |     +----+ |  +-------->+----+<-----+       |
+#           +---->| B  | +----------->| E  |  v2          |
+#                 +----+------------->+----+<-------------+
+#                          v3
+[package]
+name = "Root"
+version = "0.0.0"
+
+[dependencies]
+A = { local = "./deps_only/A" }
+B = { local = "./deps_only/B" }
+E = { local = "./deps_only/E", version = "1.0.0", override = true }

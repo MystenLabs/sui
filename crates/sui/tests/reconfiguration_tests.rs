@@ -1093,7 +1093,7 @@ async fn test_reconfig_with_committee_change_stress() {
 #[cfg(msim)]
 #[sim_test]
 async fn safe_mode_reconfig_test() {
-    use sui_adapter::execution_engine::advance_epoch_result_injection;
+    use sui_types::sui_system_state::advance_epoch_result_injection;
     use test_utils::messages::make_staking_transaction_with_wallet_context;
 
     let mut test_cluster = TestClusterBuilder::new()

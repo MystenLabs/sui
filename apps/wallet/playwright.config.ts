@@ -39,7 +39,6 @@ const config: PlaywrightTestConfig = {
         /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
         trace: 'on-first-retry',
     },
-
     /* Configure projects for major browsers */
     projects: [
         {
@@ -48,6 +47,22 @@ const config: PlaywrightTestConfig = {
                 ...devices['Desktop Chrome'],
                 userAgent: 'Playwright',
             },
+        },
+    ],
+    webServer: [
+        {
+            command: 'pnpm demoApp:dev',
+            port: 5181,
+            timeout: 30 * 1000,
+            reuseExistingServer: !process.env.CI,
+        },
+        {
+            command:
+                process.env.E2E_RUN_LOCAL_NET_CMD ??
+                'RUST_LOG="consensus=off" cargo run --bin sui-test-validator',
+            port: 9123,
+            timeout: 120 * 1000,
+            reuseExistingServer: !process.env.CI,
         },
     ],
 };

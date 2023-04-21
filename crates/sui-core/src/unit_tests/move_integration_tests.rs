@@ -15,7 +15,9 @@ use move_core_types::{
 };
 
 use sui_types::{
-    error::ExecutionErrorKind, programmable_transaction_builder::ProgrammableTransactionBuilder,
+    base_types::{RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR},
+    error::ExecutionErrorKind,
+    programmable_transaction_builder::ProgrammableTransactionBuilder,
     utils::to_sender_signed_transaction,
 };
 
@@ -30,9 +32,6 @@ use sui_types::{
 
 use std::{collections::HashSet, path::PathBuf};
 use std::{env, str::FromStr};
-use sui_verifier::entry_points_verifier::{
-    RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR,
-};
 
 #[tokio::test]
 #[cfg_attr(msim, ignore)]

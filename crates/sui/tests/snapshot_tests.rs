@@ -59,8 +59,12 @@ async fn basic_read_cmd_snapshot_tests() -> Result<(), anyhow::Error> {
     let cmds = vec![
         "sui client objects {ME}", // valid addr
         "sui client objects 0x0000000000000000000000000000000000000000000000000000000000000000", // empty addr
-        "sui client object 0x3b5121a0603ef7ab4cb57827fceca17db3338ef2cd76126cc1523b681df27cee", // valid object
-        "sui client object 0x3b5121a0603ef7ab4cb57827fceca17db3338ef2cd76126cc1523b681df27cee --bcs", // valid object BCS
+        "sui client object 0x5",       // valid object
+        "sui client object 0x5 --bcs", // valid object BCS
+        // Simtest object IDs are not stable so these object IDs may or may not exist currently --
+        // commenting them out for now.
+        // "sui client object 0x3b5121a0603ef7ab4cb57827fceca17db3338ef2cd76126cc1523b681df27cee", // valid object
+        // "sui client object 0x3b5121a0603ef7ab4cb57827fceca17db3338ef2cd76126cc1523b681df27cee --bcs", // valid object BCS
         "sui client object 0x0000000000000000000000000000000000000000000000000000000000000000", // non-existent object
         "sui client tx-block Duwr9uSk9ZvNdEa8oDHunx345i6oyrp3e78MYHVAbYdv", // valid tx digest
         "sui client tx-block EgMTHQygMi6SRsBqrPHAEKZCNrpShXurCp9rcb9qbSg8", // non-existent tx digest
