@@ -668,7 +668,7 @@ fn check_compatibility<'a, S: StorageView>(
             ));
         };
 
-        if let Err(e) = policy.check_compatibility(&cur_module, &new_module) {
+        if let Err(e) = policy.check_compatibility(&cur_module, &new_module, context.protocol_config) {
             return Err(ExecutionError::new_with_source(
                 ExecutionErrorKind::PackageUpgradeError {
                     upgrade_error: PackageUpgradeError::IncompatibleUpgrade,

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::compatibility::Compatibility;
+use move_binary_format::file_format::{Ability, AbilitySet};
 use move_binary_format::CompiledModule;
 use move_core_types::gas_algebra::InternalGas;
 use once_cell::sync::Lazy;
@@ -217,6 +218,7 @@ pub async fn compare_system_package<S: ObjectStore>(
         check_struct_layout: true,
         check_friend_linking: false,
         check_private_entry_linking: true,
+        disallowed_new_abilities: AbilitySet::singleton(Ability::Key),
     };
 
     let new_pkg = new_object
