@@ -23,7 +23,9 @@ function Navigation({ className }: NavigationProps) {
     const isVisible = useAppSelector(getNavIsVisible);
     return (
         <nav
-            className={cl(st.container, className, { [st.hidden]: !isVisible })}
+            className={cl('border-b-0', st.container, className, {
+                [st.hidden]: !isVisible,
+            })}
         >
             <div id="sui-apps-filters"></div>
 
