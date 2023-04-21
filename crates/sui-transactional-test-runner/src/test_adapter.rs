@@ -804,6 +804,47 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 }
                 Ok(merge_output(warnings_opt, output))
             }
+            SuiSubcommand::SetAddress(SetAddressCommand { address, input }) => {
+                let address_sym = &Symbol::from(address.as_str());
+                let state = self.compiled_state();
+                let input = input.into_concrete_value(&|s| Some(state.resolve_named_address(s)))?;
+                let (value, is_package) = match input {
+                    SuiValue::Object(fake_id) => {
+                        let id = match self.fake_to_real_object_id(fake_id) {
+                            Some(id) => id,
+                            None => bail!("INVALID TEST. Unknown object, object({})", fake_id),
+                        };
+                        let obj = match self.storage.get_object(&id) {
+                            Some(obj) => obj,
+                            None => bail!("INVALID TEST. Could not load object argument {}", id),
+                        };
+                        let is_package = obj.is_package();
+                        let value: AccountAddress = id.into();
+                        (value, is_package)
+                    }
+                    SuiValue::MoveValue(v) => {
+                        let bytes = v.simple_serialize().unwrap();
+                        let value: AccountAddress = bcs::from_bytes(&bytes)?;
+                        (value, false)
+                    }
+                    SuiValue::ObjVec(_) => bail!("obj vec is not supported as an input"),
+                };
+                let value = NumericalAddress::new(value.into_bytes(), NumberFormat::Hex);
+                self.compiled_state
+                    .named_address_mapping
+                    .insert(address, value);
+
+                if is_package && self.staged_modules.contains_key(address_sym) {
+                    let StagedPackage {
+                        file,
+                        syntax,
+                        modules,
+                    } = self.staged_modules.remove(address_sym).unwrap();
+                    store_modules(self, syntax, file, modules)
+                }
+
+                Ok(None)
+            }
         }
     }
 }

@@ -128,6 +128,13 @@ pub struct StagePackageCommand {
 }
 
 #[derive(Debug, clap::Parser)]
+pub struct SetAddressCommand {
+    pub address: String,
+    #[clap(parse(try_from_str = ParsedValue::parse))]
+    pub input: ParsedValue<SuiExtraValueArgs>,
+}
+
+#[derive(Debug, clap::Parser)]
 pub enum SuiSubcommand {
     #[clap(name = "view-object")]
     ViewObject(ViewObjectCommand),
@@ -141,6 +148,8 @@ pub enum SuiSubcommand {
     UpgradePackage(UpgradePackageCommand),
     #[clap(name = "package")]
     StagePackage(StagePackageCommand),
+    #[clap(name = "set-address")]
+    SetAddress(SetAddressCommand),
 }
 
 #[derive(Debug)]
