@@ -319,14 +319,14 @@ module deepbook::clob {
     // for smart routing
     public fun swap_exact_quote_for_base<BaseAsset, QuoteAsset>(
         pool: &mut Pool<BaseAsset, QuoteAsset>,
-        quantity: u64,
+        quote_quantity: u64,
         clock: &Clock,
         quote_coin: Coin<QuoteAsset>,
         ctx: &mut TxContext,
     ): (Coin<BaseAsset>, Coin<QuoteAsset>, u64) {
         let (base_asset_balance, quote_asset_balance) = match_bid_with_quote_quantity(
             pool,
-            quantity,
+            quote_quantity,
             MAX_PRICE,
             clock::timestamp_ms(clock),
             coin::into_balance(quote_coin)
@@ -337,14 +337,14 @@ module deepbook::clob {
 
     fun match_bid_with_quote_quantity<BaseAsset, QuoteAsset>(
         pool: &mut Pool<BaseAsset, QuoteAsset>,
-        quantity: u64,
+        quote_quantity: u64,
         price_limit: u64,
         current_timestamp: u64,
         quote_balance: Balance<QuoteAsset>,
     ): (Balance<BaseAsset>, Balance<QuoteAsset>) {
         // Base balance received by taker, taking into account of taker commission.
-        // Need to individually keep track of the remaining base quantity to be filled to avoid infinite loop.
-        let taker_quote_quantity_remaining = quantity;
+        // Need to individually keep track of the remaining quote quantity to be filled to avoid infinite loop.
+        let taker_quote_quantity_remaining = quote_quantity;
         let base_balance_filled = balance::zero<BaseAsset>();
         let quote_balance_left = quote_balance;
         let all_open_orders = &mut pool.asks;
