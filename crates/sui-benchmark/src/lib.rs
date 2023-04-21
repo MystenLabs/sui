@@ -200,7 +200,7 @@ impl ExecutionEffects {
         let gas_used = self.gas_used();
         let net_gas_used = self.net_gas_used();
 
-        info!(
+        println!(
             "Summary:\n\
              Gas Object: {gas_object:?}\n\
              Sender: {sender:?}\n\
@@ -384,6 +384,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                         err,
                         delay,
                     );
+                    println!("{:#?}", err);
                     retry_cnt += 1;
                     sleep(delay).await;
                 }

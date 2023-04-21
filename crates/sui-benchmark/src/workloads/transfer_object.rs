@@ -41,6 +41,8 @@ impl Payload for TransferObjectTestPayload {
         if !effects.is_ok() {
             effects.print_gas_summary();
             error!("Transfer tx failed...");
+        } else {
+            effects.print_gas_summary();
         }
 
         let recipient = self.gas.iter().find(|x| x.1 != self.transfer_to).unwrap().1;
@@ -136,11 +138,12 @@ impl WorkloadBuilder<dyn Payload> for TransferObjectWorkloadBuilder {
         let mut address_map = HashMap::new();
         // Have to include not just the coins that are going to be created and sent
         // but the coin being used as gas as well.
-        let amount = MAX_GAS_FOR_TESTING
-            + ESTIMATED_COMPUTATION_COST
-            + STORAGE_COST_PER_COIN * (self.num_transfer_accounts + 1);
+        let mut amount =
+            ESTIMATED_COMPUTATION_COST + STORAGE_COST_PER_COIN * (self.num_transfer_accounts + 1);
+
         // gas for payloads
         let mut payload_configs = vec![];
+
         for _i in 0..self.num_transfer_accounts {
             let (address, keypair) = get_key_pair();
             let cloned_keypair: Arc<AccountKeyPair> = Arc::new(keypair);
