@@ -180,7 +180,7 @@ Mutated Objects:
 38B89FE9F4A4823F1406938E87A8767CBD7F0B93 SequenceNumber(2) o#26dbaf7ec2032a6270a45498ad46ac0b1ddbc361fcff20cadafaf5d39b8181b1
 ```
 
-The preceding call created three objects. For each object, it printed out a tuple of three values (object_id, version, object_digest). Object ID is the important value here. Since there is no real application here to display things for us, you need a bit of object printing magic to figure out which object is which. Let's print out the metadata of each created object (replace the object ID with what you see on your screen):
+The preceding call created three objects. For each object, it printed out a tuple of three values (object_id, version, object_digest). Object ID is the important value here. Since there is no application here to display objects, you need a bit of object printing magic to figure out which object is which. Let's print out the metadata of each created object (replace the object ID with what you see on your screen):
 
 ```bash
 sui client object 5851B7EA07B93E68696BC0CF811D2E266DFB880D
@@ -411,7 +411,7 @@ Mutated Objects:
 ...
 ```
 
-Cool! The last transaction created a new object. Let's find out what object was created:
+Cool! The last transaction created a new object. To find out what object was created:
 ```shell
 $ sui client object 54B58C0D5B14A269B1CD424B3CCAB1E315C43343
 ```

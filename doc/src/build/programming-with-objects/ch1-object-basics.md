@@ -147,7 +147,7 @@ test_scenario::next_tx(scenario, not_owner);
 ```
 
 `test_scenario::next_tx` switches the transaction sender to `@0x2`, which is a new address different from the previous one.
-`test_scenario::has_most_recent_for_sender` checks whether an object with the given type actually exists in the global storage owned by the current sender of the transaction. In this code, it asserts that you should not be able to remove such an object, because `@0x2` does not own any object.
+`test_scenario::has_most_recent_for_sender` checks whether an object with the given type actually exists in the global storage owned by the current sender of the transaction. This code asserts that you should not be able to remove such an object, because `@0x2` does not own any object.
 
 **Note:** The second parameter of `assert!` is the error code. In non-test code, you usually define a list of dedicated error code constants for each type of error that could happen in production. For unit tests, it's usually unnecessary because there are too many assertions. The stack trace upon error is sufficient to tell where the error happened. You can just put `0` for assertions in unit tests.
 
