@@ -1150,6 +1150,11 @@ async fn safe_mode_reconfig_test() {
     assert_eq!(system_state.epoch(), 1);
     assert_eq!(system_state.system_state_version(), 2);
 
+    // Wait for all nodes to enter new epoch (otherwise we can call
+    // advance_epoch_result_injection::set_override();
+    // while one node is still in epoch 1, which will cause it to fork).
+    sleep(Duration::from_secs(3)).await;
+
     let prev_epoch_start_timestamp = system_state.epoch_start_timestamp_ms();
 
     // We are going to enter safe mode so set the expectation right.
