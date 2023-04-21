@@ -87,22 +87,8 @@ module deepbook::clob {
         lot_size: u64,
     }
 
-    /// deprecated
     /// Emitted when a maker order is injected into the order book.
-    struct OrderPlaced<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
-        /// object ID of the pool the order was placed on
-        pool_id: ID,
-        /// ID of the order within the pool
-        order_id: u64,
-        is_bid: bool,
-        /// object ID of the `AccountCap` that placed the order
-        owner: ID,
-        base_asset_quantity_placed: u64,
-        price: u64,
-    }
-
-    /// Emitted when a maker order is injected into the order book.
-    struct OrderPlacedEvent<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
+    struct OrderPlacedV2<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
         /// object ID of the pool the order was placed on
         pool_id: ID,
         /// ID of the order within the pool
@@ -819,7 +805,7 @@ module deepbook::clob {
 
         let tick_level = borrow_mut_leaf_by_index(open_orders, tick_index);
         linked_table::push_back(&mut tick_level.open_orders, order_id, order);
-        event::emit(OrderPlacedEvent<BaseAsset, QuoteAsset> {
+        event::emit(OrderPlacedV2<BaseAsset, QuoteAsset> {
             pool_id: *object::uid_as_inner(&pool.id),
             order_id,
             is_bid,
@@ -1992,4 +1978,20 @@ module deepbook::clob {
         };
         test_scenario::end(test);
     }
+
+    // <<<<<<<<<<<<<<<<<<<<<<<< deprecated codes <<<<<<<<<<<<<<<<<<<<<<<<
+    /// Emitted when a maker order is injected into the order book.
+    struct OrderPlaced<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
+        /// object ID of the pool the order was placed on
+        pool_id: ID,
+        /// ID of the order within the pool
+        order_id: u64,
+        is_bid: bool,
+        /// object ID of the `AccountCap` that placed the order
+        owner: ID,
+        base_asset_quantity_placed: u64,
+        price: u64,
+    }
+
+    // <<<<<<<<<<<<<<<<<<<<<<<< deprecated codes <<<<<<<<<<<<<<<<<<<<<<<<
 }
