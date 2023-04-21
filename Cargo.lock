@@ -9531,6 +9531,7 @@ dependencies = [
  "anemo-build",
  "anemo-tower",
  "anyhow",
+ "dashmap",
  "ed25519-consensus",
  "fastcrypto",
  "futures",
@@ -9548,6 +9549,7 @@ dependencies = [
  "tokio",
  "tonic",
  "tonic-build",
+ "tower",
  "tracing",
  "workspace-hack",
 ]

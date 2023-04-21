@@ -89,7 +89,7 @@ pub use generated::{
 };
 pub use server::GetCheckpointSummaryRequest;
 
-use self::metrics::Metrics;
+use self::{metrics::Metrics, server::CheckpointContentsDownloadLimitLayer};
 
 /// A handle to the StateSync subsystem.
 ///
@@ -260,6 +260,7 @@ struct StateSyncEventLoop<S> {
     tasks: JoinSet<()>,
     sync_checkpoint_summaries_task: Option<AbortHandle>,
     sync_checkpoint_contents_task: Option<AbortHandle>,
+    download_limit_layer: Option<CheckpointContentsDownloadLimitLayer>,
 
     store: S,
     peer_heights: Arc<RwLock<PeerHeights>>,
@@ -501,6 +502,10 @@ where
             self.config.timeout(),
         );
         self.tasks.spawn(task);
+
+        if let Some(layer) = self.download_limit_layer.as_ref() {
+            layer.maybe_prune_map();
+        }
     }
 
     fn maybe_start_checkpoint_summary_sync_task(&mut self) {
