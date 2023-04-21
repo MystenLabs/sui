@@ -244,6 +244,20 @@ impl RocksDB {
         delegate_call!(self.multi_get_cf_opt(keys, readopts))
     }
 
+    pub fn batched_multi_get_cf<'a, 'b: 'a, K, I>(
+        &'a self,
+        cf: &impl AsColumnFamilyRef,
+        keys: I,
+        sorted_input: bool,
+        readopts: &ReadOptions,
+    ) -> Vec<Result<Option<rocksdb::DBPinnableSlice<'_>>, Error>>
+    where
+        K: AsRef<[u8]>,
+        I: IntoIterator<Item = K>,
+    {
+        delegate_call!(self.batched_multi_get_cf_opt(cf, keys, sorted_input, readopts))
+    }
+
     pub fn property_int_value_cf(
         &self,
         cf: &impl AsColumnFamilyRef,
@@ -1836,6 +1850,37 @@ where
                 .collect();
             results.extend(values_parsed?);
         }
+        Ok(results)
+    }
+
+    #[instrument(level = "trace", skip_all, err)]
+    fn batched_multi_get<J>(
+        &self,
+        keys: impl IntoIterator<Item = J>,
+        sorted_input: bool
+    ) -> Result<Vec<Option<V>>, TypedStoreError>
+    where
+        J: Borrow<K>,
+    {
+        let cf = self.cf();
+        let keys_bytes: Result<Vec<_>, _> = keys
+            .into_iter()
+            .map(|k| be_fix_int_ser(k.borrow()))
+            .collect();
+
+        let keys_bytes = keys_bytes?;
+        let read_opts = self.opts.readopts();
+        let results = self.rocksdb.batched_multi_get_cf(&cf, keys_bytes, sorted_input, &read_opts);
+
+        let results = results
+        .into_iter()
+        .map(|result| {
+            result
+                .map(|opt| opt.map(|pinnable_slice| bcs::from_bytes(&pinnable_slice)))
+                .map_err(TypedStoreError::from)
+        })
+        .collect();
+
         Ok(results)
     }
 

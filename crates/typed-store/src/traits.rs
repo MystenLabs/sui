@@ -103,6 +103,17 @@ where
         keys.into_iter().map(|key| self.get(key.borrow())).collect()
     }
 
+    fn batched_multi_get<J>(
+        &self,
+        keys: impl IntoIterator<Item = J>,
+        sorted_input: bool
+    ) -> Result<Vec<Option<V>>, Self::Error>
+    where
+        J: Borrow<K>,
+    {
+        keys.into_iter().map(|key| self.get(key.borrow())).collect()
+    }
+
     /// Inserts key-value pairs, non-atomically.
     fn multi_insert<J, U>(
         &self,
