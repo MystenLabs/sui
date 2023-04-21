@@ -5308,7 +5308,6 @@ dependencies = [
  "log",
  "move-binary-format",
  "move-command-line-common",
- "move-compiler",
  "move-core-types",
  "move-docgen",
  "move-errmapgen",
