@@ -74,7 +74,24 @@ const sui = new Sui(transport);
 
 ### getPublicKey
 
-Get Sui address for a given BIP-32 path.
+Gets the Sui address for a given BIP-32 path.
+
+#### Parameters
+
+-   `path` **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** a path in BIP-32 format
+-   `displayOnDevice` **[boolean](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Boolean)** whether or not to display the address on the Ledger device.
+
+#### Examples
+
+```javascript
+const publicKey = await sui.getPublicKey("44'/784'/0'/0'/0'");
+```
+
+Returns **[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)&lt;[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)>** an object with a public key.
+
+### verifyAddress
+
+Gets the Sui address for a given BIP-32 path,  .
 
 #### Parameters
 
@@ -83,7 +100,7 @@ Get Sui address for a given BIP-32 path.
 #### Examples
 
 ```javascript
-const publicKey = await sui.getPublicKey("44'/784'/0'/0'/0'");
+const publicKey = await sui.verifyAddress("44'/784'/0'/0'/0'");
 ```
 
 Returns **[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)&lt;[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)>** an object with a public key.

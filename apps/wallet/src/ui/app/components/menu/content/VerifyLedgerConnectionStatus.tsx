@@ -3,7 +3,7 @@
 
 import { Check12, X12 } from '@mysten/icons';
 import { Ed25519PublicKey, type SuiAddress } from '@mysten/sui.js';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 
 import { useSuiLedgerClient } from '../../ledger/SuiLedgerClientProvider';
@@ -37,10 +37,6 @@ export function VerifyLedgerConnectionStatus({
     );
     const timeoutIdRef = useRef<number>();
 
-    useEffect(() => {
-        return () => clearTimeout(timeoutIdRef.current);
-    }, []);
-
     switch (verificationStatus) {
         case VerificationStatus.UNKNOWN:
             return (
@@ -51,7 +47,8 @@ export function VerifyLedgerConnectionStatus({
                             const suiLedgerClient = await connectToLedger();
                             const publicKeyResult =
                                 await suiLedgerClient.getPublicKey(
-                                    derivationPath
+                                    derivationPath,
+                                    true
                                 );
                             const publicKey = new Ed25519PublicKey(
                                 publicKeyResult.publicKey
