@@ -34,7 +34,7 @@ export function TransactionsActivityTable({
     const { data, isLoading, isFetching, fetchNextPage, hasNextPage } =
         useGetTransactionBlocks(undefined, limit);
 
-    const countQuery = useQuery(
+    const { data: count } = useQuery(
         ['transactions', 'count'],
         () => rpc.getTotalTransactionBlocks(),
         { cacheTime: 24 * 60 * 60 * 1000, staleTime: Infinity, retry: false }
@@ -97,16 +97,14 @@ export function TransactionsActivityTable({
                             onFirst={() => setCurrentPage(0)}
                         />
                     ) : (
-                            <Link to="/recent" after={<ArrowRight12 />}>
-                                More Transaction Blocks
-                            </Link>
+                        <Link to="/recent" after={<ArrowRight12 />}>
+                            More Transaction Blocks
+                        </Link>
                     )}
 
                     <div className="flex items-center space-x-3">
                         <Text variant="body/medium" color="steel-dark">
-                            {countQuery.data
-                                ? numberSuffix(Number(countQuery.data))
-                                : '-'}
+                            {count ? numberSuffix(Number(count)) : '-'}
                             {` Transaction Blocks`}
                         </Text>
                         {!disablePagination && (
