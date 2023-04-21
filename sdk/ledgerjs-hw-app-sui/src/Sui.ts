@@ -64,9 +64,12 @@ export default class Sui {
      *
      * @param path - the path to retrieve.
      * @param displayOnDevice - whether or not the address should be displayed on the device.
-     *                             
+     *
      */
-    async getPublicKey(path: string, displayOnDevice = false): Promise<GetPublicKeyResult> {
+    async getPublicKey(
+        path: string,
+        displayOnDevice = false
+    ): Promise<GetPublicKeyResult> {
         const cla = 0x00;
         const ins = displayOnDevice ? 0x01 : 0x02;
         const p1 = 0;
@@ -86,7 +89,6 @@ export default class Sui {
         };
         return res;
     }
-    
 
     /**
      * Sign a transaction with the key at a BIP32 path.
