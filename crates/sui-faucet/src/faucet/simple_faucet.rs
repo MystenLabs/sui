@@ -435,7 +435,7 @@ impl SimpleFaucet {
         let tx_digest = tx.digest();
         let client = self.wallet.get_client().await?;
         Ok(client
-            .quorum_driver()
+            .quorum_driver_api()
             .execute_transaction_block(
                 tx.clone(),
                 SuiTransactionBlockResponseOptions::new().with_effects(),
