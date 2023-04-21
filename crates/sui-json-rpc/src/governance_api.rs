@@ -126,17 +126,18 @@ impl GovernanceReadApi {
             },
         );
 
-        let system_state: SuiSystemStateSummary =
-            self.get_system_state()?.into_sui_system_state_summary();
+        let system_state = self.get_system_state()?;
+        let system_state_summary: SuiSystemStateSummary =
+            system_state.clone().into_sui_system_state_summary();
         let mut delegated_stakes = vec![];
         for (pool_id, stakes) in pools {
             // Rate table and rate can be null when the pool is not active
             let rate_table = self
-                .get_exchange_rate_table(&system_state, &pool_id)
+                .get_exchange_rate_table(&system_state_summary, &pool_id)
                 .await
                 .ok();
             let current_rate = if let Some(rate_table) = rate_table {
-                self.get_exchange_rate(rate_table, system_state.epoch)
+                self.get_exchange_rate(rate_table, system_state_summary.epoch)
                     .await
                     .ok()
             } else {
@@ -147,7 +148,7 @@ impl GovernanceReadApi {
             for (stake, exists) in stakes {
                 let status = if !exists {
                     StakeStatus::Unstaked
-                } else if system_state.epoch >= stake.activation_epoch() {
+                } else if system_state_summary.epoch >= stake.activation_epoch() {
                     let estimated_reward = if let (Some(rate_table), Some(current_rate)) =
                         (&rate_table, &current_rate)
                     {
@@ -174,8 +175,12 @@ impl GovernanceReadApi {
                     status,
                 })
             }
-            let validator =
-                get_validator_by_pool_id(self.state.db().as_ref(), &system_state, pool_id)?;
+            let validator = get_validator_by_pool_id(
+                self.state.db().as_ref(),
+                &system_state,
+                &system_state_summary,
+                pool_id,
+            )?;
             delegated_stakes.push(DelegatedStake {
                 validator_address: validator.sui_address,
                 staking_pool: pool_id,
