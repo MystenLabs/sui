@@ -9342,6 +9342,7 @@ dependencies = [
  "rand 0.8.5",
  "rocksdb",
  "rusoto_core",
+ "rusoto_credential",
  "rusoto_kms",
  "rustyline",
  "rustyline-derive",

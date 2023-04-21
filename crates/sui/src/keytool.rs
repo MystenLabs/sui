@@ -262,6 +262,7 @@ impl KeyToolCommand {
                 // Set up the KMS client, expect to use env vars or whatever the AWS
                 // SDK prefers.
                 // Length of Pubkey - 33, sig - 64
+                
                 let region = Region::default();
                 let kms = KmsClient::new(region);
 
