@@ -87,6 +87,18 @@ proptest! {
 
     #[test]
     #[cfg_attr(msim, ignore)]
+    fn fuzz_p2p_rand_gas_budget_price_and_coins(
+        universe in AccountUniverseGen::strategy(
+            2..default_num_accounts(),
+            10_000_000_000u64..1_000_000_000_000,
+            ),
+            transfers in vec(any_with::<P2PTransferGenRandGasRandPriceRandCoins>((1_000_000, 100_000_000)), 0..default_num_transactions()),
+        ) {
+        run_and_assert_universe(universe, transfers).unwrap();
+    }
+
+    #[test]
+    #[cfg_attr(msim, ignore)]
     fn fuzz_p2p_mixed(
         universe in AccountUniverseGen::strategy(
             2..default_num_accounts(),
