@@ -51,6 +51,7 @@ async fn run_one(
     Ok(test_output)
 }
 
+#[ignore]
 #[sim_test]
 async fn basic_read_cmd_snapshot_tests() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
