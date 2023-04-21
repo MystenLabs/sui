@@ -17,6 +17,7 @@ export async function demoDappConnect(
     await walletPage.waitForLoadState();
     await walletPage.getByRole('button', { name: 'Continue' }).click();
     await walletPage.getByRole('button', { name: 'Connect' }).click();
-    await page.waitForSelector('.account');
-    await expect((await page.locator('.account').all()).length).toBe(1);
+    const accountsList = page.getByTestId('accounts-list');
+    const accountListItems = accountsList.getByRole('listitem');
+    await expect(accountListItems).toHaveCount(1);
 }

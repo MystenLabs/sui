@@ -110,8 +110,7 @@ test.describe('Wallet interface', () => {
         await demoPage.goto(demoPageUrl);
     });
     test.describe('when not connected', () => {
-        // eslint-disable-next-line no-empty-pattern
-        test('no account is connected', async ({}) => {
+        test('no account is connected', async () => {
             expect((await demoPage.locator('.account').all()).length).toBe(0);
             await expect(
                 demoPage.getByRole('button', { name: 'Connect' })
@@ -142,7 +141,6 @@ test.describe('Wallet interface', () => {
         });
         test('executing transaction works', async ({ context }) => {
             const newPage = context.waitForEvent('page');
-            await demoPage.waitForSelector('.account');
             await demoPage
                 .getByRole('button', { name: 'Send transaction' })
                 .click();

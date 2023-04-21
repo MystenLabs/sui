@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { TransactionBlock } from '@mysten/sui.js';
-import { ReadonlyWalletAccount, getWallets } from '@mysten/wallet-standard';
+import {
+    ReadonlyWalletAccount,
+    type Wallet,
+    getWallets,
+} from '@mysten/wallet-standard';
 import { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 
@@ -30,23 +34,26 @@ function getAccount(account: ReadonlyWalletAccount, useWrongAccount: boolean) {
     return account;
 }
 
+function findSuiWallet(wallets: readonly Wallet[]) {
+    return (wallets.find((aWallet) => aWallet.name.includes('Sui Wallet')) ||
+        null) as SuiWallet | null;
+}
+
 function App() {
-    const [suiWallet, setSuiWallet] = useState<SuiWallet | null>(null);
+    const [suiWallet, setSuiWallet] = useState<SuiWallet | null>(() =>
+        findSuiWallet(getWallets().get())
+    );
     const [error, setError] = useState<string | null>(null);
-    const [accounts, setAccounts] = useState<ReadonlyWalletAccount[]>([]);
+    const [accounts, setAccounts] = useState<ReadonlyWalletAccount[]>(
+        () => suiWallet?.accounts || []
+    );
     const [useWrongAccounts, setUseWrongAccounts] = useState(false);
 
     useEffect(() => {
         const walletsApi = getWallets();
         function updateWallets() {
-            const updatedWallets = walletsApi.get();
-            setSuiWallet(
-                (updatedWallets.find((aWallet) =>
-                    aWallet.name.includes('Sui Wallet')
-                ) || null) as SuiWallet | null
-            );
+            setSuiWallet(findSuiWallet(walletsApi.get()));
         }
-        updateWallets();
         const unregister1 = walletsApi.on('register', updateWallets);
         const unregister2 = walletsApi.on('unregister', updateWallets);
         return () => {
@@ -56,7 +63,6 @@ function App() {
     }, []);
     useEffect(() => {
         if (suiWallet) {
-            setAccounts(suiWallet.accounts);
             return suiWallet.features['standard:events'].on(
                 'change',
                 ({ accounts }) => {
@@ -74,11 +80,9 @@ function App() {
         <>
             <h1>Sui Wallet is installed. ({suiWallet.name})</h1>
             {accounts.length ? (
-                <ul>
+                <ul data-testid="accounts-list">
                     {accounts.map((anAccount) => (
-                        <li key={anAccount.address} className="account">
-                            {anAccount.address}
-                        </li>
+                        <li key={anAccount.address}>{anAccount.address}</li>
                     ))}
                 </ul>
             ) : (
