@@ -58,6 +58,27 @@ module sui::transfer_policy_tests {
     }
 
     #[test]
+    /// Policy set and completed; rule removed; empty policy works
+    fun test_remove_rule_completed() {
+        let ctx = &mut ctx();
+        let (policy, cap) = prepare(ctx);
+
+        // now require everyone to pay any amount
+        dummy_policy::set(&mut policy, &cap);
+
+        let request = policy::new_request(fresh_id(ctx), 10_000, fresh_id(ctx));
+        dummy_policy::pay(&mut policy, &mut request, coin::mint_for_testing(10_000, ctx));
+        policy::confirm_request(&policy, request);
+
+        // remove policy and start over - this time ignore dummy_policy
+        policy::remove_rule<Asset, dummy_policy::Rule, dummy_policy::Config>(&mut policy, &cap);
+        let request = policy::new_request(fresh_id(ctx), 10_000, fresh_id(ctx));
+        policy::confirm_request(&policy, request);
+
+        assert!(wrapup(policy, cap, ctx) == 10_000, 0);
+    }
+
+    #[test]
     #[expected_failure(abort_code = sui::transfer_policy::EPolicyNotSatisfied)]
     /// Policy set but not satisfied;
     fun test_rule_ignored() {

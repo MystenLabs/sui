@@ -679,6 +679,7 @@ Remove the Rule from the <code><a href="transfer_policy.md#0x2_transfer_policy_T
 ) {
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(policy) == cap.policy_id, <a href="transfer_policy.md#0x2_transfer_policy_ENotOwner">ENotOwner</a>);
     <b>let</b> _: Config = df::remove(&<b>mut</b> policy.id, <a href="transfer_policy.md#0x2_transfer_policy_RuleKey">RuleKey</a>&lt;Rule&gt; {});
+    <a href="vec_set.md#0x2_vec_set_remove">vec_set::remove</a>(&<b>mut</b> policy.rules, &<a href="_get">type_name::get</a>&lt;Rule&gt;());
 }
 </code></pre>
 

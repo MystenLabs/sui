@@ -242,6 +242,7 @@ module sui::transfer_policy {
     ) {
         assert!(object::id(policy) == cap.policy_id, ENotOwner);
         let _: Config = df::remove(&mut policy.id, RuleKey<Rule> {});
+        vec_set::remove(&mut policy.rules, &type_name::get<Rule>());
     }
 
     // === Fields access ===

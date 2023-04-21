@@ -255,6 +255,7 @@ module sui::kiosk {
         self: &mut Kiosk, cap: &KioskOwnerCap, id: ID, price: u64
     ) {
         assert!(object::id(self) == cap.for, ENotOwner);
+        assert!(has_item(self, id), EItemNotFound);
         assert!(!is_listed_exclusively(self, id), EListedExclusively);
 
         df::add(&mut self.id, Listing { id, is_exclusive: false }, price);
@@ -299,6 +300,7 @@ module sui::kiosk {
         self: &mut Kiosk, cap: &KioskOwnerCap, id: ID, min_price: u64, ctx: &mut TxContext
     ): PurchaseCap<T> {
         assert!(object::id(self) == cap.for, ENotOwner);
+        assert!(has_item(self, id), EItemNotFound);
         assert!(!is_listed(self, id), EAlreadyListed);
 
         let uid = object::new(ctx);
@@ -395,10 +397,20 @@ module sui::kiosk {
         &mut self.id
     }
 
-    /// Allow or disallow `uid_mut` access via the `allow_extensions` setting.
+    /// Allow or disallow `uid` and `uid_mut` access via the `allow_extensions` setting.
     public fun set_allow_extensions(self: &mut Kiosk, cap: &KioskOwnerCap, allow_extensions: bool) {
         assert!(object::id(self) == cap.for, ENotOwner);
         self.allow_extensions = allow_extensions;
+    }
+
+    /// Get the immutable `UID` for dynamic field access.
+    /// Aborts if `allow_extensions` set to `false`.
+    ///
+    /// Given the &UID can be used for reading keys and authorization,
+    /// its access
+    public fun uid(self: &Kiosk): &UID {
+        assert!(self.allow_extensions, EExtensionsDisabled);
+        &self.id
     }
 
     /// Get the mutable `UID` for dynamic field access and extensions.
