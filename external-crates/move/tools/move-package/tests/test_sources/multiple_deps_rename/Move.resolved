@@ -33,6 +33,7 @@ ResolvedGraph {
                 ),
                 version: None,
                 resolver: None,
+                overridden_path: false,
             },
             "D": Package {
                 kind: Local(
@@ -40,6 +41,7 @@ ResolvedGraph {
                 ),
                 version: None,
                 resolver: None,
+                overridden_path: false,
             },
         },
         always_deps: {
@@ -156,7 +158,7 @@ ResolvedGraph {
                     "C": Internal(
                         InternalDependency {
                             kind: Local(
-                                "./deps_only/C",
+                                "deps_only/C",
                             ),
                             subst: Some(
                                 {
@@ -167,12 +169,13 @@ ResolvedGraph {
                             ),
                             version: None,
                             digest: None,
+                            dep_override: false,
                         },
                     ),
                     "D": Internal(
                         InternalDependency {
                             kind: Local(
-                                "./deps_only/D",
+                                "deps_only/D",
                             ),
                             subst: Some(
                                 {
@@ -183,6 +186,7 @@ ResolvedGraph {
                             ),
                             version: None,
                             digest: None,
+                            dep_override: false,
                         },
                     ),
                 },
