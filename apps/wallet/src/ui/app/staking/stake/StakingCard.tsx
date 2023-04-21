@@ -327,7 +327,7 @@ function StakingCard() {
                                                 validator’s stake at the end of
                                                 the Epoch in which it was
                                                 staked. Rewards are earned
-                                                separately for each epoch and
+                                                separately for each Epoch and
                                                 become available at the end of
                                                 each Epoch.
                                             </Text>
