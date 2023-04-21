@@ -2934,7 +2934,7 @@ impl Default for TransactionEffectsV1 {
             },
             modified_at_versions: Vec::new(),
             shared_objects: Vec::new(),
-            transaction_digest: TransactionDigest::random(),
+            transaction_digest: TransactionDigest::default(),
             created: Vec::new(),
             mutated: Vec::new(),
             unwrapped: Vec::new(),
@@ -2942,7 +2942,7 @@ impl Default for TransactionEffectsV1 {
             unwrapped_then_deleted: Vec::new(),
             wrapped: Vec::new(),
             gas_object: (
-                random_object_ref(),
+                default_object_ref(),
                 Owner::AddressOwner(SuiAddress::default()),
             ),
             events_digest: None,

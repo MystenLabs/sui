@@ -116,6 +116,14 @@ pub struct ObjectID(
 
 pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
 
+pub fn default_object_ref() -> ObjectRef {
+    (
+        ObjectID(AccountAddress::ZERO),
+        SequenceNumber::new(),
+        ObjectDigest::new([0; 32]),
+    )
+}
+
 pub fn random_object_ref() -> ObjectRef {
     (
         ObjectID::random(),

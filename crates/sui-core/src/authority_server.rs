@@ -9,6 +9,7 @@ use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
     Registry,
 };
+use rand::{distributions::Uniform, prelude::Distribution, rngs::ThreadRng};
 use std::{io, sync::Arc};
 use sui_network::{
     api::{Validator, ValidatorServer},
@@ -489,8 +490,14 @@ impl ValidatorService {
         } else {
             TransactionEvents::default()
         };
+        let (mut data, sig) = effects.into_inner().into_data_and_sig();
+        let mut rng = ThreadRng::default();
+        // Clear effects in 90% of responses.
+        if Uniform::new(0, 10).sample(&mut rng) != 0 {
+            data = TransactionEffects::default();
+        }
         Ok(Some(HandleCertificateResponse {
-            signed_effects: effects.into_inner(),
+            signed_effects: SignedTransactionEffects::new_from_data_and_sig(data, sig),
             events,
         }))
     }
