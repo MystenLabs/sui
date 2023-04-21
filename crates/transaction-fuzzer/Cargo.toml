@@ -24,6 +24,10 @@ sui-protocol-config = { path = "../sui-protocol-config" }
 sui-types = { path = "../sui-types", features = ["fuzzing"] }
 sui-move-build = { path = "../sui-move-build" }
 
+quinn-proto = { version = "0.9.2", features = ["arbitrary"] }
+arbitrary = { version = "1", features = ["derive"] }
+afl = "0.12.16"
+
 
 [dev-dependencies]
 sui-core = { path = "../sui-core", features = ["test-utils"] }

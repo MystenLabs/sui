@@ -59,6 +59,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "afl"
+version = "0.12.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be262ebb64b7ed6fdb21f45f265615de14d6bf5d8c88fb5b15808097bf8db14a"
+dependencies = [
+ "clap 4.1.4",
+ "fs_extra",
+ "home",
+ "libc",
+ "rustc_version",
+ "tempfile",
+ "xdg",
+]
+
+[[package]]
 name = "ahash"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7340,6 +7355,7 @@ version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72ef4ced82a24bb281af338b9e8f94429b6eca01b4e66d899f40031f074e74c9"
 dependencies = [
+ "arbitrary",
  "bytes",
  "rand 0.8.5",
  "ring",
@@ -11155,11 +11171,14 @@ dependencies = [
 name = "transaction-fuzzer"
 version = "0.1.0"
 dependencies = [
+ "afl",
+ "arbitrary",
  "move-binary-format",
  "move-core-types",
  "once_cell",
  "proptest",
  "proptest-derive",
+ "quinn-proto",
  "rand 0.8.5",
  "sui-core",
  "sui-move-build",
@@ -11914,6 +11933,7 @@ dependencies = [
  "aead",
  "aes",
  "aes-gcm",
+ "afl",
  "ahash 0.7.6",
  "ahash 0.8.2",
  "aho-corasick",
@@ -12736,6 +12756,7 @@ dependencies = [
  "winreg",
  "wyz",
  "x509-parser",
+ "xdg",
  "yaml-rust",
  "yansi",
  "yasna",
@@ -12776,6 +12797,15 @@ dependencies = [
  "rusticata-macros",
  "thiserror",
  "time 0.3.17",
+]
+
+[[package]]
+name = "xdg"
+version = "2.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c4583db5cbd4c4c0303df2d15af80f0539db703fa1c68802d4cbbd2dd0f88f6"
+dependencies = [
+ "dirs",
 ]
 
 [[package]]
