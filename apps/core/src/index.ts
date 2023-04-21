@@ -9,6 +9,7 @@ export * from './hooks/useGetValidatorsEvents';
 export * from './hooks/useGetRollingAverageApys';
 export * from './utils/formatAmount';
 export * from './utils/roundFloat';
+export * from './utils/calculateStakeShare';
 export * from './hooks/useGetTransferAmount';
 export * from './hooks/useGetObject';
 export * from './hooks/useGetDynamicFieldObject';
