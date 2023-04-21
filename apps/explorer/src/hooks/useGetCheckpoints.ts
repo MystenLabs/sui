@@ -4,12 +4,12 @@
 import { useRpcClient } from '@mysten/core';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
-export const DEFAULT_EPOCHS_LIMIT = 20;
+export const DEFAULT_CHECKPOINTS_LIMIT = 20;
 
 // Fetch transaction blocks
 export function useGetCheckpoints(
     cursor?: string,
-    limit = DEFAULT_EPOCHS_LIMIT
+    limit = DEFAULT_CHECKPOINTS_LIMIT
 ) {
     const rpc = useRpcClient();
 
