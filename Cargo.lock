@@ -10193,6 +10193,7 @@ dependencies = [
  "sui-move-natives",
  "sui-protocol-config",
  "sui-types",
+ "tempfile",
  "workspace-hack",
 ]
 

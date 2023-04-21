@@ -808,7 +808,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 let address_sym = &Symbol::from(address.as_str());
                 let state = self.compiled_state();
                 let input = input.into_concrete_value(&|s| Some(state.resolve_named_address(s)))?;
-                let (value, is_package) = match input {
+                let (value, package) = match input {
                     SuiValue::Object(fake_id) => {
                         let id = match self.fake_to_real_object_id(fake_id) {
                             Some(id) => id,
@@ -818,14 +818,25 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                             Some(obj) => obj,
                             None => bail!("INVALID TEST. Could not load object argument {}", id),
                         };
-                        let is_package = obj.is_package();
+                        let package = obj.data.try_as_package().map(|package| {
+                            package
+                                .serialized_module_map()
+                                .iter()
+                                .map(|(_, published_module_bytes)| {
+                                    let module =
+                                        CompiledModule::deserialize(published_module_bytes)
+                                            .unwrap();
+                                    (Some(*address_sym), module)
+                                })
+                                .collect()
+                        });
                         let value: AccountAddress = id.into();
-                        (value, is_package)
+                        (value, package)
                     }
                     SuiValue::MoveValue(v) => {
                         let bytes = v.simple_serialize().unwrap();
                         let value: AccountAddress = bcs::from_bytes(&bytes)?;
-                        (value, false)
+                        (value, None)
                     }
                     SuiValue::ObjVec(_) => bail!("obj vec is not supported as an input"),
                 };
@@ -834,13 +845,14 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     .named_address_mapping
                     .insert(address, value);
 
-                if is_package && self.staged_modules.contains_key(address_sym) {
+                let res = package.and_then(|p| Some((p, self.staged_modules.remove(address_sym)?)));
+                if let Some((package, staged)) = res {
                     let StagedPackage {
                         file,
                         syntax,
-                        modules,
-                    } = self.staged_modules.remove(address_sym).unwrap();
-                    store_modules(self, syntax, file, modules)
+                        modules: _,
+                    } = staged;
+                    store_modules(self, syntax, file, package)
                 }
 
                 Ok(None)
