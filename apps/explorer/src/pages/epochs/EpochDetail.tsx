@@ -20,6 +20,7 @@ import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Stats, type StatsProps } from '~/ui/Stats';
 import { TableCard } from '~/ui/TableCard';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
+import { getEpochStorageFundFlow } from '~/utils/getStorageFundFlow';
 
 function SuiStats({
     amount,
@@ -75,18 +76,9 @@ export default function EpochDetail() {
             </Banner>
         );
 
-    const fundInflow = epochData.endOfEpochInfo
-        ? BigInt(epochData.endOfEpochInfo.storageFundReinvestment) +
-          BigInt(epochData.endOfEpochInfo.storageCharge) +
-          BigInt(epochData.endOfEpochInfo.leftoverStorageFundInflow)
-        : null;
-
-    const fundOutflow = epochData.endOfEpochInfo
-        ? BigInt(epochData.endOfEpochInfo.storageRebate)
-        : null;
-
-    const netInflow =
-        fundInflow && fundOutflow ? fundInflow - fundOutflow : null;
+    const { fundInflow, fundOutflow, netInflow } = getEpochStorageFundFlow(
+        epochData.endOfEpochInfo
+    );
 
     return (
         <div className="flex flex-col space-y-16">
