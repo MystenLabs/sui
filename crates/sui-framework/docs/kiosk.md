@@ -1177,7 +1177,7 @@ Access the <code>UID</code> using the <code><a href="kiosk.md#0x2_kiosk_KioskOwn
 
 ## Function `set_allow_extensions`
 
-Allow or disallow <code>uid_mut</code> access via the <code>allow_extensions</code> setting.
+Allow or disallow <code>uid</code> and <code>uid_mut</code> access via the <code>allow_extensions</code> setting.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_set_allow_extensions">set_allow_extensions</a>(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, allow_extensions: bool)
@@ -1206,7 +1206,8 @@ Allow or disallow <code>uid_mut</code> access via the <code>allow_extensions</co
 Get the immutable <code>UID</code> for dynamic field access.
 Aborts if <code>allow_extensions</code> set to <code><b>false</b></code>.
 
-Given the &UID can be powerful for
+Given the &UID can be used for reading keys and authorization,
+its access
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_uid">uid</a>(self: &<a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>): &<a href="object.md#0x2_object_UID">object::UID</a>
