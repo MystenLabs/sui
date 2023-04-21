@@ -21,7 +21,7 @@ test('import wallet', async ({ page, extensionUrl }) => {
     await page.getByLabel('Create Password').fill('mystenlabs');
     await page.getByLabel('Confirm Password').fill('mystenlabs');
     await page.getByRole('button', { name: /Import/ }).click();
-    await page.getByRole('button', { name: /Open Sui Wallet/ }).click();
+    await page.getByRole('link', { name: /Open Sui Wallet/ }).click();
     await expect(page.getByTestId('coin-page')).toBeVisible();
     await expect(
         page.getByText(keypair.getPublicKey().toSuiAddress().slice(0, 6))
