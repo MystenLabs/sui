@@ -180,7 +180,7 @@ impl JsonRpcServerBuilder {
         let addr = server.local_addr()?;
         let handle = ServerHandle {
             rt: Some(rt),
-            handle: server.start(self.module)?,
+            handle: Some(server.start(self.module)?),
         };
         info!(local_addr =? addr, "Sui JSON-RPC server listening on {addr}");
         info!("Available JSON-RPC methods : {:?}", methods_names);
@@ -190,7 +190,15 @@ impl JsonRpcServerBuilder {
 
 pub struct ServerHandle {
     rt: Option<Runtime>,
-    pub handle: jsonrpsee::server::ServerHandle,
+    handle: Option<jsonrpsee::server::ServerHandle>,
+}
+
+impl ServerHandle {
+    pub async fn stopped(mut self) {
+        if let Some(handle) = self.handle.take() {
+            handle.stopped().await
+        }
+    }
 }
 
 impl Drop for ServerHandle {

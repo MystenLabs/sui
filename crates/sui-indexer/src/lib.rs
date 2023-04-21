@@ -200,7 +200,7 @@ impl Indexer {
                     .await
                     .expect("Json rpc server should not run into errors upon start.");
             // let JSON RPC server run forever.
-            spawn_monitored_task!(handle.handle.stopped());
+            spawn_monitored_task!(handle.stopped());
 
             backoff::future::retry(ExponentialBackoff::default(), || async {
                 let event_handler_clone = event_handler.clone();
@@ -225,7 +225,7 @@ impl Indexer {
                 build_json_rpc_server(registry, store.clone(), event_handler.clone(), config)
                     .await
                     .expect("Json rpc server should not run into errors upon start.");
-            handle.handle.stopped().await;
+            handle.stopped().await;
             Ok(())
         } else if config.fullnode_sync_worker {
             info!("Starting indexer with only fullnode sync");
