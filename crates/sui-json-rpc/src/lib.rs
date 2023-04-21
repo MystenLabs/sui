@@ -12,7 +12,7 @@ use jsonrpsee::server::{AllowHosts, ServerBuilder};
 use jsonrpsee::RpcModule;
 use prometheus::Registry;
 use tap::TapFallible;
-use tokio::runtime::Runtime;
+use tokio::runtime::{Handle, Runtime};
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tracing::{info, warn};
 
@@ -179,7 +179,7 @@ impl JsonRpcServerBuilder {
 
         let addr = server.local_addr()?;
         let handle = ServerHandle {
-            _rt: rt,
+            rt: Some(rt),
             handle: server.start(self.module)?,
         };
         info!(local_addr =? addr, "Sui JSON-RPC server listening on {addr}");
@@ -189,8 +189,17 @@ impl JsonRpcServerBuilder {
 }
 
 pub struct ServerHandle {
-    _rt: Runtime,
+    rt: Option<Runtime>,
     pub handle: jsonrpsee::server::ServerHandle,
+}
+
+impl Drop for ServerHandle {
+    // This is to prevent the runtime from being dropped in a existing runtime.
+    fn drop(&mut self) {
+        if let (Ok(handle), Some(rt)) = (Handle::try_current(), self.rt.take()) {
+            handle.spawn_blocking(move || drop(rt));
+        }
+    }
 }
 
 pub trait SuiRpcModule
