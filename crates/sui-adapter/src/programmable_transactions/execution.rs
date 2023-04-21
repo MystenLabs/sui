@@ -29,14 +29,14 @@ use sui_move_natives::object_runtime::ObjectRuntime;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::{
-        MoveObjectType, ObjectID, SuiAddress, TxContext, TX_CONTEXT_MODULE_NAME,
-        TX_CONTEXT_STRUCT_NAME,
+        MoveObjectType, ObjectID, SuiAddress, TxContext, TxContextKind, RESOLVED_ASCII_STR,
+        RESOLVED_STD_OPTION, RESOLVED_UTF8_STR, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
     },
     coin::Coin,
     error::{ExecutionError, ExecutionErrorKind},
     event::Event,
     gas::{SuiGasStatus, SuiGasStatusAPI},
-    id::UID,
+    id::{RESOLVED_SUI_ID, UID},
     messages::{
         Argument, Command, CommandArgumentError, PackageUpgradeError, ProgrammableMoveCall,
         ProgrammableTransaction,
@@ -49,9 +49,6 @@ use sui_types::{
     SUI_FRAMEWORK_ADDRESS,
 };
 use sui_verifier::{
-    entry_points_verifier::{
-        TxContextKind, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_SUI_ID, RESOLVED_UTF8_STR,
-    },
     private_generics::{EVENT_MODULE, PRIVATE_TRANSFER_FUNCTIONS, TRANSFER_MODULE},
     INIT_FN_NAME,
 };
