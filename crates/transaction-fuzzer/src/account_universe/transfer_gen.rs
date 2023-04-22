@@ -93,7 +93,7 @@ fn p2p_failure_gas(gas_price: u64) -> u64 {
     gas_price * P2P_COMPUTE_GAS_USAGE + P2P_FAILURE_STORAGE_USAGE
 }
 
-fn gas_price_selection_strategy() -> impl Strategy<Value = u64> {
+pub fn gas_price_selection_strategy() -> impl Strategy<Value = u64> {
     prop_oneof![
         Just(0u64),
         1u64..10_000,
@@ -107,7 +107,7 @@ fn gas_price_selection_strategy() -> impl Strategy<Value = u64> {
     ]
 }
 
-fn gas_budget_selection_strategy() -> impl Strategy<Value = u64> {
+pub fn gas_budget_selection_strategy() -> impl Strategy<Value = u64> {
     prop_oneof![
         Just(0u64),
         Just(PROTOCOL_CONFIG.base_tx_cost_fixed() - 1),

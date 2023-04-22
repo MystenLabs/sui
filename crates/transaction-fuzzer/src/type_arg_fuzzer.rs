@@ -60,26 +60,27 @@ pub fn gen_struct_tag() -> impl Strategy<Value = StructTag> {
         })
 }
 
+pub fn pt_for_tags(type_tags: Vec<TypeTag>) -> TransactionKind {
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder
+        .move_call(
+            SUI_FRAMEWORK_OBJECT_ID,
+            Identifier::new("random_type_tag_fuzzing").unwrap(),
+            Identifier::new("random_type_tag_fuzzing_fn").unwrap(),
+            type_tags,
+            vec![],
+        )
+        .unwrap();
+    TransactionKind::ProgrammableTransaction(builder.finish())
+}
+
 pub fn run_type_tags(account: &AccountCurrent, exec: &mut Executor, type_tags: Vec<TypeTag>) {
     let gas_object = account
         .current_coins
         .get(0)
         .unwrap()
         .compute_object_reference();
-    let txn = {
-        let mut builder = ProgrammableTransactionBuilder::new();
-        builder
-            .move_call(
-                SUI_FRAMEWORK_OBJECT_ID,
-                Identifier::new("random_type_tag_fuzzing").unwrap(),
-                Identifier::new("random_type_tag_fuzzing_fn").unwrap(),
-                type_tags,
-                vec![],
-            )
-            .unwrap();
-        builder.finish()
-    };
-    let kind = TransactionKind::ProgrammableTransaction(txn);
+    let kind = pt_for_tags(type_tags);
     let tx_data = TransactionData::new(
         kind,
         account.initial_data.account.address,
