@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import { v4 as uuid } from 'uuid';
 import Browser from 'webextension-polyfill';
 
