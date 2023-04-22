@@ -80,7 +80,7 @@ impl<T> Receiver<T> {
     }
 
     /// Polls to receive the next message on this channel.
-    ///  Decrements the gauge in case of a successful `poll_recv`.
+    /// Decrements the gauge in case of a successful `poll_recv`.
     pub fn poll_recv(&mut self, cx: &mut Context<'_>) -> Poll<Option<T>> {
         match self.inner.poll_recv(cx) {
             res @ Poll::Ready(Some(_)) => {
