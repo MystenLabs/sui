@@ -197,7 +197,7 @@ module policy::day_of_week {
 
 This code includes a constructor and defines the object type for the custom upgrade policy.
 
-You then need to add a function to authorize an upgrade, if on the correct day of the week. First, define a couple of constants, one for a day of the week where the upgrade isn't allowed, and another to define the number of milliseconds in a day (to be used shortly). Add these definitions directly under the current `ENotWeekDay` one.
+You then need to add a function to authorize an upgrade, if on the correct day of the week. First, define a couple of constants, one for the error code that identifies an attempted upgrade on a day the policy doesn't allow, and another to define the number of milliseconds in a day (to be used shortly). Add these definitions directly under the current `ENotWeekDay` one.
 
 ```rust
 // Request to authorize upgrade on the wrong day of the week.
@@ -206,7 +206,21 @@ const ENotAllowedDay: u64 = 2;
 const MS_IN_DAY: u64 = 24 * 60 * 60 * 1000;
 ```
 
-After the `new_policy` function, add an `authorize_upgrade` function to check that the day of the week is not violating the policy.
+After the `new_policy` function, add a `week_day` function to get the current weekday. As promised, the function uses the `MS_IN_DAY` constant you defined earlier.
+
+```rust
+fun week_day(ctx: &TxContext): u8 {
+    let days_since_unix_epoch = 
+        tx_context::epoch_timestamp_ms(ctx) / MS_IN_DAY;
+    // The unix epoch (1st Jan 1970) was a Thursday so shift days
+    // since the epoch by 3 so that 0 = Monday.
+    ((days_since_unix_epoch + 3) % 7 as u8)
+}
+
+```
+This function uses the epoch timestamp from `TxContext` rather than `Clock` because it needs only daily granularity, which means the upgrade transactions don't require consensus.
+
+Next, add an `authorize_upgrade` function that calls the previous function to get the current day of the week, then checks whether that value violates the policy, returning the `ENotAllowedDay` error value if it does.
 
 ```rust
 public fun authorize_upgrade(
@@ -222,19 +236,7 @@ public fun authorize_upgrade(
 
 The signature of a custom `authorize_upgrade` can be different from the signature of `sui::package::authorize_upgrade` as long as it returns an `UpgradeTicket`.
 
-Next, add a `week_day` function to get the current weekday. As promised, the function uses the `MS_IN_DAY` constant you defined earlier.
 
-```rust
-fun week_day(ctx: &TxContext): u8 {
-    let days_since_unix_epoch = 
-        tx_context::epoch_timestamp_ms(ctx) / MS_IN_DAY;
-    // The unix epoch (1st Jan 1970) was a Thursday so shift days
-    // since the epoch by 3 so that 0 = Monday.
-    ((days_since_unix_epoch + 3) % 7 as u8)
-}
-
-```
-This function uses the epoch timestamp from `TxContext` rather than `Clock` because it needs only daily granularity, which means the upgrade transactions don't require consensus.
   
 Finally, provide implementations of `commit_upgrade` and `make_immutable` that delegate to their respective functions in `sui::package`:
 
@@ -1004,7 +1006,7 @@ Array [
 
 Now, the `Events` section emitted for the `x` field has a value of `42` (changed from the original `41`).
 
-If you attempt the first upgrade before Tuesday or you change the constant again and try the upgrade the following day, the script receives a response that includes an error similar to the following, which indicates that the upgrade aborted with code `2` (`EDayNotAllowed`):
+If you attempt the first upgrade before Tuesday or you change the constant again and try the upgrade the following day, the script receives a response that includes an error similar to the following, which indicates that the upgrade aborted with code `2` (`ENotAllowedDay`):
 
 ```
 ...
