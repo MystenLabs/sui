@@ -8,7 +8,9 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
+use tracing::{info, instrument};
 
+use mysten_metrics::spawn_monitored_task;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::SuiCommittee;
 use sui_json_rpc_types::{DelegatedStake, Stake, StakeStatus};
@@ -27,11 +29,10 @@ use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::sui_system_state::{
     get_validator_from_table, sui_system_state_summary::get_validator_by_pool_id, SuiSystemState,
 };
-use tracing::{info, instrument};
 
 use crate::api::{GovernanceReadApiServer, JsonRpcMetrics};
 use crate::error::Error;
-use crate::SuiRpcModule;
+use crate::{ObjectProvider, SuiRpcModule};
 
 pub struct GovernanceReadApi {
     state: Arc<AuthorityState>,
@@ -44,10 +45,14 @@ impl GovernanceReadApi {
     }
 
     async fn get_staked_sui(&self, owner: SuiAddress) -> Result<Vec<StakedSui>, Error> {
-        let result = self
-            .state
-            .get_move_objects(owner, MoveObjectType::staked_sui())
-            .await?;
+        let state = self.state.clone();
+        let result = spawn_monitored_task!(async move {
+            state
+                .get_move_objects(owner, MoveObjectType::staked_sui())
+                .await
+        })
+        .await??;
+
         self.metrics
             .get_stake_sui_result_size
             .report(result.len() as u64);
@@ -61,10 +66,15 @@ impl GovernanceReadApi {
         &self,
         staked_sui_ids: Vec<ObjectID>,
     ) -> Result<Vec<DelegatedStake>, Error> {
-        let stakes_read = staked_sui_ids
-            .iter()
-            .map(|id| self.state.get_object_read(id))
-            .collect::<Result<Vec<_>, _>>()?;
+        let state = self.state.clone();
+        let stakes_read = spawn_monitored_task!(async move {
+            staked_sui_ids
+                .iter()
+                .map(|id| state.get_object_read(id))
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .await??;
+
         if stakes_read.is_empty() {
             return Ok(vec![]);
         }
@@ -77,8 +87,8 @@ impl GovernanceReadApi {
                 ObjectRead::Deleted(oref) => {
                     match self
                         .state
-                        .database
-                        .find_object_lt_or_eq_version(oref.0, oref.1.one_before().unwrap())
+                        .find_object_lt_or_eq_version(&oref.0, &oref.1.one_before().unwrap())
+                        .await?
                     {
                         Some(o) => stakes.push((StakedSui::try_from(&o)?, false)),
                         None => {

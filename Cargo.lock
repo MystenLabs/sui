@@ -9350,6 +9350,7 @@ dependencies = [
  "move-core-types",
  "move-package",
  "mysten-metrics",
+ "num_cpus",
  "prometheus",
  "rand 0.8.5",
  "reqwest",

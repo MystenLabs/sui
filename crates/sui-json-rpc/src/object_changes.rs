@@ -10,7 +10,7 @@ use sui_types::storage::{DeleteKind, WriteKind};
 
 use crate::ObjectProvider;
 
-pub fn get_object_changes<P: ObjectProvider<Error = E>, E>(
+pub async fn get_object_changes<P: ObjectProvider<Error = E>, E>(
     object_provider: &P,
     sender: SuiAddress,
     modified_at_versions: &[(ObjectID, SequenceNumber)],
@@ -25,7 +25,7 @@ pub fn get_object_changes<P: ObjectProvider<Error = E>, E>(
         .collect::<BTreeMap<_, _>>();
 
     for ((id, version, digest), owner, kind) in all_changed_objects {
-        let o = object_provider.get_object(id, version)?;
+        let o = object_provider.get_object(id, version).await?;
         if let Some(type_) = o.type_() {
             let object_type = type_.clone().into();
 
@@ -63,7 +63,9 @@ pub fn get_object_changes<P: ObjectProvider<Error = E>, E>(
     }
 
     for ((id, version, _), kind) in all_deleted {
-        let o = object_provider.find_object_lt_or_eq_version(id, version)?;
+        let o = object_provider
+            .find_object_lt_or_eq_version(id, version)
+            .await?;
         if let Some(o) = o {
             if let Some(type_) = o.type_() {
                 let object_type = type_.clone().into();
