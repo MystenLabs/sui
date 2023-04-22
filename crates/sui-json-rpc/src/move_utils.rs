@@ -110,7 +110,6 @@ impl MoveUtilsServer for MoveUtils {
         let object_read = self
             .state
             .get_object_read(&package)
-            .await
             .map_err(|e| anyhow!("{e}"))?;
 
         let normalized = match object_read {

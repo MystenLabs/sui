@@ -178,10 +178,7 @@ impl ObjectProvider for Arc<AuthorityState> {
         id: &ObjectID,
         version: &SequenceNumber,
     ) -> Result<Object, Self::Error> {
-        Ok(self
-            .get_past_object_read(id, *version)
-            .await?
-            .into_object()?)
+        Ok(self.get_past_object_read(id, *version)?.into_object()?)
     }
 
     async fn find_object_lt_or_eq_version(

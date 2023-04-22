@@ -93,52 +93,48 @@ impl CoinReadApi {
         package_id: &ObjectID,
         object_struct_tag: StructTag,
     ) -> Result<Object, Error> {
-        let publish_txn_digest = self
-            .state
-            .get_object_read(package_id)
-            .await?
-            .into_object()?
-            .previous_transaction;
+        let state = self.state.clone();
+        let package_id = *package_id;
 
-        let (_, effect) = self
-            .state
-            .get_executed_transaction_and_effects(publish_txn_digest)
-            .await?;
+        spawn_monitored_task!(async move {
+            let publish_txn_digest = state
+                .get_object_read(&package_id)?
+                .into_object()?
+                .previous_transaction;
 
-        async fn find_object_with_type(
-            state: &Arc<AuthorityState>,
-            created: &[(ObjectRef, Owner)],
-            object_struct_tag: &StructTag,
-            package_id: &ObjectID,
-        ) -> Result<ObjectID, anyhow::Error> {
-            for ((id, version, _), _) in created {
-                if let Ok(past_object) = state.get_past_object_read(id, *version).await {
-                    if let Ok(object) = past_object.into_object() {
-                        if matches!(object.type_(), Some(type_) if type_.is(object_struct_tag)) {
-                            return Ok(*id);
+            let (_, effect) = state
+                .get_executed_transaction_and_effects(publish_txn_digest)
+                .await?;
+
+            async fn find_object_with_type(
+                state: &Arc<AuthorityState>,
+                created: &[(ObjectRef, Owner)],
+                object_struct_tag: &StructTag,
+                package_id: &ObjectID,
+            ) -> Result<ObjectID, anyhow::Error> {
+                for ((id, version, _), _) in created {
+                    if let Ok(past_object) = state.get_past_object_read(id, *version) {
+                        if let Ok(object) = past_object.into_object() {
+                            if matches!(object.type_(), Some(type_) if type_.is(object_struct_tag))
+                            {
+                                return Ok(*id);
+                            }
                         }
                     }
                 }
+                Err(anyhow!(
+                    "Cannot find object [{}] from [{}] package event.",
+                    object_struct_tag,
+                    package_id
+                ))
             }
-            Err(anyhow!(
-                "Cannot find object [{}] from [{}] package event.",
-                object_struct_tag,
-                package_id
-            ))
-        }
 
-        let object_id = find_object_with_type(
-            &self.state,
-            effect.created(),
-            &object_struct_tag,
-            package_id,
-        )
-        .await?;
-        Ok(self
-            .state
-            .get_object_read(&object_id)
-            .await?
-            .into_object()?)
+            let object_id =
+                find_object_with_type(&state, effect.created(), &object_struct_tag, &package_id)
+                    .await?;
+            Ok(state.get_object_read(&object_id)?.into_object()?)
+        })
+        .await?
     }
 }
 

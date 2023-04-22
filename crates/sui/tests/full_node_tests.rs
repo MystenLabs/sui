@@ -70,7 +70,7 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     sleep(Duration::from_secs(1)).await;
 
     // verify that the node has seen the transfer
-    let object_read = node.state().get_object_read(&transferred_object).await?;
+    let object_read = node.state().get_object_read(&transferred_object)?;
     let object = object_read.into_object()?;
 
     assert_eq!(object.owner.get_owner_address().unwrap(), receiver);
@@ -915,9 +915,7 @@ async fn get_obj_read_from_node(
     node: &SuiNode,
     object_id: ObjectID,
 ) -> Result<(ObjectRef, Object, Option<MoveStructLayout>), anyhow::Error> {
-    if let ObjectRead::Exists(obj_ref, object, layout) =
-        node.state().get_object_read(&object_id).await?
-    {
+    if let ObjectRead::Exists(obj_ref, object, layout) = node.state().get_object_read(&object_id)? {
         Ok((obj_ref, object, layout))
     } else {
         anyhow::bail!("Can't find object {object_id:?} on fullnode.")
@@ -929,10 +927,8 @@ async fn get_past_obj_read_from_node(
     object_id: ObjectID,
     seq_num: SequenceNumber,
 ) -> Result<(ObjectRef, Object, Option<MoveStructLayout>), anyhow::Error> {
-    if let PastObjectRead::VersionFound(obj_ref, object, layout) = node
-        .state()
-        .get_past_object_read(&object_id, seq_num)
-        .await?
+    if let PastObjectRead::VersionFound(obj_ref, object, layout) =
+        node.state().get_past_object_read(&object_id, seq_num)?
     {
         Ok((obj_ref, object, layout))
     } else {
@@ -993,15 +989,14 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
     sleep(Duration::from_secs(1)).await;
 
     // Now test get_object_read
-    let object_ref_v3 = match node.state().get_object_read(&object_id).await? {
+    let object_ref_v3 = match node.state().get_object_read(&object_id)? {
         ObjectRead::Deleted(obj_ref) => obj_ref,
         other => anyhow::bail!("Expect object {object_id:?} deleted but got {other:?}."),
     };
 
     let read_ref_v3 = match node
         .state()
-        .get_past_object_read(&object_id, object_ref_v3.1)
-        .await?
+        .get_past_object_read(&object_id, object_ref_v3.1)?
     {
         PastObjectRead::ObjectDeleted(obj_ref) => obj_ref,
         other => anyhow::bail!("Expect object {object_id:?} deleted but got {other:?}."),
@@ -1024,8 +1019,7 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
 
     match node
         .state()
-        .get_past_object_read(&object_id, too_high_version)
-        .await?
+        .get_past_object_read(&object_id, too_high_version)?
     {
         PastObjectRead::VersionTooHigh {
             object_id: obj_id,

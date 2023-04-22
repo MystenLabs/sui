@@ -6,11 +6,11 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use futures::future::try_join_all;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
-use mysten_metrics::spawn_monitored_task;
+use tracing::{info, instrument};
 
+use mysten_metrics::spawn_monitored_task;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::SuiCommittee;
 use sui_json_rpc_types::{DelegatedStake, Stake, StakeStatus};
@@ -29,7 +29,6 @@ use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::sui_system_state::{
     get_validator_from_table, sui_system_state_summary::get_validator_by_pool_id, SuiSystemState,
 };
-use tracing::{info, instrument};
 
 use crate::api::{GovernanceReadApiServer, JsonRpcMetrics};
 use crate::error::Error;
@@ -67,10 +66,15 @@ impl GovernanceReadApi {
         &self,
         staked_sui_ids: Vec<ObjectID>,
     ) -> Result<Vec<DelegatedStake>, Error> {
-        let stakes_read = staked_sui_ids
-            .iter()
-            .map(|id| self.state.get_object_read(id));
-        let stakes_read = try_join_all(stakes_read).await?;
+        let state = self.state.clone();
+        let stakes_read = spawn_monitored_task!(async move {
+            staked_sui_ids
+                .iter()
+                .map(|id| state.get_object_read(id))
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .await??;
+
         if stakes_read.is_empty() {
             return Ok(vec![]);
         }
