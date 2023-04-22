@@ -8,7 +8,7 @@ use config::WorkerId;
 use fastcrypto::hash::Hash;
 use futures::stream::FuturesUnordered;
 use futures::{Future, StreamExt};
-use mysten_metrics::spawn_logged_monitored_task;
+use mysten_metrics::{monitored_scope, spawn_logged_monitored_task};
 use network::{client::NetworkClient, WorkerToPrimaryClient};
 use store::{rocks::DBMap, Map};
 use tokio::{
@@ -113,27 +113,51 @@ impl BatchMaker {
                 // Note that transactions are only consumed when the number of batches
                 // 'in-flight' are below a certain number (MAX_PARALLEL_BATCH). This
                 // condition will be met eventually if the store and network are functioning.
-                Some((transaction, response_sender)) = self.rx_batch_maker.recv(), if batch_pipeline.len() < MAX_PARALLEL_BATCH => {
-                    current_batch_size += transaction.len();
-                    current_batch.transactions_mut().push(transaction);
-                    current_responses.push(response_sender);
-                    if current_batch_size >= self.batch_size_limit {
-                        if let Some(seal) = self.seal(false, current_batch, current_batch_size, current_responses).await{
-                            batch_pipeline.push(seal);
+                mut recv = self.rx_batch_maker.recv(), if batch_pipeline.len() < MAX_PARALLEL_BATCH => {
+                    if recv.is_none() {
+                        // Shutting down.
+                        return;
+                    }
+                    let _scope = monitored_scope("BatchMaker::recv");
+                    loop {
+                        // Try to process as many transactions as possible. Otherwise because of
+                        // the yield, batch maker will not keep up with the transactions.
+                        let (transaction, response_sender) = match recv.take() {
+                            Some(r) => r,
+                            None => {
+                                // Only try to process more transactions when batch pipeline is not
+                                // full.
+                                if batch_pipeline.len() >= MAX_PARALLEL_BATCH {
+                                    break;
+                                }
+                                match self.rx_batch_maker.try_recv() {
+                                    Ok(r) => r,
+                                    _ => break,
+                                }
+                            },
+                        };
+                        current_batch_size += transaction.len();
+                        current_batch.transactions_mut().push(transaction);
+                        current_responses.push(response_sender);
+                        if current_batch_size >= self.batch_size_limit {
+                            if let Some(seal) = self.seal(false, current_batch, current_batch_size, current_responses).await{
+                                batch_pipeline.push(seal);
+                            }
+                            self.node_metrics.parallel_worker_batches.set(batch_pipeline.len() as i64);
+
+                            current_batch = Batch::default();
+                            current_responses = Vec::new();
+                            current_batch_size = 0;
+
+                            timer.as_mut().reset(Instant::now() + self.max_batch_delay);
+                            self.batch_start_timestamp = Instant::now();
                         }
-                        self.node_metrics.parallel_worker_batches.set(batch_pipeline.len() as i64);
-
-                        current_batch = Batch::default();
-                        current_responses = Vec::new();
-                        current_batch_size = 0;
-
-                        timer.as_mut().reset(Instant::now() + self.max_batch_delay);
-                        self.batch_start_timestamp = Instant::now();
                     }
                 },
 
                 // If the timer triggers, seal the batch even if it contains few transactions.
                 () = &mut timer => {
+                    let _scope = monitored_scope("BatchMaker::timer");
                     if !current_batch.transactions().is_empty() {
                         if let Some(seal) = self.seal(true, current_batch, current_batch_size, current_responses).await {
                             batch_pipeline.push(seal);
@@ -161,7 +185,7 @@ impl BatchMaker {
 
             }
 
-            // Give the change to schedule other tasks.
+            // Give the chance to schedule other tasks.
             tokio::task::yield_now().await;
         }
     }
