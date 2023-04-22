@@ -6,12 +6,13 @@
 
 
 -  [Struct `PoolCreated`](#0xdee9_clob_PoolCreated)
--  [Struct `OrderPlaced`](#0xdee9_clob_OrderPlaced)
+-  [Struct `OrderPlacedV2`](#0xdee9_clob_OrderPlacedV2)
 -  [Struct `OrderCanceled`](#0xdee9_clob_OrderCanceled)
 -  [Struct `OrderFilled`](#0xdee9_clob_OrderFilled)
 -  [Struct `Order`](#0xdee9_clob_Order)
 -  [Struct `TickLevel`](#0xdee9_clob_TickLevel)
 -  [Resource `Pool`](#0xdee9_clob_Pool)
+-  [Struct `OrderPlaced`](#0xdee9_clob_OrderPlaced)
 -  [Constants](#@Constants_0)
 -  [Function `destroy_empty_level`](#0xdee9_clob_destroy_empty_level)
 -  [Function `create_account`](#0xdee9_clob_create_account)
@@ -126,14 +127,14 @@ Emitted when a new pool is created
 
 </details>
 
-<a name="0xdee9_clob_OrderPlaced"></a>
+<a name="0xdee9_clob_OrderPlacedV2"></a>
 
-## Struct `OrderPlaced`
+## Struct `OrderPlacedV2`
 
 Emitted when a maker order is injected into the order book.
 
 
-<pre><code><b>struct</b> <a href="clob.md#0xdee9_clob_OrderPlaced">OrderPlaced</a>&lt;BaseAsset, QuoteAsset&gt; <b>has</b> <b>copy</b>, drop, store
+<pre><code><b>struct</b> <a href="clob.md#0xdee9_clob_OrderPlacedV2">OrderPlacedV2</a>&lt;BaseAsset, QuoteAsset&gt; <b>has</b> <b>copy</b>, drop, store
 </code></pre>
 
 
@@ -175,6 +176,12 @@ Emitted when a maker order is injected into the order book.
 </dd>
 <dt>
 <code>price: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>expire_timestamp: u64</code>
 </dt>
 <dd>
 
@@ -507,6 +514,64 @@ Emitted only when a maker order is filled.
 </dt>
 <dd>
  Stores the trading fees paid in <code>QuoteAsset</code>. These funds are not accessible.
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0xdee9_clob_OrderPlaced"></a>
+
+## Struct `OrderPlaced`
+
+Emitted when a maker order is injected into the order book.
+
+
+<pre><code><b>struct</b> <a href="clob.md#0xdee9_clob_OrderPlaced">OrderPlaced</a>&lt;BaseAsset, QuoteAsset&gt; <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>pool_id: <a href="../../../.././build/Sui/docs/object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+ object ID of the pool the order was placed on
+</dd>
+<dt>
+<code>order_id: u64</code>
+</dt>
+<dd>
+ ID of the order within the pool
+</dd>
+<dt>
+<code>is_bid: bool</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>owner: <a href="../../../.././build/Sui/docs/object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+ object ID of the <code>AccountCap</code> that placed the order
+</dd>
+<dt>
+<code>base_asset_quantity_placed: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>price: u64</code>
+</dt>
+<dd>
+
 </dd>
 </dl>
 
@@ -1064,7 +1129,7 @@ Emitted only when a maker order is filled.
     account_cap: &AccountCap,
     ctx: &<b>mut</b> TxContext
 ): Coin&lt;BaseAsset&gt; {
-    <a href="custodian.md#0xdee9_custodian_withdraw_base_asset">custodian::withdraw_base_asset</a>(&<b>mut</b> pool.base_custodian, quantity, account_cap, ctx)
+    <a href="custodian.md#0xdee9_custodian_withdraw_asset">custodian::withdraw_asset</a>(&<b>mut</b> pool.base_custodian, quantity, account_cap, ctx)
 }
 </code></pre>
 
@@ -1093,7 +1158,7 @@ Emitted only when a maker order is filled.
     account_cap: &AccountCap,
     ctx: &<b>mut</b> TxContext
 ): Coin&lt;QuoteAsset&gt; {
-    <a href="custodian.md#0xdee9_custodian_withdraw_quote_asset">custodian::withdraw_quote_asset</a>(&<b>mut</b> pool.quote_custodian, quantity, account_cap, ctx)
+    <a href="custodian.md#0xdee9_custodian_withdraw_asset">custodian::withdraw_asset</a>(&<b>mut</b> pool.quote_custodian, quantity, account_cap, ctx)
 }
 </code></pre>
 
@@ -1205,6 +1270,7 @@ Emitted only when a maker order is filled.
 ): (Balance&lt;BaseAsset&gt;, Balance&lt;QuoteAsset&gt;) {
     // Base <a href="../../../.././build/Sui/docs/balance.md#0x2_balance">balance</a> received by taker, taking into account of taker commission.
     // Need <b>to</b> individually keep track of the remaining base quantity <b>to</b> be filled <b>to</b> avoid infinite <b>loop</b>.
+    <b>let</b> pool_id = *<a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_as_inner">object::uid_as_inner</a>(&pool.id);
     <b>let</b> taker_quote_quantity_remaining = quantity;
     <b>let</b> base_balance_filled = <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_zero">balance::zero</a>&lt;BaseAsset&gt;();
     <b>let</b> quote_balance_left = quote_balance;
@@ -1226,6 +1292,7 @@ Emitted only when a maker order is filled.
             <b>if</b> (maker_order.expire_timestamp &lt;= current_timestamp) {
                 skip_order = <b>true</b>;
                 <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.base_custodian, maker_order.owner, maker_order.quantity);
+                <a href="clob.md#0xdee9_clob_emit_order_canceled">emit_order_canceled</a>&lt;BaseAsset, QuoteAsset&gt;(pool_id, maker_order);
             } <b>else</b> {
                 <b>let</b> (flag, maker_quote_quantity) = clob_math::mul_round(maker_base_quantity, maker_order.price);
                 <b>if</b> (flag) maker_quote_quantity = maker_quote_quantity + 1;
@@ -1645,6 +1712,7 @@ Place a market order to the order book.
     // The inner <b>loop</b> for iterating over the open orders in ascending orders of order id is the same <b>as</b> above.
     // Then iterate over the price levels in descending order until the market order is completely filled.
     <b>assert</b>!(quantity % pool.lot_size == 0, <a href="clob.md#0xdee9_clob_EInvalidQuantity">EInvalidQuantity</a>);
+    <b>assert</b>!(quantity != 0, <a href="clob.md#0xdee9_clob_EInvalidQuantity">EInvalidQuantity</a>);
     <b>if</b> (is_bid) {
         <b>let</b> (base_balance_filled, quote_balance_left) = <a href="clob.md#0xdee9_clob_match_bid">match_bid</a>(
             pool,
@@ -1742,13 +1810,14 @@ Returns the order id.
 
     <b>let</b> tick_level = borrow_mut_leaf_by_index(open_orders, tick_index);
     <a href="../../../.././build/Sui/docs/linked_table.md#0x2_linked_table_push_back">linked_table::push_back</a>(&<b>mut</b> tick_level.open_orders, order_id, order);
-    <a href="../../../.././build/Sui/docs/event.md#0x2_event_emit">event::emit</a>(<a href="clob.md#0xdee9_clob_OrderPlaced">OrderPlaced</a>&lt;BaseAsset, QuoteAsset&gt; {
+    <a href="../../../.././build/Sui/docs/event.md#0x2_event_emit">event::emit</a>(<a href="clob.md#0xdee9_clob_OrderPlacedV2">OrderPlacedV2</a>&lt;BaseAsset, QuoteAsset&gt; {
         pool_id: *<a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_as_inner">object::uid_as_inner</a>(&pool.id),
         order_id,
         is_bid,
         owner: user,
         base_asset_quantity_placed: quantity,
-        price
+        price,
+        expire_timestamp
     });
     <b>if</b> (!contains(&pool.usr_open_orders, user)) {
         add(&<b>mut</b> pool.usr_open_orders, user, <a href="../../../.././build/Sui/docs/linked_table.md#0x2_linked_table_new">linked_table::new</a>(ctx));
@@ -1769,6 +1838,9 @@ Returns the order id.
 
 Place a limit order to the order book.
 Returns (base quantity filled, quote quantity filled, whether a maker order is being placed, order id of the maker order).
+When the limit order is not successfully placed, we return false to indicate that and also returns a meaningless order_id 0.
+When the limit order is successfully placed, we return true to indicate that and also the corresponding order_id.
+So please check that boolean value first before using the order id.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="clob.md#0xdee9_clob_place_limit_order">place_limit_order</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob.md#0xdee9_clob_Pool">clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, price: u64, quantity: u64, is_bid: bool, expire_timestamp: u64, restriction: u8, <a href="../../../.././build/Sui/docs/clock.md#0x2_clock">clock</a>: &<a href="../../../.././build/Sui/docs/clock.md#0x2_clock_Clock">clock::Clock</a>, account_cap: &<a href="custodian.md#0xdee9_custodian_AccountCap">custodian::AccountCap</a>, ctx: &<b>mut</b> <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (u64, u64, bool, u64)
@@ -1878,16 +1950,19 @@ Returns (base quantity filled, quote quantity filled, whether a maker order is b
         <b>return</b> (base_quantity_filled, quote_quantity_filled, <b>true</b>, order_id)
     } <b>else</b> {
         <b>assert</b>!(restriction == <a href="clob.md#0xdee9_clob_NO_RESTRICTION">NO_RESTRICTION</a>, <a href="clob.md#0xdee9_clob_EInvalidRestriction">EInvalidRestriction</a>);
-        order_id = <a href="clob.md#0xdee9_clob_inject_limit_order">inject_limit_order</a>(
-            pool,
-            price,
-            quantity - base_quantity_filled,
-            is_bid,
-            expire_timestamp,
-            account_cap,
-            ctx
-        );
-        <b>return</b> (base_quantity_filled, quote_quantity_filled, <b>true</b>, order_id)
+        <b>if</b>(quantity &gt; base_quantity_filled){
+            order_id = <a href="clob.md#0xdee9_clob_inject_limit_order">inject_limit_order</a>(
+                pool,
+                price,
+                quantity - base_quantity_filled,
+                is_bid,
+                expire_timestamp,
+                account_cap,
+                ctx
+            );
+            <b>return</b> (base_quantity_filled, quote_quantity_filled, <b>true</b>, order_id)
+        };
+        <b>return</b> (base_quantity_filled, quote_quantity_filled, <b>false</b>, 0)
     }
 }
 </code></pre>
@@ -2071,7 +2146,7 @@ Abort if order_id is invalid or if the order is not submitted by the transaction
 ) {
     <b>let</b> pool_id = *<a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_as_inner">object::uid_as_inner</a>(&pool.id);
     <b>let</b> user = <a href="../../../.././build/Sui/docs/object.md#0x2_object_id">object::id</a>(account_cap);
-    <b>assert</b>!(contains(&pool.usr_open_orders, user), 0);
+    <b>assert</b>!(contains(&pool.usr_open_orders, user), <a href="clob.md#0xdee9_clob_EInvalidUser">EInvalidUser</a>);
     <b>let</b> usr_open_order_ids = <a href="../../../.././build/Sui/docs/table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> pool.usr_open_orders, user);
     <b>while</b> (!<a href="../../../.././build/Sui/docs/linked_table.md#0x2_linked_table_is_empty">linked_table::is_empty</a>(usr_open_order_ids)) {
         <b>let</b> order_id = *<a href="_borrow">option::borrow</a>(<a href="../../../.././build/Sui/docs/linked_table.md#0x2_linked_table_back">linked_table::back</a>(usr_open_order_ids));
@@ -2428,7 +2503,9 @@ internal func to retrive single depth of a tick price
     account_cap: &AccountCap
 ): &<a href="clob.md#0xdee9_clob_Order">Order</a> {
     <b>let</b> user = <a href="../../../.././build/Sui/docs/object.md#0x2_object_id">object::id</a>(account_cap);
+    <b>assert</b>!(<a href="../../../.././build/Sui/docs/table.md#0x2_table_contains">table::contains</a>(&pool.usr_open_orders, user), <a href="clob.md#0xdee9_clob_EInvalidUser">EInvalidUser</a>);
     <b>let</b> usr_open_order_ids = <a href="../../../.././build/Sui/docs/table.md#0x2_table_borrow">table::borrow</a>(&pool.usr_open_orders, user);
+    <b>assert</b>!(<a href="../../../.././build/Sui/docs/linked_table.md#0x2_linked_table_contains">linked_table::contains</a>(usr_open_order_ids, order_id), <a href="clob.md#0xdee9_clob_EInvalidOrderId">EInvalidOrderId</a>);
     <b>let</b> order_price = *<a href="../../../.././build/Sui/docs/linked_table.md#0x2_linked_table_borrow">linked_table::borrow</a>(usr_open_order_ids, order_id);
     <b>let</b> open_orders =
         <b>if</b> (order_id &lt; <a href="clob.md#0xdee9_clob_MIN_ASK_ORDER_ID">MIN_ASK_ORDER_ID</a>) { &pool.bids }
