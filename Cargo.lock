@@ -2245,12 +2245,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cookie-factory"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "396de984970346b0d9e93d1415082923c679e5ae5c3ee3dcbd104f5610af126b"
-
-[[package]]
 name = "core-foundation"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2833,15 +2827,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "des"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ffdd80ce8ce993de27e9f063a444a4d53ce8e8db4c1f00cc03af5ad5a9867a1e"
-dependencies = [
- "cipher",
-]
-
-[[package]]
 name = "determinator"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3178,9 +3163,6 @@ dependencies = [
  "ff 0.12.1",
  "generic-array",
  "group 0.12.1",
- "hkdf",
- "pem-rfc7468",
- "pkcs8 0.9.0",
  "rand_core 0.6.4",
  "sec1 0.3.0",
  "subtle",
@@ -3378,11 +3360,11 @@ dependencies = [
  "hkdf",
  "merlin",
  "once_cell",
- "p256 0.13.0",
+ "p256",
  "rand 0.8.5",
  "readonly",
  "rfc6979 0.4.0",
- "rsa 0.8.2",
+ "rsa",
  "schemars",
  "secp256k1",
  "serde 1.0.152",
@@ -6662,7 +6644,6 @@ dependencies = [
  "num-iter",
  "num-traits 0.2.15",
  "rand 0.8.5",
- "serde 1.0.152",
  "smallvec",
  "zeroize",
 ]
@@ -6955,17 +6936,6 @@ checksum = "c1b04fb49957986fdce4d6ee7a65027d55d4b6d2265e5848bbb507b58ccfdb6f"
 
 [[package]]
 name = "p256"
-version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51f44edd08f51e2ade572f141051021c5af22677e42b7dd28a88155151c33594"
-dependencies = [
- "ecdsa 0.14.8",
- "elliptic-curve 0.12.3",
- "sha2 0.10.6",
-]
-
-[[package]]
-name = "p256"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7270da3e5caa82afd3deb054cc237905853813aea3859544bc082c3fe55b8d47"
@@ -6973,17 +6943,6 @@ dependencies = [
  "ecdsa 0.16.6",
  "elliptic-curve 0.13.4",
  "primeorder",
- "sha2 0.10.6",
-]
-
-[[package]]
-name = "p384"
-version = "0.11.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dfc8c5bf642dde52bb9e87c0ecd8ca5a76faac2eeed98dedb7c717997e1080aa"
-dependencies = [
- "ecdsa 0.14.8",
- "elliptic-curve 0.12.3",
  "sha2 0.10.6",
 ]
 
@@ -7098,25 +7057,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "83a0692ec44e4cf1ef28ca317f14f8f07da2d95ec3fa01f86e4467b725e60917"
 dependencies = [
  "digest 0.10.6",
-]
-
-[[package]]
-name = "pcsc"
-version = "2.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37cab0be9d04e808a8d8059fa54befcd71dc8b168f9f0c04bdb7e59832abbab4"
-dependencies = [
- "bitflags",
- "pcsc-sys",
-]
-
-[[package]]
-name = "pcsc-sys"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1b7bfecba2c0f1b5efb0e7caf7533ab1c295024165bcbb066231f60d33e23ea"
-dependencies = [
- "pkg-config",
 ]
 
 [[package]]
@@ -8267,27 +8207,6 @@ dependencies = [
 
 [[package]]
 name = "rsa"
-version = "0.7.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "094052d5470cbcef561cb848a7209968c9f12dfa6d668f4bca048ac5de51099c"
-dependencies = [
- "byteorder",
- "digest 0.10.6",
- "num-bigint-dig",
- "num-integer",
- "num-iter",
- "num-traits 0.2.15",
- "pkcs1",
- "pkcs8 0.9.0",
- "rand_core 0.6.4",
- "signature 1.6.4",
- "smallvec",
- "subtle",
- "zeroize",
-]
-
-[[package]]
-name = "rsa"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "55a77d189da1fee555ad95b7e50e7457d91c0e089ec68ca69ad2989413bbdab4"
@@ -8667,7 +8586,6 @@ dependencies = [
  "base16ct 0.1.1",
  "der 0.6.1",
  "generic-array",
- "pkcs8 0.9.0",
  "subtle",
  "zeroize",
 ]
@@ -8704,15 +8622,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "70a129b9e9efbfb223753b9163c4ab3b13cff7fd9c7f010fbac25ab4099fa07e"
 dependencies = [
  "cc",
-]
-
-[[package]]
-name = "secrecy"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9bd1c54ea06cfd2f6b63219704de0b9b4f72dcc2b8fdef820be6cd799780e91e"
-dependencies = [
- "zeroize",
 ]
 
 [[package]]
@@ -9471,7 +9380,6 @@ dependencies = [
  "tracing",
  "unescape",
  "workspace-hack",
- "yubikey",
 ]
 
 [[package]]
@@ -12718,7 +12626,7 @@ dependencies = [
  "output_vt100",
  "overload",
  "owo-colors",
- "p256 0.13.0",
+ "p256",
  "parity-scale-codec",
  "parity-scale-codec-derive",
  "parking",
@@ -12830,7 +12738,7 @@ dependencies = [
  "roaring",
  "rocksdb",
  "ron",
- "rsa 0.8.2",
+ "rsa",
  "rstest",
  "rstest_macros",
  "rust-ini",
@@ -13082,16 +12990,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "x509"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca3cec94c3999f31341553f358ef55f65fc031291a022cd42ec0ce7219560c76"
-dependencies = [
- "chrono",
- "cookie-factory",
-]
-
-[[package]]
 name = "x509-parser"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13143,40 +13041,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aed2e7a52e3744ab4d0c05c20aa065258e84c49fd4226f5191b2ed29712710b4"
 dependencies = [
  "time 0.3.17",
-]
-
-[[package]]
-name = "yubikey"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10e6fa9476951a9b93d9a31aa5554b5bbac7aafdc5b23e663eb3f9b635c86053"
-dependencies = [
- "base16ct 0.1.1",
- "chrono",
- "cookie-factory",
- "der-parser",
- "des",
- "elliptic-curve 0.12.3",
- "hmac 0.12.1",
- "log",
- "nom 7.1.2",
- "num-bigint-dig",
- "num-integer",
- "num-traits 0.2.15",
- "p256 0.11.1",
- "p384",
- "pbkdf2",
- "pcsc",
- "rand_core 0.6.4",
- "rsa 0.7.2",
- "secrecy",
- "sha1",
- "sha2 0.10.6",
- "subtle",
- "uuid",
- "x509",
- "x509-parser",
- "zeroize",
 ]
 
 [[package]]
