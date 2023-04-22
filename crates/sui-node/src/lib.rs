@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::cmp::max;
 use std::collections::HashMap;
 use std::fmt;
 use std::path::PathBuf;
@@ -811,7 +812,7 @@ impl SuiNode {
             authority,
             Box::new(connection_monitor_status),
             consensus_config.max_pending_transactions(),
-            consensus_config.max_pending_transactions() * 2 / committee.num_members(),
+            consensus_config.max_pending_transactions() / 2,
             ca_metrics,
         )
     }
