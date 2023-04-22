@@ -37,8 +37,9 @@ pub async fn execution_process(
 ) {
     info!("Starting pending certificates execution process.");
 
-    // Rate limit concurrent executions to # of cpus.
-    let limit = Arc::new(Semaphore::new(num_cpus::get()));
+    // Rate limit concurrent executions to 2x cpus, because there are a lot of IO and async work
+    // per execution.
+    let limit = Arc::new(Semaphore::new(num_cpus::get() * 2));
 
     // Loop whenever there is a signal that a new transactions is ready to process.
     loop {
