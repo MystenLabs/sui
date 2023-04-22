@@ -9,8 +9,8 @@ import {
 import Browser from 'webextension-polyfill';
 
 import NetworkEnv from '../NetworkEnv';
-import { requestUserApproval } from '../Qredo';
 import { Window } from '../Window';
+import { requestUserApproval } from '../qredo';
 import { Connection } from './Connection';
 import { createMessage } from '_messages';
 import { type ErrorPayload, isBasePayload } from '_payloads';
