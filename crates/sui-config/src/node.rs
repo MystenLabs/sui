@@ -253,7 +253,7 @@ impl ConsensusConfig {
     }
 
     pub fn max_pending_transactions(&self) -> usize {
-        self.max_pending_transactions.unwrap_or(100_000)
+        self.max_pending_transactions.unwrap_or(1_000_000_000)
     }
 
     pub fn narwhal_config(&self) -> &ConsensusParameters {
