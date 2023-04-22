@@ -154,13 +154,19 @@ impl TestContext {
         desc: &str,
     ) -> SuiTransactionBlockResponse {
         let signature = self.get_context().sign(&txn_data, desc);
+        let tx = Transaction::from_data(txn_data, Intent::sui_transaction(), vec![signature])
+            .verify()
+            .unwrap();
+        let tx_digest = tx.digest();
+        info!(
+            "Executing transaction for {} with digest {}",
+            desc, tx_digest
+        );
         let resp = self
             .get_fullnode_client()
             .quorum_driver()
             .execute_transaction_block(
-                Transaction::from_data(txn_data, Intent::sui_transaction(), vec![signature])
-                    .verify()
-                    .unwrap(),
+                tx,
                 SuiTransactionBlockResponseOptions::new()
                     .with_object_changes()
                     .with_balance_changes()
