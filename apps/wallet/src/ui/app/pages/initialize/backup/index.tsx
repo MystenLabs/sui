@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ArrowLeft16 } from '@mysten/icons';
+import { ArrowLeft16, Check12 } from '@mysten/icons';
 import { useEffect, useState } from 'react';
 
 import { Button } from '_app/shared/ButtonUI';
@@ -9,7 +9,6 @@ import { CardLayout } from '_app/shared/card-layout';
 import { Text } from '_app/shared/text';
 import { useLockedGuard } from '_app/wallet/hooks';
 import Alert from '_components/alert';
-import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import { useAppDispatch } from '_hooks';
 import { loadEntropyFromKeyring } from '_redux/slices/account';
@@ -125,10 +124,7 @@ const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
                                         }
                                     />
                                     <span className="absolute top-0 left-0 h-5 w-5 bg-white peer-checked/agree:bg-success peer-checked/agree:shadow-none border-gray-50 border rounded shadow-button flex justify-center items-center">
-                                        <Icon
-                                            icon={SuiIcons.Checkmark}
-                                            className="text-white text-[8px] font-semibold"
-                                        />
+                                        <Check12 className="text-white text-body font-semibold" />
                                     </span>
 
                                     <Text
