@@ -194,6 +194,10 @@
 						"fileName": "build/package-upgrades"
 					},
 					{
+						"label": "Custom Upgrade Policies",
+						"fileName": "build/custom-upgrade-policy"
+					},
+					{
 						"label": "Sui Move Library",
 						"fileName": "build/move/sui-move-library"
 					}
