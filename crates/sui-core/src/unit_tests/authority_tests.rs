@@ -4618,7 +4618,7 @@ fn test_choose_next_system_packages() {
     let committee = Committee::new_simple_test_committee().0;
     let v = &committee.voting_rights;
     let mut protocol_config = ProtocolConfig::get_for_max_version();
-    protocol_config.set_advance_to_hightest_supported_protocol_version_for_testing(false);
+    protocol_config.set_advance_to_highest_supported_protocol_version_for_testing(false);
     protocol_config.set_buffer_stake_for_protocol_upgrade_bps_for_testing(7500);
 
     // all validators agree on new system packages, but without a new protocol version, so no
@@ -4770,7 +4770,7 @@ fn test_choose_next_system_packages() {
         )
     );
 
-    protocol_config.set_advance_to_hightest_supported_protocol_version_for_testing(true);
+    protocol_config.set_advance_to_highest_supported_protocol_version_for_testing(true);
 
     // skip straight to version 3
     let capabilities = vec![
@@ -4791,7 +4791,6 @@ fn test_choose_next_system_packages() {
         )
     );
 
-    protocol_config.set_advance_to_hightest_supported_protocol_version_for_testing(true);
     let capabilities = vec![
         make_capabilities!(3, v[0].0, vec![o1, o2]),
         make_capabilities!(3, v[1].0, vec![o1, o2]),

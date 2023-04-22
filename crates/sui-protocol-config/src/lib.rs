@@ -156,7 +156,7 @@ struct FeatureFlags {
     // advance to highest supported protocol version at epoch change, instead of the next consecutive
     // protocol version.
     #[serde(skip_serializing_if = "is_false")]
-    advance_to_hightest_supported_protocol_version: bool,
+    advance_to_highest_supported_protocol_version: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -656,9 +656,9 @@ impl ProtocolConfig {
             .disable_invariant_violation_check_in_swap_loc
     }
 
-    pub fn advance_to_hightest_supported_protocol_version(&self) -> bool {
+    pub fn advance_to_highest_supported_protocol_version(&self) -> bool {
         self.feature_flags
-            .advance_to_hightest_supported_protocol_version
+            .advance_to_highest_supported_protocol_version
     }
 }
 
@@ -1064,7 +1064,7 @@ impl ProtocolConfig {
                 cfg.feature_flags
                     .disable_invariant_violation_check_in_swap_loc = true;
                 cfg.feature_flags
-                    .advance_to_hightest_supported_protocol_version = true;
+                    .advance_to_highest_supported_protocol_version = true;
                 cfg
             }
             // Use this template when making changes:
@@ -1112,9 +1112,9 @@ impl ProtocolConfig {
     pub fn set_package_upgrades_for_testing(&mut self, val: bool) {
         self.feature_flags.package_upgrades = val
     }
-    pub fn set_advance_to_hightest_supported_protocol_version_for_testing(&mut self, val: bool) {
+    pub fn set_advance_to_highest_supported_protocol_version_for_testing(&mut self, val: bool) {
         self.feature_flags
-            .advance_to_hightest_supported_protocol_version = val
+            .advance_to_highest_supported_protocol_version = val
     }
 }
 

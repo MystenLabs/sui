@@ -3202,7 +3202,7 @@ impl AuthorityState {
         mut buffer_stake_bps: u64,
     ) -> Option<(ProtocolVersion, Vec<ObjectRef>)> {
         if proposed_protocol_version > current_protocol_version + 1
-            && !protocol_config.advance_to_hightest_supported_protocol_version()
+            && !protocol_config.advance_to_highest_supported_protocol_version()
         {
             return None;
         }
@@ -3287,22 +3287,22 @@ impl AuthorityState {
         capabilities: Vec<AuthorityCapabilities>,
         buffer_stake_bps: u64,
     ) -> (ProtocolVersion, Vec<ObjectRef>) {
-        std::iter::once(Some((current_protocol_version, Vec::new())))
-            .chain((1..).map(|i| {
-                let proposed_next_epoch_protocol_version = current_protocol_version + i;
-                Self::is_protocol_version_supported(
-                    current_protocol_version,
-                    proposed_next_epoch_protocol_version,
-                    protocol_config,
-                    committee,
-                    capabilities.clone(),
-                    buffer_stake_bps,
-                )
-            }))
-            .take_while(|x| x.is_some())
-            .last()
-            .unwrap()
-            .unwrap()
+        let mut next_protocol_version = current_protocol_version;
+        let mut system_packages = vec![];
+
+        while let Some((version, packages)) = Self::is_protocol_version_supported(
+            current_protocol_version,
+            next_protocol_version + 1,
+            protocol_config,
+            committee,
+            capabilities.clone(),
+            buffer_stake_bps,
+        ) {
+            next_protocol_version = version;
+            system_packages = packages;
+        }
+
+        (next_protocol_version, system_packages)
     }
 
     /// Creates and execute the advance epoch transaction to effects without committing it to the database.
