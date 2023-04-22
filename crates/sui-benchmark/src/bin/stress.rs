@@ -113,7 +113,7 @@ async fn main() -> Result<()> {
     barrier.wait().await;
 
     // Add a small randomized delay before workloads start, to even out the traffic.
-    const START_DELAY_INTERVAL: Duration = Duration::from_secs(2);
+    const START_DELAY_INTERVAL: Duration = Duration::from_secs(10);
     const START_DELAY_MAX_JITTER_MS: u64 = 2000;
     if opts.staggered_start_max_multiplier > 0 {
         let delay = START_DELAY_INTERVAL
