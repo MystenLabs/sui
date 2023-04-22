@@ -186,6 +186,21 @@ impl MoveObject {
 
     /// Return the `value: u64` field of a `Coin<T>` type.
     /// Useful for reading the coin without deserializing the object into a Move value
+    pub fn get_coin_value(&self) -> SuiResult<u64> {
+        debug_assert!(self.type_.is_coin());
+        // 32 bytes for object ID, 8 for balance
+        debug_assert!(self.contents.len() == 40);
+
+        let bytes = <[u8; 8]>::try_from(&self.contents[ID_END_INDEX..]).map_err(|e| {
+            SuiError::ObjectDeserializationError {
+                error: e.to_string(),
+            }
+        })?;
+        Ok(u64::from_le_bytes(bytes))
+    }
+
+    /// Return the `value: u64` field of a `Coin<T>` type.
+    /// Useful for reading the coin without deserializing the object into a Move value
     /// It is the caller's responsibility to check that `self` is a coin--this function
     /// may panic or do something unexpected otherwise.
     pub fn get_coin_value_unsafe(&self) -> u64 {
@@ -686,6 +701,13 @@ impl Object {
     /// Return true if this object is a Move package, false if it is a Move value
     pub fn is_package(&self) -> bool {
         matches!(&self.data, Data::Package(_))
+    }
+
+    pub fn move_object(&self) -> Option<&MoveObject> {
+        match &self.data {
+            Data::Move(o) => Some(o),
+            Data::Package(_) => None,
+        }
     }
 
     pub fn compute_object_reference(&self) -> ObjectRef {

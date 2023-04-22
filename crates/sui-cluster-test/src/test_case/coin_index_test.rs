@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use jsonrpsee::rpc_params;
 use move_core_types::language_storage::StructTag;
 use serde_json::json;
-use std::collections::HashMap;
+use std::collections::BTreeSet;
 use sui_core::test_utils::compile_managed_coin_package;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::ObjectChange;
@@ -37,6 +37,7 @@ impl TestCaseImpl for CoinIndexTest {
         let rgp = ctx.get_reference_gas_price().await;
 
         // 0. Get some coins first
+        println!("0. Get some coins first");
         ctx.get_sui_from_faucet(None).await;
 
         // Record initial balances
@@ -46,7 +47,8 @@ impl TestCaseImpl for CoinIndexTest {
             ..
         } = client.coin_read_api().get_balance(account, None).await?;
 
-        // 1. Exeute one transfer coin transation (to another address)
+        // 1. Execute one transfer sui transation (to another address)
+        println!("1. transfer sui to another address");
         let txn = ctx.make_transactions(1).await.swap_remove(0);
         let response = client
             .quorum_driver()
@@ -97,6 +99,7 @@ impl TestCaseImpl for CoinIndexTest {
         assert_eq!(total_balance, recipient_balance.amount as u128);
 
         // 2. Test Staking
+        println!("2. test staking");
         let validator_addr = ctx
             .get_latest_sui_system_state()
             .await
@@ -216,25 +219,28 @@ impl TestCaseImpl for CoinIndexTest {
             10000, // mint amount
         );
 
-        let balances = client.coin_read_api().get_all_balances(account).await?;
-        let mut expected_balances = vec![
-            Balance {
-                coin_type: sui_type_str.into(),
-                coin_object_count: old_coin_object_count,
-                total_balance,
-                locked_balance: HashMap::new(),
-            },
-            Balance {
-                coin_type: coin_type_str.clone(),
-                coin_object_count: 1,
-                total_balance: 10000,
-                locked_balance: HashMap::new(),
-            },
-        ];
-        // Comes with asc order.
-        expected_balances.sort_by(|l, r| l.coin_type.cmp(&r.coin_type));
+        let balances = client
+            .coin_read_api()
+            .get_all_balances(account)
+            .await?
+            .into_iter()
+            .map(|b| {
+                (
+                    b.coin_type.to_string(),
+                    b.coin_object_count,
+                    b.total_balance,
+                )
+            })
+            .collect::<BTreeSet<_>>();
+        let mut expected_balances = BTreeSet::new();
+        expected_balances.insert((
+            sui_type_str.to_string(),
+            old_coin_object_count,
+            total_balance,
+        ));
+        expected_balances.insert((coin_type_str.to_string(), 1, 10000));
 
-        assert_eq!(balances, expected_balances,);
+        assert_eq!(balances, expected_balances);
 
         // 5. Mint another MANAGED coin to account, balance 10
         let txn = client
@@ -400,6 +406,62 @@ impl TestCaseImpl for CoinIndexTest {
         assert_eq!(managed_balance.total_balance, 0);
         assert_eq!(managed_balance.coin_object_count, 0);
 
+        // 11. Transfer a Sui Coin to self
+        println!("Transfer a Sui Coin to self");
+        let sui_coin_to_transfer_to_self = client
+            .coin_read_api()
+            .get_coins(account, Some(sui_type_str.into()), None, None)
+            .await
+            .unwrap()
+            .data
+            .iter()
+            .take(2)
+            .map(|c| c.coin_object_id)
+            .collect::<Vec<_>>();
+
+        let old_balance_before_transfer_to_self = client
+            .coin_read_api()
+            .get_balance(account, None)
+            .await
+            .unwrap();
+
+        let txn = client
+            .transaction_builder()
+            .pay(
+                account,
+                sui_coin_to_transfer_to_self,
+                vec![account, account],
+                vec![1, 1],
+                None,
+                rgp * 2_000_000,
+            )
+            .await
+            .unwrap();
+        let response = ctx.sign_and_execute(txn, "pay sui to self").await;
+        assert!(response.status_ok().unwrap());
+
+        let balance_changes = &response.balance_changes.unwrap();
+        let sui_balance_change = balance_changes
+            .iter()
+            .find(|b| b.coin_type.to_string().contains("SUI"))
+            .unwrap();
+        let balance_after_transfer_to_self = client
+            .coin_read_api()
+            .get_balance(account, None)
+            .await
+            .unwrap();
+        assert_eq!(
+            balance_after_transfer_to_self.total_balance,
+            (old_balance_before_transfer_to_self.total_balance as i128 + sui_balance_change.amount)
+                as u128
+        );
+        // Pay 2 Coins A, B to self, it results in creating 2 small coins C, D,
+        // mutated gas coin. A is smashed to B. So the final delta is 2 + 0 - 1 = 1;
+        assert_eq!(
+            balance_after_transfer_to_self.coin_object_count,
+            old_balance_before_transfer_to_self.coin_object_count + 1
+        );
+
         // =========================== Test Get Coins Starts ===========================
 
         let sui_coins = client
@@ -439,7 +501,7 @@ impl TestCaseImpl for CoinIndexTest {
             sui_coins.iter().map(|c| c.balance as u128).sum::<u128>()
         );
 
-        // 11. Mint 40 MANAGED coins with balance 5
+        // 12. Mint 40 MANAGED coins with balance 5
         let txn = client
             .transaction_builder()
             .move_call(
