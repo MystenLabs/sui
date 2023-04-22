@@ -282,6 +282,14 @@ module policy::day_of_week {
         UpgradeCap { id: object::new(ctx), cap, day }
     }
 
+    fun week_day(ctx: &TxContext): u8 {
+        let days_since_unix_epoch = 
+            sui::tx_context::epoch_timestamp_ms(ctx) / MS_IN_DAY;
+        // The unix epoch (1st Jan 1970) was a Thursday so shift days
+        // since the epoch by 3 so that 0 = Monday.
+        ((days_since_unix_epoch + 3) % 7 as u8)
+    }
+
     public fun authorize_upgrade(
         cap: &mut UpgradeCap,
         policy: u8,
@@ -290,14 +298,6 @@ module policy::day_of_week {
     ): package::UpgradeTicket {
         assert!(week_day(ctx) == cap.day, ENotAllowedDay);
         package::authorize_upgrade(&mut cap.cap, policy, digest)
-    }
-
-    fun week_day(ctx: &TxContext): u8 {
-        let days_since_unix_epoch = 
-            sui::tx_context::epoch_timestamp_ms(ctx) / MS_IN_DAY;
-        // The unix epoch (1st Jan 1970) was a Thursday so shift days
-        // since the epoch by 3 so that 0 = Monday.
-        ((days_since_unix_epoch + 3) % 7 as u8)
     }
 
     public fun commit_upgrade(
