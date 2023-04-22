@@ -8,7 +8,6 @@ use openssl::nid::Nid;
 use openssl::pkey::PKey;
 
 use fastcrypto::traits::{ToFromBytes};
-
 use fastcrypto::secp256k1::{Secp256k1PublicKey};
 use anyhow::anyhow;
 use bip32::DerivationPath;
