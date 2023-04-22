@@ -256,7 +256,7 @@ impl GenesisConfig {
     /// Port offset for benchmarks' genesis configs.
     pub const BENCHMARKS_PORT_OFFSET: usize = 500;
     /// The number of gas objects to include in the genesis.
-    pub const BENCHMARKS_NUM_GENESIS_OBJECTS: usize = 50;
+    pub const BENCHMARKS_NUM_GENESIS_OBJECTS: usize = 100;
 
     pub fn for_local_testing() -> Self {
         Self::custom_genesis(

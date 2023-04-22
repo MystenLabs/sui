@@ -17,15 +17,22 @@ from itertools import cycle
 
 
 def aggregate_tps(measurement, i=-1):
-    max_duration = 0
-    for data in measurement['scrapers'].values():
-        duration = float(data[i]['timestamp']['secs'])
-        max_duration = max(duration, max_duration)
+    # max_duration = 0
+    # for data in measurement['scrapers'].values():
+    #     duration = float(data[i]['timestamp']['secs'])
+    #     max_duration = max(duration, max_duration)
+
+    # tps = []
+    # for data in measurement['scrapers'].values():
+    #     count = float(data[i]['count'])
+    #     tps += [(count / max_duration) if max_duration != 0 else 0]
 
     tps = []
     for data in measurement['scrapers'].values():
+        duration = float(data[i]['timestamp']['secs'])
         count = float(data[i]['count'])
-        tps += [(count / max_duration) if max_duration != 0 else 0]
+        tps += [(count / duration) if duration != 0 else 0]
+
     return sum(tps)
 
 
@@ -458,7 +465,7 @@ if __name__ == "__main__":
     for r in args.shared_objects_ratio:
         parameters = PlotParameters(r, args.committee, args.faults)
         plotter = Plotter(
-            args.dir, parameters, args.y_max, args.legend_columns, median=False
+            args.dir, parameters, args.y_max, args.legend_columns, median=True
         )
         plotter.plot_latency_throughput()
         plotter.plot_health()
