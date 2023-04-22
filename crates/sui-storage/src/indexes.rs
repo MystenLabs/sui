@@ -11,10 +11,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use anyhow::anyhow;
-use itertools::Itertools;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
+use rocksdb::MergeOperands;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -29,7 +29,6 @@ use sui_types::dynamic_field::{self, DynamicFieldInfo};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::TransactionEvents;
 use sui_types::object::Owner;
-use sui_types::parse_sui_struct_tag;
 use sui_types::query::TransactionFilter;
 use sui_types::temporary_store::TxCoins;
 use tokio::task::spawn_blocking;
@@ -43,6 +42,7 @@ use typed_store_derive::DBMapUtils;
 
 type OwnerIndexKey = (SuiAddress, ObjectID);
 type CoinIndexKey = (SuiAddress, String, ObjectID);
+type BalanceIndexKey = (SuiAddress, String);
 type DynamicFieldKey = (ObjectID, ObjectID);
 type EventId = (TxSequenceNumber, usize);
 type EventIndex = (TransactionEventsDigest, TransactionDigest, u64);
@@ -53,11 +53,7 @@ pub const MAX_GET_OWNED_OBJECT_SIZE: usize = 256;
 const ENV_VAR_COIN_INDEX_BLOCK_CACHE_SIZE_MB: &str = "COIN_INDEX_BLOCK_CACHE_MB";
 const ENV_VAR_DISABLE_INDEX_CACHE: &str = "DISABLE_INDEX_CACHE";
 
-#[derive(Default, Copy, Clone, Debug, Eq, PartialEq)]
-pub struct TotalBalance {
-    pub balance: u128,
-    pub num_coins: usize,
-}
+pub type TotalBalance = (u128, usize);
 
 #[derive(Debug)]
 pub struct ObjectIndexChanges {
@@ -114,8 +110,8 @@ impl IndexStoreMetrics {
 }
 
 pub struct IndexStoreCaches {
-    per_coin_type_balance: ShardedLruCache<(SuiAddress, TypeTag), SuiResult<TotalBalance>>,
-    all_balances: ShardedLruCache<SuiAddress, SuiResult<Arc<HashMap<TypeTag, TotalBalance>>>>,
+    per_coin_type_balance: ShardedLruCache<(SuiAddress, String), SuiResult<TotalBalance>>,
+    all_balances: ShardedLruCache<SuiAddress, SuiResult<HashMap<String, TotalBalance>>>,
 }
 
 #[derive(DBMapUtils)]
@@ -165,6 +161,12 @@ pub struct IndexStoreTables {
 
     #[default_options_override_fn = "coin_index_table_default_config"]
     coin_index: DBMap<CoinIndexKey, CoinInfo>,
+
+    // The balance of a Coin type is u64, so i128 totally covers it.
+    // The reason we use signed integers is merge operator need to support negative
+    // delta values, even though the merged value is always non-negative.
+    #[default_options_override_fn = "balance_index_table_default_config"]
+    balance_index: DBMap<BalanceIndexKey, (i128, i64)>,
 
     /// This is an index of object references to currently existing dynamic field object, indexed by the
     /// composite key of the object ID of their parent and the object ID of the dynamic field object.
@@ -243,6 +245,53 @@ fn coin_index_table_default_config() -> DBOptions {
     }
 }
 
+fn balance_index_table_default_config() -> DBOptions {
+    let mut options = DBOptions {
+        options: default_db_options()
+            .optimize_for_write_throughput()
+            .optimize_for_read(
+                read_size_from_env(ENV_VAR_COIN_INDEX_BLOCK_CACHE_SIZE_MB).unwrap_or(5 * 1024),
+            )
+            .options,
+        rw_options: ReadWriteOptions {
+            ignore_range_deletions: true,
+        },
+    };
+    options.options.set_merge_operator(
+        "balance merge operator",
+        coin_balance_merge_operator,
+        coin_balance_merge_operator,
+    );
+    options
+}
+
+fn deser_balance_and_count(bytes: &[u8]) -> (i128, i64) {
+    let (balance_bytes, coin_count_bytes) = bytes.split_at(std::mem::size_of::<i128>());
+    let balance = i128::from_le_bytes(balance_bytes.try_into().unwrap());
+    let coin_count = i64::from_le_bytes(coin_count_bytes.try_into().unwrap());
+    (balance, coin_count)
+}
+
+pub fn coin_balance_merge_operator(
+    _key: &[u8],
+    stored_value: Option<&[u8]>,
+    operands: &MergeOperands,
+) -> Option<Vec<u8>> {
+    let (mut balance, mut count) = stored_value.map_or((0, 0), deser_balance_and_count);
+    for operand in operands {
+        let (balance_delta, count_delta) = deser_balance_and_count(operand);
+        balance += balance_delta;
+        count += count_delta;
+    }
+
+    let balance_bytes = balance.to_le_bytes();
+    let coin_count_bytes = count.to_le_bytes();
+    let mut bytes = Vec::new();
+    bytes.extend_from_slice(&balance_bytes);
+    bytes.extend_from_slice(&coin_count_bytes);
+    Some(bytes)
+}
+
 impl IndexStore {
     pub fn new(path: PathBuf, registry: &Registry) -> Self {
         let tables =
@@ -285,11 +334,37 @@ impl IndexStore {
 
         // Index coin info
         let (input_coins, written_coins) = tx_coins.unwrap();
-        let mut address_coin_type_to_invalidate: HashSet<(SuiAddress, TypeTag)> = HashSet::new();
+        let input_coin_balances = input_coins
+            .iter()
+            .map(|(obj_id, coin)| {
+                (obj_id,
+                coin.move_object().and_then(|mo| mo.get_coin_value().ok())
+                .unwrap_or_else(|| {
+                    panic!(
+                        "object_id: {:?} in input_coins is not a coin type, input_coins: {:?}, tx_digest: {:?}",
+                        obj_id, input_coins, digest
+                    )
+                }))
+            })
+            .collect::<HashMap<_, _>>();
+        let objects_with_ownership_change = object_index_changes
+            .deleted_owners
+            .iter()
+            .map(|(_, obj_id)| obj_id)
+            .chain(
+                object_index_changes
+                    .deleted_dynamic_fields
+                    .iter()
+                    .map(|(_, obj_id)| obj_id),
+            )
+            .collect::<HashSet<_>>();
+
+        let mut address_coin_type_to_invalidate: HashSet<(SuiAddress, String)> = HashSet::new();
         let mut addresses_to_invalidate: HashSet<SuiAddress> = HashSet::new();
+
         // 1. Delete old owner if the object is deleted or transferred to a new owner,
         // by looking at `object_index_changes.deleted_owners`.
-        // Objects in `deleted_owners` must be owned by `Owner::Address` befoer the tx,
+        // Objects in `deleted_owners` must be owned by `Owner::Address` before the tx,
         // hence must appear in the tx inputs.
         // They also mut be coin type (see `AuthorityState::commit_certificate`).
         let coin_delete_keys = object_index_changes
@@ -297,6 +372,7 @@ impl IndexStore {
             .iter()
             .filter_map(|(owner, obj_id)| {
                 // If it's not in `input_coins`, then it's not a coin type. Skip.
+                let coin_balance = input_coin_balances.get(obj_id)?;
                 let coin_type_tag = input_coins.get(obj_id)?
                 .coin_type_maybe().unwrap_or_else(|| {
                     panic!(
@@ -304,16 +380,35 @@ impl IndexStore {
                         obj_id, input_coins, digest
                     )
                 });
-                address_coin_type_to_invalidate.insert((*owner, coin_type_tag.clone()));
+                let coin_type_str = coin_type_tag.to_string();
+                address_coin_type_to_invalidate.insert((*owner, coin_type_str.clone()));
                 addresses_to_invalidate.insert(*owner);
-                Some((*owner, coin_type_tag.to_string(), *obj_id))
+                Some((*owner, coin_type_str, *obj_id, coin_balance))
             }).collect::<Vec<_>>();
         trace!(
             tx_digset=?digest,
             "coin_delete_keys: {:?}",
             coin_delete_keys,
         );
-        batch.delete_batch(&self.tables.coin_index, coin_delete_keys.into_iter())?;
+        batch.delete_batch(
+            &self.tables.coin_index,
+            coin_delete_keys
+                .clone()
+                .into_iter()
+                .map(|(addr, coin_type, obj_id, _)| (addr, coin_type, obj_id)),
+        )?;
+        batch.merge_batch(
+            &self.tables.balance_index,
+            coin_delete_keys
+                .into_iter()
+                .map(|(addr, coin_type, _obj_id, coin_balance)| {
+                    // u64 to i128 is safe
+                    (
+                        (addr, coin_type),
+                        (-(i128::try_from(*coin_balance).unwrap()), -1i64),
+                    )
+                }),
+        )?;
 
         // 2. Upsert new owner, by looking at `object_index_changes.new_owners`.
         // For a object to appear in `new_owners`, it must be owned by `Owner::Address` after the tx.
@@ -333,22 +428,52 @@ impl IndexStore {
                     obj_id, written_coins, digest
                 )
             });
-            let coin = obj.as_coin_maybe().unwrap_or_else(|| {
+            let coin_balance = obj.move_object().and_then(|mo| mo.get_coin_value().ok())
+            .unwrap_or_else(|| {
                 panic!(
-                    "object_id: {:?} in written_coins cannot be deserialzied as a Coin, written_coins: {:?}, tx_digest: {:?}",
+                    "object_id: {:?} in written_coins is not a coin type, written_coins: {:?}, tx_digest: {:?}",
                     obj_id, written_coins, digest
                 )
             });
-            address_coin_type_to_invalidate.insert((*owner, coin_type_tag.clone()));
+            let coin_type_str = coin_type_tag.to_string();
+            address_coin_type_to_invalidate.insert((*owner, coin_type_str.clone()));
             addresses_to_invalidate.insert(*owner);
-            Some(((*owner, coin_type_tag.to_string(), *obj_id), (CoinInfo {version: obj_info.version, digest: obj_info.digest, balance: coin.balance.value(), previous_transaction: *digest})))
+            Some(((*owner, coin_type_str, *obj_id), (CoinInfo {version: obj_info.version, digest: obj_info.digest, balance: coin_balance, previous_transaction: *digest})))
         }).collect::<Vec<_>>();
+
         trace!(
             tx_digset=?digest,
             "coin_add_keys: {:?}",
             coin_add_keys,
         );
-        batch.insert_batch(&self.tables.coin_index, coin_add_keys.into_iter())?;
+        batch.insert_batch(&self.tables.coin_index, coin_add_keys.clone().into_iter())?;
+        batch.merge_batch(
+            &self.tables.balance_index,
+            coin_add_keys
+                .into_iter()
+                .map(|((addr, coin_type, obj_id), coin_info)| {
+                    // u64 to i128 is safe
+                    let coin_balance = i128::try_from(coin_info.balance).unwrap();
+                    // If the obj is in `objects_with_ownership_change`, its ownership is changed.
+                    // We add full balance to new owner, and bump the coin count
+                    if objects_with_ownership_change.contains(&obj_id) {
+                        return ((addr, coin_type), (coin_balance, 1i64));
+                    }
+
+                    // genesis object does not appear in the input list
+                    if !input_coin_balances.contains_key(&obj_id) {
+                        return ((addr, coin_type), (coin_balance, 1i64));
+                    }
+
+                    // The coin was and is owned by the same AddressOwner.
+                    // Only apply the delta and keep the coin count the same.
+                    let input_balance = input_coin_balances.get(&obj_id).unwrap_or(&0u64);
+                    // u64 to i128 is safe
+                    let balance_delta = coin_balance - i128::try_from(*input_balance).unwrap();
+                    ((addr, coin_type), (balance_delta, 0i64))
+                }),
+        )?;
+
         self.invalidate_per_coin_type_cache(address_coin_type_to_invalidate.into_iter())
             .await?;
         self.invalidate_all_balance_cache(addresses_to_invalidate.into_iter())
@@ -510,6 +635,7 @@ impl IndexStore {
         )?;
 
         batch.write()?;
+
         Ok(sequence)
     }
 
@@ -1049,6 +1175,26 @@ impl IndexStore {
             .collect())
     }
 
+    pub fn get_balances_iterator(
+        balance_index: &DBMap<BalanceIndexKey, (i128, i64)>,
+        owner: SuiAddress,
+    ) -> SuiResult<impl Iterator<Item = (String, u128, usize)> + '_> {
+        let starting_coin_type = String::from_utf8([0u8].to_vec()).unwrap();
+        Ok(balance_index
+            .iter()
+            .skip_to(&(owner, starting_coin_type))?
+            .take_while(move |((addr, _coin_type), _balance)| addr == &owner)
+            // The i128 -> u128 conversion is safe because the balance of CoinType is u64
+            // The i64 -> usize conversion is safe assuming one address won't have one quintillion coins.
+            .map(|((_, coin_type), (balance, count))| {
+                (
+                    coin_type,
+                    u128::try_from(balance).unwrap(),
+                    usize::try_from(count).unwrap(),
+                )
+            }))
+    }
+
     pub fn get_owned_coins_iterator(
         coin_index: &DBMap<CoinIndexKey, CoinInfo>,
         owner: SuiAddress,
@@ -1164,60 +1310,59 @@ impl IndexStore {
         coin_type: TypeTag,
     ) -> SuiResult<TotalBalance> {
         let force_disable_cache = read_size_from_env(ENV_VAR_DISABLE_INDEX_CACHE).unwrap_or(0) > 0;
-        let cloned_coin_type = coin_type.clone();
+        let coin_type_str = coin_type.to_string();
+        let coin_type_str_cloned = coin_type_str.clone();
         let metrics_cloned = self.metrics.clone();
-        let coin_index_cloned = self.tables.coin_index.clone();
+        let balance_index_cloned = self.tables.balance_index.clone();
+        self.metrics.balance_lookup_from_total.inc();
         if force_disable_cache {
             return spawn_blocking(move || {
                 Self::get_balance_from_db(
+                    balance_index_cloned,
                     metrics_cloned,
-                    coin_index_cloned,
                     owner,
-                    cloned_coin_type,
+                    coin_type_str_cloned,
                 )
             })
             .await
             .unwrap()
             .map_err(|e| {
-                SuiError::ExecutionError(format!("Failed to read balance frm DB: {:?}", e))
+                SuiError::GenericStorageError(format!("Failed to read balance frm DB: {:?}", e))
             });
         }
-
-        self.metrics.balance_lookup_from_total.inc();
 
         let balance = self
             .caches
             .per_coin_type_balance
-            .get(&(owner, coin_type.clone()))
+            .get(&(owner, coin_type.to_string()))
             .await;
         if let Some(balance) = balance {
             return balance;
         }
-        // cache miss, lookup in all balance cache
-        let all_balance = self.caches.all_balances.get(&owner.clone()).await;
-        if let Some(Ok(all_balance)) = all_balance {
-            if let Some(balance) = all_balance.get(&coin_type) {
+
+        // cache miss, lookup in all balances cache
+        let all_balances = self.caches.all_balances.get(&owner.clone()).await;
+        if let Some(Ok(all_balances)) = all_balances {
+            if let Some(balance) = all_balances.get(&coin_type_str) {
                 return Ok(*balance);
             }
         }
-        let cloned_coin_type = coin_type.clone();
         let metrics_cloned = self.metrics.clone();
-        let coin_index_cloned = self.tables.coin_index.clone();
         self.caches
             .per_coin_type_balance
-            .get_with((owner, coin_type), async move {
+            .get_with((owner, coin_type_str.clone()), async move {
                 spawn_blocking(move || {
                     Self::get_balance_from_db(
+                        balance_index_cloned,
                         metrics_cloned,
-                        coin_index_cloned,
                         owner,
-                        cloned_coin_type,
+                        coin_type_str,
                     )
                 })
                 .await
                 .unwrap()
                 .map_err(|e| {
-                    SuiError::ExecutionError(format!("Failed to read balance frm DB: {:?}", e))
+                    SuiError::GenericStorageError(format!("Failed to read balance frm DB: {:?}", e))
                 })
             })
             .await
@@ -1231,101 +1376,81 @@ impl IndexStore {
     pub async fn get_all_balance(
         &self,
         owner: SuiAddress,
-    ) -> SuiResult<Arc<HashMap<TypeTag, TotalBalance>>> {
+    ) -> SuiResult<HashMap<String, TotalBalance>> {
         let force_disable_cache = read_size_from_env(ENV_VAR_DISABLE_INDEX_CACHE).unwrap_or(0) > 0;
         let metrics_cloned = self.metrics.clone();
-        let coin_index_cloned = self.tables.coin_index.clone();
+        let balance_index_cloned = self.tables.balance_index.clone();
+
+        self.metrics.all_balance_lookup_from_total.inc();
         if force_disable_cache {
             return spawn_blocking(move || {
-                Self::get_all_balances_from_db(metrics_cloned, coin_index_cloned, owner)
+                Self::get_all_balances_from_db(metrics_cloned, balance_index_cloned, owner)
             })
             .await
             .unwrap()
             .map_err(|e| {
-                SuiError::ExecutionError(format!("Failed to read all balance from DB: {:?}", e))
+                SuiError::GenericStorageError(format!(
+                    "Failed to read all balances from DB: {:?}",
+                    e
+                ))
             });
         }
 
-        self.metrics.all_balance_lookup_from_total.inc();
-        let metrics_cloned = self.metrics.clone();
-        let coin_index_cloned = self.tables.coin_index.clone();
         self.caches
             .all_balances
             .get_with(owner, async move {
                 spawn_blocking(move || {
-                    Self::get_all_balances_from_db(metrics_cloned, coin_index_cloned, owner)
+                    Self::get_all_balances_from_db(metrics_cloned, balance_index_cloned, owner)
                 })
                 .await
                 .unwrap()
                 .map_err(|e| {
-                    SuiError::ExecutionError(format!("Failed to read all balance from DB: {:?}", e))
+                    SuiError::GenericStorageError(format!(
+                        "Failed to read all balance from DB: {:?}",
+                        e
+                    ))
                 })
             })
             .await
     }
 
-    /// Read balance for a `SuiAddress` and `CoinType` from the backend database
     pub fn get_balance_from_db(
+        balance_index: DBMap<BalanceIndexKey, (i128, i64)>,
         metrics: Arc<IndexStoreMetrics>,
-        coin_index: DBMap<CoinIndexKey, CoinInfo>,
         owner: SuiAddress,
-        coin_type: TypeTag,
+        coin_type_str: String,
     ) -> SuiResult<TotalBalance> {
         metrics.balance_lookup_from_db.inc();
-        let coin_type_str = coin_type.to_string();
-        let coins =
-            Self::get_owned_coins_iterator(&coin_index, owner, Some(coin_type_str.clone()))?
-                .map(|(_coin_type, obj_id, coin)| (coin_type_str.clone(), obj_id, coin));
+        let Some((balance, count)) = balance_index.get(&(owner, coin_type_str))? else {
+            return Ok(TotalBalance::default())
+        };
 
-        let mut balance = 0u128;
-        let mut num_coins = 0;
-        for (_coin_type, _obj_id, coin_info) in coins {
-            balance += coin_info.balance as u128;
-            num_coins += 1;
-        }
-
-        Ok(TotalBalance { balance, num_coins })
+        // The i128 -> u128 conversion is safe because the balance of Coin is u64
+        // The i64 -> usize conversion is safe assuming one address won't have one quintillion coins.
+        Ok((
+            u128::try_from(balance).unwrap(),
+            usize::try_from(count).unwrap(),
+        ))
     }
 
     /// Read all balances for a `SuiAddress` from the backend database
     pub fn get_all_balances_from_db(
         metrics: Arc<IndexStoreMetrics>,
-        coin_index: DBMap<CoinIndexKey, CoinInfo>,
+        balance_index: DBMap<BalanceIndexKey, (i128, i64)>,
         owner: SuiAddress,
-    ) -> SuiResult<Arc<HashMap<TypeTag, TotalBalance>>> {
+    ) -> SuiResult<HashMap<String, TotalBalance>> {
         metrics.all_balance_lookup_from_db.inc();
-        let mut balances: HashMap<TypeTag, TotalBalance> = HashMap::new();
-        let coins = Self::get_owned_coins_iterator(&coin_index, owner, None)?
-            .map(|(coin_type, obj_id, coin)| (coin_type, obj_id, coin))
-            .group_by(|(coin_type, _obj_id, _coin)| coin_type.clone());
-        for (coin_type, coins) in &coins {
-            let mut total_balance = 0u128;
-            let mut coin_object_count = 0;
-            for (_coin_type, _obj_id, coin_info) in coins {
-                total_balance += coin_info.balance as u128;
-                coin_object_count += 1;
-            }
-            let coin_type =
-                TypeTag::Struct(Box::new(parse_sui_struct_tag(&coin_type).map_err(|e| {
-                    SuiError::ExecutionError(format!(
-                        "Failed to parse event sender address: {:?}",
-                        e
-                    ))
-                })?));
-            balances.insert(
-                coin_type,
-                TotalBalance {
-                    num_coins: coin_object_count,
-                    balance: total_balance,
-                },
-            );
-        }
-        Ok(Arc::new(balances))
+
+        let total_balance = Self::get_balances_iterator(&balance_index, owner)?
+            .map(|(coin_type, balance, count)| (coin_type, (balance, count)))
+            .collect();
+
+        Ok(total_balance)
     }
 
     async fn invalidate_per_coin_type_cache(
         &self,
-        keys: impl IntoIterator<Item = (SuiAddress, TypeTag)>,
+        keys: impl IntoIterator<Item = (SuiAddress, String)>,
     ) -> SuiResult {
         self.caches
             .per_coin_type_balance
@@ -1400,7 +1525,7 @@ mod tests {
             new_dynamic_fields: vec![],
         };
 
-        let tx_coins = (object_map.clone(), written_objects.clone());
+        let tx_coins = (BTreeMap::new(), written_objects.clone());
         index_store
             .index_tx(
                 address,
@@ -1417,21 +1542,21 @@ mod tests {
             .await?;
 
         let balance_from_db = IndexStore::get_balance_from_db(
+            index_store.tables.balance_index.clone(),
             index_store.metrics.clone(),
-            index_store.tables.coin_index.clone(),
             address,
-            GAS::type_tag(),
+            GAS::type_tag().to_string(),
         )?;
         let balance = index_store.get_balance(address, GAS::type_tag()).await?;
         assert_eq!(balance, balance_from_db);
-        assert_eq!(balance.balance, 1000);
-        assert_eq!(balance.num_coins, 10);
+        assert_eq!(balance.0, 1000);
+        assert_eq!(balance.1, 10);
 
         let all_balance = index_store.get_all_balance(address).await?;
-        let balance = all_balance.get(&GAS::type_tag()).unwrap();
+        let balance = all_balance.get(&GAS::type_tag().to_string()).unwrap();
         assert_eq!(*balance, balance_from_db);
-        assert_eq!(balance.balance, 1000);
-        assert_eq!(balance.num_coins, 10);
+        assert_eq!(balance.0, 1000);
+        assert_eq!(balance.1, 10);
 
         written_objects.clear();
         let mut deleted_objects = vec![];
@@ -1468,15 +1593,15 @@ mod tests {
             )
             .await?;
         let balance_from_db = IndexStore::get_balance_from_db(
+            index_store.tables.balance_index.clone(),
             index_store.metrics.clone(),
-            index_store.tables.coin_index.clone(),
             address,
-            GAS::type_tag(),
+            GAS::type_tag().to_string(),
         )?;
         let balance = index_store.get_balance(address, GAS::type_tag()).await?;
         assert_eq!(balance, balance_from_db);
-        assert_eq!(balance.balance, 700);
-        assert_eq!(balance.num_coins, 7);
+        assert_eq!(balance.0, 700);
+        assert_eq!(balance.1, 7);
 
         Ok(())
     }

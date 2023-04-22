@@ -1360,7 +1360,7 @@ impl AuthorityState {
             let id = &oref.0;
             // For mutated objects, retrieve old owner and delete old index if there is a owner change.
             if let WriteKind::Mutate = kind {
-                let Some(old_version) = modified_at_version.get(id) else{
+                let Some(old_version) = modified_at_version.get(id) else {
                         error!("Error processing object owner index for tx [{:?}], cannot find modified at version for mutated object [{id}].", effects.transaction_digest());
                         continue;
                     };
@@ -1384,7 +1384,7 @@ impl AuthorityState {
             match owner {
                 Owner::AddressOwner(addr) => {
                     // TODO: We can remove the object fetching after we added ObjectType to TransactionEffects
-                    let Some(o) = self.database.get_object_by_key(id, oref.1)? else{
+                    let Some(o) = self.database.get_object_by_key(id, oref.1)? else {
                         continue;
                     };
 
@@ -1509,7 +1509,6 @@ impl AuthorityState {
         if self.indexes.is_none() {
             return Ok(());
         }
-
         let tx_digest = certificate.digest();
         let timestamp_ms = Self::unixtime_now_ms();
         // Index tx
@@ -2938,6 +2937,7 @@ impl AuthorityState {
     }
 
     // Returns coin objects for indexing for fullnode if indexing is enabled.
+    // NOTE: The logic is very important for the coin/balance related indices. Be cautious when changing it.
     fn fullnode_only_get_tx_coins_for_indexing(
         &self,
         inner_temporary_store: &InnerTemporaryStore,
