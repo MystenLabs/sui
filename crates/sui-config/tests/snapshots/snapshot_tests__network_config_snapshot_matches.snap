@@ -29,7 +29,7 @@ validator_configs:
         gc_depth: 50
         sync_retry_delay: 5000ms
         sync_retry_nodes: 3
-        batch_size: 500000
+        batch_size: 5000000
         max_batch_delay: 100ms
         block_synchronizer:
           range_synchronize_timeout: 30000ms
@@ -113,7 +113,7 @@ validator_configs:
         gc_depth: 50
         sync_retry_delay: 5000ms
         sync_retry_nodes: 3
-        batch_size: 500000
+        batch_size: 5000000
         max_batch_delay: 100ms
         block_synchronizer:
           range_synchronize_timeout: 30000ms
@@ -197,7 +197,7 @@ validator_configs:
         gc_depth: 50
         sync_retry_delay: 5000ms
         sync_retry_nodes: 3
-        batch_size: 500000
+        batch_size: 5000000
         max_batch_delay: 100ms
         block_synchronizer:
           range_synchronize_timeout: 30000ms
@@ -281,7 +281,7 @@ validator_configs:
         gc_depth: 50
         sync_retry_delay: 5000ms
         sync_retry_nodes: 3
-        batch_size: 500000
+        batch_size: 5000000
         max_batch_delay: 100ms
         block_synchronizer:
           range_synchronize_timeout: 30000ms
@@ -365,7 +365,7 @@ validator_configs:
         gc_depth: 50
         sync_retry_delay: 5000ms
         sync_retry_nodes: 3
-        batch_size: 500000
+        batch_size: 5000000
         max_batch_delay: 100ms
         block_synchronizer:
           range_synchronize_timeout: 30000ms
@@ -449,7 +449,7 @@ validator_configs:
         gc_depth: 50
         sync_retry_delay: 5000ms
         sync_retry_nodes: 3
-        batch_size: 500000
+        batch_size: 5000000
         max_batch_delay: 100ms
         block_synchronizer:
           range_synchronize_timeout: 30000ms
@@ -533,7 +533,7 @@ validator_configs:
         gc_depth: 50
         sync_retry_delay: 5000ms
         sync_retry_nodes: 3
-        batch_size: 500000
+        batch_size: 5000000
         max_batch_delay: 100ms
         block_synchronizer:
           range_synchronize_timeout: 30000ms
