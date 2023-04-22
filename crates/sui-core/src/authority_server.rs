@@ -307,7 +307,7 @@ impl ValidatorService {
 
     async fn handle_transaction(
         state: Arc<AuthorityState>,
-        consensus_adapter: Arc<ConsensusAdapter>,
+        _consensus_adapter: Arc<ConsensusAdapter>,
         request: tonic::Request<Transaction>,
         metrics: Arc<ValidatorServiceMetrics>,
     ) -> Result<tonic::Response<HandleTransactionResponse>, tonic::Status> {
@@ -333,11 +333,11 @@ impl ValidatorService {
             }
             .into()
         );
-        Self::check_system_overload(
-            Arc::clone(&state),
-            Arc::clone(&consensus_adapter),
-            transaction.data(),
-        )?;
+        // Self::check_system_overload(
+        //     Arc::clone(&state),
+        //     Arc::clone(&consensus_adapter),
+        //     transaction.data(),
+        // )?;
         let _metrics_guard = metrics.handle_transaction_latency.start_timer();
         let tx_verif_metrics_guard = metrics.tx_verification_latency.start_timer();
 
@@ -425,11 +425,11 @@ impl ValidatorService {
         );
 
         // Check system overload
-        Self::check_system_overload(
-            Arc::clone(&state),
-            Arc::clone(&consensus_adapter),
-            certificate.data(),
-        )?;
+        // Self::check_system_overload(
+        //     Arc::clone(&state),
+        //     Arc::clone(&consensus_adapter),
+        //     certificate.data(),
+        // )?;
 
         // code block within reconfiguration lock
         let certificate = {
