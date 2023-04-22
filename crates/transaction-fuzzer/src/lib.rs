@@ -5,7 +5,10 @@ pub mod account_universe;
 pub mod executor;
 pub mod type_arg_fuzzer;
 
+use executor::Executor;
 use proptest::collection::vec;
+use proptest::test_runner::TestRunner;
+use std::fmt::Debug;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::get_key_pair;
@@ -132,5 +135,37 @@ impl proptest::arbitrary::Arbitrary for GasDataWithObjects {
                 generate_random_gas_data(seed, owners, params.owned_by_sender)
             })
             .boxed()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct TestData<D> {
+    pub data: D,
+    pub executor: Executor,
+}
+
+/// Run a proptest test with give number of test cases, a strategy for something and a test function testing that something
+/// with an `Arc<AuthorityState>`.
+pub fn run_proptest<D>(
+    num_test_cases: u32,
+    strategy: impl Strategy<Value = D>,
+    test_fn: impl Fn(D, Executor) -> Result<(), TestCaseError>,
+) where
+    D: Debug + 'static,
+{
+    let mut runner = TestRunner::new(ProptestConfig {
+        cases: num_test_cases,
+        ..Default::default()
+    });
+    let executor = Executor::new();
+    let strategy_with_authority = strategy.prop_map(|data| TestData {
+        data,
+        executor: executor.clone(),
+    });
+    let result = runner.run(&strategy_with_authority, |test_data| {
+        test_fn(test_data.data, test_data.executor)
+    });
+    if result.is_err() {
+        panic!("test failed: {:?}", result);
     }
 }
