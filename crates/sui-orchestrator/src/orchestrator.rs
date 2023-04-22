@@ -307,11 +307,21 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics, T: BenchmarkType> Orchestrator<P,
         let (clients, nodes) = self.select_instances(parameters)?;
 
         // Generate the genesis configuration file and the keystore allowing access to gas objects.
+        let id = "configure";
         let command = self.protocol_commands.genesis_command(nodes.iter());
         let repo_name = self.settings.repository_name();
-        let context = CommandContext::new().with_execute_from_path(repo_name.into());
+        let context = CommandContext::new()
+            .run_background(id.into())
+            .with_execute_from_path(repo_name.into());
         let all = clients.into_iter().chain(nodes);
-        self.ssh_manager.execute(all, command, context).await?;
+        self.ssh_manager
+            .execute(all.clone(), command, context)
+            .await?;
+
+        // Wait until the command finished running.
+        self.ssh_manager
+            .wait_for_command(all, &id, CommandStatus::Terminated)
+            .await?;
 
         display::done();
         Ok(())
