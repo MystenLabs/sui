@@ -69,7 +69,6 @@ const CreatePage = () => {
                                         I read and agreed to the{' '}
                                         <ExternalLink
                                             href={ToS_LINK}
-                                            showIcon={false}
                                             className="text-[#1F6493] no-underline"
                                         >
                                             Terms of Services

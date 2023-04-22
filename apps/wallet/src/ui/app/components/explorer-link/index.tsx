@@ -40,7 +40,6 @@ function ExplorerLink({
             href={explorerHref}
             className={className}
             title={title}
-            showIcon={false}
             onClick={() => {
                 if (track) {
                     trackEvent('ViewExplorerAccount');

@@ -88,7 +88,6 @@ export function SuiApp({
                     href={link}
                     title={name}
                     className={st.ecosystemApp}
-                    showIcon={false}
                     onClick={() => {
                         trackEvent('AppOpen', {
                             props: { name, source: 'AppPage' },
