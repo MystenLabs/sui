@@ -1214,6 +1214,7 @@ impl IndexStore {
             // The object id 0 is the smallest possible
             .skip_to(&(owner, starting_object_id))?
             .skip(usize::from(starting_object_id != ObjectID::ZERO))
+            .take_while(move |((address_owner, _), _)| address_owner == &owner)
             .filter(move |(_, o)| {
                 if let Some(filter) = filter.as_ref() {
                     filter.matches(o)
@@ -1221,7 +1222,6 @@ impl IndexStore {
                     true
                 }
             })
-            .take_while(move |((address_owner, _), _)| address_owner == &owner)
             .map(|(_, object_info)| object_info))
     }
 
