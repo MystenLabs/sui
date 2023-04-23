@@ -56,9 +56,9 @@ impl EpochStartConfiguration {
         ))
     }
 
-    pub fn new_for_testing() -> Self {
+    pub fn new_for_testing_with_rgp(rgp: u64) -> Self {
         Self::new_v2(
-            EpochStartSystemState::new_for_testing(),
+            EpochStartSystemState::new_for_testing_with_rgp(rgp),
             CheckpointDigest::default(),
             EpochFlag::default_flags_for_new_epoch(),
         )

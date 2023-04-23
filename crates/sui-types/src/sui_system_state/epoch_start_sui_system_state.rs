@@ -68,6 +68,10 @@ impl EpochStartSystemState {
         Self::new_for_testing_with_epoch(0)
     }
 
+    pub fn new_for_testing_with_rgp(rgp: u64) -> Self {
+        Self::V1(EpochStartSystemStateV1::new_for_testing_with_rgp(rgp))
+    }
+
     pub fn new_for_testing_with_epoch(epoch: EpochId) -> Self {
         Self::V1(EpochStartSystemStateV1::new_for_testing_with_epoch(epoch))
     }
@@ -94,6 +98,18 @@ impl EpochStartSystemStateV1 {
             epoch,
             protocol_version: ProtocolVersion::MAX.as_u64(),
             reference_gas_price: 1,
+            safe_mode: false,
+            epoch_start_timestamp_ms: 0,
+            epoch_duration_ms: 1000,
+            active_validators: vec![],
+        }
+    }
+
+    pub fn new_for_testing_with_rgp(rgp: u64) -> Self {
+        Self {
+            epoch: 0,
+            protocol_version: ProtocolVersion::MAX.as_u64(),
+            reference_gas_price: rgp,
             safe_mode: false,
             epoch_start_timestamp_ms: 0,
             epoch_duration_ms: 1000,

@@ -20,7 +20,7 @@ use sui_config::node::{
 use sui_config::transaction_deny_config::TransactionDenyConfig;
 use sui_config::NetworkConfig;
 use sui_macros::nondeterministic;
-use sui_protocol_config::SupportedProtocolVersions;
+use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_storage::IndexStore;
 use sui_types::base_types::{AuthorityName, ObjectID};
 use sui_types::crypto::AuthorityKeyPair;
@@ -31,6 +31,8 @@ pub struct TestAuthorityBuilder<'a> {
     store_base_path: Option<PathBuf>,
     store: Option<Arc<AuthorityStore>>,
     transaction_deny_config: Option<TransactionDenyConfig>,
+    protocol_config: Option<ProtocolConfig>,
+    reference_gas_price: Option<u64>,
     node_keypair: Option<&'a AuthorityKeyPair>,
     genesis: Option<&'a Genesis>,
 }
@@ -52,6 +54,19 @@ impl<'a> TestAuthorityBuilder<'a> {
 
     pub fn with_transaction_deny_config(mut self, config: TransactionDenyConfig) -> Self {
         assert!(self.transaction_deny_config.replace(config).is_none());
+        self
+    }
+
+    pub fn with_protocol_config(mut self, config: ProtocolConfig) -> Self {
+        assert!(self.protocol_config.replace(config).is_none());
+        self
+    }
+
+    pub fn with_reference_gas_price(mut self, reference_gas_price: u64) -> Self {
+        assert!(self
+            .reference_gas_price
+            .replace(reference_gas_price)
+            .is_none());
         self
     }
 
@@ -108,13 +123,18 @@ impl<'a> TestAuthorityBuilder<'a> {
         let registry = Registry::new();
         let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
         let signature_verifier_metrics = SignatureVerifierMetrics::new(&registry);
+        let rgp = self.reference_gas_price.unwrap_or(1);
+        if self.protocol_config.is_some() {
+            let config = self.protocol_config.unwrap();
+            let _guard = ProtocolConfig::apply_overrides_for_testing(move |_, _| config.clone());
+        }
         let epoch_store = AuthorityPerEpochStore::new(
             name,
             Arc::new(genesis_committee.clone()),
             &path.join("store"),
             None,
             EpochMetrics::new(&registry),
-            EpochStartConfiguration::new_for_testing(),
+            EpochStartConfiguration::new_for_testing_with_rgp(rgp),
             authority_store.clone(),
             cache_metrics,
             signature_verifier_metrics,
