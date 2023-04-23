@@ -506,20 +506,94 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
 
         // Send the certificate to all validators.
         let _cert_guard = GaugeGuard::acquire(&auth_agg.metrics.inflight_certificates);
-        let mut futures = FuturesUnordered::new();
-        total_stake = 0;
-        let mut transaction_effects = None;
-        let mut transaction_events = None;
-        for (name, client) in self.clients.iter() {
-            let client = client.clone();
-            let certificate = certified_transaction.clone();
-            let name = *name;
-            futures.push(async move {
-                client
-                    .handle_certificate(certificate)
-                    .map(move |r| (r, name))
-                    .await
-            });
+        loop {
+            let mut futures = FuturesUnordered::new();
+            total_stake = 0;
+            let mut transaction_effects = None;
+            let mut transaction_events = None;
+            for (name, client) in self.clients.iter() {
+                let client = client.clone();
+                let certificate = certified_transaction.clone();
+                let name = *name;
+                futures.push(async move {
+                    client
+                        .handle_certificate(certificate)
+                        .map(move |r| (r, name))
+                        .await
+                });
+            }
+            auth_agg
+                .metrics
+                .inflight_certificate_requests
+                .add(futures.len() as i64);
+
+            // Wait for the replies from a quorum of validators.
+            while let Some((response, name)) = futures.next().await {
+                auth_agg.metrics.inflight_certificate_requests.dec();
+                match response {
+                    // If all goes well, the validators reply with signed effects.
+                    Ok(HandleCertificateResponse {
+                        signed_effects,
+                        events,
+                    }) => {
+                        let author = signed_effects.auth_sig().authority;
+                        if signed_effects.data() != &TransactionEffects::default() {
+                            transaction_effects = Some(signed_effects.data().clone());
+                        }
+                        transaction_events = Some(events);
+                        total_stake += self.committee.weight(&author);
+                    }
+
+                    // This typically happens when the validators are overloaded and the certificate is
+                    // immediately rejected.
+                    Err(e) => {
+                        auth_agg
+                            .metrics
+                            .process_cert_errors
+                            .with_label_values(&[&name.concise().to_string(), e.as_ref()])
+                            .inc();
+                        tracing::warn!("Failed to submit certificate: {e}")
+                    }
+                }
+
+                if transaction_effects.is_some() && total_stake >= self.committee.quorum_threshold()
+                {
+                    break;
+                }
+            }
+
+            // Abort if we failed to submit the certificate to enough validators. This typically
+            // happens when the validators are overloaded and the requests timed out.
+            if transaction_effects.is_none() || total_stake < self.committee.quorum_threshold() {
+                warn!("Failed to submit certificate to quorum of validators");
+                continue;
+            }
+
+            // Wait for 10 more seconds on remaining requests asynchronously.
+            {
+                let auth_agg = auth_agg.clone();
+                let mut requests = self.requests.lock().unwrap();
+                requests.spawn(async move {
+                    let _ = timeout(Duration::from_secs(600), async {
+                        while futures.next().await.is_some() {
+                            auth_agg.metrics.inflight_certificate_requests.dec();
+                        }
+                    })
+                    .await;
+                    auth_agg
+                        .metrics
+                        .inflight_certificate_requests
+                        .sub(futures.len() as i64);
+                });
+            }
+
+            // Package the certificate and effects to return.
+            let signed_material = certified_transaction.auth_sig().clone();
+            let effects = ExecutionEffects::CertifiedTransactionEffects(
+                Envelope::new_from_data_and_sig(transaction_effects.unwrap(), signed_material),
+                transaction_events.unwrap(),
+            );
+            return Ok(effects);
         }
         auth_agg
             .metrics
