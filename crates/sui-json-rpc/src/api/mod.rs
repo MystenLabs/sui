@@ -19,6 +19,7 @@ pub use indexer::IndexerApiServer;
 pub use move_utils::MoveUtilsClient;
 pub use move_utils::MoveUtilsOpenRpc;
 pub use move_utils::MoveUtilsServer;
+use once_cell::sync::Lazy;
 use prometheus::{register_int_counter_with_registry, IntCounter};
 pub use read::ReadApiClient;
 pub use read::ReadApiOpenRpc;
@@ -26,6 +27,7 @@ pub use read::ReadApiServer;
 pub use transaction_builder::TransactionBuilderClient;
 pub use transaction_builder::TransactionBuilderOpenRpc;
 pub use transaction_builder::TransactionBuilderServer;
+use typed_store::rocks::read_size_from_env;
 pub use write::WriteApiClient;
 pub use write::WriteApiOpenRpc;
 pub use write::WriteApiServer;
@@ -39,16 +41,20 @@ mod read;
 mod transaction_builder;
 mod write;
 
-pub const QUERY_MAX_RESULT_LIMIT: usize = 50;
+const RPC_QUERY_MAX_RESULT_LIMIT: &str = "RPC_QUERY_MAX_RESULT_LIMIT";
+const DEFAULT_RPC_QUERY_MAX_RESULT_LIMIT: usize = 50;
+
+pub static QUERY_MAX_RESULT_LIMIT: Lazy<usize> = Lazy::new(|| {
+    read_size_from_env(RPC_QUERY_MAX_RESULT_LIMIT).unwrap_or(DEFAULT_RPC_QUERY_MAX_RESULT_LIMIT)
+});
+
 // TODOD(chris): make this configurable
 pub const QUERY_MAX_RESULT_LIMIT_CHECKPOINTS: usize = 100;
 
-pub const QUERY_MAX_RESULT_LIMIT_OBJECTS: usize = 50;
-
 pub fn cap_page_limit(limit: Option<usize>) -> usize {
     let limit = limit.unwrap_or_default();
-    if limit > QUERY_MAX_RESULT_LIMIT || limit == 0 {
-        QUERY_MAX_RESULT_LIMIT
+    if limit > *QUERY_MAX_RESULT_LIMIT || limit == 0 {
+        *QUERY_MAX_RESULT_LIMIT
     } else {
         limit
     }

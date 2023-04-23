@@ -9351,6 +9351,7 @@ dependencies = [
  "move-package",
  "mysten-metrics",
  "num_cpus",
+ "once_cell",
  "prometheus",
  "rand 0.8.5",
  "reqwest",
@@ -9379,6 +9380,7 @@ dependencies = [
  "tower",
  "tower-http 0.3.5",
  "tracing",
+ "typed-store",
  "workspace-hack",
 ]
 
