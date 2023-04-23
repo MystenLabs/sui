@@ -37,10 +37,10 @@ pub const TOTAL_VOTING_POWER: StakeUnit = 10_000;
 
 /// Quorum threshold for our fixed voting power--any message signed by this much voting power can be trusted
 /// up to BFT assumptions
-pub const QUORUM_THRESHOLD: StakeUnit = 3334; // 6_667;
+pub const QUORUM_THRESHOLD: StakeUnit = 6_667;
 
 /// Validity threshold defined by f+1
-pub const VALIDITY_THRESHOLD: StakeUnit = 1650; //3_334;
+pub const VALIDITY_THRESHOLD: StakeUnit = 3_334;
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq)]
 pub struct Committee {
