@@ -51,22 +51,13 @@ module deepbook::custodian {
         }
     }
 
-    public(friend) fun withdraw_base_asset<BaseAsset>(
-        custodian: &mut Custodian<BaseAsset>,
+    public(friend) fun withdraw_asset<T>(
+        custodian: &mut Custodian<T>,
         quantity: u64,
         account_cap: &AccountCap,
         ctx: &mut TxContext
-    ): Coin<BaseAsset> {
-        coin::from_balance(decrease_user_available_balance<BaseAsset>(custodian, account_cap, quantity), ctx)
-    }
-
-    public(friend) fun withdraw_quote_asset<QuoteAsset>(
-        custodian: &mut Custodian<QuoteAsset>,
-        quantity: u64,
-        account_cap: &AccountCap,
-        ctx: &mut TxContext
-    ): Coin<QuoteAsset> {
-        coin::from_balance(decrease_user_available_balance<QuoteAsset>(custodian, account_cap, quantity), ctx)
+    ): Coin<T> {
+        coin::from_balance(decrease_user_available_balance<T>(custodian, account_cap, quantity), ctx)
     }
 
     public(friend) fun increase_user_available_balance<T>(
