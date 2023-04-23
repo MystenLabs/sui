@@ -474,8 +474,7 @@ impl ValidatorService {
             // It is useful to enqueue owned object transaction for execution locally,
             // even when we are not returning effects to user
             if !certificate.contains_shared_object() {
-                state
-                    .enqueue_certificates_for_execution(vec![certificate.clone()], &epoch_store)?;
+                state.enqueue_certificates_for_execution(certificate.clone(), &epoch_store)?;
             }
             return Ok(None);
         }

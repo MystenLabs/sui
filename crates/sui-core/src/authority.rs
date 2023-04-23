@@ -30,6 +30,7 @@ use sui_types::TypeTag;
 use tap::TapFallible;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::oneshot;
+use tokio::time::Instant;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tracing::{debug, error, info, instrument, trace, warn, Instrument};
 
@@ -507,6 +508,8 @@ pub struct AuthorityState {
     expensive_safety_check_config: ExpensiveSafetyCheckConfig,
 
     transaction_deny_config: TransactionDenyConfig,
+
+    enqueue_buffer: Mutex<(Instant, Vec<VerifiedCertificate>)>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -688,7 +691,7 @@ impl AuthorityState {
         let expected_effects_digest = effects.digest();
 
         self.transaction_manager
-            .enqueue(vec![transaction.clone()], epoch_store)?;
+            .enqueue(vec![transaction.clone()])?;
 
         let observed_effects = self
             .database
@@ -726,7 +729,7 @@ impl AuthorityState {
             // Shared object transactions need to be sequenced by Narwhal before enqueueing
             // for execution, done in AuthorityPerEpochStore::handle_consensus_transaction().
             // For owned object transactions, they can be enqueued for execution immediately.
-            self.enqueue_certificates_for_execution(vec![certificate.clone()], epoch_store)?;
+            self.enqueue_certificates_for_execution(certificate.clone(), epoch_store)?;
         }
 
         let effects = self.notify_read_effects(certificate).await?;
@@ -934,8 +937,7 @@ impl AuthorityState {
         // REQUIRED: this must be called after commit_certificate() (above), which writes output
         // objects into storage. Otherwise, the transaction manager may schedule a transaction
         // before the output objects are actually available.
-        self.transaction_manager
-            .notify_commit(&digest, output_keys, epoch_store);
+        self.transaction_manager.notify_commit(&digest, output_keys);
 
         // index certificate
         let _ = self
@@ -1712,7 +1714,7 @@ impl AuthorityState {
         let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
         let transaction_manager = Arc::new(TransactionManager::new(
             store.clone(),
-            &epoch_store,
+            epoch_store.clone(),
             tx_ready_certificates,
             metrics.clone(),
         ));
@@ -1745,6 +1747,7 @@ impl AuthorityState {
             db_checkpoint_config: db_checkpoint_config.clone(),
             expensive_safety_check_config,
             transaction_deny_config,
+            enqueue_buffer: Mutex::new((Instant::now(), Default::default())),
         });
 
         // Start a task to execute ready certificates.
@@ -1772,11 +1775,21 @@ impl AuthorityState {
     /// because only Narwhal output needs to be persisted.
     pub fn enqueue_certificates_for_execution(
         &self,
-        certs: Vec<VerifiedCertificate>,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
+        cert: VerifiedCertificate,
+        _epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<()> {
-        self.transaction_manager
-            .enqueue_certificates(certs, epoch_store)
+        let certs;
+        {
+            let mut buffer = self.enqueue_buffer.lock();
+            buffer.1.push(cert);
+            if buffer.1.len() >= 50 || buffer.0.elapsed() >= Duration::from_millis(10) {
+                certs = std::mem::take(&mut buffer.1);
+                buffer.0 = Instant::now();
+            } else {
+                return Ok(());
+            }
+        }
+        self.transaction_manager.enqueue_certificates(certs)
     }
 
     fn create_owner_index_if_empty(
@@ -1875,7 +1888,8 @@ impl AuthorityState {
             )
             .await?;
         assert_eq!(new_epoch_store.epoch(), new_epoch);
-        self.transaction_manager.reconfigure(new_epoch);
+        self.transaction_manager
+            .reconfigure(new_epoch_store.clone());
         *execution_lock = new_epoch;
         // drop execution_lock after epoch store was updated
         // see also assert in AuthorityState::process_certificate

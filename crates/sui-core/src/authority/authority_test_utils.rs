@@ -270,10 +270,7 @@ pub async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCertifica
             .await
             .unwrap();
 
-        authority
-            .transaction_manager()
-            .enqueue(certs, &authority.epoch_store_for_testing())
-            .unwrap();
+        authority.transaction_manager().enqueue(certs).unwrap();
     } else {
         warn!("Failed to verify certificate: {:?}", cert);
     }

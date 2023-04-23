@@ -5,10 +5,12 @@ use std::{
     cmp::max,
     collections::{BTreeMap, BTreeSet, HashMap},
     sync::Arc,
+    time::Duration,
 };
 
+use arc_swap::ArcSwap;
 use mysten_metrics::monitored_scope;
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use sui_types::{
     base_types::ObjectID,
     committee::EpochId,
@@ -16,7 +18,7 @@ use sui_types::{
     messages::{TransactionDataAPI, VerifiedCertificate, VerifiedExecutableTransaction},
 };
 use sui_types::{base_types::TransactionDigest, error::SuiResult};
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::{sync::mpsc::UnboundedSender, time::Instant};
 use tracing::{error, trace, warn};
 
 use crate::authority::{
@@ -41,12 +43,14 @@ const MIN_HASHMAP_CAPACITY: usize = 1000;
 /// storage, committed objects and certificates are notified back to TransactionManager.
 pub struct TransactionManager {
     authority_store: Arc<AuthorityStore>,
+    epoch_store: ArcSwap<AuthorityPerEpochStore>,
+    metrics: Arc<AuthorityMetrics>,
+    inner: RwLock<Inner>,
     tx_ready_certificates: UnboundedSender<(
         VerifiedExecutableTransaction,
         Option<TransactionEffectsDigest>,
     )>,
-    metrics: Arc<AuthorityMetrics>,
-    inner: RwLock<Inner>,
+    notify_commit_buffer: Mutex<(Instant, Vec<(TransactionDigest, Vec<InputKey>)>)>,
 }
 
 #[derive(Clone, Debug)]
@@ -209,7 +213,7 @@ impl TransactionManager {
     /// retry transactions.
     pub(crate) fn new(
         authority_store: Arc<AuthorityStore>,
-        epoch_store: &AuthorityPerEpochStore,
+        epoch_store: Arc<AuthorityPerEpochStore>,
         tx_ready_certificates: UnboundedSender<(
             VerifiedExecutableTransaction,
             Option<TransactionEffectsDigest>,
@@ -218,12 +222,14 @@ impl TransactionManager {
     ) -> TransactionManager {
         let transaction_manager = TransactionManager {
             authority_store,
+            epoch_store: ArcSwap::new(epoch_store.clone()),
             metrics,
             inner: RwLock::new(Inner::new(epoch_store.epoch())),
             tx_ready_certificates,
+            notify_commit_buffer: Mutex::new((Instant::now(), Default::default())),
         };
         transaction_manager
-            .enqueue(epoch_store.all_pending_execution().unwrap(), epoch_store)
+            .enqueue(epoch_store.all_pending_execution().unwrap())
             .expect("Initialize TransactionManager with pending certificates failed.");
         transaction_manager
     }
@@ -233,37 +239,28 @@ impl TransactionManager {
     ///
     /// REQUIRED: Shared object locks must be taken before calling enqueueing transactions
     /// with shared objects!
-    pub(crate) fn enqueue_certificates(
-        &self,
-        certs: Vec<VerifiedCertificate>,
-        epoch_store: &AuthorityPerEpochStore,
-    ) -> SuiResult<()> {
+    pub(crate) fn enqueue_certificates(&self, certs: Vec<VerifiedCertificate>) -> SuiResult<()> {
         let executable_txns = certs
             .into_iter()
             .map(VerifiedExecutableTransaction::new_from_certificate)
             .collect();
-        self.enqueue(executable_txns, epoch_store)
+        self.enqueue(executable_txns)
     }
 
-    pub(crate) fn enqueue(
-        &self,
-        certs: Vec<VerifiedExecutableTransaction>,
-        epoch_store: &AuthorityPerEpochStore,
-    ) -> SuiResult<()> {
+    pub(crate) fn enqueue(&self, certs: Vec<VerifiedExecutableTransaction>) -> SuiResult<()> {
         let certs = certs.into_iter().map(|cert| (cert, None)).collect();
-        self.enqueue_impl(certs, epoch_store)
+        self.enqueue_impl(certs)
     }
 
     pub(crate) fn enqueue_with_expected_effects_digest(
         &self,
         certs: Vec<(VerifiedExecutableTransaction, TransactionEffectsDigest)>,
-        epoch_store: &AuthorityPerEpochStore,
     ) -> SuiResult<()> {
         let certs = certs
             .into_iter()
             .map(|(cert, fx)| (cert, Some(fx)))
             .collect();
-        self.enqueue_impl(certs, epoch_store)
+        self.enqueue_impl(certs)
     }
 
     fn enqueue_impl(
@@ -272,8 +269,8 @@ impl TransactionManager {
             VerifiedExecutableTransaction,
             Option<TransactionEffectsDigest>,
         )>,
-        epoch_store: &AuthorityPerEpochStore,
     ) -> SuiResult<()> {
+        let epoch_store = self.epoch_store.load();
         let mut pending = Vec::new();
         // Check input objects availability, before taking TM lock.
         let mut object_availability: HashMap<InputKey, bool> = HashMap::new();
@@ -293,7 +290,7 @@ impl TransactionManager {
             let input_object_locks = self.authority_store.get_input_object_locks(
                 &digest,
                 &input_object_kinds,
-                epoch_store,
+                &epoch_store,
             );
             if input_object_kinds.len() != input_object_locks.len() {
                 error!("Duplicated input objects: {:?}", input_object_kinds);
@@ -494,7 +491,7 @@ impl TransactionManager {
             })
             .collect();
         if !additional_available_objects.is_empty() {
-            self.objects_available(additional_available_objects, epoch_store);
+            self.objects_available(additional_available_objects);
         }
 
         Ok(())
@@ -503,23 +500,15 @@ impl TransactionManager {
     /// Notifies TransactionManager that the given objects are available in the objects table.
     /// Useful when transactions associated with the objects are not known, e.g. after checking
     /// object availability from storage, or for testing.
-    pub(crate) fn objects_available(
-        &self,
-        input_keys: Vec<InputKey>,
-        epoch_store: &AuthorityPerEpochStore,
-    ) {
+    pub(crate) fn objects_available(&self, input_keys: Vec<InputKey>) {
         let mut inner = self.inner.write();
         let _scope = monitored_scope("TransactionManager::objects_available::wlock");
-        self.objects_available_locked(&mut inner, epoch_store, input_keys);
+        self.objects_available_locked(&mut inner, &input_keys);
         inner.maybe_shrink_capacity();
     }
 
-    fn objects_available_locked(
-        &self,
-        inner: &mut Inner,
-        epoch_store: &AuthorityPerEpochStore,
-        input_keys: Vec<InputKey>,
-    ) {
+    fn objects_available_locked(&self, inner: &mut Inner, input_keys: &Vec<InputKey>) {
+        let epoch_store = self.epoch_store.load();
         if inner.epoch != epoch_store.epoch() {
             warn!(
                 "Ignoring objects committed from wrong epoch. Expected={} Actual={} \
@@ -532,7 +521,7 @@ impl TransactionManager {
         }
 
         for input_key in input_keys {
-            for ready_cert in inner.try_acquire_lock(input_key) {
+            for ready_cert in inner.try_acquire_lock(*input_key) {
                 self.certificate_ready(inner, ready_cert);
             }
         }
@@ -553,46 +542,72 @@ impl TransactionManager {
         &self,
         digest: &TransactionDigest,
         output_object_keys: Vec<InputKey>,
-        epoch_store: &AuthorityPerEpochStore,
     ) {
+        let commits;
+        {
+            let mut buffer = self.notify_commit_buffer.lock();
+            buffer.1.push((*digest, output_object_keys));
+            if buffer.1.len() >= 50 || buffer.0.elapsed() >= Duration::from_millis(10) {
+                commits = std::mem::take(&mut buffer.1);
+                buffer.0 = Instant::now();
+            } else {
+                return;
+            }
+        }
+        if commits.is_empty() {
+            return;
+        }
+        let epoch_store = self.epoch_store.load();
         {
             let mut inner = self.inner.write();
             let _scope = monitored_scope("TransactionManager::notify_commit::wlock");
-
-            if inner.epoch != epoch_store.epoch() {
-                warn!("Ignoring committed certificate from wrong epoch. Expected={} Actual={} CertificateDigest={:?}", inner.epoch, epoch_store.epoch(), digest);
-                return;
+            for (digest, output_object_keys) in &commits {
+                self.notify_commit_internal(&mut inner, &epoch_store, digest, output_object_keys);
             }
-            let Some(acquired_locks) = inner.executing_certificates.remove(digest) else {
-                trace!("{:?} not found in executing certificates, likely because it is a system transaction", digest);
-                return;
-            };
-            for (key, lock_mode) in acquired_locks {
-                if lock_mode == LockMode::Default {
-                    // Holders of default locks are not tracked.
-                    continue;
-                }
-                assert_eq!(lock_mode, LockMode::ReadOnly);
-                let lock_queue = inner.lock_waiters.get_mut(&key).unwrap();
-                assert!(
-                    lock_queue.readonly_holders.remove(digest),
-                    "Certificate {:?} not found among readonly lock holders",
-                    digest
-                );
-                for ready_cert in inner.try_acquire_lock(key) {
-                    self.certificate_ready(&mut inner, ready_cert);
-                }
-            }
-            self.metrics
-                .transaction_manager_num_executing_certificates
-                .set(inner.executing_certificates.len() as i64);
-
-            self.objects_available_locked(&mut inner, epoch_store, output_object_keys);
-
-            inner.maybe_shrink_capacity();
         }
+        for (digest, _) in &commits {
+            let _ = epoch_store.remove_pending_execution(digest);
+        }
+    }
 
-        let _ = epoch_store.remove_pending_execution(digest);
+    fn notify_commit_internal(
+        &self,
+        inner: &mut Inner,
+        epoch_store: &AuthorityPerEpochStore,
+        digest: &TransactionDigest,
+        output_object_keys: &Vec<InputKey>,
+    ) {
+        if inner.epoch != epoch_store.epoch() {
+            warn!("Ignoring committed certificate from wrong epoch. Expected={} Actual={} CertificateDigest={:?}", inner.epoch, epoch_store.epoch(), digest);
+            return;
+        }
+        let Some(acquired_locks) = inner.executing_certificates.remove(digest) else {
+            trace!("{:?} not found in executing certificates, likely because it is a system transaction", digest);
+            return;
+        };
+        for (key, lock_mode) in acquired_locks {
+            if lock_mode == LockMode::Default {
+                // Holders of default locks are not tracked.
+                continue;
+            }
+            assert_eq!(lock_mode, LockMode::ReadOnly);
+            let lock_queue = inner.lock_waiters.get_mut(&key).unwrap();
+            assert!(
+                lock_queue.readonly_holders.remove(digest),
+                "Certificate {:?} not found among readonly lock holders",
+                digest
+            );
+            for ready_cert in inner.try_acquire_lock(key) {
+                self.certificate_ready(inner, ready_cert);
+            }
+        }
+        self.metrics
+            .transaction_manager_num_executing_certificates
+            .set(inner.executing_certificates.len() as i64);
+
+        self.objects_available_locked(inner, output_object_keys);
+
+        inner.maybe_shrink_capacity();
     }
 
     /// Sends the ready certificate for execution.
@@ -651,7 +666,9 @@ impl TransactionManager {
 
     // Reconfigures the TransactionManager for a new epoch. Existing transactions will be dropped
     // because they are no longer relevant and may be incorrect in the new epoch.
-    pub(crate) fn reconfigure(&self, new_epoch: EpochId) {
+    pub(crate) fn reconfigure(&self, epoch_store: Arc<AuthorityPerEpochStore>) {
+        let new_epoch = epoch_store.epoch();
+        self.epoch_store.store(epoch_store);
         let mut inner = self.inner.write();
         *inner = Inner::new(new_epoch);
     }

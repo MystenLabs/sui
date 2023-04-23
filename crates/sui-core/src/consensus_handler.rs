@@ -383,12 +383,12 @@ impl AsyncTransactionScheduler {
     pub async fn run(
         mut recv: tokio::sync::mpsc::Receiver<Vec<VerifiedExecutableTransaction>>,
         transaction_manager: Arc<TransactionManager>,
-        epoch_store: Arc<AuthorityPerEpochStore>,
+        _epoch_store: Arc<AuthorityPerEpochStore>,
     ) {
         while let Some(transactions) = recv.recv().await {
             let _guard = monitored_scope("ConsensusHandler::enqueue");
             transaction_manager
-                .enqueue(transactions, &epoch_store)
+                .enqueue(transactions)
                 .expect("transaction_manager::enqueue should not fail");
         }
     }

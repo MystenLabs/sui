@@ -407,7 +407,7 @@ async fn test_execution_with_dependencies() {
     for cert in executed_shared_certs.iter().rev() {
         authorities[3]
             .enqueue_certificates_for_execution(
-                vec![cert.clone()],
+                cert.clone(),
                 &authorities[3].epoch_store_for_testing(),
             )
             .unwrap();
@@ -415,7 +415,7 @@ async fn test_execution_with_dependencies() {
     for cert in executed_owned_certs.iter().rev() {
         authorities[3]
             .enqueue_certificates_for_execution(
-                vec![cert.clone()],
+                cert.clone(),
                 &authorities[3].epoch_store_for_testing(),
             )
             .unwrap();

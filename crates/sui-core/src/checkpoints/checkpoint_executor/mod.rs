@@ -472,7 +472,7 @@ impl CheckpointExecutor {
         }
 
         self.tx_manager
-            .enqueue_with_expected_effects_digest(executable_txns.clone(), &epoch_store)?;
+            .enqueue_with_expected_effects_digest(executable_txns.clone())?;
 
         let local_execution_timeout_sec = self.config.local_execution_timeout_sec;
         let checkpoint_store = self.checkpoint_store.clone();
@@ -534,10 +534,10 @@ impl CheckpointExecutor {
         }
 
         self.tx_manager
-            .enqueue_with_expected_effects_digest(
-                vec![(change_epoch_tx.clone(), execution_digests.effects)],
-                &epoch_store,
-            )
+            .enqueue_with_expected_effects_digest(vec![(
+                change_epoch_tx.clone(),
+                execution_digests.effects,
+            )])
             .expect("Enqueueing change_epoch tx cannot fail");
         handle_execution_effects(
             vec![execution_digests],
