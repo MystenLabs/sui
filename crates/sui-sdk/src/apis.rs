@@ -290,19 +290,28 @@ impl CoinReadApi {
         coin_type: Option<String>,
     ) -> impl Stream<Item = Coin> + '_ {
         stream::unfold(
-            (vec![], None, true, coin_type),
-            move |(mut data, cursor, first, coin_type)| async move {
+            (
+                vec![],
+                /* cursor */ None,
+                /* has_next_page */ true,
+                coin_type,
+            ),
+            move |(mut data, cursor, has_next_page, coin_type)| async move {
                 if let Some(item) = data.pop() {
-                    Some((item, (data, cursor, false, coin_type)))
-                } else if (cursor.is_none() && first) || cursor.is_some() {
+                    Some((item, (data, cursor, /* has_next_page */ true, coin_type)))
+                } else if has_next_page {
                     let page = self
                         .get_coins(owner, coin_type.clone(), cursor, Some(100))
                         .await
                         .ok()?;
                     let mut data = page.data;
                     data.reverse();
-                    data.pop()
-                        .map(|item| (item, (data, page.next_cursor, false, coin_type)))
+                    data.pop().map(|item| {
+                        (
+                            item,
+                            (data, page.next_cursor, page.has_next_page, coin_type),
+                        )
+                    })
                 } else {
                     None
                 }
