@@ -414,7 +414,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
 
         // Listen to the replies from the first 2f+1 votes.
         let mut total_stake = 0;
-        let mut votes = Vec::new();
+        let mut votes = BTreeMap::new();
         let mut certificate = None;
         while let Some((response, name)) = futures.next().await {
             auth_agg.metrics.inflight_transaction_requests.dec();
@@ -423,8 +423,10 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                     // If all goes well, the authority returns a vote.
                     TransactionStatus::Signed(signature) => {
                         epoch = signature.epoch;
-                        total_stake += self.committee.weight(&signature.authority);
-                        votes.push(signature);
+                        let auth = signature.authority.clone();
+                        if votes.insert(signature.authority, signature).is_none() {
+                            total_stake += self.committee.weight(&auth);
+                        }
                     }
                     // The transaction may be submitted again in case the certificate's submission failed.
                     TransactionStatus::Executed(cert, _effects, _) => {
@@ -464,10 +466,8 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         let certified_transaction: CertifiedTransaction = match certificate {
             Some(x) => x,
             None => {
-                let signatures: BTreeMap<_, _> = votes
-                    .into_iter()
-                    .map(|a| (a.authority, a.signature))
-                    .collect();
+                let signatures: BTreeMap<_, _> =
+                    votes.into_iter().map(|(k, v)| (k, v.signature)).collect();
                 let mut signers_map = RoaringBitmap::new();
                 for pk in signatures.keys() {
                     signers_map.insert(
