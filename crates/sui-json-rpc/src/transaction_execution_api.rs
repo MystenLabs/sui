@@ -101,7 +101,7 @@ impl TransactionExecutionApi {
         };
 
         let transaction_orchestrator = self.transaction_orchestrator.clone();
-        let _orch_timer = self.metrics.orchestrator_latency.start_timer();
+        let orch_timer = self.metrics.orchestrator_latency_ms.start_timer();
         let response = spawn_monitored_task!(transaction_orchestrator.execute_transaction_block(
             ExecuteTransactionRequest {
                 transaction: txn,
@@ -109,9 +109,9 @@ impl TransactionExecutionApi {
             }
         ))
         .await??;
-        drop(_orch_timer);
+        drop(orch_timer);
 
-        let _post_orch_timer = self.metrics.post_orchestrator_latency.start_timer();
+        let _post_orch_timer = self.metrics.post_orchestrator_latency_ms.start_timer();
         let ExecuteTransactionResponse::EffectsCert(cert) = response;
         let (effects, transaction_events, is_executed_locally) = *cert;
         let mut events: Option<SuiTransactionBlockEvents> = None;
