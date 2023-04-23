@@ -473,4 +473,4 @@ if __name__ == "__main__":
 
     if args.inspect is not None:
         plotter.plot_inspect(args.inspect)
-        plotter.plot_duration(args.inspect, args.precision)
+        # plotter.plot_duration(args.inspect, args.precision)
