@@ -143,7 +143,6 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
         let timestamp = if timestamp < epoch_start {
             error!(
                 "Unexpected commit timestamp {timestamp} less then epoch start time {epoch_start}, author {leader_author}, round {round}",
-
             );
             epoch_start
         } else {
@@ -226,9 +225,9 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
                 Some(i) => i,
                 None => {
                     debug!(
-                "Ignore consensus transaction at index {:?} as it appear to be already processed",
-                index
-            );
+                        "Ignore consensus transaction at index {:?} as it appear to be already processed",
+                        index
+                    );
                     continue;
                 }
             };

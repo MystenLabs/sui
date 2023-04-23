@@ -11,7 +11,7 @@ use crate::transaction_manager::TransactionManager;
 use async_trait::async_trait;
 use narwhal_types::BatchAPI;
 use narwhal_worker::TransactionValidator;
-use sui_types::messages::{ConsensusTransaction, ConsensusTransactionKind};
+use sui_types::messages::{ConsensusTransaction, ConsensusTransactionKind, VerifiedCertificate};
 use tap::TapFallible;
 use tokio::runtime::Handle;
 use tracing::{info, warn};
@@ -20,7 +20,7 @@ use tracing::{info, warn};
 #[derive(Clone)]
 pub struct SuiTxValidator {
     epoch_store: Arc<AuthorityPerEpochStore>,
-    _transaction_manager: Arc<TransactionManager>,
+    transaction_manager: Arc<TransactionManager>,
     metrics: Arc<SuiTxValidatorMetrics>,
 }
 
@@ -36,7 +36,7 @@ impl SuiTxValidator {
         );
         Self {
             epoch_store,
-            _transaction_manager: transaction_manager,
+            transaction_manager,
             metrics,
         }
     }
@@ -64,18 +64,19 @@ impl TransactionValidator for SuiTxValidator {
             .map(|tx| tx_from_bytes(tx))
             .collect::<Result<Vec<_>, _>>()?;
 
+        let mut owned_tx_certs = Vec::new();
         let mut cert_batch = Vec::new();
         let mut ckpt_batch = Vec::new();
         for tx in txs.into_iter() {
             match tx.kind {
                 ConsensusTransactionKind::UserTransaction(certificate) => {
+                    if !certificate.contains_shared_object() {
+                        // new_unchecked safety: we do not use the certs in this list until all
+                        // have had their signatures verified.
+                        owned_tx_certs
+                            .push(VerifiedCertificate::new_unchecked((*certificate).clone()));
+                    }
                     cert_batch.push(*certificate);
-
-                    // if !certificate.contains_shared_object() {
-                    //     // new_unchecked safety: we do not use the certs in this list until all
-                    //     // have had their signatures verified.
-                    //     owned_tx_certs.push(VerifiedCertificate::new_unchecked(*certificate));
-                    // }
                 }
                 ConsensusTransactionKind::CheckpointSignature(signature) => {
                     ckpt_batch.push(signature.summary)
@@ -84,6 +85,15 @@ impl TransactionValidator for SuiTxValidator {
                 | ConsensusTransactionKind::CapabilityNotification(_) => {}
             }
         }
+
+        // todo - we should un-comment line below once we have a way to revert those transactions at the end of epoch
+        // all certificates had valid signatures, schedule them for execution prior to sequencing
+        // which is unnecessary for owned object transactions.
+        // It is unnecessary to write to pending_certificates table because the certs will be written
+        // via Narwhal output.
+        self.transaction_manager
+            .enqueue_certificates(owned_tx_certs)
+            .expect("Failed to schedule certificates for execution");
 
         // verify the certificate signatures as a batch
         let cert_count = cert_batch.len();
@@ -98,6 +108,7 @@ impl TransactionValidator for SuiTxValidator {
                     .wrap_err("Malformed batch (failed to verify)")
             })
             .await??;
+
         self.metrics
             .certificate_signatures_verified
             .inc_by(cert_count as u64);
@@ -105,15 +116,6 @@ impl TransactionValidator for SuiTxValidator {
             .checkpoint_signatures_verified
             .inc_by(ckpt_count as u64);
         Ok(())
-
-        // todo - we should un-comment line below once we have a way to revert those transactions at the end of epoch
-        // all certificates had valid signatures, schedule them for execution prior to sequencing
-        // which is unnecessary for owned object transactions.
-        // It is unnecessary to write to pending_certificates table because the certs will be written
-        // via Narwhal output.
-        // self.transaction_manager
-        //     .enqueue_certificates(owned_tx_certs, &self.epoch_store)
-        //     .wrap_err("Failed to schedule certificates for execution")
     }
 }
 
