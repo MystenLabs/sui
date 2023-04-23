@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::cmp::max;
 use std::collections::HashMap;
 use std::fmt;
 use std::path::PathBuf;
@@ -796,7 +795,7 @@ impl SuiNode {
     }
 
     fn construct_consensus_adapter(
-        committee: &Committee,
+        _committee: &Committee,
         consensus_config: &ConsensusConfig,
         authority: AuthorityName,
         connection_monitor_status: Arc<ConnectionMonitorStatus>,

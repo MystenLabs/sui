@@ -30,10 +30,10 @@ use sui_json_rpc_types::{
 };
 use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::messages::Argument;
 use sui_types::messages::CallArg;
 use sui_types::messages::ObjectArg;
 use sui_types::messages::TransactionEvents;
+use sui_types::messages::{Argument, TransactionEffects};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_types::{
@@ -61,7 +61,7 @@ use tokio::{
     task::JoinSet,
     time::{sleep, timeout},
 };
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 pub mod bank;
 pub mod benchmark_setup;
@@ -414,7 +414,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
 
         // Listen to the replies from the first 2f+1 votes.
         let mut total_stake = 0;
-        let mut votes = Vec::new();
+        let mut votes = BTreeMap::new();
         let mut certificate = None;
         while let Some((response, name)) = futures.next().await {
             auth_agg.metrics.inflight_transaction_requests.dec();
@@ -423,8 +423,10 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                     // If all goes well, the authority returns a vote.
                     TransactionStatus::Signed(signature) => {
                         epoch = signature.epoch;
-                        total_stake += self.committee.weight(&signature.authority);
-                        votes.push(signature);
+                        let auth = signature.authority;
+                        if votes.insert(signature.authority, signature).is_none() {
+                            total_stake += self.committee.weight(&auth);
+                        }
                     }
                     // The transaction may be submitted again in case the certificate's submission failed.
                     TransactionStatus::Executed(cert, _effects, _) => {
@@ -464,10 +466,8 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         let certified_transaction: CertifiedTransaction = match certificate {
             Some(x) => x,
             None => {
-                let signatures: BTreeMap<_, _> = votes
-                    .into_iter()
-                    .map(|a| (a.authority, a.signature))
-                    .collect();
+                let signatures: BTreeMap<_, _> =
+                    votes.into_iter().map(|(k, v)| (k, v.signature)).collect();
                 let mut signers_map = RoaringBitmap::new();
                 for pk in signatures.keys() {
                     signers_map.insert(
@@ -595,75 +595,6 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             );
             return Ok(effects);
         }
-        auth_agg
-            .metrics
-            .inflight_certificate_requests
-            .add(futures.len() as i64);
-
-        // Wait for the replies from a quorum of validators.
-        while let Some((response, name)) = futures.next().await {
-            auth_agg.metrics.inflight_certificate_requests.dec();
-            match response {
-                // If all goes well, the validators reply with signed effects.
-                Ok(HandleCertificateResponse {
-                    signed_effects,
-                    events,
-                }) => {
-                    let author = signed_effects.auth_sig().authority;
-                    transaction_effects = Some(signed_effects.data().clone());
-                    transaction_events = Some(events);
-                    total_stake += self.committee.weight(&author);
-                }
-
-                // This typically happens when the validators are overloaded and the certificate is
-                // immediately rejected.
-                Err(e) => {
-                    auth_agg
-                        .metrics
-                        .process_cert_errors
-                        .with_label_values(&[&name.concise().to_string(), e.as_ref()])
-                        .inc();
-                    tracing::warn!("Failed to submit certificate: {e}")
-                }
-            }
-
-            if total_stake >= self.committee.quorum_threshold() {
-                break;
-            }
-        }
-
-        // Abort if we failed to submit the certificate to enough validators. This typically
-        // happens when the validators are overloaded and the requests timed out.
-        if transaction_effects.is_none() || total_stake < self.committee.quorum_threshold() {
-            bail!("Failed to submit certificate to quorum of validators");
-        }
-
-        // Wait for 10 more seconds on remaining requests asynchronously.
-        const WAIT_TIMEOUT: Duration = Duration::from_secs(10);
-        {
-            let auth_agg = auth_agg.clone();
-            let mut requests = self.requests.lock().unwrap();
-            requests.spawn(async move {
-                let _ = timeout(WAIT_TIMEOUT, async {
-                    while futures.next().await.is_some() {
-                        auth_agg.metrics.inflight_certificate_requests.dec();
-                    }
-                })
-                .await;
-                auth_agg
-                    .metrics
-                    .inflight_certificate_requests
-                    .sub(futures.len() as i64);
-            });
-        }
-
-        // Package the certificate and effects to return.
-        let signed_material = certified_transaction.auth_sig().clone();
-        let effects = ExecutionEffects::CertifiedTransactionEffects(
-            Envelope::new_from_data_and_sig(transaction_effects.unwrap(), signed_material),
-            transaction_events.unwrap(),
-        );
-        Ok(effects)
     }
 
     fn clone_committee(&self) -> Committee {
