@@ -21,7 +21,6 @@
         "test": "vitest run",
         "test:watch": "vitest",
         "playwright": "playwright",
-        "make-font-icons": "svgtofont -s ./font-icons/svgs/ -o ./font-icons/output/",
         "pack:zip": "web-ext build --source-dir ./dist --overwrite-dest",
         "storybook": "storybook dev -p 6007",
         "build-storybook": "storybook build",
