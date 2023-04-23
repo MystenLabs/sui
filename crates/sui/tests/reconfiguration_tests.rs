@@ -9,7 +9,7 @@ use prometheus::Registry;
 use rand::{rngs::StdRng, SeedableRng};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use sui_config::builder::ConfigBuilder;
 use sui_config::NodeConfig;
 use sui_core::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
@@ -28,9 +28,9 @@ use sui_types::gas::GasCostSummary;
 use sui_types::message_envelope::Message;
 use sui_types::messages::{
     CallArg, CertifiedTransactionEffects, ObjectArg, TransactionData, TransactionDataAPI,
-    TransactionEffectsAPI, TransactionExpiration, VerifiedTransaction,
-    TEST_ONLY_GAS_UNIT_FOR_GENERIC, TEST_ONLY_GAS_UNIT_FOR_STAKING,
-    TEST_ONLY_GAS_UNIT_FOR_TRANSFER, TEST_ONLY_GAS_UNIT_FOR_VALIDATOR,
+    TransactionEffectsAPI, TransactionExpiration, TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    TEST_ONLY_GAS_UNIT_FOR_STAKING, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+    TEST_ONLY_GAS_UNIT_FOR_VALIDATOR,
 };
 use sui_types::object::{
     generate_test_gas_objects_with_owner, generate_test_gas_objects_with_owner_and_value, Object,
@@ -49,10 +49,10 @@ use test_utils::{
     authority::{
         spawn_test_authorities, test_authority_configs, test_authority_configs_with_objects,
     },
-    network::TestClusterBuilder,
+    network::{execute_transaction_block, trigger_reconfiguration, TestClusterBuilder},
 };
-use tokio::time::{sleep, timeout};
-use tracing::{info, warn};
+use tokio::time::sleep;
+use tracing::info;
 
 #[sim_test]
 async fn advance_epoch_tx_test() {
@@ -1328,7 +1328,7 @@ async fn execute_join_committee_txes(
     effects_ret
 }
 
-async fn execute_leave_committee_tx(
+pub async fn execute_leave_committee_tx(
     authorities: &[SuiNodeHandle],
     gas: ObjectRef,
     account_kp: &Ed25519KeyPair,
@@ -1360,69 +1360,4 @@ async fn execute_leave_committee_tx(
         .unwrap();
     assert!(effects.status().is_ok(), "{:?}", effects.status());
     effects
-}
-
-async fn trigger_reconfiguration(authorities: &[SuiNodeHandle]) {
-    info!("Starting reconfiguration");
-    let start = Instant::now();
-
-    // Close epoch on 2f+1 validators.
-    let cur_committee =
-        authorities[0].with(|node| node.state().epoch_store_for_testing().committee().clone());
-    let mut cur_stake = 0;
-    for handle in authorities {
-        handle
-            .with_async(|node| async {
-                node.close_epoch_for_testing().await.unwrap();
-                cur_stake += cur_committee.weight(&node.state().name);
-            })
-            .await;
-        if cur_stake >= cur_committee.quorum_threshold() {
-            break;
-        }
-    }
-    info!("close_epoch complete after {:?}", start.elapsed());
-
-    // Wait for all nodes to reach the next epoch.
-    let handles: Vec<_> = authorities
-        .iter()
-        .map(|handle| {
-            handle.with_async(|node| async {
-                let mut retries = 0;
-                loop {
-                    if node.state().epoch_store_for_testing().epoch() == cur_committee.epoch + 1 {
-                        break;
-                    }
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                    retries += 1;
-                    if retries % 5 == 0 {
-                        warn!(validator=?node.state().name.concise(), "Waiting for {:?} seconds for epoch change", retries);
-                    }
-                }
-            })
-        })
-        .collect();
-
-    timeout(Duration::from_secs(40), join_all(handles))
-        .await
-        .expect("timed out waiting for reconfiguration to complete");
-
-    info!("reconfiguration complete after {:?}", start.elapsed());
-}
-
-async fn execute_transaction_block(
-    authorities: &[SuiNodeHandle],
-    transaction: VerifiedTransaction,
-) -> anyhow::Result<CertifiedTransactionEffects> {
-    let registry = Registry::new();
-    let net = AuthorityAggregator::new_from_local_system_state(
-        &authorities[0].with(|node| node.state().db()),
-        &authorities[0].with(|node| node.state().committee_store().clone()),
-        SafeClientMetricsBase::new(&registry),
-        AuthAggMetrics::new(&registry),
-    )
-    .unwrap();
-    net.execute_transaction_block(&transaction)
-        .await
-        .map(|e| e.into_inner())
 }

@@ -4,7 +4,7 @@
 use futures::future::join_all;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::ws_client::WsClient;
@@ -13,7 +13,7 @@ use prometheus::Registry;
 use rand::{distributions::*, rngs::OsRng, seq::SliceRandom};
 use tokio::time::timeout;
 use tokio::{task::JoinHandle, time::sleep};
-use tracing::info;
+use tracing::{info, warn};
 
 use mysten_metrics::RegistryService;
 use sui::config::SuiEnv;
@@ -23,6 +23,9 @@ use sui_config::genesis_config::GenesisConfig;
 use sui_config::node::DBCheckpointConfig;
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{FullnodeConfigBuilder, NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
+use sui_core::authority_aggregator::AuthAggMetrics;
+use sui_core::authority_aggregator::AuthorityAggregator;
+use sui_core::safe_client::SafeClientMetricsBase;
 use sui_json_rpc_types::{SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNode;
@@ -35,7 +38,7 @@ use sui_types::base_types::{AuthorityName, SuiAddress};
 use sui_types::committee::EpochId;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
-use sui_types::messages::VerifiedTransaction;
+use sui_types::messages::{CertifiedTransactionEffects, VerifiedTransaction};
 use sui_types::object::Object;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemState;
@@ -585,4 +588,69 @@ pub async fn wait_for_nodes_transition_to_epoch<'a>(
         .map(|handle| wait_for_node_transition_to_epoch(handle, expected_epoch))
         .collect();
     join_all(handles).await;
+}
+
+pub async fn trigger_reconfiguration(authorities: &[SuiNodeHandle]) {
+    info!("Starting reconfiguration");
+    let start = Instant::now();
+
+    // Close epoch on 2f+1 validators.
+    let cur_committee =
+        authorities[0].with(|node| node.state().epoch_store_for_testing().committee().clone());
+    let mut cur_stake = 0;
+    for handle in authorities {
+        handle
+            .with_async(|node| async {
+                node.close_epoch_for_testing().await.unwrap();
+                cur_stake += cur_committee.weight(&node.state().name);
+            })
+            .await;
+        if cur_stake >= cur_committee.quorum_threshold() {
+            break;
+        }
+    }
+    info!("close_epoch complete after {:?}", start.elapsed());
+
+    // Wait for all nodes to reach the next epoch.
+    let handles: Vec<_> = authorities
+        .iter()
+        .map(|handle| {
+            handle.with_async(|node| async {
+                let mut retries = 0;
+                loop {
+                    if node.state().epoch_store_for_testing().epoch() == cur_committee.epoch + 1 {
+                        break;
+                    }
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    retries += 1;
+                    if retries % 5 == 0 {
+                        warn!(validator=?node.state().name.concise(), "Waiting for {:?} seconds for epoch change", retries);
+                    }
+                }
+            })
+        })
+        .collect();
+
+    timeout(Duration::from_secs(40), join_all(handles))
+        .await
+        .expect("timed out waiting for reconfiguration to complete");
+
+    info!("reconfiguration complete after {:?}", start.elapsed());
+}
+
+pub async fn execute_transaction_block(
+    authorities: &[SuiNodeHandle],
+    transaction: VerifiedTransaction,
+) -> anyhow::Result<CertifiedTransactionEffects> {
+    let registry = Registry::new();
+    let net = AuthorityAggregator::new_from_local_system_state(
+        &authorities[0].with(|node| node.state().db()),
+        &authorities[0].with(|node| node.state().committee_store().clone()),
+        SafeClientMetricsBase::new(&registry),
+        AuthAggMetrics::new(&registry),
+    )
+    .unwrap();
+    net.execute_transaction_block(&transaction)
+        .await
+        .map(|e| e.into_inner())
 }
