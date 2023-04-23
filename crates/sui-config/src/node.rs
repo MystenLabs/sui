@@ -417,7 +417,7 @@ impl AuthorityStorePruningConfig {
     pub fn validator_config() -> Self {
         Self {
             num_latest_epoch_dbs_to_retain: 3,
-            epoch_db_pruning_period_secs: 60 * 60,
+            epoch_db_pruning_period_secs: 24 * 60 * 60,
             num_epochs_to_retain: 2,
             pruning_run_delay_seconds: None,
             max_checkpoints_in_batch: 10,
