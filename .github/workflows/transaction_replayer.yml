@@ -1,0 +1,169 @@
+name: Transaction Replayer
+
+concurrency:
+  # TODO: figure out a good way to limit to N running instances of the workflow. This is not
+  # directly supported by github actions yet. Possible workaround: depend on a job that polls
+  # the remote host trying to decrement a "semaphore". Blocks until able, effectively making
+  # dependent job wait until there is "capacity"
+
+  group: ${{ github.workflow }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit:
+        type: string
+        required: false
+
+jobs:
+  replay-transactions:
+    strategy:
+      matrix:
+        hostname: [
+            "fullnode-tx-replayer-01",
+            # Add more hosts here
+          ]
+    timeout-minutes: 300
+    permissions:
+      # The "id-token: write" permission is required or Machine ID will not be
+      # able to authenticate with the cluster.
+      id-token: write
+      contents: read
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install Teleport
+        uses: teleport-actions/setup@75c810ac63a7e9b28ca4795c6111619f2a13ac71 # pin@v1
+        with:
+          version: 11.3.4
+      - name: Authorize against Teleport
+        id: auth
+        uses: teleport-actions/auth@05047917b0e5bf81f3ef65e7856cadbcfec9140a # pin@v1
+        with:
+          # Specify the publically accessible address of your Teleport proxy.
+          proxy: proxy.mysten-int.com:443
+          # Specify the name of the join token for your bot.
+          token: fullnode-compat-test
+          # Specify the length of time that the generated credentials should be
+          # valid for. This is optional and defaults to "1h"
+          certificate-ttl: 12h
+
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      # Cargo clean and git restore on any left over files from git checkout
+      - name: Environment clean
+        run: |
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && cargo clean && git restore ."
+
+      - name: Checkout sui repo
+        run: |
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 10 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && git checkout main && git fetch origin main && git rebase origin/main"
+
+      - name: Checkout provided commit
+        if: ${{ github.event.inputs.commit != '' }}
+        run: |
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 30 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && git checkout ${{ github.event.inputs.commit }}"
+
+      - name: Build latest sui-tool binary
+        run: |
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 30 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && source ~/.cargo/env && cargo build --release --bin sui-tool"
+
+      - name: Setup run directory
+        run: |
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "source ~/.bashrc && mkdir -p /opt/sui/instances/run_${{ github.run_id }}/suidb"
+
+      - name: Symlink latest snapshot as db and mark as live
+        run: |
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "LATEST_SNAPSHOT=$(ls /opt/sui/snpshots | grep epoch | sort  | tail -1) && ln -s /opt/sui/snapshots/$LATEST_SNAPSHOT /opt/sui/instances/run_${{ github.run_id }}/suidb/live"
+
+      - name: Get epoch to fetch
+        id: get-epoch-to-fetch
+        run: |
+          curl --silent --location --request POST https://explorer-rpc.testnet.sui.io/ --header 'Content-Type: application/json' --data-raw '{"jsonrpc":"2.0", "method":"suix_getCurrentEpoch", "params":[], "id":1}' | jq -r '.result.epoch' > /tmp/current_epoch
+          echo "current_epoch=$(cat /tmp/current_epoch)" >> $GITHUB_OUTPUT
+          current_epoch=$(cat /tmp/current_epoch)
+          echo "epoch_to_fetch=$(( $current_epoch - 1 ))" >> $GITHUB_OUTPUT
+
+      - name: Run tx replay tool
+        run: |
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 720 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "cd ~/sui && ./targets/release/sui-tool replay --end-epoch ${{ steps.get-epoch-to-fetch.outputs.epoch_to_fetch }}"
+
+      - name: Remove db reference
+        if: always()
+        run: |
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 720 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "rm /opt/sui/instances/run_${{ github.run_id }}/suidb/live"
+
+      - name: Cleanup
+        if: ${{ cancelled() }}
+        run: |
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 720 ssh ubuntu@${{ matrix.shard_manifest.hostname }} "pkill .*sui-node; pkill .*sui-tool;"
+
+  notify:
+    name: Notify
+    needs: [replay-transactions]
+    runs-on: ubuntu-latest
+    if: always() # always notify
+
+    steps:
+      - uses: technote-space/workflow-conclusion-action@v3
+
+      - name: Checkout sui repo main branch
+        uses: actions/checkout@755da8c3cf115ac066823e79a1e1788f8940201b # pin@v3
+
+      - name: Get sui commit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          export sui_sha=$(git rev-parse HEAD)
+          echo "sui_sha=${sui_sha}" >> $GITHUB_ENV
+
+      - name: Get link to logs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh_job_link=$(gh api -X GET 'repos/MystenLabs/sui/actions/runs/${{ github.run_id }}/jobs' --jq '.jobs.[0].html_url')
+          echo "gh_job_link=${gh_job_link}" >> $GITHUB_ENV
+
+      - name: Post to slack
+        uses: slackapi/slack-github-action@936158bbe252e9a6062e793ea4609642c966e302 # pin@v1.21.0
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SUI_SHA: ${{ env.sui_sha }}
+          GH_JOB_LINK: ${{ env.gh_job_link }}
+        with: # TODO fix commit hash below, as we are reunning on last commit that passed CI
+          channel-id: "compatibility-test-nightly"
+          payload: |
+            {
+              "text": "*${{ github.workflow }}* workflow status: `${{ env.WORKFLOW_CONCLUSION }}`",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*${{ github.workflow }}* workflow status: `${{ env.WORKFLOW_CONCLUSION }}`"
+                  }
+                },
+                {
+                  "type": "divider"
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}> \nRun: <${{ env.GH_JOB_LINK }}|${{ github.run_id }}>"
+                  }
+                },
+                {
+                  "type": "divider"
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "To debug failures: See run logs; Rerun with `verbose` logging enabled; `tsh ssh ubuntu@fullnode-compat-test-01` if needed (or -02, -03). \nMetrics can be viewed at https://metrics.sui.io/d/_nu1mWC7zx/sui-fullnode?orgId=1&refresh=1m&var-Environment=mysten-metrics-internal&var-network=testnet&var-host=fullnode-compat-test-01"
+                  }
+                }
+              ]
+            }
