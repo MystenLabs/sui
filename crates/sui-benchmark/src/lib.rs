@@ -574,9 +574,16 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                 let auth_agg = auth_agg.clone();
                 let mut requests = self.requests.lock().unwrap();
                 requests.spawn(async move {
-                    let len = futures.len() as i64;
-                    let _ = timeout(Duration::from_secs(600), futures.collect::<Vec<_>>()).await;
-                    auth_agg.metrics.inflight_certificate_requests.sub(len);
+                    let _ = timeout(Duration::from_secs(600), async {
+                        while futures.next().await.is_some() {
+                            auth_agg.metrics.inflight_certificate_requests.dec();
+                        }
+                    })
+                    .await;
+                    auth_agg
+                        .metrics
+                        .inflight_certificate_requests
+                        .sub(futures.len() as i64);
                 });
             }
 
