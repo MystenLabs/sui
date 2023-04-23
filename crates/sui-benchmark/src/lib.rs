@@ -423,7 +423,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                     // If all goes well, the authority returns a vote.
                     TransactionStatus::Signed(signature) => {
                         epoch = signature.epoch;
-                        let auth = signature.authority.clone();
+                        let auth = signature.authority;
                         if votes.insert(signature.authority, signature).is_none() {
                             total_stake += self.committee.weight(&auth);
                         }
