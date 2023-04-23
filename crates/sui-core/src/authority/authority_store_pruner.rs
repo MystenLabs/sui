@@ -234,10 +234,10 @@ impl AuthorityStorePruner {
             if config.num_epochs_to_retain > 0 {
                 epoch_duration_ms / 2
             } else {
-                60
+                600000000
             },
         ));
-        let pruning_initial_delay = min(tick_duration, Duration::from_secs(300));
+        let pruning_initial_delay = min(tick_duration, Duration::from_secs(600000000));
         let mut prune_interval =
             tokio::time::interval_at(Instant::now() + pruning_initial_delay, tick_duration);
 
