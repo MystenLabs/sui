@@ -77,6 +77,7 @@ pub struct BuildConfig {
 
 impl BuildConfig {
     pub fn new_for_testing() -> Self {
+        move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
         let mut build_config: Self = Default::default();
         let install_dir = tempfile::tempdir().unwrap().into_path();
         let lock_file = install_dir.join("Move.lock");
