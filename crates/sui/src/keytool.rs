@@ -1,14 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use rusoto_core::Region;
-use rusoto_kms::{Kms, KmsClient, SignRequest, GetPublicKeyRequest};
-use secp256k1::ecdsa::Signature as secpSig;
-use openssl::ec::{EcGroup, PointConversionForm};
-use openssl::nid::Nid;
-use openssl::pkey::PKey;
-
-use fastcrypto::traits::{ToFromBytes};
-use fastcrypto::secp256k1::{Secp256k1PublicKey};
 use anyhow::anyhow;
 use bip32::DerivationPath;
 use clap::*;
@@ -31,6 +22,14 @@ use sui_types::messages::TransactionData;
 use sui_types::multisig::{MultiSig, MultiSigPublicKey, ThresholdUnit, WeightUnit};
 use sui_types::signature::GenericSignature;
 use tracing::info;
+use rusoto_core::Region;
+use rusoto_kms::{Kms, KmsClient, SignRequest, GetPublicKeyRequest};
+use secp256k1::ecdsa::Signature as secpSig;
+use openssl::ec::{EcGroup, PointConversionForm};
+use openssl::nid::Nid;
+use openssl::pkey::PKey;
+use fastcrypto::traits::{ToFromBytes};
+use fastcrypto::secp256k1::{Secp256k1PublicKey};
 
 #[cfg(test)]
 #[path = "unit_tests/keytool_tests.rs"]
@@ -57,11 +56,15 @@ pub enum KeyToolCommand {
     /// This reads the content at the provided file path. The accepted format can be
     /// [enum SuiKeyPair] (Base64 encoded of 33-byte `flag || privkey`) or `type AuthorityKeyPair`
     /// (Base64 encoded `privkey`). It prints its Base64 encoded public key and the key scheme flag.
-    Show { file: PathBuf },
+    Show {
+        file: PathBuf,
+    },
     /// This takes [enum SuiKeyPair] of Base64 encoded of 33-byte `flag || privkey`). It
     /// outputs the keypair into a file at the current directory, and prints out its Sui
     /// address, Base64 encoded public key, and the key scheme flag.
-    Unpack { keypair: SuiKeyPair },
+    Unpack {
+        keypair: SuiKeyPair,
+    },
     /// List all keys by its Sui address, Base64 encoded public key, key scheme name in
     /// sui.keystore.
     List,
@@ -106,7 +109,13 @@ pub enum KeyToolCommand {
     /// [enum SuiKeyPair] (Base64 encoded of 33-byte `flag || privkey`) or `type AuthorityKeyPair`
     /// (Base64 encoded `privkey`). This prints out the account keypair as Base64 encoded `flag || privkey`,
     /// the network keypair, worker keypair, protocol keypair as Base64 encoded `privkey`.
-    LoadKeypair { file: PathBuf },
+    LoadKeypair {
+        file: PathBuf,
+    },
+
+    Base64PubKeyToAddress {
+        base64_key: String,
+    },
 
     /// To MultiSig Sui Address. Pass in a list of all public keys `flag || pk` in Base64.
     /// See `keytool list` for example public keys.
@@ -233,6 +242,45 @@ impl KeyToolCommand {
                 );
             }
 
+            KeyToolCommand::Import {
+                mnemonic_phrase,
+                key_scheme,
+                derivation_path,
+            } => {
+                let address =
+                    keystore.import_from_mnemonic(&mnemonic_phrase, key_scheme, derivation_path)?;
+                info!("Key imported for address [{address}]");
+            }
+
+            KeyToolCommand::Base64PubKeyToAddress { base64_key } => {
+                let pk = PublicKey::decode_base64(&base64_key)
+                    .map_err(|e| anyhow!("Invalid base64 key: {:?}", e))?;
+                let address = SuiAddress::from(&pk);
+                println!("Address {:?}", address);
+            }
+
+            KeyToolCommand::LoadKeypair { file } => {
+                match read_keypair_from_file(&file) {
+                    Ok(keypair) => {
+                        // Account keypair is encoded with the key scheme flag {},
+                        // and network and worker keypair are not.
+                        println!("Account Keypair: {}", keypair.encode_base64());
+                        if let SuiKeyPair::Ed25519(kp) = keypair {
+                            println!("Network Keypair: {}", kp.encode_base64());
+                            println!("Worker Keypair: {}", kp.encode_base64());
+                        };
+                    }
+                    Err(_) => {
+                        // Authority keypair file is not stored with the flag, it will try read as BLS keypair..
+                        match read_authority_keypair_from_file(&file) {
+                            Ok(kp) => println!("Protocol Keypair: {}", kp.encode_base64()),
+                            Err(e) => {
+                                println!("Failed to read keypair at path {:?} err: {:?}", file, e)
+                            }
+                        }
+                    }
+                }
+            }
             KeyToolCommand::SignKMS {
                 data,
                 keyid,
@@ -314,40 +362,7 @@ impl KeyToolCommand {
                     "Serialized signature (`flag || sig || pk` in Base64): {:?}",
                     serialized_sig
                 );
-            }    
-
-            KeyToolCommand::Import {
-                mnemonic_phrase,
-                key_scheme,
-                derivation_path,
-            } => {
-                let address =
-                    keystore.import_from_mnemonic(&mnemonic_phrase, key_scheme, derivation_path)?;
-                info!("Key imported for address [{address}]");
-            }
-
-            KeyToolCommand::LoadKeypair { file } => {
-                match read_keypair_from_file(&file) {
-                    Ok(keypair) => {
-                        // Account keypair is encoded with the key scheme flag {},
-                        // and network and worker keypair are not.
-                        println!("Account Keypair: {}", keypair.encode_base64());
-                        if let SuiKeyPair::Ed25519(kp) = keypair {
-                            println!("Network Keypair: {}", kp.encode_base64());
-                            println!("Worker Keypair: {}", kp.encode_base64());
-                        };
-                    }
-                    Err(_) => {
-                        // Authority keypair file is not stored with the flag, it will try read as BLS keypair..
-                        match read_authority_keypair_from_file(&file) {
-                            Ok(kp) => println!("Protocol Keypair: {}", kp.encode_base64()),
-                            Err(e) => {
-                                println!("Failed to read keypair at path {:?} err: {:?}", file, e)
-                            }
-                        }
-                    }
-                }
-            }
+            } 
             KeyToolCommand::MultiSigAddress {
                 threshold,
                 pks,
@@ -405,4 +420,3 @@ fn store_and_print_keypair(address: SuiAddress, keypair: SuiKeyPair) {
         path.to_str().unwrap()
     );
 }
-
