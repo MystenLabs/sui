@@ -2695,7 +2695,6 @@
         "required": [
           "coinObjectCount",
           "coinType",
-          "lockedBalance",
           "totalBalance"
         ],
         "properties": {
@@ -2706,12 +2705,6 @@
           },
           "coinType": {
             "type": "string"
-          },
-          "lockedBalance": {
-            "type": "object",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/BigInt_for_uint128"
-            }
           },
           "totalBalance": {
             "$ref": "#/components/schemas/BigInt_for_uint128"
@@ -2920,17 +2913,6 @@
           },
           "digest": {
             "$ref": "#/components/schemas/ObjectDigest"
-          },
-          "lockedUntilEpoch": {
-            "default": null,
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/BigInt_for_uint64"
-              },
-              {
-                "type": "null"
-              }
-            ]
           },
           "previousTransaction": {
             "$ref": "#/components/schemas/TransactionDigest"

@@ -251,8 +251,6 @@ impl CoinReadApiServer for CoinReadApi {
             coin_type: coin_type.to_string(),
             coin_object_count: balance.num_coins as usize,
             total_balance: balance.balance as u128,
-            // note: LockedCoin is deprecated
-            locked_balance: Default::default(),
         })
     }
 
@@ -272,14 +270,10 @@ impl CoinReadApiServer for CoinReadApi {
             })?;
         Ok(all_balance
             .iter()
-            .map(|(coin_type, balance)| {
-                Balance {
-                    coin_type: coin_type.to_string(),
-                    coin_object_count: balance.num_coins as usize,
-                    total_balance: balance.balance as u128,
-                    // note: LockedCoin is deprecated
-                    locked_balance: Default::default(),
-                }
+            .map(|(coin_type, balance)| Balance {
+                coin_type: coin_type.to_string(),
+                coin_object_count: balance.num_coins as usize,
+                total_balance: balance.balance as u128,
             })
             .collect())
     }

@@ -1,16 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashMap;
-
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
 use crate::Page;
-use sui_types::base_types::{
-    EpochId, ObjectDigest, ObjectID, ObjectRef, SequenceNumber, TransactionDigest,
-};
+use sui_types::base_types::{ObjectDigest, ObjectID, ObjectRef, SequenceNumber, TransactionDigest};
 use sui_types::coin::CoinMetadata;
 use sui_types::error::SuiError;
 use sui_types::object::Object;
@@ -28,10 +24,6 @@ pub struct Balance {
     #[schemars(with = "BigInt<u128>")]
     #[serde_as(as = "BigInt<u128>")]
     pub total_balance: u128,
-    // TODO: This should be removed
-    #[schemars(with = "HashMap<BigInt<u64>, BigInt<u128>>")]
-    #[serde_as(as = "HashMap<BigInt<u64>, BigInt<u128>>")]
-    pub locked_balance: HashMap<EpochId, u128>,
 }
 
 #[serde_as]

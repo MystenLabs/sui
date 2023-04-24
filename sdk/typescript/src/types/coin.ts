@@ -8,7 +8,6 @@ import {
   nullable,
   number,
   object,
-  optional,
   string,
 } from 'superstruct';
 import { ObjectId, TransactionDigest } from './common';
@@ -20,7 +19,6 @@ export const CoinStruct = object({
   version: string(),
   digest: TransactionDigest,
   balance: string(),
-  lockedUntilEpoch: nullable(number()),
   previousTransaction: TransactionDigest,
 });
 
@@ -38,10 +36,6 @@ export const CoinBalance = object({
   coinType: string(),
   coinObjectCount: number(),
   totalBalance: string(),
-  lockedBalance: object({
-    epochId: optional(number()),
-    number: optional(number()),
-  }),
 });
 
 export type CoinBalance = Infer<typeof CoinBalance>;

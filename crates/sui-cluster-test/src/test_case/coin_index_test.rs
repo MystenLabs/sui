@@ -6,7 +6,6 @@ use async_trait::async_trait;
 use jsonrpsee::rpc_params;
 use move_core_types::language_storage::StructTag;
 use serde_json::json;
-use std::collections::HashMap;
 use sui_core::test_utils::compile_managed_coin_package;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::ObjectChange;
@@ -222,13 +221,11 @@ impl TestCaseImpl for CoinIndexTest {
                 coin_type: sui_type_str.into(),
                 coin_object_count: old_coin_object_count,
                 total_balance,
-                locked_balance: HashMap::new(),
             },
             Balance {
                 coin_type: coin_type_str.clone(),
                 coin_object_count: 1,
                 total_balance: 10000,
-                locked_balance: HashMap::new(),
             },
         ];
         // Comes with asc order.
