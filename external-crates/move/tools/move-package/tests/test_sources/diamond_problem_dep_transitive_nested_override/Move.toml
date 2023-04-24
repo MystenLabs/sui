@@ -1,0 +1,27 @@
+# Dependency graph and and override (ov) - both overrides should succeed as after ov(2) kicks in, C
+# will dominate E and D (and this override will always kick in before any other dependencies are
+# processed as overrides are processed first).
+#
+#                   +----+    ov(3)                      +----+
+#           +------>| C  |------------------------------>| D  |
+#           |       +----+----------+               +--->+----+
+#           |                       |               | v1
+#           |       +----+          |               |
+#           +------>| A  |          |               |
+#           |       +----+          +---->+----+    |
+#           |       | v1   +----+         | E  |----+
+# +----+    |       +----->| B2 |-------->+----+
+# |Root|----+              +----+
+# +----+    |
+#           |
+#           | ov(2)        +----+
+#           +------------->| B1 |
+#                          +----+
+[package]
+name = "Root"
+version = "0.0.0"
+
+[dependencies]
+A = { local = "./deps_only/A" }
+B = { local = "./deps_only/B1", version = "2.0.0", override = true }
+C = { local = "./deps_only/C" }

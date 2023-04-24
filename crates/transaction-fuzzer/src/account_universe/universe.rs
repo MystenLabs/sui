@@ -19,6 +19,8 @@ use proptest::{
 };
 use proptest_derive::Arbitrary;
 
+const PICK_SIZE: usize = 3;
+
 /// A set of accounts which can be used to construct an initial state.
 #[derive(Debug)]
 pub struct AccountUniverseGen {
@@ -35,10 +37,10 @@ pub struct AccountUniverse {
     ignore_new_accounts: bool,
 }
 
-/// Allows pairs of accounts to be uniformly randomly selected from an account universe.
+/// Allows accounts to be randomly selected from an account universe.
 #[derive(Arbitrary, Clone, Debug)]
 pub struct AccountPairGen {
-    pair: [Index; 2],
+    indices: [Index; PICK_SIZE],
     // The pick_slice_idx method used by this struct returns values in order, so use this flag
     // to determine whether to reverse it.
     reverse: bool,
@@ -104,9 +106,7 @@ impl AccountUniverseGen {
     /// Returns an [`AccountUniverse`] with the initial state generated in this universe.
     pub fn setup(self, executor: &mut Executor) -> AccountUniverse {
         for account_data in &self.accounts {
-            for coin in &account_data.coins {
-                executor.add_object(coin.clone())
-            }
+            executor.add_objects(&account_data.coins);
         }
 
         AccountUniverse::new(self.accounts, self.pick_style, false)
@@ -182,25 +182,24 @@ impl AccountPicker {
         }
     }
 
-    fn pick_pair(&mut self, indexes: &[Index; 2]) -> [usize; 2] {
+    fn pick_account_indices(&mut self, indexes: &[Index; PICK_SIZE]) -> [usize; PICK_SIZE] {
         match self {
-            AccountPicker::Unlimited(num_accounts) => Self::pick_pair_impl(*num_accounts, indexes),
+            AccountPicker::Unlimited(num_accounts) => {
+                Self::pick_account_indices_impl(*num_accounts, indexes)
+            }
             AccountPicker::Limited(remaining) => {
-                let [remaining_idx_1, remaining_idx_2] =
-                    Self::pick_pair_impl(remaining.len(), indexes);
-                // Use the later index first to avoid invalidating indexes.
-                let account_idx_2 = Self::pick_limited(remaining, remaining_idx_2);
-                let account_idx_1 = Self::pick_limited(remaining, remaining_idx_1);
-
-                [account_idx_1, account_idx_2]
+                Self::pick_account_indices_impl(remaining.len(), indexes).map(|idx| {
+                    let (account_idx, _) = remaining[idx];
+                    account_idx
+                })
             }
         }
     }
 
-    fn pick_pair_impl(max: usize, indexes: &[Index; 2]) -> [usize; 2] {
+    fn pick_account_indices_impl(max: usize, indexes: &[Index; PICK_SIZE]) -> [usize; PICK_SIZE] {
         let idxs = pick_slice_idxs(max, indexes);
-        assert_eq!(idxs.len(), 2);
-        let idxs = [idxs[0], idxs[1]];
+        assert_eq!(idxs.len(), PICK_SIZE);
+        let idxs: [usize; PICK_SIZE] = idxs[0..PICK_SIZE].try_into().unwrap();
         assert!(
             idxs[0] < idxs[1],
             "pick_slice_idxs should return sorted order"
@@ -225,41 +224,54 @@ impl AccountPicker {
 }
 
 impl AccountPairGen {
-    /// Picks two accounts uniformly randomly from this universe and returns mutable references to
+    /// Picks two accounts randomly from this universe and returns mutable references to
     /// them.
-    pub fn pick<'a>(&self, universe: &'a mut AccountUniverse) -> AccountPair<'a> {
-        let [low_idx, high_idx] = universe.picker.pick_pair(&self.pair);
+    pub fn pick<'a>(&self, universe: &'a mut AccountUniverse) -> AccountTriple<'a> {
+        let [low_idx, mid_idx, high_idx] = universe.picker.pick_account_indices(&self.indices);
         // Need to use `split_at_mut` because you can't have multiple mutable references to items
         // from a single slice at any given time.
         let (head, tail) = universe.accounts.split_at_mut(low_idx + 1);
-        let (low_account, high_account) = (&mut head[low_idx], &mut tail[high_idx - low_idx - 1]);
+        let (mid, tail) = tail.split_at_mut(mid_idx - low_idx);
+        let (low_account, mid_account, high_account) = (
+            head.last_mut().unwrap(),
+            mid.last_mut().unwrap(),
+            tail.last_mut().unwrap(),
+        );
 
         if self.reverse {
-            AccountPair {
+            AccountTriple {
                 idx_1: high_idx,
-                idx_2: low_idx,
+                idx_2: mid_idx,
+                idx_3: low_idx,
                 account_1: high_account,
-                account_2: low_account,
+                account_2: mid_account,
+                account_3: low_account,
             }
         } else {
-            AccountPair {
+            AccountTriple {
                 idx_1: low_idx,
-                idx_2: high_idx,
+                idx_2: mid_idx,
+                idx_3: high_idx,
                 account_1: low_account,
-                account_2: high_account,
+                account_2: mid_account,
+                account_3: high_account,
             }
         }
     }
 }
 
-/// Mutable references to a pair of distinct accounts picked from a universe.
-pub struct AccountPair<'a> {
+/// Mutable references to a three-tuple of distinct accounts picked from a universe.
+pub struct AccountTriple<'a> {
     /// The index of the first account picked.
     pub idx_1: usize,
     /// The index of the second account picked.
     pub idx_2: usize,
+    /// The index of the third account picked.
+    pub idx_3: usize,
     /// A mutable reference to the first account picked.
     pub account_1: &'a mut AccountCurrent,
     /// A mutable reference to the second account picked.
     pub account_2: &'a mut AccountCurrent,
+    /// A mutable reference to the third account picked.
+    pub account_3: &'a mut AccountCurrent,
 }

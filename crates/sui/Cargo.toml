@@ -28,7 +28,6 @@ rand = "0.8.5"
 tap = "1.0"
 inquire = "0.6.0"
 
-sui-adapter = { path = "../sui-adapter" }
 sui-core = { path = "../sui-core" }
 sui-framework-snapshot = { path = "../sui-framework-snapshot" }
 sui-config = { path = "../sui-config" }
@@ -70,14 +69,14 @@ futures = "0.3.23"
 prometheus = "0.13.3"
 fs_extra = "1.3.0"
 indexmap = "1.9.2"
-
+insta = { version = "1.21.1", features = ["json"] }
 jsonrpsee = { version = "0.16.2", features = ["jsonrpsee-core"] }
-
 test-utils = { path = "../test-utils" }
 rand = "0.8.5"
 expect-test = "1.4.0"
 move-binary-format.workspace = true
 move-package.workspace = true
+
 sui-core = { path = "../sui-core" }
 sui-framework = { path = "../sui-framework" }
 sui-json-rpc = { path = "../sui-json-rpc" }

@@ -3,6 +3,7 @@
 
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::collections::HashMap;
+use sui_config::NetworkConfig;
 use sui_types::{
     base_types::AuthorityName,
     committee::{Committee, EpochId, StakeUnit},
@@ -43,6 +44,32 @@ impl CommitteeFixture {
         Self {
             epoch,
             validators,
+            committee,
+        }
+    }
+
+    pub fn from_network_config(network_config: &NetworkConfig) -> Self {
+        let committee = network_config.genesis.committee().unwrap();
+        Self {
+            epoch: committee.epoch,
+            validators: committee
+                .members()
+                .map(|(name, stake)| {
+                    (
+                        *name,
+                        (
+                            network_config
+                                .validator_configs()
+                                .iter()
+                                .find(|config| config.protocol_public_key() == *name)
+                                .unwrap()
+                                .protocol_key_pair()
+                                .copy(),
+                            *stake,
+                        ),
+                    )
+                })
+                .collect(),
             committee,
         }
     }

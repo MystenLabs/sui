@@ -322,6 +322,7 @@ impl SuiNode {
             genesis.objects(),
             &db_checkpoint_config,
             config.expensive_safety_check_config.clone(),
+            config.transaction_deny_config.clone(),
         )
         .await;
         // ensure genesis txn was executed
@@ -1157,6 +1158,7 @@ pub async fn build_server(
         server.register_module(TransactionExecutionApi::new(
             state.clone(),
             transaction_orchestrator.clone(),
+            metrics.clone(),
         ))?;
     }
 

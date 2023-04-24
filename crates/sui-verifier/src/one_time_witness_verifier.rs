@@ -27,11 +27,11 @@ use move_core_types::{ident_str, language_storage::ModuleId};
 use sui_types::{
     base_types::{TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME},
     error::ExecutionError,
-    move_package::FnInfoMap,
+    move_package::{is_test_fun, FnInfoMap},
     SUI_FRAMEWORK_ADDRESS,
 };
 
-use crate::{is_test_fun, verification_failure, INIT_FN_NAME};
+use crate::{verification_failure, INIT_FN_NAME};
 
 pub fn verify_module(
     module: &CompiledModule,

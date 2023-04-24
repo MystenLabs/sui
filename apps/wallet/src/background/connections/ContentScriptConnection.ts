@@ -168,6 +168,10 @@ export class ContentScriptConnection extends Connection {
                         msg.id
                     )
                 );
+            } else {
+                throw new Error(
+                    `Unknown message, ${JSON.stringify(msg.payload)}`
+                );
             }
         } catch (e) {
             this.sendError(

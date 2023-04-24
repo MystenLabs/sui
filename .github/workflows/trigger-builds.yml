@@ -1,9 +1,11 @@
 name: Build docker images and binaries
 
 on:
+  workflow_dispatch:
   push:
      branches: [ devnet, testnet ]
-  workflow_dispatch:
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 jobs:
   docker-images:
@@ -15,7 +17,7 @@ jobs:
           repository: MystenLabs/sui-operations
           token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
           event-type: build-docker-images
-          client-payload: '{"sui_commit": "${{ github.sha }}", "additional_tag": ""}'
+          client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
 
   release-binaries:
     runs-on: ubuntu-latest
@@ -26,4 +28,4 @@ jobs:
           repository: MystenLabs/sui-operations
           token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
           event-type: build-release-binaries
-          client-payload: '{"sui_commit": "${{ github.sha }}"}'
+          client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'

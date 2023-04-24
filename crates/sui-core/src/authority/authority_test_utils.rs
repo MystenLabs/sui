@@ -5,6 +5,12 @@
 use crate::checkpoints::CheckpointServiceNoop;
 use crate::consensus_handler::SequencedConsensusTransaction;
 use fastcrypto::hash::MultisetHash;
+use move_core_types::account_address::AccountAddress;
+use move_symbol_pool::Symbol;
+use sui_move_build::{BuildConfig, CompiledPackage};
+use sui_types::crypto::Signature;
+use sui_types::move_package::UpgradePolicy;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
     crypto::{AccountKeyPair, AuthorityKeyPair, KeypairTraits},
@@ -101,30 +107,19 @@ pub async fn send_and_confirm_transaction_with_execution_error(
     ))
 }
 
-pub async fn init_state() -> Arc<AuthorityState> {
-    let dir = tempfile::TempDir::new().unwrap();
-    let network_config = sui_config::builder::ConfigBuilder::new(&dir).build();
-    let genesis = network_config.genesis;
-    let keypair = network_config.validator_configs[0]
-        .protocol_key_pair()
-        .copy();
-
-    init_state_with_committee(&genesis, &keypair).await
-}
-
 pub async fn init_state_validator_with_fullnode() -> (Arc<AuthorityState>, Arc<AuthorityState>) {
     use sui_types::crypto::get_authority_key_pair;
 
-    let dir = tempfile::TempDir::new().unwrap();
-    let network_config = sui_config::builder::ConfigBuilder::new(&dir).build();
-    let genesis = network_config.genesis;
-    let keypair = network_config.validator_configs[0]
-        .protocol_key_pair()
-        .copy();
-
-    let validator = init_state_with_committee(&genesis, &keypair).await;
+    let network_config = sui_config::builder::ConfigBuilder::new_with_temp_dir().build();
+    let validator = TestAuthorityBuilder::new()
+        .with_network_config(&network_config)
+        .build()
+        .await;
     let fullnode_key_pair = get_authority_key_pair().1;
-    let fullnode = init_state_with_committee(&genesis, &fullnode_key_pair).await;
+    let fullnode = TestAuthorityBuilder::new()
+        .with_genesis_and_keypair(&network_config.genesis, &fullnode_key_pair)
+        .build()
+        .await;
     (validator, fullnode)
 }
 
@@ -133,16 +128,18 @@ pub async fn init_state_with_committee(
     authority_key: &AuthorityKeyPair,
 ) -> Arc<AuthorityState> {
     TestAuthorityBuilder::new()
-        .build(genesis.committee().unwrap(), authority_key, genesis)
+        .with_genesis_and_keypair(genesis, authority_key)
+        .build()
         .await
 }
 
 pub async fn init_state_with_ids<I: IntoIterator<Item = (SuiAddress, ObjectID)>>(
     objects: I,
 ) -> Arc<AuthorityState> {
-    let state = init_state().await;
+    let state = TestAuthorityBuilder::new().build().await;
     for (address, object_id) in objects {
         let obj = Object::with_id_owner_for_testing(object_id, address);
+        // TODO: Make this part of genesis initialization instead of explicit insert.
         state.insert_genesis_object(obj).await;
     }
     state
@@ -153,7 +150,7 @@ pub async fn init_state_with_ids_and_versions<
 >(
     objects: I,
 ) -> Arc<AuthorityState> {
-    let state = init_state().await;
+    let state = TestAuthorityBuilder::new().build().await;
     for (address, object_id, version) in objects {
         let obj = Object::with_id_owner_version_for_testing(object_id, version, address);
         state.insert_genesis_object(obj).await;
@@ -305,4 +302,143 @@ pub async fn send_consensus_no_execution(authority: &AuthorityState, cert: &Veri
     } else {
         warn!("Failed to verify certificate: {:?}", cert);
     }
+}
+
+pub fn build_test_modules_with_dep_addr(
+    path: PathBuf,
+    dep_original_addresses: impl IntoIterator<Item = (&'static str, ObjectID)>,
+    dep_ids: impl IntoIterator<Item = (&'static str, ObjectID)>,
+) -> CompiledPackage {
+    let mut build_config = BuildConfig::new_for_testing();
+    for (addr_name, obj_id) in dep_original_addresses {
+        build_config
+            .config
+            .additional_named_addresses
+            .insert(addr_name.to_string(), AccountAddress::from(obj_id));
+    }
+    let mut package = build_config.build(path).unwrap();
+
+    let dep_id_mapping: BTreeMap<_, _> = dep_ids
+        .into_iter()
+        .map(|(dep_name, obj_id)| (Symbol::from(dep_name), obj_id))
+        .collect();
+
+    assert_eq!(
+        dep_id_mapping.len(),
+        package.dependency_ids.unpublished.len()
+    );
+    for unpublished_dep in &package.dependency_ids.unpublished {
+        let published_id = dep_id_mapping.get(unpublished_dep).unwrap();
+        // Make sure we aren't overriding a package
+        assert!(package
+            .dependency_ids
+            .published
+            .insert(*unpublished_dep, *published_id)
+            .is_none())
+    }
+
+    // No unpublished deps
+    package.dependency_ids.unpublished.clear();
+    package
+}
+
+/// Returns the new package's ID and the upgrade cap object ref.
+/// `dep_original_addresses` allows us to fill out mappings in the addresses section of the package manifest. These IDs
+/// must be the original IDs of names.
+/// dep_ids are the IDs of the dependencies of the package, in the latest version (if there were upgrades).
+pub async fn publish_package_on_single_authority(
+    path: PathBuf,
+    sender: SuiAddress,
+    sender_key: &dyn Signer<Signature>,
+    gas_payment: ObjectRef,
+    dep_original_addresses: impl IntoIterator<Item = (&'static str, ObjectID)>,
+    dep_ids: Vec<ObjectID>,
+    state: &Arc<AuthorityState>,
+) -> SuiResult<(ObjectID, ObjectRef)> {
+    let mut build_config = BuildConfig::new_for_testing();
+    for (addr_name, obj_id) in dep_original_addresses {
+        build_config
+            .config
+            .additional_named_addresses
+            .insert(addr_name.to_string(), AccountAddress::from(obj_id));
+    }
+    let modules = build_config.build(path).unwrap().get_package_bytes(false);
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let cap = builder.publish_upgradeable(modules, dep_ids);
+    builder.transfer_arg(sender, cap);
+    let pt = builder.finish();
+
+    let rgp = state.epoch_store_for_testing().reference_gas_price();
+    let txn_data = TransactionData::new_programmable(
+        sender,
+        vec![gas_payment],
+        pt,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        rgp,
+    );
+
+    let signed = to_sender_signed_transaction(txn_data, sender_key);
+    let (_cert, effects) = send_and_confirm_transaction(state, signed).await?;
+    assert!(effects.data().status().is_ok());
+    let package_id = effects
+        .data()
+        .created()
+        .iter()
+        .find(|c| c.1 == Owner::Immutable)
+        .unwrap()
+        .0
+         .0;
+    let cap_object = effects
+        .data()
+        .created()
+        .iter()
+        .find(|c| matches!(c.1, Owner::AddressOwner(..)))
+        .unwrap()
+        .0;
+    Ok((package_id, cap_object))
+}
+
+pub async fn upgrade_package_on_single_authority(
+    path: PathBuf,
+    sender: SuiAddress,
+    sender_key: &dyn Signer<Signature>,
+    gas_payment: ObjectRef,
+    package_id: ObjectID,
+    upgrade_cap: ObjectRef,
+    dep_original_addresses: impl IntoIterator<Item = (&'static str, ObjectID)>,
+    dep_id_mapping: impl IntoIterator<Item = (&'static str, ObjectID)>,
+    state: &Arc<AuthorityState>,
+) -> SuiResult<ObjectID> {
+    let package = build_test_modules_with_dep_addr(path, dep_original_addresses, dep_id_mapping);
+
+    let modules = package.get_package_bytes(false);
+    let digest = package.get_package_digest(false).to_vec();
+
+    let rgp = state.epoch_store_for_testing().reference_gas_price();
+    let data = TransactionData::new_upgrade(
+        sender,
+        gas_payment,
+        package_id,
+        modules,
+        package.published_dependency_ids(),
+        (upgrade_cap, Owner::AddressOwner(sender)),
+        UpgradePolicy::COMPATIBLE,
+        digest,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        rgp,
+    )
+    .unwrap();
+    let signed = to_sender_signed_transaction(data, sender_key);
+    let (_cert, effects) = send_and_confirm_transaction(state, signed).await?;
+    assert!(effects.data().status().is_ok());
+    let package_id = effects
+        .data()
+        .created()
+        .iter()
+        .find(|c| c.1 == Owner::Immutable)
+        .unwrap()
+        .0
+         .0;
+    Ok(package_id)
 }

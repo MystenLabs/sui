@@ -14,7 +14,7 @@ use move_bytecode_utils::layout::TypeLayoutBuilder;
 use serde::Serialize;
 use sui_json::SuiJsonValue;
 use sui_types::MOVE_STDLIB_ADDRESS;
-use tracing::{debug, warn};
+use tracing::{info, instrument, warn};
 
 use move_core_types::language_storage::{StructTag, TypeTag};
 use mysten_metrics::spawn_monitored_task;
@@ -86,13 +86,15 @@ impl<R: ReadApiServer> IndexerApi<R> {
 
 #[async_trait]
 impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
-    fn get_owned_objects(
+    #[instrument(skip(self))]
+    async fn get_owned_objects(
         &self,
         address: SuiAddress,
         query: Option<SuiObjectResponseQuery>,
         cursor: Option<ObjectID>,
         limit: Option<usize>,
     ) -> RpcResult<ObjectsPage> {
+        info!("indexer_get_owned_objects");
         let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_OBJECTS)?;
         self.metrics.get_owned_objects_limit.report(limit as u64);
         let SuiObjectResponseQuery { filter, options } = query.unwrap_or_default();
@@ -113,7 +115,9 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         let data = match options.is_not_in_object_info() {
             true => {
                 let object_ids = objects.iter().map(|obj| obj.object_id).collect();
-                self.read_api.multi_get_objects(object_ids, Some(options))?
+                self.read_api
+                    .multi_get_objects(object_ids, Some(options))
+                    .await?
             }
             false => objects
                 .into_iter()
@@ -134,7 +138,8 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         })
     }
 
-    fn query_transaction_blocks(
+    #[instrument(skip(self))]
+    async fn query_transaction_blocks(
         &self,
         query: SuiTransactionBlockResponseQuery,
         // If `Some`, the query will start from the next item after the specified cursor
@@ -142,6 +147,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         limit: Option<usize>,
         descending_order: Option<bool>,
     ) -> RpcResult<TransactionBlocksPage> {
+        info!("indexer_query_transaction_blocks");
         let limit = cap_page_limit(limit);
         self.metrics.query_tx_blocks_limit.report(limit as u64);
         let descending = descending_order.unwrap_or_default();
@@ -164,7 +170,8 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 .collect()
         } else {
             self.read_api
-                .multi_get_transaction_blocks(digests, Some(opts))?
+                .multi_get_transaction_blocks(digests, Some(opts))
+                .await?
         };
 
         self.metrics
@@ -179,7 +186,8 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
             has_next_page,
         })
     }
-    fn query_events(
+    #[instrument(skip(self))]
+    async fn query_events(
         &self,
         query: EventFilter,
         // exclusive cursor if `Some`, otherwise start from the beginning
@@ -187,13 +195,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         limit: Option<usize>,
         descending_order: Option<bool>,
     ) -> RpcResult<EventPage> {
-        debug!(
-            ?query,
-            ?cursor,
-            ?limit,
-            ?descending_order,
-            "get_events query"
-        );
+        info!("indexer_query_events");
         let descending = descending_order.unwrap_or_default();
         let limit = cap_page_limit(limit);
         self.metrics.query_events_limit.report(limit as u64);
@@ -221,14 +223,15 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         spawn_subscription(sink, self.state.event_handler.subscribe(filter));
         Ok(())
     }
-
-    fn get_dynamic_fields(
+    #[instrument(skip(self))]
+    async fn get_dynamic_fields(
         &self,
         parent_object_id: ObjectID,
         // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<ObjectID>,
         limit: Option<usize>,
     ) -> RpcResult<DynamicFieldPage> {
+        info!("indexer_get_dynamic_fields");
         let limit = cap_page_limit(limit);
         self.metrics.get_dynamic_fields_limit.report(limit as u64);
         let mut data = self
@@ -251,11 +254,13 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         })
     }
 
-    fn get_dynamic_field_object(
+    #[instrument(skip(self))]
+    async fn get_dynamic_field_object(
         &self,
         parent_object_id: ObjectID,
         name: DynamicFieldName,
     ) -> RpcResult<SuiObjectResponse> {
+        info!("indexer_get_dynamic_field_object");
         let DynamicFieldName {
             type_: name_type,
             value,
@@ -273,11 +278,15 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         // TODO(chris): add options to `get_dynamic_field_object` API as well
         self.read_api
             .get_object(id, Some(SuiObjectDataOptions::full_content()))
+            .await
     }
 
-    async fn resolve_name_service_address(&self, name: String) -> RpcResult<SuiAddress> {
-        let dynmaic_field_table_object_id =
-            self.get_name_service_dynamic_field_table_object_id(/* reverse_lookup */ false)?;
+    #[instrument(skip(self))]
+    async fn resolve_name_service_address(&self, name: String) -> RpcResult<Option<SuiAddress>> {
+        info!("indexer_resolve_name_service_address");
+        let dynamic_field_table_object_id = self
+            .get_name_service_dynamic_field_table_object_id(/* reverse_lookup */ false)
+            .await?;
         // NOTE: 0x1::string::String is the type tag of fields in dynamic_field_table
         let name_type_tag = TypeTag::Struct(Box::new(StructTag {
             address: MOVE_STDLIB_ADDRESS,
@@ -287,10 +296,10 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         }));
         let name_bcs_value = bcs::to_bytes(&name).context("Unable to serialize name")?;
         // record of the input `name`
-        let record_object_id = self
+        let record_object_id_option = self
             .state
             .get_dynamic_field_object_id(
-                dynmaic_field_table_object_id,
+                dynamic_field_table_object_id,
                 name_type_tag,
                 &name_bcs_value,
             )
@@ -299,58 +308,65 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                     "Read name service dynamic field table failed with error: {:?}",
                     e
                 )
-            })?
-            .ok_or_else(|| anyhow!("Record not found for name: {:?}", name,))?;
-        let record_object_read = self.state.get_object_read(&record_object_id).map_err(|e| {
-            warn!(
-                "Failed to get object read of name: {:?} with error: {:?}",
-                record_object_id, e
-            );
-            anyhow!("{e}")
-        })?;
-        let record_parsed_move_object =
-            SuiParsedMoveObject::try_from_object_read(record_object_read)?;
-        // NOTE: "value" is the field name to get the address info
-        let address_info_move_value = record_parsed_move_object
-            .read_dynamic_field_value(NAME_SERVICE_VALUE)
-            .ok_or_else(|| anyhow!("Cannot find value field in record Move struct"))?;
-        let address_info_move_struct = match address_info_move_value {
-            SuiMoveValue::Struct(a) => Ok(a),
-            _ => Err(anyhow!("value field is not found.")),
-        }?;
-        // NOTE: "marker" is the field name to get the address
-        let address_str_move_value = address_info_move_struct
-            .read_dynamic_field_value(NAME_SERVICE_MARKER)
-            .ok_or_else(|| {
-                anyhow!(
-                    "Cannot find marker field in address info Move struct: {:?}",
-                    address_info_move_struct
-                )
             })?;
-        let addr = match address_str_move_value {
-            SuiMoveValue::Address(addr) => Ok(addr),
-            _ => Err(anyhow!(
-                "No SuiAddress found in: {:?}",
-                address_str_move_value
-            )),
-        }?;
-        Ok(addr)
+        if let Some(record_object_id) = record_object_id_option {
+            let record_object_read =
+                self.state.get_object_read(&record_object_id).map_err(|e| {
+                    warn!(
+                        "Failed to get object read of name: {:?} with error: {:?}",
+                        record_object_id, e
+                    );
+                    anyhow!("{e}")
+                })?;
+            let record_parsed_move_object =
+                SuiParsedMoveObject::try_from_object_read(record_object_read)?;
+            // NOTE: "value" is the field name to get the address info
+            let address_info_move_value = record_parsed_move_object
+                .read_dynamic_field_value(NAME_SERVICE_VALUE)
+                .ok_or_else(|| anyhow!("Cannot find value field in record Move struct"))?;
+            let address_info_move_struct = match address_info_move_value {
+                SuiMoveValue::Struct(a) => Ok(a),
+                _ => Err(anyhow!("value field is not found.")),
+            }?;
+            // NOTE: "marker" is the field name to get the address
+            let address_str_move_value = address_info_move_struct
+                .read_dynamic_field_value(NAME_SERVICE_MARKER)
+                .ok_or_else(|| {
+                    anyhow!(
+                        "Cannot find marker field in address info Move struct: {:?}",
+                        address_info_move_struct
+                    )
+                })?;
+            let addr = match address_str_move_value {
+                SuiMoveValue::Address(addr) => Ok(addr),
+                _ => Err(anyhow!(
+                    "No SuiAddress found in: {:?}",
+                    address_str_move_value
+                )),
+            }?;
+            return Ok(Some(addr));
+        } else {
+            return Ok(None);
+        }
     }
 
+    #[instrument(skip(self))]
     async fn resolve_name_service_names(
         &self,
         address: SuiAddress,
         _cursor: Option<ObjectID>,
         _limit: Option<usize>,
     ) -> RpcResult<Page<String, ObjectID>> {
-        let dynmaic_field_table_object_id =
-            self.get_name_service_dynamic_field_table_object_id(/* reverse_lookup */ true)?;
+        info!("indexer_resolve_name_service_names");
+        let dynamic_field_table_object_id = self
+            .get_name_service_dynamic_field_table_object_id(/* reverse_lookup */ true)
+            .await?;
         let name_type_tag = TypeTag::Address;
         let name_bcs_value = bcs::to_bytes(&address).context("Unable to serialize address")?;
         let addr_object_id = self
             .state
             .get_dynamic_field_object_id(
-                dynmaic_field_table_object_id,
+                dynamic_field_table_object_id,
                 name_type_tag,
                 &name_bcs_value,
             )
@@ -399,7 +415,7 @@ impl<R: ReadApiServer> SuiRpcModule for IndexerApi<R> {
 }
 
 impl<R: ReadApiServer> IndexerApi<R> {
-    fn get_name_service_dynamic_field_table_object_id(
+    async fn get_name_service_dynamic_field_table_object_id(
         &self,
         reverse_lookup: bool,
     ) -> RpcResult<ObjectID> {
@@ -432,7 +448,7 @@ impl<R: ReadApiServer> IndexerApi<R> {
                 )),
             }?;
 
-            let dynmaic_field_table_object_id_struct = records_move_struct
+            let dynamic_field_table_object_id_struct = records_move_struct
                 .read_dynamic_field_value(NAME_SERVICE_ID)
                 .ok_or_else(|| {
                     anyhow!(
@@ -440,11 +456,11 @@ impl<R: ReadApiServer> IndexerApi<R> {
                         dynamic_field_table_key
                     )
                 })?;
-            let dynmaic_field_table_object_id = match dynmaic_field_table_object_id_struct {
+            let dynamic_field_table_object_id = match dynamic_field_table_object_id_struct {
                 SuiMoveValue::UID { id } => Ok(id),
                 _ => Err(anyhow!("id field is not a UID")),
             }?;
-            Ok(dynmaic_field_table_object_id)
+            Ok(dynamic_field_table_object_id)
         } else {
             Err(anyhow!("Name service resolver is not set"))?
         }

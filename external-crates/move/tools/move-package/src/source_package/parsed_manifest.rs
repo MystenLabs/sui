@@ -16,6 +16,7 @@ pub type NamedAddress = Symbol;
 pub type PackageName = Symbol;
 pub type FileName = Symbol;
 pub type PackageDigest = Symbol;
+pub type DepOverride = bool;
 
 pub type AddressDeclarations = BTreeMap<NamedAddress, Option<AccountAddress>>;
 pub type DevAddressDeclarations = BTreeMap<NamedAddress, AccountAddress>;
@@ -55,6 +56,7 @@ pub struct InternalDependency {
     pub subst: Option<Substitution>,
     pub version: Option<Version>,
     pub digest: Option<PackageDigest>,
+    pub dep_override: DepOverride,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -154,7 +156,7 @@ impl Default for DependencyKind {
 /// or is prefixed by accesses to parent directories when `allow_cwd_parent` is false.
 ///
 /// Returns the normalized path on success.
-fn normalize_path(path: impl AsRef<Path>, allow_cwd_parent: bool) -> Result<PathBuf> {
+pub fn normalize_path(path: impl AsRef<Path>, allow_cwd_parent: bool) -> Result<PathBuf> {
     use Component::*;
 
     let mut stack = Vec::new();

@@ -435,7 +435,7 @@ impl SimpleFaucet {
         let tx_digest = tx.digest();
         let client = self.wallet.get_client().await?;
         Ok(client
-            .quorum_driver()
+            .quorum_driver_api()
             .execute_transaction_block(
                 tx.clone(),
                 SuiTransactionBlockResponseOptions::new().with_effects(),
@@ -730,6 +730,7 @@ mod tests {
             input_coins: vec![*bad_gas.id()],
             recipient: SuiAddress::random_for_testing_only(),
             gas_budget: 2_000_000,
+            serialize_output: false,
         }
         .execute(faucet.wallet_mut())
         .await
@@ -846,6 +847,7 @@ mod tests {
             gas_budget: 50000000,
             gas: None,
             count: None,
+            serialize_output: false,
         }
         .execute(&mut context)
         .await;

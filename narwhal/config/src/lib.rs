@@ -207,7 +207,7 @@ impl Parameters {
     }
 
     fn default_batch_size() -> usize {
-        500_000
+        5_000_000
     }
 
     fn default_max_batch_delay() -> Duration {

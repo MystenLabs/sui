@@ -437,11 +437,11 @@ impl EventApi {
 }
 
 #[derive(Clone)]
-pub struct QuorumDriver {
+pub struct QuorumDriverApi {
     api: Arc<RpcClient>,
 }
 
-impl QuorumDriver {
+impl QuorumDriverApi {
     pub(crate) fn new(api: Arc<RpcClient>) -> Self {
         Self { api }
     }

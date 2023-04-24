@@ -582,7 +582,7 @@ async fn call_0x5(
     let transaction =
         Transaction::from_data(tx_data, Intent::sui_transaction(), vec![signature]).verify()?;
     sui_client
-        .quorum_driver()
+        .quorum_driver_api()
         .execute_transaction_block(
             transaction,
             SuiTransactionBlockResponseOptions::new()

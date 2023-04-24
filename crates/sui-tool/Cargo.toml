@@ -26,6 +26,7 @@ strum_macros = "^0.24"
 tempfile = "3.3.0"
 thiserror = "1.0.34"
 tracing = "0.1.36"
+prometheus = "0.13.3"
 
 anemo-cli.workspace = true
 anemo.workspace = true
@@ -38,7 +39,6 @@ tokio = { workspace = true, features = ["full"] }
 typed-store.workspace = true
 
 narwhal-types = { path = "../../narwhal/types" }
-sui-adapter = { path = "../sui-adapter" }
 sui-config = { path = "../sui-config" }
 sui-core = { path = "../sui-core" }
 sui-framework = { path = "../sui-framework" }

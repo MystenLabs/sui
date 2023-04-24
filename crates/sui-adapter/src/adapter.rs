@@ -5,6 +5,7 @@ use std::{
     borrow::Borrow,
     collections::{BTreeMap, BTreeSet},
     fmt::Debug,
+    sync::Arc,
 };
 
 use anyhow::Result;
@@ -13,6 +14,7 @@ use move_binary_format::{
     binary_views::BinaryIndexedView,
     file_format::{AbilitySet, CompiledModule, LocalIndex, SignatureToken, StructHandleIndex},
 };
+use move_bytecode_utils::{format_signature_token, resolve_struct};
 use move_bytecode_verifier::{verify_module_with_config, VerifierConfig};
 use move_core_types::{
     account_address::AccountAddress,
@@ -38,13 +40,12 @@ use sui_types::{
     base_types::*,
     error::ExecutionError,
     error::{ExecutionErrorKind, SuiError},
+    id::RESOLVED_SUI_ID,
+    is_primitive,
     messages::{InputObjectKind, ObjectArg},
+    metrics::LimitsMetrics,
     object::{Data, Object, Owner},
     storage::ChildObjectResolver,
-};
-use sui_verifier::entry_points_verifier::{
-    self, is_tx_context, TxContextKind, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_SUI_ID,
-    RESOLVED_UTF8_STR,
 };
 
 sui_macros::checked_arithmetic! {
@@ -109,6 +110,8 @@ pub fn new_move_vm(
             runtime_limits_config: VMRuntimeLimitsConfig {
                 vector_len_max: protocol_config.max_move_vector_len(),
             },
+            enable_invariant_violation_check_in_swap_loc:
+                !protocol_config.disable_invariant_violation_check_in_swap_loc(),
         },
     )
     .map_err(|_| SuiError::ExecutionInvariantViolation)
@@ -119,6 +122,7 @@ pub fn new_native_extensions<'r>(
     input_objects: BTreeMap<ObjectID, Owner>,
     is_metered: bool,
     protocol_config: &ProtocolConfig,
+    metrics: Arc<LimitsMetrics>,
 ) -> NativeContextExtensions<'r> {
     let mut extensions = NativeContextExtensions::default();
     extensions.add(ObjectRuntime::new(
@@ -126,6 +130,7 @@ pub fn new_native_extensions<'r>(
         input_objects,
         is_metered,
         protocol_config,
+        metrics,
     ));
     extensions.add(NativesCostTable::from_protocol_config(protocol_config));
     extensions
@@ -233,7 +238,7 @@ pub fn resolve_and_type_check<Mode: ExecutionMode>(
     let parameters = &module.signature_at(fhandle.parameters).0;
     let tx_ctx_kind = parameters
         .last()
-        .map(|t| is_tx_context(view, t))
+        .map(|t| TxContext::kind(view, t))
         .unwrap_or(TxContextKind::None);
 
     let num_args = if tx_ctx_kind != TxContextKind::None {
@@ -270,9 +275,7 @@ pub fn resolve_and_type_check<Mode: ExecutionMode>(
                     .iter()
                     .map(|_| AbilitySet::PRIMITIVES)
                     .collect::<Vec<_>>();
-                let is_primitive =
-                    entry_points_verifier::is_primitive(view, type_arg_abilities, param_type);
-                if !is_primitive {
+                if !is_primitive(view, type_arg_abilities, param_type) {
                     anyhow::bail!(
                         "Non-primitive argument at index {}. If it is an object, it must be \
                         populated by an object ID",
@@ -378,7 +381,7 @@ fn additional_validation_layout(
         SignatureToken::Vector(inner) => additional_validation_layout(view, inner)
             .map(|layout| PrimitiveArgumentLayout::Vector(Box::new(layout))),
         SignatureToken::StructInstantiation(idx, targs) => {
-            let resolved_struct = sui_verifier::resolve_struct(view, *idx);
+            let resolved_struct = resolve_struct(view, *idx);
             if resolved_struct == RESOLVED_STD_OPTION && targs.len() == 1 {
                 additional_validation_layout(view, &targs[0])
                     .map(|layout| PrimitiveArgumentLayout::Option(Box::new(layout)))
@@ -387,7 +390,7 @@ fn additional_validation_layout(
             }
         }
         SignatureToken::Struct(idx) => {
-            let resolved_struct = sui_verifier::resolve_struct(view, *idx);
+            let resolved_struct = resolve_struct(view, *idx);
             if resolved_struct == RESOLVED_SUI_ID {
                 Some(PrimitiveArgumentLayout::Address)
             } else if resolved_struct == RESOLVED_ASCII_STR {
@@ -592,7 +595,7 @@ fn type_check_struct(
     if !move_type_equals_sig_token(view, function_type_arguments, arg_type, param_type) {
         anyhow::bail!(
             "Expected argument of type {}, but found type {}",
-            sui_verifier::format_signature_token(view, param_type),
+            format_signature_token(view, param_type),
             arg_type
         )
     }
@@ -683,7 +686,7 @@ fn move_type_equals_struct_inst(
     param_type: StructHandleIndex,
     param_type_arguments: &[SignatureToken],
 ) -> bool {
-    let (address, module_name, struct_name) = sui_verifier::resolve_struct(view, param_type);
+    let (address, module_name, struct_name) = resolve_struct(view, param_type);
     let arg_type_params = arg_type.type_params();
 
     // same address, module, name, and type parameters
@@ -711,7 +714,7 @@ fn struct_tag_equals_struct_inst(
     param_type: StructHandleIndex,
     param_type_arguments: &[SignatureToken],
 ) -> bool {
-    let (address, module_name, struct_name) = sui_verifier::resolve_struct(view, param_type);
+    let (address, module_name, struct_name) = resolve_struct(view, param_type);
 
     // same address, module, name, and type parameters
     &arg_type.address == address

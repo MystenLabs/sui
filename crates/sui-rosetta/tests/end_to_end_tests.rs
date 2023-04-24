@@ -33,6 +33,8 @@ async fn test_get_staked_sui() {
     let (rosetta_client, _handle) =
         start_rosetta_test_server(client.clone(), test_cluster.swarm.dir()).await;
 
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
     let network_identifier = NetworkIdentifier {
         blockchain: "sui".to_string(),
         network: SuiEnv::LocalNet,
@@ -101,7 +103,7 @@ async fn test_get_staked_sui() {
         .unwrap();
     let tx = to_sender_signed_transaction(delegation_tx, keystore.get_key(&address).unwrap());
     client
-        .quorum_driver()
+        .quorum_driver_api()
         .execute_transaction_block(
             tx,
             SuiTransactionBlockResponseOptions::new(),

@@ -12,7 +12,7 @@ import { Stats } from '~/ui/Stats';
 type StatsCardProps = {
     validatorData: SuiValidatorSummary;
     epoch: number | string;
-    epochRewards: number;
+    epochRewards: number | null;
     apy: number;
     tallyingScore: string | null;
 };
@@ -98,10 +98,14 @@ export function ValidatorStats({
                             <Stats
                                 label="Last Epoch Rewards"
                                 tooltip="The stake rewards collected during the last epoch."
-                                unavailable={Number(epochRewards) <= 0}
+                                unavailable={epochRewards === null}
                             >
                                 <DelegationAmount
-                                    amount={epochRewards}
+                                    amount={
+                                        typeof epochRewards === 'number'
+                                            ? epochRewards
+                                            : 0n
+                                    }
                                     isStats
                                 />
                             </Stats>

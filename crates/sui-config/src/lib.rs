@@ -15,6 +15,7 @@ pub mod genesis_config;
 pub mod node;
 pub mod p2p;
 mod swarm;
+pub mod transaction_deny_config;
 pub mod utils;
 
 pub use node::{ConsensusConfig, NodeConfig, ValidatorInfo};

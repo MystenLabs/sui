@@ -303,12 +303,11 @@ async fn sync_with_checkpoints_being_inserted() {
 
     // Inject one checkpoint and verify that it was shared with the other node
     let mut checkpoint_iter = ordered_checkpoints.clone().into_iter().skip(1);
+    let checkpoint = checkpoint_iter.next().unwrap();
     store_1
-        .insert_checkpoint_contents(empty_contents())
+        .insert_checkpoint_contents(&checkpoint, empty_contents())
         .unwrap();
-    handle_1
-        .send_checkpoint(checkpoint_iter.next().unwrap())
-        .await;
+    handle_1.send_checkpoint(checkpoint).await;
 
     timeout(Duration::from_secs(1), async {
         assert_eq!(

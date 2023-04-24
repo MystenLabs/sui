@@ -556,19 +556,23 @@ async fn test_validator_candidate_pool_read() {
         let system_state = node
             .state()
             .get_sui_system_state_object_for_testing()
-            .unwrap()
-            .into_sui_system_state_summary();
-        assert_eq!(system_state.validator_candidates_size, 1);
+            .unwrap();
+        let system_state_summary = system_state.clone().into_sui_system_state_summary();
+        assert_eq!(system_state_summary.validator_candidates_size, 1);
         let staking_pool_id = get_validator_from_table(
             node.state().db().as_ref(),
-            system_state.validator_candidates_id,
+            system_state_summary.validator_candidates_id,
             &new_validator_address,
         )
         .unwrap()
         .staking_pool_id;
-        let validator =
-            get_validator_by_pool_id(node.state().db().as_ref(), &system_state, staking_pool_id)
-                .unwrap();
+        let validator = get_validator_by_pool_id(
+            node.state().db().as_ref(),
+            &system_state,
+            &system_state_summary,
+            staking_pool_id,
+        )
+        .unwrap();
         assert_eq!(validator.sui_address, new_validator_address);
     });
 }
@@ -612,12 +616,16 @@ async fn test_inactive_validator_pool_read() {
         let system_state = node
             .state()
             .get_sui_system_state_object_for_testing()
-            .unwrap()
-            .into_sui_system_state_summary();
+            .unwrap();
+        let system_state_summary = system_state.clone().into_sui_system_state_summary();
         // Validator is active. Check that we can find its summary by staking pool id.
-        let validator =
-            get_validator_by_pool_id(node.state().db().as_ref(), &system_state, staking_pool_id)
-                .unwrap();
+        let validator = get_validator_by_pool_id(
+            node.state().db().as_ref(),
+            &system_state,
+            &system_state_summary,
+            staking_pool_id,
+        )
+        .unwrap();
         assert_eq!(validator.sui_address, address);
     });
 
@@ -651,11 +659,15 @@ async fn test_inactive_validator_pool_read() {
         let system_state = node
             .state()
             .get_sui_system_state_object_for_testing()
-            .unwrap()
-            .into_sui_system_state_summary();
-        let validator =
-            get_validator_by_pool_id(node.state().db().as_ref(), &system_state, staking_pool_id)
-                .unwrap();
+            .unwrap();
+        let system_state_summary = system_state.clone().into_sui_system_state_summary();
+        let validator = get_validator_by_pool_id(
+            node.state().db().as_ref(),
+            &system_state,
+            &system_state_summary,
+            staking_pool_id,
+        )
+        .unwrap();
         assert_eq!(validator.sui_address, address);
         assert!(validator.staking_pool_deactivation_epoch.is_some());
     })
@@ -759,6 +771,25 @@ async fn test_reconfig_with_committee_change_basic() {
         &new_validator_key,
     )
     .await;
+
+    // Give the nodes enough time to execute the joining txns.
+    sleep(Duration::from_secs(5)).await;
+
+    // Check that we can get the pending validator from 0x5.
+    authorities[0].with(|node| {
+        let system_state = node
+            .state()
+            .get_sui_system_state_object_for_testing()
+            .unwrap();
+        let pending_active_validators = system_state
+            .get_pending_active_validators(node.state().db().as_ref())
+            .unwrap();
+        assert_eq!(pending_active_validators.len(), 1);
+        assert_eq!(
+            pending_active_validators[0].sui_address,
+            new_validator_address
+        );
+    });
 
     trigger_reconfiguration(&authorities).await;
     // Check that a new validator has joined the committee.
@@ -1093,7 +1124,7 @@ async fn test_reconfig_with_committee_change_stress() {
 #[cfg(msim)]
 #[sim_test]
 async fn safe_mode_reconfig_test() {
-    use sui_adapter::execution_engine::advance_epoch_result_injection;
+    use sui_types::sui_system_state::advance_epoch_result_injection;
     use test_utils::messages::make_staking_transaction_with_wallet_context;
 
     let mut test_cluster = TestClusterBuilder::new()
@@ -1118,6 +1149,11 @@ async fn safe_mode_reconfig_test() {
     assert!(!system_state.safe_mode());
     assert_eq!(system_state.epoch(), 1);
     assert_eq!(system_state.system_state_version(), 2);
+
+    // Wait for all nodes to enter new epoch (otherwise we can call
+    // advance_epoch_result_injection::set_override();
+    // while one node is still in epoch 1, which will cause it to fork).
+    sleep(Duration::from_secs(3)).await;
 
     let prev_epoch_start_timestamp = system_state.epoch_start_timestamp_ms();
 

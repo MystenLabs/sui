@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { X32 } from '@mysten/icons';
 import cl from 'classnames';
 import { useCallback } from 'react';
 
 import useAppSelector from '../../hooks/useAppSelector';
 import { AppType } from '../../redux/slices/app/AppType';
 import { Portal } from '../../shared/Portal';
-import Icon, { SuiIcons } from '_components/icon';
 
 import type { ReactNode } from 'react';
 
@@ -18,7 +18,7 @@ type OverlayProps = {
     children: ReactNode;
     showModal: boolean;
     closeOverlay?: () => void;
-    closeIcon?: SuiIcons;
+    closeIcon?: ReactNode | null;
     setShowModal?: (showModal: boolean) => void;
 };
 
@@ -28,7 +28,7 @@ function Overlay({
     showModal,
     closeOverlay,
     setShowModal,
-    closeIcon = SuiIcons.Close,
+    closeIcon = <X32 fill="currentColor" className="text-sui-light w-8 h-8" />,
 }: OverlayProps) {
     const closeModal = useCallback(
         (e: React.MouseEvent<HTMLElement>) => {
@@ -54,10 +54,7 @@ function Overlay({
                 </div>
                 <div className={st.content}>{children}</div>
                 <button className={st.closeOverlay} onClick={closeModal}>
-                    <Icon
-                        icon={closeIcon}
-                        className={cl(st.close, st[closeIcon])}
-                    />
+                    {closeIcon}
                 </button>
             </div>
         </Portal>

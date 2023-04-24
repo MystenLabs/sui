@@ -1,0 +1,3 @@
+Failed to resolve dependencies for package 'Root': Adding dependencies from ../resolvers/successful.sh for dependency 'A' in 'Root': Conflicting dependencies found:
+ADep = { local = "deps_only/ADep", version = "1.0.0" }
+ADep = { local = "deps_only/ADep" } # Resolved by ../resolvers/successful.sh

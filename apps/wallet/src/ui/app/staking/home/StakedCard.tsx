@@ -1,12 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFormatCoin } from '@mysten/core';
+import { useFormatCoin, useGetTimeBeforeEpochNumber } from '@mysten/core';
 import { SUI_TYPE_ARG, type SuiAddress } from '@mysten/sui.js';
 import { cx, cva, type VariantProps } from 'class-variance-authority';
 import { Link } from 'react-router-dom';
 
-import { useGetTimeBeforeEpochNumber } from '../useGetTimeBeforeEpochNumber';
 import { ValidatorLogo } from '../validators/ValidatorLogo';
 import { NUM_OF_EPOCH_BEFORE_EARNING } from '_src/shared/constants';
 import { CountDownTimer } from '_src/ui/app/shared/countdown-timer';

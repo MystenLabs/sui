@@ -114,7 +114,7 @@ pub fn reset_db_to_genesis(path: &Path) -> anyhow::Result<()> {
     //   num-latest-epoch-dbs-to-retain: 3
     //   epoch-db-pruning-period-secs: 3600
     //   num-epochs-to-retain: 18446744073709551615
-    //   max-checkpoints-in-batch: 200
+    //   max-checkpoints-in-batch: 10
     //   max-transactions-in-batch: 1000
     //   use-range-deletion: true
     let perpetual_db = AuthorityPerpetualTables::open_tables_read_write(

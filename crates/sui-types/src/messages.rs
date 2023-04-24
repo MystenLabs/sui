@@ -932,6 +932,13 @@ impl TransactionKind {
             _ => 0,
         }
     }
+
+    pub fn iter_commands(&self) -> impl Iterator<Item = &Command> {
+        match self {
+            TransactionKind::ProgrammableTransaction(pt) => pt.commands.iter(),
+            _ => [].iter(),
+        }
+    }
 }
 
 impl Display for TransactionKind {
@@ -1073,12 +1080,30 @@ impl TransactionData {
         gas_budget: u64,
         gas_price: u64,
     ) -> Self {
+        Self::new_with_gas_coins_allow_sponsor(
+            kind,
+            sender,
+            gas_payment,
+            gas_budget,
+            gas_price,
+            sender,
+        )
+    }
+
+    pub fn new_with_gas_coins_allow_sponsor(
+        kind: TransactionKind,
+        sender: SuiAddress,
+        gas_payment: Vec<ObjectRef>,
+        gas_budget: u64,
+        gas_price: u64,
+        gas_sponsor: SuiAddress,
+    ) -> Self {
         TransactionData::V1(TransactionDataV1 {
             kind,
             sender,
             gas_data: GasData {
                 price: gas_price,
-                owner: sender,
+                owner: gas_sponsor,
                 payment: gas_payment,
                 budget: gas_budget,
             },
@@ -1168,12 +1193,39 @@ impl TransactionData {
         gas_budget: u64,
         gas_price: u64,
     ) -> Self {
+        Self::new_transfer_sui_allow_sponsor(
+            recipient,
+            sender,
+            amount,
+            gas_payment,
+            gas_budget,
+            gas_price,
+            sender,
+        )
+    }
+
+    pub fn new_transfer_sui_allow_sponsor(
+        recipient: SuiAddress,
+        sender: SuiAddress,
+        amount: Option<u64>,
+        gas_payment: ObjectRef,
+        gas_budget: u64,
+        gas_price: u64,
+        gas_sponsor: SuiAddress,
+    ) -> Self {
         let pt = {
             let mut builder = ProgrammableTransactionBuilder::new();
             builder.transfer_sui(recipient, amount);
             builder.finish()
         };
-        Self::new_programmable(sender, vec![gas_payment], pt, gas_budget, gas_price)
+        Self::new_programmable_allow_sponsor(
+            sender,
+            vec![gas_payment],
+            pt,
+            gas_budget,
+            gas_price,
+            gas_sponsor,
+        )
     }
 
     pub fn new_pay(
@@ -1325,8 +1377,26 @@ impl TransactionData {
         gas_budget: u64,
         gas_price: u64,
     ) -> Self {
+        Self::new_programmable_allow_sponsor(sender, gas_payment, pt, gas_budget, gas_price, sender)
+    }
+
+    pub fn new_programmable_allow_sponsor(
+        sender: SuiAddress,
+        gas_payment: Vec<ObjectRef>,
+        pt: ProgrammableTransaction,
+        gas_budget: u64,
+        gas_price: u64,
+        sponsor: SuiAddress,
+    ) -> Self {
         let kind = TransactionKind::ProgrammableTransaction(pt);
-        Self::new_with_gas_coins(kind, sender, gas_payment, gas_budget, gas_price)
+        Self::new_with_gas_coins_allow_sponsor(
+            kind,
+            sender,
+            gas_payment,
+            gas_budget,
+            gas_price,
+            sponsor,
+        )
     }
 
     pub fn execution_parts(&self) -> (TransactionKind, SuiAddress, Vec<ObjectRef>) {
@@ -2953,6 +3023,10 @@ impl InputObjectKind {
                 version: None,
             },
         }
+    }
+
+    pub fn is_shared_object(&self) -> bool {
+        matches!(self, Self::SharedMoveObject { .. })
     }
 }
 

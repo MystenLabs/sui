@@ -1266,9 +1266,17 @@ WHERE e1.epoch = e2.epoch
         checkpoint: &Checkpoint,
         transactions: &[Transaction],
     ) -> Result<usize, IndexerError> {
+        let trimmed_transactions = transactions
+            .iter()
+            .map(|t| {
+                let mut t = t.clone();
+                t.trim_data();
+                t
+            })
+            .collect::<Vec<_>>();
         transactional_blocking!(&self.blocking_cp, |conn| {
             // Commit indexed transactions
-            for transaction_chunk in transactions.chunks(PG_COMMIT_CHUNK_SIZE) {
+            for transaction_chunk in trimmed_transactions.chunks(PG_COMMIT_CHUNK_SIZE) {
                 diesel::insert_into(transactions::table)
                     .values(transaction_chunk)
                     .on_conflict(transactions::transaction_digest)
@@ -1319,7 +1327,6 @@ WHERE e1.epoch = e2.epoch
                     .iter()
                     .flat_map(|changes| changes.changed_objects.iter().cloned())
                     .collect();
-
                 let deleted_changes = tx_object_changes
                     .iter()
                     .flat_map(|changes| changes.deleted_objects.iter().cloned())
@@ -1330,10 +1337,26 @@ WHERE e1.epoch = e2.epoch
                     .collect();
                 let (mutation_count, deletion_count) =
                     (mutated_objects.len(), deleted_objects.len());
+
+                // MUSTFIX(gegaowp): trim data to reduce short-term storage consumption.
+                let trimmed_mutated_objects = mutated_objects
+                    .into_iter()
+                    .map(|mut o| {
+                        o.trim_data();
+                        o
+                    })
+                    .collect::<Vec<Object>>();
+                let trimmed_deleted_objects = deleted_objects
+                    .into_iter()
+                    .map(|mut o| {
+                        o.trim_data();
+                        o
+                    })
+                    .collect::<Vec<Object>>();
                 persist_transaction_object_changes(
                     conn,
-                    mutated_objects,
-                    deleted_objects,
+                    trimmed_mutated_objects,
+                    trimmed_deleted_objects,
                     Some(object_mutation_latency),
                     Some(object_deletion_latency),
                 )?;
@@ -1791,7 +1814,7 @@ async fn get_network_metrics_cached(cp: &PgConnectionPool) -> Result<NetworkMetr
 #[async_trait]
 impl ObjectProvider for PgIndexerStore {
     type Error = IndexerError;
-    fn get_object(
+    async fn get_object(
         &self,
         _id: &ObjectID,
         _version: &SequenceNumber,
@@ -1802,7 +1825,7 @@ impl ObjectProvider for PgIndexerStore {
         // self.get_sui_types_object(id, version)
     }
 
-    fn find_object_lt_or_eq_version(
+    async fn find_object_lt_or_eq_version(
         &self,
         _id: &ObjectID,
         _version: &SequenceNumber,

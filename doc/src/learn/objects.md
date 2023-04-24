@@ -35,9 +35,9 @@ struct A {
 }
 ```
 
-defines a object type `A` that contains a field whose type is another object type `B`. In this case, we say an object of type `B` is wrapped into an object of type `A`. With object wrapping, the wrapped object (in this example, object `b`) is not stored as a top-level object in Sui storage, and it's not accessible by object ID. Instead, it's simply part of the serialized bytes content of an object of type `A`. You can think of the case of an object being wrapped similar to being deleted, except its content still exist somewhere in another object.
+defines a object type `A` that contains a field whose type is another object type `B`. In this case, the object of type `B` is wrapped into an object of type `A`. With object wrapping, the wrapped object (in this example, object `b`) is not stored as a top-level object in Sui storage, and it's not accessible by object ID. Instead, it's simply part of the serialized bytes content of an object of type `A`. You can think of the case of an object being wrapped similar to being deleted, except its content still exist somewhere in another object.
 
-Now back to the topic of object owned by another object. When an object is owned by another object, it's not wrapped. This means the child object still exists independently as a top-level object and can be accessed directly in the Sui storage. The ownership relationship is only tracked through the owner field of the child object. This can be useful if you still want to observe the child object or be able to use it in other transactions. We provide library APIs to make an object owned by another object. More details on how to do this can be found in the [Sui Move library](../build/move/sui-move-library.md).
+Now back to the topic of object owned by another object. When an object is owned by another object, it's not wrapped. This means the child object still exists independently as a top-level object and can be accessed directly in the Sui storage. The ownership relationship is only tracked through the owner field of the child object. This can be useful if you still want to observe the child object or be able to use it in other transactions. Sui provides library APIs to make an object owned by another object. More details on how to do this can be found in the [Sui Move library](../build/move/sui-move-library.md).
 
 ### Immutable
 
@@ -69,13 +69,13 @@ Transactions (and thus, certificates) take objects as input, read/write/mutate t
  * Nodes are transactions.
  * Directed edges connect transaction output objects to transaction input objects and are labeled with object references.
 
-To construct this graph, we add a node for each committed transaction and draw a directed edge labeled with object reference `O` from transaction `A` to transaction `B` if `A` produced object `O` (i.e., created or mutated `O`) and transaction `B` takes object `O` as an input.
+To construct this graph, add a node for each committed transaction and draw a directed edge labeled with object reference `O` from transaction `A` to transaction `B` if `A` produced object `O` (i.e., created or mutated `O`) and transaction `B` takes object `O` as an input.
 
 The root of this DAG is a *genesis* transaction that takes no inputs and produces the objects that exist in the system's initial state. The DAG can be extended by identifying mutable transaction outputs that have not yet been consumed by any committed transaction and sending a new transaction that takes these outputs (and optionally, immutable transaction outputs) as inputs.
 
 The set of objects that are available to be taken as input by a transaction are the *live objects*, and the global state maintained by Sui consists of the totality of such objects. The live objects for a particular Sui address `A` are all objects owned by `A`, along with all immutable objects in the system.
 
-When this DAG contains all committed transactions in the system, it forms a complete (and cryptographically auditable) view of the system's state and history. In addition, we can use the scheme above to construct a DAG of the relevant history for a subset of transactions or objects (e.g., the objects owned by a single address).
+When this DAG contains all committed transactions in the system, it forms a complete (and cryptographically auditable) view of the system's state and history. In addition, you can use the scheme above to construct a DAG of the relevant history for a subset of transactions or objects (e.g., the objects owned by a single address).
 
 ## Limits on transactions, objects, and data
 

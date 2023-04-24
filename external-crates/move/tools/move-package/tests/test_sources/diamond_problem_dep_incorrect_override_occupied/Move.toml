@@ -1,0 +1,20 @@
+# Dependency graph and and override (ov) - when override is processed there is already an entry in
+# the graph (override is incorrect).
+#                 +----+           ov(2)
+#           +---->| B  |----------------------+
+#           |     +----+----+                 |
+#           |               |                 |
+# +----+    |               |     +----+ v1   +--->+----+
+# |Root|----+               +---->| C  |---------->| D  |
+# +----+    |               |     +----+           +----+
+#           |               |
+#           |     +----+----+
+#           +---->| A  |
+#                 +----+
+[package]
+name = "Root"
+version = "0.0.0"
+
+[dependencies]
+A = { local = "./deps_only/A" }
+B = { local = "./deps_only/B" }

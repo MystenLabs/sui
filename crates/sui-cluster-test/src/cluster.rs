@@ -206,7 +206,7 @@ impl Cluster for LocalNewCluster {
         };
         if options.pg_address.is_some() && indexer_address.is_some() {
             let config = IndexerConfig {
-                db_url: options.pg_address.clone().unwrap(),
+                db_url: Some(options.pg_address.clone().unwrap()),
                 rpc_client_url: fullnode_url.clone(),
                 rpc_server_url: indexer_address.as_ref().unwrap().ip().to_string(),
                 rpc_server_port: indexer_address.as_ref().unwrap().port(),

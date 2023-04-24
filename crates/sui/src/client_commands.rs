@@ -148,7 +148,7 @@ pub enum SuiClientCommands {
         #[clap(long)]
         with_unpublished_dependencies: bool,
 
-        /// Do not Sign transaction, output Base64-encoded Serialized Output
+        /// Do not sign/submit transaction, output base64-encoded serialized output
         #[clap(long)]
         serialize_output: bool,
     },
@@ -190,6 +190,10 @@ pub enum SuiClientCommands {
         /// Also publish transitive dependencies that have not already been published.
         #[clap(long)]
         with_unpublished_dependencies: bool,
+
+        /// Do not sign/submit transaction, output base64-encoded serialized output
+        #[clap(long)]
+        serialize_output: bool,
     },
 
     /// Verify local Move packages against on-chain packages, and optionally their dependencies.
@@ -254,6 +258,10 @@ pub enum SuiClientCommands {
         /// Gas budget for this call
         #[clap(long)]
         gas_budget: u64,
+
+        /// Do not sign/submit transaction, output base64-encoded serialized output
+        #[clap(long)]
+        serialize_output: bool,
     },
 
     /// Transfer object
@@ -275,6 +283,10 @@ pub enum SuiClientCommands {
         /// Gas budget for this transfer
         #[clap(long)]
         gas_budget: u64,
+
+        /// Do not sign/submit transaction, output base64-encoded serialized output
+        #[clap(long)]
+        serialize_output: bool,
     },
     /// Transfer SUI, and pay gas with the same SUI coin object.
     /// If amount is specified, only the amount is transferred; otherwise the entire object
@@ -296,6 +308,10 @@ pub enum SuiClientCommands {
         /// The amount to transfer, if not specified, the entire coin object will be transferred.
         #[clap(long)]
         amount: Option<u64>,
+
+        /// Do not sign/submit transaction, output base64-encoded serialized output
+        #[clap(long)]
+        serialize_output: bool,
     },
     /// Pay coins to recipients following specified amounts, with input coins.
     /// Length of recipients must be the same as that of amounts.
@@ -321,6 +337,10 @@ pub enum SuiClientCommands {
         /// Gas budget for this transaction
         #[clap(long)]
         gas_budget: u64,
+
+        /// Do not sign/submit transaction, output base64-encoded serialized output
+        #[clap(long)]
+        serialize_output: bool,
     },
 
     /// Pay SUI coins to recipients following following specified amounts, with input coins.
@@ -343,6 +363,10 @@ pub enum SuiClientCommands {
         /// Gas budget for this transaction
         #[clap(long)]
         gas_budget: u64,
+
+        /// Do not sign/submit transaction, output base64-encoded serialized output
+        #[clap(long)]
+        serialize_output: bool,
     },
 
     /// Pay all residual SUI coins to the recipient with input coins, after deducting the gas cost.
@@ -360,6 +384,10 @@ pub enum SuiClientCommands {
         /// Gas budget for this transaction
         #[clap(long)]
         gas_budget: u64,
+
+        /// Do not sign/submit transaction, output base64-encoded serialized output
+        #[clap(long)]
+        serialize_output: bool,
     },
 
     /// Obtain the Addresses managed by the client.
@@ -427,6 +455,9 @@ pub enum SuiClientCommands {
         /// Gas budget for this call
         #[clap(long)]
         gas_budget: u64,
+        /// Do not sign/submit transaction, output base64-encoded serialized output
+        #[clap(long)]
+        serialize_output: bool,
     },
 
     /// Merge two coin objects into one coin
@@ -444,26 +475,9 @@ pub enum SuiClientCommands {
         /// Gas budget for this call
         #[clap(long)]
         gas_budget: u64,
-    },
-
-    /// Serialize a transfer that can be signed. This is useful when user prefers to take the data to sign elsewhere.
-    #[clap(name = "serialize-transfer-sui")]
-    SerializeTransferSui {
-        /// Recipient address
+        /// Do not sign/submit transaction, output base64-encoded serialized output
         #[clap(long)]
-        to: SuiAddress,
-
-        /// Sui coin object to transfer, ID in 20 bytes Hex string. This is also the gas object.
-        #[clap(long)]
-        sui_coin_object_id: ObjectID,
-
-        /// Gas budget for this transfer
-        #[clap(long)]
-        gas_budget: u64,
-
-        /// The amount to transfer, if not specified, the entire coin object will be transferred.
-        #[clap(long)]
-        amount: Option<u64>,
+        serialize_output: bool,
     },
 
     /// Execute a Signed Transaction. This is useful when the user prefers to sign elsewhere and use this command to execute.
@@ -492,6 +506,7 @@ impl SuiClientCommands {
                 gas_budget,
                 skip_dependency_verification,
                 with_unpublished_dependencies,
+                serialize_output,
             } => {
                 let sender = context.try_get_object_owner(&gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
@@ -560,6 +575,11 @@ impl SuiClientCommands {
                         gas_budget,
                     )
                     .await?;
+                if serialize_output {
+                    return Ok(SuiClientCommandResult::SerializeTx(Base64::encode(
+                        bcs::to_bytes(&data).unwrap(),
+                    )));
+                }
                 let signature = context.config.keystore.sign_secure(
                     &sender,
                     &data,
@@ -607,7 +627,7 @@ impl SuiClientCommands {
                     )
                     .await?;
                 if serialize_output {
-                    return Ok(SuiClientCommandResult::SerializePublish(Base64::encode(
+                    return Ok(SuiClientCommandResult::SerializeTx(Base64::encode(
                         bcs::to_bytes(&data).unwrap(),
                     )));
                 }
@@ -651,7 +671,14 @@ impl SuiClientCommands {
                     .read_api()
                     .get_transaction_with_options(
                         digest,
-                        SuiTransactionBlockResponseOptions::full_content(),
+                        SuiTransactionBlockResponseOptions {
+                            show_input: true,
+                            show_raw_input: false,
+                            show_effects: true,
+                            show_events: true,
+                            show_object_changes: true,
+                            show_balance_changes: false,
+                        },
                     )
                     .await?;
                 SuiClientCommandResult::TransactionBlock(tx_read)
@@ -674,12 +701,20 @@ impl SuiClientCommands {
                 gas,
                 gas_budget,
                 args,
+                serialize_output,
             } => {
-                let response = call_move(
-                    package, &module, &function, type_args, gas, gas_budget, args, context,
+                call_move(
+                    package,
+                    &module,
+                    &function,
+                    type_args,
+                    gas,
+                    gas_budget,
+                    args,
+                    serialize_output,
+                    context,
                 )
-                .await?;
-                SuiClientCommandResult::Call(response)
+                .await?
             }
 
             SuiClientCommands::Transfer {
@@ -687,6 +722,7 @@ impl SuiClientCommands {
                 object_id,
                 gas,
                 gas_budget,
+                serialize_output,
             } => {
                 let from = context.get_object_owner(&object_id).await?;
                 let time_start = Instant::now();
@@ -696,6 +732,11 @@ impl SuiClientCommands {
                     .transaction_builder()
                     .transfer_object(from, object_id, gas, gas_budget, to)
                     .await?;
+                if serialize_output {
+                    return Ok(SuiClientCommandResult::SerializeTx(Base64::encode(
+                        bcs::to_bytes(&data).unwrap(),
+                    )));
+                }
                 let signature =
                     context
                         .config
@@ -725,6 +766,7 @@ impl SuiClientCommands {
                 sui_coin_object_id: object_id,
                 gas_budget,
                 amount,
+                serialize_output,
             } => {
                 let from = context.get_object_owner(&object_id).await?;
 
@@ -733,6 +775,11 @@ impl SuiClientCommands {
                     .transaction_builder()
                     .transfer_sui(from, object_id, gas_budget, to, amount)
                     .await?;
+                if serialize_output {
+                    return Ok(SuiClientCommandResult::SerializeTx(Base64::encode(
+                        bcs::to_bytes(&data).unwrap(),
+                    )));
+                }
                 let signature =
                     context
                         .config
@@ -759,6 +806,7 @@ impl SuiClientCommands {
                 amounts,
                 gas,
                 gas_budget,
+                serialize_output,
             } => {
                 ensure!(
                     !input_coins.is_empty(),
@@ -782,6 +830,11 @@ impl SuiClientCommands {
                     .transaction_builder()
                     .pay(from, input_coins, recipients, amounts, gas, gas_budget)
                     .await?;
+                if serialize_output {
+                    return Ok(SuiClientCommandResult::SerializeTx(Base64::encode(
+                        bcs::to_bytes(&data).unwrap(),
+                    )));
+                }
                 let signature =
                     context
                         .config
@@ -810,6 +863,7 @@ impl SuiClientCommands {
                 recipients,
                 amounts,
                 gas_budget,
+                serialize_output,
             } => {
                 ensure!(
                     !input_coins.is_empty(),
@@ -833,6 +887,11 @@ impl SuiClientCommands {
                     .transaction_builder()
                     .pay_sui(signer, input_coins, recipients, amounts, gas_budget)
                     .await?;
+                if serialize_output {
+                    return Ok(SuiClientCommandResult::SerializeTx(Base64::encode(
+                        bcs::to_bytes(&data).unwrap(),
+                    )));
+                }
                 let signature = context.config.keystore.sign_secure(
                     &signer,
                     &data,
@@ -860,6 +919,7 @@ impl SuiClientCommands {
                 input_coins,
                 recipient,
                 gas_budget,
+                serialize_output,
             } => {
                 ensure!(
                     !input_coins.is_empty(),
@@ -871,7 +931,11 @@ impl SuiClientCommands {
                     .transaction_builder()
                     .pay_all_sui(signer, input_coins, recipient, gas_budget)
                     .await?;
-
+                if serialize_output {
+                    return Ok(SuiClientCommandResult::SerializeTx(Base64::encode(
+                        bcs::to_bytes(&data).unwrap(),
+                    )));
+                }
                 let signature = context.config.keystore.sign_secure(
                     &signer,
                     &data,
@@ -957,6 +1021,7 @@ impl SuiClientCommands {
                 count,
                 gas,
                 gas_budget,
+                serialize_output,
             } => {
                 let signer = context.get_object_owner(&coin_id).await?;
                 let client = context.get_client().await?;
@@ -980,6 +1045,11 @@ impl SuiClientCommands {
                         return Err(anyhow!("Exactly one of `count` and `amounts` must be present for split-coin command."));
                     }
                 };
+                if serialize_output {
+                    return Ok(SuiClientCommandResult::SerializeTx(Base64::encode(
+                        bcs::to_bytes(&data).unwrap(),
+                    )));
+                }
                 let signature = context.config.keystore.sign_secure(
                     &signer,
                     &data,
@@ -998,6 +1068,7 @@ impl SuiClientCommands {
                 coin_to_merge,
                 gas,
                 gas_budget,
+                serialize_output,
             } => {
                 let client = context.get_client().await?;
                 let signer = context.get_object_owner(&primary_coin).await?;
@@ -1005,6 +1076,11 @@ impl SuiClientCommands {
                     .transaction_builder()
                     .merge_coins(signer, primary_coin, coin_to_merge, gas, gas_budget)
                     .await?;
+                if serialize_output {
+                    return Ok(SuiClientCommandResult::SerializeTx(Base64::encode(
+                        bcs::to_bytes(&data).unwrap(),
+                    )));
+                }
                 let signature = context.config.keystore.sign_secure(
                     &signer,
                     &data,
@@ -1037,23 +1113,6 @@ impl SuiClientCommands {
             }
             SuiClientCommands::ActiveAddress => {
                 SuiClientCommandResult::ActiveAddress(context.active_address().ok())
-            }
-
-            SuiClientCommands::SerializeTransferSui {
-                to,
-                sui_coin_object_id: object_id,
-                gas_budget,
-                amount,
-            } => {
-                let from = context.get_object_owner(&object_id).await?;
-                let client = context.get_client().await?;
-                let data = client
-                    .transaction_builder()
-                    .transfer_sui(from, object_id, gas_budget, to, amount)
-                    .await?;
-                SuiClientCommandResult::SerializeTransferSui(Base64::encode(
-                    bcs::to_bytes(&data).unwrap(),
-                ))
             }
 
             SuiClientCommands::ExecuteSignedTx {
@@ -1399,7 +1458,7 @@ impl WalletContext {
     ) -> anyhow::Result<SuiTransactionBlockResponse> {
         let client = self.get_client().await?;
         Ok(client
-            .quorum_driver()
+            .quorum_driver_api()
             .execute_transaction_block(
                 tx,
                 SuiTransactionBlockResponseOptions::new()
@@ -1584,10 +1643,7 @@ impl Display for SuiClientCommandResult {
             SuiClientCommandResult::ExecuteSignedTx(response) => {
                 write!(writer, "{}", write_transaction_response(response)?)?;
             }
-            SuiClientCommandResult::SerializeTransferSui(data) => {
-                writeln!(writer, "Raw tx_bytes to execute: {}", data)?;
-            }
-            SuiClientCommandResult::SerializePublish(data) => {
+            SuiClientCommandResult::SerializeTx(data) => {
                 writeln!(writer, "Raw tx_bytes to execute: {}", data)?;
             }
             SuiClientCommandResult::ActiveEnv(env) => {
@@ -1621,8 +1677,9 @@ pub async fn call_move(
     gas: Option<ObjectID>,
     gas_budget: u64,
     args: Vec<SuiJsonValue>,
+    serialize_output: bool,
     context: &mut WalletContext,
-) -> Result<SuiTransactionBlockResponse, anyhow::Error> {
+) -> Result<SuiClientCommandResult, anyhow::Error> {
     // Convert all numeric input to String, this will allow number input from the CLI without failing SuiJSON's checks.
     let args = args
         .into_iter()
@@ -1649,6 +1706,11 @@ pub async fn call_move(
             gas_budget,
         )
         .await?;
+    if serialize_output {
+        return Ok(SuiClientCommandResult::SerializeTx(Base64::encode(
+            bcs::to_bytes(&data).unwrap(),
+        )));
+    }
     let signature =
         context
             .config
@@ -1665,7 +1727,7 @@ pub async fn call_move(
     if matches!(effects.status(), SuiExecutionStatus::Failure { .. }) {
         return Err(anyhow!("Error calling module: {:#?}", effects.status()));
     }
-    Ok(response)
+    Ok(SuiClientCommandResult::Call(response))
 }
 
 fn convert_number_to_string(value: Value) -> Value {
@@ -1753,6 +1815,34 @@ impl SuiClientCommandResult {
             info!("{line}")
         }
     }
+
+    pub fn tx_block_response(&self) -> Option<&SuiTransactionBlockResponse> {
+        use SuiClientCommandResult::*;
+        match self {
+            Upgrade(b)
+            | Publish(b)
+            | TransactionBlock(b)
+            | Call(b)
+            | Transfer(_, b)
+            | TransferSui(b)
+            | Pay(b)
+            | PaySui(b)
+            | PayAllSui(b)
+            | SplitCoin(b)
+            | MergeCoin(b)
+            | ExecuteSignedTx(b) => Some(b),
+            _ => None,
+        }
+    }
+
+    pub fn objects_response(&self) -> Option<Vec<SuiObjectResponse>> {
+        use SuiClientCommandResult::*;
+        match self {
+            Object(o) | RawObject(o) => Some(vec![o.clone()]),
+            Objects(o) => Some(o.clone()),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -1786,8 +1876,8 @@ pub enum SuiClientCommandResult {
     ActiveAddress(Option<SuiAddress>),
     ActiveEnv(Option<String>),
     Envs(Vec<SuiEnv>, Option<String>),
-    SerializeTransferSui(String),
-    SerializePublish(String),
+    /// Return a base64-encoded transaction to be signed elsewhere
+    SerializeTx(String),
     ExecuteSignedTx(SuiTransactionBlockResponse),
     NewEnv(SuiEnv),
 }
