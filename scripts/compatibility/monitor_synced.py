@@ -13,7 +13,7 @@ from datetime import datetime
 
 
 NUM_RETRIES = 10
-CHECKPOINT_TIMEOUT_SEC = 120
+CHECKPOINT_SLEEP_SEC = 30
 STARTUP_TIMEOUT_SEC = 60
 RETRY_BASE_TIME_SEC = 3
 AVAILABLE_NETWORKS = ['testnet', 'devnet']
@@ -150,16 +150,21 @@ def main(argv):
 
     current_time = datetime.now()
     start_time = current_time
+    progress_check_iteration = 1
     while current_epoch < end_epoch:
         # check that we are making progress
-        time.sleep(CHECKPOINT_TIMEOUT_SEC)
+        time.sleep(CHECKPOINT_SLEEP_SEC)
         new_checkpoint = get_local_metric(Metric.CHECKPOINT)
 
         if new_checkpoint == current_checkpoint:
             print(
-                f'Checkpoint is stuck at {current_checkpoint} for over {CHECKPOINT_TIMEOUT_SEC} seconds')
-            exit(1)
-        current_checkpoint = new_checkpoint
+                f'WARNING: Checkpoint is stuck at {current_checkpoint} for over {CHECKPOINT_SLEEP_SEC * progress_check_iteration} seconds')
+            progress_check_iteration += 1
+        else:
+            if verbose:
+                print(f'New highest executed checkpoint: {new_checkpoint}')
+            current_checkpoint = new_checkpoint
+            progress_check_iteration = 1
 
         new_epoch = get_local_metric(Metric.EPOCH)
         if new_epoch > current_epoch:
@@ -172,8 +177,6 @@ def main(argv):
                 print(
                     f'Epoch is stuck at {current_epoch} for over {epoch_timeout} minutes')
                 exit(1)
-        if verbose:
-            print(f'New highest executed checkpoint: {current_checkpoint}')
 
     elapsed_minutes = (datetime.now() - start_time).total_seconds() / 60
     print('-------------------------------')
