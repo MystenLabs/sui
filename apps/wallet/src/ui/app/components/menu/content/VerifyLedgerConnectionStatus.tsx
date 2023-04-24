@@ -37,10 +37,24 @@ export function VerifyLedgerConnectionStatus({
     const [verificationStatus, setVerificationStatus] = useState(
         VerificationStatus.UNKNOWN
     );
-    const { mutateAsync, isLoading } = useMutation({
+    const { mutate, isLoading } = useMutation({
         mutationFn: async () => {
             const suiLedgerClient = await connectToLedger();
             return await suiLedgerClient.getPublicKey(derivationPath, true);
+        },
+        onSuccess: (publicKeyResult) => {
+            const publicKey = new Ed25519PublicKey(publicKeyResult.publicKey);
+            const suiAddress = publicKey.toSuiAddress();
+
+            setVerificationStatus(
+                accountAddress === suiAddress
+                    ? VerificationStatus.VERIFIED
+                    : VerificationStatus.NOT_VERIFIED
+            );
+
+            window.setTimeout(() => {
+                setVerificationStatus(VerificationStatus.UNKNOWN);
+            }, resetVerificationStatusTimeout);
         },
         onError: (error) => {
             const errorMessage =
@@ -67,23 +81,7 @@ export function VerifyLedgerConnectionStatus({
             return (
                 <Link
                     text="Verify Ledger connection"
-                    onClick={async () => {
-                        const publicKeyResult = await mutateAsync();
-                        const publicKey = new Ed25519PublicKey(
-                            publicKeyResult.publicKey
-                        );
-                        const suiAddress = publicKey.toSuiAddress();
-
-                        setVerificationStatus(
-                            accountAddress === suiAddress
-                                ? VerificationStatus.VERIFIED
-                                : VerificationStatus.NOT_VERIFIED
-                        );
-
-                        window.setTimeout(() => {
-                            setVerificationStatus(VerificationStatus.UNKNOWN);
-                        }, resetVerificationStatusTimeout);
-                    }}
+                    onClick={() => mutate()}
                     color="heroDark"
                     weight="medium"
                 />
