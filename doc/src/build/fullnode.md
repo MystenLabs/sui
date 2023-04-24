@@ -45,9 +45,9 @@ Follow the instructions here to run your own Sui Full.
 
 Suggested minimum hardware to run a Sui Full node:
 
-- CPUs: 10 core
-- RAM: 32 GB
-- Storage (SSD): 2 TB
+- CPUs: 10 physical cores / 20 vCPUs
+- RAM: 128 GB
+- Storage (SSD): 2 TB NVMe drive
 
 ### Software requirements
 

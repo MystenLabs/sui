@@ -19,7 +19,7 @@ BIP-32 defines the hierarchical deterministic wallet structure to logically asso
 
 BIP-44 further defines the five levels of the derivation path with their exact meanings: `m / purpose' / coin_type' / account' / change / address_index`. In this structure, the slashes indicate new levels, or children, in the hierarchy.
 
-The `purpose` level is generally set to 44, corresponding to the BIP number. In Sui, however, the purpose level distinguishes different signing schemes: 44 is set for Ed25519, 54 for ECDSA Secp256k1 and 74 for Secp256r1. While it is non-standard to set the purpose level to a value that is not 44, it is common to use the purpose field to distinguish different signing schemes. BIP-49 and BIP-84, for example, are used to identify script types in Bitcoin. We chose 54 to indicate ECDSA Secp256k1 because there is no existing BIP under 54, avoiding confusion with any Bitcoin standard.
+The `purpose` level is generally set to 44, corresponding to the BIP number. In Sui, however, the purpose level distinguishes different signing schemes: 44 is set for Ed25519, 54 for ECDSA Secp256k1 and 74 for Secp256r1. While it is non-standard to set the purpose level to a value that is not 44, it is common to use the purpose field to distinguish different signing schemes. BIP-49 and BIP-84, for example, are used to identify script types in Bitcoin. Sui chose 54 to indicate ECDSA Secp256k1 because there is no existing BIP under 54, avoiding confusion with any Bitcoin standard.
 
 The `coin_type` value is managed with a repository of all other cryptocurrencies. Both signature schemes use Sui's registered coin_type, 784 (SUI on a telephone keypad).
 
@@ -34,7 +34,7 @@ It is generally accepted that, while account-based currencies define only the fi
 
 ## Mnemonics Support
 
-After we defined the deterministic way to derive the master key from a seed, BIP-39 is introduced to make the seed more human-readable and memorizable using mnemonics. Sui accepts 12, 15, 18, 21, and 24 words from the BIP-39 wordlist that is properly checksummed, corresponding to 128, 160, 192, 224, and 256 bits of entropy. In Sui Wallet and SDKs, we provide a flexible interface to sign transactions with various signing schemes.
+After Sui defines the deterministic way to derive the master key from a seed, BIP-39 is introduced to make the seed more human-readable and memorizable using mnemonics. Sui accepts 12, 15, 18, 21, and 24 words from the BIP-39 wordlist that is properly checksummed, corresponding to 128, 160, 192, 224, and 256 bits of entropy. Sui Wallet and SDKs provide a flexible interface to sign transactions with various signing schemes.
 
 ## Address Format
 

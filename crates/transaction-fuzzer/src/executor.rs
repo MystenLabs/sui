@@ -4,7 +4,7 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::{fmt::Debug, sync::Arc};
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::{authority::AuthorityState, test_utils::send_and_confirm_transaction};
 use sui_types::{
@@ -32,9 +32,16 @@ pub fn assert_is_acceptable_result(result: &ExecutionResult) {
     }
 }
 
+#[derive(Clone)]
 pub struct Executor {
     pub state: Arc<AuthorityState>,
-    pub rt: Runtime,
+    pub rt: Arc<Runtime>,
+}
+
+impl Debug for Executor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Executor").finish()
+    }
 }
 
 impl Default for Executor {
@@ -47,11 +54,18 @@ impl Executor {
     pub fn new() -> Self {
         let rt = Runtime::new().unwrap();
         let state = rt.block_on(TestAuthorityBuilder::new().build());
-        Self { state, rt }
+        Self {
+            state,
+            rt: Arc::new(rt),
+        }
     }
 
     pub fn add_object(&mut self, object: Object) {
         self.rt.block_on(self.state.insert_genesis_object(object));
+    }
+
+    pub fn add_objects(&mut self, objects: &[Object]) {
+        self.rt.block_on(self.state.insert_genesis_objects(objects));
     }
 
     pub fn execute_transaction(&mut self, txn: VerifiedTransaction) -> ExecutionResult {

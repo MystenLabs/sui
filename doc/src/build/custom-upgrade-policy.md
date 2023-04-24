@@ -1,33 +1,22 @@
-# Custom Upgrade Policies
+---
+title: Custom Upgrade Policies
+---
 
-`sui client upgrade` offers a simple way to upgrade packages when the
-CLI's active address owns the package's `UpgradeCap`.  This process is
-useful to get started with upgrades, or in the early stages of a
-package's development, but having the ability to upgrade a package be
-protected by only one key can pose a security risk for packages that
-are live in production:
+The ability to upgrade Sui Move packages provides the opportunity to iterate your package development, whether to continuously improve features or address logic defects. The `sui client upgrade` command offers an approachable way to upgrade packages when the CLI active address owns the `UpgradeCap` object associated with those packages. 
 
-- The individual owning that key may make changes that are in their
-  interests but not the interests of the broader community.
-- Upgrades may happen without enough time for package users to consult
-  on the change or stop using the package if they disagree.
-- The key may get lost.
+Using the Sui Client CLI is useful to get started with upgrades, or in the early stages of package development, but protecting the ability to upgrade a package on chain using a single key can pose a security risk for several reasons:
 
-This security risk can be eliminated by making a package **immutable**
-when it goes live (using `sui::package::make_immutable` to burn its
-`UpgradeCap`) but this prevents future bugfixes and new features being
-added, which may not be practical.
+- The entity owning that key might make changes that are in their own interests but not the interests of the broader community.
+- Upgrades might happen without enough time for package users to consult on the change or stop using the package if they disagree.
+- The key might get lost.
 
-**Custom upgrade policies** maintain safety and security for the 
-package creator and its users while preserving the ability to make 
-changes to live packages.  They protect `UpgradeCap` access behind
-arbitrary Move code and allow upgrades to be authorized on a case-by-
--case basis by issuing `UpgradeTicket`s.
+You can make a package *immutable* when it goes live to mitigate this risk using the Sui Move `sui::package::make_immutable` function to destroy its `UpgradeCap`. Making the package immutable, however, prevents future bug fixes and new features, which might not be practical or desired.
 
-## Overview
+To address the security risk a single key poses while still providing the opportunity to upgrade live packages, Sui offers *custom upgrade policies*. These policies protect `UpgradeCap` access behind arbitrary Sui Move code and issue `UpgradeTicket` objects that authorize upgrades on a case-by-case basis.
 
-Package upgrades must occur end-to-end in a single transaction block
-and are composed of three commands:
+## Upgrade overview
+
+Package upgrades must occur end-to-end in a single transaction block and are composed of three commands:
 
 1. **Authorization:** Get permission from the `UpgradeCap` to perform
    the upgrade, creating an `UpgradeTicket`.
@@ -38,9 +27,7 @@ and are composed of three commands:
 3. **Commit:** Update the `UpgradeCap` with information about the
    newly created package.
 
-While step 2 is a built-in command, steps 1 and 3 are implemented as
-move functions.  Their most basic implementation is provided as part
-of the Sui framework:
+While step 2 is a built-in command, steps 1 and 3 are implemented as Move functions. The Sui framework provides their most basic implementation:
 
 ```rust
 module sui::package {
@@ -57,17 +44,16 @@ module sui::package {
 }
 ```
 
-These are the functions that are called for authorization and commit
-by `sui client upgrade`.  Custom upgrade policies work by guarding
-access to a package's `UpgradeCap` (and therefore to calls of these
-functions) behind extra conditions that are specific to that policy
-(e.g. voting, governance, permission lists, timelocks).
+These are the functions that `sui client upgrade` calls for authorization and commit. Custom upgrade policies work by guarding
+access to a package `UpgradeCap` (and therefore to calls of these functions) behind extra conditions that are specific to that policy
+(such as voting, governance, permission lists, timelocks, and so on).
 
-Any pair of functions that produces an `UpgradeTicket` from an
-`UpgradeCap` and consumes an `UpgradeReceipt` to update an
+Any pair of functions that produces an `UpgradeTicket` from an `UpgradeCap` and consumes an `UpgradeReceipt` to update an
 `UpgradeCap` constitutes a custom upgrade policy.
 
-## Upgrade Cap
+## UpgradeCap
+
+The `UpgradeCap` is the central type responsible for coordinating package upgrades.
 
 ```rust
 module sui::package {
@@ -80,9 +66,7 @@ module sui::package {
 }
 ```
 
-The `UpgradeCap` is the central type responsible for coordinating
-package upgrades.  It is created during package publishing and updated
-during upgrades.  The owner of this object has permission to:
+Publishing a package creates the `UpgradeCap` object and upgrading the package updates that object. The owner of this object has permission to:
 
 - Change the compatibility requirements for future upgrades.
 - Authorize future upgrades.
@@ -90,17 +74,12 @@ during upgrades.  The owner of this object has permission to:
 
 And its API guarantees the following properties:
 
-- Only the latest version of a package can be upgraded (a linear
-  history is guaranteed).
-- Only one upgrade can be in-flight at any time (cannot authorize
-  multiple concurrent upgrades).
-- An upgrade can only be authorized for the extent of a single
-  transaction, the `UpgradeTicket` that proves authorization cannot be
-  `store`d.
-- Compatibility requirements for a package can only be made more
-  restrictive over time.
+- Only the latest version of a package can be upgraded (a linear history is guaranteed).
+- Only one upgrade can be in-flight at any time (cannot authorize multiple concurrent upgrades).
+- An upgrade can only be authorized for the extent of a single transaction; no one can `store` the `UpgradeTicket` that proves authorization.
+- Compatibility requirements for a package can be made only more restrictive over time.
 
-## Upgrade Ticket
+## UpgradeTicket
 
 ```rust
 module sui::package {
@@ -113,47 +92,29 @@ module sui::package {
 }
 ```
 
-An `UpgradeTicket` is proof that an upgrade has been authorized.  This
-authorization is specific to:
+An `UpgradeTicket` is proof that an upgrade has been authorized.  This authorization is specific to:
 
-- A particular `package: ID` to upgrade from, which must be the latest
-  package in the family identified by the `UpgradeCap` at `cap: ID`.
-- A particular `policy: u8` that attests to the kind of compatibility
-  guarantees that the upgrade expects to adhere to.
-- A particular `digest: vector<u8>` which identifies the contents of
-  the package after the upgrade.
+- A particular `package: ID` to upgrade from, which must be the latest package in the family identified by the `UpgradeCap` at `cap: ID`.
+- A particular `policy: u8` that attests to the kind of compatibility guarantees that the upgrade expects to adhere to.
+- A particular `digest: vector<u8>` that identifies the contents of the package after the upgrade.
 
-When the upgrade is run, the validator checks that the upgrade it is
-about to perform matches the upgrade that was authorized along all
-those lines, and will not perform the upgrade if any of these criteria
-are not met.
+When you attempt to run the upgrade, the validator checks that the upgrade it is about to perform matches the upgrade that was authorized along all those lines, and does not perform the upgrade if any of these criteria are not met.
 
-Once an `UpgradeTicket` is created, it must be used within that
-transaction (it cannot be stored for later, dropped, or burned), or the
-transaction will fail.
+After creating an `UpgradeTicket`, you must use it within that transaction block (you cannot store it for later, drop it, or burn it), or the transaction fails.
 
-### Package Digest
+### Package digest
 
-The `UpgradeTicket`'s `digest` field comes from the `digest` parameter
-to `authorize_upgrade`, which must be supplied by the caller.  While
-`authorize_upgrade` does not process the `digest`, it can be used by
-custom policies to only authorize upgrades that it has seen the
-bytecode or source code for ahead of time.  The digest is calculated
-as follows:
+The `UpgradeTicket` `digest` field comes from the `digest` parameter to `authorize_upgrade`, which the caller must supply.  While
+`authorize_upgrade` does not process the `digest`, custom policies can use it to authorize only upgrades that it has seen the
+bytecode or source code for ahead of time. Sui calculates the digest as follows:
 
 - Take the bytecode for each module, represented as an array of bytes.
-- Append the list of the package's transitive dependencies, each
-  represented as an array of bytes.
+- Append the list of the package's transitive dependencies, each represented as an array of bytes.
 - Sort this list of byte-arrays lexicographically.
-- Feed each element in the sorted list, in order, into a `Blake2B`
-  hasher.
+- Feed each element in the sorted list, in order, into a `Blake2B` hasher.
 - Compute the digest from this hash state.
 
-The reference implementation for digest calculation can be found
-[here](https://github.com/MystenLabs/sui/blob/d8cb153d886d54752763fbdab631b062da7d894b/crates/sui-types/src/move_package.rs#L232-L251),
-but in most cases, package creators can rely on the Move toolchain to
-output the digest as part of the build, when passing the
-`--dump-bytecode-as-base64` flag:
+Refer to the [implementation for digest calculation](https://github.com/MystenLabs/sui/blob/d8cb153d886d54752763fbdab631b062da7d894b/crates/sui-types/src/move_package.rs#L232-L251) for more information, but in most cases, you can rely on the Move toolchain to output the digest as part of the build, when passing the `--dump-bytecode-as-base64` flag:
 
 ```
 $ sui move build --dump-bytecode-as-base64
@@ -164,7 +125,7 @@ BUILDING test
 {"modules":[<MODULE-BYTES-BASE64>],"dependencies":[<DEPENDENCY-IDS>],"digest":[59,43,173,195,216,88,176,182,18,8,24,200,200,192,196,197,248,35,118,184,207,205,33,59,228,109,184,230,50,31,235,201]}
 ```
 
-## Upgrade Receipt
+## UpgradeReceipt
 
 ```rust
 module sui::package {
@@ -175,47 +136,38 @@ module sui::package {
 }
 ```
 
-The `UpgradeReceipt` is proof that the `Upgrade` command ran
-successfully, and the new package has been added to the set of created
-objects for the transaction.  It is used to update its `UpgradeCap`
-(identified by `cap: ID`) with the ID of the latest package in its
+The `UpgradeReceipt` is proof that the `Upgrade` command ran successfully, and Sui added the new package to the set of created
+objects for the transaction. It is used to update its `UpgradeCap` (identified by `cap: ID`) with the ID of the latest package in its
 family (`package: ID`).
 
-Once an `UpgradeReceipt` is created, it must be used to update its
-`UpgradeCap` within the same transaction (it cannot be stored for
-later, dropped, or burned), or the transaction will fail.
+After Sui creates an `UpgradeReceipt`, you must use it to update its `UpgradeCap` within the same transaction block (you cannot store it for later, drop it, or burn it), or the transaction fails.
 
-## Isolating Policies
+## Isolating policies
 
 When writing custom upgrade policies, prefer: 
 
-- separating them into their own package, (i.e. not co-located with
-  the code they govern the upgradeability of)
-- making that package immutable (not upgradeable),
-- locking in the `UpgradeCap`, so that a package's upgrade policy
-  cannot be made less restrictive, once one is chosen.
+- separating them into their own package, (i.e. not co-located with the code they govern the upgradeability of),
+- making that package immutable (not upgradeable), and
+- locking in the policy of the `UpgradeCap`, so that the policy cannot be made less restrictive later.
 
-These best practices help uphold **informed user consent** and
-**bounded risk** by making it clear what a package's upgrade policy is
-at the moment a user locks value into it, and ensuring that the policy
-does not evolve to be more permissive with time, without the package
-user realising and choosing to accept the new terms.
+These best practices help uphold **informed user consent** and **bounded risk** by making it clear what a package's upgrade policy is
+at the moment a user locks value into it, and ensuring that the policy does not evolve to be more permissive with time, without the package user realizing and choosing to accept the new terms.
 
-## Example: "Day of the Week" Upgrade Policy
+## Example: "Day of the Week" upgrade policy
 
-We will put everything into practice by writing a toy upgrade policy that
-only authorizes upgrades on a particular day of the week (of the
-package creator's choosing).
+Time to put everything into practice by writing a toy upgrade policy that only authorizes upgrades on a particular day of the week (of the package creator's choosing).
 
-Start by creating a new move package for the upgrade policy:
+### Creating an upgrade policy
+
+Start by creating a new Move package for the upgrade policy:
 
 ```
 $ sui move new policy
 ```
 
-Add a source file, at `policy/sources/day_of_week.move`, where we
-define the object type for our custom upgrade policy, and a
-constructor:
+The command creates a `policy` directory with a `sources` folder and `Move.toml` manifest.
+
+In the `sources` folder, create a source file named `day_of_week.move`. Copy and paste the following code into the file:
 
 ```rust
 module policy::day_of_week {
@@ -243,18 +195,100 @@ module policy::day_of_week {
 }
 ```
 
-We then need to add a function to authorize an upgrade, if we are on
-the correct day of the week:
+This code includes a constructor and defines the object type for the custom upgrade policy.
+
+You then need to add a function to authorize an upgrade, if on the correct day of the week. First, define a couple of constants, one for the error code that identifies an attempted upgrade on a day the policy doesn't allow, and another to define the number of milliseconds in a day (to be used shortly). Add these definitions directly under the current `ENotWeekDay` one.
 
 ```rust
+// Request to authorize upgrade on the wrong day of the week.
+const ENotAllowedDay: u64 = 2;
+
+const MS_IN_DAY: u64 = 24 * 60 * 60 * 1000;
+```
+
+After the `new_policy` function, add a `week_day` function to get the current weekday. As promised, the function uses the `MS_IN_DAY` constant you defined earlier.
+
+```rust
+fun week_day(ctx: &TxContext): u8 {
+    let days_since_unix_epoch = 
+        tx_context::epoch_timestamp_ms(ctx) / MS_IN_DAY;
+    // The unix epoch (1st Jan 1970) was a Thursday so shift days
+    // since the epoch by 3 so that 0 = Monday.
+    ((days_since_unix_epoch + 3) % 7 as u8)
+}
+
+```
+This function uses the epoch timestamp from `TxContext` rather than `Clock` because it needs only daily granularity, which means the upgrade transactions don't require consensus.
+
+Next, add an `authorize_upgrade` function that calls the previous function to get the current day of the week, then checks whether that value violates the policy, returning the `ENotAllowedDay` error value if it does.
+
+```rust
+public fun authorize_upgrade(
+    cap: &mut UpgradeCap,
+    policy: u8,
+    digest: vector<u8>,
+    ctx: &TxContext,
+): package::UpgradeTicket {
+    assert!(week_day(ctx) == cap.day, ENotAllowedDay);
+    package::authorize_upgrade(&mut cap.cap, policy, digest)
+}
+```
+
+The signature of a custom `authorize_upgrade` can be different from the signature of `sui::package::authorize_upgrade` as long as it returns an `UpgradeTicket`.
+
+
+  
+Finally, provide implementations of `commit_upgrade` and `make_immutable` that delegate to their respective functions in `sui::package`:
+
+```rust
+public fun commit_upgrade(
+    cap: &mut UpgradeCap,
+    receipt: package::UpgradeReceipt,
+) {
+    package::commit_upgrade(&mut cap.cap, receipt)
+}
+
+public entry fun make_immutable(cap: UpgradeCap) {
+    let UpgradeCap { id, cap, day: _ } = cap;
+    object::delete(id);
+    package::make_immutable(cap);
+}
+```
+
+The final code in your `day_of_week.move` file should resemble the following:
+```rust
 module policy::day_of_week {
+    use sui::object::{Self, UID};
     use sui::package;
-    use sui::tx_context::{Self, TxContext};
+    use sui::tx_context::TxContext;
 
-    /// Request to authorize upgrade on the wrong day of the week.
+    struct UpgradeCap has key, store {
+        id: UID,
+        cap: package::UpgradeCap,
+        day: u8,
+    }
+
+    // Day is not a week day (number in range 0 <= day < 7).
+    const ENotWeekDay: u64 = 1;
     const ENotAllowedDay: u64 = 2;
-
     const MS_IN_DAY: u64 = 24 * 60 * 60 * 1000;
+
+    public fun new_policy(
+        cap: package::UpgradeCap,
+        day: u8,
+        ctx: &mut TxContext,
+    ): UpgradeCap {
+        assert!(day < 7, ENotWeekDay);
+        UpgradeCap { id: object::new(ctx), cap, day }
+    }
+
+    fun week_day(ctx: &TxContext): u8 {
+        let days_since_unix_epoch = 
+            sui::tx_context::epoch_timestamp_ms(ctx) / MS_IN_DAY;
+        // The unix epoch (1st Jan 1970) was a Thursday so shift days
+        // since the epoch by 3 so that 0 = Monday.
+        ((days_since_unix_epoch + 3) % 7 as u8)
+    }
 
     public fun authorize_upgrade(
         cap: &mut UpgradeCap,
@@ -265,34 +299,6 @@ module policy::day_of_week {
         assert!(week_day(ctx) == cap.day, ENotAllowedDay);
         package::authorize_upgrade(&mut cap.cap, policy, digest)
     }
-
-    fun week_day(ctx: &TxContext): u8 {
-        let days_since_unix_epoch = 
-            tx_context::epoch_timestamp_ms(clock) / MS_IN_DAY;
-        // The unix epoch (1st Jan 1970) was a Thursday so shift days
-        // since the epoch by 3 so that 0 = Monday.
-        ((days_since_unix_epoch + 3) % 7 as u8)
-    }
-}
-```
-
-Note that: 
-
-- The signature of our custom `authorize_upgrade` can be different
-  from the signature of `sui::package::authorize_upgrade` as long as
-  it returns an `UpgradeTicket`.
-- We use the epoch timestamp from `TxContext` rather than `Clock`
-  because we only need daily granularity, and this means our
-  upgrade transactions don't need to go through consensus.
-  
-We also need to provide implementations of `commit_upgrade` and
-`make_immutable`, but these simply delegate to their respective
-functions in `sui::package`:
-
-```rust
-module policy::day_of_week {
-    use sui::object::{Self, UID};
-    use sui::package;
 
     public fun commit_upgrade(
         cap: &mut UpgradeCap,
@@ -309,10 +315,16 @@ module policy::day_of_week {
 }
 ```
 
-Next we publish the policy code:
+### Publishing an upgrade policy
 
+Use the `sui client publish` command to publish the policy.
+
+```sh
+sui client publish --gas-budget 100000000
 ```
-$ sui client publish --gas-budget 100000000
+A successful publish returns the following:
+
+```sh
 INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING policy
@@ -328,19 +340,19 @@ Commands: [
   TransferObjects([Result(0)],Input(0)),
 ]
 
-Sender: <SENDER>
+Sender: <SENDER-ADDRESS>
 Gas Payment: Object ID: <GAS>, version: 0x5, digest: E3tu6NE34ZDzVRtQUmXdnSTyQL2ZTm5NnhQSn1sgeUZ6
-Gas Owner: <SENDER>
+Gas Owner: <SENDER-ADDRESS>
 Gas Price: 1000
 Gas Budget: 100000000
 
 ----- Transaction Effects ----
 Status : Success
 Created Objects:
-  - ID: <POLICY-UPGRADE-CAP> , Owner: Account Address ( <SENDER> )
+  - ID: <POLICY-UPGRADE-CAP> , Owner: Account Address ( <SENDER-ADDRESS> )
   - ID: <POLICY-PACKAGE> , Owner: Immutable
 Mutated Objects:
-  - ID: <GAS> , Owner: Account Address ( <SENDER> )
+  - ID: <GAS> , Owner: Account Address ( <SENDER-ADDRESS> )
 
 ----- Events ----
 Array []
@@ -348,9 +360,9 @@ Array []
 Array [
     Object {
         "type": String("mutated"),
-        "sender": String("<SENDER>"),
+        "sender": String("<SENDER-ADDRESS>"),
         "owner": Object {
-            "AddressOwner": String("<SENDER>"),
+            "AddressOwner": String("<SENDER-ADDRESS>"),
         },
         "objectType": String("0x2::coin::Coin<0x2::sui::SUI>"),
         "objectId": String("<GAS>"),
@@ -360,9 +372,9 @@ Array [
     },
     Object {
         "type": String("created"),
-        "sender": String("<SENDER>"),
+        "sender": String("<SENDER-ADDRESS>"),
         "owner": Object {
-            "AddressOwner": String("<SENDER>"),
+            "AddressOwner": String("<SENDER-ADDRESS>"),
         },
         "objectType": String("0x2::package::UpgradeCap"),
         "objectId": String("<POLICY-UPGRADE-CAP>"),
@@ -383,7 +395,7 @@ Array [
 Array [
     Object {
         "owner": Object {
-            "AddressOwner": String("<SENDER>"),
+            "AddressOwner": String("<SENDER-ADDRESS>"),
         },
         "coinType": String("0x2::sui::SUI"),
         "amount": String("-10773600"),
@@ -391,15 +403,17 @@ Array [
 ]
 ```
 
-Following best practices, we make the policy code immutable by calling
-`sui::package::make_immutable` on its `UpgradeCap`:
+Following best practices, use the Sui Client CLI to call `sui::package::make_immutable` on the `UpgradeCap` to make the policy immutable.
 
+```sh
+sui client call --gas-budget 10000000 \
+    --package 0x2 \
+    --module 'package' \
+    --function 'make_immutable' \
+    --args '<POLICY-UPGRADE-CAP>'
 ```
-$ sui client call --gas-budget 10000000 \
-    --package 0x2                       \
-    --module 'package'                  \
-    --function 'make_immutable'         \
-    --args <POLICY-UPGRADE-CAP>         \
+
+```sh
 ----- Transaction Digest ----
 FqTdsEgFnyVqc3sFeu5EnBUziEDYbxhLUAaLv4FDjN6d
 ----- Transaction Data ----
@@ -410,16 +424,16 @@ Commands: [
   MoveCall(0x0000000000000000000000000000000000000000000000000000000000000002::package::make_immutable(Input(0))),
 ]
 
-Sender: <SENDER>
+Sender: <SENDER-ADDRESS>
 Gas Payment: Object ID: <GAS>, version: 0x6, digest: 2x4rn2NNa9K5TKcSku17MMEc2JZTr4RZhkJqWAmmiU1u
-Gas Owner: <SENDER>
+Gas Owner: <SENDER-ADDRESS>
 Gas Price: 1000
 Gas Budget: 10000000
 
 ----- Transaction Effects ----
 Status : Success
 Mutated Objects:
-  - ID: <GAS> , Owner: Account Address ( <SENDER> )
+  - ID: <GAS> , Owner: Account Address ( <SENDER-ADDRESS> )
 Deleted Objects:
   - ID: <POLICY-UPGRADE-CAP>
 
@@ -429,9 +443,9 @@ Array []
 Array [
     Object {
         "type": String("mutated"),
-        "sender": String("<SENDER>"),
+        "sender": String("<SENDER-ADDRESS>"),
         "owner": Object {
-            "AddressOwner": String("<SENDER>"),
+            "AddressOwner": String("<SENDER-ADDRESS>"),
         },
         "objectType": String("0x2::coin::Coin<0x2::sui::SUI>"),
         "objectId": String("<GAS>"),
@@ -444,7 +458,7 @@ Array [
 Array [
     Object {
         "owner": Object {
-            "AddressOwner": String("<SENDER>"),
+            "AddressOwner": String("<SENDER-ADDRESS>"),
         },
         "coinType": String("0x2::sui::SUI"),
         "amount": String("607780"),
@@ -452,16 +466,19 @@ Array [
 ]
 ```
 
-Now we need a package to upgrade with our new policy, any package will
-do, but if you don't have one handy, try the following:
+### Creating a package for testing
+
+With a policy now available on chain, you need a package to upgrade. This topic creates a basic package and references it in the following scenarios, but you can use any package you might have available instead of creating a new one.
+
+If you don't have a package available, use the `sui move new` command to create the template for a new package called `example`.
 
 ```
 $ sui move new example
 ```
 
-With a single module `example/sources/example.move`:
+In the `example/sources` directory, create an `example.move` file with the following code: 
 
-```
+```rust
 module example::example {
     struct Event has copy, drop { x: u64 }
     entry fun nudge() {
@@ -470,37 +487,35 @@ module example::example {
 }
 ```
 
-We will publish this and upgrade it to change the value in the `Event`
-that is emitted.
+The instruction that follows publishes this example package and then upgrades it to change the value in the `Event` it emits. Because you are using a custom upgrade policy, you need to use the TypeScript SDK to build the package's publish and upgrade commands.
 
-Because we are using a custom upgrade policy, we will need to use the
-TypeScript SDK to build the package's publish and upgrade commands.
-Create a node project with the following `package.json`:
+### Using TypeScript SDK
+
+Create a new directory to store a Node.js project. You can use the `npm init` function to create the `package.json`, or manually create the file. Depending on your approach to creating `package.json`, populate or add the following JSON to it:
 
 ```JSON
 { "type": "module" }
 
 ```
 
-And run the following in its directory to add the Sui TypeScript SDK
-as a dependency:
+Open a terminal or console to the root of your Node.js project. Run the following command to add the Sui TypeScript SDK as a dependency:
 
 ```
 $ npm install @mysten/sui.js
 ```
 
-And create a script, `publish.js` to perform the upgrade, starting by
-defining some constants: `SUI` the location of the `sui` CLI binary,
-and `POLICY_PACKAGE_ID`, the ID of our published `day_of_week`
-package:
+### Publishing a package with custom policy
+
+In the root of your Node.js project, create a script file named `publish.js`. Open the file for editing and define some constants: 
+* `SUI`: the location of the `sui` CLI binary.
+* `POLICY_PACKAGE_ID`: the ID of our published `day_of_week` package.
 
 ```js
 const SUI = 'sui';
 const POLICY_PACKAGE_ID = '<POLICY-PACKAGE>';
 ```
 
-Then some boiler-plate to get the keypair for the currently active
-address in the `sui` CLI:
+Next, add boilerplate code to get the keypair for the currently active address in the Sui Client CLI:
 
 ```js
 import { execSync } from 'child_process';
@@ -538,19 +553,19 @@ const keyPair = (() => {
 })();
 ```
 
-Then define the path of the package to be published.  The following
-snippet assumes that the package is found in a sibling directory to
+Next, define the path of the package you are publishing. The following snippet assumes that the package is in a sibling directory to
 `publish.js`, called `example`:
 
 ```js
 import path from 'path';
 import { fileToURLPath } from 'url';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __dirname = path.dirname(fileToURLPath(import.meta.url));
+// Location of package relative to current directory
 const packagePath = path.join(__dirname, 'example');
 ```
 
-Then we can build the package:
+Next, build the package:
 
 ```js
 const { modules, dependencies } = JSON.parse(
@@ -561,9 +576,7 @@ const { modules, dependencies } = JSON.parse(
 );
 ```
 
-Construct the transaction to publish it, wrap its `UpgradeCap` in a
-"day of the week" policy, which permits upgrades on Tuesdays, and send
-the new policy back to us:
+Next, construct the transaction to publish the package. Wrap its `UpgradeCap` in a "day of the week" policy, which permits upgrades on Tuesdays, and send the new policy back:
 
 ```js
 import { TransactionBlock } from '@mysten/sui.js';
@@ -574,18 +587,15 @@ const tuesdayUpgradeCap = tx.moveCall({
     target: `${POLICY_PACKAGE_ID}::day_of_week::new_policy`,
     arguments: [
         packageUpgradeCap,
-        tx.pure(1), // Tuesday
+        tx.pure(1), // 1 = Tuesday
     ],
 });
 
 tx.transferObjects([tuesdayUpgradeCap], tx.pure(sender));
 ```
 
-And finally, execute that transaction, and display its effects (The
-following snippet assumes that you are running your examples against a
-local network.  Replace `localnetConnection` with `devnetConnection`
-or `testnetConnection` everywhere as appropriate to run on devnet or
-testnet respectively):
+And finally, execute that transaction and display its effects to the console. The following snippet assumes that you're running your examples against a
+local network. Replace all `localnetConnection` references with `devnetConnection` or `testnetConnection` to run on Devnet or Testnet respectively:
 
 ```js
 import { JsonRpcProvider, RawSigner, localnetConnection }
@@ -603,10 +613,15 @@ const result = await signer.signAndExecuteTransactionBlock({
 console.log(result)
 ```
 
-Then, run the publish script:
+Save your `publish.js` file, and then use Node.js to run the script:
 
-```
+```sh
 $ node publish.js
+```
+
+If the script is successful, the console prints the following response:
+
+```sh
 INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING example
@@ -665,13 +680,20 @@ BUILDING example
 }
 ```
 
-We can test that our newly published package works using the CLI:
+**Note:** If you receive a `ReferenceError: fetch is not defined` error, use Node.js version 18 or greater.
 
-```
+Use the CLI to test that your newly published package works:
+
+```sh
 $ sui client call --gas-budget 10000000 \
-    --package '<EXAMPLE-PACKAGE>'       \
-    --module 'example'                  \
-    --function 'nudge'                  \
+    --package '<EXAMPLE-PACKAGE-ID>' \
+    --module 'example' \
+    --function 'nudge' \
+```
+
+A successful call responds with the following:
+
+```sh
 ----- Transaction Digest ----
 Bx1GA8EsBjoLKvXV2GG92DC5Jt58dbytf6jFcLg18dDR
 ----- Transaction Data ----
@@ -737,14 +759,11 @@ Array [
 ]
 ```
 
-Note that the Event produced contains a field `x` with value `41`.
+If you used the example package provided, notice you have an `Events` section that contains a field `x` with value `41`.
 
-Now we can prepare our `upgrade.js` script to perform an upgrade using
-our new policy.  It behaves identically to `publish.js` up until
-building the package, at which point it diverges.  When building the
-package, we also capture its `digest`, and the transaction now
-performs the three upgrade commands (authorize, execute, commit).  The
-full script for `upgrade.js` follows:
+### Upgrading a package with custom policy
+
+With your package published, you can prepare an `upgrade.js` script to perform an upgrade using the new policy. It behaves identically to `publish.js` up until building the package. When building the package, the script also captures its `digest`, and the transaction now performs the three upgrade commands (authorize, execute, commit). The full script for `upgrade.js` follows:
 
 ```js
 import { execSync } from 'child_process';
@@ -839,12 +858,15 @@ const result = await signer.signAndExecuteTransactionBlock({
 console.log(result)
 ```
 
-The next step, is to wait until next Tuesday, when your policy allows
-you to perform upgrades.  At that point, update your `example.move` so
-the event is emitted with a different constant and run the upgrade script:
+If today is not Tuesday, wait until next Tuesday to run the script, when your policy allows you to perform upgrades. At that point, update your `example.move` so the event is emitted with a different constant and use Node.js to run the upgrade script:
 
+```sh
+node upgrade.js
 ```
-$ node upgrade.js
+
+If the script is successful (and today is Tuesday), your console displays the following response:
+
+```sh
 INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING example
@@ -905,15 +927,18 @@ BUILDING example
 }
 ```
 
-And test the upgraded package on the CLI (Note that its Package ID
-will be **different** from the original version of your example
-package):
+Use the Sui Client CLI to test the upgraded package (the package ID is **different** from the original version of your example package):
 
-```
-$ sui client call --gas-budget 10000000    \
+```sh
+sui client call --gas-budget 10000000 \
     --package '<UPGRADED-EXAMPLE-PACKAGE>' \
-    --module 'example'                     \
-    --function 'nudge'                     \
+    --module 'example' \
+    --function 'nudge'
+```
+
+If successful, the console prints the following response:
+
+```sh
 ----- Transaction Digest ----
 EF2rQzWHmtjPvkqzFGyFvANA8e4ETULSBqDMkzqVoshi
 ----- Transaction Data ----
@@ -979,26 +1004,15 @@ Array [
 ]
 ```
 
-Now, the emitted Event's `x` field has value `42` (changed from the
-original `41`).
+Now, the `Events` section emitted for the `x` field has a value of `42` (changed from the original `41`).
 
-If you wait a further day, change the constant again, and re-run the
-script, you will receive an output similar to the following, which
-indicates that the upgrade aborted with code `2` (`EDayNotAllowed`):
+If you attempt the first upgrade before Tuesday or you change the constant again and try the upgrade the following day, the script receives a response that includes an error similar to the following, which indicates that the upgrade aborted with code `2` (`ENotAllowedDay`):
 
 ```
-$ node upgrade.js
-INCLUDING DEPENDENCY Sui
-INCLUDING DEPENDENCY MoveStdlib
-BUILDING example
-... [snip] ...
-  [cause]: {
-    effects: {
-      messageVersion: 'v1',
-      status: {
+...
+status: {
         status: 'failure',
         error: 'MoveAbort(MoveLocation { module: ModuleId { address: <POLICY-PACKAGE>, name: Identifier("day_of_week") }, function: 1, instruction: 11, function_name: Some("authorize_upgrade") }, 2) in command 0'
       },
-... [snip] ...
-}
+...
 ```

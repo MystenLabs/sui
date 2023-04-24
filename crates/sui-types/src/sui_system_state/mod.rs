@@ -174,6 +174,10 @@ pub trait SuiSystemStateTrait {
     fn safe_mode(&self) -> bool;
     fn advance_epoch_safe_mode(&mut self, params: &AdvanceEpochParams);
     fn get_current_epoch_committee(&self) -> CommitteeWithNetworkMetadata;
+    fn get_pending_active_validators<S: ObjectStore>(
+        &self,
+        object_store: &S,
+    ) -> Result<Vec<SuiValidatorSummary>, SuiError>;
     fn into_epoch_start_state(self) -> EpochStartSystemState;
     fn into_sui_system_state_summary(self) -> SuiSystemStateSummary;
 }
@@ -376,6 +380,29 @@ where
             version
         ))),
     }
+}
+
+pub fn get_validators_from_table_vec<S, ValidatorType>(
+    object_store: &S,
+    table_id: ObjectID,
+    table_size: u64,
+) -> Result<Vec<ValidatorType>, SuiError>
+where
+    S: ObjectStore,
+    ValidatorType: Serialize + DeserializeOwned,
+{
+    let mut validators = vec![];
+    for i in 0..table_size {
+        let validator: ValidatorType = get_dynamic_field_from_store(object_store, table_id, &i)
+            .map_err(|err| {
+                SuiError::SuiSystemStateReadError(format!(
+                    "Failed to load validator from table: {:?}",
+                    err
+                ))
+            })?;
+        validators.push(validator);
+    }
+    Ok(validators)
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Default)]

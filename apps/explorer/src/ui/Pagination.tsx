@@ -6,6 +6,7 @@ import {
     PaginationNext24,
     PaginationPrev24,
 } from '@mysten/icons';
+import { type UseInfiniteQueryResult } from '@tanstack/react-query';
 import { useState } from 'react';
 
 export interface PaginationProps {
@@ -55,6 +56,39 @@ export function useBoundedPaginationStack<Cursor = string>(
     };
 }
 
+export function useCursorPagination<T>(query: UseInfiniteQueryResult<T>) {
+    const [currentPage, setCurrentPage] = useState(0);
+
+    return {
+        ...query,
+        data: query.data?.pages[currentPage],
+        pagination: {
+            onFirst: () => setCurrentPage(0),
+            onNext: () => {
+                if (!query.data || query.isFetchingNextPage) {
+                    return;
+                }
+
+                // Make sure we are at the end before fetching another page
+                if (currentPage >= query.data.pages.length - 1) {
+                    query.fetchNextPage();
+                }
+
+                setCurrentPage(currentPage + 1);
+            },
+            onPrev: () => {
+                setCurrentPage(Math.max(currentPage - 1, 0));
+            },
+            hasNext:
+                !query.isFetchingNextPage &&
+                (currentPage < (query.data?.pages.length ?? 0) - 1 ||
+                    !!query.hasNextPage),
+            hasPrev: currentPage !== 0,
+        } satisfies PaginationProps,
+    };
+}
+
+/** @deprecated Prefer `useCursorPagination` + `useInfiniteQuery` for pagination. */
 export function usePaginationStack<Cursor = string>() {
     const [stack, setStack] = useState<Cursor[]>([]);
 

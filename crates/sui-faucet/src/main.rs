@@ -59,7 +59,6 @@ async fn main() -> Result<(), anyhow::Error> {
         max_request_per_second,
         wallet_client_timeout_secs,
         ref write_ahead_log,
-        wal_retry_interval,
         ..
     } = config;
 
@@ -107,14 +106,15 @@ async fn main() -> Result<(), anyhow::Error> {
                 .into_inner(),
         );
 
-    spawn_monitored_task!(async move {
-        info!("Starting task to clear WAL.");
-        loop {
-            // Every 300 seconds we try to clear the wal coins
-            tokio::time::sleep(Duration::from_secs(wal_retry_interval)).await;
-            app_state.faucet.retry_wal_coins().await.unwrap();
-        }
-    });
+    // TODO (jian):Investigate this issue later.
+    // spawn_monitored_task!(async move {
+    //     info!("Starting task to clear WAL.");
+    //     loop {
+    //         // Every 300 seconds we try to clear the wal coins
+    //         tokio::time::sleep(Duration::from_secs(wal_retry_interval)).await;
+    //         app_state.faucet.retry_wal_coins().await.unwrap();
+    //     }
+    // });
 
     let addr = SocketAddr::new(IpAddr::V4(host_ip), port);
     info!("listening on {}", addr);

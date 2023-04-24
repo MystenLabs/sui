@@ -9,7 +9,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use axum::{extract::Extension, http::StatusCode, routing::get, Router};
 use backoff::future::retry;
 use backoff::ExponentialBackoff;
@@ -88,7 +88,17 @@ const IMPLEMENTED_METHODS: [&str; 9] = [
 )]
 pub struct IndexerConfig {
     #[clap(long)]
-    pub db_url: String,
+    pub db_url: Option<String>,
+    #[clap(long)]
+    pub db_user_name: Option<String>,
+    #[clap(long)]
+    pub db_password: Option<String>,
+    #[clap(long)]
+    pub db_host: Option<String>,
+    #[clap(long)]
+    pub db_port: Option<u16>,
+    #[clap(long)]
+    pub db_name: Option<String>,
     #[clap(long)]
     pub rpc_client_url: String,
     #[clap(long, default_value = "0.0.0.0", global = true)]
@@ -114,27 +124,46 @@ pub struct IndexerConfig {
 
 impl IndexerConfig {
     /// returns connection url without the db name
-    pub fn base_connection_url(&self) -> String {
-        let url = Url::parse(&self.db_url).expect("Failed to parse URL");
-        format!(
+    pub fn base_connection_url(&self) -> Result<String, anyhow::Error> {
+        let url_str = self.get_db_url()?;
+        let url = Url::parse(&url_str).expect("Failed to parse URL");
+        Ok(format!(
             "{}://{}:{}@{}:{}/",
             url.scheme(),
             url.username(),
             url.password().unwrap_or_default(),
             url.host_str().unwrap_or_default(),
             url.port().unwrap_or_default()
-        )
+        ))
     }
 
     pub fn all_implemented_methods() -> Vec<String> {
         IMPLEMENTED_METHODS.iter().map(|&s| s.to_string()).collect()
+    }
+
+    pub fn get_db_url(&self) -> Result<String, anyhow::Error> {
+        match (&self.db_url, &self.db_user_name, &self.db_password, &self.db_host, &self.db_port, &self.db_name) {
+            (Some(db_url), _, _, _, _, _) => Ok(db_url.clone()),
+            (None, Some(db_user_name), Some(db_password), Some(db_host), Some(db_port), Some(db_name)) => {
+                Ok(format!(
+                    "postgres://{}:{}@{}:{}/{}",
+                    db_user_name, db_password, db_host, db_port, db_name
+                ))
+            }
+            _ => Err(anyhow!("Invalid db connection config, either db_url or (db_user_name, db_password, db_host, db_port, db_name) must be provided")),
+        }
     }
 }
 
 impl Default for IndexerConfig {
     fn default() -> Self {
         Self {
-            db_url: "postgres://postgres:postgres@localhost:5432/sui_indexer".to_string(),
+            db_url: Some("postgres://postgres:postgres@localhost:5432/sui_indexer".to_string()),
+            db_user_name: None,
+            db_password: None,
+            db_host: None,
+            db_port: None,
+            db_name: None,
             rpc_client_url: "http://127.0.0.1:9000".to_string(),
             client_metric_host: "0.0.0.0".to_string(),
             client_metric_port: 9184,

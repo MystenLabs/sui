@@ -42,7 +42,7 @@ use sui_types::messages_checkpoint::SignedCheckpointSummary;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
     CheckpointSignatureMessage, CheckpointSummary, CheckpointTimestamp, EndOfEpochData,
-    TrustedCheckpoint, VerifiedCheckpoint,
+    FullCheckpointContents, TrustedCheckpoint, VerifiedCheckpoint, VerifiedCheckpointContents,
 };
 use sui_types::signature::GenericSignature;
 use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
@@ -89,6 +89,11 @@ pub struct BuilderCheckpointSummary {
 pub struct CheckpointStore {
     /// Maps checkpoint contents digest to checkpoint contents
     checkpoint_content: DBMap<CheckpointContentsDigest, CheckpointContents>,
+
+    /// Stores entire checkpoint contents from state sync, indexed by sequence number, for
+    /// efficient reads of full checkpoints. Entries from this table are deleted after state
+    /// accumulation has completed.
+    full_checkpoint_content: DBMap<CheckpointSequenceNumber, FullCheckpointContents>,
 
     /// Stores certified checkpoints
     pub(crate) certified_checkpoints: DBMap<CheckpointSequenceNumber, TrustedCheckpoint>,
@@ -272,6 +277,13 @@ impl CheckpointStore {
         self.checkpoint_content.get(digest)
     }
 
+    pub fn get_full_checkpoint_contents_by_sequence_number(
+        &self,
+        seq: CheckpointSequenceNumber,
+    ) -> Result<Option<FullCheckpointContents>, TypedStoreError> {
+        self.full_checkpoint_content.get(&seq)
+    }
+
     pub fn insert_certified_checkpoint(
         &self,
         checkpoint: &VerifiedCheckpoint,
@@ -344,6 +356,25 @@ impl CheckpointStore {
         contents: CheckpointContents,
     ) -> Result<(), TypedStoreError> {
         self.checkpoint_content.insert(contents.digest(), &contents)
+    }
+
+    pub fn insert_verified_checkpoint_contents(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+        full_contents: VerifiedCheckpointContents,
+    ) -> Result<(), TypedStoreError> {
+        let full_contents = full_contents.into_inner();
+        self.full_checkpoint_content
+            .insert(checkpoint.sequence_number(), &full_contents)?;
+        let contents = full_contents.into_checkpoint_contents();
+        self.insert_checkpoint_contents(contents)
+    }
+
+    pub fn delete_full_checkpoint_contents(
+        &self,
+        seq: CheckpointSequenceNumber,
+    ) -> Result<(), TypedStoreError> {
+        self.full_checkpoint_content.remove(&seq)
     }
 
     pub fn get_epoch_last_checkpoint(
@@ -1325,7 +1356,7 @@ mod tests {
     use async_trait::async_trait;
     use std::collections::{BTreeMap, HashMap};
     use std::ops::Deref;
-    use sui_types::base_types::{ObjectID, SequenceNumber};
+    use sui_types::base_types::{ObjectID, SequenceNumber, TransactionEffectsDigest};
     use sui_types::crypto::Signature;
     use sui_types::messages::{GenesisObject, VerifiedTransaction};
     use sui_types::messages_checkpoint::SignedCheckpointSummary;
@@ -1515,6 +1546,20 @@ mod tests {
             Ok(digests
                 .into_iter()
                 .map(|d| self.get(&d).expect("effects not found").clone())
+                .collect())
+        }
+
+        async fn notify_read_executed_effects_digests(
+            &self,
+            digests: Vec<TransactionDigest>,
+        ) -> SuiResult<Vec<TransactionEffectsDigest>> {
+            Ok(digests
+                .into_iter()
+                .map(|d| {
+                    self.get(&d)
+                        .map(|fx| fx.digest())
+                        .expect("effects not found")
+                })
                 .collect())
         }
 

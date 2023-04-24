@@ -9,11 +9,11 @@ This topic describes how to integrate SUI, the token native to the Sui network, 
 The requirements to configure a SUI integration include:
  * A Sui Full node. You can operate your own Sui Full node or use a Full node from a node operator.
  * Suggested hardware requirements to run a Sui Full node:
-    * CPU: 10 core
-    * RAM: 32 GB
-    * Storage: 2 TB SSD
+    * CPU: 10 physical cores / 20 vCPUs
+    * RAM: 128 GB
+    * Storage (SSD): 2 TB NVMe drive
 
-We recommend running Sui Full nodes on Linux. Sui supports the Ubuntu and Debian distributions.
+For best results, run Sui Full nodes on Linux. Sui supports the Ubuntu and Debian distributions. You can also fun a Full node on macOS.
 
 ## Configure a Sui Full node
 

@@ -7,10 +7,11 @@ import { getObjectFields, getObjectType } from '@mysten/sui.js';
 import clsx from 'clsx';
 import { useState } from 'react';
 
+import { FieldItem } from './FieldItem';
+import { ScrollToViewCard } from './ScrollToViewCard';
+import { getFieldTypeValue } from './utils';
+
 import { ReactComponent as SearchIcon } from '~/assets/SVGIcons/24px/Search.svg';
-import { getFieldTypeValue } from '~/components/owned-objects/utils';
-import { FieldItem } from '~/components/owned-objects/views/FieldItem';
-import { ScrollToViewCard } from '~/components/owned-objects/views/ScrollToViewCard';
 import { Banner } from '~/ui/Banner';
 import { DisclosureBox } from '~/ui/DisclosureBox';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';

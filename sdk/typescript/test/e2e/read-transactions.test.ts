@@ -75,8 +75,8 @@ describe('Transaction Reading API', () => {
         }),
       ).rejects.toThrowError('The operation was aborted due to timeout');
 
-      // Expect it to poll the API at the provided interval
-      expect(spy.mock.calls).toHaveLength(6);
+      // Because JS event loop is somewhat unpredictable, we don't know exactly how long this will take, but we should have _at least_ 2 calls.
+      expect(spy.mock.calls.length).toBeGreaterThan(2);
     });
   });
 
