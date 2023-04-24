@@ -17,6 +17,7 @@ use move_core_types::{
 };
 use move_vm_runtime::{move_vm::MoveVM, session::Session};
 use move_vm_types::loaded_data::runtime_types::Type;
+use mysten_metrics::monitored_scope;
 use sui_move_natives::object_runtime::{max_event_error, ObjectRuntime, RuntimeResults};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
@@ -922,6 +923,8 @@ pub fn load_type<'state, S: StorageView>(
     session: &mut Session<'state, '_, LinkageView<'state, S>>,
     type_tag: &TypeTag,
 ) -> VMResult<Type> {
+    let _scope = monitored_scope("Execution::load_type");
+
     use move_binary_format::errors::PartialVMError;
     use move_core_types::vm_status::StatusCode;
 

@@ -806,9 +806,15 @@ impl AuthorityStore {
         transaction: &VerifiedTransaction,
         effects: &TransactionEffects,
     ) -> SuiResult {
+        let _scope = monitored_scope("Execution::update_state");
+
+        let read_scope = monitored_scope("Execution::update_state::read_locks");
         let _locks = self
             .acquire_read_locks_for_indirect_objects(&inner_temporary_store)
             .await;
+        drop(read_scope);
+
+        let write_scope = monitored_scope("Execution::update_state::write");
         // Extract the new state from the execution
         let mut write_batch = self.perpetual_tables.transactions.batch();
 
@@ -840,12 +846,15 @@ impl AuthorityStore {
 
         // Commit.
         write_batch.write()?;
+        drop(write_scope);
 
         // test crashing before notifying
         fail_point_async!("crash");
 
+        let notify_scope = monitored_scope("Execution::update_state::notify");
         self.executed_effects_notify_read
             .notify(transaction_digest, effects);
+        drop(notify_scope);
 
         Ok(())
     }
@@ -881,6 +890,8 @@ impl AuthorityStore {
         write_batch: &mut DBBatch,
         inner_temporary_store: InnerTemporaryStore,
     ) -> SuiResult {
+        let write_scope = monitored_scope("Execution::update_objects_and_locks");
+
         let InnerTemporaryStore {
             objects,
             mutable_inputs: active_inputs,

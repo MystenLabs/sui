@@ -15,6 +15,7 @@ use std::collections::BTreeSet;
 use std::time::Duration;
 
 use itertools::Itertools;
+use prometheus::Registry;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
@@ -564,4 +565,81 @@ async fn test_per_object_overload() {
         "{}",
         message
     );
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn test_execution_basic() {
+    telemetry_subscribers::init_for_testing();
+    mysten_metrics::init_metrics(&Registry::new());
+
+    // ---- Initialize a network with three accounts, each with 10 gas objects.
+
+    const NUM_ACCOUNTS: usize = 3;
+    let accounts: Vec<(_, AccountKeyPair)> =
+        (0..NUM_ACCOUNTS).map(|_| get_key_pair()).collect_vec();
+
+    const NUM_GAS_OBJECTS_PER_ACCOUNT: usize = 10;
+    let gas_objects = (0..NUM_ACCOUNTS)
+        .map(|i| {
+            (0..NUM_GAS_OBJECTS_PER_ACCOUNT)
+                .map(|_| Object::with_owner_for_testing(accounts[i].0))
+                .collect_vec()
+        })
+        .collect_vec();
+    let all_gas_objects = gas_objects.clone().into_iter().flatten().collect_vec();
+
+    let (aggregator, authorities, _genesis, package) =
+        init_local_authorities(4, all_gas_objects.clone()).await;
+    let authority_clients: Vec<_> = authorities
+        .iter()
+        .map(|a| &aggregator.authority_clients[&a.name])
+        .collect();
+    let rgp = authorities
+        .get(0)
+        .unwrap()
+        .reference_gas_price_for_testing()
+        .unwrap();
+
+    // ---- Create an owned object and a shared counter.
+
+    let mut executed_owned_certs = Vec::new();
+
+    // Initialize an object owned by 1st account.
+    let (addr1, key1): &(_, AccountKeyPair) = &accounts[0];
+    let gas_ref = get_latest_ref(authority_clients[0], gas_objects[0][0].id()).await;
+    let tx1 = create_object_move_transaction(*addr1, key1, *addr1, 100, package, gas_ref, rgp);
+    let (cert, effects1) =
+        execute_owned_on_first_three_authorities(&authority_clients, &aggregator.committee, &tx1)
+            .await;
+    let owned_object_ref = effects1.created()[0].0;
+    executed_owned_certs.push(cert);
+
+    let i = 0;
+    let source_index = i % NUM_ACCOUNTS;
+    let (source_addr, source_key) = &accounts[source_index];
+
+    let gas_ref = get_latest_ref(
+        authority_clients[source_index],
+        gas_objects[source_index][i * 3 % NUM_GAS_OBJECTS_PER_ACCOUNT].id(),
+    )
+    .await;
+    let (dest_addr, _) = &accounts[(i + 1) % NUM_ACCOUNTS];
+    let owned_tx = make_transfer_object_move_transaction(
+        *source_addr,
+        source_key,
+        *dest_addr,
+        owned_object_ref,
+        package,
+        gas_ref,
+        rgp,
+    );
+    let (cert, effects) = execute_owned_on_first_three_authorities(
+        &authority_clients,
+        &aggregator.committee,
+        &owned_tx,
+    )
+    .await;
+    executed_owned_certs.push(cert);
+
+    sleep(Duration::from_secs(1)).await;
 }

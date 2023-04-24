@@ -8,6 +8,7 @@ use move_binary_format::access::ModuleAccess;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_vm_runtime::move_vm::MoveVM;
+use mysten_metrics::monitored_scope;
 use sui_types::balance::{
     BALANCE_CREATE_REWARDS_FUNCTION_NAME, BALANCE_DESTROY_REBATES_FUNCTION_NAME,
     BALANCE_MODULE_NAME,
@@ -124,6 +125,7 @@ pub fn execute_transaction_to_effects_impl<
     #[cfg(debug_assertions)]
     let is_epoch_change = matches!(transaction_kind, TransactionKind::ChangeEpoch(_));
 
+    let exec_scope = monitored_scope("Execution::execute_transaction");
     let (gas_cost_summary, execution_result) = execute_transaction::<Mode, _>(
         &mut temporary_store,
         transaction_kind,
@@ -135,6 +137,7 @@ pub fn execute_transaction_to_effects_impl<
         metrics,
         enable_expensive_checks
     );
+    drop(exec_scope);
 
     let status = if let Err(error) = &execution_result {
         // Elaborate errors in logs if they are unexpected or their status is terse.
@@ -203,6 +206,7 @@ pub fn execute_transaction_to_effects_impl<
                 .unwrap()
         } // else, in dev inspect mode and anything goes--don't check
     }
+    let _scope = monitored_scope("Execution::create_effects");
     let (inner, effects) = temporary_store.to_effects(
         shared_object_refs,
         &transaction_digest,
