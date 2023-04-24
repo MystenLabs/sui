@@ -54,6 +54,7 @@ export function validatorsTableData(
                     ([address]) => address === validator.suiAddress
                 );
                 const isAtRisk = !!atRiskValidator;
+                const lastReward = event?.pool_staking_reward ?? null;
 
                 return {
                     name: {
@@ -67,7 +68,7 @@ export function validatorsTableData(
                     commission: Number(validator.commissionRate) / 100,
                     img: img,
                     address: validator.suiAddress,
-                    lastReward: Number(event?.pool_staking_reward) || 0,
+                    lastReward: lastReward ? Number(lastReward) : null,
                     atRisk: isAtRisk
                         ? VALIDATOR_LOW_STAKE_GRACE_PERIOD -
                           Number(atRiskValidator[1])
@@ -167,7 +168,7 @@ export function validatorsTableData(
                 accessorKey: 'lastReward',
                 cell: (props: any) => {
                     const lastReward = props.getValue();
-                    return lastReward > 0 ? (
+                    return lastReward >= 0 ? (
                         <StakeColumn stake={lastReward} />
                     ) : (
                         <Text variant="bodySmall/medium" color="steel-darker">
