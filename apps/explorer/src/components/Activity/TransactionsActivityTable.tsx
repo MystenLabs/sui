@@ -37,13 +37,18 @@ export function TransactionsActivityTable({
     );
 
     const transactions = useGetTransactionBlocks(undefined, limit);
-    const { data, isFetching, pagination, isLoading } =
+    const { data, isFetching, pagination, isLoading, isError } =
         useCursorPagination(transactions);
 
     const cardData = data ? genTableDataFromTxData(data.data) : undefined;
 
     return (
         <div data-testid="tx">
+            {isError && (
+                <div className="pt-2 font-sans font-semibold text-issue-dark">
+                    Failed to load Coins
+                </div>
+            )}
             <div className="flex flex-col space-y-5 text-left xl:pr-10">
                 {isLoading || isFetching || !cardData ? (
                     <PlaceholderTable
