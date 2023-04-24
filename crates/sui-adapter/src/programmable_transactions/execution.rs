@@ -32,11 +32,10 @@ use sui_types::{
         MoveObjectType, ObjectID, SuiAddress, TxContext, TxContextKind, RESOLVED_ASCII_STR,
         RESOLVED_STD_OPTION, RESOLVED_UTF8_STR, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
     },
-    coin::Coin,
     error::{ExecutionError, ExecutionErrorKind},
     event::Event,
     gas::{SuiGasStatus, SuiGasStatusAPI},
-    id::{RESOLVED_SUI_ID, UID},
+    id::RESOLVED_SUI_ID,
     messages::{
         Argument, Command, CommandArgumentError, PackageUpgradeError, ProgrammableMoveCall,
         ProgrammableTransaction,
@@ -211,7 +210,7 @@ fn execute_command<S: StorageView, Mode: ExecutionMode>(
         }
         Command::SplitCoins(coin_arg, amount_args) => {
             let mut obj: ObjectValue = context.borrow_arg_mut(0, coin_arg)?;
-            let ObjectContents::Coin(coin) = &mut obj.contents else {
+            let coin@ObjectContents::Coin(_) = &mut obj.contents else {
                 let e = ExecutionErrorKind::command_argument_error(
                     CommandArgumentError::TypeMismatch,
                     0,
@@ -225,7 +224,9 @@ fn execute_command<S: StorageView, Mode: ExecutionMode>(
                     let amount: u64 =
                         context.by_value_arg(CommandKind::SplitCoins, 1, amount_arg)?;
                     let new_coin_id = context.fresh_id()?;
-                    let new_coin = coin.split(amount, UID::new(new_coin_id))?;
+                    let new_coin = coin.split(amount, new_coin_id)?;
+                    // TODO: should we return an error here? what did coin.split do?
+                    //let new_coin = coin.split(amount, UID::new(new_coin_id))?;
                     let coin_type = obj.type_.clone();
                     // safe because we are propagating the coin type, and relying on the internal
                     // invariant that coin values have a coin type
@@ -238,7 +239,7 @@ fn execute_command<S: StorageView, Mode: ExecutionMode>(
         }
         Command::MergeCoins(target_arg, coin_args) => {
             let mut target: ObjectValue = context.borrow_arg_mut(0, target_arg)?;
-            let ObjectContents::Coin(target_coin) = &mut target.contents else {
+            let target_coin@ObjectContents::Coin(_) = &mut target.contents else {
                 let e = ExecutionErrorKind::command_argument_error(
                     CommandArgumentError::TypeMismatch,
                     0,
@@ -260,14 +261,8 @@ fn execute_command<S: StorageView, Mode: ExecutionMode>(
                     let msg = "Coins do not have the same type".to_owned();
                     return Err(ExecutionError::new_with_source(e, msg));
                 }
-                let ObjectContents::Coin(Coin { id, balance }) = coin.contents else {
-                    invariant_violation!(
-                        "Target coin was a coin, and we already checked for the same type. \
-                        This should be a coin"
-                    );
-                };
-                context.delete_id(*id.object_id())?;
-                target_coin.add(balance)?;
+                context.delete_id(coin.contents.id())?;
+                target_coin.add(coin.contents.balance())?;
             }
             context.restore_arg::<Mode>(
                 &mut argument_updates,
