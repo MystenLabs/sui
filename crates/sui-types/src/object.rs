@@ -193,8 +193,12 @@ impl MoveObject {
         // 32 bytes for object ID, 8 for balance
         debug_assert!(self.contents.len() == 40);
 
-        // unwrap safe because we checked that it is a coin
-        u64::from_le_bytes(<[u8; 8]>::try_from(&self.contents[ID_END_INDEX..]).unwrap())
+        // unwrap in callee safe because we checked that it is a coin
+        Self::bytes_get_coin_value_unsafe(&self.contents)
+    }
+
+    pub fn bytes_get_coin_value_unsafe(object_contents: &[u8]) -> u64 {
+        u64::from_le_bytes(<[u8; 8]>::try_from(&object_contents[ID_END_INDEX..]).unwrap())
     }
 
     /// Update the `value: u64` field of a `Coin<T>` type.
@@ -206,7 +210,45 @@ impl MoveObject {
         // 32 bytes for object ID, 8 for balance
         debug_assert!(self.contents.len() == 40);
 
-        self.contents.splice(ID_END_INDEX.., value.to_le_bytes());
+        Self::bytes_set_coin_value_unsafe(&mut self.contents, value)
+    }
+
+    pub fn bytes_set_coin_value_unsafe(object_contents: &mut Vec<u8>, value: u64) {
+        object_contents.splice(ID_END_INDEX.., value.to_le_bytes());
+    }
+
+    pub fn bytes_split_coin_unsafe(
+        object_contents: &mut Vec<u8>,
+        amount: u64,
+        new_coin_id: ObjectID,
+    ) -> Result<Vec<u8>, ExecutionError> {
+        let balance = Self::bytes_get_coin_value_unsafe(object_contents);
+        if let Some(new_balance) = balance.checked_sub(amount) {
+            Self::bytes_set_coin_value_unsafe(object_contents, new_balance);
+            let mut new_coin_bytes = new_coin_id.to_vec();
+            new_coin_bytes.extend(amount.to_le_bytes());
+            Ok(new_coin_bytes)
+        } else {
+            Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::InsufficientCoinBalance,
+                format!("balance: {} required: {}", balance, amount),
+            ))
+        }
+    }
+
+    pub fn bytes_add_coin_unsafe(
+        object_contents: &mut Vec<u8>,
+        amount: u64,
+    ) -> Result<(), ExecutionError> {
+        let balance = Self::bytes_get_coin_value_unsafe(object_contents);
+        if let Some(new_balance) = balance.checked_add(amount) {
+            Self::bytes_set_coin_value_unsafe(object_contents, new_balance);
+            Ok(())
+        } else {
+            Err(ExecutionError::from_kind(
+                ExecutionErrorKind::CoinBalanceOverflow,
+            ))
+        }
     }
 
     pub fn is_coin(&self) -> bool {
