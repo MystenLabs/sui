@@ -329,11 +329,11 @@ impl RocksDB {
         fail_point!("batch-write-before");
         let ret = match (self, batch) {
             (RocksDB::DBWithThreadMode(db), RocksDBBatch::Regular(batch)) => {
-                db.underlying.write(batch)?;
+                db.underlying.write_without_wal(batch)?;
                 Ok(())
             }
             (RocksDB::OptimisticTransactionDB(db), RocksDBBatch::Transactional(batch)) => {
-                db.underlying.write(batch)?;
+                db.underlying.write_without_wal(batch)?;
                 Ok(())
             }
             _ => Err(TypedStoreError::RocksDBError(
