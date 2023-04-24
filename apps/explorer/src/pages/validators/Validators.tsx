@@ -253,7 +253,7 @@ function ValidatorPageResult() {
     }, [rollingAverageApys]);
 
     const lastEpochRewardOnAllValidators = useMemo(() => {
-        if (!validatorEvents) return 0;
+        if (!validatorEvents) return null;
         let totalRewards = 0;
 
         validatorEvents.forEach(({ parsedJson }) => {
@@ -306,12 +306,15 @@ function ValidatorPageResult() {
                                     label="Last Epoch Rewards"
                                     tooltip="The stake rewards collected during the last epoch."
                                     unavailable={
-                                        lastEpochRewardOnAllValidators <= 0
+                                        lastEpochRewardOnAllValidators === null
                                     }
                                 >
                                     <DelegationAmount
                                         amount={
-                                            lastEpochRewardOnAllValidators || 0n
+                                            typeof lastEpochRewardOnAllValidators ===
+                                            'number'
+                                                ? lastEpochRewardOnAllValidators
+                                                : 0n
                                         }
                                         isStats
                                     />
