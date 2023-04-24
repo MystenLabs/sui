@@ -295,11 +295,13 @@ impl KeyToolCommand {
                     signing_algorithm: "ECDSA_SHA_256".to_string(),
                     ..Default::default()
                 };
-                // Sign the message
+                // Sign the message, normalize the signature and then compacts it
                 let response = kms.sign(request).await.unwrap();
                 let sig_bytes_der = response.signature.map(|b| b.to_vec()).unwrap_or_default();     
-                let sig = secpSig::from_der(&sig_bytes_der).unwrap();
+                let mut sig = secpSig::from_der(&sig_bytes_der).unwrap();
+                let _ = secpSig::normalize_s(&mut sig);
                 let sig_bytes = secpSig::serialize_compact(&sig);
+
 
                 //println!("Sig Bytes {:?}", sig_bytes);
                 //println!("Public Key Compact bytes {:?}", pkey_compact);
