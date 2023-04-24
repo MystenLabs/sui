@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ArrowRight12 } from '@mysten/icons';
 import {
     getPureSerializationType,
     getExecutionStatusType,
@@ -14,7 +15,6 @@ import { useMemo } from 'react';
 import { useWatch } from 'react-hook-form';
 import { z } from 'zod';
 
-import { ReactComponent as ArrowRight } from '../../../assets/SVGIcons/12px/ArrowRight.svg';
 import { FunctionExecutionResult } from './FunctionExecutionResult';
 import { useFunctionParamsDetails } from './useFunctionParamsDetails';
 import { useFunctionTypeArguments } from './useFunctionTypeArguments';
@@ -145,7 +145,7 @@ export function ModuleFunction({
                         connectText={
                             <>
                                 Connect Wallet
-                                <ArrowRight
+                                <ArrowRight12
                                     fill="currentColor"
                                     className="-rotate-45"
                                 />

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Combobox } from '@headlessui/react';
+import { Search24 } from '@mysten/icons';
 import clsx from 'clsx';
 import { useState, useCallback, useEffect } from 'react';
 import { type Direction } from 'react-resizable-panels';
@@ -9,7 +10,6 @@ import { type Direction } from 'react-resizable-panels';
 import ModuleView from './ModuleView';
 import { ModuleFunctionsInteraction } from './module-functions-interaction';
 
-import { ReactComponent as SearchIcon } from '~/assets/SVGIcons/24px/Search.svg';
 import { useBreakpoint } from '~/hooks/useBreakpoint';
 import { SplitPanes } from '~/ui/SplitPanes';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
@@ -173,7 +173,7 @@ function PkgModuleViewWrapper({ id, modules, splitPanelOrientation }: Props) {
                             className="border-none bg-inherit pr-2"
                             type="submit"
                         >
-                            <SearchIcon className="h-4.5 w-4.5 cursor-pointer fill-steel align-middle" />
+                            <Search24 className="h-4.5 w-4.5 cursor-pointer fill-steel align-middle text-gray-60" />
                         </button>
                     </div>
                     <Combobox.Options className="absolute left-0 z-10 flex h-fit max-h-verticalListLong w-full flex-col gap-1 overflow-auto rounded-md bg-white px-2 pb-5 pt-3 shadow-moduleOption md:left-auto md:w-1/6">
