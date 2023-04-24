@@ -271,7 +271,7 @@ pub async fn metadata(
         context
             .client
             .coin_read_api()
-            .select_coins(sender, None, total_amount.into(), None, vec![])
+            .select_coins(sender, None, total_amount.into(), vec![])
             .await
             .ok()
     } else {

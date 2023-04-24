@@ -2921,17 +2921,6 @@
           "digest": {
             "$ref": "#/components/schemas/ObjectDigest"
           },
-          "lockedUntilEpoch": {
-            "default": null,
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/BigInt_for_uint64"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "previousTransaction": {
             "$ref": "#/components/schemas/TransactionDigest"
           },
