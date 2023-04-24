@@ -239,8 +239,6 @@ impl KeyToolCommand {
                 intent
             } => {
                 // Currently only supports secp256k1 keys
-                // TODO generate "address" from KMS key id
-                //println!("Signer address: {}", address);
                 println!("Raw tx_bytes to execute: {}", data);
                 let intent = intent.unwrap_or_else(Intent::sui_transaction);
                 println!("Intent: {:?}", intent);
