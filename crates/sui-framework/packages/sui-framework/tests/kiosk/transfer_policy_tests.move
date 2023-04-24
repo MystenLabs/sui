@@ -19,6 +19,7 @@ module sui::transfer_policy_tests {
     use sui::object::{Self, ID, UID};
     use sui::dummy_policy;
     use sui::malicious_policy;
+    use sui::vec_set;
     use sui::package;
     use sui::coin;
 
@@ -44,8 +45,11 @@ module sui::transfer_policy_tests {
         let ctx = &mut ctx();
         let (policy, cap) = prepare(ctx);
 
+        assert!(vec_set::size(policy::rules(&policy)) == 0, 0);
         // now require everyone to pay any amount
         dummy_policy::set(&mut policy, &cap);
+
+        assert!(vec_set::size(policy::rules(&policy)) == 1, 1);
 
         let request = policy::new_request(fresh_id(ctx), 10_000, fresh_id(ctx));
 
@@ -55,6 +59,32 @@ module sui::transfer_policy_tests {
         let profits = wrapup(policy, cap, ctx);
 
         assert!(profits == 10_000, 0);
+    }
+
+    #[test]
+    /// Policy set and completed; rule removed; empty policy works
+    fun test_remove_rule_completed() {
+        let ctx = &mut ctx();
+        let (policy, cap) = prepare(ctx);
+
+        assert!(vec_set::size(policy::rules(&policy)) == 0, 0);
+
+        // now require everyone to pay any amount
+        dummy_policy::set(&mut policy, &cap);
+
+        assert!(vec_set::size(policy::rules(&policy)) == 1, 0);
+
+        let request = policy::new_request(fresh_id(ctx), 10_000, fresh_id(ctx));
+        dummy_policy::pay(&mut policy, &mut request, coin::mint_for_testing(10_000, ctx));
+        policy::confirm_request(&policy, request);
+
+        // remove policy and start over - this time ignore dummy_policy
+        policy::remove_rule<Asset, dummy_policy::Rule, dummy_policy::Config>(&mut policy, &cap);
+        let request = policy::new_request(fresh_id(ctx), 10_000, fresh_id(ctx));
+        policy::confirm_request(&policy, request);
+
+        assert!(vec_set::size(policy::rules(&policy)) == 0, 0);
+        assert!(wrapup(policy, cap, ctx) == 10_000, 0);
     }
 
     #[test]

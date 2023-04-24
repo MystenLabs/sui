@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "0.33.0"
+    "version": "0.34.0"
   },
   "methods": [
     {
@@ -2920,17 +2920,6 @@
           },
           "digest": {
             "$ref": "#/components/schemas/ObjectDigest"
-          },
-          "lockedUntilEpoch": {
-            "default": null,
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/BigInt_for_uint64"
-              },
-              {
-                "type": "null"
-              }
-            ]
           },
           "previousTransaction": {
             "$ref": "#/components/schemas/TransactionDigest"

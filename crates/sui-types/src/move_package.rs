@@ -12,7 +12,7 @@ use crate::{
 };
 use derive_more::Display;
 use fastcrypto::hash::HashFunction;
-use move_binary_format::file_format::{Ability, CompiledModule};
+use move_binary_format::file_format::CompiledModule;
 use move_binary_format::normalized;
 use move_binary_format::{
     access::ModuleAccess,
@@ -136,8 +136,8 @@ impl UpgradePolicy {
     }
 
     fn compatibility_check_for_protocol(protocol_config: &ProtocolConfig) -> Compatibility {
-        let disallowed_new_abilities = if protocol_config.disallow_adding_key_ability() {
-            AbilitySet::singleton(Ability::Key)
+        let disallowed_new_abilities = if protocol_config.disallow_adding_abilities_on_upgrade() {
+            AbilitySet::ALL
         } else {
             AbilitySet::EMPTY
         };

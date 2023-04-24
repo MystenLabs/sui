@@ -3,7 +3,7 @@
 
 import { GrowthBookProvider } from '@growthbook/growthbook-react';
 import { PostHogAnalyticsProvider, RpcClientContext } from '@mysten/core';
-import { QueryClientProvider } from '@tanstack/react-query';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { Fragment, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Provider } from 'react-redux';
@@ -12,7 +12,7 @@ import { HashRouter } from 'react-router-dom';
 import App from './app';
 import { SuiLedgerClientProvider } from './app/components/ledger/SuiLedgerClientProvider';
 import { growthbook } from './app/experimentation/feature-gating';
-import { queryClient } from './app/helpers/queryClient';
+import { persister, queryClient } from './app/helpers/queryClient';
 import { useAppSelector } from './app/hooks';
 import { ErrorBoundary } from '_components/error-boundary';
 import { initAppType } from '_redux/slices/app';
@@ -68,7 +68,10 @@ function AppWrapper() {
                          * making the API provider instance a reactive value and moving it out of the redux-thunk middleware
                          */}
                         <Fragment key={network}>
-                            <QueryClientProvider client={queryClient}>
+                            <PersistQueryClientProvider
+                                client={queryClient}
+                                persistOptions={{ persister }}
+                            >
                                 <RpcClientContext.Provider
                                     value={api.instance.fullNode}
                                 >
@@ -76,7 +79,7 @@ function AppWrapper() {
                                         <App />
                                     </ErrorBoundary>
                                 </RpcClientContext.Provider>
-                            </QueryClientProvider>
+                            </PersistQueryClientProvider>
                         </Fragment>
                     </SuiLedgerClientProvider>
                 </HashRouter>

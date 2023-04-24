@@ -131,6 +131,19 @@ pub struct StateSyncConfig {
     /// If unspecified, this will default to no limit.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub get_checkpoint_contents_rate_limit: Option<NonZeroU32>,
+
+    /// Per-peer inflight limit for the GetCheckpointContents RPC.
+    ///
+    /// If unspecified, this will default to no limit.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub get_checkpoint_contents_inflight_limit: Option<usize>,
+
+    /// Per-checkpoint inflight limit for the GetCheckpointContents RPC. This is enforced globally
+    /// across all peers.
+    ///
+    /// If unspecified, this will default to no limit.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub get_checkpoint_contents_per_checkpoint_limit: Option<usize>,
 }
 
 impl StateSyncConfig {

@@ -12,7 +12,7 @@ Compatibility { check_struct_and_pub_function_linking: true, check_struct_layout
 	upgrade->base: true
 ====
 ====
-Compatibility { check_struct_and_pub_function_linking: true, check_struct_layout: true, check_friend_linking: true, check_private_entry_linking: false, disallowed_new_abilities: [Key, ] }
+Compatibility { check_struct_and_pub_function_linking: true, check_struct_layout: true, check_friend_linking: true, check_private_entry_linking: false, disallowed_new_abilities: [Copy, Drop, Store, Key, ] }
 0000000000000000000000000000000000000000000000000000000000000000::base_module:
 	base->upgrade: false
 	upgrade->base: false
@@ -21,7 +21,7 @@ Compatibility { check_struct_and_pub_function_linking: true, check_struct_layout
 	upgrade->base: true
 ====
 ====
-Compatibility { check_struct_and_pub_function_linking: true, check_struct_layout: true, check_friend_linking: false, check_private_entry_linking: false, disallowed_new_abilities: [Key, ] }
+Compatibility { check_struct_and_pub_function_linking: true, check_struct_layout: true, check_friend_linking: false, check_private_entry_linking: false, disallowed_new_abilities: [Copy, Drop, Store, Key, ] }
 0000000000000000000000000000000000000000000000000000000000000000::base_module:
 	base->upgrade: true
 	upgrade->base: true
@@ -30,7 +30,7 @@ Compatibility { check_struct_and_pub_function_linking: true, check_struct_layout
 	upgrade->base: true
 ====
 ====
-Compatibility { check_struct_and_pub_function_linking: true, check_struct_layout: true, check_friend_linking: false, check_private_entry_linking: true, disallowed_new_abilities: [Key, ] }
+Compatibility { check_struct_and_pub_function_linking: true, check_struct_layout: true, check_friend_linking: false, check_private_entry_linking: true, disallowed_new_abilities: [Copy, Drop, Store, Key, ] }
 0000000000000000000000000000000000000000000000000000000000000000::base_module:
 	base->upgrade: false
 	upgrade->base: true

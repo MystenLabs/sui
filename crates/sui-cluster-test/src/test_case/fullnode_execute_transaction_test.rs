@@ -56,7 +56,7 @@ impl TestCaseImpl for FullNodeExecuteTransactionTest {
         let txn_digest = *txn.digest();
 
         let response = fullnode
-            .quorum_driver()
+            .quorum_driver_api()
             .execute_transaction_block(
                 txn,
                 SuiTransactionBlockResponseOptions::new().with_effects(),
@@ -83,7 +83,7 @@ impl TestCaseImpl for FullNodeExecuteTransactionTest {
         let txn_digest = *txn.digest();
 
         let response = fullnode
-            .quorum_driver()
+            .quorum_driver_api()
             .execute_transaction_block(
                 txn,
                 SuiTransactionBlockResponseOptions::new().with_effects(),

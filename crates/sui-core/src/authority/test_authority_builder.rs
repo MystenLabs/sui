@@ -20,17 +20,20 @@ use sui_config::node::{
 use sui_config::transaction_deny_config::TransactionDenyConfig;
 use sui_config::NetworkConfig;
 use sui_macros::nondeterministic;
-use sui_protocol_config::SupportedProtocolVersions;
+use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_storage::IndexStore;
 use sui_types::base_types::{AuthorityName, ObjectID};
 use sui_types::crypto::AuthorityKeyPair;
 use sui_types::messages::{VerifiedExecutableTransaction, VerifiedTransaction};
+use sui_types::sui_system_state::SuiSystemStateTrait;
 
 #[derive(Default)]
 pub struct TestAuthorityBuilder<'a> {
     store_base_path: Option<PathBuf>,
     store: Option<Arc<AuthorityStore>>,
     transaction_deny_config: Option<TransactionDenyConfig>,
+    protocol_config: Option<ProtocolConfig>,
+    reference_gas_price: Option<u64>,
     node_keypair: Option<&'a AuthorityKeyPair>,
     genesis: Option<&'a Genesis>,
 }
@@ -55,12 +58,32 @@ impl<'a> TestAuthorityBuilder<'a> {
         self
     }
 
+    pub fn with_protocol_config(mut self, config: ProtocolConfig) -> Self {
+        assert!(self.protocol_config.replace(config).is_none());
+        self
+    }
+
+    pub fn with_reference_gas_price(mut self, reference_gas_price: u64) -> Self {
+        // If genesis is already set then setting rgp is meaningless since it will be overwritten.
+        assert!(self.genesis.is_none());
+        assert!(self
+            .reference_gas_price
+            .replace(reference_gas_price)
+            .is_none());
+        self
+    }
+
     pub fn with_genesis_and_keypair(
         mut self,
         genesis: &'a Genesis,
         keypair: &'a AuthorityKeyPair,
     ) -> Self {
         assert!(self.genesis.replace(genesis).is_none());
+        assert!(self.node_keypair.replace(keypair).is_none());
+        self
+    }
+
+    pub fn with_keypair(mut self, keypair: &'a AuthorityKeyPair) -> Self {
         assert!(self.node_keypair.replace(keypair).is_none());
         self
     }
@@ -75,7 +98,10 @@ impl<'a> TestAuthorityBuilder<'a> {
     }
 
     pub async fn build(self) -> Arc<AuthorityState> {
-        let local_network_config = sui_config::builder::ConfigBuilder::new_with_temp_dir().build();
+        let local_network_config = sui_config::builder::ConfigBuilder::new_with_temp_dir()
+            // TODO: change the default to 1000 instead after fixing tests.
+            .with_reference_gas_price(self.reference_gas_price.unwrap_or(1))
+            .build();
         let genesis = &self.genesis.unwrap_or(&local_network_config.genesis);
         let genesis_committee = genesis.committee().unwrap();
         let path = self.store_base_path.unwrap_or_else(|| {
@@ -108,13 +134,21 @@ impl<'a> TestAuthorityBuilder<'a> {
         let registry = Registry::new();
         let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
         let signature_verifier_metrics = SignatureVerifierMetrics::new(&registry);
+        if self.protocol_config.is_some() {
+            let config = self.protocol_config.unwrap();
+            let _guard = ProtocolConfig::apply_overrides_for_testing(move |_, _| config.clone());
+        }
+        let epoch_start_configuration = EpochStartConfiguration::new(
+            genesis.sui_system_object().into_epoch_start_state(),
+            *genesis.checkpoint().digest(),
+        );
         let epoch_store = AuthorityPerEpochStore::new(
             name,
             Arc::new(genesis_committee.clone()),
             &path.join("store"),
             None,
             EpochMetrics::new(&registry),
-            EpochStartConfiguration::new_for_testing(),
+            epoch_start_configuration,
             authority_store.clone(),
             cache_metrics,
             signature_verifier_metrics,

@@ -10,7 +10,7 @@ feature_flags:
   missing_type_is_compatibility_error: true
   scoring_decision_with_validity_cutoff: true
   consensus_order_end_of_epoch_last: true
-  disallow_adding_key_ability: true
+  disallow_adding_abilities_on_upgrade: true
   disable_invariant_violation_check_in_swap_loc: true
   advance_to_highest_supported_protocol_version: true
 max_tx_size_bytes: 131072

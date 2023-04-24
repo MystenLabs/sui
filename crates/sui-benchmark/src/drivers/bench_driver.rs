@@ -312,7 +312,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
         for (i, worker) in bench_workers.into_iter().enumerate() {
             let cloned_token = self.token.clone();
             let request_delay_micros = 1_000_000 / worker.target_qps;
-            let mut free_pool = worker.payload;
+            let mut free_pool: VecDeque<_> = worker.payload.into_iter().collect();
             let progress_cloned = progress.clone();
             let tx_cloned = tx.clone();
             let cloned_barrier = barrier.clone();
@@ -418,7 +418,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                             if free_pool.is_empty() {
                                 num_no_gas += 1;
                             } else {
-                                let mut payload = free_pool.pop().unwrap();
+                                let mut payload = free_pool.pop_front().unwrap();
                                 num_in_flight += 1;
                                 num_submitted += 1;
                                 metrics_cloned.num_in_flight.with_label_values(&[&payload.to_string()]).inc();
@@ -477,7 +477,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                     num_success_cmds += num_commands as u64;
                                     num_in_flight -= 1;
                                     total_gas_used += gas_used;
-                                    free_pool.push(payload);
+                                    free_pool.push_back(payload);
                                     latency_histogram.saturating_record(latency.as_millis().try_into().unwrap());
                                     BenchDriver::update_progress(*start_time, run_duration, total_gas_used, progress_cloned.clone());
                                     if progress_cloned.is_finished() {

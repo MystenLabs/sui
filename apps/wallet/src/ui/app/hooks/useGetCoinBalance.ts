@@ -15,7 +15,7 @@ export function useGetCoinBalance(
     const rpc = useRpcClient();
     const refetchInterval = useFeatureValue(
         FEATURES.WALLET_BALANCE_REFETCH_INTERVAL,
-        8_000
+        20_000
     );
 
     return useQuery(
@@ -24,6 +24,9 @@ export function useGetCoinBalance(
         {
             enabled: !!address && !!coinType,
             refetchInterval,
+            refetchOnMount: true,
+            // NOTE: We lower the stale time here so that balances are more often refetched on page load.
+            staleTime: 5_000,
         }
     );
 }
