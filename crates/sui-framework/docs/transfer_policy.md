@@ -44,6 +44,7 @@ of the type at once.
 -  [Function `remove_rule`](#0x2_transfer_policy_remove_rule)
 -  [Function `uid`](#0x2_transfer_policy_uid)
 -  [Function `uid_mut_as_owner`](#0x2_transfer_policy_uid_mut_as_owner)
+-  [Function `rules`](#0x2_transfer_policy_rules)
 -  [Function `item`](#0x2_transfer_policy_item)
 -  [Function `paid`](#0x2_transfer_policy_paid)
 -  [Function `from`](#0x2_transfer_policy_from)
@@ -732,6 +733,31 @@ to the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">Tra
 ): &<b>mut</b> UID {
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.policy_id, <a href="transfer_policy.md#0x2_transfer_policy_ENotOwner">ENotOwner</a>);
     &<b>mut</b> self.id
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_transfer_policy_rules"></a>
+
+## Function `rules`
+
+Read the <code>rules</code> field from the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_rules">rules</a>&lt;T&gt;(self: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;): &<a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<a href="_TypeName">type_name::TypeName</a>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_rules">rules</a>&lt;T&gt;(self: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;): &VecSet&lt;TypeName&gt; {
+    &self.rules
 }
 </code></pre>
 

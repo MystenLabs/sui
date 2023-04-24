@@ -40,6 +40,7 @@ be used to implement application-specific transfer rules.
 -  [Struct `Listing`](#0x2_kiosk_Listing)
 -  [Struct `Lock`](#0x2_kiosk_Lock)
 -  [Struct `ItemListed`](#0x2_kiosk_ItemListed)
+-  [Struct `ItemPurchased`](#0x2_kiosk_ItemPurchased)
 -  [Constants](#@Constants_0)
 -  [Function `new`](#0x2_kiosk_new)
 -  [Function `close_and_withdraw`](#0x2_kiosk_close_and_withdraw)
@@ -376,6 +377,54 @@ type-indexed which allows for searching for offers of a specific <code>T</code>
 
 
 <pre><code><b>struct</b> <a href="kiosk.md#0x2_kiosk_ItemListed">ItemListed</a>&lt;T: store, key&gt; <b>has</b> <b>copy</b>, drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code><a href="kiosk.md#0x2_kiosk">kiosk</a>: <a href="object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>id: <a href="object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>price: u64</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x2_kiosk_ItemPurchased"></a>
+
+## Struct `ItemPurchased`
+
+Emitted when an item was purchased from the <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code>. Can be used
+to track finalized sales across the network. The event is emitted
+in both cases: when an item is purchased via the <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code> or
+when it's purchased directly (via <code>list</code> + <code>purchase</code>).
+
+The <code>price</code> is also emitted and might differ from the <code>price</code> set
+in the <code><a href="kiosk.md#0x2_kiosk_ItemListed">ItemListed</a></code> event. This is because the <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code> only
+sets a minimum price for the item, and the actual price is defined
+by the trading module / extension.
+
+
+<pre><code><b>struct</b> <a href="kiosk.md#0x2_kiosk_ItemPurchased">ItemPurchased</a>&lt;T: store, key&gt; <b>has</b> <b>copy</b>, drop
 </code></pre>
 
 
@@ -863,6 +912,8 @@ finalized.
     <b>assert</b>!(price == <a href="coin.md#0x2_coin_value">coin::value</a>(&payment), <a href="kiosk.md#0x2_kiosk_EIncorrectAmount">EIncorrectAmount</a>);
     <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> self.profits, <a href="coin.md#0x2_coin_into_balance">coin::into_balance</a>(payment));
     df::remove_if_exists&lt;<a href="kiosk.md#0x2_kiosk_Lock">Lock</a>, bool&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Lock">Lock</a> { id });
+
+    <a href="event.md#0x2_event_emit">event::emit</a>(<a href="kiosk.md#0x2_kiosk_ItemPurchased">ItemPurchased</a>&lt;T&gt; { <a href="kiosk.md#0x2_kiosk">kiosk</a>: <a href="object.md#0x2_object_id">object::id</a>(self), id, price });
 
     (inner, <a href="transfer_policy.md#0x2_transfer_policy_new_request">transfer_policy::new_request</a>(id, price, <a href="object.md#0x2_object_id">object::id</a>(self)))
 }
