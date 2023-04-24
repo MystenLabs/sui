@@ -112,14 +112,9 @@ export function CheckpointsActivityTable({
                         onFirst={() => setCurrentPage(0)}
                     />
                 ) : (
-                    disablePagination && (
-                        <Link
-                            to="/recent?tab=checkpoints"
-                            after={<ArrowRight12 />}
-                        >
-                            More Checkpoints
-                        </Link>
-                    )
+                    <Link to="/recent?tab=checkpoints" after={<ArrowRight12 />}>
+                        More Checkpoints
+                    </Link>
                 )}
 
                 <div className="flex items-center space-x-3">
