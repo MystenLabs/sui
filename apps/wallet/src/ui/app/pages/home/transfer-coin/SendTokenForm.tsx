@@ -65,14 +65,8 @@ export function SendTokenForm({
         activeAddress!
     );
 
-    const suiCoins = suiCoinsData?.filter(
-        ({ lockedUntilEpoch }) => !lockedUntilEpoch
-    );
-
-    // filter out locked lockedUntilEpoch
-    const coins = coinsData?.filter(
-        ({ lockedUntilEpoch }) => !lockedUntilEpoch
-    );
+    const suiCoins = suiCoinsData;
+    const coins = coinsData;
     const coinBalance = CoinAPI.totalBalance(coins || []);
 
     const coinSymbol = (coinType && CoinAPI.getCoinSymbol(coinType)) || '';
