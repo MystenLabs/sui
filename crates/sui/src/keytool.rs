@@ -3,7 +3,7 @@
 use anyhow::anyhow;
 use bip32::DerivationPath;
 use clap::*;
-use fastcrypto::encoding::{decode_bytes_hex, Base64, Encoding};
+use fastcrypto::encoding::{decode_bytes_hex, Base64, Encoding, Hex};
 use fastcrypto::hash::HashFunction;
 use fastcrypto::traits::KeyPair;
 use shared_crypto::intent::{Intent, IntentMessage};
@@ -116,6 +116,30 @@ pub enum KeyToolCommand {
         weights: Vec<WeightUnit>,
         #[clap(long)]
         threshold: ThresholdUnit,
+    },
+
+    Base64ToHex {
+        base64: String,
+    },
+
+    HexToBase64 {
+        hex: String,
+    },
+
+    HexToBytes {
+        hex: String,
+    },
+
+    BytesToHex {
+        bytes: Vec<u8>,
+    },
+
+    Base64ToBytes {
+        base64: String,
+    },
+
+    BytesToBase64 {
+        bytes: Vec<u8>,
     },
 }
 
@@ -233,6 +257,42 @@ impl KeyToolCommand {
                     .map_err(|e| anyhow!("Invalid base64 key: {:?}", e))?;
                 let address = SuiAddress::from(&pk);
                 println!("Address {:?}", address);
+            }
+
+            KeyToolCommand::Base64ToHex { base64 } => {
+                let bytes =
+                    Base64::decode(&base64).map_err(|e| anyhow!("Invalid base64 key: {:?}", e))?;
+                let hex = Hex::from_bytes(&bytes);
+                println!("Hex {:?}", hex);
+            }
+
+            KeyToolCommand::HexToBase64 { hex } => {
+                let bytes =
+                    Hex::decode(&hex).map_err(|e| anyhow!("Invalid base64 key: {:?}", e))?;
+                let base64 = Base64::from_bytes(&bytes);
+                println!("Base64 {:?}", base64);
+            }
+
+            KeyToolCommand::HexToBytes { hex } => {
+                let bytes =
+                    Hex::decode(&hex).map_err(|e| anyhow!("Invalid base64 key: {:?}", e))?;
+                println!("Bytes {:?}", bytes);
+            }
+
+            KeyToolCommand::BytesToHex { bytes } => {
+                let hex = Hex::from_bytes(&bytes);
+                println!("Hex {:?}", hex);
+            }
+
+            KeyToolCommand::Base64ToBytes { base64 } => {
+                let bytes =
+                    Base64::decode(&base64).map_err(|e| anyhow!("Invalid base64 key: {:?}", e))?;
+                println!("Bytes {:?}", bytes);
+            }
+
+            KeyToolCommand::BytesToBase64 { bytes } => {
+                let base64 = Base64::from_bytes(&bytes);
+                println!("Base64 {:?}", base64);
             }
 
             KeyToolCommand::LoadKeypair { file } => {
