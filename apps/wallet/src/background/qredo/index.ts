@@ -29,11 +29,12 @@ export async function requestUserApproval(
         apiUrl,
         origin,
     });
-    if (existingPendingRequest?.token === token) {
+    if (existingPendingRequest) {
         const qredoConnectUrl = qredoConnectPageUrl(existingPendingRequest.id);
         const changes: Parameters<typeof updatePendingRequest>['1'] = {
             messageID: message.id,
             append: true,
+            token: token,
         };
         if (
             !(await Tabs.highlight({

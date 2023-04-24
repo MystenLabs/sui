@@ -86,7 +86,12 @@ export async function createPendingRequest(
 
 export async function updatePendingRequest(
     id: string,
-    change: { windowID?: number; messageID?: string; append?: boolean }
+    change: {
+        windowID?: number;
+        messageID?: string;
+        append?: boolean;
+        token?: string;
+    }
 ) {
     const request = await getPendingRequest(id);
     if (!request) {
@@ -101,6 +106,9 @@ export async function updatePendingRequest(
         } else {
             request.messageIDs = [change.messageID];
         }
+    }
+    if (change.token) {
+        request.token = change.token;
     }
     await storePendingRequest(request);
 }
