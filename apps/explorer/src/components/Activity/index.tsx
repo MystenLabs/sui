@@ -4,12 +4,8 @@
 import { useState } from 'react';
 // import toast from 'react-hot-toast';
 
-<<<<<<< HEAD
-import { Transactions } from '../transactions';
 import { CheckpointsActivityTable } from './CheckpointsActivityTable';
-=======
 import { TransactionsActivityTable } from './TransactionsActivityTable';
->>>>>>> main
 
 import { EpochsTable } from '~/pages/epochs/EpochsTable';
 // import { PlayPause } from '~/ui/PlayPause';
