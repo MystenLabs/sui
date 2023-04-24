@@ -17,7 +17,7 @@ use sui_types::{
     storage::ReadStore,
     storage::WriteStore,
 };
-use tokio::sync::{mpsc, Semaphore};
+use tokio::sync::{mpsc, OwnedSemaphorePermit, Semaphore};
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum GetCheckpointSummaryRequest {
@@ -189,7 +189,7 @@ where
                     .or_insert_with(|| Arc::new(Semaphore::new(max_inflight_per_checkpoint)));
                 semaphore_entry.value().clone()
             };
-            let _permit = semaphore.try_acquire().map_err(|e| match e {
+            let permit = semaphore.try_acquire_owned().map_err(|e| match e {
                 tokio::sync::TryAcquireError::Closed => {
                     anemo::rpc::Status::new(StatusCode::InternalServerError)
                 }
@@ -197,7 +197,13 @@ where
                     anemo::rpc::Status::new(StatusCode::TooManyRequests)
                 }
             })?;
-            inner.call(req).await
+
+            struct SemaphoreExtension(OwnedSemaphorePermit);
+            inner.call(req).await.map(move |mut response| {
+                // Insert permit as extension so it's not dropped until the response is sent.
+                response.extensions_mut().insert(SemaphoreExtension(permit));
+                response
+            })
         };
         Box::pin(fut)
     }
