@@ -5,12 +5,12 @@ import { getObjectDisplay, type SuiObjectData } from '@mysten/sui.js';
 import { Link } from 'react-router-dom';
 
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
+import { PageContainer, PageContent } from '_app/shared/PageContainer';
 import Alert from '_components/alert';
 import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
 import { NFTDisplayCard } from '_components/nft-display';
 import { useObjectsOwnedByAddress } from '_hooks';
-import PageTitle from '_src/ui/app/shared/PageTitle';
 
 function NftsPage() {
     const accountAddress = useActiveAddress();
@@ -23,8 +23,7 @@ function NftsPage() {
         .map(({ data }) => data as SuiObjectData);
 
     return (
-        <div className="flex flex-col flex-nowrap h-full overflow-x-visible">
-            <PageTitle title="NFTs" />
+        <PageContainer title="NFTs">
             <Loading loading={isLoading}>
                 {isError ? (
                     <Alert>
@@ -35,8 +34,8 @@ function NftsPage() {
                     </Alert>
                 ) : null}
                 {nfts?.length ? (
-                    <div className="mt-5 flex-grow overflow-y-auto">
-                        <div className="grid w-full grid-cols-2 gap-x-3.5 gap-y-4 h-full">
+                    <PageContent>
+                        <div className="grid w-full grid-cols-2 gap-x-3.5 gap-y-4">
                             {nfts.map(({ objectId }) => (
                                 <Link
                                     to={`/nft-details?${new URLSearchParams({
@@ -57,14 +56,14 @@ function NftsPage() {
                                 </Link>
                             ))}
                         </div>
-                    </div>
+                    </PageContent>
                 ) : (
                     <div className="flex flex-1 items-center self-center text-caption font-semibold text-steel-darker">
                         No NFTs found
                     </div>
                 )}
             </Loading>
-        </div>
+        </PageContainer>
     );
 }
 

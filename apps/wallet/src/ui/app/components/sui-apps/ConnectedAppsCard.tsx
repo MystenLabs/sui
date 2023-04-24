@@ -10,7 +10,7 @@ import { permissionsSelectors } from '../../redux/slices/permissions';
 import Loading from '../loading';
 import { type DAppEntry, SuiApp } from './SuiApp';
 import { SuiAppEmpty } from './SuiAppEmpty';
-import { Heading } from '_app/shared/heading';
+import { PageContainer, PageContent } from '_app/shared/PageContainer';
 import { Text } from '_app/shared/text';
 import { useAppSelector } from '_hooks';
 import { FEATURES } from '_src/shared/experimentation/features';
@@ -75,36 +75,35 @@ function ConnectedDapps() {
         [allPermissions, ecosystemApps]
     );
     return (
-        <Loading loading={loading}>
-            <div className="flex justify-center">
-                <Heading variant="heading6" color="gray-90" weight="semibold">
-                    Active Connections
-                </Heading>
-            </div>
-            <div className="my-4">
-                <Text variant="pBodySmall" color="gray-80" weight="normal">
-                    Apps you have connected to through the Sui Wallet in this
-                    browser.
-                </Text>
-            </div>
+        <PageContainer title="Active Connections">
+            <Loading loading={loading}>
+                <div className="mt-4">
+                    <Text variant="pBodySmall" color="gray-80" weight="normal">
+                        Apps you have connected to through the Sui Wallet in
+                        this browser.
+                    </Text>
+                </div>
 
-            <div className={cl(st.apps, st.appCards)}>
-                {connectedApps.length ? (
-                    connectedApps.map((app) => (
-                        <SuiApp
-                            key={app.permissionID}
-                            {...app}
-                            displayType="card"
-                        />
-                    ))
-                ) : (
-                    <>
-                        <SuiAppEmpty displayType="card" />
-                        <SuiAppEmpty displayType="card" />
-                    </>
-                )}
-            </div>
-        </Loading>
+                <PageContent>
+                    <div className={cl(st.apps, st.appCards)}>
+                        {connectedApps.length ? (
+                            connectedApps.map((app) => (
+                                <SuiApp
+                                    key={app.permissionID}
+                                    {...app}
+                                    displayType="card"
+                                />
+                            ))
+                        ) : (
+                            <>
+                                <SuiAppEmpty displayType="card" />
+                                <SuiAppEmpty displayType="card" />
+                            </>
+                        )}
+                    </div>
+                </PageContent>
+            </Loading>
+        </PageContainer>
     );
 }
 

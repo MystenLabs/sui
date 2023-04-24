@@ -10,7 +10,7 @@ import { permissionsSelectors } from '../../redux/slices/permissions';
 import { SuiApp, type DAppEntry } from './SuiApp';
 import { SuiAppEmpty } from './SuiAppEmpty';
 import { Button } from '_app/shared/ButtonUI';
-import PageTitle from '_app/shared/PageTitle';
+import { PageContainer, PageContent } from '_app/shared/PageContainer';
 import { Text } from '_app/shared/text';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import { useAppSelector } from '_hooks';
@@ -23,6 +23,7 @@ import st from './Playground.module.scss';
 function AppsPlayGround() {
     const ecosystemApps =
         useFeature<DAppEntry[]>(FEATURES.WALLET_DAPPS).value ?? [];
+
     const allPermissions = useAppSelector(permissionsSelectors.selectAll);
     const linkToPermissionID = useMemo(() => {
         const map = new Map<string, string>();
@@ -42,10 +43,8 @@ function AppsPlayGround() {
         useActiveAddress: true,
     });
     return (
-        <div className="flex flex-col flex-nowrap h-full overflow-x-visible">
-            <PageTitle title="Playground" />
-
-            <div className="mt-5 flex-grow overflow-y-auto">
+        <PageContainer title="Playground">
+            <PageContent>
                 <div className="mb-4 overflow-y-auto">
                     <Button
                         variant="outline"
@@ -92,8 +91,8 @@ function AppsPlayGround() {
                 ) : (
                     <SuiAppEmpty displayType="full" />
                 )}
-            </div>
-        </div>
+            </PageContent>
+        </PageContainer>
     );
 }
 
