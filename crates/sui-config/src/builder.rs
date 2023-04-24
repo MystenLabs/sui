@@ -5,7 +5,7 @@ use crate::genesis::{TokenAllocation, TokenDistributionScheduleBuilder};
 use crate::genesis_config::AccountConfig;
 use crate::node::{
     default_enable_index_processing, default_end_of_epoch_broadcast_channel_capacity,
-    AuthorityKeyPairWithPath, DBCheckpointConfig, KeyPairWithPath,
+    AuthorityKeyPairWithPath, DBCheckpointConfig, KeyPairWithPath, DEFAULT_VALIDATOR_GAS_PRICE,
 };
 use crate::{
     genesis,
@@ -73,6 +73,7 @@ pub struct ConfigBuilder<R = OsRng> {
     randomize_ports: bool,
     committee: Option<CommitteeConfig>,
     genesis_config: Option<GenesisConfig>,
+    reference_gas_price: Option<u64>,
     additional_objects: Vec<Object>,
     with_swarm: bool,
     validator_ip_sel: ValidatorIpSelection,
@@ -90,6 +91,7 @@ impl ConfigBuilder {
             randomize_ports: true,
             committee: Some(CommitteeConfig::Size(NonZeroUsize::new(1).unwrap())),
             genesis_config: None,
+            reference_gas_price: None,
             additional_objects: vec![],
             with_swarm: false,
             // Set a sensible default here so that most tests can run with or without the
@@ -143,6 +145,11 @@ impl<R> ConfigBuilder<R> {
     pub fn with_genesis_config(mut self, genesis_config: GenesisConfig) -> Self {
         assert!(self.genesis_config.is_none(), "Genesis config already set");
         self.genesis_config = Some(genesis_config);
+        self
+    }
+
+    pub fn with_reference_gas_price(mut self, reference_gas_price: u64) -> Self {
+        self.reference_gas_price = Some(reference_gas_price);
         self
     }
 
@@ -200,6 +207,7 @@ impl<R> ConfigBuilder<R> {
             randomize_ports: self.randomize_ports,
             committee: self.committee,
             genesis_config: self.genesis_config,
+            reference_gas_price: self.reference_gas_price,
             additional_objects: self.additional_objects,
             with_swarm: self.with_swarm,
             validator_ip_sel: self.validator_ip_sel,
@@ -237,6 +245,8 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                 worker_key_pair,
                 account_key_pair.into(),
                 network_key_pair,
+                self.reference_gas_price
+                    .unwrap_or(DEFAULT_VALIDATOR_GAS_PRICE),
             )
         };
 
@@ -283,6 +293,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
         worker_key_pair: NetworkKeyPair,
         account_key_pair: SuiKeyPair,
         network_key_pair: NetworkKeyPair,
+        gas_price: u64,
     ) -> ValidatorConfigInfo {
         match self.validator_ip_sel {
             ValidatorIpSelection::Localhost => ValidatorConfigInfo {
@@ -291,6 +302,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     worker_key_pair,
                     account_key_pair,
                     network_key_pair,
+                    gas_price,
                 ),
                 consensus_address: utils::new_tcp_network_address(),
                 consensus_internal_worker_address: None,
@@ -317,6 +329,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                         None,
                         ip.clone(),
                         index,
+                        gas_price,
                     ),
                     consensus_address: make_tcp_addr(4000 + index as u16),
                     consensus_internal_worker_address: None,
