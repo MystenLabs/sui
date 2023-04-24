@@ -8910,6 +8910,7 @@ dependencies = [
  "move-package",
  "move-vm-runtime",
  "move-vm-types",
+ "mysten-metrics",
  "serde 1.0.152",
  "sui-macros",
  "sui-move-natives",

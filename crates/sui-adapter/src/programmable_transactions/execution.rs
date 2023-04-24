@@ -24,6 +24,7 @@ use move_vm_runtime::{
     session::{LoadedFunctionInstantiation, SerializedReturnValues},
 };
 use move_vm_types::loaded_data::runtime_types::{StructType, Type};
+use mysten_metrics::monitored_scope;
 use serde::{de::DeserializeSeed, Deserialize};
 use sui_move_natives::object_runtime::ObjectRuntime;
 use sui_protocol_config::ProtocolConfig;
@@ -69,7 +70,9 @@ pub fn execute<S: StorageView, Mode: ExecutionMode>(
     gas_coin: Option<ObjectID>,
     pt: ProgrammableTransaction,
 ) -> Result<Mode::ExecutionResults, ExecutionError> {
+    let exec_scope = monitored_scope("Execution::ProgrammableTransaction::execute");
     let ProgrammableTransaction { inputs, commands } = pt;
+    let ctx_scope = monitored_scope("Execution::ProgrammableTransaction::new_ctx");
     let mut context = ExecutionContext::new(
         protocol_config,
         metrics,
@@ -80,18 +83,23 @@ pub fn execute<S: StorageView, Mode: ExecutionMode>(
         gas_coin,
         inputs,
     )?;
+    drop(ctx_scope);
     // execute commands
     let mut mode_results = Mode::empty_results();
     for (idx, command) in commands.into_iter().enumerate() {
+        let scope_0 = monitored_scope("Execution::ProgrammableTransaction::execute_command");
         if let Err(err) = execute_command::<_, Mode>(&mut context, &mut mode_results, command) {
-                let object_runtime: &ObjectRuntime = context.session.get_native_extensions().get();
-                // We still need to record the loaded child objects for replay
-                let loaded_child_objects = object_runtime.loaded_child_objects();
-                drop(context);
-                state_view.save_loaded_child_objects(loaded_child_objects);
-                return Err(err.with_command_index(idx));
+            drop(scope_0);
+            let _scope_1 = monitored_scope("Execution::ProgrammableTransaction::error");
+            let object_runtime: &ObjectRuntime = context.session.get_native_extensions().get();
+            // We still need to record the loaded child objects for replay
+            let loaded_child_objects = object_runtime.loaded_child_objects();
+            drop(context);
+            state_view.save_loaded_child_objects(loaded_child_objects);
+            return Err(err.with_command_index(idx));
         };
     }
+    drop(exec_scope);
 
     // Save loaded objects table in case we fail in post execution
     let object_runtime: &ObjectRuntime = context.session.get_native_extensions().get();

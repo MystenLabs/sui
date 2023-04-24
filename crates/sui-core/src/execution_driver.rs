@@ -43,6 +43,8 @@ pub async fn execution_process(
 
     // Loop whenever there is a signal that a new transactions is ready to process.
     loop {
+        let _scope = monitored_scope("ExecutionDriver::loop");
+
         let certificate;
         let expected_effects_digest;
         tokio::select! {
@@ -82,11 +84,14 @@ pub async fn execution_process(
         let limit = limit.clone();
         // hold semaphore permit until task completes. unwrap ok because we never close
         // the semaphore in this context.
-        let permit = limit.acquire_owned().await.unwrap();
+        let permit = {
+            let _scope = monitored_scope("ExecutionDriver::acquire_semaphore");
+            limit.acquire_owned().await.unwrap()
+        };
 
         // Certificate execution can take significant time, so run it in a separate task.
         spawn_monitored_task!(async move {
-            let _scope = monitored_scope("ExecutionDriver");
+            let _scope = monitored_scope("ExecutionDriver::task");
             let _guard = permit;
             if let Ok(true) = authority.is_tx_already_executed(&digest) {
                 return;

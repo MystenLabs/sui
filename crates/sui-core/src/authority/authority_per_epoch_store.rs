@@ -603,6 +603,7 @@ impl AuthorityPerEpochStore {
         cert_sig: Option<&AuthorityStrongQuorumSignInfo>,
         effects_signature: Option<&AuthoritySignInfo>,
     ) -> SuiResult {
+        let _scope = monitored_scope("Execution::insert_tx_cert_and_effects_signature");
         let mut batch = self.tables.effects_signatures.batch();
         if let Some(cert_sig) = cert_sig {
             batch.insert_batch(
