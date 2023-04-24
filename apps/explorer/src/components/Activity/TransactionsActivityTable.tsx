@@ -46,7 +46,7 @@ export function TransactionsActivityTable({
         <div data-testid="tx">
             {isError && (
                 <div className="pt-2 font-sans font-semibold text-issue-dark">
-                    Failed to load Coins
+                    Failed to load Transactions
                 </div>
             )}
             <div className="flex flex-col space-y-5 text-left xl:pr-10">
