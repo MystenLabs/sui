@@ -7,7 +7,7 @@ One of the main features of the Move programming language used to program Sui sm
 A package might depend on another package _directly_ or _indirectly_ (also called _transitively_). A direct dependency is specified in the "user" package's [manifest](./move/manifest.md) file and its version is directly controlled by the developer of the "user" package. Clearly these directly dependent packages might have dependencies of their own, and these dependencies become indirect dependencies of the "user" package if they are not also specified in the "user" package's manifest file.
 
 
-As long as all versions of all (directly or indirectly) dependent packages are the same, no further action on the side of the "user" package's developer is required. Unfortunately, this is not always the case. Consider the following example of the `user` package directly depending on two "library" packages: `vault` and `currency` (these are not real packages and their addresses do not work). The (simplified) manifest file of the `user` package would then resemble the following:
+As long as all versions of all (directly or indirectly) dependent packages are the same, no further action on the side of the "user" package's developer is required. Unfortunately, this is not always the case. Consider the following example of the `user` package directly depending on two "library" packages: `vault` and `currency` (these are not real packages and their URLs do not exist). The (simplified) manifest file of the `user` package would then resemble the following:
 
 ```move
 [package]
