@@ -4,12 +4,12 @@
 import {
     useGetRollingAverageApys,
     formatPercentageDisplay,
+    calculateStakeShare,
 } from '@mysten/core';
 import { ArrowRight16 } from '@mysten/icons';
 import cl from 'classnames';
 import { useState, useMemo } from 'react';
 
-import { calculateStakeShare } from '../calculateStakeShare';
 import { useSystemState } from '../useSystemState';
 import { ValidatorListItem } from './ValidatorListItem';
 import { Button } from '_app/shared/ButtonUI';

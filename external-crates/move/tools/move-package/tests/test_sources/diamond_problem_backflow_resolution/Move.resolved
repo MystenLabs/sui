@@ -51,6 +51,7 @@ ResolvedGraph {
                 ),
                 version: None,
                 resolver: None,
+                overridden_path: false,
             },
             "B": Package {
                 kind: Local(
@@ -58,6 +59,7 @@ ResolvedGraph {
                 ),
                 version: None,
                 resolver: None,
+                overridden_path: false,
             },
             "C": Package {
                 kind: Local(
@@ -65,6 +67,7 @@ ResolvedGraph {
                 ),
                 version: None,
                 resolver: None,
+                overridden_path: false,
             },
         },
         always_deps: {
@@ -123,6 +126,7 @@ ResolvedGraph {
                             ),
                             version: None,
                             digest: None,
+                            dep_override: false,
                         },
                     ),
                 },
@@ -171,6 +175,7 @@ ResolvedGraph {
                             ),
                             version: None,
                             digest: None,
+                            dep_override: false,
                         },
                     ),
                 },
@@ -238,17 +243,18 @@ ResolvedGraph {
                     "A": Internal(
                         InternalDependency {
                             kind: Local(
-                                "./deps_only/A",
+                                "deps_only/A",
                             ),
                             subst: None,
                             version: None,
                             digest: None,
+                            dep_override: false,
                         },
                     ),
                     "B": Internal(
                         InternalDependency {
                             kind: Local(
-                                "./deps_only/B",
+                                "deps_only/B",
                             ),
                             subst: Some(
                                 {
@@ -259,6 +265,7 @@ ResolvedGraph {
                             ),
                             version: None,
                             digest: None,
+                            dep_override: false,
                         },
                     ),
                 },

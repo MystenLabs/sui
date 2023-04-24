@@ -10,10 +10,11 @@ use move_binary_format::{
     },
     CompiledModule,
 };
+use move_bytecode_utils::format_signature_token;
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::IdentStr};
 use sui_types::{error::ExecutionError, SUI_FRAMEWORK_ADDRESS};
 
-use crate::{format_signature_token, verification_failure, TEST_SCENARIO_MODULE_NAME};
+use crate::{verification_failure, TEST_SCENARIO_MODULE_NAME};
 
 pub const TRANSFER_MODULE: &IdentStr = ident_str!("transfer");
 pub const EVENT_MODULE: &IdentStr = ident_str!("event");

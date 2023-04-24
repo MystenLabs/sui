@@ -14,6 +14,7 @@ use sui_types::balance::{
 };
 use sui_types::base_types::ObjectID;
 use sui_types::gas_coin::GAS;
+use sui_types::metrics::LimitsMetrics;
 use sui_types::object::OBJECT_START_VERSION;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use tracing::{info, instrument, trace, warn};
@@ -31,8 +32,11 @@ use sui_types::messages::{
     ProgrammableTransaction, TransactionKind,
 };
 use sui_types::storage::{ChildObjectResolver, ObjectStore, ParentSync, WriteKind};
+#[cfg(msim)]
+use sui_types::sui_system_state::advance_epoch_result_injection::maybe_modify_result;
 use sui_types::sui_system_state::{AdvanceEpochParams, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME};
 use sui_types::temporary_store::InnerTemporaryStore;
+use sui_types::temporary_store::TemporaryStore;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
     gas::SuiGasStatus,
@@ -46,11 +50,6 @@ use sui_types::{
     is_system_package, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
     SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
-
-use sui_types::temporary_store::TemporaryStore;
-
-#[cfg(msim)]
-use self::advance_epoch_result_injection::maybe_modify_result;
 
 checked_arithmetic! {
 
@@ -70,6 +69,7 @@ pub fn execute_transaction_to_effects<
     gas_status: SuiGasStatus,
     epoch_data: &EpochData,
     protocol_config: &ProtocolConfig,
+    metrics: Arc<LimitsMetrics>,
     enable_expensive_checks: bool
 ) -> (
     InnerTemporaryStore,
@@ -90,6 +90,7 @@ pub fn execute_transaction_to_effects<
         &epoch_data.epoch_id(),
         epoch_data.epoch_start_timestamp(),
         protocol_config,
+        metrics,
         enable_expensive_checks
     )
 }
@@ -111,6 +112,7 @@ pub fn execute_transaction_to_effects_impl<
     epoch_id: &EpochId,
     epoch_timestamp_ms: u64,
     protocol_config: &ProtocolConfig,
+    metrics: Arc<LimitsMetrics>,
     enable_expensive_checks: bool
 ) -> (
     InnerTemporaryStore,
@@ -130,6 +132,7 @@ pub fn execute_transaction_to_effects_impl<
         move_vm,
         gas_status,
         protocol_config,
+        metrics,
         enable_expensive_checks
     );
 
@@ -239,6 +242,7 @@ fn execute_transaction<
     move_vm: &Arc<MoveVM>,
     mut gas_status: SuiGasStatus,
     protocol_config: &ProtocolConfig,
+    metrics: Arc<LimitsMetrics>,
     enable_expensive_checks: bool
 ) -> (
     GasCostSummary,
@@ -271,6 +275,7 @@ fn execute_transaction<
             move_vm,
             &mut gas_status,
             protocol_config,
+            metrics.clone(),
         );
 
         let effects_estimated_size = temporary_store.estimate_effects_size_upperbound();
@@ -282,11 +287,11 @@ fn execute_transaction<
             !gas_status.is_unmetered(),
             effects_estimated_size,
             protocol_config.max_serialized_tx_effects_size_bytes(),
-            protocol_config.max_serialized_tx_effects_size_bytes_system_tx()
+            protocol_config.max_serialized_tx_effects_size_bytes_system_tx(),
+            metrics.excessive_estimated_effects_size
         ) {
             LimitThresholdCrossed::None => (),
             LimitThresholdCrossed::Soft(_, limit) => {
-                /* TODO: add more alerting */
                 warn!(
                     effects_estimated_size = effects_estimated_size,
                     soft_limit = limit,
@@ -315,11 +320,11 @@ fn execute_transaction<
                     !gas_status.is_unmetered(),
                     written_objects_size,
                     normal_lim,
-                    system_lim
+                    system_lim,
+                    metrics.excessive_written_objects_size
                 ) {
                     LimitThresholdCrossed::None => (),
                     LimitThresholdCrossed::Soft(_, limit) => {
-                        /* TODO: add more alerting */
                         warn!(
                             written_objects_size = written_objects_size,
                             soft_limit = limit,
@@ -406,6 +411,7 @@ fn execution_loop<
     move_vm: &Arc<MoveVM>,
     gas_status: &mut SuiGasStatus,
     protocol_config: &ProtocolConfig,
+    metrics: Arc<LimitsMetrics>,
 ) -> Result<Mode::ExecutionResults, ExecutionError> {
     match transaction_kind {
         TransactionKind::ChangeEpoch(change_epoch) => {
@@ -416,6 +422,7 @@ fn execution_loop<
                 move_vm,
                 gas_status,
                 protocol_config,
+                metrics,
             )?;
             Ok(Mode::empty_results())
         }
@@ -447,12 +454,14 @@ fn execution_loop<
                 move_vm,
                 gas_status,
                 protocol_config,
+                metrics,
             ).expect("ConsensusCommitPrologue cannot fail");
             Ok(Mode::empty_results())
         }
         TransactionKind::ProgrammableTransaction(pt) => {
             programmable_transactions::execution::execute::<_, Mode>(
                 protocol_config,
+                metrics,
                 move_vm,
                 temporary_store,
                 tx_ctx,
@@ -622,6 +631,7 @@ fn advance_epoch<S: ObjectStore + BackingPackageStore + ParentSync + ChildObject
     move_vm: &Arc<MoveVM>,
     gas_status: &mut SuiGasStatus,
     protocol_config: &ProtocolConfig,
+    metrics: Arc<LimitsMetrics>,
 ) -> Result<(), ExecutionError> {
     let params = AdvanceEpochParams {
         epoch: change_epoch.epoch,
@@ -637,6 +647,7 @@ fn advance_epoch<S: ObjectStore + BackingPackageStore + ParentSync + ChildObject
     let advance_epoch_pt = construct_advance_epoch_pt(&params)?;
     let result = programmable_transactions::execution::execute::<_, execution_mode::System>(
         protocol_config,
+        metrics.clone(),
         move_vm,
         temporary_store,
         tx_ctx,
@@ -666,6 +677,7 @@ fn advance_epoch<S: ObjectStore + BackingPackageStore + ParentSync + ChildObject
                 construct_advance_epoch_safe_mode_pt(&params, protocol_config)?;
             programmable_transactions::execution::execute::<_, execution_mode::System>(
                 protocol_config,
+                metrics.clone(),
                 move_vm,
                 temporary_store,
                 tx_ctx,
@@ -696,6 +708,7 @@ fn advance_epoch<S: ObjectStore + BackingPackageStore + ParentSync + ChildObject
 
             programmable_transactions::execution::execute::<_, execution_mode::System>(
                 protocol_config,
+                metrics.clone(),
                 move_vm,
                 temporary_store,
                 tx_ctx,
@@ -741,6 +754,7 @@ fn setup_consensus_commit<S: BackingPackageStore + ParentSync + ChildObjectResol
     move_vm: &Arc<MoveVM>,
     gas_status: &mut SuiGasStatus,
     protocol_config: &ProtocolConfig,
+    metrics: Arc<LimitsMetrics>,
 ) -> Result<(), ExecutionError> {
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
@@ -766,6 +780,7 @@ fn setup_consensus_commit<S: BackingPackageStore + ParentSync + ChildObjectResol
     };
     programmable_transactions::execution::execute::<_, execution_mode::System>(
         protocol_config,
+        metrics,
         move_vm,
         temporary_store,
         tx_ctx,
@@ -775,31 +790,4 @@ fn setup_consensus_commit<S: BackingPackageStore + ParentSync + ChildObjectResol
     )
 }
 
-}
-
-#[cfg(msim)]
-pub mod advance_epoch_result_injection {
-    use std::cell::RefCell;
-    use sui_types::error::{ExecutionError, ExecutionErrorKind};
-
-    thread_local! {
-        static OVERRIDE: RefCell<bool>  = RefCell::new(false);
-    }
-
-    pub fn set_override(value: bool) {
-        OVERRIDE.with(|o| *o.borrow_mut() = value);
-    }
-
-    /// This function is used to modify the result of advance_epoch transaction for testing.
-    /// If the override is set, the result will be an execution error, otherwise the original result will be returned.
-    pub fn maybe_modify_result(result: Result<(), ExecutionError>) -> Result<(), ExecutionError> {
-        if OVERRIDE.with(|o| *o.borrow()) {
-            Err::<(), ExecutionError>(ExecutionError::new(
-                ExecutionErrorKind::FunctionNotFound,
-                None,
-            ))
-        } else {
-            result
-        }
-    }
 }

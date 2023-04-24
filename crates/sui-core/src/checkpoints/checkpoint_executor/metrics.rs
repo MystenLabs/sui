@@ -11,6 +11,7 @@ use std::sync::Arc;
 pub struct CheckpointExecutorMetrics {
     pub checkpoint_exec_sync_tps: IntGauge,
     pub last_executed_checkpoint: IntGauge,
+    pub last_executed_checkpoint_timestamp_ms: IntGauge,
     pub checkpoint_exec_errors: IntCounter,
     pub checkpoint_exec_epoch: IntGauge,
     pub checkpoint_exec_inflight: IntGauge,
@@ -33,6 +34,12 @@ impl CheckpointExecutorMetrics {
             last_executed_checkpoint: register_int_gauge_with_registry!(
                 "last_executed_checkpoint",
                 "Last executed checkpoint",
+                registry
+            )
+            .unwrap(),
+            last_executed_checkpoint_timestamp_ms: register_int_gauge_with_registry!(
+                "last_executed_checkpoint_timestamp_ms",
+                "Last executed checkpoint timestamp ms",
                 registry
             )
             .unwrap(),

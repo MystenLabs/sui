@@ -521,6 +521,10 @@ impl CompiledPackage {
             error: error_message.join("\n"),
         })
     }
+
+    pub fn published_dependency_ids(&self) -> Vec<ObjectID> {
+        self.dependency_ids.published.values().cloned().collect()
+    }
 }
 
 impl Default for BuildConfig {

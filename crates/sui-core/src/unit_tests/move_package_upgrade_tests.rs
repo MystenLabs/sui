@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_core_types::{account_address::AccountAddress, ident_str, language_storage::StructTag};
-use move_symbol_pool::Symbol;
+use move_core_types::{ident_str, language_storage::StructTag};
 use sui_move_build::BuildConfig;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
@@ -20,17 +19,13 @@ use sui_types::{
     MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID,
 };
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    path::PathBuf,
-    str::FromStr,
-    sync::Arc,
-};
+use std::{collections::BTreeSet, path::PathBuf, str::FromStr, sync::Arc};
 
+use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::{
-    authority_tests::{execute_programmable_transaction, init_state},
-    move_integration_tests::build_and_publish_test_package_with_upgrade_cap,
-    AuthorityState,
+    authority_test_utils::build_test_modules_with_dep_addr,
+    authority_tests::execute_programmable_transaction,
+    move_integration_tests::build_and_publish_test_package_with_upgrade_cap, AuthorityState,
 };
 
 macro_rules! move_call {
@@ -61,40 +56,10 @@ pub fn build_upgrade_test_modules_with_dep_addr(
     dep_original_addresses: impl IntoIterator<Item = (&'static str, ObjectID)>,
     dep_ids: impl IntoIterator<Item = (&'static str, ObjectID)>,
 ) -> (Vec<u8>, Vec<Vec<u8>>, Vec<ObjectID>) {
-    let mut build_config = BuildConfig::new_for_testing();
-    for (addr_name, obj_id) in dep_original_addresses {
-        build_config
-            .config
-            .additional_named_addresses
-            .insert(addr_name.to_string(), AccountAddress::from(obj_id));
-    }
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["src", "unit_tests", "data", "move_upgrade", test_dir]);
-    let mut package = build_config.build(path).unwrap();
-
-    let dep_id_mapping: BTreeMap<_, _> = dep_ids
-        .into_iter()
-        .map(|(dep_name, obj_id)| (Symbol::from(dep_name), obj_id))
-        .collect();
-
-    assert_eq!(
-        dep_id_mapping.len(),
-        package.dependency_ids.unpublished.len()
-    );
-    for unpublished_dep in &package.dependency_ids.unpublished {
-        let published_id = dep_id_mapping.get(unpublished_dep).unwrap();
-        // Make sure we aren't overriding a package
-        assert!(package
-            .dependency_ids
-            .published
-            .insert(*unpublished_dep, *published_id)
-            .is_none())
-    }
-
-    // No unpublished deps
+    let package = build_test_modules_with_dep_addr(path, dep_original_addresses, dep_ids);
     let with_unpublished_deps = false;
-    package.dependency_ids.unpublished = BTreeSet::new();
-
     (
         package.get_package_digest(with_unpublished_deps).to_vec(),
         package.get_package_bytes(with_unpublished_deps),
@@ -149,7 +114,7 @@ impl UpgradeStateRunner {
         let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
         let gas_object_id = ObjectID::random();
         let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
-        let authority_state = init_state().await;
+        let authority_state = TestAuthorityBuilder::new().build().await;
         authority_state.insert_genesis_object(gas_object).await;
 
         let (package, upgrade_cap) = build_and_publish_test_package_with_upgrade_cap(

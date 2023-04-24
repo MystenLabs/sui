@@ -81,6 +81,14 @@ impl ReadStore for RocksDbStore {
             })
     }
 
+    fn get_full_checkpoint_contents_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> Result<Option<FullCheckpointContents>, Self::Error> {
+        self.checkpoint_store
+            .get_full_checkpoint_contents_by_sequence_number(sequence_number)
+    }
+
     fn get_full_checkpoint_contents(
         &self,
         digest: &CheckpointContentsDigest,
@@ -143,12 +151,13 @@ impl WriteStore for RocksDbStore {
 
     fn insert_checkpoint_contents(
         &self,
+        checkpoint: &VerifiedCheckpoint,
         contents: VerifiedCheckpointContents,
     ) -> Result<(), Self::Error> {
         self.authority_store
             .multi_insert_transaction_and_effects(contents.iter())?;
         self.checkpoint_store
-            .insert_checkpoint_contents(contents.into_inner().into_checkpoint_contents())
+            .insert_verified_checkpoint_contents(checkpoint, contents)
     }
 
     fn insert_committee(&self, new_committee: Committee) -> Result<(), Self::Error> {

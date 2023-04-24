@@ -6,8 +6,8 @@ import { useParams } from 'react-router-dom';
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import { TransactionsForAddress } from '../../components/transactions/TransactionsForAddress';
 
-import OwnedCoins from '~/components/OwnedCoins/OwnedCoins';
-import OwnedObjects from '~/components/OwnedObjectsV2/OwnedObjects';
+import { OwnedCoins } from '~/components/OwnedCoins';
+import { OwnedObjects } from '~/components/OwnedObjects';
 import { Heading } from '~/ui/Heading';
 import { PageHeader } from '~/ui/PageHeader';
 
@@ -24,9 +24,14 @@ function AddressResult() {
                     </Heading>
                 </div>
                 <ErrorBoundary>
-                    <div className="grid w-full grid-cols-1 divide-x-0 divide-gray-45 md:grid-cols-2 md:divide-x">
-                        <OwnedCoins id={addressID!} />
-                        <OwnedObjects id={addressID!} />
+                    <div className="flex flex-col gap-10 md:flex-row">
+                        <div className="flex-1 overflow-hidden">
+                            <OwnedCoins id={addressID!} />
+                        </div>
+                        <div className="hidden w-px bg-gray-45 md:block" />
+                        <div className="flex-1 overflow-hidden">
+                            <OwnedObjects id={addressID!} />
+                        </div>
                     </div>
                 </ErrorBoundary>
             </div>

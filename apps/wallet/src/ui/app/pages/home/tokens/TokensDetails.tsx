@@ -46,7 +46,7 @@ function MyTokens() {
                     <Text variant="caption" color="steel" weight="semibold">
                         MY COINS
                     </Text>
-                    <div className="flex flex-col w-full justify-center divide-y divide-solid divide-steel/20 divide-x-0">
+                    <div className="flex flex-col w-full justify-center divide-y divide-solid divide-steel/20 divide-x-0 px-1.5">
                         {balance.map(({ coinType, totalBalance }) => (
                             <CoinBalance
                                 type={coinType}
@@ -59,7 +59,7 @@ function MyTokens() {
             ) : null}
             {noSuiToken ? (
                 <div className="flex flex-col flex-nowrap justify-center items-center gap-2 text-center mt-6 px-2.5">
-                    <FaucetRequestButton trackEventSource="home" />
+                    <FaucetRequestButton />
                     <Text variant="pBodySmall" color="gray-80" weight="normal">
                         To conduct transactions on the Sui network, you need SUI
                         in your wallet.
@@ -126,7 +126,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                             </div>
                         </Alert>
                     ) : null}
-                    <div className="flex flex-nowrap gap-2 justify-center w-full mt-5">
+                    <div className="flex flex-nowrap gap-3 justify-center w-full mt-5">
                         <IconLink
                             icon={SuiIcons.Buy}
                             to="/"
@@ -157,7 +157,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                         <div className="mt-6 flex justify-start gap-2 flex-col w-full">
                             <Text
                                 variant="caption"
-                                color="steel-darker"
+                                color="steel"
                                 weight="semibold"
                             >
                                 SUI Stake

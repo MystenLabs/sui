@@ -416,6 +416,7 @@ impl From<AdapterExecuteArgs> for VMConfig {
     fn from(arg: AdapterExecuteArgs) -> VMConfig {
         VMConfig {
             paranoid_type_checks: arg.check_runtime_types,
+            enable_invariant_violation_check_in_swap_loc: false,
             ..Default::default()
         }
     }

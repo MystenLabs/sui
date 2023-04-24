@@ -9,7 +9,7 @@ use crate::authority_client::{
 use crate::safe_client::{SafeClient, SafeClientMetrics, SafeClientMetricsBase};
 use fastcrypto::encoding::Encoding;
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
-use mysten_metrics::monitored_future;
+use mysten_metrics::{monitored_future, GaugeGuard};
 use mysten_network::config::Config;
 use std::convert::AsRef;
 use sui_config::genesis::Genesis;
@@ -36,8 +36,8 @@ use thiserror::Error;
 use tracing::{debug, error, info, trace, warn, Instrument};
 
 use prometheus::{
-    register_int_counter_vec_with_registry, register_int_counter_with_registry, IntCounter,
-    IntCounterVec, Registry,
+    register_int_counter_vec_with_registry, register_int_counter_with_registry,
+    register_int_gauge_with_registry, IntCounter, IntCounterVec, IntGauge, Registry,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::string::ToString;
@@ -103,6 +103,10 @@ pub struct AuthAggMetrics {
     pub total_client_double_spend_attempts_detected: IntCounter,
     pub total_aggregated_err: IntCounterVec,
     pub total_rpc_err: IntCounterVec,
+    pub inflight_transactions: IntGauge,
+    pub inflight_certificates: IntGauge,
+    pub inflight_transaction_requests: IntGauge,
+    pub inflight_certificate_requests: IntGauge,
 }
 
 impl AuthAggMetrics {
@@ -145,6 +149,30 @@ impl AuthAggMetrics {
                 "total_rpc_err",
                 "Total number of rpc errors returned from validators, grouped by validator short name and RPC error message",
                 &["name", "error_message"],
+                registry,
+            )
+            .unwrap(),
+            inflight_transactions: register_int_gauge_with_registry!(
+                "auth_agg_inflight_transactions",
+                "Inflight transaction gathering signatures",
+                registry,
+            )
+            .unwrap(),
+            inflight_certificates: register_int_gauge_with_registry!(
+                "auth_agg_inflight_certificates",
+                "Inflight certificates gathering effects",
+                registry,
+            )
+            .unwrap(),
+            inflight_transaction_requests: register_int_gauge_with_registry!(
+                "auth_agg_inflight_transaction_requests",
+                "Inflight handle_transaction requests",
+                registry,
+            )
+            .unwrap(),
+            inflight_certificate_requests: register_int_gauge_with_registry!(
+                "auth_agg_inflight_certificate_requests",
+                "Inflight handle_certificate requests",
                 registry,
             )
             .unwrap(),
@@ -1000,7 +1028,10 @@ where
                 state,
                 |_name, client| {
                     Box::pin(
-                        async move { client.handle_transaction(transaction_ref.clone()).await },
+                        async move {
+                            let _guard = GaugeGuard::acquire(&self.metrics.inflight_transaction_requests);
+                            client.handle_transaction(transaction_ref.clone()).await
+                        },
                     )
                 },
                 |mut state, name, weight, response| {
@@ -1424,6 +1455,7 @@ where
             state,
             |name, client| {
                 Box::pin(async move {
+                    let _guard = GaugeGuard::acquire(&self.metrics.inflight_certificate_requests);
                     client
                         .handle_certificate(cert_ref.clone())
                         .instrument(
@@ -1579,6 +1611,7 @@ where
         &self,
         transaction: &VerifiedTransaction,
     ) -> Result<VerifiedCertifiedTransactionEffects, anyhow::Error> {
+        let tx_guard = GaugeGuard::acquire(&self.metrics.inflight_transactions);
         let result = self
             .process_transaction(transaction.clone())
             .instrument(tracing::debug_span!("process_tx"))
@@ -1590,6 +1623,9 @@ where
             }
         };
         self.metrics.total_tx_certificates_created.inc();
+        drop(tx_guard);
+
+        let _cert_guard = GaugeGuard::acquire(&self.metrics.inflight_certificates);
         let response = self
             .process_certificate(cert.clone().into())
             .instrument(tracing::debug_span!("process_cert"))

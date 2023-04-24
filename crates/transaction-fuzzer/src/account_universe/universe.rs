@@ -104,9 +104,7 @@ impl AccountUniverseGen {
     /// Returns an [`AccountUniverse`] with the initial state generated in this universe.
     pub fn setup(self, executor: &mut Executor) -> AccountUniverse {
         for account_data in &self.accounts {
-            for coin in &account_data.coins {
-                executor.add_object(coin.clone())
-            }
+            executor.add_objects(&account_data.coins);
         }
 
         AccountUniverse::new(self.accounts, self.pick_style, false)

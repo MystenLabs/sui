@@ -797,4 +797,51 @@ export class JsonRpcProvider {
       EpochInfo,
     );
   }
+
+  /**
+   * Wait for a transaction block result to be available over the API.
+   * This can be used in conjunction with `executeTransactionBlock` to wait for the transaction to
+   * be available via the API.
+   * This currently polls the `getTransactionBlock` API to check for the transaction.
+   */
+  async waitForTransactionBlock({
+    signal,
+    timeout = 60 * 1000,
+    pollInterval = 2 * 1000,
+    ...input
+  }: {
+    /** An optional abort signal that can be used to cancel */
+    signal?: AbortSignal;
+    /** The amount of time to wait for a transaction block. Defaults to one minute. */
+    timeout?: number;
+    /** The amount of time to wait between checks for the transaction block. Defaults to 2 seconds. */
+    pollInterval?: number;
+  } & Parameters<
+    JsonRpcProvider['getTransactionBlock']
+  >[0]): Promise<SuiTransactionBlockResponse> {
+    const timeoutSignal = AbortSignal.timeout(timeout);
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutSignal.addEventListener('abort', () =>
+        reject(timeoutSignal.reason),
+      );
+    });
+
+    while (!timeoutSignal.aborted) {
+      signal?.throwIfAborted();
+      try {
+        return await this.getTransactionBlock(input);
+      } catch (e) {
+        // Wait for either the next poll interval, or the timeout.
+        await Promise.race([
+          new Promise((resolve) => setTimeout(resolve, pollInterval)),
+          timeoutPromise,
+        ]);
+      }
+    }
+
+    timeoutSignal.throwIfAborted();
+
+    // This should never happen, because the above case should always throw, but just adding it in the event that something goes horribly wrong.
+    throw new Error('Unexpected error while waiting for transaction block.');
+  }
 }

@@ -7,8 +7,13 @@
     rust_2021_compatibility
 )]
 
-use base_types::{SequenceNumber, SuiAddress};
+use base_types::{SequenceNumber, SuiAddress, RESOLVED_ASCII_STR, RESOLVED_UTF8_STR};
 use messages::{CallArg, ObjectArg};
+use move_binary_format::{
+    binary_views::BinaryIndexedView,
+    file_format::{AbilitySet, SignatureToken},
+};
+use move_bytecode_utils::resolve_struct;
 use move_core_types::{account_address::AccountAddress, language_storage::StructTag};
 pub use move_core_types::{identifier::Identifier, language_storage::TypeTag};
 use object::OBJECT_START_VERSION;
@@ -16,6 +21,8 @@ use object::OBJECT_START_VERSION;
 use base_types::ObjectID;
 
 pub use mysten_network::multiaddr;
+
+use crate::{base_types::RESOLVED_STD_OPTION, id::RESOLVED_SUI_ID};
 
 #[macro_use]
 pub mod error;
@@ -42,6 +49,7 @@ pub mod in_memory_storage;
 pub mod message_envelope;
 pub mod messages;
 pub mod messages_checkpoint;
+pub mod metrics;
 pub mod move_package;
 pub mod multisig;
 pub mod object;
@@ -161,5 +169,91 @@ impl MoveTypeTagTrait for ObjectID {
 impl MoveTypeTagTrait for SuiAddress {
     fn get_type_tag() -> TypeTag {
         TypeTag::Address
+    }
+}
+
+pub fn is_primitive(
+    view: &BinaryIndexedView<'_>,
+    function_type_args: &[AbilitySet],
+    s: &SignatureToken,
+) -> bool {
+    use SignatureToken as S;
+    match s {
+        S::Bool | S::U8 | S::U16 | S::U32 | S::U64 | S::U128 | S::U256 | S::Address => true,
+        S::Signer => false,
+        // optimistic, but no primitive has key
+        S::TypeParameter(idx) => !function_type_args[*idx as usize].has_key(),
+
+        S::Struct(idx) => [RESOLVED_SUI_ID, RESOLVED_ASCII_STR, RESOLVED_UTF8_STR]
+            .contains(&resolve_struct(view, *idx)),
+
+        S::StructInstantiation(idx, targs) => {
+            let resolved_struct = resolve_struct(view, *idx);
+            // is option of a primitive
+            resolved_struct == RESOLVED_STD_OPTION
+                && targs.len() == 1
+                && is_primitive(view, function_type_args, &targs[0])
+        }
+
+        S::Vector(inner) => is_primitive(view, function_type_args, inner),
+        S::Reference(_) | S::MutableReference(_) => false,
+    }
+}
+
+pub fn is_object(
+    view: &BinaryIndexedView<'_>,
+    function_type_args: &[AbilitySet],
+    t: &SignatureToken,
+) -> Result<bool, String> {
+    use SignatureToken as S;
+    match t {
+        S::Reference(inner) | S::MutableReference(inner) => {
+            is_object(view, function_type_args, inner)
+        }
+        _ => is_object_struct(view, function_type_args, t),
+    }
+}
+
+pub fn is_object_vector(
+    view: &BinaryIndexedView<'_>,
+    function_type_args: &[AbilitySet],
+    t: &SignatureToken,
+) -> Result<bool, String> {
+    use SignatureToken as S;
+    match t {
+        S::Vector(inner) => is_object_struct(view, function_type_args, inner),
+        _ => is_object_struct(view, function_type_args, t),
+    }
+}
+
+fn is_object_struct(
+    view: &BinaryIndexedView<'_>,
+    function_type_args: &[AbilitySet],
+    s: &SignatureToken,
+) -> Result<bool, String> {
+    use SignatureToken as S;
+    match s {
+        S::Bool
+        | S::U8
+        | S::U16
+        | S::U32
+        | S::U64
+        | S::U128
+        | S::U256
+        | S::Address
+        | S::Signer
+        | S::Vector(_)
+        | S::Reference(_)
+        | S::MutableReference(_) => Ok(false),
+        S::TypeParameter(idx) => Ok(function_type_args
+            .get(*idx as usize)
+            .map(|abs| abs.has_key())
+            .unwrap_or(false)),
+        S::Struct(_) | S::StructInstantiation(_, _) => {
+            let abilities = view
+                .abilities(s, function_type_args)
+                .map_err(|vm_err| vm_err.to_string())?;
+            Ok(abilities.has_key())
+        }
     }
 }

@@ -67,6 +67,9 @@ async fn main() -> Result<()> {
 
     // Initialize logging
     let (_guard, filter_handle) = telemetry_subscribers::TelemetryConfig::new()
+        // Set a default
+        .with_sample_nth(10)
+        .with_target_prefix("sui_json_rpc")
         .with_env()
         .with_prom_registry(&prometheus_registry)
         .init();

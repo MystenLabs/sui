@@ -13,6 +13,7 @@ import { usePaginationStack } from '~/ui/Pagination';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
 import { Text } from '~/ui/Text';
+import { getEpochStorageFundFlow } from '~/utils/getStorageFundFlow';
 
 interface EpochsTableProps {
     initialLimit: number;
@@ -96,11 +97,13 @@ export function EpochsTable({
                                   />
                               </div>
                           ),
-                          storageRevenue: (
+                          storageFundInflow: (
                               <TxTableCol>
                                   <SuiAmount
                                       amount={
-                                          epoch.endOfEpochInfo?.storageCharge
+                                          getEpochStorageFundFlow(
+                                              epoch.endOfEpochInfo
+                                          ).netInflow
                                       }
                                   />
                               </TxTableCol>
@@ -134,8 +137,8 @@ export function EpochsTable({
                               accessorKey: 'checkpointSet',
                           },
                           {
-                              header: 'Storage Revenue',
-                              accessorKey: 'storageRevenue',
+                              header: 'Storage Net Inflow',
+                              accessorKey: 'storageFundInflow',
                           },
                           {
                               header: 'Epoch End',
@@ -167,7 +170,7 @@ export function EpochsTable({
                         'Transaction Blocks',
                         'Stake Rewards',
                         'Checkpoint Set',
-                        'Storage Revenue',
+                        'Net Inflow',
                         'Epoch End',
                     ]}
                     colWidths={[

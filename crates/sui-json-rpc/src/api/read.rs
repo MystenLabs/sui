@@ -30,8 +30,8 @@ pub trait ReadApi {
     /// Returns an ordered list of transaction responses
     /// The method will throw an error if the input contains any duplicate or
     /// the input size exceeds QUERY_MAX_RESULT_LIMIT
-    #[method(name = "multiGetTransactionBlocks", blocking)]
-    fn multi_get_transaction_blocks(
+    #[method(name = "multiGetTransactionBlocks")]
+    async fn multi_get_transaction_blocks(
         &self,
         /// A list of transaction digests.
         digests: Vec<TransactionDigest>,
@@ -40,8 +40,8 @@ pub trait ReadApi {
     ) -> RpcResult<Vec<SuiTransactionBlockResponse>>;
 
     /// Return the object information for a specified object
-    #[method(name = "getObject", blocking)]
-    fn get_object(
+    #[method(name = "getObject")]
+    async fn get_object(
         &self,
         /// the ID of the queried object
         object_id: ObjectID,
@@ -50,8 +50,8 @@ pub trait ReadApi {
     ) -> RpcResult<SuiObjectResponse>;
 
     /// Return the object data for a list of objects
-    #[method(name = "multiGetObjects", blocking)]
-    fn multi_get_objects(
+    #[method(name = "multiGetObjects")]
+    async fn multi_get_objects(
         &self,
         /// the IDs of the queried objects
         object_ids: Vec<ObjectID>,
@@ -63,8 +63,8 @@ pub trait ReadApi {
     /// can be retrieved by this API, even if the object and version exists/existed.
     /// The result may vary across nodes depending on their pruning policies.
     /// Return the object information for a specified version
-    #[method(name = "tryGetPastObject", blocking)]
-    fn try_get_past_object(
+    #[method(name = "tryGetPastObject")]
+    async fn try_get_past_object(
         &self,
         /// the ID of the queried object
         object_id: ObjectID,
@@ -78,8 +78,8 @@ pub trait ReadApi {
     /// can be retrieved by this API, even if the object and version exists/existed.
     /// The result may vary across nodes depending on their pruning policies.
     /// Return the object information for a specified version
-    #[method(name = "tryMultiGetPastObjects", blocking)]
-    fn try_multi_get_past_objects(
+    #[method(name = "tryMultiGetPastObjects")]
+    async fn try_multi_get_past_objects(
         &self,
         /// a vector of object and versions to be queried
         past_objects: Vec<SuiGetPastObjectRequest>,
@@ -87,8 +87,8 @@ pub trait ReadApi {
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiPastObjectResponse>>;
 
-    #[method(name = "getLoadedChildObjects", blocking)]
-    fn get_loaded_child_objects(
+    #[method(name = "getLoadedChildObjects")]
+    async fn get_loaded_child_objects(
         &self,
         digest: TransactionDigest,
     ) -> RpcResult<SuiLoadedChildObjectsResponse>;
@@ -102,8 +102,8 @@ pub trait ReadApi {
     ) -> RpcResult<Checkpoint>;
 
     /// Return paginated list of checkpoints
-    #[method(name = "getCheckpoints", blocking)]
-    fn get_checkpoints(
+    #[method(name = "getCheckpoints")]
+    async fn get_checkpoints(
         &self,
         /// An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.
         cursor: Option<BigInt<u64>>,
@@ -113,8 +113,8 @@ pub trait ReadApi {
         descending_order: bool,
     ) -> RpcResult<CheckpointPage>;
 
-    #[method(name = "getCheckpoints", version <= "0.31", blocking)]
-    fn get_checkpoints_deprecated_limit(
+    #[method(name = "getCheckpoints", version <= "0.31")]
+    async fn get_checkpoints_deprecated_limit(
         &self,
         /// An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.
         cursor: Option<BigInt<u64>>,
@@ -125,8 +125,8 @@ pub trait ReadApi {
     ) -> RpcResult<CheckpointPage>;
 
     /// Return transaction events.
-    #[method(name = "getEvents", blocking)]
-    fn get_events(
+    #[method(name = "getEvents")]
+    async fn get_events(
         &self,
         /// the event query criteria.
         transaction_digest: TransactionDigest,

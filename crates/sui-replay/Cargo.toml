@@ -9,6 +9,8 @@ edition = "2021"
 [dependencies]
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 bcs = "0.1.4"
+prometheus = "0.13.3"
+
 clap = { version = "4.1.4", features = ["derive"] }
 colored = "2.0.0"
 futures = "0.3.23"

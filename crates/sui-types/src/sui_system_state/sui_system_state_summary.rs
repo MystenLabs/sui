@@ -18,6 +18,8 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::collections::BTreeMap;
 
+use super::{SuiSystemState, SuiSystemStateTrait};
+
 /// This is the JSON-RPC type for the SUI system state object.
 /// It flattens all fields to make them top-level fields such that it as minimum
 /// dependencies to the internal data structures of the SUI system state type.
@@ -409,22 +411,31 @@ impl Default for SuiValidatorSummary {
 /// works for validator candidates, active validators, as well as inactive validators.
 pub fn get_validator_by_pool_id<S>(
     object_store: &S,
-    system_state: &SuiSystemStateSummary,
+    system_state: &SuiSystemState,
+    system_state_summary: &SuiSystemStateSummary,
     pool_id: ObjectID,
 ) -> Result<SuiValidatorSummary, SuiError>
 where
     S: ObjectStore,
 {
     // First try to find in active validator set.
-    let active_validator = system_state
+    let active_validator = system_state_summary
         .active_validators
         .iter()
         .find(|v| v.staking_pool_id == pool_id);
     if let Some(active) = active_validator {
         return Ok(active.clone());
     }
-    // Then try to fiind in inactive pools.
-    let inactive_table_id = system_state.inactive_pools_id;
+    // Then try to find in pending active validator set.
+    let pending_active_validators = system_state.get_pending_active_validators(object_store)?;
+    let pending_active = pending_active_validators
+        .iter()
+        .find(|v| v.staking_pool_id == pool_id);
+    if let Some(pending) = pending_active {
+        return Ok(pending.clone());
+    }
+    // After that try to find in inactive pools.
+    let inactive_table_id = system_state_summary.inactive_pools_id;
     if let Ok(inactive) =
         get_validator_from_table(object_store, inactive_table_id, &ID::new(pool_id))
     {
@@ -433,7 +444,7 @@ where
     // Finally look up the candidates pool.
     let candidate_address: SuiAddress = get_dynamic_field_from_store(
         object_store,
-        system_state.staking_pool_mappings_id,
+        system_state_summary.staking_pool_mappings_id,
         &ID::new(pool_id),
     )
     .map_err(|err| {
@@ -442,6 +453,6 @@ where
             err
         ))
     })?;
-    let candidate_table_id = system_state.validator_candidates_id;
+    let candidate_table_id = system_state_summary.validator_candidates_id;
     get_validator_from_table(object_store, candidate_table_id, &candidate_address)
 }

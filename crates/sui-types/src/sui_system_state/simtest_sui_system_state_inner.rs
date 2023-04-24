@@ -6,6 +6,8 @@ use crate::base_types::SuiAddress;
 use crate::collection_types::{Bag, Table};
 use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata};
 use crate::crypto::AuthorityPublicKeyBytes;
+use crate::error::SuiError;
+use crate::storage::ObjectStore;
 use crate::sui_system_state::epoch_start_sui_system_state::{
     EpochStartSystemState, EpochStartValidatorInfoV1,
 };
@@ -182,6 +184,13 @@ impl SuiSystemStateTrait for SimTestSuiSystemStateInnerV1 {
         }
     }
 
+    fn get_pending_active_validators<S: ObjectStore>(
+        &self,
+        _object_store: &S,
+    ) -> Result<Vec<SuiValidatorSummary>, SuiError> {
+        Ok(vec![])
+    }
+
     fn into_epoch_start_state(self) -> EpochStartSystemState {
         EpochStartSystemState::new_v1(
             self.epoch,
@@ -287,6 +296,13 @@ impl SuiSystemStateTrait for SimTestSuiSystemStateInnerShallowV2 {
             committee: Committee::new(self.epoch, voting_rights),
             network_metadata,
         }
+    }
+
+    fn get_pending_active_validators<S: ObjectStore>(
+        &self,
+        _object_store: &S,
+    ) -> Result<Vec<SuiValidatorSummary>, SuiError> {
+        Ok(vec![])
     }
 
     fn into_epoch_start_state(self) -> EpochStartSystemState {
@@ -423,6 +439,13 @@ impl SuiSystemStateTrait for SimTestSuiSystemStateInnerDeepV2 {
             committee: Committee::new(self.epoch, voting_rights),
             network_metadata,
         }
+    }
+
+    fn get_pending_active_validators<S: ObjectStore>(
+        &self,
+        _object_store: &S,
+    ) -> Result<Vec<SuiValidatorSummary>, SuiError> {
+        Ok(vec![])
     }
 
     fn into_epoch_start_state(self) -> EpochStartSystemState {

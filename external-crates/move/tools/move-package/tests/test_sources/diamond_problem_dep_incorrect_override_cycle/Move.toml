@@ -1,0 +1,27 @@
+# Dependency graph and override (ov) - when override is processed there is no entry in the graph
+# yet (override is incorrect). This part is the same as in the
+# diamond_problem_dep_incorrect_override_empty test. Additionally, a cycle introduced during graph
+# construction interferes with part of the algorithm responsible for validating potentially
+# incorrect overrides (dependency_graph::override_verify) and if not explicitly handled would
+# trigger infinite recursion.
+#
+#           +--------------------------------------------+
+#           |                                            |
+#           +---->+----+                                 |
+#           +---->| B  |----+                            |
+#           |     +----+    |                            |
+#           |               |                            |
+# +----+    |               |     +----+         +----+--+    v1 +----+
+# |Root|----+               +---->| C  |-------->| D  |--------->| E  |
+# +----+    |               |     +----+         +----+     +--->+----+
+#           |               |                               |
+#           |     +----+----+      ov(2)                    |
+#           +---->| A  |------------------------------------+
+#                 +----+
+[package]
+name = "Root"
+version = "0.0.0"
+
+[dependencies]
+A = { local = "./deps_only/A" }
+B = { local = "./deps_only/B" }

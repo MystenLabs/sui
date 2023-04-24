@@ -31,6 +31,8 @@ pub struct Compatibility {
     pub check_friend_linking: bool,
     /// if false, treat `entry` as `private` when `check_struct_and_pub_function_linking`.
     pub check_private_entry_linking: bool,
+    /// The set of abilities that cannot be added to an already exisiting type.
+    pub disallowed_new_abilities: AbilitySet,
 }
 
 impl Default for Compatibility {
@@ -40,6 +42,7 @@ impl Default for Compatibility {
             check_struct_layout: true,
             check_friend_linking: true,
             check_private_entry_linking: true,
+            disallowed_new_abilities: AbilitySet::EMPTY,
         }
     }
 }
@@ -55,6 +58,7 @@ impl Compatibility {
             check_struct_layout: false,
             check_friend_linking: false,
             check_private_entry_linking: false,
+            disallowed_new_abilities: AbilitySet::EMPTY,
         }
     }
 
@@ -85,12 +89,14 @@ impl Compatibility {
                 break;
             };
 
-            if !struct_abilities_compatibile(old_struct.abilities, new_struct.abilities)
-                || !struct_type_parameters_compatibile(
-                    &old_struct.type_parameters,
-                    &new_struct.type_parameters,
-                )
-            {
+            if !struct_abilities_compatibile(
+                self.disallowed_new_abilities,
+                old_struct.abilities,
+                new_struct.abilities,
+            ) || !struct_type_parameters_compatibile(
+                &old_struct.type_parameters,
+                &new_struct.type_parameters,
+            ) {
                 struct_and_function_linking = false;
             }
             if new_struct.fields != old_struct.fields {
@@ -209,9 +215,18 @@ impl Compatibility {
 }
 
 // When upgrading, the new abilities must be a superset of the old abilities.
-// Adding an ability is fine, but removing an ability could cause existing usages to fail.
-fn struct_abilities_compatibile(old_abilities: AbilitySet, new_abilities: AbilitySet) -> bool {
+// Adding an ability is fine as long as it's not in the disallowed_new_abilities,
+// but removing an ability could cause existing usages to fail.
+fn struct_abilities_compatibile(
+    disallowed_new_abilities: AbilitySet,
+    old_abilities: AbilitySet,
+    new_abilities: AbilitySet,
+) -> bool {
     old_abilities.is_subset(new_abilities)
+        && disallowed_new_abilities.into_iter().all(|ability| {
+            // If the new abilities have the ability the old ones must have it to
+            !new_abilities.has_ability(ability) || old_abilities.has_ability(ability)
+        })
 }
 
 // When upgrading, the new type parameters must be the same length, and the new type parameter

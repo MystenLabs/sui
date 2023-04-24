@@ -85,18 +85,23 @@
 //!
 //! To exit the process on panic, set the `CRASH_ON_PANIC` environment variable.
 
+use crossterm::tty::IsTty;
 use span_latency_prom::PrometheusSpanLatencyLayer;
 use std::{
     env,
     io::{stderr, Write},
     str::FromStr,
+    sync::atomic::{AtomicUsize, Ordering},
 };
-use tracing::metadata::LevelFilter;
 use tracing::Level;
+use tracing::{metadata::LevelFilter, subscriber::Interest, Metadata, Subscriber};
 use tracing_appender::non_blocking::{NonBlocking, WorkerGuard};
-use tracing_subscriber::{filter, fmt, layer::SubscriberExt, reload, EnvFilter, Layer, Registry};
-
-use crossterm::tty::IsTty;
+use tracing_subscriber::{
+    filter, fmt,
+    layer::{Context, SubscriberExt},
+    registry::LookupSpan,
+    reload, EnvFilter, Layer, Registry,
+};
 
 pub mod span_latency_prom;
 
@@ -127,6 +132,9 @@ pub struct TelemetryConfig {
     pub crash_on_panic: bool,
     /// Optional Prometheus registry - if present, all enabled span latencies are measured
     pub prom_registry: Option<prometheus::Registry>,
+    /// Log sampling rate
+    pub sample_nth: Option<usize>,
+    pub target_prefix: Option<String>,
 }
 
 #[must_use]
@@ -212,6 +220,8 @@ impl TelemetryConfig {
             panic_hook: true,
             crash_on_panic: false,
             prom_registry: None,
+            sample_nth: None,
+            target_prefix: None,
         }
     }
 
@@ -240,6 +250,16 @@ impl TelemetryConfig {
         self
     }
 
+    pub fn with_sample_nth(mut self, rate: usize) -> Self {
+        self.sample_nth = Some(rate);
+        self
+    }
+
+    pub fn with_target_prefix(mut self, prefix: &str) -> Self {
+        self.target_prefix = Some(prefix.to_owned());
+        self
+    }
+
     pub fn with_env(mut self) -> Self {
         if env::var("CRASH_ON_PANIC").is_ok() {
             self.crash_on_panic = true
@@ -260,6 +280,14 @@ impl TelemetryConfig {
 
         if let Ok(filepath) = env::var("RUST_LOG_FILE") {
             self.log_file = Some(filepath);
+        }
+
+        if let Ok(sample_nth) = env::var("SAMPLE_NTH") {
+            self.sample_nth = Some(sample_nth.parse().expect("Cannot parse SAMPLE_NTH"));
+        }
+
+        if let Ok(target_prefix) = env::var("TARGET_PREFIX") {
+            self.target_prefix = Some(target_prefix);
         }
 
         self
@@ -323,6 +351,12 @@ impl TelemetryConfig {
             layers.push(fmt_layer);
         }
 
+        if config.sample_nth.is_some() {
+            let sample_nth = config.sample_nth.unwrap();
+            let sampling_layer = SamplingFilter::new(sample_nth, config.target_prefix);
+            layers.push(sampling_layer.boxed());
+        }
+
         let subscriber = tracing_subscriber::registry().with(layers);
         ::tracing::subscriber::set_global_default(subscriber)
             .expect("unable to initialize tracing subscriber");
@@ -336,6 +370,44 @@ impl TelemetryConfig {
         let guards = TelemetryGuards { worker_guard };
 
         (guards, filter_handle)
+    }
+}
+
+struct SamplingFilter {
+    counter: AtomicUsize,
+    sample_nth: usize,
+    target_prefix: Option<String>,
+}
+
+impl SamplingFilter {
+    fn new(sample_nth: usize, target_prefix: Option<String>) -> Self {
+        SamplingFilter {
+            counter: AtomicUsize::new(0),
+            sample_nth,
+            target_prefix,
+        }
+    }
+
+    fn is_sampled(&self) -> bool {
+        self.counter.fetch_add(1, Ordering::Relaxed) % self.sample_nth == 0
+    }
+}
+
+impl<S> Layer<S> for SamplingFilter
+where
+    S: Subscriber + for<'a> LookupSpan<'a>,
+{
+    fn register_callsite(&self, _: &'static Metadata<'static>) -> Interest {
+        Interest::sometimes()
+    }
+
+    fn enabled(&self, metadata: &Metadata<'_>, _: Context<'_, S>) -> bool {
+        if let Some(ref prefix) = self.target_prefix {
+            if metadata.target().starts_with(prefix) {
+                return self.is_sampled();
+            }
+        }
+        true
     }
 }
 

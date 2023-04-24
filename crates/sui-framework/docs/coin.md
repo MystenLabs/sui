@@ -15,7 +15,7 @@ tokens and coins. <code><a href="coin.md#0x2_coin_Coin">Coin</a></code> can be d
 -  [Constants](#@Constants_0)
 -  [Function `total_supply`](#0x2_coin_total_supply)
 -  [Function `treasury_into_supply`](#0x2_coin_treasury_into_supply)
--  [Function `supply`](#0x2_coin_supply)
+-  [Function `supply_immut`](#0x2_coin_supply_immut)
 -  [Function `supply_mut`](#0x2_coin_supply_mut)
 -  [Function `value`](#0x2_coin_value)
 -  [Function `balance`](#0x2_coin_balance)
@@ -43,6 +43,7 @@ tokens and coins. <code><a href="coin.md#0x2_coin_Coin">Coin</a></code> can be d
 -  [Function `get_symbol`](#0x2_coin_get_symbol)
 -  [Function `get_description`](#0x2_coin_get_description)
 -  [Function `get_icon_url`](#0x2_coin_get_icon_url)
+-  [Function `supply`](#0x2_coin_supply)
 
 
 <pre><code><b>use</b> <a href="">0x1::ascii</a>;
@@ -313,14 +314,14 @@ to different security guarantees (TreasuryCap can be created only once for a typ
 
 </details>
 
-<a name="0x2_coin_supply"></a>
+<a name="0x2_coin_supply_immut"></a>
 
-## Function `supply`
+## Function `supply_immut`
 
 Get immutable reference to the treasury's <code>Supply</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_supply">supply</a>&lt;T&gt;(treasury: &<b>mut</b> <a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;): &<a href="balance.md#0x2_balance_Supply">balance::Supply</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_supply_immut">supply_immut</a>&lt;T&gt;(treasury: &<a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;): &<a href="balance.md#0x2_balance_Supply">balance::Supply</a>&lt;T&gt;
 </code></pre>
 
 
@@ -329,7 +330,7 @@ Get immutable reference to the treasury's <code>Supply</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_supply">supply</a>&lt;T&gt;(treasury: &<b>mut</b> <a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;): &Supply&lt;T&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_supply_immut">supply_immut</a>&lt;T&gt;(treasury: &<a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;): &Supply&lt;T&gt; {
     &treasury.total_supply
 }
 </code></pre>
@@ -1219,6 +1220,30 @@ Update the url of the coin in <code><a href="coin.md#0x2_coin_CoinMetadata">Coin
     metadata: &<a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;
 ): Option&lt;Url&gt; {
     metadata.icon_url
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_coin_supply"></a>
+
+## Function `supply`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_supply">supply</a>&lt;T&gt;(treasury: &<b>mut</b> <a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;): &<a href="balance.md#0x2_balance_Supply">balance::Supply</a>&lt;T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_supply">supply</a>&lt;T&gt;(treasury: &<b>mut</b> <a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;): &Supply&lt;T&gt; {
+    &treasury.total_supply
 }
 </code></pre>
 
