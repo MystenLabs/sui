@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anemo::codegen::InboundRequestLayer;
-use anemo_tower::rate_limit;
+use anemo_tower::{inflight_limit, rate_limit};
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
@@ -16,8 +16,9 @@ use tokio::{
 };
 
 use super::{
-    metrics::Metrics, server::Server, Handle, PeerHeights, StateSync, StateSyncEventLoop,
-    StateSyncMessage, StateSyncServer,
+    metrics::Metrics,
+    server::{CheckpointContentsDownloadLimitLayer, Server},
+    Handle, PeerHeights, StateSync, StateSyncEventLoop, StateSyncMessage, StateSyncServer,
 };
 use sui_types::storage::WriteStore;
 
@@ -65,7 +66,7 @@ where
 {
     pub fn build(self) -> (UnstartedStateSync<S>, StateSyncServer<impl StateSync>) {
         let state_sync_config = self.config.clone().unwrap_or_default();
-        let (builder, server) = self.build_internal();
+        let (mut builder, server) = self.build_internal();
         let mut state_sync_server = StateSyncServer::new(server);
 
         // Apply rate limits from configuration as needed.
@@ -92,6 +93,20 @@ where
                     rate_limit::WaitMode::Block,
                 )),
             );
+        }
+        if let Some(limit) = state_sync_config.get_checkpoint_contents_inflight_limit {
+            state_sync_server = state_sync_server.add_layer_for_get_checkpoint_contents(
+                InboundRequestLayer::new(inflight_limit::InflightLimitLayer::new(
+                    limit,
+                    inflight_limit::WaitMode::ReturnError,
+                )),
+            );
+        }
+        if let Some(limit) = state_sync_config.get_checkpoint_contents_per_checkpoint_limit {
+            let layer = CheckpointContentsDownloadLimitLayer::new(limit);
+            builder.download_limit_layer = Some(layer.clone());
+            state_sync_server = state_sync_server
+                .add_layer_for_get_checkpoint_contents(InboundRequestLayer::new(layer));
         }
 
         (builder, state_sync_server)
@@ -135,6 +150,7 @@ where
                 handle,
                 mailbox,
                 store,
+                download_limit_layer: None,
                 peer_heights,
                 checkpoint_event_sender,
                 metrics,
@@ -148,6 +164,7 @@ pub struct UnstartedStateSync<S> {
     pub(super) config: StateSyncConfig,
     pub(super) handle: Handle,
     pub(super) mailbox: mpsc::Receiver<StateSyncMessage>,
+    pub(super) download_limit_layer: Option<CheckpointContentsDownloadLimitLayer>,
     pub(super) store: S,
     pub(super) peer_heights: Arc<RwLock<PeerHeights>>,
     pub(super) checkpoint_event_sender: broadcast::Sender<VerifiedCheckpoint>,
@@ -164,6 +181,7 @@ where
             config,
             handle,
             mailbox,
+            download_limit_layer,
             store,
             peer_heights,
             checkpoint_event_sender,
@@ -178,6 +196,7 @@ where
                 tasks: JoinSet::new(),
                 sync_checkpoint_summaries_task: None,
                 sync_checkpoint_contents_task: None,
+                download_limit_layer,
                 store,
                 peer_heights,
                 checkpoint_event_sender,
