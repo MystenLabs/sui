@@ -22,6 +22,7 @@ use move_binary_format::{
 };
 use move_bytecode_verifier::{
     absint::{AbstractDomain, AbstractInterpreter, JoinResult, TransferFunctions},
+    abstract_stack::AbsStack,
     meter::{Meter, Scope},
 };
 use move_core_types::{
@@ -187,7 +188,7 @@ impl AbstractDomain for AbstractState {
 struct IDLeakAnalysis<'a> {
     binary_view: &'a BinaryIndexedView<'a>,
     function_view: &'a FunctionView<'a>,
-    stack: Vec<AbstractValue>,
+    stack: AbsStack<AbstractValue>,
 }
 
 impl<'a> IDLeakAnalysis<'a> {
@@ -195,18 +196,19 @@ impl<'a> IDLeakAnalysis<'a> {
         Self {
             binary_view,
             function_view,
-            stack: vec![],
+            stack: AbsStack::new(),
         }
     }
 
-    fn stack_popn(&mut self, n: usize) {
-        let new_len = self.stack.len() - n;
-        self.stack.drain(new_len..);
+    fn stack_popn(&mut self, n: u64) -> Result<(), PartialVMError> {
+        self.stack.pop_n(None, n).map_err(|e| {
+            PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION)
+                .with_message(format!("Unexpected stack error on pop: {e}"))
+        })
     }
 
-    fn stack_pushn(&mut self, n: usize, val: AbstractValue) {
-        let new_len = self.stack.len() + n;
-        self.stack.resize(new_len, val);
+    fn stack_pushn(&mut self, n: u64, val: AbstractValue) {
+        self.stack.push_n(val, n)
     }
 
     fn resolve_function(&self, function_handle: &FunctionHandle) -> FunctionIdent<'a> {
@@ -264,7 +266,7 @@ fn call(
     let parameters = verifier
         .binary_view
         .signature_at(function_handle.parameters);
-    verifier.stack_popn(parameters.len());
+    verifier.stack_popn(parameters.len() as u64)?;
 
     let return_ = verifier.binary_view.signature_at(function_handle.return_);
     let function = verifier.resolve_function(function_handle);
@@ -282,15 +284,15 @@ fn call(
         }
         verifier.stack.push(AbstractValue::Fresh);
     } else {
-        verifier.stack_pushn(return_.0.len(), AbstractValue::Other);
+        verifier.stack_pushn(return_.0.len() as u64, AbstractValue::Other);
     }
     Ok(())
 }
 
-fn num_fields(struct_def: &StructDefinition) -> usize {
+fn num_fields(struct_def: &StructDefinition) -> u64 {
     match &struct_def.field_information {
         StructFieldInformation::Native => 0,
-        StructFieldInformation::Declared(fields) => fields.len(),
+        StructFieldInformation::Declared(fields) => fields.len() as u64,
     }
 }
 
@@ -304,7 +306,7 @@ fn pack(
         .binary_view
         .struct_handle_at(struct_def.struct_handle);
     let num_fields = num_fields(struct_def);
-    verifier.stack_popn(num_fields - 1);
+    verifier.stack_popn(num_fields - 1)?;
     let last_value = verifier.stack.pop().unwrap();
     if handle.abilities.has_key() && last_value != AbstractValue::Fresh {
         let (cur_package, cur_module, cur_function) = verifier.cur_function();
@@ -445,7 +447,7 @@ fn execute_inner(
         }
 
         Bytecode::Ret => {
-            verifier.stack_popn(verifier.function_view.return_().len())
+            verifier.stack_popn(verifier.function_view.return_().len() as u64)?
         }
 
         Bytecode::BrTrue(_) | Bytecode::BrFalse(_) | Bytecode::Abort => {
@@ -477,7 +479,7 @@ fn execute_inner(
         }
 
         Bytecode::VecPack(_, num) => {
-            verifier.stack_popn(*num as usize);
+            verifier.stack_popn(*num )?;
             verifier.stack.push(AbstractValue::Other);
         }
 
@@ -488,7 +490,7 @@ fn execute_inner(
 
         Bytecode::VecUnpack(_, num) => {
             verifier.stack.pop().unwrap();
-            verifier.stack_pushn(*num as usize, AbstractValue::Other);
+            verifier.stack_pushn(*num, AbstractValue::Other);
         }
 
         Bytecode::VecSwap(_) => {
