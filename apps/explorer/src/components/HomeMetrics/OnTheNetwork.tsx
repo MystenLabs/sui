@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useRpcClient } from '@mysten/core';
+import { useGetTotalTransactionBlocks } from '@mysten/core';
 import { Svg3D32, Nft232, Wallet32, Staking32 } from '@mysten/icons';
-import { useQuery } from '@tanstack/react-query';
 
 import { FormattedStatsAmount } from './FormattedStatsAmount';
 import { NetworkStats } from './NetworkStats';
@@ -11,13 +10,8 @@ import { NetworkStats } from './NetworkStats';
 import { useGetNetworkMetrics } from '~/hooks/useGetNetworkMetrics';
 
 export function OnTheNetwork() {
-    const rpc = useRpcClient();
     const { data: networkMetrics } = useGetNetworkMetrics();
-    const { data: transactionCount } = useQuery(
-        ['home', 'transaction-count'],
-        () => rpc.getTotalTransactionBlocks(),
-        { cacheTime: 24 * 60 * 60 * 1000, staleTime: Infinity, retry: 5 }
-    );
+    const { data: transactionCount } = useGetTotalTransactionBlocks();
     return (
         <NetworkStats label="On the Network" bg="lightBlue" spacing="none">
             <div className="flex gap-8">

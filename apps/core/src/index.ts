@@ -20,3 +20,4 @@ export * from './utils/formatPercentageDisplay';
 export * from './hooks/useGetSystemState';
 export * from './hooks/useGetTimeBeforeEpochNumber';
 export * from './hooks/useGetLatestCheckpointSequenceNumber';
+export * from './hooks/useGetTotalTransactionBlocks';

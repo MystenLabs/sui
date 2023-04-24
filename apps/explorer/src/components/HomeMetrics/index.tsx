@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useGetSystemState, useRpcClient } from '@mysten/core';
+import {
+    useGetSystemState,
+    useRpcClient,
+    useGetTotalTransactionBlocks,
+} from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
 
 import { FormattedStatsAmount, StatsWrapper } from './FormattedStatsAmount';
@@ -25,11 +29,7 @@ export function HomeMetrics() {
 
     const { data: systemState } = useGetSystemState();
 
-    const { data: transactionCount } = useQuery(
-        ['home', 'transaction-count'],
-        () => rpc.getTotalTransactionBlocks(),
-        { cacheTime: 24 * 60 * 60 * 1000, staleTime: Infinity, retry: 5 }
-    );
+    const { data: transactionCount } = useGetTotalTransactionBlocks();
 
     const { data: networkMetrics } = useQuery(
         ['home', 'metrics'],
