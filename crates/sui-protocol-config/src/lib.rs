@@ -153,6 +153,9 @@ struct FeatureFlags {
     // Disables unnecessary invariant check in the Move VM when swapping the value out of a local
     #[serde(skip_serializing_if = "is_false")]
     disable_invariant_violation_check_in_swap_loc: bool,
+    // If true, disallow entry modifiers on entry functions
+    #[serde(skip_serializing_if = "is_false")]
+    ban_entry_init: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -651,6 +654,10 @@ impl ProtocolConfig {
         self.feature_flags
             .disable_invariant_violation_check_in_swap_loc
     }
+
+    pub fn ban_entry_init(&self) -> bool {
+        self.feature_flags.ban_entry_init
+    }
 }
 
 // Special getters
@@ -1054,6 +1061,7 @@ impl ProtocolConfig {
                 cfg.feature_flags.disallow_adding_abilities_on_upgrade = true;
                 cfg.feature_flags
                     .disable_invariant_violation_check_in_swap_loc = true;
+                cfg.feature_flags.ban_entry_init = true;
                 cfg
             }
             // Use this template when making changes:
