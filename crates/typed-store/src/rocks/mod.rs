@@ -329,11 +329,11 @@ impl RocksDB {
         fail_point!("batch-write-before");
         let ret = match (self, batch) {
             (RocksDB::DBWithThreadMode(db), RocksDBBatch::Regular(batch)) => {
-                db.underlying.write(batch)?;
+                db.underlying.write_without_wal(batch)?;
                 Ok(())
             }
             (RocksDB::OptimisticTransactionDB(db), RocksDBBatch::Transactional(batch)) => {
-                db.underlying.write(batch)?;
+                db.underlying.write_without_wal(batch)?;
                 Ok(())
             }
             _ => Err(TypedStoreError::RocksDBError(
@@ -1581,8 +1581,10 @@ where
                 .write_perf_ctx_metrics
                 .report_metrics(&self.cf);
         }
+        let mut opts = self.opts.writeopts();
+        opts.disable_wal(true);
         self.rocksdb
-            .put_cf(&self.cf(), &key_buf, &value_buf, &self.opts.writeopts())?;
+            .put_cf(&self.cf(), &key_buf, &value_buf, &opts)?;
         Ok(())
     }
 
@@ -1600,8 +1602,9 @@ where
             None
         };
         let key_buf = be_fix_int_ser(key)?;
-        self.rocksdb
-            .delete_cf(&self.cf(), key_buf, &self.opts.writeopts())?;
+        let mut opts = self.opts.writeopts();
+        opts.disable_wal(true);
+        self.rocksdb.delete_cf(&self.cf(), key_buf, &opts)?;
         if report_metrics.is_some() {
             self.db_metrics
                 .op_metrics
