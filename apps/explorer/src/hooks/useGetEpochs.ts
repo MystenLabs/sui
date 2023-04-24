@@ -12,15 +12,15 @@ export function useGetEpochs(limit = DEFAULT_EPOCHS_LIMIT) {
 
     return useInfiniteQuery(
         ['get-epochs-blocks', limit],
-        ({ pageParam }) =>
+        ({ pageParam = null }) =>
             rpc.getEpochs({
                 descendingOrder: true,
                 cursor: pageParam,
                 limit,
             }),
         {
-            getNextPageParam: (lastPage) =>
-                lastPage?.hasNextPage ? lastPage.nextCursor : false,
+            getNextPageParam: ({ nextCursor, hasNextPage }) =>
+                hasNextPage ? nextCursor : null,
             staleTime: 10 * 1000,
             cacheTime: 24 * 60 * 60 * 1000,
             retry: false,
