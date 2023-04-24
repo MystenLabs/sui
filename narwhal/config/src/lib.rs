@@ -207,11 +207,11 @@ impl Parameters {
     }
 
     fn default_batch_size() -> usize {
-        5_000_000
+        200_000
     }
 
     fn default_max_batch_delay() -> Duration {
-        Duration::from_millis(100)
+        Duration::from_millis(200)
     }
 
     fn default_max_concurrent_requests() -> usize {
