@@ -13,7 +13,7 @@ import {
     getTransactionDigest,
     getGasData,
 } from '@mysten/sui.js';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { DateCard } from '../../shared/date-card';
 import { ReceiptCardBg } from './ReceiptCardBg';
@@ -38,6 +38,21 @@ type ReceiptCardProps = {
     activeAddress: SuiAddress;
 };
 
+const TIME_TO_WAIT_FOR_EXPLORER = 60 * 1000;
+
+function useShouldShowExplorerLink(timestamp?: string) {
+    const [shouldShow, setShouldShow] = useState(false);
+    useEffect(() => {
+        if (!timestamp) return;
+        const diff = Date.now() - new Date(Number(timestamp)).getTime();
+        const showAfter = Math.max(0, TIME_TO_WAIT_FOR_EXPLORER - diff);
+        const timeout = setTimeout(() => setShouldShow(true), showAfter);
+        return () => clearTimeout(timeout);
+    }, [timestamp]);
+
+    return shouldShow;
+}
+
 function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
     const { events } = txn;
     const timestamp = txn.timestampMs;
@@ -46,15 +61,11 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
     const isSuccessful = executionStatus === 'success';
     const transaction = getTransactionKind(txn)!;
     const txnKind = getTransactionKindName(transaction);
-
     const recipientAddress = useGetTxnRecipientAddress({
         txn,
         address: activeAddress,
     });
-
-    // const objectId = useMemo(() => {
-    //     return getTxnEffectsEventID(events!, activeAddress)[0];
-    // }, [events, activeAddress]);
+    const shouldShowExplorerLink = useShouldShowExplorerLink(timestamp);
 
     const transferAmount = useGetTransferAmount({
         txn,
@@ -194,18 +205,20 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                         {txnGasSummary}
                     </>
 
-                    <div className="flex gap-1.5 w-full py-3.5">
-                        <ExplorerLink
-                            type={ExplorerLinkType.transaction}
-                            transactionID={getTransactionDigest(txn)}
-                            title="View on Sui Explorer"
-                            className="text-sui-dark text-pSubtitleSmall font-semibold no-underline uppercase tracking-wider"
-                            showIcon={false}
-                        >
-                            View on Explorer
-                        </ExplorerLink>
-                        <ArrowUpRight12 className="text-steel text-pSubtitle" />
-                    </div>
+                    {shouldShowExplorerLink && (
+                        <div className="flex gap-1.5 w-full py-3.5">
+                            <ExplorerLink
+                                type={ExplorerLinkType.transaction}
+                                transactionID={getTransactionDigest(txn)}
+                                title="View on Sui Explorer"
+                                className="text-sui-dark text-pSubtitleSmall font-semibold no-underline uppercase tracking-wider"
+                                showIcon={false}
+                            >
+                                View on Explorer
+                            </ExplorerLink>
+                            <ArrowUpRight12 className="text-steel text-pSubtitle" />
+                        </div>
+                    )}
                 </div>
             </ReceiptCardBg>
         </div>

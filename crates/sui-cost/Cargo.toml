@@ -21,6 +21,6 @@ sui-core = { path = "../sui-core" }
 insta = { version = "1.21.1", features = ["redactions", "json"] }
 test-utils = { path = "../test-utils" }
 sui-config = {path = "../sui-config"}
+sui-move-build = { path = "../sui-move-build" }
 move-cli.workspace = true
 move-disassembler.workspace = true
-move-package.workspace = true

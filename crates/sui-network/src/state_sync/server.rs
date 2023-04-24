@@ -2,9 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{PeerHeights, StateSync, StateSyncMessage};
-use anemo::{rpc::Status, Request, Response, Result};
+use anemo::{rpc::Status, types::response::StatusCode, Request, Response, Result};
+use dashmap::DashMap;
+use futures::future::BoxFuture;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, RwLock};
+use std::task::{Context, Poll};
 use sui_types::{
     digests::{CheckpointContentsDigest, CheckpointDigest},
     messages_checkpoint::{
@@ -14,7 +17,7 @@ use sui_types::{
     storage::ReadStore,
     storage::WriteStore,
 };
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, OwnedSemaphorePermit, Semaphore};
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum GetCheckpointSummaryRequest {
@@ -102,5 +105,106 @@ where
             .get_full_checkpoint_contents(request.inner())
             .map_err(|e| Status::internal(e.to_string()))?;
         Ok(Response::new(contents))
+    }
+}
+
+/// [`Layer`] for adding a per-checkpoint limit to the number of inflight GetCheckpointContent
+/// requests.
+#[derive(Clone)]
+pub(super) struct CheckpointContentsDownloadLimitLayer {
+    inflight_per_checkpoint: Arc<DashMap<CheckpointContentsDigest, Arc<Semaphore>>>,
+    max_inflight_per_checkpoint: usize,
+}
+
+impl CheckpointContentsDownloadLimitLayer {
+    pub(super) fn new(max_inflight_per_checkpoint: usize) -> Self {
+        Self {
+            inflight_per_checkpoint: Arc::new(DashMap::new()),
+            max_inflight_per_checkpoint,
+        }
+    }
+
+    pub(super) fn maybe_prune_map(&self) {
+        const PRUNE_THRESHOLD: usize = 5000;
+        if self.inflight_per_checkpoint.len() >= PRUNE_THRESHOLD {
+            self.inflight_per_checkpoint.retain(|_, semaphore| {
+                semaphore.available_permits() < self.max_inflight_per_checkpoint
+            });
+        }
+    }
+}
+
+impl<S> tower::layer::Layer<S> for CheckpointContentsDownloadLimitLayer {
+    type Service = CheckpointContentsDownloadLimit<S>;
+
+    fn layer(&self, inner: S) -> Self::Service {
+        CheckpointContentsDownloadLimit {
+            inner,
+            inflight_per_checkpoint: self.inflight_per_checkpoint.clone(),
+            max_inflight_per_checkpoint: self.max_inflight_per_checkpoint,
+        }
+    }
+}
+
+/// Middleware for adding a per-checkpoint limit to the number of inflight GetCheckpointContent
+/// requests.
+#[derive(Clone)]
+pub(super) struct CheckpointContentsDownloadLimit<S> {
+    inner: S,
+    inflight_per_checkpoint: Arc<DashMap<CheckpointContentsDigest, Arc<Semaphore>>>,
+    max_inflight_per_checkpoint: usize,
+}
+
+impl<S> tower::Service<Request<CheckpointContentsDigest>> for CheckpointContentsDownloadLimit<S>
+where
+    S: tower::Service<
+            Request<CheckpointContentsDigest>,
+            Response = Response<Option<FullCheckpointContents>>,
+            Error = Status,
+        >
+        + 'static
+        + Clone
+        + Send,
+    <S as tower::Service<Request<CheckpointContentsDigest>>>::Future: Send,
+    Request<CheckpointContentsDigest>: 'static + Send + Sync,
+{
+    type Response = Response<Option<FullCheckpointContents>>;
+    type Error = S::Error;
+    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
+
+    #[inline]
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, req: Request<CheckpointContentsDigest>) -> Self::Future {
+        let inflight_per_checkpoint = self.inflight_per_checkpoint.clone();
+        let max_inflight_per_checkpoint = self.max_inflight_per_checkpoint;
+        let mut inner = self.inner.clone();
+
+        let fut = async move {
+            let semaphore = {
+                let semaphore_entry = inflight_per_checkpoint
+                    .entry(*req.body())
+                    .or_insert_with(|| Arc::new(Semaphore::new(max_inflight_per_checkpoint)));
+                semaphore_entry.value().clone()
+            };
+            let permit = semaphore.try_acquire_owned().map_err(|e| match e {
+                tokio::sync::TryAcquireError::Closed => {
+                    anemo::rpc::Status::new(StatusCode::InternalServerError)
+                }
+                tokio::sync::TryAcquireError::NoPermits => {
+                    anemo::rpc::Status::new(StatusCode::TooManyRequests)
+                }
+            })?;
+
+            struct SemaphoreExtension(OwnedSemaphorePermit);
+            inner.call(req).await.map(move |mut response| {
+                // Insert permit as extension so it's not dropped until the response is sent.
+                response.extensions_mut().insert(SemaphoreExtension(permit));
+                response
+            })
+        };
+        Box::pin(fut)
     }
 }

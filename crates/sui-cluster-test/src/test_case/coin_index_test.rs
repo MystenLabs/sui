@@ -46,10 +46,10 @@ impl TestCaseImpl for CoinIndexTest {
             ..
         } = client.coin_read_api().get_balance(account, None).await?;
 
-        // 1. Exeute one transfer coin transation (to another address)
+        // 1. Execute one transfer coin transaction (to another address)
         let txn = ctx.make_transactions(1).await.swap_remove(0);
         let response = client
-            .quorum_driver()
+            .quorum_driver_api()
             .execute_transaction_block(
                 txn,
                 SuiTransactionBlockResponseOptions::new()
@@ -109,7 +109,7 @@ impl TestCaseImpl for CoinIndexTest {
                 .await;
 
         let response = client
-            .quorum_driver()
+            .quorum_driver_api()
             .execute_transaction_block(
                 txn,
                 SuiTransactionBlockResponseOptions::new()
@@ -216,7 +216,7 @@ impl TestCaseImpl for CoinIndexTest {
             10000, // mint amount
         );
 
-        let balances = client.coin_read_api().get_all_balances(account).await?;
+        let mut balances = client.coin_read_api().get_all_balances(account).await?;
         let mut expected_balances = vec![
             Balance {
                 coin_type: sui_type_str.into(),
@@ -232,7 +232,8 @@ impl TestCaseImpl for CoinIndexTest {
             },
         ];
         // Comes with asc order.
-        expected_balances.sort_by(|l, r| l.coin_type.cmp(&r.coin_type));
+        expected_balances.sort_by(|l: &Balance, r| l.coin_type.cmp(&r.coin_type));
+        balances.sort_by(|l: &Balance, r| l.coin_type.cmp(&r.coin_type));
 
         assert_eq!(balances, expected_balances,);
 

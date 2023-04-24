@@ -238,7 +238,7 @@ impl TestCluster {
     ) -> SuiRpcResult<SuiTransactionBlockResponse> {
         self.fullnode_handle
             .sui_client
-            .quorum_driver()
+            .quorum_driver_api()
             .execute_transaction_block(
                 transaction,
                 SuiTransactionBlockResponseOptions::new().with_effects(),

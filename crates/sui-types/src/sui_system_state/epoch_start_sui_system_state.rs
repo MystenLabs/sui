@@ -64,10 +64,6 @@ impl EpochStartSystemState {
         })
     }
 
-    pub fn new_for_testing() -> Self {
-        Self::new_for_testing_with_epoch(0)
-    }
-
     pub fn new_for_testing_with_epoch(epoch: EpochId) -> Self {
         Self::V1(EpochStartSystemStateV1::new_for_testing_with_epoch(epoch))
     }

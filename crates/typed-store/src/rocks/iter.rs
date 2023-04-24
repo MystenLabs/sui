@@ -11,7 +11,8 @@ use serde::{de::DeserializeOwned, Serialize};
 /// An iterator over all key-value pairs in a data map.
 pub struct Iter<'a, K, V> {
     db_iter: RocksDBRawIter<'a>,
-    _phantom: PhantomData<(K, V)>,
+    // *const here is an equivalent to `impl !Send for Iter` (which is not a stable feature at the moment)
+    _phantom: PhantomData<*const (K, V)>,
     direction: Direction,
     is_initialized: bool,
 }

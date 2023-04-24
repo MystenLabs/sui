@@ -4,7 +4,7 @@
 use move_binary_format::file_format::CompiledModule;
 
 use sui_adapter::adapter::{default_verifier_config, run_metered_move_bytecode_verifier_impl};
-use sui_move_build::{BuildConfig, CompiledPackage};
+use sui_move_build::{BuildConfig, CompiledPackage, SuiPackageHooks};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::ObjectID,
@@ -445,6 +445,7 @@ pub fn build_test_modules(test_dir: &str) -> Vec<CompiledModule> {
 
 #[tokio::test]
 async fn test_metered_move_bytecode_verifier() {
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let path =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../sui-framework/packages/sui-framework");
     let compiled_package = BuildConfig::new_for_testing().build(path).unwrap();
