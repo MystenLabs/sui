@@ -6,10 +6,10 @@ import {
     ArrowRight16,
     Info16,
     Swap16,
+    Unstaked,
+    Sui,
 } from '@mysten/icons';
 import cl from 'classnames';
-
-import Icon, { SuiIcons } from '_components/icon';
 
 // TODO: use update icons lib
 const icons = {
@@ -28,18 +28,8 @@ const icons = {
     Staked: (
         <WalletActionStake24 className="text-gradient-blue-start text-heading2 bg-transparent" />
     ),
-    Unstaked: (
-        <Icon
-            icon={SuiIcons.Tokens}
-            className="text-gradient-blue-start text-heading3"
-        />
-    ),
-    Rewards: (
-        <Icon
-            icon={SuiIcons.SuiLogoIcon}
-            className="text-gradient-blue-start text-body"
-        />
-    ),
+    Unstaked: <Unstaked className="text-gradient-blue-start text-heading3" />,
+    Rewards: <Sui className="text-gradient-blue-start text-body" />,
     Swapped: <Swap16 className="text-gradient-blue-start text-heading6" />,
     Failed: <Info16 className="text-issue-dark text-heading6" />,
 };

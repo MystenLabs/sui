@@ -15,10 +15,9 @@ import {
     FloatingPortal,
     arrow,
 } from '@floating-ui/react';
+import { Info16 } from '@mysten/icons';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useRef, useState } from 'react';
-
-import Icon, { SuiIcons } from '_components/icon';
 
 import type { Placement } from '@floating-ui/react';
 import type { ReactNode, CSSProperties } from 'react';
@@ -156,7 +155,7 @@ export type IconTooltipProps = Omit<TooltipProps, 'children'>;
 export function IconTooltip(props: IconTooltipProps) {
     return (
         <Tooltip {...props}>
-            <Icon icon={SuiIcons.Info} className="font-normal" />
+            <Info16 className="shrink-0 font-normal text-steel" />
         </Tooltip>
     );
 }
