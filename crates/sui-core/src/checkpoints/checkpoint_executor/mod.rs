@@ -255,7 +255,7 @@ impl CheckpointExecutor {
         // We store a fixed number of additional FullCheckpointContents after execution is complete
         // for use in state sync.
         const NUM_SAVED_FULL_CHECKPOINT_CONTENTS: u64 = 5_000;
-        if seq > NUM_SAVED_FULL_CHECKPOINT_CONTENTS {
+        if seq >= NUM_SAVED_FULL_CHECKPOINT_CONTENTS {
             let prune_seq = seq - NUM_SAVED_FULL_CHECKPOINT_CONTENTS;
             let prune_checkpoint = self
                 .checkpoint_store
