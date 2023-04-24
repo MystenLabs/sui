@@ -3,6 +3,9 @@
 
 use std::fmt::{self, Display, Formatter, Write};
 
+use crate::balance_changes::BalanceChange;
+use crate::object_changes::ObjectChange;
+use crate::{Page, SuiEvent, SuiMovePackage, SuiObjectRef};
 use enum_dispatch::enum_dispatch;
 use fastcrypto::encoding::Base64;
 use move_binary_format::access::ModuleAccess;
@@ -38,10 +41,6 @@ use sui_types::storage::{DeleteKind, WriteKind};
 use sui_types::sui_serde::{
     BigInt, SequenceNumber as AsSequenceNumber, SuiTypeTag as AsSuiTypeTag,
 };
-
-use crate::balance_changes::BalanceChange;
-use crate::object_changes::ObjectChange;
-use crate::{Page, SuiEvent, SuiMovePackage, SuiObjectRef};
 
 // similar to EpochId of sui-types but BigInt
 pub type SuiEpochId = BigInt<u64>;
