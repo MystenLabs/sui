@@ -242,9 +242,10 @@ module sui::transfer_policy {
     ) {
         assert!(object::id(policy) == cap.policy_id, ENotOwner);
         let _: Config = df::remove(&mut policy.id, RuleKey<Rule> {});
+        vec_set::remove(&mut policy.rules, &type_name::get<Rule>());
     }
 
-    // === Fields access ===
+    // === Fields access: TransferPolicy ===
 
     /// Allows reading custom attachments to the `TransferPolicy` if there are any.
     public fun uid<T>(self: &TransferPolicy<T>): &UID { &self.id }
@@ -257,6 +258,13 @@ module sui::transfer_policy {
         assert!(object::id(self) == cap.policy_id, ENotOwner);
         &mut self.id
     }
+
+    /// Read the `rules` field from the `TransferPolicy`.
+    public fun rules<T>(self: &TransferPolicy<T>): &VecSet<TypeName> {
+        &self.rules
+    }
+
+    // === Fields access: TransferRequest ===
 
     /// Get the `item` field of the `TransferRequest`.
     public fun item<T>(self: &TransferRequest<T>): ID { self.item }
