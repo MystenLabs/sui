@@ -38,7 +38,7 @@ impl Instance {
 
     /// Return whether the instance is inactive and not ready for use.
     pub fn is_inactive(&self) -> bool {
-        !self.is_active()
+        !self.is_active() && self.status.to_lowercase() != "terminated"
     }
 
     /// Return whether the instance is terminated and in the process of being deleted.

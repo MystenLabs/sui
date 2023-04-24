@@ -202,8 +202,15 @@ impl<C: ServerProviderClient> Testbed<C> {
     pub async fn stop(&mut self) -> TestbedResult<()> {
         display::action("Stopping instances");
 
+        let active: Vec<_> = self
+            .instances
+            .iter()
+            .filter(|x| x.is_active())
+            .cloned()
+            .collect();
+
         // Stop all instances.
-        self.client.stop_instances(self.instances.iter()).await?;
+        self.client.stop_instances(active.iter()).await?;
 
         // Wait until the instances are stopped.
         loop {

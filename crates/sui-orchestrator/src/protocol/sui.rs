@@ -178,7 +178,7 @@ impl ProtocolCommands<SuiBenchmarkType> for SuiProtocol {
                     &format!("--genesis-blob-path {genesis} --keystore-path {keystore}",),
                     &format!("--primary-gas-id {gas_id}"),
                     "bench",
-                    &format!("--in-flight-ratio 30 --num-workers 24 --target-qps {load_share}"),
+                    &format!("--in-flight-ratio 3 --num-workers 24 --target-qps {load_share}"),
                     &format!(
                         "--shared-counter {shared_counter} --transfer-object {transfer_objects}"
                     ),
