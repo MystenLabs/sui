@@ -12,8 +12,8 @@ export function useGetEpochs(limit = DEFAULT_EPOCHS_LIMIT) {
 
     return useInfiniteQuery(
         ['get-epochs-blocks', limit],
-        async ({ pageParam }) =>
-            await rpc.getEpochs({
+        ({ pageParam }) =>
+            rpc.getEpochs({
                 descendingOrder: true,
                 cursor: pageParam,
                 limit,
@@ -21,7 +21,7 @@ export function useGetEpochs(limit = DEFAULT_EPOCHS_LIMIT) {
         {
             getNextPageParam: (lastPage) =>
                 lastPage?.hasNextPage ? lastPage.nextCursor : false,
-            staleTime: Infinity,
+            staleTime: 10 * 1000,
             cacheTime: 24 * 60 * 60 * 1000,
             retry: false,
             keepPreviousData: true,

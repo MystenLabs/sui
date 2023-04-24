@@ -61,8 +61,6 @@ export const genTableDataFromEpochsData = (results: EpochPage) => ({
     })),
     columns: [
         {
-            // header: () => <TxTableHeader label="Sender" />,
-
             header: () => <TxTableHeader label="Epoch" />,
             accessorKey: 'epoch',
         },
@@ -80,12 +78,10 @@ export const genTableDataFromEpochsData = (results: EpochPage) => ({
         },
         {
             header: () => <TxTableHeader label="Storage Revenue" />,
-
             accessorKey: 'storageRevenue',
         },
         {
             header: () => <TxTableHeader label="Epoch End" />,
-
             accessorKey: 'time',
         },
     ],
