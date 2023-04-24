@@ -3,7 +3,6 @@
 
 import { useFeature } from '@growthbook/growthbook-react';
 import { ArrowUpRight16 } from '@mysten/icons';
-import cl from 'classnames';
 import { useMemo } from 'react';
 
 import { useExplorerLink } from '../../hooks/useExplorerLink';
@@ -11,7 +10,7 @@ import { permissionsSelectors } from '../../redux/slices/permissions';
 import { SuiApp, type DAppEntry } from './SuiApp';
 import { SuiAppEmpty } from './SuiAppEmpty';
 import { Button } from '_app/shared/ButtonUI';
-import { Heading } from '_app/shared/heading';
+import PageTitle from '_app/shared/PageTitle';
 import { Text } from '_app/shared/text';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import { useAppSelector } from '_hooks';
@@ -43,53 +42,57 @@ function AppsPlayGround() {
         useActiveAddress: true,
     });
     return (
-        <div className={cl(st.container)}>
-            <div className="flex justify-center">
-                <Heading variant="heading6" color="gray-90" weight="semibold">
-                    Playground
-                </Heading>
-            </div>
-            <div className="my-4">
-                <Button
-                    variant="outline"
-                    href={accountOnExplorerHref!}
-                    text={
-                        <div className="flex gap-1">
-                            View your account on Sui Explorer <ArrowUpRight16 />
-                        </div>
-                    }
-                    onClick={() => {
-                        trackEvent('ViewExplorerAccount');
-                    }}
-                />
-            </div>
+        <div className="flex flex-col flex-nowrap h-full overflow-x-visible">
+            <PageTitle title="Playground" />
 
-            {ecosystemApps?.length ? (
-                <div className="p-4 bg-gray-40 rounded-xl">
-                    <Text variant="pBodySmall" color="gray-75" weight="normal">
-                        Apps below are actively curated but do not indicate any
-                        endorsement or relationship with Sui Wallet. Please
-                        DYOR.
-                    </Text>
+            <div className="mt-5 flex-grow overflow-y-auto">
+                <div className="mb-4 overflow-y-auto">
+                    <Button
+                        variant="outline"
+                        href={accountOnExplorerHref!}
+                        text={
+                            <div className="flex gap-1">
+                                View your account on Sui Explorer{' '}
+                                <ArrowUpRight16 />
+                            </div>
+                        }
+                        onClick={() => {
+                            trackEvent('ViewExplorerAccount');
+                        }}
+                    />
                 </div>
-            ) : null}
 
-            {ecosystemApps?.length ? (
-                <div className={st.apps}>
-                    {ecosystemApps.map((app) => (
-                        <SuiApp
-                            key={app.link}
-                            {...app}
-                            permissionID={linkToPermissionID.get(
-                                prepareLinkToCompare(app.link)
-                            )}
-                            displayType="full"
-                        />
-                    ))}
-                </div>
-            ) : (
-                <SuiAppEmpty displayType="full" />
-            )}
+                {ecosystemApps?.length ? (
+                    <div className="p-4 bg-gray-40 rounded-xl">
+                        <Text
+                            variant="pBodySmall"
+                            color="gray-75"
+                            weight="normal"
+                        >
+                            Apps below are actively curated but do not indicate
+                            any endorsement or relationship with Sui Wallet.
+                            Please DYOR.
+                        </Text>
+                    </div>
+                ) : null}
+
+                {ecosystemApps?.length ? (
+                    <div className={st.apps}>
+                        {ecosystemApps.map((app) => (
+                            <SuiApp
+                                key={app.link}
+                                {...app}
+                                permissionID={linkToPermissionID.get(
+                                    prepareLinkToCompare(app.link)
+                                )}
+                                displayType="full"
+                            />
+                        ))}
+                    </div>
+                ) : (
+                    <SuiAppEmpty displayType="full" />
+                )}
+            </div>
         </div>
     );
 }

@@ -21,8 +21,9 @@ function NftsPage() {
     const nfts = data?.data
         ?.filter((resp) => !!getObjectDisplay(resp).data)
         .map(({ data }) => data as SuiObjectData);
+
     return (
-        <div className="flex flex-1 flex-col flex-nowrap items-center gap-4">
+        <div className="flex flex-col flex-nowrap h-full overflow-x-visible">
             <PageTitle title="NFTs" />
             <Loading loading={isLoading}>
                 {isError ? (
@@ -34,26 +35,28 @@ function NftsPage() {
                     </Alert>
                 ) : null}
                 {nfts?.length ? (
-                    <div className="grid w-full grid-cols-2 gap-x-3.5 gap-y-4">
-                        {nfts.map(({ objectId }) => (
-                            <Link
-                                to={`/nft-details?${new URLSearchParams({
-                                    objectId,
-                                }).toString()}`}
-                                key={objectId}
-                                className="no-underline"
-                            >
-                                <ErrorBoundary>
-                                    <NFTDisplayCard
-                                        objectId={objectId}
-                                        size="md"
-                                        showLabel
-                                        animateHover
-                                        borderRadius="xl"
-                                    />
-                                </ErrorBoundary>
-                            </Link>
-                        ))}
+                    <div className="mt-5 flex-grow overflow-y-auto">
+                        <div className="grid w-full grid-cols-2 gap-x-3.5 gap-y-4 h-full">
+                            {nfts.map(({ objectId }) => (
+                                <Link
+                                    to={`/nft-details?${new URLSearchParams({
+                                        objectId,
+                                    }).toString()}`}
+                                    key={objectId}
+                                    className="no-underline"
+                                >
+                                    <ErrorBoundary>
+                                        <NFTDisplayCard
+                                            objectId={objectId}
+                                            size="md"
+                                            showLabel
+                                            animateHover
+                                            borderRadius="xl"
+                                        />
+                                    </ErrorBoundary>
+                                </Link>
+                            ))}
+                        </div>
                     </div>
                 ) : (
                     <div className="flex flex-1 items-center self-center text-caption font-semibold text-steel-darker">
