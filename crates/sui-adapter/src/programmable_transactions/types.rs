@@ -14,7 +14,6 @@ use move_vm_types::loaded_data::runtime_types::Type;
 use serde::Deserialize;
 use sui_types::{
     base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
-    coin::Coin,
     error::{ExecutionError, ExecutionErrorKind, SuiError},
     messages::CommandArgumentError,
     object::{Data, MoveObject, Object, Owner},
@@ -102,8 +101,59 @@ pub struct ObjectValue {
 
 #[derive(Debug, Clone)]
 pub enum ObjectContents {
-    Coin(Coin),
+    Coin(Vec<u8>),
     Raw(Vec<u8>),
+}
+
+impl ObjectContents {
+    pub fn bytes(&self) -> &[u8] {
+        match self {
+            ObjectContents::Coin(contents) | ObjectContents::Raw(contents) => contents
+        }
+    }
+
+    pub fn into_bytes(self) -> Vec<u8> {
+        match self {
+            ObjectContents::Coin(contents) | ObjectContents::Raw(contents) => contents
+        }
+    }
+
+    pub fn id(&self) -> ObjectID {
+        MoveObject::id_opt(self.bytes()).unwrap()
+    }
+
+    // Functions below this line should only be called on values that the caller has confirmed are coins
+
+    pub fn balance(&self) -> u64 {
+        match self {
+            ObjectContents::Coin(contents) => MoveObject::bytes_get_coin_value_unsafe(contents),
+            ObjectContents::Raw(_) => unreachable!(),
+        }
+    }
+
+    pub fn set_balance(&mut self, new_balance: u64) {
+        match self {
+            ObjectContents::Coin(contents) => MoveObject::bytes_set_coin_value_unsafe(contents, new_balance),
+            ObjectContents::Raw(_) => unreachable!(),
+        }
+    }
+
+    pub fn split(&mut self, amount: u64, new_coin_id: ObjectID) -> Result<Self, ExecutionError> {
+        match self {
+            ObjectContents::Coin(contents) => {
+                let new_coin_contents = MoveObject::bytes_split_coin_unsafe(contents, amount, new_coin_id)?;
+                Ok(ObjectContents::Coin(new_coin_contents))
+            }
+            ObjectContents::Raw(_) => unreachable!(),
+        }
+    }
+
+    pub fn add(&mut self, amount: u64) ->  Result<(), ExecutionError> {
+        match self {
+            ObjectContents::Coin(contents) => MoveObject::bytes_add_coin_unsafe(contents, amount),
+            ObjectContents::Raw(_) => unreachable!(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -199,10 +249,7 @@ impl ObjectValue {
         contents: &[u8],
     ) -> Result<Self, ExecutionError> {
         let contents = if type_.is_coin() {
-            let Ok(coin) = Coin::from_bcs_bytes(contents) else{
-                invariant_violation!("Could not deserialize a coin")
-            };
-            ObjectContents::Coin(coin)
+            ObjectContents::Coin(contents.to_vec())
         } else {
             ObjectContents::Raw(contents.to_vec())
         };
@@ -246,12 +293,12 @@ impl ObjectValue {
 
     /// # Safety
     /// We must have the Type is the coin type, but we are unable to check it at this spot
-    pub unsafe fn coin(type_: Type, coin: Coin) -> Self {
+    pub unsafe fn coin(type_: Type, coin: ObjectContents) -> Self {
         Self {
             type_,
             has_public_transfer: true,
             used_in_non_entry_move_call: false,
-            contents: ObjectContents::Coin(coin),
+            contents: coin,
         }
     }
 
@@ -264,8 +311,8 @@ impl ObjectValue {
 
     pub fn write_bcs_bytes(&self, buf: &mut Vec<u8>) {
         match &self.contents {
-            ObjectContents::Raw(bytes) => buf.extend(bytes),
-            ObjectContents::Coin(coin) => buf.extend(coin.to_bcs_bytes()),
+            ObjectContents::Raw(bytes) |
+            ObjectContents::Coin(bytes) => buf.extend(bytes),
         }
     }
 }

@@ -141,22 +141,23 @@ impl<'vm, 'state, 'a, S: StorageView> ExecutionContext<'vm, 'state, 'a, S> {
                 /* imm override */ false,
                 gas_coin,
             )?;
+            let Some(Value::Object(ObjectValue {
+                                contents: coin @ ObjectContents::Coin(_),
+                                ..
+                })) = &mut gas.inner.value else {
+                                invariant_violation!("Gas object should be a populated coin")
+            };
             // subtract the max gas budget. This amount is off limits in the programmable transaction,
             // so to mimic this "off limits" behavior, we act as if the coin has less balance than
             // it really does
-            let Some(Value::Object(ObjectValue {
-                contents: ObjectContents::Coin(coin),
-                ..
-            })) = &mut gas.inner.value else {
-                invariant_violation!("Gas object should be a populated coin")
-            };
+            let old_balance = coin.balance();
             let max_gas_in_balance = gas_status.gas_budget();
-            let Some(new_balance) = coin.balance.value().checked_sub(max_gas_in_balance) else {
+            let Some(new_balance) = old_balance.checked_sub(max_gas_in_balance) else {
                 invariant_violation!(
                     "Transaction input checker should check that there is enough gas"
                 );
             };
-            coin.balance = Balance::new(new_balance);
+            coin.set_balance(new_balance);
             gas
         } else {
             InputValue {
@@ -1093,10 +1094,7 @@ fn add_additional_write(
         contents,
         ..
     } = object_value;
-    let bytes = match contents {
-        ObjectContents::Coin(coin) => coin.to_bcs_bytes(),
-        ObjectContents::Raw(bytes) => bytes,
-    };
+    let bytes = contents.into_bytes();
     let object_id = MoveObject::id_opt(&bytes).map_err(|e| {
         ExecutionError::invariant_violation(format!("No id for Raw object bytes. {e}"))
     })?;
