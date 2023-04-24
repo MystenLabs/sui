@@ -61,6 +61,7 @@ macro_rules! define_index {
         #[cfg_attr(any(test, feature = "fuzzing"), derive(proptest_derive::Arbitrary))]
         #[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
         #[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
+        #[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
         #[doc=$comment]
         pub struct $name(pub TableIndex);
 
@@ -218,6 +219,7 @@ pub const NO_TYPE_ARGUMENTS: SignatureIndex = SignatureIndex(0);
 #[cfg_attr(any(test, feature = "fuzzing"), derive(proptest_derive::Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
 #[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
 pub struct ModuleHandle {
     /// Index into the `AddressIdentifierIndex`. Identifies module-holding account's address.
     pub address: AddressIdentifierIndex,
@@ -242,6 +244,7 @@ pub struct ModuleHandle {
 #[cfg_attr(any(test, feature = "fuzzing"), derive(proptest_derive::Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
 #[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
 pub struct StructHandle {
     /// The module that defines the type.
     pub module: ModuleHandleIndex,
@@ -284,6 +287,7 @@ pub struct StructTypeParameter {
 #[cfg_attr(any(test, feature = "fuzzing"), derive(proptest_derive::Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(params = "usize"))]
 #[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
 pub struct FunctionHandle {
     /// The module that defines the function.
     pub module: ModuleHandleIndex,
@@ -302,6 +306,7 @@ pub struct FunctionHandle {
 #[cfg_attr(any(test, feature = "fuzzing"), derive(proptest_derive::Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
 #[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
 pub struct FieldHandle {
     pub owner: StructDefinitionIndex,
     pub field: MemberCount,
@@ -315,6 +320,7 @@ pub struct FieldHandle {
 #[cfg_attr(any(test, feature = "fuzzing"), derive(proptest_derive::Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
 #[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
 pub enum StructFieldInformation {
     Native,
     Declared(Vec<FieldDefinition>),
@@ -333,6 +339,7 @@ pub enum StructFieldInformation {
 #[cfg_attr(any(test, feature = "fuzzing"), derive(proptest_derive::Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
 #[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
 pub struct StructDefInstantiation {
     pub def: StructDefinitionIndex,
     pub type_parameters: SignatureIndex,
@@ -343,6 +350,7 @@ pub struct StructDefInstantiation {
 #[cfg_attr(any(test, feature = "fuzzing"), derive(proptest_derive::Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
 #[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
 pub struct FunctionInstantiation {
     pub handle: FunctionHandleIndex,
     pub type_parameters: SignatureIndex,
@@ -358,6 +366,7 @@ pub struct FunctionInstantiation {
 #[cfg_attr(any(test, feature = "fuzzing"), derive(proptest_derive::Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
 #[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
 pub struct FieldInstantiation {
     pub handle: FieldHandleIndex,
     pub type_parameters: SignatureIndex,
@@ -369,6 +378,7 @@ pub struct FieldInstantiation {
 #[cfg_attr(any(test, feature = "fuzzing"), derive(proptest_derive::Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
 #[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
 pub struct StructDefinition {
     /// The `StructHandle` for this `StructDefinition`. This has the name and the abilities
     /// for the type.
@@ -402,6 +412,7 @@ impl StructDefinition {
 #[cfg_attr(any(test, feature = "fuzzing"), derive(proptest_derive::Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
 #[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
 pub struct FieldDefinition {
     /// The name of the field.
     pub name: IdentifierIndex,
@@ -457,6 +468,7 @@ impl std::convert::TryFrom<u8> for Visibility {
 #[cfg_attr(any(test, feature = "fuzzing"), derive(proptest_derive::Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(params = "usize"))]
 #[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
 pub struct FunctionDefinition {
     /// The prototype of the function (module, name, signature).
     pub function: FunctionHandleIndex,
@@ -510,6 +522,7 @@ impl FunctionDefinition {
 #[cfg_attr(any(test, feature = "fuzzing"), derive(proptest_derive::Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
 #[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
 pub struct TypeSignature(pub SignatureToken);
 
 // TODO: remove at some point or move it in the front end (language/move-ir-compiler)
@@ -519,6 +532,7 @@ pub struct TypeSignature(pub SignatureToken);
 #[cfg_attr(any(test, feature = "fuzzing"), derive(proptest_derive::Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(params = "usize"))]
 #[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
 pub struct FunctionSignature {
     /// The list of return types.
     #[cfg_attr(
@@ -544,6 +558,7 @@ pub struct FunctionSignature {
 #[cfg_attr(any(test, feature = "fuzzing"), derive(proptest_derive::Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(params = "usize"))]
 #[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
 pub struct Signature(
     #[cfg_attr(
         any(test, feature = "fuzzing"),
@@ -575,6 +590,7 @@ pub type TypeParameterIndex = u16;
 #[derive(Debug, Clone, Eq, Copy, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(proptest_derive::Arbitrary))]
 #[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
 pub enum Ability {
     /// Allows values of types with this ability to be copied, via CopyLoc or ReadRef
     Copy = 0x1,
@@ -838,6 +854,7 @@ impl Arbitrary for AbilitySet {
 /// enforced by the verifier.
 #[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
 pub enum SignatureToken {
     /// Boolean, `true` or `false`.
     Bool,
@@ -1116,6 +1133,7 @@ impl SignatureToken {
 /// loader/evauluator
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
 pub struct Constant {
     pub type_: SignatureToken,
     pub data: Vec<u8>,
@@ -1126,6 +1144,7 @@ pub struct Constant {
 #[cfg_attr(any(test, feature = "fuzzing"), derive(proptest_derive::Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(params = "usize"))]
 #[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
 pub struct CodeUnit {
     /// List of locals type. All locals are typed.
     pub locals: SignatureIndex,
@@ -1146,6 +1165,7 @@ pub struct CodeUnit {
 #[cfg_attr(any(test, feature = "fuzzing"), derive(proptest_derive::Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
 #[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
 pub enum Bytecode {
     /// Pop and discard the value at the top of the stack.
     /// The value on the stack must be an copyable type.
@@ -1789,6 +1809,7 @@ impl Bytecode {
 /// A CompiledScript defines the constant pools (string, address, signatures, etc.), the handle
 /// tables (external code references) and it has a `main` definition.
 #[derive(Clone, Default, Eq, PartialEq, Debug)]
+#[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
 pub struct CompiledScript {
     /// Version number found during deserialization
     pub version: u32,
@@ -1832,6 +1853,7 @@ impl CompiledScript {
 /// A module is published as a single entry and it is retrieved as a single blob.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 #[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
 pub struct CompiledModule {
     /// Version number found during deserialization
     pub version: u32,
