@@ -1,3 +1,7 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+/// This example shows how to update an object field without the need of a Permission Capability.
 module access_control_function::contract {
 
     use sui::object::{Self, UID};
