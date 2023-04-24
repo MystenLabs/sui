@@ -4,10 +4,10 @@
 import {
     formatPercentageDisplay,
     useGetRollingAverageApys,
+    useGetTimeBeforeEpochNumber,
 } from '@mysten/core';
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
 
-import { useGetTimeBeforeEpochNumber } from '_app/staking/useGetTimeBeforeEpochNumber';
 import { ValidatorLogo } from '_app/staking/validators/ValidatorLogo';
 import { TxnAmount } from '_components/receipt-card/TxnAmount';
 import { NUM_OF_EPOCH_BEFORE_EARNING } from '_src/shared/constants';

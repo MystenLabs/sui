@@ -40,7 +40,7 @@ export function EpochsActivityTable({
         hasNextPage,
     } = useGetEpochs(limit);
 
-    const countQuery = useQuery(
+    const { data: count } = useQuery(
         ['epochs', 'current'],
         async () => rpc.getCurrentEpoch(),
         {
@@ -113,18 +113,14 @@ export function EpochsActivityTable({
                         onFirst={() => setCurrentPage(0)}
                     />
                 ) : (
-                    disablePagination && (
-                        <Link to="/recent?tab=epochs" after={<ArrowRight12 />}>
-                            More Epochs
-                        </Link>
-                    )
+                    <Link to="/recent?tab=epochs" after={<ArrowRight12 />}>
+                        More Epochs
+                    </Link>
                 )}
 
                 <div className="flex items-center space-x-3">
                     <Text variant="body/medium" color="steel-dark">
-                        {countQuery.data
-                            ? numberSuffix(Number(countQuery.data))
-                            : '-'}
+                        {count ? numberSuffix(Number(count)) : '-'}
                         {` Epochs`}
                     </Text>
                     {!disablePagination && (

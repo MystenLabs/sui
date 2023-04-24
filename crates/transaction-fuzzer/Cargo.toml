@@ -13,6 +13,7 @@ proptest = "1.1.0"
 proptest-derive = "0.3.0"
 rand = "0.8.5"
 move-core-types.workspace = true
+move-binary-format.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tracing = "0.1.36"
 

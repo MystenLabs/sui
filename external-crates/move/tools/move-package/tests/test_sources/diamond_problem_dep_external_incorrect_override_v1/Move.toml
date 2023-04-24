@@ -1,0 +1,22 @@
+# Dependency graph and and override (ov)
+# C's dependency on A and ADep is externally resolved (override is incorrect)
+#
+#                 +----+
+#           +---->| C  |----+
+#           |     +----+    |
+#           |               |
+# +----+    |               +---->+----+------>+-------+
+# |Root|----|                     | A  |       | ADep  |
+# +----+    |               +---->+----+   +-->+-------+
+#           |               |              |
+#           |     +----+----+    ov(1)     |
+#           +---->| B  |-------------------+
+#                 +----+
+
+[package]
+name = "Root"
+version = "0.0.0"
+
+[dependencies]
+B = { local = "./deps_only/B" }
+C = { local = "./deps_only/C" }

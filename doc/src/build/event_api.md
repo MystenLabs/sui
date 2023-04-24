@@ -494,7 +494,7 @@ You can use `EventFilter` to filter the events included in your subscription to 
 
 ### Combining filters
 
-We provide a few operators for combining filters:
+Sui provides a few operators for combining filters:
 
 | Operator | Description | JSON-RPC Parameter Example |
 |----------| ----------- | -------------------------- |

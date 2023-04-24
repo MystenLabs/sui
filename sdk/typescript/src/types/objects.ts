@@ -456,9 +456,17 @@ export type PaginatedObjectsResponse = Infer<typeof PaginatedObjectsResponse>;
 
 // mirrors sui_json_rpc_types:: SuiObjectDataFilter
 export type SuiObjectDataFilter =
+  | { MatchAll: SuiObjectDataFilter[] }
+  | { MatchAny: SuiObjectDataFilter[] }
+  | { MatchNone: SuiObjectDataFilter[] }
   | { Package: ObjectId }
   | { MoveModule: { package: ObjectId; module: string } }
-  | { StructType: string };
+  | { StructType: string }
+  | { AddressOwner: string }
+  | { ObjectOwner: string }
+  | { ObjectId: string }
+  | { ObjectIds: string[] }
+  | { Version: string };
 
 export type SuiObjectResponseQuery = {
   filter?: SuiObjectDataFilter;

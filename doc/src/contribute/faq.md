@@ -19,7 +19,7 @@ Additional resources:
 
 ## Can I buy Sui tokens?
 
-We will have a public token, called SUI, for the Sui Mainnet. But it is not available right now and there is no timeline as of yet. Anyone who claims otherwise (offering tokens, whitelists, pre-sale, etc.) is running a scam.
+SUI will be listed on public exchanges after the Mainnet launch.
 
 ## How can I join the Sui network? How do I participate in the Sui project?
 
@@ -29,7 +29,7 @@ You can also join the [Move](https://discord.gg/8prNjUqyFj) and [Sui](https://di
 
 ## Are you looking for partners?
 
-We are seeking partners that can contribute to the ecosystem, primarily in development, by building apps with the SDK now so they can be ready to launch when the network goes live. If interested, please apply using the [Sui Partnerships Form](https://bit.ly/suiform).
+If interested in partnering with Sui, please apply using the [Sui Partnerships Form](https://bit.ly/suiform).
 
 ## After I publish a Move package, how do I update it?
 
@@ -45,12 +45,12 @@ See the instructions to [run a Sui Full node](../build/fullnode.md).
 
 No. Sui heavily leverages the Move's asset-centric data model for its novel parallel execution and commitment scheme. This is simply not possible with the EVM data model. Because assets are represented as entries in dynamically indexable maps, it is not possible to statically determine which assets a transaction will touch.
 
-To be blunt: even if we preferred the EVM/Solidity to Move, we could not use them in Sui without sacrificing the performance breakthroughs that make Sui unique. And of course, we think there are many reasons why Move is a safer and more developer-friendly language than the EVM.
+Further, Sui could not implement EVMs without sacrificing the performance breakthroughs that make Sui unique. There are also many reasons why Move is a safer and more developer-friendly language than the EVM.
 
-See [Why move?](../learn/why-move.md) for more details on this. In addition, see the [Move Problem Statement](https://github.com/MystenLabs/awesome-move/blob/main/docs/problem_statement.md) for why we think that - despite being the most popular smart contract language of today - EVM is holding back the crypto space.
+See [Why move?](../learn/why-move.md) for more details on this. In addition, see the [Move Problem Statement](https://github.com/MystenLabs/awesome-move/blob/main/docs/problem_statement.md) for why - despite being the most popular smart contract language of today - EVM is holding back the crypto space.
 
-Finally, the EVM developer community is very small--approximately 4,000 programmers according to [this study](https://medium.com/electric-capital/electric-capital-developer-report-2021-f37874efea6d). Compare this to (e.g.) the [>20M registered iOS developers](https://techcrunch.com/2018/06/04/app-store-hits-20m-registered-developers-at-100b-in-revenues-500m-visitors-per-week). Thus, the practical path to scaling the smart contract dev community is to bring folks in from the broader population, not to pull them from the tiny pool of existing Solidity developers. We think Move is much safer and much more approachable for mainstream programmers than the EVM.
+Finally, the EVM developer community is very small--approximately 4,000 programmers according to [this study](https://medium.com/electric-capital/electric-capital-developer-report-2021-f37874efea6d). Compare this to (e.g.) the [>20M registered iOS developers](https://techcrunch.com/2018/06/04/app-store-hits-20m-registered-developers-at-100b-in-revenues-500m-visitors-per-week). Thus, the practical path to scaling the smart contract dev community is to bring folks in from the broader population, not to pull them from the tiny pool of existing Solidity developers. Sui believes that Move is much safer and much more approachable for mainstream programmers than the EVM.
 
 ## Is Sui an L2, or are there plans to support L2s?
 
-Sui tackles scaling at the base layer rather than via L2s. We think this approach leads to a more user and developer-friendly system than adding additional complexity on top of an already-complex base layer that doesn't scale.
+Sui tackles scaling at the base layer rather than via L2s. This approach leads to a more user and developer-friendly system than adding additional complexity on top of an already-complex base layer that doesn't scale.

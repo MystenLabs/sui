@@ -30,7 +30,7 @@ use crate::authority_aggregator::{
 };
 use crate::authority_client::AuthorityAPI;
 use mysten_common::sync::notify_read::{NotifyRead, Registration};
-use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::{spawn_monitored_task, GaugeGuard};
 use std::fmt::Write;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
@@ -246,10 +246,10 @@ where
         &self,
         transaction: VerifiedTransaction,
     ) -> Result<ProcessTransactionResult, Option<QuorumDriverError>> {
+        let auth_agg = self.validators.load();
+        let _tx_guard = GaugeGuard::acquire(&auth_agg.metrics.inflight_transactions);
         let tx_digest = *transaction.digest();
-        let result = self
-            .validators
-            .load()
+        let result = auth_agg
             .process_transaction(transaction)
             .instrument(tracing::debug_span!("aggregator_process_tx", ?tx_digest))
             .await;
@@ -402,10 +402,10 @@ where
         &self,
         certificate: VerifiedCertificate,
     ) -> Result<QuorumDriverResponse, Option<QuorumDriverError>> {
+        let auth_agg = self.validators.load();
+        let _cert_guard = GaugeGuard::acquire(&auth_agg.metrics.inflight_certificates);
         let tx_digest = *certificate.digest();
-        let (effects, events) = self
-            .validators
-            .load()
+        let (effects, events) = auth_agg
             .process_certificate(certificate.clone().into_inner())
             .instrument(tracing::debug_span!("aggregator_process_cert", ?tx_digest))
             .await

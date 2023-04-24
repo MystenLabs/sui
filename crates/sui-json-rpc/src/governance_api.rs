@@ -8,7 +8,9 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
+use tracing::{info, instrument};
 
+use mysten_metrics::spawn_monitored_task;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::SuiCommittee;
 use sui_json_rpc_types::{DelegatedStake, Stake, StakeStatus};
@@ -30,7 +32,7 @@ use sui_types::sui_system_state::{
 
 use crate::api::{GovernanceReadApiServer, JsonRpcMetrics};
 use crate::error::Error;
-use crate::SuiRpcModule;
+use crate::{ObjectProvider, SuiRpcModule};
 
 pub struct GovernanceReadApi {
     state: Arc<AuthorityState>,
@@ -43,10 +45,14 @@ impl GovernanceReadApi {
     }
 
     async fn get_staked_sui(&self, owner: SuiAddress) -> Result<Vec<StakedSui>, Error> {
-        let result = self
-            .state
-            .get_move_objects(owner, MoveObjectType::staked_sui())
-            .await?;
+        let state = self.state.clone();
+        let result = spawn_monitored_task!(async move {
+            state
+                .get_move_objects(owner, MoveObjectType::staked_sui())
+                .await
+        })
+        .await??;
+
         self.metrics
             .get_stake_sui_result_size
             .report(result.len() as u64);
@@ -60,10 +66,15 @@ impl GovernanceReadApi {
         &self,
         staked_sui_ids: Vec<ObjectID>,
     ) -> Result<Vec<DelegatedStake>, Error> {
-        let stakes_read = staked_sui_ids
-            .iter()
-            .map(|id| self.state.get_object_read(id))
-            .collect::<Result<Vec<_>, _>>()?;
+        let state = self.state.clone();
+        let stakes_read = spawn_monitored_task!(async move {
+            staked_sui_ids
+                .iter()
+                .map(|id| state.get_object_read(id))
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .await??;
+
         if stakes_read.is_empty() {
             return Ok(vec![]);
         }
@@ -76,8 +87,8 @@ impl GovernanceReadApi {
                 ObjectRead::Deleted(oref) => {
                     match self
                         .state
-                        .database
-                        .find_object_lt_or_eq_version(oref.0, oref.1.one_before().unwrap())
+                        .find_object_lt_or_eq_version(&oref.0, &oref.1.one_before().unwrap())
+                        .await?
                     {
                         Some(o) => stakes.push((StakedSui::try_from(&o)?, false)),
                         None => {
@@ -125,17 +136,18 @@ impl GovernanceReadApi {
             },
         );
 
-        let system_state: SuiSystemStateSummary =
-            self.get_system_state()?.into_sui_system_state_summary();
+        let system_state = self.get_system_state()?;
+        let system_state_summary: SuiSystemStateSummary =
+            system_state.clone().into_sui_system_state_summary();
         let mut delegated_stakes = vec![];
         for (pool_id, stakes) in pools {
             // Rate table and rate can be null when the pool is not active
             let rate_table = self
-                .get_exchange_rate_table(&system_state, &pool_id)
+                .get_exchange_rate_table(&system_state_summary, &pool_id)
                 .await
                 .ok();
             let current_rate = if let Some(rate_table) = rate_table {
-                self.get_exchange_rate(rate_table, system_state.epoch)
+                self.get_exchange_rate(rate_table, system_state_summary.epoch)
                     .await
                     .ok()
             } else {
@@ -146,7 +158,7 @@ impl GovernanceReadApi {
             for (stake, exists) in stakes {
                 let status = if !exists {
                     StakeStatus::Unstaked
-                } else if system_state.epoch >= stake.activation_epoch() {
+                } else if system_state_summary.epoch >= stake.activation_epoch() {
                     let estimated_reward = if let (Some(rate_table), Some(current_rate)) =
                         (&rate_table, &current_rate)
                     {
@@ -173,8 +185,12 @@ impl GovernanceReadApi {
                     status,
                 })
             }
-            let validator =
-                get_validator_by_pool_id(self.state.db().as_ref(), &system_state, pool_id)?;
+            let validator = get_validator_by_pool_id(
+                self.state.db().as_ref(),
+                &system_state,
+                &system_state_summary,
+                pool_id,
+            )?;
             delegated_stakes.push(DelegatedStake {
                 validator_address: validator.sui_address,
                 staking_pool: pool_id,
@@ -234,18 +250,24 @@ impl GovernanceReadApi {
 
 #[async_trait]
 impl GovernanceReadApiServer for GovernanceReadApi {
+    #[instrument(skip(self))]
     async fn get_stakes_by_ids(
         &self,
         staked_sui_ids: Vec<ObjectID>,
     ) -> RpcResult<Vec<DelegatedStake>> {
+        info!("get_stakes_by_ids");
         Ok(self.get_stakes_by_ids(staked_sui_ids).await?)
     }
 
+    #[instrument(skip(self))]
     async fn get_stakes(&self, owner: SuiAddress) -> RpcResult<Vec<DelegatedStake>> {
+        info!("get_stakes");
         Ok(self.get_stakes(owner).await?)
     }
 
+    #[instrument(skip(self))]
     async fn get_committee_info(&self, epoch: Option<BigInt<u64>>) -> RpcResult<SuiCommittee> {
+        info!("get_committee_info");
         Ok(self
             .state
             .committee_store()
@@ -254,7 +276,9 @@ impl GovernanceReadApiServer for GovernanceReadApi {
             .map_err(Error::from)?)
     }
 
+    #[instrument(skip(self))]
     async fn get_latest_sui_system_state(&self) -> RpcResult<SuiSystemStateSummary> {
+        info!("get_latest_sui_system_state");
         Ok(self
             .state
             .database
@@ -263,7 +287,9 @@ impl GovernanceReadApiServer for GovernanceReadApi {
             .into_sui_system_state_summary())
     }
 
+    #[instrument(skip(self))]
     async fn get_reference_gas_price(&self) -> RpcResult<BigInt<u64>> {
+        info!("get_reference_gas_price");
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         Ok(epoch_store.reference_gas_price().into())
     }

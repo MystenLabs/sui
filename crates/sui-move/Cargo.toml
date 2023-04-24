@@ -16,6 +16,7 @@ once_cell = { version = "1.16", optional = true }
 serde_json = "1.0.88"
 serde_yaml = "0.8.26"
 tracing = "0.1.36"
+prometheus = "0.13.3"
 
 fastcrypto.workspace = true
 move-binary-format.workspace = true
@@ -45,7 +46,6 @@ jemalloc-ctl = "^0.5"
 assert_cmd = "2.0.6"
 futures = "0.3.23"
 jsonrpsee = { version = "0.16.2", features = ["jsonrpsee-core"] }
-prometheus = "0.13.3"
 rand = "0.8.5"
 tempfile = "3.3.0"
 

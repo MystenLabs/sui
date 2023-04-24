@@ -43,7 +43,6 @@ use sui_core::transaction_input_checker::check_objects;
 use sui_framework::BuiltInFramework;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_protocol_config::ProtocolConfig;
-use sui_types::DEEPBOOK_OBJECT_ID;
 use sui_types::MOVE_STDLIB_OBJECT_ID;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, SUI_ADDRESS_LENGTH},
@@ -71,6 +70,7 @@ use sui_types::{
     messages::{Argument, CallArg},
     move_package::MovePackage,
 };
+use sui_types::{metrics::LimitsMetrics, DEEPBOOK_OBJECT_ID};
 use sui_types::{
     programmable_transaction_builder::ProgrammableTransactionBuilder, SUI_FRAMEWORK_OBJECT_ID,
 };
@@ -111,6 +111,7 @@ pub struct SuiTestAdapter<'a> {
     rng: StdRng,
     gas_price: u64,
     protocol_config: ProtocolConfig,
+    metrics: Arc<LimitsMetrics>,
 }
 
 struct TestAccount {
@@ -295,6 +296,10 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             named_address_mapping.insert(name, addr);
         }
 
+        // Use a throwaway metrics registry for testing.
+        let registry = prometheus::Registry::new();
+        let metrics = Arc::new(LimitsMetrics::new(&registry));
+
         let enable_move_vm_paranoid_checks = false;
         let mut test_adapter = Self {
             vm: Arc::new(
@@ -323,6 +328,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             // TODO: make this configurable
             gas_price: 1000,
             protocol_config,
+            metrics,
         };
         for well_known in WELL_KNOWN_OBJECTS.iter().copied() {
             test_adapter
@@ -366,7 +372,6 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             upgradeable,
             dependencies,
         } = extra;
-
         let named_addr_opt = modules.first().unwrap().0;
         let first_module_name = modules.first().unwrap().1.self_id().name().to_string();
         let modules_bytes = modules
@@ -974,6 +979,7 @@ impl<'a> SuiTestAdapter<'a> {
             // TODO: Support different epochs in transactional tests.
             &EpochData::new_test(),
             &self.protocol_config,
+            self.metrics.clone(),
             false, // enable_expensive_checks
         );
         let mut created_ids: Vec<_> = effects

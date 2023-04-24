@@ -350,6 +350,7 @@ pub(crate) fn explain_publish_error(
                 check_struct_layout: true,
                 check_friend_linking: false,
                 check_private_entry_linking: true,
+                disallowed_new_abilities: AbilitySet::EMPTY,
             })
             .check(&old_api, &new_api)
             .is_err()
@@ -362,6 +363,7 @@ pub(crate) fn explain_publish_error(
                 check_struct_layout: false,
                 check_friend_linking: false,
                 check_private_entry_linking: true,
+                disallowed_new_abilities: AbilitySet::EMPTY,
             })
             .check(&old_api, &new_api)
             .is_err()

@@ -25,7 +25,6 @@ import { api, thunkExtras } from '_store/thunk-extras';
 import './styles/global.scss';
 import '@fontsource/inter/variable.css';
 import '@fontsource/red-hat-mono/variable.css';
-import '_font-icons/output/sui-icons.scss';
 import 'bootstrap-icons/font/bootstrap-icons.scss';
 
 async function init() {

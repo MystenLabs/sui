@@ -32,6 +32,7 @@ anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "691e43c3
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace"] }
+arbitrary = { version = "1", default-features = false, features = ["derive_arbitrary"] }
 arc-swap = { version = "1", default-features = false, features = ["serde"] }
 ark-bls12-381 = { version = "0.4" }
 ark-bn254 = { version = "0.4" }
@@ -344,7 +345,7 @@ move-bytecode-viewer = { path = "../../external-crates/move/tools/move-bytecode-
 move-cli = { path = "../../external-crates/move/tools/move-cli", default-features = false }
 move-command-line-common = { path = "../../external-crates/move/move-command-line-common", default-features = false }
 move-compiler = { path = "../../external-crates/move/move-compiler", default-features = false }
-move-core-types = { path = "../../external-crates/move/move-core/types", features = ["address32"] }
+move-core-types = { path = "../../external-crates/move/move-core/types", features = ["address32", "fuzzing"] }
 move-coverage = { path = "../../external-crates/move/tools/move-coverage" }
 move-disassembler = { path = "../../external-crates/move/tools/move-disassembler" }
 move-docgen = { path = "../../external-crates/move/move-prover/move-docgen", default-features = false }
@@ -687,6 +688,7 @@ anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "691e43c3
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace"] }
+arbitrary = { version = "1", default-features = false, features = ["derive_arbitrary"] }
 arc-swap = { version = "1", default-features = false, features = ["serde"] }
 ark-bls12-381 = { version = "0.4" }
 ark-bn254 = { version = "0.4" }
@@ -848,6 +850,7 @@ der-ca01ad9e24f5d932 = { package = "der", version = "0.7", default-features = fa
 der-parser = { version = "8", features = ["bigint"] }
 derivative = { version = "2", default-features = false, features = ["use_core"] }
 derive-syn-parse = { version = "0.1", default-features = false }
+derive_arbitrary = { version = "1", default-features = false }
 derive_builder = { version = "0.12" }
 derive_builder_core = { version = "0.12", default-features = false }
 derive_builder_macro = { version = "0.12", default-features = false }
@@ -1049,7 +1052,7 @@ move-bytecode-viewer = { path = "../../external-crates/move/tools/move-bytecode-
 move-cli = { path = "../../external-crates/move/tools/move-cli", default-features = false }
 move-command-line-common = { path = "../../external-crates/move/move-command-line-common", default-features = false }
 move-compiler = { path = "../../external-crates/move/move-compiler", default-features = false }
-move-core-types = { path = "../../external-crates/move/move-core/types", features = ["address32"] }
+move-core-types = { path = "../../external-crates/move/move-core/types", features = ["address32", "fuzzing"] }
 move-coverage = { path = "../../external-crates/move/tools/move-coverage" }
 move-disassembler = { path = "../../external-crates/move/tools/move-disassembler" }
 move-docgen = { path = "../../external-crates/move/move-prover/move-docgen", default-features = false }

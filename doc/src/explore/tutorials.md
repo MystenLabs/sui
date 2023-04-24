@@ -180,7 +180,7 @@ Mutated Objects:
 38B89FE9F4A4823F1406938E87A8767CBD7F0B93 SequenceNumber(2) o#26dbaf7ec2032a6270a45498ad46ac0b1ddbc361fcff20cadafaf5d39b8181b1
 ```
 
-The preceding call created three objects. For each object, it printed out a tuple of three values (object_id, version, object_digest). Object ID is what we care about here. Since we don't have a real application here to display things for us, we need a bit of object printing magic to figure out which object is which. Let's print out the metadata of each created object (replace the object ID with what you see on your screen):
+The preceding call created three objects. For each object, it printed out a tuple of three values (object_id, version, object_digest). Object ID is the important value here. Since there is no application here to display objects, you need a bit of object printing magic to figure out which object is which. Let's print out the metadata of each created object (replace the object ID with what you see on your screen):
 
 ```bash
 sui client object 5851B7EA07B93E68696BC0CF811D2E266DFB880D
@@ -210,7 +210,7 @@ There are two `MarkMintCap` objects (for capability of minting a mark for each p
  1. `MarkMintCap` Object `A6D3B507D4533822E690291166891D42694A2721` is owned by PLAYER_X.
  1. `TicTacToe` Object `F1B8161BD97D3CD6627E739AD675089C5ACFB452` is owned by ADMIN.
 
-We add the above three object IDs to these environment variables:
+Add the above three object IDs to these environment variables:
 
 ```
 $ export XCAP=A6D3B507D4533822E690291166891D42694A2721
@@ -219,7 +219,7 @@ export GAME=F1B8161BD97D3CD6627E739AD675089C5ACFB452
 ```
 
 By convention, PlayerX goes first. PlayerX wants to put a mark at the center of the gameboard ((1, 1)). This needs to take two steps. First PlayerX creates a Mark object with the placement intention and send it to the admin.
-We will call the `send_mark_to_game` function in `TicTacToe`, whose signature looks like this:
+Then call the `send_mark_to_game` function in `TicTacToe`, whose signature looks like this:
 
 ```
 public entry fun send_mark_to_game(cap: &mut MarkMintCap, game_address: address, row: u64, col: u64, ctx: &mut TxContext);
@@ -259,7 +259,7 @@ The admin can now place the mark on the gameboard. The function to place the mar
 public entry fun place_mark(game: &mut TicTacToe, mark: Mark, ctx: &mut TxContext);
 ```
 
-The first argument is the game board, and the second argument is the mark the admin just received from the player. We will call this function (replace the second argument with the Mark object ID above):
+The first argument is the game board, and the second argument is the mark the admin just received from the player. Call this function (replace the second argument with the Mark object ID above):
 
 ```shell
 $ sui client call --package $PACKAGE --module tic_tac_toe --function place_mark --args $GAME 0xAE3CE9176F1A8C1F21D922722486DF667FA00394 --gas $ADMIN_GAS --gas-budget 1000
@@ -411,7 +411,7 @@ Mutated Objects:
 ...
 ```
 
-Cool! The last transaction created a new object. Let's find out what object was created:
+Cool! The last transaction created a new object. To find out what object was created:
 ```shell
 $ sui client object 54B58C0D5B14A269B1CD424B3CCAB1E315C43343
 ```

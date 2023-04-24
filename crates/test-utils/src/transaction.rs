@@ -411,6 +411,7 @@ pub async fn create_devnet_nft(
         args,
         gas: Some(*gas_object),
         gas_budget: TEST_ONLY_GAS_UNIT_FOR_GENERIC * gas_price,
+        serialize_output: false,
     }
     .execute(context)
     .await?;
@@ -458,6 +459,7 @@ pub async fn transfer_sui(
         amount: None,
         sui_coin_object_id: gas_ref.0,
         gas_budget: TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
+        serialize_output: false,
     }
     .execute(context)
     .await?;
@@ -529,6 +531,7 @@ pub async fn transfer_coin(
         object_id: object_to_send,
         gas: None,
         gas_budget: TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
+        serialize_output: false,
     }
     .execute(context)
     .await?;
@@ -570,6 +573,7 @@ pub async fn split_coin_with_wallet_context(context: &mut WalletContext, coin_id
         count: Some(2),
         gas: None,
         gas_budget: TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN * gas_price,
+        serialize_output: false,
     }
     .execute(context)
     .await

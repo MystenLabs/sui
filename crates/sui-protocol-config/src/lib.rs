@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 6;
+const MAX_PROTOCOL_VERSION: u64 = 7;
 
 // Record history of protocol version allocations here:
 //
@@ -24,6 +24,9 @@ const MAX_PROTOCOL_VERSION: u64 = 6;
 // Version 5: Package upgrade compatibility error fix. New gas cost table. New scoring decision
 //            mechanism that includes up to f scoring authorities.
 // Version 6: Change to how bytes are charged in the gas meter, increase buffer stake to 0.5f
+// Version 7: Disallow adding `key` ability during package upgrades,
+//            disable_invariant_violation_check_in_swap_loc,
+//            advance_to_hightest_supported_protocol_version
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -144,6 +147,16 @@ struct FeatureFlags {
     // Re-order end of epoch messages to the end of the commit
     #[serde(skip_serializing_if = "is_false")]
     consensus_order_end_of_epoch_last: bool,
+    // Disallow adding `key` ability to types during package upgrades.
+    #[serde(skip_serializing_if = "is_false")]
+    disallow_adding_key_ability: bool,
+    // Disables unnecessary invariant check in the Move VM when swapping the value out of a local
+    #[serde(skip_serializing_if = "is_false")]
+    disable_invariant_violation_check_in_swap_loc: bool,
+    // advance to highest supported protocol version at epoch change, instead of the next consecutive
+    // protocol version.
+    #[serde(skip_serializing_if = "is_false")]
+    advance_to_highest_supported_protocol_version: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -633,6 +646,20 @@ impl ProtocolConfig {
     pub fn consensus_order_end_of_epoch_last(&self) -> bool {
         self.feature_flags.consensus_order_end_of_epoch_last
     }
+
+    pub fn disallow_adding_key_ability(&self) -> bool {
+        self.feature_flags.disallow_adding_key_ability
+    }
+
+    pub fn disable_invariant_violation_check_in_swap_loc(&self) -> bool {
+        self.feature_flags
+            .disable_invariant_violation_check_in_swap_loc
+    }
+
+    pub fn advance_to_highest_supported_protocol_version(&self) -> bool {
+        self.feature_flags
+            .advance_to_highest_supported_protocol_version
+    }
 }
 
 // Special getters
@@ -1031,6 +1058,15 @@ impl ProtocolConfig {
                 cfg.feature_flags.consensus_order_end_of_epoch_last = true;
                 cfg
             }
+            7 => {
+                let mut cfg = Self::get_for_version_impl(version - 1);
+                cfg.feature_flags.disallow_adding_key_ability = true;
+                cfg.feature_flags
+                    .disable_invariant_violation_check_in_swap_loc = true;
+                cfg.feature_flags
+                    .advance_to_highest_supported_protocol_version = true;
+                cfg
+            }
             // Use this template when making changes:
             //
             //     // modify an existing constant.
@@ -1075,6 +1111,10 @@ impl ProtocolConfig {
     }
     pub fn set_package_upgrades_for_testing(&mut self, val: bool) {
         self.feature_flags.package_upgrades = val
+    }
+    pub fn set_advance_to_highest_supported_protocol_version_for_testing(&mut self, val: bool) {
+        self.feature_flags
+            .advance_to_highest_supported_protocol_version = val
     }
 }
 
@@ -1143,16 +1183,26 @@ macro_rules! check_limit {
 /// metered_limit is always less than or equal to unmetered_hard_limit
 #[macro_export]
 macro_rules! check_limit_by_meter {
-    ($is_metered:expr, $x:expr, $metered_limit:expr, $unmetered_hard_limit:expr) => {{
+    ($is_metered:expr, $x:expr, $metered_limit:expr, $unmetered_hard_limit:expr, $metric:expr) => {{
         // If this is metered, we use the metered_limit limit as the upper bound
-        let h = if $is_metered {
-            $metered_limit
+        let (h, metered_str) = if $is_metered {
+            ($metered_limit, "metered")
         } else {
             // Unmetered gets more headroom
-            $unmetered_hard_limit
+            ($unmetered_hard_limit, "unmetered")
         };
         use sui_protocol_config::check_limit_in_range;
-        check_limit_in_range($x as u64, $metered_limit, h)
+        let result = check_limit_in_range($x as u64, $metered_limit, h);
+        match result {
+            LimitThresholdCrossed::None => {}
+            LimitThresholdCrossed::Soft(_, _) => {
+                $metric.with_label_values(&[metered_str, "soft"]).inc();
+            }
+            LimitThresholdCrossed::Hard(_, _) => {
+                $metric.with_label_values(&[metered_str, "hard"]).inc();
+            }
+        };
+        result
     }};
 }
 

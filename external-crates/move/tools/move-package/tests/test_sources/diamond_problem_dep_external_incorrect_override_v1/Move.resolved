@@ -1,0 +1,1 @@
+Failed to resolve dependencies for package 'Root': Adding dependencies from ../../../resolvers/successful.sh for dependency 'A' in 'C': Incorrect override of ADep in B (an override should dominate all uses of the overridden package)

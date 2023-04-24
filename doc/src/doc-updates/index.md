@@ -4,6 +4,12 @@ title: Sui Documentation Updates
 
 This topic lists the significant updates to the [Sui documentation](https://docs.sui.io) site so that you can easily identify new or updated information.
 
+## Week ending 04/22/23
+
+| Topic | Update | 
+| :------ | :------- |
+| [Sui Full Node](../build/fullnode.md#hardware-requirements). | Updated hardware requirements. |
+
 ## Week ending 03/25/23
 
 | Topic | Update | 
@@ -48,8 +54,6 @@ This topic lists the significant updates to the [Sui documentation](https://docs
 | Topic | Update | 
 | :------ | :------- |
 | [Sui Move by Example](../explore/move-examples/index.md) | [Relocated this content](https://github.com/MystenLabs/sui/pull/6957) from examples.sui.io to the Explore section of docs.sui.io. |
-| [Sui Framework Reference](../reference/framework/index.md) | [Added links to each module topic in the Framework Reference](https://github.com/MystenLabs/sui/pull/6958) folder in the repo until we can properly add them to the Docs site. |
-
 
 ## Week ending 12/17/22
 
@@ -100,7 +104,6 @@ This topic lists the significant updates to the [Sui documentation](https://docs
 
 | Topic | Update | 
 | :------ | :------- |
-| [Install Sui](../build/install.md) | Removed the setup script (sui-setup.sh) until we can resolve the errors with the latest version of Sui. |
 | [Explore Sui](../explore/index.md) | General copyedits for style, removed some stale images and examples. |
 
 ## Week ending 10/01/22

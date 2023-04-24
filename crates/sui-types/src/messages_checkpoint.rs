@@ -491,6 +491,15 @@ impl FullCheckpointContents {
     }
 }
 
+impl IntoIterator for FullCheckpointContents {
+    type Item = ExecutionData;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.transactions.into_iter()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VerifiedCheckpointContents {
     transactions: Vec<VerifiedExecutionData>,
