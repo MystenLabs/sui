@@ -39,7 +39,7 @@ module sui::kiosk {
     use sui::coin::{Self, Coin};
     use sui::sui::SUI;
     use sui::event;
-    use sui::kiosk_actions as actions;
+    use sui::kiosk_permissions as permissions;
 
     /// Trying to withdraw profits and sender is not owner.
     const ENotOwner: u64 = 0;
@@ -67,6 +67,8 @@ module sui::kiosk {
     const EItemNotFound: u64 = 11;
     /// Extension is not allowed to perform this action.
     const EExtNotPermitted: u64 = 12;
+    /// Extension is not installed.
+    const EExtNotInstalled: u64 = 13;
 
     /// An object which allows selling collectibles within "kiosk" ecosystem.
     /// By default gives the functionality to list an item openly - for anyone
@@ -385,22 +387,31 @@ module sui::kiosk {
         coin::take(&mut self.profits, amount, ctx)
     }
 
-    // === Extension calls ===
+    // === Kiosk Extensions ===
 
     /// Add a new extension to the Kiosk; depending on the `cap` parameter, the extension
-    /// might be able to call `place`, `borrow`, `borrow_mut` and `lock` functions.
-    public fun add_extension<E: drop>(
-        _ext: E,
+    /// might be able to call `ext_place` (and `ext_lock`), `ext_borrow` and `ext_borrow_mut`
+    /// functions.
+    ///
+    /// The call visibility is intentionally `entry` to make sure that the extension is
+    /// explicitly installed by the owner of the Kiosk (and avoid arbitrary execution).
+    entry fun add_extension<E: drop>(
         self: &mut Kiosk,
         cap: &KioskOwnerCap,
-        action_set: u16
+        permissions: u16
     ) {
         assert!(object::id(self) == cap.for, ENotOwner);
-        df::add(&mut self.id, Extension<E> {}, action_set);
+        df::add(&mut self.id, Extension<E> {}, permissions);
     }
 
-    /// Get the action set for the extension.
-    public fun get_extension<E: drop>(self: &Kiosk): u16 {
+    /// Check whether an extension is installed.
+    public fun has_extension<E: drop>(self: &Kiosk): bool {
+        df::exists_(&self.id, Extension<E> {})
+    }
+
+    /// Get the permissions set for the extension.
+    public fun get_extension_permissions<E: drop>(self: &Kiosk): u16 {
+        assert!(has_extension<E>(self), EExtNotInstalled);
         *df::borrow(&self.id, Extension<E> {})
     }
 
@@ -412,30 +423,30 @@ module sui::kiosk {
     }
 
     /// Extension: place an item if the `Place` action is enabled.
-    public fun ext_place<E: drop, T: key + store>(
+    public fun place_as_extension<E: drop, T: key + store>(
         _ext: E, self: &mut Kiosk, item: T
     ) {
-        let action_set = get_extension<E>(self);
-        assert!(actions::can_place(action_set), EExtNotPermitted);
+        let permissions = get_extension_permissions<E>(self);
+        assert!(permissions::can_place(permissions), EExtNotPermitted);
         place_(self, item)
     }
 
     /// Extension: place and lock an item if the `Lock` action is enabled.
-    public fun ext_lock<E: drop, T: key + store>(
+    public fun lock_as_extension<E: drop, T: key + store>(
         _ext: E, self: &mut Kiosk, _policy: &TransferPolicy<T>, item: T
     ) {
-        let action_set = get_extension<E>(self);
-        assert!(actions::can_lock(action_set), EExtNotPermitted);
+        let permissions = get_extension_permissions<E>(self);
+        assert!(permissions::can_place(permissions), EExtNotPermitted);
         df::add(&mut self.id, Lock { id: object::id(&item) }, true);
         place_(self, item)
     }
 
     /// Extension: borrow an item if the `Borrow` action is enabled.
-    public fun ext_borrow<E: drop, T: key + store>(
+    public fun borrow_as_extension<E: drop, T: key + store>(
         _ext: E, self: &Kiosk, id: ID
     ): &T {
-        let action_set = get_extension<E>(self);
-        assert!(actions::can_borrow(action_set), EExtNotPermitted);
+        let permissions = get_extension_permissions<E>(self);
+        assert!(permissions::can_borrow(permissions), EExtNotPermitted);
         assert!(has_item(self, id), EItemNotFound);
         dof::borrow(&self.id, Item { id })
     }
@@ -482,6 +493,13 @@ module sui::kiosk {
     /// Access the `UID` using the `KioskOwnerCap`.
     public fun uid_mut_as_owner(self: &mut Kiosk, cap: &KioskOwnerCap): &mut UID {
         assert!(object::id(self) == cap.for, ENotOwner);
+        &mut self.id
+    }
+
+    /// Access the `UID` using the `Extension` setting. Any installed extension can
+    /// get mutable access to Kiosk UID no matter which permissions are set.
+    public fun uid_mut_as_extension<E: drop>(_ext: E, self: &mut Kiosk): &mut UID {
+        assert!(has_extension<E>(self), EExtNotInstalled);
         &mut self.id
     }
 
@@ -595,23 +613,35 @@ module sui::kiosk {
     public fun purchase_cap_min_price<T: key + store>(self: &PurchaseCap<T>): u64 {
         self.min_price
     }
+
+    #[test_only]
+    /// Test-only version of `add_extension`
+    public fun add_extension_for_testing<E: drop>(
+        self: &mut Kiosk, cap: &KioskOwnerCap, action_set: u16
+    ) {
+        add_extension<E>(self, cap, action_set);
+    }
 }
 
-/// Utility module implementing the action_set parsing. Currently all methods are
-/// friends to allow for
-module sui::kiosk_actions {
+/// Utility module implementing the permissions for the `Kiosk`.
+///
+/// Permissions:
+/// - `place_as_extension` and `lock_as_extension`
+/// - `borrow_as_extension`
+/// - `borrow_mut_as_extension`
+module sui::kiosk_permissions {
     friend sui::kiosk;
 
     /// Check whether the first bit of the value is set (odd value)
-    public(friend) fun can_place(action_set: u16): bool { action_set & 0x01 != 0 }
+    public fun can_place(permissions: u16): bool { permissions & 0x01 != 0 }
     /// Check whether the second bit of the value is set;
-    public(friend) fun can_borrow(action_set: u16): bool { action_set & 0x02 != 0 }
+    public fun can_borrow(permissions: u16): bool { permissions & 0x02 != 0 }
     /// Check whether the third bit of the value is set;
-    public(friend) fun can_lock(action_set: u16): bool { action_set & 0x04 != 0 }
+    public fun can_borrow_mut(permissions: u16): bool { permissions & 0x04 != 0 }
 
     #[test]
     /// Test the bits of the value.
-    fun test_action_set() {
+    fun test_permissions() {
         assert!(check(0x0) == vector[false, false, false], 0); // 000
         assert!(check(0x1) == vector[false, false, true], 0);  // 001
         assert!(check(0x2) == vector[false, true, false], 0);  // 010
@@ -620,17 +650,45 @@ module sui::kiosk_actions {
         assert!(check(0x5) == vector[true, false, true], 0);   // 101
     }
 
-    #[test_only] fun add_place(action_set: &mut u16) { *action_set = *action_set | 0x01 }
-    #[test_only] fun add_borrow(action_set: &mut u16) { *action_set = *action_set | 0x02 }
-    #[test_only] fun add_lock(action_set: &mut u16) { *action_set = *action_set | 0x04 }
+    /// Add the `place_as_extension` and `lock_as_extension` permission to the permissions set.
+    public fun add_place(permissions: &mut u16) { *permissions = *permissions | 0x01 }
+
+    /// Add the `borrow_as_extension` permission to the permissions set.
+    public fun add_borrow(permissions: &mut u16) { *permissions = *permissions | 0x02 }
+
+    /// Add the `borrow_mut_as_extension` permission to the permissions set.
+    public fun add_borrow_mut(permissions: &mut u16) { *permissions = *permissions | 0x04 }
 
     #[test_only]
     /// Turn the bits into a vector of booleans for testing.
     fun check(self: u16): vector<bool> {
         vector[
-            can_lock(self),
+            can_borrow_mut(self),
             can_borrow(self),
             can_place(self),
         ]
+    }
+
+    #[test]
+    fun kiosk_permissions() {
+        let permissions = 0u16;
+        assert!(!can_place(permissions), 0);
+        assert!(!can_borrow(permissions), 1);
+        assert!(!can_borrow_mut(permissions), 2);
+
+        add_place(&mut permissions);
+        assert!(can_place(permissions), 3);
+        assert!(!can_borrow(permissions), 4);
+        assert!(!can_borrow_mut(permissions), 5);
+
+        add_borrow(&mut permissions);
+        assert!(can_place(permissions), 6);
+        assert!(can_borrow(permissions), 7);
+        assert!(!can_borrow_mut(permissions), 8);
+
+        add_borrow_mut(&mut permissions);
+        assert!(can_place(permissions), 9);
+        assert!(can_borrow(permissions), 10);
+        assert!(can_borrow_mut(permissions), 11);
     }
 }
