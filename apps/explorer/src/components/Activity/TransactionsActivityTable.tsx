@@ -10,7 +10,7 @@ import { genTableDataFromTxData } from '../transactions/TxCardUtils';
 
 import { useGetTransactionBlocks } from '~/hooks/useGetTransactionBlocks';
 import { Link } from '~/ui/Link';
-import { Pagination } from '~/ui/Pagination';
+import { Pagination, useCursorPagination } from '~/ui/Pagination';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
 import { Text } from '~/ui/Text';
@@ -28,22 +28,19 @@ export function TransactionsActivityTable({
     disablePagination,
     initialLimit = DEFAULT_TRANSACTIONS_LIMIT,
 }: Props) {
-    const [currentPage, setCurrentPage] = useState(0);
     const [limit, setLimit] = useState(initialLimit);
     const rpc = useRpcClient();
-    const { data, isLoading, isFetching, fetchNextPage, hasNextPage } =
-        useGetTransactionBlocks(undefined, limit);
-
     const { data: count } = useQuery(
         ['transactions', 'count'],
         () => rpc.getTotalTransactionBlocks(),
         { cacheTime: 24 * 60 * 60 * 1000, staleTime: Infinity, retry: false }
     );
 
-    const cardData =
-        data && Boolean(data.pages[currentPage])
-            ? genTableDataFromTxData(data.pages[currentPage].data)
-            : undefined;
+    const transactions = useGetTransactionBlocks(undefined, limit);
+    const { data, isFetching, pagination, isLoading } =
+        useCursorPagination(transactions);
+
+    const cardData = data ? genTableDataFromTxData(data.data) : undefined;
 
     return (
         <div data-testid="tx">
@@ -71,31 +68,8 @@ export function TransactionsActivityTable({
                 )}
 
                 <div className="flex justify-between">
-                    {(hasNextPage || data?.pages.length) &&
-                    !disablePagination ? (
-                        <Pagination
-                            onNext={() => {
-                                if (isLoading || isFetching) {
-                                    return;
-                                }
-
-                                // Make sure we are at the end before fetching another page
-                                if (
-                                    data &&
-                                    currentPage === data?.pages.length - 1
-                                ) {
-                                    fetchNextPage();
-                                }
-                                setCurrentPage(currentPage + 1);
-                            }}
-                            hasNext={
-                                Boolean(hasNextPage) &&
-                                Boolean(data?.pages[currentPage])
-                            }
-                            hasPrev={currentPage !== 0}
-                            onPrev={() => setCurrentPage(currentPage - 1)}
-                            onFirst={() => setCurrentPage(0)}
-                        />
+                    {!disablePagination ? (
+                        <Pagination {...pagination} />
                     ) : (
                         <Link to="/recent" after={<ArrowRight12 />}>
                             More Transaction Blocks
@@ -113,7 +87,7 @@ export function TransactionsActivityTable({
                                 value={limit}
                                 onChange={(e) => {
                                     setLimit(Number(e.target.value));
-                                    setCurrentPage(0);
+                                    pagination.onFirst();
                                 }}
                             >
                                 <option value={20}>20 Per Page</option>
