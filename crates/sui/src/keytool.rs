@@ -1,5 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use rusoto_core::Region;
+use rusoto_kms::{Kms, KmsClient, SignRequest, GetPublicKeyRequest};
+use secp256k1::ecdsa::Signature as secpSig;
+use openssl::ec::{EcGroup, PointConversionForm};
+use openssl::nid::Nid;
+use openssl::pkey::PKey;
+
+use fastcrypto::traits::{ToFromBytes};
+use fastcrypto::secp256k1::{Secp256k1PublicKey};
 use anyhow::anyhow;
 use bip32::DerivationPath;
 use clap::*;
@@ -22,6 +31,7 @@ use sui_types::messages::TransactionData;
 use sui_types::multisig::{MultiSig, MultiSigPublicKey, ThresholdUnit, WeightUnit};
 use sui_types::signature::GenericSignature;
 use tracing::info;
+
 #[cfg(test)]
 #[path = "unit_tests/keytool_tests.rs"]
 mod keytool_tests;
@@ -47,15 +57,11 @@ pub enum KeyToolCommand {
     /// This reads the content at the provided file path. The accepted format can be
     /// [enum SuiKeyPair] (Base64 encoded of 33-byte `flag || privkey`) or `type AuthorityKeyPair`
     /// (Base64 encoded `privkey`). It prints its Base64 encoded public key and the key scheme flag.
-    Show {
-        file: PathBuf,
-    },
+    Show { file: PathBuf },
     /// This takes [enum SuiKeyPair] of Base64 encoded of 33-byte `flag || privkey`). It
     /// outputs the keypair into a file at the current directory, and prints out its Sui
     /// address, Base64 encoded public key, and the key scheme flag.
-    Unpack {
-        keypair: SuiKeyPair,
-    },
+    Unpack { keypair: SuiKeyPair },
     /// List all keys by its Sui address, Base64 encoded public key, key scheme name in
     /// sui.keystore.
     List,
@@ -73,6 +79,21 @@ pub enum KeyToolCommand {
         #[clap(long)]
         intent: Option<Intent>,
     },
+    /// Create signature using leveraging AWS KMS. Pass in a key-id to leverage Amazon
+    /// KMS to sing a message.
+    /// Any signature commits to a [struct IntentMessage] consisting of the Base64 encoded
+    /// of the BCS serialized transaction bytes itself (the result of
+    /// [transaction builder API](https://docs.sui.io/sui-jsonrpc) and its intent. If
+    /// intent is absent, default will be used. See [struct IntentMessage] and [struct Intent]
+    /// for more details.
+    SignKMS {
+        #[clap(long)]
+        data: String,
+        #[clap(long)]
+        keyid: String,
+        #[clap(long)]
+        intent: Option<Intent>        
+    },
     /// Add a new key to sui.key based on the input mnemonic phrase, the key scheme flag {ed25519 | secp256k1 | secp256r1}
     /// and an optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1
     /// or m/74'/784'/0'/0/0 for secp256r1. Supports mnemonic phrase of word length 12, 15, 18`, 21, 24.
@@ -85,13 +106,7 @@ pub enum KeyToolCommand {
     /// [enum SuiKeyPair] (Base64 encoded of 33-byte `flag || privkey`) or `type AuthorityKeyPair`
     /// (Base64 encoded `privkey`). This prints out the account keypair as Base64 encoded `flag || privkey`,
     /// the network keypair, worker keypair, protocol keypair as Base64 encoded `privkey`.
-    LoadKeypair {
-        file: PathBuf,
-    },
-
-    Base64PubKeyToAddress {
-        base64_key: String,
-    },
+    LoadKeypair { file: PathBuf },
 
     /// To MultiSig Sui Address. Pass in a list of all public keys `flag || pk` in Base64.
     /// See `keytool list` for example public keys.
@@ -120,7 +135,7 @@ pub enum KeyToolCommand {
 }
 
 impl KeyToolCommand {
-    pub fn execute(self, keystore: &mut Keystore) -> Result<(), anyhow::Error> {
+    pub async fn execute(self, keystore: &mut Keystore) -> Result<(), anyhow::Error> {
         match self {
             KeyToolCommand::Generate {
                 key_scheme,
@@ -218,6 +233,89 @@ impl KeyToolCommand {
                 );
             }
 
+            KeyToolCommand::SignKMS {
+                data,
+                keyid,
+                intent
+            } => {
+                // Currently only supports secp256k1 keys
+                println!("Raw tx_bytes to execute: {}", data);
+                let intent = intent.unwrap_or_else(Intent::sui_transaction);
+                println!("Intent: {:?}", intent);
+                let msg: TransactionData =
+                    bcs::from_bytes(&Base64::decode(&data).map_err(|e| {
+                        anyhow!("Cannot deserialize data as TransactionData {:?}", e)
+                    })?)?;
+                let intent_msg = IntentMessage::new(intent, msg);
+                println!(
+                    "Raw intent message: {:?}",
+                    Base64::encode(bcs::to_bytes(&intent_msg)?)
+                );
+                let mut hasher = DefaultHash::default();
+                hasher.update(bcs::to_bytes(&intent_msg)?);
+                let digest = hasher.finalize().digest;
+                println!("Digest to sign: {:?}", Base64::encode(digest));
+               
+                // Set up the KMS client, expect to use env vars or whatever the AWS
+                // SDK prefers.
+                // Length of Pubkey - 33, sig - 64
+                
+                let region = Region::default();
+                let kms = KmsClient::new(region);
+
+                // Get Pub key from keyid. This is in DER Format from AWS
+                let req = GetPublicKeyRequest { grant_tokens: None, key_id: keyid.to_string() };
+                let pubkey_resp = kms.get_public_key(req).await.unwrap();
+                let public_key_bytes = pubkey_resp.public_key.unwrap_or_default();
+                let public_key: &[u8] = &public_key_bytes.to_vec(); // Vec of bytes
+
+                // Parse the PEM-encoded public key and extract the raw bytes
+                // Compresses into 33 bytes
+                let group = EcGroup::from_curve_name(Nid::SECP256K1).unwrap();
+                let pkey = PKey::public_key_from_der(public_key).unwrap();
+                let pkey_compact_result = pkey.ec_key().unwrap().public_key().to_bytes(&group,
+                    PointConversionForm::COMPRESSED,
+                    &mut openssl::bn::BigNumContext::new().unwrap(),);
+                let pkey_compact = pkey_compact_result.unwrap();
+
+                // Generates Corresponding Sui Address from public key
+                let secp_pk = Secp256k1PublicKey::from_bytes(&pkey_compact).unwrap();
+                println!(
+                        "Address For Corresponding KMS Key: {}",
+                        Into::<SuiAddress>::into(&secp_pk),
+                );
+                    
+                // Construct the signing request
+                let request = SignRequest {
+                    key_id: keyid.to_string() ,
+                    message: digest.to_vec().into(),
+                    message_type: Some("RAW".to_string()),
+                    signing_algorithm: "ECDSA_SHA_256".to_string(),
+                    ..Default::default()
+                };
+                // Sign the message, normalize the signature and then compacts it
+                let response = kms.sign(request).await.unwrap();
+                let sig_bytes_der = response.signature.map(|b| b.to_vec()).unwrap_or_default();     
+                let mut sig = secpSig::from_der(&sig_bytes_der).unwrap();
+                let _ = secpSig::normalize_s(&mut sig);
+                let sig_bytes = secpSig::serialize_compact(&sig);
+
+
+                //println!("Sig Bytes {:?}", sig_bytes);
+                //println!("Public Key Compact bytes {:?}", pkey_compact);
+            
+                // TODO, just plopping more things into flag
+                let mut flag = vec![0x01];
+                flag.extend(sig_bytes);
+                flag.extend(pkey_compact);
+                
+                let serialized_sig =  Base64::encode(&flag);
+                println!(
+                    "Serialized signature (`flag || sig || pk` in Base64): {:?}",
+                    serialized_sig
+                );
+            }    
+
             KeyToolCommand::Import {
                 mnemonic_phrase,
                 key_scheme,
@@ -226,13 +324,6 @@ impl KeyToolCommand {
                 let address =
                     keystore.import_from_mnemonic(&mnemonic_phrase, key_scheme, derivation_path)?;
                 info!("Key imported for address [{address}]");
-            }
-
-            KeyToolCommand::Base64PubKeyToAddress { base64_key } => {
-                let pk = PublicKey::decode_base64(&base64_key)
-                    .map_err(|e| anyhow!("Invalid base64 key: {:?}", e))?;
-                let address = SuiAddress::from(&pk);
-                println!("Address {:?}", address);
             }
 
             KeyToolCommand::LoadKeypair { file } => {
@@ -314,3 +405,4 @@ fn store_and_print_keypair(address: SuiAddress, keypair: SuiKeyPair) {
         path.to_str().unwrap()
     );
 }
+
