@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use move_binary_format::{
     compatibility::{Compatibility, InclusionCheck},
-    file_format::{Ability, AbilitySet},
+    file_format::AbilitySet,
     normalized, CompiledModule,
 };
 use sui_move_build::{BuildConfig, SuiPackageHooks};
@@ -63,7 +63,7 @@ fn check_all_compatibilities(
             check_struct_layout: true,
             check_friend_linking: true,
             check_private_entry_linking: false,
-            disallowed_new_abilities: AbilitySet::singleton(Ability::Key),
+            disallowed_new_abilities: AbilitySet::ALL,
         },
         // Full compat but allow private entry functions and friends to change
         Compatibility {
@@ -71,7 +71,7 @@ fn check_all_compatibilities(
             check_struct_layout: true,
             check_friend_linking: false,
             check_private_entry_linking: false,
-            disallowed_new_abilities: AbilitySet::singleton(Ability::Key),
+            disallowed_new_abilities: AbilitySet::ALL,
         },
         // Full compat but allow friends to change
         Compatibility {
@@ -79,7 +79,7 @@ fn check_all_compatibilities(
             check_struct_layout: true,
             check_friend_linking: false,
             check_private_entry_linking: true,
-            disallowed_new_abilities: AbilitySet::singleton(Ability::Key),
+            disallowed_new_abilities: AbilitySet::ALL,
         },
         Compatibility::no_check(),
     ];
