@@ -5,11 +5,11 @@ use async_recursion::async_recursion;
 use clap::Parser;
 
 use crate::replay::LocalExec;
+use crate::replay::ProtocolVersionSummary;
 use std::str::FromStr;
 use sui_config::node::ExpensiveSafetyCheckConfig;
 use sui_types::digests::TransactionDigest;
 use tracing::{error, info};
-
 mod data_fetcher;
 mod replay;
 mod types;
@@ -91,13 +91,29 @@ pub async fn execute_replay_command(
             // We need this for other activities in this session
             lx.current_protocol_version = *epoch_table.keys().peekable().last().unwrap();
 
-            println!("  Protocol Version  |                Epoch Change TX               |      Epoch Range");
-            println!("-------------------------------------------------------------------------------------");
+            println!("  Protocol Version  |                Epoch Change TX               |      Epoch Range     |   Checkpoint Range   ");
+            println!("---------------------------------------------------------------------------------------------------------------");
 
-            for (protocol_version, (tx_digest, start_epoch, end_epoch)) in epoch_table {
+            for (
+                protocol_version,
+                ProtocolVersionSummary {
+                    epoch_change_tx: tx_digest,
+                    epoch_start: start_epoch,
+                    epoch_end: end_epoch,
+                    checkpoint_start,
+                    checkpoint_end,
+                    ..
+                },
+            ) in epoch_table
+            {
                 println!(
-                    " {:^16}   | {:^32} | {:^10}-{:^10}",
-                    protocol_version, tx_digest, start_epoch, end_epoch
+                    " {:^16}   | {:^43} | {:^10}-{:^10}| {:^10}-{:^10} ",
+                    protocol_version,
+                    tx_digest,
+                    start_epoch,
+                    end_epoch,
+                    checkpoint_start,
+                    checkpoint_end
                 );
             }
 
@@ -186,11 +202,8 @@ pub async fn execute_replay_command(
             max_tasks,
         } => {
             let lx = LocalExec::new_from_fn_url(&rpc_url).await?;
-            let epoch_table: std::collections::BTreeMap<u64, (TransactionDigest, u64, u64)> =
-                lx.protocol_ver_to_epoch_map().await?;
-            let (_, start, end) = epoch_table
-                .get(&lx.current_protocol_version)
-                .expect("Invalid epoch or full node not caught up to epoch");
+
+            let (start, end) = lx.checkpoints_for_epoch(epoch).await?;
 
             info!(
                 "Executing epoch {} (checkpoint range {}-{}) with at most {} tasks",
@@ -200,8 +213,8 @@ pub async fn execute_replay_command(
                 rpc_url,
                 safety_checks,
                 ReplayToolCommand::ReplayCheckpoints {
-                    start: *start,
-                    end: *end,
+                    start,
+                    end,
                     terminate_early,
                     max_tasks,
                 },

@@ -19,7 +19,7 @@ use tokio::time::Duration;
 
 // These are very testnet specific
 pub(crate) const GENESIX_TX_DIGEST: &str = "Cgww1sn7XViCPSdDcAPmVcARueWuexJ8af8zD842Ff43";
-pub(crate) const SAFE_MODETX_1_DIGEST: &str = "AGBCaUGj4iGpGYyQvto9Bke1EwouY8LGMoTzzuPMx4nd";
+pub(crate) const SAFE_MODE_TX_1_DIGEST: &str = "AGBCaUGj4iGpGYyQvto9Bke1EwouY8LGMoTzzuPMx4nd";
 
 // TODO: make these configurable
 pub(crate) const RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD: Duration = Duration::from_millis(10_000);
@@ -133,8 +133,11 @@ pub enum LocalExecError {
     #[error("Unexpected event format {:#?}", event)]
     UnexpectedEventFormat { event: SuiEvent },
 
-    #[error("Unable to find event to derive epoch start timestamp for epoch {epoch}")]
+    #[error("Unable to find event for epoch {epoch}")]
     EventNotFound { epoch: u64 },
+
+    #[error("Unable to find checkpoints for epoch {epoch}")]
+    UnableToDetermineCheckpoint { epoch: u64 },
 
     #[error("Unable to query system events; {}", rpc_err)]
     UnableToQuerySystemEvents { rpc_err: String },

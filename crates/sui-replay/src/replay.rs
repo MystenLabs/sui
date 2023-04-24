@@ -42,6 +42,22 @@ use tracing::{error, warn};
 // TODO: add persistent cache. But perf is good enough already.
 // TODO: handle safe mode
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProtocolVersionSummary {
+    /// Protocol version at this point
+    pub protocol_version: u64,
+    /// The first epoch that uses this protocol version
+    pub epoch_start: u64,
+    /// The last epoch that uses this protocol version
+    pub epoch_end: u64,
+    /// The first checkpoint in this protocol v ersion
+    pub checkpoint_start: u64,
+    /// The last checkpoint in this protocol version
+    pub checkpoint_end: u64,
+    /// The transaction which triggered this epoch change
+    pub epoch_change_tx: TransactionDigest,
+}
+
 pub struct Storage {
     /// These are objects at the frontier of the execution's view
     /// They might not be the latest object currently but they are the latest objects
@@ -95,7 +111,7 @@ pub struct LocalExec {
     pub client: SuiClient,
     // For a given protocol version, what TX created it, and what is the valid range of epochs
     // at this protocol version.
-    pub protocol_version_epoch_table: BTreeMap<u64, (TransactionDigest, u64, u64)>,
+    pub protocol_version_epoch_table: BTreeMap<u64, ProtocolVersionSummary>,
     // For a given protocol version, the mapping valid sequence numbers for each framework package
     pub protocol_version_system_package_table: BTreeMap<u64, BTreeMap<ObjectID, SequenceNumber>>,
     // The current protocol version for this execution
@@ -582,7 +598,7 @@ impl LocalExec {
 
     pub async fn protocol_ver_to_epoch_map(
         &self,
-    ) -> Result<BTreeMap<u64, (TransactionDigest, u64, u64)>, LocalExecError> {
+    ) -> Result<BTreeMap<u64, ProtocolVersionSummary>, LocalExecError> {
         let mut range_map = BTreeMap::new();
         let epoch_change_events = self.get_epoch_change_events(false).await?;
 
@@ -590,21 +606,39 @@ impl LocalExec {
         let mut tx_digest = TransactionDigest::from_str(GENESIX_TX_DIGEST).unwrap();
         // Somehow the genesis TX did not emit any event, but we know it was the start of version 1
         // So we need to manually add this range
-        let (mut start_epoch, mut start_protocol_version) = (0, 1);
+        let (mut start_epoch, mut start_protocol_version, mut start_checkpoint) = (0, 1, 0u64);
 
         // Exception for incident: Protocol version 2 started epoch 742
         // But this was in safe mode so no events emmitted
         // So we need to manually add this range
         let (mut curr_epoch, mut curr_protocol_version) = (742, 2);
+        let mut curr_checkpoint = self
+            .fetcher
+            .get_transaction(&TransactionDigest::from_str(SAFE_MODE_TX_1_DIGEST).unwrap())
+            .await?
+            .checkpoint
+            .expect("Checkpoint should be present");
         range_map.insert(
             start_protocol_version,
-            (tx_digest, start_epoch, curr_epoch - 1),
+            ProtocolVersionSummary {
+                protocol_version: start_protocol_version,
+                epoch_start: start_epoch,
+                epoch_end: curr_epoch - 1,
+                checkpoint_start: start_checkpoint,
+                checkpoint_end: curr_checkpoint - 1,
+                epoch_change_tx: tx_digest,
+            },
         );
-        (start_epoch, start_protocol_version) = (curr_epoch, curr_protocol_version);
-        tx_digest = TransactionDigest::from_str(SAFE_MODETX_1_DIGEST).unwrap();
+
+        (start_epoch, start_protocol_version, start_checkpoint) =
+            (curr_epoch, curr_protocol_version, curr_checkpoint);
+        tx_digest = TransactionDigest::from_str(SAFE_MODE_TX_1_DIGEST).unwrap();
+        // This is the final tx digest for the epoch change. We need this to track the final checkpoint
+        let mut end_epoch_tx_digest = tx_digest;
 
         for event in epoch_change_events {
             (curr_epoch, curr_protocol_version) = extract_epoch_and_version(event.clone())?;
+            end_epoch_tx_digest = event.id.tx_digest;
 
             if curr_protocol_version < 3 {
                 // Ignore protocol versions before 3 as we've handled before the loop
@@ -617,18 +651,49 @@ impl LocalExec {
             }
 
             // Change in prot version
+            // Find the last checkpoint
+            curr_checkpoint = self
+                .fetcher
+                .get_transaction(&event.id.tx_digest)
+                .await?
+                .checkpoint
+                .expect("Checkpoint should be present");
             // Insert the last range
             range_map.insert(
                 start_protocol_version,
-                (tx_digest, start_epoch, curr_epoch - 1),
+                ProtocolVersionSummary {
+                    protocol_version: start_protocol_version,
+                    epoch_start: start_epoch,
+                    epoch_end: curr_epoch - 1,
+                    checkpoint_start: start_checkpoint,
+                    checkpoint_end: curr_checkpoint - 1,
+                    epoch_change_tx: tx_digest,
+                },
             );
+
             start_epoch = curr_epoch;
             start_protocol_version = curr_protocol_version;
             tx_digest = event.id.tx_digest;
+            start_checkpoint = curr_checkpoint;
         }
 
         // Insert the last range
-        range_map.insert(curr_protocol_version, (tx_digest, start_epoch, curr_epoch));
+        range_map.insert(
+            curr_protocol_version,
+            ProtocolVersionSummary {
+                protocol_version: curr_protocol_version,
+                epoch_start: start_epoch,
+                epoch_end: curr_epoch,
+                checkpoint_start: curr_checkpoint,
+                checkpoint_end: self
+                    .fetcher
+                    .get_transaction(&end_epoch_tx_digest)
+                    .await?
+                    .checkpoint
+                    .expect("Checkpoint should be present"),
+                epoch_change_tx: tx_digest,
+            },
+        );
 
         Ok(range_map)
     }
@@ -656,7 +721,14 @@ impl LocalExec {
 
         // This can be more efficient but small footprint so okay for now
         //Table is sorted from earliest to latest
-        for (prot_ver, (tx_digest, _, _)) in self.protocol_version_epoch_table.clone() {
+        for (
+            prot_ver,
+            ProtocolVersionSummary {
+                epoch_change_tx: tx_digest,
+                ..
+            },
+        ) in self.protocol_version_epoch_table.clone()
+        {
             // Use the previous versions protocol version table
             let mut working = self
                 .protocol_version_system_package_table
@@ -761,7 +833,7 @@ impl LocalExec {
         self.protocol_version_epoch_table
             .iter()
             .rev()
-            .find(|(_, rg)| epoch_id >= rg.1)
+            .find(|(_, rg)| epoch_id >= rg.epoch_start)
             .map(|(p, _rg)| Ok(ProtocolConfig::get_for_version((*p).into())))
             .unwrap_or_else(|| Err(LocalExecError::ProtocolVersionNotFound { epoch: epoch_id }))
     }
@@ -785,6 +857,47 @@ impl LocalExec {
             })?
             .data
             .into_iter())
+    }
+
+    pub async fn checkpoints_for_epoch(&self, epoch_id: u64) -> Result<(u64, u64), LocalExecError> {
+        let epoch_change_events = self
+            .get_epoch_change_events(true)
+            .await?
+            .collect::<Vec<_>>();
+        let (start_checkpoint, start_epoch_idx) = if epoch_id == 0 {
+            (0, 1)
+        } else {
+            let idx = epoch_change_events
+                .iter()
+                .position(|ev| match extract_epoch_and_version(ev.clone()) {
+                    Ok((epoch, _)) => epoch == epoch_id,
+                    Err(_) => false,
+                })
+                .ok_or(LocalExecError::EventNotFound { epoch: epoch_id })?;
+            let epoch_change_tx = epoch_change_events[idx].id.tx_digest;
+            (
+                self.fetcher
+                    .get_transaction(&epoch_change_tx)
+                    .await?
+                    .checkpoint
+                    .expect("Checkpoint should be present"),
+                idx,
+            )
+        };
+
+        let next_epoch_change_tx = epoch_change_events
+            .get(start_epoch_idx + 1)
+            .map(|v| v.id.tx_digest)
+            .ok_or(LocalExecError::UnableToDetermineCheckpoint { epoch: epoch_id })?;
+
+        let next_epoch_checkpoint = self
+            .fetcher
+            .get_transaction(&next_epoch_change_tx)
+            .await?
+            .checkpoint
+            .expect("Checkpoint should be present");
+
+        Ok((start_checkpoint, next_epoch_checkpoint - 1))
     }
 
     pub async fn get_epoch_start_timestamp(&self, epoch_id: u64) -> Result<u64, LocalExecError> {
