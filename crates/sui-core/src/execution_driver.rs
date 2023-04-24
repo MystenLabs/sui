@@ -91,7 +91,7 @@ pub async fn execution_process(
 
         // Certificate execution can take significant time, so run it in a separate task.
         spawn_monitored_task!(async move {
-            let _scope = monitored_scope("Execution::task");
+            let _scope = monitored_scope("ExecutionDriver::task");
             let _guard = permit;
             if let Ok(true) = authority.is_tx_already_executed(&digest) {
                 return;

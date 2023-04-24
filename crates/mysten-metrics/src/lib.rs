@@ -11,7 +11,7 @@ use std::time::Instant;
 use once_cell::sync::OnceCell;
 use prometheus::{register_int_gauge_vec_with_registry, IntGaugeVec, Registry};
 use tap::TapFallible;
-use tracing::warn;
+use tracing::{warn, info};
 
 pub use scopeguard;
 use uuid::Uuid;
@@ -175,10 +175,14 @@ pub struct MonitoredScopeGuard {
 
 impl Drop for MonitoredScopeGuard {
     fn drop(&mut self) {
+        let elapsed = self.timer.elapsed();
+        if self.name.starts_with("Execution") {
+            info!("{}: {:?}", self.name, elapsed);
+        }
         self.metrics
             .scope_duration_ns
             .with_label_values(&[self.name])
-            .add(self.timer.elapsed().as_nanos() as i64);
+            .add(elapsed.as_nanos() as i64);
         self.metrics
             .scope_entrance
             .with_label_values(&[self.name])
