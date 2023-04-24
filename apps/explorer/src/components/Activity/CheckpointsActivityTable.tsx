@@ -60,15 +60,18 @@ export function CheckpointsActivityTable({
             : undefined;
 
     const evaluateHasNextPage = () => {
-        let goToNextPage = Boolean(hasNextPage) && Boolean(data?.pages[currentPage])
+        let goToNextPage =
+            Boolean(hasNextPage) && Boolean(data?.pages[currentPage]);
 
         if (maxCursor) {
             // Used for checkpoints on epochs
-            goToNextPage = goToNextPage && Number(data?.pages[currentPage].nextCursor) > Number(maxCursor)
+            goToNextPage =
+                goToNextPage &&
+                Number(data?.pages[currentPage].nextCursor) > Number(maxCursor);
         }
 
-        return goToNextPage
-    }
+        return goToNextPage;
+    };
     return (
         <div className="flex flex-col space-y-5 text-left xl:pr-10">
             {isLoading || isFetching || isFetchingNextPage || !cardData ? (
@@ -111,9 +114,7 @@ export function CheckpointsActivityTable({
                             }
                             setCurrentPage(currentPage + 1);
                         }}
-                        hasNext={
-                            evaluateHasNextPage()
-                        }
+                        hasNext={evaluateHasNextPage()}
                         hasPrev={currentPage !== 0}
                         onPrev={() => setCurrentPage(currentPage - 1)}
                         onFirst={() => setCurrentPage(0)}
