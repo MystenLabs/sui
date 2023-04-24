@@ -890,7 +890,7 @@ impl AuthorityStore {
         write_batch: &mut DBBatch,
         inner_temporary_store: InnerTemporaryStore,
     ) -> SuiResult {
-        let write_scope = monitored_scope("Execution::update_objects_and_locks");
+        let _write_scope = monitored_scope("Execution::update_objects_and_locks");
 
         let InnerTemporaryStore {
             objects,
