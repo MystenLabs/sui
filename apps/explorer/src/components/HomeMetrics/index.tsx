@@ -1,43 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    formatAmountParts,
-    useGetSystemState,
-    useRpcClient,
-} from '@mysten/core';
+import { useGetSystemState, useRpcClient } from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
 
+import { FormattedStatsAmount, StatsWrapper } from './FormattedStatsAmount';
 import { MetricGroup } from './MetricGroup';
 
 import { useEnhancedRpcClient } from '~/hooks/useEnhancedRpc';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
-import { Stats, type StatsProps } from '~/ui/Stats';
-
-// Simple wrapper around stats to avoid text wrapping:
-function StatsWrapper(props: StatsProps) {
-    return (
-        <div className="flex-shrink-0">
-            <Stats {...props} />
-        </div>
-    );
-}
-
-function FormattedStatsAmount({
-    amount,
-    ...props
-}: Omit<StatsProps, 'children'> & {
-    amount?: string | number | bigint;
-}) {
-    const [formattedAmount, postfix] = formatAmountParts(amount);
-
-    return (
-        <StatsWrapper {...props} postfix={postfix}>
-            {formattedAmount}
-        </StatsWrapper>
-    );
-}
 
 // const HOME_REFETCH_INTERVAL = 5 * 1000;
 
