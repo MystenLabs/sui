@@ -24,7 +24,7 @@ const MAX_PROTOCOL_VERSION: u64 = 7;
 // Version 5: Package upgrade compatibility error fix. New gas cost table. New scoring decision
 //            mechanism that includes up to f scoring authorities.
 // Version 6: Change to how bytes are charged in the gas meter, increase buffer stake to 0.5f
-// Version 7: Disallow adding `key` ability during package upgrades,
+// Version 7: Disallow adding new abilities to types during package upgrades,
 //            disable_invariant_violation_check_in_swap_loc,
 //            advance_to_hightest_supported_protocol_version
 
@@ -147,9 +147,9 @@ struct FeatureFlags {
     // Re-order end of epoch messages to the end of the commit
     #[serde(skip_serializing_if = "is_false")]
     consensus_order_end_of_epoch_last: bool,
-    // Disallow adding `key` ability to types during package upgrades.
+    // Disallow adding abilities to types during package upgrades.
     #[serde(skip_serializing_if = "is_false")]
-    disallow_adding_key_ability: bool,
+    disallow_adding_abilities_on_upgrade: bool,
     // Disables unnecessary invariant check in the Move VM when swapping the value out of a local
     #[serde(skip_serializing_if = "is_false")]
     disable_invariant_violation_check_in_swap_loc: bool,
@@ -647,8 +647,8 @@ impl ProtocolConfig {
         self.feature_flags.consensus_order_end_of_epoch_last
     }
 
-    pub fn disallow_adding_key_ability(&self) -> bool {
-        self.feature_flags.disallow_adding_key_ability
+    pub fn disallow_adding_abilities_on_upgrade(&self) -> bool {
+        self.feature_flags.disallow_adding_abilities_on_upgrade
     }
 
     pub fn disable_invariant_violation_check_in_swap_loc(&self) -> bool {
@@ -1060,7 +1060,7 @@ impl ProtocolConfig {
             }
             7 => {
                 let mut cfg = Self::get_for_version_impl(version - 1);
-                cfg.feature_flags.disallow_adding_key_ability = true;
+                cfg.feature_flags.disallow_adding_abilities_on_upgrade = true;
                 cfg.feature_flags
                     .disable_invariant_violation_check_in_swap_loc = true;
                 cfg.feature_flags
