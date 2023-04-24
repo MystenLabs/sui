@@ -142,7 +142,7 @@ module sui::kiosk {
     /// authorizes their usage. Currently supported methods are: `borrow`, `place`
     /// and `lock`.
     ///
-    /// The `action_set` can support up to 16 different "actions" and all their
+    /// The `permissions` can support up to 16 different "actions" and all their
     /// combinations in the future.
     struct Extension<phantom E> has store, copy, drop {}
 
@@ -617,9 +617,9 @@ module sui::kiosk {
     #[test_only]
     /// Test-only version of `add_extension`
     public fun add_extension_for_testing<E: drop>(
-        self: &mut Kiosk, cap: &KioskOwnerCap, action_set: u16
+        self: &mut Kiosk, cap: &KioskOwnerCap, permissions: u16
     ) {
-        add_extension<E>(self, cap, action_set);
+        add_extension<E>(self, cap, permissions);
     }
 }
 
