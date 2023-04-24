@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Image32 } from '@mysten/icons';
 import { useState, useCallback, useEffect } from 'react';
 
-import { ReactComponent as BrokenImage } from '../../assets/SVGIcons/24px/NFTTypeImage.svg';
 import {
     FALLBACK_IMAGE,
     ImageModClient,
@@ -22,7 +22,7 @@ function ShowBrokenImage({ onClick }: { onClick?: () => void }) {
             onClick={onClick}
         >
             <div>
-                <BrokenImage />
+                <Image32 className="h-6 w-6 text-gray-70" />
             </div>
         </div>
     );

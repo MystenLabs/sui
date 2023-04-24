@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useGetSystemState } from '@mysten/core';
+import { ArrowRight12 } from '@mysten/icons';
 import { type SuiValidatorSummary } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
-import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
 import { StakeColumn } from './StakeColumn';
 
 import { Banner } from '~/ui/Banner';
@@ -128,7 +128,7 @@ export function TopValidatorsCard({ limit, showIcon }: TopValidatorsCardProps) {
                             <Link to="/validators">
                                 <div className="flex items-center gap-2">
                                     More Validators
-                                    <ArrowRight fill="currentColor" />
+                                    <ArrowRight12 fill="currentColor" />
                                 </div>
                             </Link>
                         </div>
