@@ -1016,6 +1016,7 @@ async fn sync_checkpoint_contents<S>(
         .pipe(futures::stream::iter)
         .buffered(checkpoint_content_download_concurrency);
 
+    let mut checkpoint_contents_sync_error = false;
     while let Some(maybe_checkpoint) = checkpoint_contents_stream.next().await {
         match maybe_checkpoint {
             Ok((checkpoint, num_txns)) => {
@@ -1035,6 +1036,7 @@ async fn sync_checkpoint_contents<S>(
                 highest_synced = checkpoint;
             }
             Err(err) => {
+                checkpoint_contents_sync_error = true;
                 debug!("unable to sync contents of checkpoint: {err}");
                 break;
             }
@@ -1045,6 +1047,11 @@ async fn sync_checkpoint_contents<S>(
     if let Some(sender) = sender.upgrade() {
         let message = StateSyncMessage::SyncedCheckpoint(Box::new(highest_synced));
         let _ = sender.send(message).await;
+    }
+
+    // Add a delay if any checkpoint contents failed to sync, to prevent fast retry loops.
+    if checkpoint_contents_sync_error {
+        tokio::time::sleep(Duration::from_secs(10)).await;
     }
 }
 
