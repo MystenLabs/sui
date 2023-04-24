@@ -3,7 +3,8 @@
 use once_cell::sync::OnceCell;
 use prometheus::{
     register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
-    register_int_gauge_vec_with_registry, HistogramVec, IntCounterVec, IntGaugeVec, Registry,
+    register_int_counter_with_registry, register_int_gauge_vec_with_registry, HistogramVec,
+    IntCounter, IntCounterVec, IntGaugeVec, Registry,
 };
 use rocksdb::perf::set_perf_stats;
 use rocksdb::{PerfContext, PerfMetric, PerfStatsLevel};
@@ -815,6 +816,10 @@ pub struct DBMetrics {
     pub cf_metrics: ColumnFamilyMetrics,
     pub read_perf_ctx_metrics: ReadPerfContextMetrics,
     pub write_perf_ctx_metrics: WritePerfContextMetrics,
+
+    pub deferred_batch_timeouts: IntCounter,
+    pub deferred_batch_full_batches: IntCounter,
+    pub deferred_batch_partial_batches: IntCounter,
 }
 
 static ONCE: OnceCell<Arc<DBMetrics>> = OnceCell::new();
@@ -826,6 +831,24 @@ impl DBMetrics {
             cf_metrics: ColumnFamilyMetrics::new(registry),
             read_perf_ctx_metrics: ReadPerfContextMetrics::new(registry),
             write_perf_ctx_metrics: WritePerfContextMetrics::new(registry),
+            deferred_batch_timeouts: register_int_counter_with_registry!(
+                "deferred_batch_timeouts",
+                "Number of deferred batches that timed out",
+                registry
+            )
+            .unwrap(),
+            deferred_batch_full_batches: register_int_counter_with_registry!(
+                "deferred_batch_full_batches",
+                "Number of deferred batches that were full",
+                registry
+            )
+            .unwrap(),
+            deferred_batch_partial_batches: register_int_counter_with_registry!(
+                "deferred_batch_partial_batches",
+                "Number of deferred batches that were partial",
+                registry
+            )
+            .unwrap(),
         }
     }
     pub fn init(registry: &Registry) -> &'static Arc<DBMetrics> {

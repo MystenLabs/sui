@@ -32,7 +32,7 @@ use sui_types::storage::{
 };
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentSync};
-use typed_store::rocks::{DBBatch, TypedStoreError};
+use typed_store::rocks::{DeferredBatch, TypedStoreError};
 use typed_store::traits::Map;
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
@@ -709,7 +709,7 @@ impl AuthorityStore {
     /// NOTE: does not handle transaction lock.
     /// This is used to insert genesis objects
     async fn insert_object_direct(&self, object_ref: ObjectRef, object: &Object) -> SuiResult {
-        let mut write_batch = self.perpetual_tables.objects.batch();
+        let mut write_batch = self.perpetual_tables.objects.deferred_batch();
 
         // Insert object
         let StoreObjectPair(store_object, indirect_object) =
@@ -733,14 +733,14 @@ impl AuthorityStore {
             }
         }
 
-        write_batch.write()?;
+        write_batch.write_sync()?;
 
         Ok(())
     }
 
     /// This function should only be used for initializing genesis and should remain private.
     async fn bulk_object_insert(&self, objects: &[&Object]) -> SuiResult<()> {
-        let mut batch = self.perpetual_tables.objects.batch();
+        let mut batch = self.perpetual_tables.objects.deferred_batch();
         let ref_and_objects: Vec<_> = objects
             .iter()
             .map(|o| (o.compute_object_reference(), o))
@@ -777,7 +777,7 @@ impl AuthorityStore {
             false, // is_force_reset
         )?;
 
-        batch.write()?;
+        batch.write_sync()?;
 
         Ok(())
     }
@@ -810,7 +810,7 @@ impl AuthorityStore {
             .acquire_read_locks_for_indirect_objects(&inner_temporary_store)
             .await;
         // Extract the new state from the execution
-        let mut write_batch = self.perpetual_tables.transactions.batch();
+        let mut write_batch = self.perpetual_tables.transactions.deferred_batch();
 
         // Store the certificate indexed by transaction digest
         let transaction_digest = transaction.digest();
@@ -839,7 +839,11 @@ impl AuthorityStore {
         fail_point_async!("crash");
 
         // Commit.
-        write_batch.write()?;
+        if transaction.is_system_tx() {
+            write_batch.write_sync()?;
+        } else {
+            write_batch.write().await?;
+        }
 
         // test crashing before notifying
         fail_point_async!("crash");
@@ -878,7 +882,7 @@ impl AuthorityStore {
     /// Helper function for updating the objects and locks in the state
     async fn update_objects_and_locks(
         &self,
-        write_batch: &mut DBBatch,
+        write_batch: &mut DeferredBatch,
         inner_temporary_store: InnerTemporaryStore,
     ) -> SuiResult {
         let InnerTemporaryStore {
@@ -1171,7 +1175,7 @@ impl AuthorityStore {
     /// Returns SuiError::ObjectLockAlreadyInitialized if the lock already exists and is locked to a transaction
     fn initialize_locks_impl(
         &self,
-        write_batch: &mut DBBatch,
+        write_batch: &mut DeferredBatch,
         objects: &[ObjectRef],
         is_force_reset: bool,
     ) -> SuiResult {
@@ -1210,7 +1214,7 @@ impl AuthorityStore {
     }
 
     /// Removes locks for a given list of ObjectRefs.
-    fn delete_locks(&self, write_batch: &mut DBBatch, objects: &[ObjectRef]) -> SuiResult {
+    fn delete_locks(&self, write_batch: &mut DeferredBatch, objects: &[ObjectRef]) -> SuiResult {
         trace!(?objects, "delete_locks");
         write_batch.delete_batch(
             &self.perpetual_tables.owned_object_transaction_locks,
@@ -1230,19 +1234,25 @@ impl AuthorityStore {
             epoch_store.delete_signed_transaction_for_test(tx);
         }
 
-        let mut batch = self.perpetual_tables.owned_object_transaction_locks.batch();
+        let mut batch = self
+            .perpetual_tables
+            .owned_object_transaction_locks
+            .deferred_batch();
         batch
             .delete_batch(
                 &self.perpetual_tables.owned_object_transaction_locks,
                 objects.iter(),
             )
             .unwrap();
-        batch.write().unwrap();
+        batch.write_sync().unwrap();
 
-        let mut batch = self.perpetual_tables.owned_object_transaction_locks.batch();
+        let mut batch = self
+            .perpetual_tables
+            .owned_object_transaction_locks
+            .deferred_batch();
         self.initialize_locks_impl(&mut batch, objects, false)
             .unwrap();
-        batch.write().unwrap();
+        batch.write_sync().unwrap();
     }
 
     /// This function is called at the end of epoch for each transaction that's
@@ -1269,7 +1279,7 @@ impl AuthorityStore {
         // We should never be reverting shared object transactions.
         assert!(effects.shared_objects().is_empty());
 
-        let mut write_batch = self.perpetual_tables.transactions.batch();
+        let mut write_batch = self.perpetual_tables.transactions.deferred_batch();
         write_batch.delete_batch(
             &self.perpetual_tables.executed_effects,
             iter::once(tx_digest),
@@ -1343,7 +1353,7 @@ impl AuthorityStore {
             new_locks.flatten(),
         )?;
 
-        write_batch.write()?;
+        write_batch.write_sync()?;
 
         Ok(())
     }

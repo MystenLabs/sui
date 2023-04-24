@@ -13,7 +13,10 @@ use crate::{
 };
 use bincode::Options;
 use collectable::TryExtend;
+use futures::pin_mut;
+use itertools::Either;
 use itertools::Itertools;
+use parking_lot::{Mutex, MutexGuard};
 use rocksdb::{
     checkpoint::Checkpoint, BlockBasedOptions, BottommostLevelCompaction, Cache, CompactOptions,
     LiveFile, OptimisticTransactionDB, SnapshotWithThreadMode,
@@ -33,9 +36,12 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use std::{collections::HashSet, ffi::CStr};
+use std::{
+    collections::{HashMap, HashSet},
+    ffi::CStr,
+};
 use tap::TapFallible;
-use tokio::sync::oneshot;
+use tokio::{sync::oneshot, time::timeout};
 use tracing::{error, info, instrument, warn};
 
 use self::{iter::Iter, keys::Keys, values::Values};
@@ -611,6 +617,240 @@ impl RocksDBBatch {
     }
 }
 
+enum DeferredBatchOperation {
+    Delete { key: Vec<u8> },
+    DeleteRange { from: Vec<u8>, to: Vec<u8> },
+    Put { key: Vec<u8>, value: Vec<u8> },
+    Merge { key: Vec<u8>, value: Vec<u8> },
+}
+
+type OperationBuffer = HashMap<String, Vec<DeferredBatchOperation>>;
+
+pub struct DeferredBatch {
+    rocksdb: Arc<RocksDB>,
+    batch_batcher: Arc<Mutex<BatchBatcher>>,
+    db_metrics: Arc<DBMetrics>,
+    write_sample_interval: SamplingInterval,
+
+    // batch operations by CF, in the order they were added
+    operations: OperationBuffer,
+}
+
+impl DeferredBatch {
+    fn new(
+        rocksdb: &Arc<RocksDB>,
+        batch_batcher: &Arc<Mutex<BatchBatcher>>,
+        db_metrics: &Arc<DBMetrics>,
+        write_sample_interval: &SamplingInterval,
+    ) -> Self {
+        Self {
+            rocksdb: rocksdb.clone(),
+            batch_batcher: batch_batcher.clone(),
+            db_metrics: db_metrics.clone(),
+            write_sample_interval: write_sample_interval.clone(),
+            operations: HashMap::new(),
+        }
+    }
+
+    /// inserts a range of (key, value) pairs given as an iterator
+    pub fn insert_batch<J: Borrow<K>, K: Serialize, U: Borrow<V>, V: Serialize>(
+        &mut self,
+        db: &DBMap<K, V>,
+        new_vals: impl IntoIterator<Item = (J, U)>,
+    ) -> Result<&mut Self, TypedStoreError> {
+        if !Arc::ptr_eq(&db.rocksdb, &self.rocksdb) {
+            return Err(TypedStoreError::CrossDBBatch);
+        }
+
+        let entry = self
+            .operations
+            .entry(db.cf.clone())
+            .or_insert_with(Vec::new);
+
+        new_vals
+            .into_iter()
+            .try_for_each::<_, Result<_, TypedStoreError>>(|(k, v)| {
+                let key = be_fix_int_ser(k.borrow())?;
+                let value = bcs::to_bytes(v.borrow())?;
+                entry.push(DeferredBatchOperation::Put { key, value });
+                Ok(())
+            })?;
+        Ok(self)
+    }
+
+    /// merges a range of (key, value) pairs given as an iterator
+    pub fn merge_batch<J: Borrow<K>, K: Serialize, U: Borrow<V>, V: Serialize>(
+        &mut self,
+        db: &DBMap<K, V>,
+        new_vals: impl IntoIterator<Item = (J, U)>,
+    ) -> Result<&mut Self, TypedStoreError> {
+        if !Arc::ptr_eq(&db.rocksdb, &self.rocksdb) {
+            return Err(TypedStoreError::CrossDBBatch);
+        }
+
+        let entry = self
+            .operations
+            .entry(db.cf.clone())
+            .or_insert_with(Vec::new);
+
+        new_vals
+            .into_iter()
+            .try_for_each::<_, Result<_, TypedStoreError>>(|(k, v)| {
+                let key = be_fix_int_ser(k.borrow())?;
+                let value = bcs::to_bytes(v.borrow())?;
+                entry.push(DeferredBatchOperation::Merge { key, value });
+                Ok(())
+            })?;
+        Ok(self)
+    }
+
+    /// similar to `merge_batch` but allows merge with partial values
+    pub fn partial_merge_batch<J: Borrow<K>, K: Serialize, V: Serialize, B: AsRef<[u8]>>(
+        &mut self,
+        db: &DBMap<K, V>,
+        new_vals: impl IntoIterator<Item = (J, B)>,
+    ) -> Result<&mut Self, TypedStoreError> {
+        if !Arc::ptr_eq(&db.rocksdb, &self.rocksdb) {
+            return Err(TypedStoreError::CrossDBBatch);
+        }
+
+        let entry = self
+            .operations
+            .entry(db.cf.clone())
+            .or_insert_with(Vec::new);
+
+        new_vals
+            .into_iter()
+            .try_for_each::<_, Result<_, TypedStoreError>>(|(k, value)| {
+                let key = be_fix_int_ser(k.borrow())?;
+                entry.push(DeferredBatchOperation::Merge {
+                    key,
+                    value: value.as_ref().to_vec(),
+                });
+                Ok(())
+            })?;
+        Ok(self)
+    }
+
+    pub fn delete_batch<J: Borrow<K>, K: Serialize, V>(
+        &mut self,
+        db: &DBMap<K, V>,
+        purged_vals: impl IntoIterator<Item = J>,
+    ) -> Result<(), TypedStoreError> {
+        if !Arc::ptr_eq(&db.rocksdb, &self.rocksdb) {
+            return Err(TypedStoreError::CrossDBBatch);
+        }
+
+        let entry = self
+            .operations
+            .entry(db.cf.clone())
+            .or_insert_with(Vec::new);
+
+        purged_vals
+            .into_iter()
+            .try_for_each::<_, Result<_, TypedStoreError>>(|k| {
+                let key = be_fix_int_ser(k.borrow())?;
+                entry.push(DeferredBatchOperation::Delete { key });
+                Ok(())
+            })?;
+        Ok(())
+    }
+
+    pub fn delete_range<K: Serialize, V>(
+        &mut self,
+        db: &DBMap<K, V>,
+        from: &K,
+        to: &K,
+    ) -> Result<(), TypedStoreError> {
+        if !Arc::ptr_eq(&db.rocksdb, &self.rocksdb) {
+            return Err(TypedStoreError::CrossDBBatch);
+        }
+
+        let from = be_fix_int_ser(from)?;
+        let to = be_fix_int_ser(to)?;
+
+        let entry = self
+            .operations
+            .entry(db.cf.clone())
+            .or_insert_with(Vec::new);
+
+        entry.push(DeferredBatchOperation::DeleteRange { from, to });
+
+        Ok(())
+    }
+
+    pub fn write_sync(self) -> Result<(), TypedStoreError> {
+        let mut batch = DBBatch::new(&self.rocksdb, &self.db_metrics, &self.write_sample_interval);
+        batch.add_deferred_batch(self)?;
+        batch.write()
+    }
+
+    pub async fn write(self) -> Result<(), TypedStoreError> {
+        let Self {
+            operations,
+            rocksdb,
+            db_metrics,
+            write_sample_interval,
+            batch_batcher,
+        } = self;
+
+        let (tx, rx) = oneshot::channel();
+        pin_mut!(rx);
+
+        // Move operations into Box to make critical section as fast as possible.
+        let entry = Box::new(BatchQueueEntry { tx, operations });
+
+        let prev_id_or_batch = {
+            let mut batcher = batch_batcher.lock();
+            batcher.push(entry);
+
+            if batcher.is_queue_full() {
+                Either::Right(BatchBatcher::take_and_replace(batcher))
+            } else {
+                Either::Left(batcher.id)
+            }
+        };
+
+        let prev_id = match prev_id_or_batch {
+            Either::Left(prev_id) => prev_id,
+            Either::Right(batcher) => {
+                db_metrics.deferred_batch_full_batches.inc();
+                batcher.write(DBBatch::new(&rocksdb, &db_metrics, &write_sample_interval));
+                // unwrap ok - write() will have sent the result already
+                return rx.try_recv().unwrap();
+            }
+        };
+
+        if let Ok(res) = timeout(BatchBatcher::BATCH_TIMEOUT_MS, &mut rx).await {
+            // unwrap ok - tx cannot have been dropped without sending a result.
+            return res.unwrap();
+        }
+
+        db_metrics.deferred_batch_timeouts.inc();
+
+        let batcher = {
+            let batcher = batch_batcher.lock();
+            // check if another thread took the queue while we were re-acquiring lock.
+            if prev_id == batcher.id {
+                Some(BatchBatcher::take_and_replace(batcher))
+            } else {
+                None
+            }
+        };
+
+        if let Some(batcher) = batcher {
+            db_metrics.deferred_batch_partial_batches.inc();
+            batcher.write(DBBatch::new(&rocksdb, &db_metrics, &write_sample_interval));
+            // unwrap ok - process_queue will have sent the result already
+            return rx.try_recv().unwrap();
+        }
+
+        // unwrap ok - another thread took the queue while we were re-acquiring the lock and is
+        // guaranteed to process the queue immediately.
+        rx.await.unwrap()
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct MetricConf {
     pub db_name_override: Option<String>,
@@ -643,6 +883,82 @@ impl MetricConf {
 const CF_METRICS_REPORT_PERIOD_MILLIS: u64 = 1000;
 const METRICS_ERROR: i64 = -1;
 
+struct BatchBatcher {
+    // We want to keep the critical section in which we push into the queue as fast as possible, so
+    // we want to push a single pointer into the vector.
+    #[allow(clippy::vec_box)]
+    queue: Vec<Box<BatchQueueEntry>>,
+
+    id: u64,
+}
+
+impl Default for BatchBatcher {
+    fn default() -> Self {
+        Self {
+            queue: Vec::with_capacity(Self::MAX_BATCH_SIZE),
+            id: 0,
+        }
+    }
+}
+
+impl std::fmt::Debug for BatchBatcher {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BatchBatcher")
+            .field("id", &self.id)
+            .finish()
+    }
+}
+
+struct BatchQueueEntry {
+    operations: OperationBuffer,
+    tx: oneshot::Sender<Result<(), TypedStoreError>>,
+}
+
+impl BatchBatcher {
+    const MAX_BATCH_SIZE: usize = 10;
+    const BATCH_TIMEOUT_MS: Duration = Duration::from_millis(20);
+
+    fn new() -> Self {
+        Self::default()
+    }
+
+    fn push(&mut self, entry: Box<BatchQueueEntry>) {
+        self.queue.push(entry);
+    }
+
+    fn is_queue_full(&self) -> bool {
+        self.queue.len() == Self::MAX_BATCH_SIZE
+    }
+
+    fn write(self, mut write_batch: DBBatch) {
+        let senders: Vec<_> = self
+            .queue
+            .into_iter()
+            .map(|op| {
+                let op = *op;
+                write_batch
+                    .add_deferred_batch_operations(op.operations)
+                    .unwrap();
+                op.tx
+            })
+            .collect();
+
+        let result = write_batch.write();
+        senders.into_iter().for_each(|sender| {
+            let _ = sender.send(result.clone());
+        });
+    }
+
+    // Function consumes MutexGuard, therefore releasing the lock after mem swap is done
+    fn take_and_replace(mut guard: MutexGuard<'_, BatchBatcher>) -> Self {
+        let this = &mut *guard;
+        let mut new = BatchBatcher::new();
+        new.id = this.id + 1;
+        std::mem::swap(&mut new, this);
+        new
+    }
+}
+
 /// An interface to a rocksDB database, keyed by a columnfamily
 #[derive(Clone, Debug)]
 pub struct DBMap<K, V> {
@@ -657,6 +973,8 @@ pub struct DBMap<K, V> {
     iter_latency_sample_interval: SamplingInterval,
     iter_bytes_sample_interval: SamplingInterval,
     _metrics_task_cancel_handle: Arc<oneshot::Sender<()>>,
+
+    batch_batchers: Vec<Arc<Mutex<BatchBatcher>>>,
 }
 
 unsafe impl<K: Send, V: Send> Send for DBMap<K, V> {}
@@ -688,8 +1006,14 @@ impl<K, V> DBMap<K, V> {
             }
             info!("Returning the cf metric logging task for DBMap: {}", &cf);
         });
+
+        let batch_batchers = (0..8)
+            .map(|_| Arc::new(Mutex::new(BatchBatcher::new())))
+            .collect();
+
         DBMap {
             rocksdb: db.clone(),
+            batch_batchers,
             opts: opts.clone(),
             _phantom: PhantomData,
             cf: opt_cf.to_string(),
@@ -757,15 +1081,19 @@ impl<K, V> DBMap<K, V> {
     }
 
     pub fn batch(&self) -> DBBatch {
-        let batch = match *self.rocksdb {
-            RocksDB::DBWithThreadMode(_) => RocksDBBatch::Regular(WriteBatch::default()),
-            RocksDB::OptimisticTransactionDB(_) => {
-                RocksDBBatch::Transactional(WriteBatchWithTransaction::<true>::default())
-            }
-        };
-        DBBatch::new(
+        DBBatch::new(&self.rocksdb, &self.db_metrics, &self.write_sample_interval)
+    }
+
+    pub fn deferred_batch(&self) -> DeferredBatch {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static NEXT_IDX: AtomicUsize = AtomicUsize::new(0);
+        thread_local! {
+            static IDX: usize = NEXT_IDX.fetch_add(1, Ordering::Relaxed);
+        }
+        let idx = IDX.with(|idx| *idx) % self.batch_batchers.len();
+        DeferredBatch::new(
             &self.rocksdb,
-            batch,
+            &self.batch_batchers[idx],
             &self.db_metrics,
             &self.write_sample_interval,
         )
@@ -1076,10 +1404,16 @@ impl DBBatch {
     /// Use `open_cf` to get the DB reference or an existing open database.
     pub fn new(
         dbref: &Arc<RocksDB>,
-        batch: RocksDBBatch,
         db_metrics: &Arc<DBMetrics>,
         write_sample_interval: &SamplingInterval,
     ) -> Self {
+        let batch = match **dbref {
+            RocksDB::DBWithThreadMode(_) => RocksDBBatch::Regular(WriteBatch::default()),
+            RocksDB::OptimisticTransactionDB(_) => {
+                RocksDBBatch::Transactional(WriteBatchWithTransaction::<true>::default())
+            }
+        };
+
         DBBatch {
             rocksdb: dbref.clone(),
             batch,
@@ -1215,6 +1549,59 @@ impl DBBatch {
             .try_for_each::<_, Result<_, TypedStoreError>>(|(k, v)| {
                 let k_buf = be_fix_int_ser(k.borrow())?;
                 self.batch.merge_cf(&db.cf(), k_buf, v);
+                Ok(())
+            })?;
+        Ok(self)
+    }
+
+    pub fn add_deferred_batch(
+        &mut self,
+        batch: DeferredBatch,
+    ) -> Result<&mut Self, TypedStoreError> {
+        self.add_deferred_batch_operations(batch.operations)
+    }
+
+    fn add_deferred_batch_operations(
+        &mut self,
+        operations: HashMap<String, Vec<DeferredBatchOperation>>,
+    ) -> Result<&mut Self, TypedStoreError> {
+        operations
+            .into_iter()
+            .try_for_each::<_, Result<_, TypedStoreError>>(|(cf, operations)| {
+                let cf_handle = self
+                    .rocksdb
+                    .cf_handle(&cf)
+                    .expect("Map-keying column family should have been checked at DB creation");
+
+                let has_delete_range = operations
+                    .iter()
+                    .any(|op| matches!(op, DeferredBatchOperation::DeleteRange { .. }));
+
+                if has_delete_range && matches!(self.batch, RocksDBBatch::Transactional(_)) {
+                    return Err(TypedStoreError::RocksDBError(
+                        "operation not supported".to_string(),
+                    ));
+                }
+
+                // Cannot fail once we start adding operations to the batch, since
+                // there may be other transactions with data in the batch already.
+                operations.into_iter().for_each(|op| match op {
+                    DeferredBatchOperation::Put { key, value } => {
+                        self.batch.put_cf(&cf_handle, key, value);
+                    }
+                    DeferredBatchOperation::Delete { key } => {
+                        self.batch.delete_cf(&cf_handle, key);
+                    }
+                    DeferredBatchOperation::DeleteRange { from, to } => {
+                        self.batch
+                            .delete_range_cf(&cf_handle, from, to)
+                            .expect("should have already checked for delete range support");
+                    }
+                    DeferredBatchOperation::Merge { key, value } => {
+                        self.batch.merge_cf(&cf_handle, key, value);
+                    }
+                });
+
                 Ok(())
             })?;
         Ok(self)

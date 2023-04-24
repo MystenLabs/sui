@@ -31,6 +31,8 @@ rand = "0.8.5"
 async-trait = "0.1.57"
 itertools = "0.10.5"
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+parking_lot = "0.12.1"
+futures = "0.3.23"
 
 [dev-dependencies]
 tempfile = "3.3.0"
