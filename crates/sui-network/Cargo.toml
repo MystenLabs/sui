@@ -12,6 +12,8 @@ anemo-tower.workspace = true
 governor = "0.5.1"
 serde = { version = "1.0.144", features = ["derive"] }
 tonic = "0.8"
+dashmap = "5.4.0"
+tower = "0.4.13"
 
 sui-types = { path = "../sui-types" }
 sui-config = { path = "../sui-config" }
