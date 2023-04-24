@@ -633,7 +633,7 @@ async fn test_execution_basic() {
         gas_ref,
         rgp,
     );
-    let (cert, effects) = execute_owned_on_first_three_authorities(
+    let (cert, _effects) = execute_owned_on_first_three_authorities(
         &authority_clients,
         &aggregator.committee,
         &owned_tx,
