@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Add16, Download16 } from '@mysten/icons';
 import { Link } from 'react-router-dom';
 
 import { Heading } from '_app/shared/heading';
 import { Text } from '_app/shared/text';
-import Icon, { SuiIcons } from '_components/icon';
 
 const selections = [
     {
@@ -13,14 +13,14 @@ const selections = [
         desc: 'This creates a new wallet and a 12-word recovery phrase.',
         url: '../create',
         action: 'Create a New Wallet',
-        icon: SuiIcons.Plus,
+        icon: <Add16 className="font-semibold" />,
     },
     {
         title: 'No, I already have one',
         desc: 'Import your existing wallet by entering the 12-word recovery phrase.',
         url: '../import',
         action: 'Import an Existing Wallet',
-        icon: SuiIcons.Download,
+        icon: <Download16 className="font-semibold" />,
     },
 ];
 
@@ -56,10 +56,7 @@ const SelectPage = () => {
                                 'mt-3.5 flex flex-nowrap items-center justify-center bg-hero-dark text-white !rounded-xl py-3.75 px-5 w-full gap-2.5 no-underline font-semibold text-body hover:bg-hero'
                             }
                         >
-                            <Icon
-                                icon={aSelection.icon}
-                                className="font-semibold"
-                            />
+                            {aSelection.icon}
                             {aSelection.action}
                         </Link>
                     </div>

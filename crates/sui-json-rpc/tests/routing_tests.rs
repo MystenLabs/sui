@@ -24,7 +24,7 @@ async fn test_rpc_backward_compatibility() {
     builder.register_module(TestApiModule).unwrap();
 
     let port = get_available_port("0.0.0.0");
-    let handle = builder
+    let _handle = builder
         .start(SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port)))
         .await
         .unwrap();
@@ -96,8 +96,6 @@ async fn test_rpc_backward_compatibility() {
         .await
         .unwrap();
     assert_eq!("Some string from old method", response);
-
-    handle.stop().unwrap()
 }
 
 #[tokio::test]
@@ -108,7 +106,7 @@ async fn test_disable_routing() {
     builder.register_module(TestApiModule).unwrap();
 
     let port = get_available_port("0.0.0.0");
-    let handle = builder
+    let _handle = builder
         .start(SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port)))
         .await
         .unwrap();
@@ -137,8 +135,6 @@ async fn test_disable_routing() {
         )
         .await;
     assert!(response.is_err());
-
-    handle.stop().unwrap()
 }
 
 // TODO(chris): clean up this after March 27th, 2023

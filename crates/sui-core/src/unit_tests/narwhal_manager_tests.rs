@@ -96,10 +96,10 @@ async fn test_narwhal_manager() {
         let registry_service = RegistryService::new(Registry::new());
         let secret = Arc::pin(config.protocol_key_pair().copy());
         let genesis = config.genesis().unwrap();
-        let genesis_committee = genesis.committee().unwrap();
 
         let state = TestAuthorityBuilder::new()
-            .build(genesis_committee, &secret, genesis)
+            .with_genesis_and_keypair(genesis, &secret)
+            .build()
             .await;
 
         let system_state = state

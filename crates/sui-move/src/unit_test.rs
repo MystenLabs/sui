@@ -11,13 +11,14 @@ use move_package::BuildConfig;
 use move_unit_test::{extensions::set_extension_hook, UnitTestingConfig};
 use move_vm_runtime::native_extensions::NativeContextExtensions;
 use once_cell::sync::Lazy;
-use std::{collections::BTreeMap, path::PathBuf};
+use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 use sui_core::authority::TemporaryStore;
 use sui_cost_tables::bytecode_tables::initial_cost_schedule_for_unit_tests;
 use sui_move_natives::{object_runtime::ObjectRuntime, NativesCostTable};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     digests::TransactionDigest, in_memory_storage::InMemoryStorage, messages::InputObjects,
+    metrics::LimitsMetrics,
 };
 
 // Move unit tests will halt after executing this many steps. This is a protection to avoid divergence
@@ -102,11 +103,16 @@ fn new_testing_object_and_natives_cost_runtime(ext: &mut NativeContextExtensions
         TransactionDigest::random(),
         &ProtocolConfig::get_for_min_version(),
     );
+    // Use a throwaway metrics registry for testing.
+    let registry = prometheus::Registry::new();
+    let metrics = Arc::new(LimitsMetrics::new(&registry));
+
     ext.add(ObjectRuntime::new(
         Box::new(state_view),
         BTreeMap::new(),
         false,
         &ProtocolConfig::get_for_min_version(),
+        metrics,
     ));
     ext.add(NativesCostTable::from_protocol_config(
         &ProtocolConfig::get_for_min_version(),

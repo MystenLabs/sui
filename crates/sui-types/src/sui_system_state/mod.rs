@@ -174,6 +174,10 @@ pub trait SuiSystemStateTrait {
     fn safe_mode(&self) -> bool;
     fn advance_epoch_safe_mode(&mut self, params: &AdvanceEpochParams);
     fn get_current_epoch_committee(&self) -> CommitteeWithNetworkMetadata;
+    fn get_pending_active_validators<S: ObjectStore>(
+        &self,
+        object_store: &S,
+    ) -> Result<Vec<SuiValidatorSummary>, SuiError>;
     fn into_epoch_start_state(self) -> EpochStartSystemState;
     fn into_sui_system_state_summary(self) -> SuiSystemStateSummary;
 }
@@ -378,6 +382,29 @@ where
     }
 }
 
+pub fn get_validators_from_table_vec<S, ValidatorType>(
+    object_store: &S,
+    table_id: ObjectID,
+    table_size: u64,
+) -> Result<Vec<ValidatorType>, SuiError>
+where
+    S: ObjectStore,
+    ValidatorType: Serialize + DeserializeOwned,
+{
+    let mut validators = vec![];
+    for i in 0..table_size {
+        let validator: ValidatorType = get_dynamic_field_from_store(object_store, table_id, &i)
+            .map_err(|err| {
+                SuiError::SuiSystemStateReadError(format!(
+                    "Failed to load validator from table: {:?}",
+                    err
+                ))
+            })?;
+        validators.push(validator);
+    }
+    Ok(validators)
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Default)]
 pub struct PoolTokenExchangeRate {
     sui_amount: u64,
@@ -411,4 +438,31 @@ pub struct AdvanceEpochParams {
     pub storage_fund_reinvest_rate: u64,
     pub reward_slashing_rate: u64,
     pub epoch_start_timestamp_ms: u64,
+}
+
+#[cfg(msim)]
+pub mod advance_epoch_result_injection {
+    use crate::error::{ExecutionError, ExecutionErrorKind};
+    use std::cell::RefCell;
+
+    thread_local! {
+        static OVERRIDE: RefCell<bool>  = RefCell::new(false);
+    }
+
+    pub fn set_override(value: bool) {
+        OVERRIDE.with(|o| *o.borrow_mut() = value);
+    }
+
+    /// This function is used to modify the result of advance_epoch transaction for testing.
+    /// If the override is set, the result will be an execution error, otherwise the original result will be returned.
+    pub fn maybe_modify_result(result: Result<(), ExecutionError>) -> Result<(), ExecutionError> {
+        if OVERRIDE.with(|o| *o.borrow()) {
+            Err::<(), ExecutionError>(ExecutionError::new(
+                ExecutionErrorKind::FunctionNotFound,
+                None,
+            ))
+        } else {
+            result
+        }
+    }
 }

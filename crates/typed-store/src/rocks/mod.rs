@@ -1960,9 +1960,9 @@ impl DBOptions {
         self.options
             .set_blob_compression_type(rocksdb::DBCompressionType::Lz4);
         self.options.set_enable_blob_gc(true);
-        // Not setting a min_blob_size, to avoid additional behavior variance when workload changes.
-        // Most transactions and effects are > 300B, which makes blob storage worthwhile for
-        // saving write cost.
+        // Since each blob can have non-trivial size overhead, and compression does not work across blobs,
+        // set a min blob size to so small transactions and effects are kept in sst files.
+        self.options.set_min_blob_size(4 * 1024); // 4KiB
 
         // Since large blobs are not in sst files, reduce the target file size and base level
         // target size.

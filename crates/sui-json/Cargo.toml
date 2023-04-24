@@ -17,9 +17,9 @@ schemars = "0.8.12"
 sui-framework = { path = "../sui-framework" }
 sui-protocol-config = { path = "../sui-protocol-config" }
 sui-types = { path = "../sui-types" }
-sui-verifier = { path = "../sui-verifier" }
 
 move-binary-format.workspace = true
+move-bytecode-utils.workspace = true
 move-core-types.workspace = true
 fastcrypto = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

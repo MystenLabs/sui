@@ -406,7 +406,7 @@ impl Default for AuthorityStorePruningConfig {
             epoch_db_pruning_period_secs: u64::MAX,
             num_epochs_to_retain: 2,
             pruning_run_delay_seconds: None,
-            max_checkpoints_in_batch: 200,
+            max_checkpoints_in_batch: 10,
             max_transactions_in_batch: 1000,
             use_range_deletion: true,
         }
@@ -420,7 +420,7 @@ impl AuthorityStorePruningConfig {
             epoch_db_pruning_period_secs: 60 * 60,
             num_epochs_to_retain: 2,
             pruning_run_delay_seconds: None,
-            max_checkpoints_in_batch: 200,
+            max_checkpoints_in_batch: 10,
             max_transactions_in_batch: 1000,
             use_range_deletion: true,
         }
@@ -431,7 +431,7 @@ impl AuthorityStorePruningConfig {
             epoch_db_pruning_period_secs: 60 * 60,
             num_epochs_to_retain: 2,
             pruning_run_delay_seconds: None,
-            max_checkpoints_in_batch: 200,
+            max_checkpoints_in_batch: 10,
             max_transactions_in_batch: 1000,
             use_range_deletion: true,
         }

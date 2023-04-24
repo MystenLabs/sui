@@ -144,20 +144,18 @@ impl SuiTxValidatorMetrics {
 #[cfg(test)]
 mod tests {
     use crate::{
-        authority::authority_tests::init_state_with_objects_and_committee,
         consensus_adapter::consensus_tests::{test_certificates, test_gas_objects},
         consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics},
     };
-    use fastcrypto::traits::KeyPair;
     use narwhal_types::Batch;
     use narwhal_worker::TransactionValidator;
-    use sui_types::{
-        base_types::AuthorityName, messages::ConsensusTransaction, signature::GenericSignature,
-    };
+    use sui_types::{messages::ConsensusTransaction, signature::GenericSignature};
 
+    use crate::authority::test_authority_builder::TestAuthorityBuilder;
     use sui_macros::sim_test;
     use sui_types::crypto::Ed25519SuiSignature;
     use sui_types::object::Object;
+
     #[sim_test]
     async fn accept_valid_transaction() {
         // Initialize an authority with a (owned) gas object and a shared object; then
@@ -165,18 +163,15 @@ mod tests {
         let mut objects = test_gas_objects();
         objects.push(Object::shared_for_testing());
 
-        let dir = tempfile::TempDir::new().unwrap();
-        let network_config = sui_config::builder::ConfigBuilder::new(&dir)
+        let network_config = sui_config::builder::ConfigBuilder::new_with_temp_dir()
             .with_objects(objects.clone())
             .build();
-        let genesis = network_config.genesis;
 
-        let sec1 = network_config.validator_configs[0]
-            .protocol_key_pair()
-            .copy();
-        let name1: AuthorityName = sec1.public().into();
-
-        let state = init_state_with_objects_and_committee(objects, &genesis, &sec1).await;
+        let state = TestAuthorityBuilder::new()
+            .with_network_config(&network_config)
+            .build()
+            .await;
+        let name1 = state.name;
         let certificates = test_certificates(&state).await;
 
         let first_transaction = certificates[0].clone();

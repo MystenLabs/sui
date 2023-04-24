@@ -6,6 +6,7 @@ import {
     PaginationNext24,
     PaginationPrev24,
 } from '@mysten/icons';
+import { type UseInfiniteQueryResult } from '@tanstack/react-query';
 import { useState } from 'react';
 
 export interface PaginationProps {

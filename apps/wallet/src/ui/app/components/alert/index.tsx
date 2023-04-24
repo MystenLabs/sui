@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Info16, Check32 } from '@mysten/icons';
 import cl from 'classnames';
 
-import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 
 import type { ReactNode } from 'react';
@@ -16,9 +16,10 @@ export type AlertProps = {
     className?: string;
     mode?: ModeType;
 };
-const modeToIcon: Record<Exclude<ModeType, 'loading'>, SuiIcons> = {
-    warning: SuiIcons.Info,
-    success: SuiIcons.Check,
+const modeToIcon = {
+    warning: <Info16 />,
+    success: <Check32 />,
+    loading: <LoadingIndicator color="inherit" />,
 };
 
 export default function Alert({
@@ -28,11 +29,7 @@ export default function Alert({
 }: AlertProps) {
     return (
         <div className={cl(st.container, st[mode], className)}>
-            {mode === 'loading' ? (
-                <LoadingIndicator color="inherit" />
-            ) : (
-                <Icon className={st.icon} icon={modeToIcon[mode]} />
-            )}
+            {modeToIcon[mode]}
             <div className={st.message}>{children}</div>
         </div>
     );

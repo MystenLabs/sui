@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useRpcClient } from '@mysten/core';
+import { Check32 } from '@mysten/icons';
 import { getExecutionStatusType } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 import { Navigate, useSearchParams, useNavigate } from 'react-router-dom';
 
 import Alert from '_components/alert';
-import { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import Overlay from '_components/overlay';
 import ReceiptCard from '_components/receipt-card';
@@ -74,7 +74,12 @@ function ReceiptPage() {
                 setShowModal={setShowModal}
                 title={pageTitle}
                 closeOverlay={closeReceipt}
-                closeIcon={SuiIcons.Check}
+                closeIcon={
+                    <Check32
+                        fill="currentColor"
+                        className="text-sui-light w-8 h-8"
+                    />
+                }
             >
                 {isError ? (
                     <Alert className="mb-2 h-fit">Something went wrong</Alert>

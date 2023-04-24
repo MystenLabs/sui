@@ -4,7 +4,7 @@ title: Connect to a Sui Network
 
 Sui has Testnet and Devnet networks available. Use one of the on-chain networks to experiment with the version of Sui running on that network. You can also spin up a [local Sui network](sui-local-network.md) for local development. 
 
-The Sui networks consist of:
+The Sui Testnet and Devnet networks consist of:
 
  * Four validator nodes operated by Mysten Labs. Clients send transactions and read requests via this endpoint: `https://fullnode.<SUI-NETWORK-VERSION>.sui.io:443` using [JSON-RPC](../build/json-rpc.md).
  * A public network [Sui Explorer](https://explorer.sui.io) for browsing transaction history.
@@ -251,7 +251,7 @@ Created new keypair for address with scheme ED25519: [0xa01cd0c520f12a1e9d57bf3c
 Secret Recovery Phrase : [sunny tip element salad frequent february amount notice chair kite race push noise ketchup that same cannon bench mirror please dinosaur indicate violin sunset]
 ```
 
-To create a sword and transfer it to another player, we use the following command to call the `sword_create` [function](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/move_tutorial/sources/my_module.move#L47) in the `my_module` [module](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/move_tutorial/sources/my_module.move#L4) of the package we previously published.
+To create a sword and transfer it to another player, use the following command to call the `sword_create` [function](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/move_tutorial/sources/my_module.move#L47) in the `my_module` [module](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/move_tutorial/sources/my_module.move#L4) of the package you previously published.
 
 You must use the same format for the command and function parameters as the example shown.
 

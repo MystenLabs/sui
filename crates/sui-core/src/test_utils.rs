@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::{AuthorityState, EffectsNotifyRead};
 use crate::authority_aggregator::{AuthorityAggregator, TimeoutConfig};
 use crate::epoch::committee_store::CommitteeStore;
@@ -49,18 +48,6 @@ use tokio::time::timeout;
 use tracing::{info, warn};
 
 const WAIT_FOR_TX_TIMEOUT: Duration = Duration::from_secs(15);
-
-pub async fn init_state() -> Arc<AuthorityState> {
-    let dir = tempfile::TempDir::new().unwrap();
-    let network_config = sui_config::builder::ConfigBuilder::new(&dir).build();
-    let genesis = network_config.genesis;
-    let keypair = network_config.validator_configs[0]
-        .protocol_key_pair()
-        .copy();
-    TestAuthorityBuilder::new()
-        .build(genesis.committee().unwrap(), &keypair, &genesis)
-        .await
-}
 
 pub async fn send_and_confirm_transaction(
     authority: &AuthorityState,
@@ -295,7 +282,7 @@ pub async fn init_local_authorities_with_genesis(
     let mut clients = BTreeMap::new();
     let mut states = Vec::new();
     for (authority_name, secret) in key_pairs {
-        let client = LocalAuthorityClient::new(committee.clone(), secret, genesis).await;
+        let client = LocalAuthorityClient::new(secret, genesis).await;
         states.push(client.state.clone());
         clients.insert(authority_name, client);
     }

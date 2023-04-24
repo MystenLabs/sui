@@ -23,6 +23,7 @@ ResolvedGraph {
                 ),
                 version: None,
                 resolver: None,
+                overridden_path: false,
             },
         },
         always_deps: {
@@ -104,7 +105,7 @@ ResolvedGraph {
                     "OtherDep": Internal(
                         InternalDependency {
                             kind: Local(
-                                "./deps_only/other_dep",
+                                "deps_only/other_dep",
                             ),
                             subst: Some(
                                 {
@@ -117,6 +118,7 @@ ResolvedGraph {
                             digest: Some(
                                 "6A88B7888D6049EB0121900E22B6FA2C0E702F042C8C8D4FD62AD5C990B9F9A8",
                             ),
+                            dep_override: false,
                         },
                     ),
                 },

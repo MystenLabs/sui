@@ -121,7 +121,7 @@ To read a detailed description and the motivation behind the standard, see the [
 
 In Sui Move, to claim a `Display` object, call `display::new<T>(&Publisher)`. As stated in the signature, it requires the `Publisher` object. Once acquired, `Display` can be modified by adding new fields (templates) to it, and when it’s ready to be published, a `display::update_version(&mut Display)` call is required to publish and make it available. All further additions / edits in the `Display` should also be applied by calling `update_version` again.
 
-Fields that we suggest to use in `Display` are:
+Fields that you should use in `Display` include:
 
 - **name:** a displayable name
 - **link:** a link to an object in an application / external link

@@ -4,7 +4,6 @@
 import '../src/ui/styles/global.scss';
 import '@fontsource/inter/variable.css';
 import '@fontsource/red-hat-mono/variable.css';
-import '_font-icons/output/sui-icons.scss';
 import 'bootstrap-icons/font/bootstrap-icons.scss';
 
 import { MemoryRouter } from 'react-router-dom';

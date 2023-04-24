@@ -4,7 +4,7 @@ title: Programming Objects Tutorial Series
 
 Sui is a blockchain centered on [objects](../../learn/objects.md). Once you start programming non-trivial [smart contracts](../../build/move/index.md) on Sui, you will begin dealing with Sui objects in the code. Sui includes a rich, comprehensive library and testing framework to allow you to interact with objects in a safe yet flexible way.
 
-In this tutorial series, we will walk through all the powerful ways to interact with objects in [Sui Move](../../learn/sui-move-diffs.md). At the end, we will also explore the designs of a few (close-to-)real-world examples to demonstrate the tradeoffs of using different object types and ownership relationships.
+This tutorial series walks through all the powerful ways to interact with objects in [Sui Move](../../learn/sui-move-diffs.md). At the end, it also explores the designs of a few (close-to-)real-world examples to demonstrate the tradeoffs of using different object types and ownership relationships.
 
 ## Prerequisites
 

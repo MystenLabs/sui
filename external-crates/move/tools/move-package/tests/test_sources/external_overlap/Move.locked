@@ -10,7 +10,7 @@ dependencies = [
 
 [[move.package]]
 name = "A"
-source = { local = "./deps_only/A" }
+source = { local = "deps_only/A" }
 
 dependencies = [
   { name = "ADep" },

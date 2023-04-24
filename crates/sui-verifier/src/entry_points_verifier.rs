@@ -7,23 +7,17 @@ use move_binary_format::{
     file_format::{AbilitySet, Bytecode, FunctionDefinition, SignatureToken, Visibility},
     CompiledModule,
 };
-use move_core_types::{account_address::AccountAddress, identifier::IdentStr};
+use move_bytecode_utils::format_signature_token;
 use sui_types::{
-    base_types::{
-        STD_ASCII_MODULE_NAME, STD_ASCII_STRUCT_NAME, STD_OPTION_MODULE_NAME,
-        STD_OPTION_STRUCT_NAME, STD_UTF8_MODULE_NAME, STD_UTF8_STRUCT_NAME, TX_CONTEXT_MODULE_NAME,
-        TX_CONTEXT_STRUCT_NAME,
-    },
-    clock::{CLOCK_MODULE_NAME, CLOCK_STRUCT_NAME},
+    base_types::{TxContext, TxContextKind, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME},
+    clock::Clock,
     error::ExecutionError,
-    id::{ID_STRUCT_NAME, OBJECT_MODULE_NAME},
-    move_package::FnInfoMap,
-    MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
+    is_object, is_object_vector, is_primitive,
+    move_package::{is_test_fun, FnInfoMap},
+    SUI_FRAMEWORK_ADDRESS,
 };
 
-use crate::{
-    format_signature_token, is_test_fun, resolve_struct, verification_failure, INIT_FN_NAME,
-};
+use crate::{verification_failure, INIT_FN_NAME};
 
 /// Checks valid rules rules for entry points, both for module initialization and transactions
 ///
@@ -150,7 +144,7 @@ fn verify_init_function(module: &CompiledModule, fdef: &FunctionDefinition) -> R
     // then the first parameter must be of a one-time witness type and must be passed by value. This
     // is checked by the verifier for pass one-time witness value (one_time_witness_verifier) -
     // please see the description of this pass for additional details.
-    if is_tx_context(view, &parameters[parameters.len() - 1]) != TxContextKind::None {
+    if TxContext::kind(view, &parameters[parameters.len() - 1]) != TxContextKind::None {
         Ok(())
     } else {
         Err(format!(
@@ -175,7 +169,7 @@ fn verify_entry_function_impl(
     let params = view.signature_at(handle.parameters);
 
     let all_non_ctx_params = match params.0.last() {
-        Some(last_param) if is_tx_context(view, last_param) != TxContextKind::None => {
+        Some(last_param) if TxContext::kind(view, last_param) != TxContextKind::None => {
             &params.0[0..params.0.len() - 1]
         }
         _ => &params.0,
@@ -223,7 +217,7 @@ fn verify_param_type(
 ) -> Result<(), String> {
     // Only `sui::sui_system` is allowed to expose entry functions that accept a mutable clock
     // parameter.
-    if is_mutable_clock(view, param) {
+    if Clock::is_mutable(view, param) {
         return Err(format!(
             "Invalid entry point parameter type. Clock must be passed by immutable reference. got: \
              {}",
@@ -241,168 +235,5 @@ fn verify_param_type(
             "Invalid entry point parameter type. Expected primitive or object type. Got: {}",
             format_signature_token(view, param)
         ))
-    }
-}
-
-pub const RESOLVED_SUI_ID: (&AccountAddress, &IdentStr, &IdentStr) =
-    (&SUI_FRAMEWORK_ADDRESS, OBJECT_MODULE_NAME, ID_STRUCT_NAME);
-pub const RESOLVED_SUI_CLOCK: (&AccountAddress, &IdentStr, &IdentStr) =
-    (&SUI_FRAMEWORK_ADDRESS, CLOCK_MODULE_NAME, CLOCK_STRUCT_NAME);
-pub const RESOLVED_STD_OPTION: (&AccountAddress, &IdentStr, &IdentStr) = (
-    &MOVE_STDLIB_ADDRESS,
-    STD_OPTION_MODULE_NAME,
-    STD_OPTION_STRUCT_NAME,
-);
-pub const RESOLVED_ASCII_STR: (&AccountAddress, &IdentStr, &IdentStr) = (
-    &MOVE_STDLIB_ADDRESS,
-    STD_ASCII_MODULE_NAME,
-    STD_ASCII_STRUCT_NAME,
-);
-pub const RESOLVED_UTF8_STR: (&AccountAddress, &IdentStr, &IdentStr) = (
-    &MOVE_STDLIB_ADDRESS,
-    STD_UTF8_MODULE_NAME,
-    STD_UTF8_STRUCT_NAME,
-);
-
-pub fn is_primitive(
-    view: &BinaryIndexedView,
-    function_type_args: &[AbilitySet],
-    s: &SignatureToken,
-) -> bool {
-    match s {
-        SignatureToken::Bool
-        | SignatureToken::U8
-        | SignatureToken::U16
-        | SignatureToken::U32
-        | SignatureToken::U64
-        | SignatureToken::U128
-        | SignatureToken::U256
-        | SignatureToken::Address => true,
-        SignatureToken::Signer => false,
-        // optimistic, but no primitive has key
-        SignatureToken::TypeParameter(idx) => !function_type_args[*idx as usize].has_key(),
-
-        SignatureToken::Struct(idx) => {
-            let resolved_struct = resolve_struct(view, *idx);
-            resolved_struct == RESOLVED_SUI_ID
-                || resolved_struct == RESOLVED_ASCII_STR
-                || resolved_struct == RESOLVED_UTF8_STR
-        }
-
-        SignatureToken::StructInstantiation(idx, targs) => {
-            let resolved_struct = resolve_struct(view, *idx);
-            // is option of a primitive
-            resolved_struct == RESOLVED_STD_OPTION
-                && targs.len() == 1
-                && is_primitive(view, function_type_args, &targs[0])
-        }
-
-        SignatureToken::Vector(inner) => is_primitive(view, function_type_args, inner),
-        SignatureToken::Reference(_) | SignatureToken::MutableReference(_) => false,
-    }
-}
-
-#[derive(PartialEq, Eq, Clone, Copy)]
-pub enum TxContextKind {
-    // No TxContext
-    None,
-    // &mut TxContext
-    Mutable,
-    // &TxContext
-    Immutable,
-}
-
-// Returns Some(kind) if the type is a reference to the TxnContext. kind being Mutable with
-// a MutableReference, and Immutable otherwise.
-// Returns None for all other types
-pub fn is_tx_context(view: &BinaryIndexedView, p: &SignatureToken) -> TxContextKind {
-    match p {
-        SignatureToken::MutableReference(m) | SignatureToken::Reference(m) => match &**m {
-            SignatureToken::Struct(idx) => {
-                let (module_addr, module_name, struct_name) = resolve_struct(view, *idx);
-                let is_tx_context_type = module_name == TX_CONTEXT_MODULE_NAME
-                    && module_addr == &SUI_FRAMEWORK_ADDRESS
-                    && struct_name == TX_CONTEXT_STRUCT_NAME;
-                if is_tx_context_type {
-                    match p {
-                        SignatureToken::MutableReference(_) => TxContextKind::Mutable,
-                        SignatureToken::Reference(_) => TxContextKind::Immutable,
-                        _ => unreachable!(),
-                    }
-                } else {
-                    TxContextKind::None
-                }
-            }
-            _ => TxContextKind::None,
-        },
-        _ => TxContextKind::None,
-    }
-}
-
-/// Detects a `&mut sui::clock::Clock` or `sui::clock::Clock` in the signature.
-pub fn is_mutable_clock(view: &BinaryIndexedView, t: &SignatureToken) -> bool {
-    use SignatureToken as S;
-    match t {
-        S::MutableReference(inner) => is_mutable_clock(view, inner),
-        S::Struct(idx) => resolve_struct(view, *idx) == RESOLVED_SUI_CLOCK,
-        _ => false,
-    }
-}
-
-pub fn is_object(
-    view: &BinaryIndexedView,
-    function_type_args: &[AbilitySet],
-    t: &SignatureToken,
-) -> Result<bool, String> {
-    use SignatureToken as S;
-    match t {
-        S::Reference(inner) | S::MutableReference(inner) => {
-            is_object(view, function_type_args, inner)
-        }
-        _ => is_object_struct(view, function_type_args, t),
-    }
-}
-
-pub fn is_object_vector(
-    view: &BinaryIndexedView,
-    function_type_args: &[AbilitySet],
-    t: &SignatureToken,
-) -> Result<bool, String> {
-    use SignatureToken as S;
-    match t {
-        S::Vector(inner) => is_object_struct(view, function_type_args, inner),
-        _ => is_object_struct(view, function_type_args, t),
-    }
-}
-
-fn is_object_struct(
-    view: &BinaryIndexedView,
-    function_type_args: &[AbilitySet],
-    s: &SignatureToken,
-) -> Result<bool, String> {
-    use SignatureToken as S;
-    match s {
-        S::Bool
-        | S::U8
-        | S::U16
-        | S::U32
-        | S::U64
-        | S::U128
-        | S::U256
-        | S::Address
-        | S::Signer
-        | S::Vector(_)
-        | S::Reference(_)
-        | S::MutableReference(_) => Ok(false),
-        S::TypeParameter(idx) => Ok(function_type_args
-            .get(*idx as usize)
-            .map(|abs| abs.has_key())
-            .unwrap_or(false)),
-        S::Struct(_) | S::StructInstantiation(_, _) => {
-            let abilities = view
-                .abilities(s, function_type_args)
-                .map_err(|vm_err| vm_err.to_string())?;
-            Ok(abilities.has_key())
-        }
     }
 }

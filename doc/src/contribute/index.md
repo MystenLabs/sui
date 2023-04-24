@@ -28,7 +28,7 @@ First, create a fork of the Mysten Labs Sui repo in your own account so that you
 1. Browse to the [Sui repo](https://github.com/MystenLabs/sui) on GitHub.
 1. Choose **Fork** in the top-right, then choose **Create new fork**.
 1. For **Owner**, select your username.
-1. For **Repository name**, we suggest keeping the name sui, but you can use any name. 
+1. For **Repository name**, you can use any name you want, but some find it easier to track if you use the same name as the source repo. 
 1. Optional. To contribute you need only the main branch of the repo. To include all branches, unselect the checkbox for **Copy the `main` branch only**.
 1. Click **Create fork**.
 

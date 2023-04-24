@@ -30,6 +30,7 @@ signature = "1.6.0"
 thiserror = "1.0.37"
 bcs = "0.1.4"
 eyre = "0.6.8"
+num_cpus = "1.15.0"
 
 tap = "1.0"
 

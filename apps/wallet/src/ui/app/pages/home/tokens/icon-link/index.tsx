@@ -1,19 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 import cl from 'classnames';
 import { memo } from 'react';
 import { Link } from 'react-router-dom';
 
-import Icon from '_components/icon';
+import { Text } from '_app/shared/text';
 
-import type { IconProps } from '_components/icon';
+import type { ReactNode } from 'react';
 
 import st from './IconLink.module.scss';
 
 export type IconLinkProps = {
     to: string;
-    icon: IconProps['icon'];
+    icon: ReactNode;
     disabled?: boolean;
     text: string;
 };
@@ -25,10 +24,16 @@ function IconLink({ to, icon, disabled = false, text }: IconLinkProps) {
             className={cl(st.container, { [st.disabled]: disabled })}
             tabIndex={disabled ? -1 : undefined}
         >
-            <div className={st.iconContainer}>
-                <Icon icon={icon} />
+            <div className={cl(disabled ? 'text-gray-60' : 'text-hero-dark')}>
+                {icon}
             </div>
-            <span className={st.text}>{text}</span>
+            <Text
+                color={disabled ? 'gray-60' : 'hero-dark'}
+                weight="semibold"
+                variant="bodySmall"
+            >
+                {text}
+            </Text>
         </Link>
     );
 }

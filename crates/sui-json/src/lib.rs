@@ -11,6 +11,7 @@ use move_binary_format::{
     access::ModuleAccess, binary_views::BinaryIndexedView, file_format::SignatureToken,
     file_format_common::VERSION_MAX,
 };
+use move_bytecode_utils::resolve_struct;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::IdentStr;
 use move_core_types::u256::U256;
@@ -27,16 +28,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Number, Value as JsonValue};
 
 use sui_types::base_types::{
-    ObjectID, SuiAddress, STD_ASCII_MODULE_NAME, STD_ASCII_STRUCT_NAME, STD_OPTION_MODULE_NAME,
+    ObjectID, SuiAddress, TxContext, TxContextKind, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION,
+    RESOLVED_UTF8_STR, STD_ASCII_MODULE_NAME, STD_ASCII_STRUCT_NAME, STD_OPTION_MODULE_NAME,
     STD_OPTION_STRUCT_NAME, STD_UTF8_MODULE_NAME, STD_UTF8_STRUCT_NAME,
 };
-use sui_types::id::ID;
+use sui_types::id::{ID, RESOLVED_SUI_ID};
 use sui_types::move_package::MovePackage;
 use sui_types::MOVE_STDLIB_ADDRESS;
-use sui_verifier::entry_points_verifier::{
-    is_tx_context, TxContextKind, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_SUI_ID,
-    RESOLVED_UTF8_STR,
-};
 
 const HEX_PREFIX: &str = "0x";
 
@@ -622,7 +620,7 @@ pub fn primitive_type(
             }
         }
         SignatureToken::Struct(struct_handle_idx) => {
-            let resolved_struct = sui_verifier::resolve_struct(view, *struct_handle_idx);
+            let resolved_struct = resolve_struct(view, *struct_handle_idx);
             if resolved_struct == RESOLVED_ASCII_STR {
                 (
                     true,
@@ -662,7 +660,7 @@ pub fn primitive_type(
             }
         }
         SignatureToken::StructInstantiation(idx, targs) => {
-            let resolved_struct = sui_verifier::resolve_struct(view, *idx);
+            let resolved_struct = resolve_struct(view, *idx);
             // is option of a primitive
             if resolved_struct == RESOLVED_STD_OPTION && targs.len() == 1 {
                 // there is no MoveLayout for this so while we can still report whether a type
@@ -878,7 +876,7 @@ pub fn resolve_move_function_args(
 
     // Lengths have to match, less one, due to TxContext
     let expected_len = match parameters.last() {
-        Some(param) if is_tx_context(&view, param) != TxContextKind::None => parameters.len() - 1,
+        Some(param) if TxContext::kind(&view, param) != TxContextKind::None => parameters.len() - 1,
         _ => parameters.len(),
     };
     if combined_args_json.len() != expected_len {

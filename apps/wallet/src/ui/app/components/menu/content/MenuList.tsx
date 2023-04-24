@@ -90,10 +90,7 @@ function MenuList() {
                     />
                 </div>
                 <div className="flex flex-col items-stretch mt-2.5">
-                    <FaucetRequestButton
-                        variant="outline"
-                        trackEventSource="settings"
-                    />
+                    <FaucetRequestButton variant="outline" />
                 </div>
                 <div className="flex-1" />
                 <div className="flex flex-nowrap flex-row items-stretch gap-3 mt-2.5">

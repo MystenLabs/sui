@@ -1,13 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Coins16 } from '@mysten/icons';
+import { Sui, Unstaked } from '@mysten/icons';
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import { cva, type VariantProps } from 'class-variance-authority';
 
-import Icon, { SuiIcons } from '_components/icon';
-
-const imageStyle = cva(['rounded-full flex bg-sui'], {
+const imageStyle = cva(['rounded-full flex rounded-full'], {
     variants: {
         size: {
             sm: 'w-6 h-6',
@@ -35,13 +33,10 @@ export function CoinIcon({ coinType, ...styleProps }: CoinIconProps) {
     return (
         <div className={imageStyle(styleProps)}>
             {coinType === SUI_TYPE_ARG ? (
-                <Icon
-                    icon={SuiIcons.SuiLogoIcon}
-                    className="flex h-full w-full items-center justify-center text-white text-body"
-                />
+                <Sui className="flex items-center w-full h-full justify-center text-white text-body p-1.5 bg-sui rounded-full" />
             ) : (
-                <div className="flex h-full w-full items-center justify-center text-white">
-                    <Coins16 />
+                <div className="flex h-full w-full items-center justify-center text-white bg-steel rounded-full">
+                    <Unstaked />
                 </div>
             )}
         </div>

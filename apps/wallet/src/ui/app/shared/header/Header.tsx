@@ -35,7 +35,7 @@ export function Header({
                 </div>
             )}
             {rightContent && (
-                <div className="col-start-3 justify-self-end">
+                <div className="col-start-3 mr-1 justify-self-end">
                     {rightContent}
                 </div>
             )}

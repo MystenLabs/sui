@@ -20,6 +20,7 @@ import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Stats, type StatsProps } from '~/ui/Stats';
 import { TableCard } from '~/ui/TableCard';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
+import { getEpochStorageFundFlow } from '~/utils/getStorageFundFlow';
 
 function SuiStats({
     amount,
@@ -75,30 +76,23 @@ export default function EpochDetail() {
             </Banner>
         );
 
-    const fundInflow = epochData.endOfEpochInfo
-        ? BigInt(epochData.endOfEpochInfo.storageFundReinvestment) +
-          BigInt(epochData.endOfEpochInfo.storageCharge) +
-          BigInt(epochData.endOfEpochInfo.leftoverStorageFundInflow)
-        : null;
-
-    const fundOutflow = epochData.endOfEpochInfo
-        ? BigInt(epochData.endOfEpochInfo.storageRebate)
-        : null;
-
-    const netInflow =
-        fundInflow && fundOutflow ? fundInflow - fundOutflow : null;
+    const { fundInflow, fundOutflow, netInflow } = getEpochStorageFundFlow(
+        epochData.endOfEpochInfo
+    );
 
     return (
         <div className="flex flex-col space-y-16">
             <div className="grid grid-flow-row gap-4 sm:gap-2 md:flex md:gap-6">
-                <EpochProgress
-                    epoch={epochData.epoch}
-                    inProgress={isCurrentEpoch}
-                    start={Number(epochData.epochStartTimestamp)}
-                    end={Number(
-                        epochData.endOfEpochInfo?.epochEndTimestamp ?? 0
-                    )}
-                />
+                <div className="flex min-w-[136px] max-w-[240px]">
+                    <EpochProgress
+                        epoch={epochData.epoch}
+                        inProgress={isCurrentEpoch}
+                        start={Number(epochData.epochStartTimestamp)}
+                        end={Number(
+                            epochData.endOfEpochInfo?.epochEndTimestamp ?? 0
+                        )}
+                    />
+                </div>
 
                 <EpochStats label="Rewards">
                     <SuiStats
