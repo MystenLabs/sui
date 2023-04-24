@@ -151,7 +151,6 @@ export type DelegationData = SuiMoveObject & {
       id: string;
       version: number;
     };
-    coin_locked_until_epoch: Option<SuiMoveObject>;
     ending_epoch: Option<number>;
   };
 };

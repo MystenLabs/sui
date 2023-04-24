@@ -47,9 +47,6 @@ pub struct Coin {
     #[schemars(with = "BigInt<u64>")]
     #[serde_as(as = "BigInt<u64>")]
     pub balance: u64,
-    #[schemars(with = "Option<BigInt<u64>>")]
-    #[serde_as(as = "Option<BigInt<u64>>")]
-    pub locked_until_epoch: Option<EpochId>,
     pub previous_transaction: TransactionDigest,
 }
 
