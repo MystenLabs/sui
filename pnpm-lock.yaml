@@ -31,8 +31,8 @@ importers:
         specifier: ^7.47.0
         version: 7.47.0
       '@tanstack/react-query':
-        specifier: ^4.29.1
-        version: 4.29.1(react-dom@18.2.0)(react@18.2.0)
+        specifier: ^4.29.3
+        version: 4.29.3(react-dom@18.2.0)(react@18.2.0)
       bignumber.js:
         specifier: ^9.1.1
         version: 9.1.1
@@ -128,11 +128,11 @@ importers:
         specifier: ^7.47.0
         version: 7.47.0
       '@tanstack/react-query':
-        specifier: ^4.29.1
-        version: 4.29.1(react-dom@18.2.0)(react@18.2.0)
+        specifier: ^4.29.3
+        version: 4.29.3(react-dom@18.2.0)(react@18.2.0)
       '@tanstack/react-query-devtools':
-        specifier: ^4.29.1
-        version: 4.29.1(@tanstack/react-query@4.29.1)(react-dom@18.2.0)(react@18.2.0)
+        specifier: ^4.29.3
+        version: 4.29.3(@tanstack/react-query@4.29.3)(react-dom@18.2.0)(react@18.2.0)
       '@tanstack/react-table':
         specifier: ^8.8.5
         version: 8.8.5(react-dom@18.2.0)(react@18.2.0)
@@ -399,8 +399,11 @@ importers:
         specifier: ^1.2.0
         version: 1.2.0
       '@tanstack/react-query':
-        specifier: ^4.29.1
-        version: 4.29.1(react-dom@18.2.0)(react@18.2.0)
+        specifier: ^4.29.3
+        version: 4.29.3(react-dom@18.2.0)(react@18.2.0)
+      '@tanstack/react-query-persist-client':
+        specifier: ^4.29.3
+        version: 4.29.3(@tanstack/react-query@4.29.3)
       bignumber.js:
         specifier: ^9.1.1
         version: 9.1.1
@@ -422,6 +425,9 @@ importers:
       framer-motion:
         specifier: ^10.11.6
         version: 10.11.6(react-dom@18.2.0)(react@18.2.0)
+      idb-keyval:
+        specifier: ^6.2.0
+        version: 6.2.0
       mitt:
         specifier: ^3.0.0
         version: 3.0.0
@@ -1010,10 +1016,10 @@ importers:
         version: 13.3.0(react-dom@18.2.0)(react@18.2.0)
       nextra:
         specifier: latest
-        version: 2.3.0(next@13.3.0)(react-dom@18.2.0)(react@18.2.0)
+        version: 2.4.0(next@13.3.0)(react-dom@18.2.0)(react@18.2.0)
       nextra-theme-docs:
         specifier: latest
-        version: 2.3.0(next@13.3.0)(nextra@2.3.0)(react-dom@18.2.0)(react@18.2.0)
+        version: 2.4.0(next@13.3.0)(nextra@2.4.0)(react-dom@18.2.0)(react@18.2.0)
       react:
         specifier: ^18.2.0
         version: 18.2.0
@@ -5075,7 +5081,7 @@ packages:
       ts-dedent: 2.2.0
       util-deprecate: 1.0.2
       watchpack: 2.4.0
-      ws: 8.13.0(bufferutil@4.0.7)(utf-8-validate@5.0.10)
+      ws: 8.13.0
     transitivePeerDependencies:
       - bufferutil
       - encoding
@@ -5781,23 +5787,38 @@ packages:
     resolution: {integrity: sha512-vkPewLEG8ua0efo3SsVT0BcBtkq5RZX8oPhDAyKL+k/rdOYSQTEocfGEXSaBwIwsXeOGBUpfKqI+UmHvNqdWXg==}
     dev: false
 
-  /@tanstack/react-query-devtools@4.29.1(@tanstack/react-query@4.29.1)(react-dom@18.2.0)(react@18.2.0):
-    resolution: {integrity: sha512-lbtNGArplXLVmY8eEh8LFqZz61PJI38sASEcuKoSnEK8UgWvLCwY5vjlT8fzk10yQ4jhR3+PHKLDMXA5ifCTXw==}
+  /@tanstack/query-persist-client-core@4.29.1:
+    resolution: {integrity: sha512-lC7YsXHdHygVCHDXJqwaLGoWOHSfX+YEhwRaSWMBcHrfsHyEFzAvluQJlDytVd6JFAe49IuLJlajMGBbyI00ZA==}
+    dependencies:
+      '@tanstack/query-core': 4.29.1
+    dev: false
+
+  /@tanstack/react-query-devtools@4.29.3(@tanstack/react-query@4.29.3)(react-dom@18.2.0)(react@18.2.0):
+    resolution: {integrity: sha512-Ne/K9+gskn8zM4sbLWl4mq5x0ha0JIg7I078K+t6seorL6oq9Y9E30wlP4y/IVa9hgn8DHB1Q6GoPtA2iu6p2g==}
     peerDependencies:
-      '@tanstack/react-query': 4.29.1
+      '@tanstack/react-query': 4.29.3
       react: ^16.8.0 || ^17.0.0 || ^18.0.0
       react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0
     dependencies:
       '@tanstack/match-sorter-utils': 8.8.4
-      '@tanstack/react-query': 4.29.1(react-dom@18.2.0)(react@18.2.0)
+      '@tanstack/react-query': 4.29.3(react-dom@18.2.0)(react@18.2.0)
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
-      superjson: 1.12.2
+      superjson: 1.12.3
       use-sync-external-store: 1.2.0(react@18.2.0)
     dev: false
 
-  /@tanstack/react-query@4.29.1(react-dom@18.2.0)(react@18.2.0):
-    resolution: {integrity: sha512-/crv1v+OeuGG6EOvaQmyeo9GCKtH4jbmuhZkvk9ulufRiHcTr/A9+YP9GevEAZzUTdzXMwenpTbyxBGvG2xXvw==}
+  /@tanstack/react-query-persist-client@4.29.3(@tanstack/react-query@4.29.3):
+    resolution: {integrity: sha512-yyQYr1cLxmakVdWOUV9U/7D4fLiIdtlFa18KIwUI1MSSRwvAjjdx6D4GSmsuLXL9eSudNMyvpy5iTAICv2+CoQ==}
+    peerDependencies:
+      '@tanstack/react-query': 4.29.3
+    dependencies:
+      '@tanstack/query-persist-client-core': 4.29.1
+      '@tanstack/react-query': 4.29.3(react-dom@18.2.0)(react@18.2.0)
+    dev: false
+
+  /@tanstack/react-query@4.29.3(react-dom@18.2.0)(react@18.2.0):
+    resolution: {integrity: sha512-FPQrMu7PbCgBcVzoRJm7WmQnAFv+LUgZM9KBZ7Vk/+yERH2BDLvQRuAgczQd5Tb1s3HbOktECRDaOkUxdyBAjw==}
     peerDependencies:
       react: ^16.8.0 || ^17.0.0 || ^18.0.0
       react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0
@@ -7980,6 +8001,7 @@ packages:
     requiresBuild: true
     dependencies:
       node-gyp-build: 4.5.0
+    dev: false
 
   /bundle-require@4.0.1(esbuild@0.17.16):
     resolution: {integrity: sha512-9NQkRHlNdNpDBGmLpngF3EFDcwodhMUuLz9PaWYciVcQF9SE4LFjM2DB/xV1Li5JiuDMv7ZUWuC3rGbqR0MAXQ==}
@@ -11807,6 +11829,12 @@ packages:
       postcss: 8.4.21
     dev: true
 
+  /idb-keyval@6.2.0:
+    resolution: {integrity: sha512-uw+MIyQn2jl3+hroD7hF8J7PUviBU7BPKWw4f/ISf32D4LoGu98yHjrzWWJDASu9QNrX10tCJqk9YY0ClWm8Ng==}
+    dependencies:
+      safari-14-idb-fix: 3.0.0
+    dev: false
+
   /ieee754@1.2.1:
     resolution: {integrity: sha512-dcyqhDvX1C46lXZcVqCpK+FtMRQVdIMN6/Df5js2zouUsqG7I6sFxitIC+7KYK29KdXOLHdu9zL4sFnoVQnqaA==}
 
@@ -14377,8 +14405,8 @@ packages:
       - supports-color
     dev: false
 
-  /next-seo@5.15.0(next@13.3.0)(react-dom@18.2.0)(react@18.2.0):
-    resolution: {integrity: sha512-LGbcY91yDKGMb7YI+28n3g+RuChUkt6pXNpa8FkfKkEmNiJkeRDEXTnnjVtwT9FmMhG6NH8qwHTelGrlYm9rgg==}
+  /next-seo@6.0.0(next@13.3.0)(react-dom@18.2.0)(react@18.2.0):
+    resolution: {integrity: sha512-jKKt1p1z4otMA28AyeoAONixVjdYmgFCWwpEFtu+DwRHQDllVX3RjtyXbuCQiUZEfQ9rFPBpAI90vDeLZlMBdg==}
     peerDependencies:
       next: ^8.1.1-canary.54 || >=9.0.0
       react: '>=16.0.0'
@@ -14445,11 +14473,11 @@ packages:
       - babel-plugin-macros
     dev: false
 
-  /nextra-theme-docs@2.3.0(next@13.3.0)(nextra@2.3.0)(react-dom@18.2.0)(react@18.2.0):
-    resolution: {integrity: sha512-KMvHhGOvaKIqR71Gnx+w/1c9LLfpQJ3+fnCAgg9qfjXo2agr1zRKyRDROyY8cGINdslpzmEGgs/MH2gDSAI6nw==}
+  /nextra-theme-docs@2.4.0(next@13.3.0)(nextra@2.4.0)(react-dom@18.2.0)(react@18.2.0):
+    resolution: {integrity: sha512-RXwrMUOZANpw11d+IYaRW9OclwVYGcX6z4K27lLx1w2qCVW5Qvlfkm30lIKtqLrksgHnGa2UI50QzmQ0MYa5uw==}
     peerDependencies:
       next: '>=9.5.3'
-      nextra: 2.3.0
+      nextra: 2.4.0
       react: '>=16.13.1'
       react-dom: '>=16.13.1'
     dependencies:
@@ -14462,17 +14490,17 @@ packages:
       intersection-observer: 0.12.2
       match-sorter: 6.3.1
       next: 13.3.0(react-dom@18.2.0)(react@18.2.0)
-      next-seo: 5.15.0(next@13.3.0)(react-dom@18.2.0)(react@18.2.0)
+      next-seo: 6.0.0(next@13.3.0)(react-dom@18.2.0)(react@18.2.0)
       next-themes: 0.2.1(next@13.3.0)(react-dom@18.2.0)(react@18.2.0)
-      nextra: 2.3.0(next@13.3.0)(react-dom@18.2.0)(react@18.2.0)
+      nextra: 2.4.0(next@13.3.0)(react-dom@18.2.0)(react@18.2.0)
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
       scroll-into-view-if-needed: 3.0.10
       zod: 3.21.4
     dev: false
 
-  /nextra@2.3.0(next@13.3.0)(react-dom@18.2.0)(react@18.2.0):
-    resolution: {integrity: sha512-v17vMq2bJa15iKKt9+6AidSeIoKcK1ZlXmwqFqTgc0pQmRrl6pTJaSR36UZKcpMwvvLZ/7/xWuWV/OQB599O3g==}
+  /nextra@2.4.0(next@13.3.0)(react-dom@18.2.0)(react@18.2.0):
+    resolution: {integrity: sha512-bAA1BOf/aegOXy878FLms3nOD4I+s8ksrPEoaFi1PrDzIATuf3ftgPf4y8vpgVGlkbE666p3bDHi7QHOclS22Q==}
     engines: {node: '>=16'}
     peerDependencies:
       next: '>=9.5.3'
@@ -14493,7 +14521,7 @@ packages:
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
       rehype-katex: 6.0.2
-      rehype-pretty-code: 0.9.3(shiki@0.14.1)
+      rehype-pretty-code: 0.9.4(shiki@0.14.1)
       remark-gfm: 3.0.1
       remark-math: 5.1.1
       remark-reading-time: 2.0.1
@@ -14562,6 +14590,7 @@ packages:
   /node-gyp-build@4.5.0:
     resolution: {integrity: sha512-2iGbaQBV+ITgCz76ZEjmhUKAKVf7xfY1sRl4UiKQspfZMH2h06SyhNsnSVy50cwkFQDGLyif6m/6uFXHkOZ6rg==}
     hasBin: true
+    dev: false
 
   /node-gyp@9.3.1:
     resolution: {integrity: sha512-4Q16ZCqq3g8awk6UplT7AuxQ35XN4R/yf/+wSAwcBUAjg7l58RTactWaP8fIDTi0FzI7YcVLujwExakZlfWkXg==}
@@ -16699,8 +16728,8 @@ packages:
       unified: 10.1.2
     dev: false
 
-  /rehype-pretty-code@0.9.3(shiki@0.14.1):
-    resolution: {integrity: sha512-57i+ifrttqpeQxub0NZ2pRw0aiUPYeBpr234NLWfZ4BfbEaP+29+iCXB1rUMkzoPi6IBC4w4I93mUPgw36IajQ==}
+  /rehype-pretty-code@0.9.4(shiki@0.14.1):
+    resolution: {integrity: sha512-3m4aQT15n8C+UizcZL0enaahoZwCDm5K1qKQ3DGgHE7U8l/DEEEJ/hm+uDe9yyK4sxVOSfZcRIMHrpJwLQi+Rg==}
     engines: {node: ^12.16.0 || >=13.2.0}
     peerDependencies:
       shiki: '*'
@@ -17025,6 +17054,10 @@ packages:
     engines: {node: '>=6'}
     dependencies:
       mri: 1.2.0
+    dev: false
+
+  /safari-14-idb-fix@3.0.0:
+    resolution: {integrity: sha512-eBNFLob4PMq8JA1dGyFn6G97q3/WzNtFK4RnzT1fnLq+9RyrGknzYiM/9B12MnKAxuj1IXr7UKYtTNtjyKMBog==}
     dev: false
 
   /safe-buffer@5.1.1:
@@ -18126,8 +18159,8 @@ packages:
       pirates: 4.0.5
       ts-interface-checker: 0.1.13
 
-  /superjson@1.12.2:
-    resolution: {integrity: sha512-ugvUo9/WmvWOjstornQhsN/sR9mnGtWGYeTxFuqLb4AiT4QdUavjGFRALCPKWWnAiUJ4HTpytj5e0t5HoMRkXg==}
+  /superjson@1.12.3:
+    resolution: {integrity: sha512-0j+U70KUtP8+roVPbwfqkyQI7lBt7ETnuA7KXbTDX3mCKiD/4fXs2ldKSMdt0MCfpTwiMxo20yFU3vu6ewETpQ==}
     engines: {node: '>=10'}
     dependencies:
       copy-anything: 3.0.3
@@ -19339,6 +19372,7 @@ packages:
     requiresBuild: true
     dependencies:
       node-gyp-build: 4.5.0
+    dev: false
 
   /util-deprecate@1.0.2:
     resolution: {integrity: sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==}
@@ -19763,7 +19797,7 @@ packages:
       tmp: 0.2.1
       update-notifier: 6.0.2
       watchpack: 2.4.0
-      ws: 8.13.0(bufferutil@4.0.7)(utf-8-validate@5.0.10)
+      ws: 8.13.0
       yargs: 17.7.1
       zip-dir: 2.0.0
     transitivePeerDependencies:
@@ -20143,6 +20177,19 @@ packages:
         optional: true
     dev: false
 
+  /ws@8.13.0:
+    resolution: {integrity: sha512-x9vcZYTrFPC7aSIbj7sRCYo7L/Xb8Iy+pW0ng0wt2vCJv7M9HOMy0UoN3rr+IFC7hb7vXoqS+P9ktyLLLhO+LA==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+    dev: true
+
   /ws@8.13.0(bufferutil@4.0.7)(utf-8-validate@5.0.10):
     resolution: {integrity: sha512-x9vcZYTrFPC7aSIbj7sRCYo7L/Xb8Iy+pW0ng0wt2vCJv7M9HOMy0UoN3rr+IFC7hb7vXoqS+P9ktyLLLhO+LA==}
     engines: {node: '>=10.0.0'}
@@ -20157,6 +20204,7 @@ packages:
     dependencies:
       bufferutil: 4.0.7
       utf-8-validate: 5.0.10
+    dev: false
 
   /xdg-basedir@5.1.0:
     resolution: {integrity: sha512-GCPAHLvrIH13+c0SuacwvRYj2SxJXQ4kaVTT5xgL3kPrz56XxkF21IGhjSE1+W0aw7gpBWRGXLCPnPby6lSpmQ==}

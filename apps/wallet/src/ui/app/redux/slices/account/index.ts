@@ -13,6 +13,7 @@ import {
     AccountType,
     type SerializedAccount,
 } from '_src/background/keyring/Account';
+import { persister, queryClient } from '_src/ui/app/helpers/queryClient';
 
 import type { PayloadAction, Reducer } from '@reduxjs/toolkit';
 import type { KeyringPayload } from '_payloads/keyring';
@@ -52,6 +53,11 @@ export const logout = createAsyncThunk<void, void, AppThunkConfig>(
             v: -1,
         });
         await background.clearWallet();
+
+        queryClient.resetQueries();
+        queryClient.clear();
+        queryClient.unmount();
+        await persister.removeClient();
     }
 );
 
