@@ -12,8 +12,6 @@ use futures::StreamExt;
 use futures_core::Stream;
 use jsonrpsee::core::client::Subscription;
 
-use crate::error::{Error, SuiRpcResult};
-use crate::{RpcClient, WAIT_FOR_TX_TIMEOUT_SEC};
 use sui_json_rpc::api::GovernanceReadApiClient;
 use sui_json_rpc::api::{
     CoinReadApiClient, IndexerApiClient, MoveUtilsClient, ReadApiClient, WriteApiClient,
@@ -29,13 +27,15 @@ use sui_json_rpc_types::{
 };
 use sui_types::balance::Supply;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest};
-use sui_types::committee::EpochId;
 use sui_types::error::TRANSACTION_NOT_FOUND_MSG_PREFIX;
 use sui_types::event::EventID;
 use sui_types::messages::{ExecuteTransactionRequestType, TransactionData, VerifiedTransaction};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::sui_serde::BigInt;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
+
+use crate::error::{Error, SuiRpcResult};
+use crate::{RpcClient, WAIT_FOR_TX_TIMEOUT_SEC};
 
 #[derive(Debug)]
 pub struct ReadApi {
@@ -315,23 +315,17 @@ impl CoinReadApi {
         address: SuiAddress,
         coin_type: Option<String>,
         amount: u128,
-        locked_until_epoch: Option<EpochId>,
         exclude: Vec<ObjectID>,
     ) -> SuiRpcResult<Vec<Coin>> {
         let mut total = 0u128;
         let coins = self
             .get_coins_stream(address, coin_type)
-            .filter(|coin: &Coin| {
-                future::ready(
-                    locked_until_epoch == coin.locked_until_epoch
-                        && !exclude.contains(&coin.coin_object_id),
-                )
-            })
             .take_while(|coin: &Coin| {
                 let ready = future::ready(total < amount);
                 total += coin.balance as u128;
                 ready
             })
+            .filter(|coin: &Coin| future::ready(!exclude.contains(&coin.coin_object_id)))
             .collect::<Vec<_>>()
             .await;
 

@@ -65,7 +65,6 @@ impl CoinReadApi {
                         version: coin.version,
                         digest: coin.digest,
                         balance: coin.balance,
-                        locked_until_epoch: None,
                         previous_transaction: coin.previous_transaction,
                     })
                     .collect::<Vec<_>>(),
