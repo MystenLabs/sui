@@ -12,6 +12,7 @@ use move_core_types::resolver::{ModuleResolver, ResourceResolver};
 use serde::{Deserialize, Serialize};
 use similar::{ChangeTag, TextDiff};
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use sui_adapter::adapter;
@@ -74,6 +75,9 @@ pub enum ReplayToolCommand {
 
     #[clap(name = "report")]
     Report,
+
+    #[clap(name = "obj")]
+    Obj { path: String },
 }
 
 pub async fn execute_replay_command(
@@ -149,6 +153,9 @@ pub async fn execute_replay_command(
                     println!("Package: {} Seq: {}", package_id, seq_num);
                 }
             }
+        }
+        ReplayToolCommand::Obj { path } => {
+            sui_storage::sec::follow_index_table(PathBuf::from(path));
         }
     }
     Ok(())
