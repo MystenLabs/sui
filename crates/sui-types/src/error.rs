@@ -183,6 +183,9 @@ pub enum UserInputError {
 
     #[error("Feature is not yet supported: {0}")]
     Unsupported(String),
+
+    #[error("Module must be passed as input if function is passed as input.")]
+    MoveFunctionInputError,
 }
 
 #[derive(

@@ -162,7 +162,13 @@ impl<'a> TestAuthorityBuilder<'a> {
         ));
 
         let checkpoint_store = CheckpointStore::new(&path.join("checkpoints"));
-        let index_store = Some(Arc::new(IndexStore::new(path.join("indexes"), &registry)));
+        let index_store = Some(Arc::new(IndexStore::new(
+            path.join("indexes"),
+            &registry,
+            epoch_store
+                .protocol_config()
+                .max_move_identifier_len_as_option(),
+        )));
         let transaction_deny_config = self.transaction_deny_config.unwrap_or_default();
         let state = AuthorityState::new(
             name,
