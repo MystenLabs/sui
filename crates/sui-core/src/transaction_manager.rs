@@ -7,7 +7,7 @@ use std::{
 };
 
 use lru::LruCache;
-use mysten_metrics::monitored_scope;
+use mysten_metrics::{monitored_scope, scoped_timer::ScopedTimer};
 use parking_lot::RwLock;
 use sui_types::{base_types::TransactionDigest, error::SuiResult};
 use sui_types::{
@@ -91,7 +91,7 @@ struct AvailableObjectsCache {
 impl AvailableObjectsCache {
     fn new(metrics: Arc<AuthorityMetrics>) -> Self {
         Self {
-            cache: LruCache::new(100000.try_into().unwrap()),
+            cache: LruCache::new(1000000.try_into().unwrap()),
             metrics,
         }
     }
@@ -211,9 +211,13 @@ impl TransactionManager {
         certs: Vec<VerifiedExecutableTransaction>,
         epoch_store: &AuthorityPerEpochStore,
     ) -> SuiResult<()> {
+        let _logger = ScopedTimer::new_with_count("TransactionManager::enqueue", certs.len());
+
         let mut pending = Vec::new();
         // Check input objects availability, before taking TM lock.
         let mut object_availability: HashMap<InputKey, bool> = HashMap::new();
+
+        let cache_miss_logger = ScopedTimer::paused("TransactionManager::enqueue.cache_miss");
         for cert in certs {
             let digest = *cert.digest();
             // skip already executed txes
@@ -259,6 +263,8 @@ impl TransactionManager {
                     .collect::<Vec<_>>()
             };
 
+            cache_miss_logger.resume();
+            cache_miss_logger.increment_count(cache_miss_keys.len());
             for key in &cache_miss_keys {
                 // Checking object availability without holding TM lock to reduce contention.
                 // But input objects can become available before TM lock is acquired.
@@ -272,6 +278,7 @@ impl TransactionManager {
                     );
                 }
             }
+            cache_miss_logger.pause();
 
             pending.push(PendingCertificate {
                 certificate: cert,
@@ -288,6 +295,8 @@ impl TransactionManager {
         let mut inner = self.inner.write();
         let _scope = monitored_scope("TransactionManager::enqueue::wlock");
 
+        let pending_logger =
+            ScopedTimer::new_with_count("TransactionManager::enqueue.pending", pending.len());
         for mut pending_cert in pending {
             // Tx lock is not held here, which makes it possible to send duplicated transactions to
             // the execution driver after crash-recovery, when the same transaction is recovered
@@ -403,6 +412,7 @@ impl TransactionManager {
                 .with_label_values(&["pending"])
                 .inc();
         }
+        drop(pending_logger);
 
         self.metrics
             .transaction_manager_num_missing_objects
@@ -451,6 +461,10 @@ impl TransactionManager {
         // Unnecessary to keep holding the lock while re-checking input object existence.
         drop(inner);
 
+        let cache_miss_recheck_logger = ScopedTimer::new_with_count(
+            "TransactionManager::enqueue.recheck-cachemiss",
+            cache_misses.len(),
+        );
         let mut additional_available_objects: Vec<_> = cache_misses
             .into_iter()
             .filter_map(|key| {
@@ -465,6 +479,7 @@ impl TransactionManager {
                 }
             })
             .collect();
+        drop(cache_miss_recheck_logger);
 
         additional_available_objects.extend(cache_hits);
 

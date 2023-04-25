@@ -58,37 +58,7 @@ use crate::{authority::EffectsNotifyRead, checkpoints::CheckpointStore};
 
 use self::metrics::CheckpointExecutorMetrics;
 
-// A struct that logs when it is created and when it is dropped, in order to log the time that a
-// scope is active
-struct ScopeLogger {
-    name: &'static str,
-    start_time: Instant,
-    count: Option<usize>,
-}
-
-impl ScopeLogger {
-    fn new(name: &'static str) -> Self {
-        let start_time = Instant::now();
-        debug!("Entering scope {}", name);
-        Self {
-            name,
-            start_time,
-            count: None,
-        }
-    }
-}
-
-impl Drop for ScopeLogger {
-    fn drop(&mut self) {
-        let duration = self.start_time.elapsed();
-        debug!(
-            "Leaving scope {} after {:?} (per element time: {:?})",
-            self.name,
-            duration,
-            self.count.map(|c| duration / (c as u32))
-        );
-    }
-}
+use mysten_metrics::scoped_timer::ScopedTimer;
 
 mod metrics;
 #[cfg(test)]
@@ -372,7 +342,7 @@ impl CheckpointExecutor {
         epoch_store: Arc<AuthorityPerEpochStore>,
         pending: &mut CheckpointExecutionBuffer,
     ) -> SuiResult {
-        let mut logger = ScopeLogger::new("execute_checkpoint");
+        let logger = ScopedTimer::new("execute_checkpoint");
         let checkpoint_sequence = *checkpoint.sequence_number();
         debug!(
             "Scheduling checkpoint {:?} for execution",
@@ -394,7 +364,7 @@ impl CheckpointExecutor {
         );
 
         let tx_count = execution_digests.len();
-        logger.count = Some(tx_count);
+        logger.set_count(tx_count);
         debug!(
             epoch=?epoch_store.epoch(),
             checkpoint_sequence=?checkpoint.sequence_number(),
@@ -426,8 +396,7 @@ impl CheckpointExecutor {
         checkpoint: VerifiedCheckpoint,
         pending: &mut CheckpointExecutionBuffer,
     ) -> SuiResult {
-        let mut logger = ScopeLogger::new("execute_transactions");
-        logger.count = Some(execution_digests.len());
+        let _logger = ScopedTimer::new_with_count("execute_transactions", execution_digests.len());
         let effects_digests: HashMap<_, _> = execution_digests
             .iter()
             .map(|digest| (digest.transaction, digest.effects))
@@ -442,13 +411,12 @@ impl CheckpointExecutor {
                     .expect("Transaction digest not found in effects_digests")
             });
 
-        let digest_to_effects: HashMap<TransactionDigest, TransactionEffects> = {
-            let mut logger = ScopeLogger::new("digest_to_effects");
-            logger.count = Some(execution_digests.len());
-            self.authority_store
+        let digest_to_effects = {
+            let logger = ScopedTimer::new("digest_to_effects");
+            let effects: HashMap<TransactionDigest, TransactionEffects> = self
+                .authority_store
                 .perpetual_tables
                 .effects
-                // XXX
                 .multi_get(shared_effects_digests)?
                 .into_iter()
                 .map(|fx| {
@@ -458,11 +426,13 @@ impl CheckpointExecutor {
                     let fx = fx.unwrap();
                     (*fx.transaction_digest(), fx)
                 })
-                .collect()
+                .collect();
+            logger.set_count(effects.len());
+            effects
         };
 
-        let mut shared_object_logger = ScopeLogger::new("shared_objects");
-        shared_object_logger.count = Some(execution_digests.len());
+        let shared_object_logger =
+            ScopedTimer::new_with_count("shared_objects", execution_digests.len());
         for tx in &executable_txns {
             if tx.contains_shared_object() {
                 epoch_store
@@ -820,6 +790,7 @@ fn get_unexecuted_transactions(
     Vec<TransactionDigest>,
     Vec<VerifiedExecutableTransaction>,
 ) {
+    let logger = ScopedTimer::new("get_unexecuted_transactions");
     let checkpoint_sequence = checkpoint.sequence_number();
     let mut execution_digests = checkpoint_store
         .get_checkpoint_contents(&checkpoint.content_digest)
@@ -831,6 +802,8 @@ fn get_unexecuted_transactions(
             )
         })
         .into_inner();
+
+    logger.set_count(execution_digests.len());
 
     // Remove the change epoch transaction so that we can special case its execution.
     checkpoint.end_of_epoch_data.as_ref().tap_some(|_| {
@@ -854,9 +827,18 @@ fn get_unexecuted_transactions(
     let all_tx_digests: Vec<TransactionDigest> =
         execution_digests.iter().map(|tx| tx.transaction).collect();
 
-    let executed_effects_digests = authority_store
-        .multi_get_executed_effects_digests(&all_tx_digests)
-        .expect("failed to read executed_effects from store");
+    let executed_effects_digests = {
+        let _logger =
+            ScopedTimer::new_with_count("multi_get_executed_effects_digests", all_tx_digests.len());
+        authority_store
+            .multi_get_executed_effects_digests(&all_tx_digests)
+            .expect("failed to read executed_effects from store")
+    };
+
+    let _rest_logger = ScopedTimer::new_with_count(
+        "rest of get_unexecuted_transactions",
+        executed_effects_digests.len(),
+    );
 
     let unexecuted_txns: Vec<_> = izip!(execution_digests.iter(), executed_effects_digests.iter())
         .filter_map(|(digests, effects_digest)| match effects_digest {
