@@ -36,13 +36,13 @@ export function CurrentEpoch() {
                     <div className="flex flex-col gap-2">
                         <Heading
                             color="success-dark"
-                            variant="heading3/semibold"
+                            variant="heading4/semibold"
                         >
                             Current Epoch
                         </Heading>
                         <Heading
                             color="success-dark"
-                            variant="heading3/semibold"
+                            variant="heading4/semibold"
                         >
                             {formatAmountParts(epoch)}
                         </Heading>

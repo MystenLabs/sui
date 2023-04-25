@@ -15,9 +15,9 @@ export function NetworkStats({ label, children, ...props }: NetStatsProps) {
     return (
         <div className="inline-grid h-full w-full">
             <Card {...props}>
-                <div className="grid grid-cols-1 gap-8 py-8">
+                <div className="grid grid-cols-1 gap-4 py-8 md:gap-8">
                     {label && (
-                        <div className="px-8">
+                        <div className="px-4 md:px-8">
                             <Heading
                                 color="steel-darker"
                                 variant="heading4/semibold"
@@ -26,7 +26,7 @@ export function NetworkStats({ label, children, ...props }: NetStatsProps) {
                             </Heading>
                         </div>
                     )}
-                    <div className="mr-2 flex gap-8 overflow-x-auto overflow-y-hidden pl-8">
+                    <div className="mr-2 flex gap-8 overflow-x-auto overflow-y-hidden pl-4 md:pl-8">
                         {children}
                     </div>
                 </div>
