@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 
@@ -39,4 +41,8 @@ pub trait GovernanceReadApi {
     /// Return the reference gas price for the network
     #[method(name = "getReferenceGasPrice")]
     async fn get_reference_gas_price(&self) -> RpcResult<BigInt<u64>>;
+
+    /// Return the validator APY
+    #[method(name = "getValidatorsApy")]
+    async fn get_validators_apy(&self) -> RpcResult<BTreeMap<SuiAddress, f64>>;
 }

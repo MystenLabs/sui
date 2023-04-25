@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::HttpClient;
@@ -49,6 +51,10 @@ impl GovernanceReadApiServer for GovernanceReadApi {
 
     async fn get_reference_gas_price(&self) -> RpcResult<BigInt<u64>> {
         self.fullnode.get_reference_gas_price().await
+    }
+
+    async fn get_validators_apy(&self) -> RpcResult<BTreeMap<SuiAddress, f64>> {
+        self.fullnode.get_validators_apy().await
     }
 }
 

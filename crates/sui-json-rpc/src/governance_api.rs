@@ -80,7 +80,6 @@ impl GovernanceReadApi {
         }
 
         let mut stakes: Vec<(StakedSui, bool)> = vec![];
-
         for stake in stakes_read.into_iter() {
             match stake {
                 ObjectRead::Exists(_, o, _) => stakes.push((StakedSui::try_from(&o)?, true)),
@@ -95,7 +94,7 @@ impl GovernanceReadApi {
                             return Err(Error::UserInputError(UserInputError::ObjectNotFound {
                                 object_id: oref.0,
                                 version: None,
-                            }))
+                            }));
                         }
                     }
                 }
@@ -103,7 +102,7 @@ impl GovernanceReadApi {
                     return Err(Error::UserInputError(UserInputError::ObjectNotFound {
                         object_id: id,
                         version: None,
-                    }))
+                    }));
                 }
             }
         }
@@ -292,6 +291,32 @@ impl GovernanceReadApiServer for GovernanceReadApi {
         info!("get_reference_gas_price");
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         Ok(epoch_store.reference_gas_price().into())
+    }
+
+    #[instrument(skip(self))]
+    async fn get_validators_apy(&self) -> RpcResult<BTreeMap<SuiAddress, f64>> {
+        info!("get_validator_apy");
+        let system_state_summary: SuiSystemStateSummary =
+            self.get_latest_sui_system_state().await?;
+
+        let validators = system_state_summary
+            .active_validators
+            .iter()
+            .map(|v| (v.sui_address, v.exchange_rates_id))
+            .collect::<Vec<_>>();
+
+        let mut apys = BTreeMap::new();
+        for (validator, rate_table_id) in validators {
+            let current_rate = self
+                .get_exchange_rate(rate_table_id, system_state_summary.epoch)
+                .await?;
+            let rate_30_days = self
+                .get_exchange_rate(rate_table_id, max(system_state_summary.epoch - 30, 0))
+                .await?;
+            let apy = (current_rate.rate() / rate_30_days.rate()).powf(12.0) - 1.0;
+            apys.insert(validator, apy);
+        }
+        Ok(apys)
     }
 }
 
