@@ -20,9 +20,9 @@ import { Card } from '~/ui/Card';
 import { FilterList } from '~/ui/FilterList';
 import { Heading } from '~/ui/Heading';
 import { ListboxSelect } from '~/ui/ListboxSelect';
+import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Stats } from '~/ui/Stats';
 import { Text } from '~/ui/Text';
-import { LoadingSpinner } from '~/ui/LoadingSpinner';
 
 const UNITS = ['MIST', 'SUI'] as const;
 type UnitsType = (typeof UNITS)[number];
@@ -66,10 +66,10 @@ function useGasPriceAverage(totalEpochs: number) {
     const { data, isLoading } = useHistoricalGasPrices();
     const average = useMemo(() => {
         const epochs = data?.slice(-totalEpochs) || [];
-        if (epochs.length) {
-            const epochsWithPrices = epochs.filter(
-                ({ referenceGasPrice }) => referenceGasPrice !== null
-            );
+        const epochsWithPrices = epochs.filter(
+            ({ referenceGasPrice }) => referenceGasPrice !== null
+        );
+        if (epochsWithPrices.length) {
             const sum = epochsWithPrices.reduce(
                 (acc, { referenceGasPrice }) =>
                     acc + BigInt(referenceGasPrice!),
@@ -113,10 +113,10 @@ export function GasPriceCard() {
         useState<GraphDurationsType>('7 EPOCHS');
     const graphEpochs = useMemo(
         () =>
-            historicalData?.splice(
+            historicalData?.slice(
                 -GRAPH_DURATIONS_MAP[selectedGraphDuration]
             ) || [],
-        [historicalData]
+        [historicalData, selectedGraphDuration]
     );
     return (
         <Card bg="default" spacing="lg">
@@ -148,7 +148,7 @@ export function GasPriceCard() {
                         </Stats>
                     ) : null}
                 </div>
-                <div className="flex min-h-[30vh] flex-1 flex-col items-center justify-center rounded-xl bg-white pt-5">
+                <div className="flex min-h-[30vh] flex-1 flex-col items-center justify-center rounded-xl bg-white pt-2">
                     {isDataLoading ? (
                         <>
                             <LoadingSpinner />
@@ -158,7 +158,23 @@ export function GasPriceCard() {
                         </>
                     ) : historicalData ? (
                         <>
-                            <div className="flex flex-row justify-end self-stretch pr-5">
+                            <div className="flex flex-row self-stretch pr-2">
+                                <div className="ml-3 mt-1 flex min-w-0 flex-col flex-nowrap gap-0.5 rounded-md border border-solid border-gray-45 px-2 py-1.5">
+                                    <Text
+                                        variant="caption/semibold"
+                                        color="hero-dark"
+                                        truncate
+                                    >
+                                        420 MIST
+                                    </Text>
+                                    <Text
+                                        variant="subtitleSmallExtra/medium"
+                                        color="steel-darker"
+                                    >
+                                        March 30, 2023
+                                    </Text>
+                                </div>
+                                <div className="flex-1" />
                                 <ListboxSelect
                                     value={selectedGraphDuration}
                                     options={GRAPH_DURATIONS}
@@ -173,6 +189,11 @@ export function GasPriceCard() {
                                                 width={parent.width}
                                                 height={parent.height}
                                                 data={graphEpochs}
+                                                durationDays={
+                                                    GRAPH_DURATIONS_MAP[
+                                                        selectedGraphDuration
+                                                    ]
+                                                }
                                             />
                                         )}
                                     </ParentSize>

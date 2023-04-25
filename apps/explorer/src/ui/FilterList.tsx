@@ -1,7 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Tab, TabGroup, TabList, type TabGroupProps, type TabListProps } from './Tabs';
+import {
+    Tab,
+    TabGroup,
+    TabList,
+    type TabGroupProps,
+    type TabListProps,
+} from './Tabs';
 
 export interface FilterListProps<T extends string = string> {
     options: readonly T[];
