@@ -3,7 +3,7 @@
 import { type EpochPage } from '@mysten/sui.js/src/types/epochs';
 
 import { SuiAmount } from '../Table/SuiAmount';
-import { TxTableCol, TxTableHeader } from '../transactions/TxCardUtils';
+import { TxTableCol } from '../transactions/TxCardUtils';
 import { TxTimeType } from '../tx-time/TxTimeType';
 
 import { CheckpointSequenceLink, EpochLink } from '~/ui/InternalLink';
@@ -61,27 +61,27 @@ export const genTableDataFromEpochsData = (results: EpochPage) => ({
     })),
     columns: [
         {
-            header: () => <TxTableHeader label="Epoch" />,
+            header: 'Epoch',
             accessorKey: 'epoch',
         },
         {
-            header: () => <TxTableHeader label="Transaction Blocks" />,
+            header: 'Transaction Blocks',
             accessorKey: 'transactions',
         },
         {
-            header: () => <TxTableHeader label="Stake Rewards" />,
+            header: 'Stake Rewards',
             accessorKey: 'stakeRewards',
         },
         {
-            header: () => <TxTableHeader label="Checkpoint Set" />,
+            header: 'Checkpoint Set',
             accessorKey: 'checkpointSet',
         },
         {
-            header: () => <TxTableHeader label="Storage Revenue" />,
+            header: 'Storage Revenue',
             accessorKey: 'storageRevenue',
         },
         {
-            header: () => <TxTableHeader label="Epoch End" />,
+            header: 'Epoch End',
             accessorKey: 'time',
         },
     ],
