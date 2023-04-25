@@ -195,7 +195,10 @@ where
         info!("Indexer object checkpoint download & index task started...");
         // NOTE: important not to cast i64 to u64 here,
         // because -1 will be returned when checkpoints table is empty.
-        let last_seq_from_db = self.state.get_latest_checkpoint_sequence_number().await?;
+        let last_seq_from_db = self
+            .state
+            .get_latest_object_checkpoint_sequence_number()
+            .await?;
         if last_seq_from_db > 0 {
             info!("Resuming from checkpoint {last_seq_from_db}");
         }
