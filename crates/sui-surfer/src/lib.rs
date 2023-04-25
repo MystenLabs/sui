@@ -5,14 +5,13 @@ use futures::future::join_all;
 use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
 use rand::{Rng, SeedableRng};
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use surf_strategy::SurfStrategy;
 use test_utils::network::TestClusterBuilder;
-use tokio::sync::{watch, RwLock};
+use tokio::sync::watch;
 use tracing::info;
 
 use crate::surfer_state::SurfStatistics;
@@ -56,17 +55,7 @@ pub async fn run<S: SurfStrategy + Default>(run_duration: Duration, package_path
     let mut rng = StdRng::seed_from_u64(seed);
     let (exit_sender, exit_rcv) = watch::channel(());
 
-    let immutable_objects = Arc::new(RwLock::new(HashMap::new()));
-    let shared_objects = Arc::new(RwLock::new(HashMap::new()));
-
-    let mut tasks = SurferTask::create_surfer_tasks::<S>(
-        cluster.clone(),
-        &mut rng,
-        exit_rcv,
-        immutable_objects,
-        shared_objects,
-    )
-    .await;
+    let mut tasks = SurferTask::create_surfer_tasks::<S>(cluster.clone(), &mut rng, exit_rcv).await;
     info!("Created {} surfer tasks", tasks.len());
 
     for path in package_paths {

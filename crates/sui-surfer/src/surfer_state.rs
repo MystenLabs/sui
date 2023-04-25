@@ -261,7 +261,8 @@ impl SurferState {
                     .functions
                     .into_iter()
                     .filter_map(|(func_name, func)| {
-                        if !matches!(func.visibility, Visibility::Public) {
+                        // Either public function or entry function is callable.
+                        if !matches!(func.visibility, Visibility::Public) && !func.is_entry {
                             return None;
                         }
                         // Surfer doesn't support chaining transactions in a programmable transaction yet.

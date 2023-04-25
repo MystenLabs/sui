@@ -164,13 +164,13 @@ impl DefaultSurfStrategy {
             }
         };
         let owned = state.matching_owned_objects_count(&type_tag);
-        let immutable = state.matching_immutable_objects_count(&type_tag).await;
         let shared = state.matching_shared_objects_count(&type_tag).await;
+        let immutable = state.matching_immutable_objects_count(&type_tag).await;
 
         let total_matching_count = match kind {
             InputObjectPassKind::Value => owned,
-            InputObjectPassKind::ByRef => owned + immutable + shared,
             InputObjectPassKind::MutRef => owned + shared,
+            InputObjectPassKind::ByRef => owned + shared + immutable,
         };
         if total_matching_count == 0 {
             return None;
@@ -182,19 +182,16 @@ impl DefaultSurfStrategy {
             return Some(CallArg::Object(ObjectArg::ImmOrOwnedObject(obj_ref)));
         }
         n -= owned;
-        if matches!(kind, InputObjectPassKind::ByRef) {
-            if n < immutable {
-                let obj_ref = state.choose_nth_immutable_object(&type_tag, n).await;
-                return Some(CallArg::Object(ObjectArg::ImmOrOwnedObject(obj_ref)));
-            } else {
-                n -= immutable;
-            }
+        if n < shared {
+            let (id, initial_shared_version) = state.choose_nth_shared_object(&type_tag, n).await;
+            return Some(CallArg::Object(ObjectArg::SharedObject {
+                id,
+                initial_shared_version,
+                mutable: matches!(kind, InputObjectPassKind::MutRef),
+            }));
         }
-        let (id, initial_shared_version) = state.choose_nth_shared_object(&type_tag, n).await;
-        Some(CallArg::Object(ObjectArg::SharedObject {
-            id,
-            initial_shared_version,
-            mutable: matches!(kind, InputObjectPassKind::MutRef),
-        }))
+        n -= shared;
+        let obj_ref = state.choose_nth_immutable_object(&type_tag, n).await;
+        Some(CallArg::Object(ObjectArg::ImmOrOwnedObject(obj_ref)))
     }
 }

@@ -28,9 +28,10 @@ impl SurferTask {
         cluster: Arc<TestCluster>,
         rng: &mut StdRng,
         exit_rcv: watch::Receiver<()>,
-        immutable_objects: ImmObjects,
-        shared_objects: SharedObjects,
     ) -> Vec<SurferTask> {
+        let immutable_objects: ImmObjects = Arc::new(RwLock::new(HashMap::new()));
+        let shared_objects: SharedObjects = Arc::new(RwLock::new(HashMap::new()));
+
         let mut accounts: HashMap<SuiAddress, (Option<ObjectRef>, OwnedObjects)> = cluster
             .accounts
             .iter()
