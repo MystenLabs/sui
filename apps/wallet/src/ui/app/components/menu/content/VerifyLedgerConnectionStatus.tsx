@@ -27,7 +27,7 @@ enum VerificationStatus {
 }
 
 const resetVerificationStatusDelay = 5000;
-const loadingStateDelay = 400;
+const loadingStateDelay = 200;
 
 export function VerifyLedgerConnectionStatus({
     accountAddress,
