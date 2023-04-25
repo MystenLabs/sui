@@ -8023,6 +8023,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "sample-tool"
+version = "0.1.0"
+dependencies = [
+ "test-utils",
+ "tokio",
+]
+
+[[package]]
 name = "schannel"
 version = "0.1.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
