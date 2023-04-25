@@ -8,7 +8,7 @@ When running benchmarks, the codebase is automatically compiled with the feature
 
 ### Parametrize the benchmark
 
-After [cloning the repo and installing all dependencies](https://github.com/mystenlabs/narwhal#quick-start), you can use [Fabric](http://www.fabfile.org/) to run benchmarks on your local machine. Locate the task called `local` in the file [fabfile.py](https://github.com/MystenLabs/sui/blob/main/narwhal/benchmark/fabfile.py):
+After [cloning the repo and installing all dependencies](https://github.com/MystenLabs/sui/tree/main/narwhal#quick-start), you can use [Fabric](http://www.fabfile.org/) to run benchmarks on your local machine. Locate the task called `local` in the file [fabfile.py](https://github.com/MystenLabs/sui/blob/main/narwhal/benchmark/fabfile.py):
 
 ```python
 @task
@@ -184,13 +184,13 @@ The file [settings.json](https://github.com/MystenLabs/sui/blob/main/narwhal/ben
 ```json
 {
   "key": {
-    "name": "aws",
-    "path": "/absolute/key/path"
+    "name": "aws-sui",
+    "path": "/Users/username/.ssh/aws-sui.pem"
   },
   "port": 5000,
   "repo": {
-    "name": "narwhal",
-    "url": "https://github.com/mystenlabs/narwhal.git",
+    "name": "sui",
+    "url": "https://github.com/mystenlabs/sui",
     "branch": "main"
   },
   "instances": {
@@ -229,8 +229,8 @@ The third block (`repo`) contains the information regarding the repository's nam
 
 ```json
 "repo": {
-    "name": "narwhal",
-    "url": "https://github.com/mystenlabs/narwhal.git",
+    "name": "sui",
+    "url": "https://github.com/mystenlabs/sui",
     "branch": "main"
 },
 ```
@@ -291,7 +291,7 @@ The commands `fab stop` and `fab start` respectively stop and start the testbed 
 
 ### Step 5. Run a benchmark
 
-After setting up the testbed, running a benchmark on AWS is similar to running it locally (see [Run Local Benchmarks](https://github.com/mystenlabs/narwhal/tree/main/benchmark#local-benchmarks)). Locate the task `remote` in [fabfile.py](https://github.com/MystenLabs/sui/blob/main/narwhal/benchmark/fabfile.py):
+After setting up the testbed, running a benchmark on AWS is similar to running it locally (see [Run Local Benchmarks](https://github.com/MystenLabs/sui/tree/main/narwhal/benchmark#local-benchmarks)). Locate the task `remote` in [fabfile.py](https://github.com/MystenLabs/sui/blob/main/narwhal/benchmark/fabfile.py):
 
 ```python
 @task
@@ -299,7 +299,7 @@ def remote(ctx):
     ...
 ```
 
-The benchmark parameters are similar to [local benchmarks](https://github.com/mystenlabs/narwhal/tree/main/benchmark#local-benchmarks) but allow you to specify the number of nodes and the input rate as arrays to automate multiple benchmarks with a single command. The parameter `runs` specifies the number of times to repeat each benchmark (to later compute the average and stdev of the results), and the parameter `collocate` specifies whether to collocate all the node's workers and the primary on the same machine. If `collocate` is set to `False`, the script will run one node per data center (AWS region), with its primary and each of its worker running on a dedicated instance.
+The benchmark parameters are similar to [local benchmarks](https://github.com/MystenLabs/sui/tree/main/narwhal/benchmark#local-benchmarks) but allow you to specify the number of nodes and the input rate as arrays to automate multiple benchmarks with a single command. The parameter `runs` specifies the number of times to repeat each benchmark (to later compute the average and stdev of the results), and the parameter `collocate` specifies whether to collocate all the node's workers and the primary on the same machine. If `collocate` is set to `False`, the script will run one node per data center (AWS region), with its primary and each of its worker running on a dedicated instance.
 
 ```python
 bench_params = {
