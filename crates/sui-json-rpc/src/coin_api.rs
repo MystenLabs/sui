@@ -17,12 +17,12 @@ use sui_json_rpc_types::{Balance, Coin as SuiCoin};
 use sui_json_rpc_types::{CoinPage, SuiCoinMetadata};
 use sui_open_rpc::Module;
 use sui_types::balance::Supply;
-use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
+use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::coin::{CoinMetadata, TreasuryCap};
 use sui_types::error::SuiError;
 use sui_types::gas_coin::GAS;
 use sui_types::messages::TransactionEffectsAPI;
-use sui_types::object::{Object, Owner};
+use sui_types::object::Object;
 use sui_types::parse_sui_struct_tag;
 
 use crate::api::{cap_page_limit, CoinReadApiServer, JsonRpcMetrics};
@@ -101,38 +101,41 @@ impl CoinReadApi {
                 .get_object_read(&package_id)?
                 .into_object()?
                 .previous_transaction;
-
+            info!(
+                "get_coin_metadata get publish_txn_digest {:?} ",
+                publish_txn_digest
+            );
             let (_, effect) = state
                 .get_executed_transaction_and_effects(publish_txn_digest)
                 .await?;
-
-            async fn find_object_with_type(
-                state: &Arc<AuthorityState>,
-                created: &[(ObjectRef, Owner)],
-                object_struct_tag: &StructTag,
-                package_id: &ObjectID,
-            ) -> Result<ObjectID, anyhow::Error> {
-                for ((id, version, _), _) in created {
-                    if let Ok(past_object) = state.get_past_object_read(id, *version) {
-                        if let Ok(object) = past_object.into_object() {
-                            if matches!(object.type_(), Some(type_) if type_.is(object_struct_tag))
-                            {
-                                return Ok(*id);
-                            }
+            info!("get_coin_metadata get effects {:?} ", effect);
+            for ((id, _, _), _) in effect.created() {
+                let object_read = state.get_object_read(id);
+                info!(
+                    "get_coin_metadata get object_read {:?} for id {:?}",
+                    object_read, id
+                );
+                if let Ok(object) = object_read {
+                    if let Ok(object) = object.into_object() {
+                        info!(
+                            "get_coin_metadata get object {:?} for id {:?} type {:?}",
+                            object,
+                            id,
+                            object.type_()
+                        );
+                        if matches!(object.type_(), Some(type_) if type_.is(&object_struct_tag)) {
+                            info!("find_package_object returned {:?}", object);
+                            return Ok(object);
                         }
                     }
                 }
-                Err(anyhow!(
-                    "Cannot find object [{}] from [{}] package event.",
-                    object_struct_tag,
-                    package_id
-                ))
             }
 
-            let object_id =
-                find_object_with_type(&state, effect.created(), &object_struct_tag, &package_id)
-                    .await?;
-            Ok(state.get_object_read(&object_id)?.into_object()?)
+            Err(anyhow!(
+                "Cannot find object [{}] from [{}] package publish effects.",
+                object_struct_tag,
+                package_id
+            ))?
         })
         .await?
     }
@@ -287,7 +290,7 @@ impl CoinReadApiServer for CoinReadApi {
 
     #[instrument(skip(self))]
     async fn get_coin_metadata(&self, coin_type: String) -> RpcResult<Option<SuiCoinMetadata>> {
-        info!("get_coin_metadata");
+        info!("get_coin_metadata with coin type {:?}", coin_type);
         let coin_struct = parse_sui_struct_tag(&coin_type)?;
 
         let metadata_object = self
@@ -296,8 +299,16 @@ impl CoinReadApiServer for CoinReadApi {
                 CoinMetadata::type_(coin_struct),
             )
             .await
+            .map_err(|e| {
+                info!(
+                    "get_coin_metadata Failed to get coin metadata for {:?} with error: {:?}",
+                    coin_type, e
+                );
+                e
+            })
             .ok();
 
+        info!("get_coin_metadata metadata object {:?}", metadata_object);
         Ok(metadata_object.and_then(|v: Object| v.try_into().ok()))
     }
 

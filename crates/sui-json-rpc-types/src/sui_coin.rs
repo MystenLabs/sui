@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use tracing::info;
 
 use crate::Page;
 use sui_types::base_types::{
@@ -79,6 +80,7 @@ pub struct SuiCoinMetadata {
 impl TryFrom<Object> for SuiCoinMetadata {
     type Error = SuiError;
     fn try_from(object: Object) -> Result<Self, Self::Error> {
+        info!("SuiCoinMetadata::try_from {:?}", object);
         let metadata: CoinMetadata = object.try_into()?;
         let CoinMetadata {
             decimals,
