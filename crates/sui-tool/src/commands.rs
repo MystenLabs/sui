@@ -319,7 +319,6 @@ impl ToolCommand {
                 cmd,
             } => {
                 execute_replay_command(rpc_url, safety_checks, cmd).await?;
-                ()
             }
         };
         Ok(())
