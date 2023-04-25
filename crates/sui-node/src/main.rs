@@ -129,9 +129,30 @@ fn main() {
         .enable_all()
         .build()
         .unwrap()
-        .block_on(tokio::signal::ctrl_c())
-        .unwrap();
+        .block_on(wait_termination());
 
     // Drop and wait all runtimes on main thread
     drop(runtimes);
+}
+
+#[cfg(not(unix))]
+// On windows we wait for whatever "ctrl_c" means there
+async fn wait_termination() {
+    tokio::signal::ctrl_c().await.unwrap()
+}
+
+#[cfg(unix)]
+// On unix we wait for both SIGINT (when run in terminal) and SIGTERM(when run in docker or other supervisor)
+// Docker stop sends SIGTERM: https://www.baeldung.com/ops/docker-stop-vs-kill#:~:text=The%20docker%20stop%20commands%20issue,rather%20than%20killing%20it%20immediately.
+// Systemd by default sends SIGTERM as well: https://www.freedesktop.org/software/systemd/man/systemd.kill.html
+// Upstart also sends SIGTERM by default: https://upstart.ubuntu.com/cookbook/#kill-signal
+async fn wait_termination() {
+    use futures::future::select;
+    use futures::FutureExt;
+    use tokio::signal::unix::*;
+
+    let sigint = tokio::signal::ctrl_c().map(Result::ok).boxed();
+    let mut sigterm = signal(SignalKind::terminate()).unwrap();
+    let sigterm_recv = sigterm.recv().boxed();
+    select(sigint, sigterm_recv).await;
 }
