@@ -347,7 +347,7 @@ impl LocalExec {
     ) -> Result<Option<Object>, LocalExecError> {
         let resp = block_on({
             //info!("Downloading latest object {object_id}");
-            self.multi_download_latest(&vec![*object_id])
+            self.multi_download_latest(&[*object_id])
         })
         .map(|mut q| {
             q.pop()
