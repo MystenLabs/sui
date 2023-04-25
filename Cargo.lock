@@ -548,13 +548,13 @@ dependencies = [
 
 [[package]]
 name = "async-recursion"
-version = "1.0.0"
+version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2cda8f4bcc10624c4e85bc66b3f452cca98cfa5ca002dc83a16aad2367641bea"
+checksum = "0e97ce7de6cf12de5d7226c73f5ba9811622f4db3a5b91b55c53e987e5f91cba"
 dependencies = [
  "proc-macro2 1.0.54",
  "quote 1.0.26",
- "syn 1.0.107",
+ "syn 2.0.10",
 ]
 
 [[package]]
@@ -9715,10 +9715,13 @@ name = "sui-replay"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-recursion",
+ "async-trait",
  "bcs",
  "clap 4.1.4",
  "colored",
  "futures",
+ "jsonrpsee",
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
@@ -9739,7 +9742,9 @@ dependencies = [
  "sui-storage",
  "sui-types",
  "thiserror",
+ "tokio",
  "tracing",
+ "typed-store",
  "workspace-hack",
 ]
 
