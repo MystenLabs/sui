@@ -26,7 +26,9 @@ const MAX_PROTOCOL_VERSION: u64 = 7;
 // Version 6: Change to how bytes are charged in the gas meter, increase buffer stake to 0.5f
 // Version 7: Disallow adding new abilities to types during package upgrades,
 //            disable_invariant_violation_check_in_swap_loc,
-//            advance_to_hightest_supported_protocol_version
+//            advance_to_highest_supported_protocol_version,
+//            disable init functions becoming entry,
+//            hash module bytes individually before computing package digest.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -160,6 +162,9 @@ struct FeatureFlags {
     // If true, disallow entry modifiers on entry functions
     #[serde(skip_serializing_if = "is_false")]
     ban_entry_init: bool,
+    // If true, hash module bytes individually when calculating package digests for upgrades
+    #[serde(skip_serializing_if = "is_false")]
+    package_digest_hash_module: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -667,6 +672,10 @@ impl ProtocolConfig {
     pub fn ban_entry_init(&self) -> bool {
         self.feature_flags.ban_entry_init
     }
+
+    pub fn package_digest_hash_module(&self) -> bool {
+        self.feature_flags.package_digest_hash_module
+    }
 }
 
 // Special getters
@@ -1073,6 +1082,7 @@ impl ProtocolConfig {
                 cfg.feature_flags
                     .advance_to_highest_supported_protocol_version = true;
                 cfg.feature_flags.ban_entry_init = true;
+                cfg.feature_flags.package_digest_hash_module = true;
                 cfg
             }
             // Use this template when making changes:

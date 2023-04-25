@@ -14,6 +14,7 @@ feature_flags:
   disable_invariant_violation_check_in_swap_loc: true
   advance_to_highest_supported_protocol_version: true
   ban_entry_init: true
+  package_digest_hash_module: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000

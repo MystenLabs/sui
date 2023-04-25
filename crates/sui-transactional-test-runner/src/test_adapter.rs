@@ -800,8 +800,12 @@ impl<'a> SuiTestAdapter<'a> {
 
         SuiValue::Object(upgrade_capability).into_argument(&mut builder, self)?; // Argument::Input(0)
         let upgrade_arg = builder.pure(policy).unwrap();
-        let digest: Vec<u8> =
-            MovePackage::compute_digest_for_modules_and_deps(&modules_bytes, &dependencies).into();
+        let digest: Vec<u8> = MovePackage::compute_digest_for_modules_and_deps(
+            &modules_bytes,
+            &dependencies,
+            /* hash_modules */ true,
+        )
+        .into();
         let digest_arg = builder.pure(digest).unwrap();
 
         let upgrade_ticket = builder.programmable_move_call(
