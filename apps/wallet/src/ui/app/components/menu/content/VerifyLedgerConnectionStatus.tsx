@@ -3,7 +3,6 @@
 
 import { Check12, X12 } from '@mysten/icons';
 import { Ed25519PublicKey, type SuiAddress } from '@mysten/sui.js';
-import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 
@@ -27,43 +26,18 @@ enum VerificationStatus {
     NOT_VERIFIED = 'NOT_VERIFIED',
 }
 
-const resetVerificationStatusTimeout = 5000;
+const resetVerificationStatusDelay = 5000;
+const loadingStateDelay = 400;
 
 export function VerifyLedgerConnectionStatus({
     accountAddress,
     derivationPath,
 }: VerifyLedgerConnectionLinkProps) {
     const { connectToLedger } = useSuiLedgerClient();
+    const [isLoading, setLoading] = useState(false);
     const [verificationStatus, setVerificationStatus] = useState(
         VerificationStatus.UNKNOWN
     );
-    const { mutate, isLoading } = useMutation({
-        mutationFn: async () => {
-            const suiLedgerClient = await connectToLedger();
-            return await suiLedgerClient.getPublicKey(derivationPath, true);
-        },
-        onSuccess: (publicKeyResult) => {
-            const publicKey = new Ed25519PublicKey(publicKeyResult.publicKey);
-            const suiAddress = publicKey.toSuiAddress();
-
-            setVerificationStatus(
-                accountAddress === suiAddress
-                    ? VerificationStatus.VERIFIED
-                    : VerificationStatus.NOT_VERIFIED
-            );
-
-            window.setTimeout(() => {
-                setVerificationStatus(VerificationStatus.UNKNOWN);
-            }, resetVerificationStatusTimeout);
-        },
-        onError: (error) => {
-            const errorMessage =
-                getLedgerConnectionErrorMessage(error) ||
-                getSuiApplicationErrorMessage(error) ||
-                'Something went wrong';
-            toast.error(errorMessage);
-        },
-    });
 
     switch (verificationStatus) {
         case VerificationStatus.UNKNOWN:
@@ -81,7 +55,49 @@ export function VerifyLedgerConnectionStatus({
             return (
                 <Link
                     text="Verify Ledger connection"
-                    onClick={() => mutate()}
+                    onClick={async () => {
+                        const loadingTimeoutId = setTimeout(() => {
+                            setLoading(true);
+                        }, loadingStateDelay);
+
+                        try {
+                            const suiLedgerClient = await connectToLedger();
+                            const publicKeyResult =
+                                await suiLedgerClient.getPublicKey(
+                                    derivationPath,
+                                    true
+                                );
+                            const publicKey = new Ed25519PublicKey(
+                                publicKeyResult.publicKey
+                            );
+                            const suiAddress = publicKey.toSuiAddress();
+
+                            setVerificationStatus(
+                                accountAddress === suiAddress
+                                    ? VerificationStatus.VERIFIED
+                                    : VerificationStatus.NOT_VERIFIED
+                            );
+                        } catch (error) {
+                            const errorMessage =
+                                getLedgerConnectionErrorMessage(error) ||
+                                getSuiApplicationErrorMessage(error) ||
+                                'Something went wrong';
+                            toast.error(errorMessage);
+
+                            setVerificationStatus(
+                                VerificationStatus.NOT_VERIFIED
+                            );
+                        } finally {
+                            clearTimeout(loadingTimeoutId);
+                            setLoading(false);
+
+                            window.setTimeout(() => {
+                                setVerificationStatus(
+                                    VerificationStatus.UNKNOWN
+                                );
+                            }, resetVerificationStatusDelay);
+                        }
+                    }}
                     color="heroDark"
                     weight="medium"
                 />
