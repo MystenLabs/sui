@@ -88,12 +88,13 @@ function SplitPanel({
     const [isCollapsed, setIsCollapsed] = useState(false);
 
     const togglePanelCollapse = () => {
-        const panel = ref.current;
-        if (panel) {
+        const panelRef = ref.current;
+
+        if (panelRef) {
             if (isCollapsed) {
-                panel.expand();
+                panelRef.expand();
             } else {
-                panel.collapse();
+                panelRef.collapse();
             }
         }
     };
@@ -105,9 +106,9 @@ function SplitPanel({
             </Panel>
             {renderResizeHandle && (
                 <ResizeHandle
+                    isCollapsed={isCollapsed}
                     isHorizontal={direction === 'horizontal'}
                     togglePanelCollapse={togglePanelCollapse}
-                    isCollapsed={isCollapsed}
                     collapsibleButton={collapsibleButton}
                 />
             )}
@@ -116,36 +117,21 @@ function SplitPanel({
 }
 
 export interface SplitPanesProps extends PanelGroupProps {
-    panels: ReactNode[];
-    collapsible?: boolean;
-    collapsibleButtons?: boolean[];
-    minSizes?: number[];
-    defaultSizes?: number[];
+    splitPanels: Omit<SplitPanelProps, 'renderResizeHandle' | 'direction'>[];
 }
 
-export function SplitPanes({
-    panels,
-    collapsible,
-    collapsibleButtons = [],
-    minSizes = [],
-    defaultSizes = [],
-    ...props
-}: SplitPanesProps) {
+export function SplitPanes({ splitPanels, ...props }: SplitPanesProps) {
     const { direction } = props;
 
     return (
         <PanelGroup {...props}>
-            {panels.map((panel, index) => (
+            {splitPanels.map((panel, index) => (
                 <SplitPanel
                     key={index}
-                    panel={panel}
-                    direction={direction}
-                    collapsible={collapsible}
                     order={index}
-                    minSize={minSizes[index]}
-                    defaultSize={defaultSizes[index]}
-                    collapsibleButton={collapsible && collapsibleButtons[index]}
-                    renderResizeHandle={index < panels.length - 1}
+                    renderResizeHandle={index < splitPanels.length - 1}
+                    direction={direction}
+                    {...panel}
                 />
             ))}
         </PanelGroup>
