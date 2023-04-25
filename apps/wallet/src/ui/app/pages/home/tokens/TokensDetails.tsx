@@ -58,13 +58,6 @@ function MyTokens() {
                                 key={coinType}
                             />
                         ))}
-                        {balance.map(({ coinType, totalBalance }) => (
-                            <CoinBalance
-                                type={coinType}
-                                balance={BigInt(totalBalance)}
-                                key={coinType}
-                            />
-                        ))}
                     </div>
                 </div>
             ) : null}
