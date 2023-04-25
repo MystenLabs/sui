@@ -217,6 +217,8 @@ impl<R> ConfigBuilder<R> {
     }
 
     fn get_or_init_genesis_config(&mut self) -> &mut GenesisConfig {
+        println!("Does genesis exist: {:?}", self.genesis_config.is_none());
+
         if self.genesis_config.is_none() {
             self.genesis_config = Some(GenesisConfig::for_local_testing());
         }
@@ -391,8 +393,10 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
 
         self.get_or_init_genesis_config();
         let genesis_config = self.genesis_config.unwrap();
+        println!("genesis accounts: {:?}", genesis_config.accounts);
 
         let (account_keys, allocations) = genesis_config.generate_accounts(&mut rng).unwrap();
+        println!("swarm_builder genesis accounts keys: {:?}", account_keys);
 
         let token_distribution_schedule = {
             let mut builder = TokenDistributionScheduleBuilder::new();

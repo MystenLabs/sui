@@ -54,7 +54,11 @@ impl GenesisConfig {
 
         let mut keys = Vec::new();
         for account in &self.accounts {
+            println!("genesis_account_config: {:?}", account);
+
             let address = if let Some(address) = account.address {
+                println!("genesis_account_address: {:?}", address);
+
                 address
             } else {
                 let (address, keypair) = get_key_pair_from_rng(&mut rng);
@@ -230,6 +234,19 @@ impl GenesisConfig {
         )
     }
 
+    pub fn for_local_testing_with_addresses_and_faucet(addresses: Vec<SuiAddress>) -> Self {
+        let mut custom_genesis = Self::custom_genesis_with_addresses(
+            DEFAULT_NUMBER_OF_AUTHORITIES,
+            addresses,
+            DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT,
+        );
+        custom_genesis.accounts.push(AccountConfig {
+            address: None,
+            gas_amounts: vec![DEFAULT_GAS_AMOUNT; DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT],
+        });
+        custom_genesis
+    }
+
     pub fn custom_genesis(
         num_authorities: usize,
         num_accounts: usize,
@@ -271,7 +288,7 @@ impl GenesisConfig {
                 gas_amounts: vec![DEFAULT_GAS_AMOUNT; num_objects_per_account],
             })
         }
-
+        println!("custom genesis accounts list: {:?}", accounts);
         Self {
             accounts,
             ..Default::default()

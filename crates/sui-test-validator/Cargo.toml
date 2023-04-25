@@ -18,4 +18,10 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 sui-faucet = { path = "../sui-faucet" }
 sui-cluster-test = { path = "../sui-cluster-test" }
+sui-keys = { path = "../sui-keys" }
+sui-config = { path = "../sui-config" }
+
 telemetry-subscribers.workspace = true
+
+[dev-dependencies]
+fs_extra = "1.3.0"

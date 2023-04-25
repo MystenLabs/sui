@@ -31,6 +31,7 @@ const STAGING_FULLNODE_ADDR: &str = "https://fullnode.staging.sui.io:443";
 const CONTINUOUS_FULLNODE_ADDR: &str = "https://fullnode.ci.sui.io:443";
 const CONTINUOUS_NOMAD_FULLNODE_ADDR: &str = "https://fullnode.nomad.ci.sui.io:443";
 const TESTNET_FULLNODE_ADDR: &str = "https://fullnode.testnet.sui.io:443";
+pub const SUI_NETWORK_CONFIG: &str = "network.yaml";
 
 pub struct ClusterFactory;
 
@@ -39,8 +40,8 @@ impl ClusterFactory {
         options: &ClusterTestOpt,
     ) -> Result<Box<dyn Cluster + Sync + Send>, anyhow::Error> {
         Ok(match &options.env {
-            Env::NewLocal => Box::new(LocalNewCluster::start(options).await?),
-            _ => Box::new(RemoteRunningCluster::start(options).await?),
+            Env::NewLocal => Box::new(LocalNewCluster::start(options, None).await?),
+            _ => Box::new(RemoteRunningCluster::start(options, None).await?),
         })
     }
 }
@@ -48,7 +49,10 @@ impl ClusterFactory {
 /// Cluster Abstraction
 #[async_trait]
 pub trait Cluster {
-    async fn start(options: &ClusterTestOpt) -> Result<Self, anyhow::Error>
+    async fn start(
+        options: &ClusterTestOpt,
+        genesis_config: Option<GenesisConfig>,
+    ) -> Result<Self, anyhow::Error>
     where
         Self: Sized;
 
@@ -75,7 +79,10 @@ pub struct RemoteRunningCluster {
 
 #[async_trait]
 impl Cluster for RemoteRunningCluster {
-    async fn start(options: &ClusterTestOpt) -> Result<Self, anyhow::Error> {
+    async fn start(
+        options: &ClusterTestOpt,
+        _genesis_config: Option<GenesisConfig>,
+    ) -> Result<Self, anyhow::Error> {
         let (fullnode_url, faucet_url) = match options.env {
             Env::Devnet => (
                 String::from(DEVNET_FULLNODE_ADDR),
@@ -162,9 +169,16 @@ impl LocalNewCluster {
 
 #[async_trait]
 impl Cluster for LocalNewCluster {
-    async fn start(options: &ClusterTestOpt) -> Result<Self, anyhow::Error> {
+    async fn start(
+        options: &ClusterTestOpt,
+        genesis_config: Option<GenesisConfig>,
+    ) -> Result<Self, anyhow::Error> {
         // Let the faucet account hold 1000 gas objects on genesis
-        let genesis_config = GenesisConfig::custom_genesis(4, 1, 100);
+        let genesis_config = if let Some(config) = genesis_config {
+            config
+        } else {
+            GenesisConfig::custom_genesis(4, 1, 100)
+        };
 
         // TODO: options should contain port instead of address
         let fullnode_port = options.fullnode_address.as_ref().map(|addr| {
@@ -192,6 +206,11 @@ impl Cluster for LocalNewCluster {
         let mut test_cluster = cluster_builder.build().await?;
 
         // Use the wealthy account for faucet
+        println!(
+            "Setting_faucet_key with acc keys: {:?}",
+            test_cluster.swarm.config_mut().account_keys
+        );
+
         let faucet_key = test_cluster.swarm.config_mut().account_keys.swap_remove(0);
         let faucet_address = SuiAddress::from(faucet_key.public());
         info!(?faucet_address, "faucet_address");
@@ -258,7 +277,10 @@ impl Cluster for LocalNewCluster {
 // Make linter happy
 #[async_trait]
 impl Cluster for Box<dyn Cluster + Send + Sync> {
-    async fn start(_options: &ClusterTestOpt) -> Result<Self, anyhow::Error> {
+    async fn start(
+        _options: &ClusterTestOpt,
+        _genesis_config: Option<GenesisConfig>,
+    ) -> Result<Self, anyhow::Error> {
         unreachable!(
             "If we already have a boxed Cluster trait object we wouldn't have to call this function"
         );
