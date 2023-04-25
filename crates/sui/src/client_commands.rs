@@ -190,6 +190,10 @@ pub enum SuiClientCommands {
         /// Also publish transitive dependencies that have not already been published.
         #[clap(long)]
         with_unpublished_dependencies: bool,
+
+        /// Use the legacy digest calculation algorithm
+        #[clap(long)]
+        legacy_digest: bool,
     },
 
     /// Verify local Move packages against on-chain packages, and optionally their dependencies.
@@ -492,6 +496,7 @@ impl SuiClientCommands {
                 gas_budget,
                 skip_dependency_verification,
                 with_unpublished_dependencies,
+                legacy_digest,
             } => {
                 let sender = context.try_get_object_owner(&gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
@@ -543,8 +548,8 @@ impl SuiClientCommands {
                 // policy at the moment. To change the policy you can call a Move function in the
                 // `package` module to change this policy.
                 let upgrade_policy = upgrade_cap.policy;
-                let package_digest =
-                    compiled_package.get_package_digest(with_unpublished_dependencies);
+                let package_digest = compiled_package
+                    .get_package_digest(with_unpublished_dependencies, !legacy_digest);
 
                 let data = client
                     .transaction_builder()

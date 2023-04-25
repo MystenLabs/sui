@@ -587,7 +587,11 @@ fn execute_move_upgrade<S: StorageView, Mode: ExecutionMode>(
 
     // Check digest.
     let computed_digest =
-        MovePackage::compute_digest_for_modules_and_deps(&module_bytes, &dep_ids).to_vec();
+        MovePackage::compute_digest_for_modules_and_deps(
+            &module_bytes,
+            &dep_ids,
+            context.protocol_config.package_digest_hash_module(),
+        ).to_vec();
     if computed_digest != upgrade_ticket.digest {
         return Err(ExecutionError::from_kind(
             ExecutionErrorKind::PackageUpgradeError {
@@ -851,7 +855,7 @@ fn publish_and_verify_modules<S: StorageView>(
     for module in modules {
         // Run Sui bytecode verifier, which runs some additional checks that assume the Move
         // bytecode verifier has passed.
-        sui_verifier::verifier::verify_module(module, &BTreeMap::new())?;
+        sui_verifier::verifier::verify_module(context.protocol_config, module, &BTreeMap::new())?;
     }
 
     Ok(())
@@ -966,6 +970,14 @@ fn check_visibility_and_signature<S: StorageView, Mode: ExecutionMode>(
             ),
         ));
     };
+
+    // entry on init is now banned, so ban invoking it
+    if !from_init && function == INIT_FN_NAME && context.protocol_config.ban_entry_init() {
+        return Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::NonEntryFunctionInvoked,
+            "Cannot call 'init'",
+        ));
+    }
 
     let last_instr: CodeOffset = fdef
         .code
