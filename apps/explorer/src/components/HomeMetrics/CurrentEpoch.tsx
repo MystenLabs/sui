@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { formatDate, formatAmountParts } from '@mysten/core';
+import { format, isToday, isYesterday } from 'date-fns';
+import { useMemo } from 'react';
 
 import { NetworkStats } from './NetworkStats';
 
@@ -12,29 +14,20 @@ import { Text } from '~/ui/Text';
 
 export function CurrentEpoch() {
     const { epoch, progress, label, end, start } = useEpochProgress();
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const yesterday = new Date(today);
-    yesterday.setDate(today.getDate() - 1);
 
-    const inputDate = new Date(start);
-    const inputDay = new Date(
-        inputDate.getFullYear(),
-        inputDate.getMonth(),
-        inputDate.getDate()
-    );
-
-    const isToday = inputDay.getTime() === today.getTime();
-    const isYesterday = inputDay.getTime() === yesterday.getTime();
-
-    let dayLabel = '';
-    if (isToday) {
-        dayLabel = 'Today';
-    } else if (isYesterday) {
-        dayLabel = 'Yesterday';
-    } else {
-        dayLabel = inputDate.toLocaleDateString();
-    }
+    const formattedDateString = useMemo(() => {
+        let formattedDate = '';
+        const epochStartDate = new Date(start);
+        if (isToday(epochStartDate)) {
+            formattedDate = 'Today';
+        } else if (isYesterday(epochStartDate)) {
+            formattedDate = 'Yesterday';
+        } else {
+            formattedDate = format(epochStartDate, 'PPP');
+        }
+        const formattedTime = format(epochStartDate, 'p');
+        return `${formattedTime}, ${formattedDate}`;
+    }, [start]);
 
     return (
         <NetworkStats bg="highlight" spacing="none">
@@ -91,7 +84,7 @@ export function CurrentEpoch() {
                     </Text>
 
                     <Text variant="pSubtitle/semibold" color="steel">
-                        {formatDate(start, ['hour', 'minute'])} {dayLabel}
+                        {formattedDateString}
                     </Text>
                 </div>
             </div>
