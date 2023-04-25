@@ -181,7 +181,7 @@ module deepbook::clob_test {
             let clock = test::take_shared<Clock>(&mut test);
             let order = clob::get_order_status(&pool, order_id(0, false), &account_cap);
             let order_cmp = clob::test_construct_order(0, 5 * FLOAT_SCALING, 500, false, account_cap_user);
-            assert!(order == &order_cmp, 0);
+            assert!(order == order_cmp, 0);
             let (prices, depth) = clob::get_level2_book_status_ask_side(
                 &pool,
                 1 * FLOAT_SCALING,
