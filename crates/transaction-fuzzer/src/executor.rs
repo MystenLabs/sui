@@ -60,6 +60,23 @@ impl Executor {
         }
     }
 
+    pub fn new_with_rgp(rgp: u64) -> Self {
+        let rt = Runtime::new().unwrap();
+        let state = rt.block_on(
+            TestAuthorityBuilder::new()
+                .with_reference_gas_price(rgp)
+                .build(),
+        );
+        Self {
+            state,
+            rt: Arc::new(rt),
+        }
+    }
+
+    pub fn get_reference_gas_price(&self) -> u64 {
+        self.state.reference_gas_price_for_testing().unwrap()
+    }
+
     pub fn add_object(&mut self, object: Object) {
         self.rt.block_on(self.state.insert_genesis_object(object));
     }
