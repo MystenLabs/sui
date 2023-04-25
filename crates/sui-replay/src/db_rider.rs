@@ -16,7 +16,7 @@ pub struct _DBRider {
 
 impl _DBRider {
     pub fn _open(path: PathBuf) -> Self {
-        let mut index_path = path;;
+        let mut index_path = path.clone();
         index_path.push("indexes");
 
         let index_store =

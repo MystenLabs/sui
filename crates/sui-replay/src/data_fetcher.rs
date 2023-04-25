@@ -4,7 +4,7 @@
 use crate::types::LocalExecError;
 use async_trait::async_trait;
 use futures::future::join_all;
-use sui_json_rpc::api::QUERY_MAX_RESULT_LIMIT_OBJECTS;
+use sui_json_rpc::api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::SuiGetPastObjectRequest;
 use sui_json_rpc_types::SuiObjectData;
 use sui_json_rpc_types::SuiObjectDataOptions;
@@ -68,7 +68,7 @@ impl DataFetcher for RemoteFetcher {
             })
             .collect();
 
-        let objectsx = objs.chunks(QUERY_MAX_RESULT_LIMIT_OBJECTS).map(|q| {
+        let objectsx = objs.chunks(*QUERY_MAX_RESULT_LIMIT).map(|q| {
             self.rpc_client
                 .read_api()
                 .try_multi_get_parsed_past_object(q.to_vec(), options.clone())
@@ -88,7 +88,7 @@ impl DataFetcher for RemoteFetcher {
     async fn multi_get_latest(&self, objects: &[ObjectID]) -> Result<Vec<Object>, LocalExecError> {
         let options = SuiObjectDataOptions::bcs_lossless();
 
-        let objectsx = objects.chunks(QUERY_MAX_RESULT_LIMIT_OBJECTS).map(|q| {
+        let objectsx = objects.chunks(*QUERY_MAX_RESULT_LIMIT).map(|q| {
             self.rpc_client
                 .read_api()
                 .multi_get_object_with_options(q.to_vec(), options.clone())
