@@ -252,7 +252,7 @@ group-5ef9efb8ec2df382 = { package = "group", version = "0.12", default-features
 guppy = { version = "0.15", default-features = false, features = ["rayon1", "summaries"] }
 guppy-summaries = { version = "0.7", default-features = false }
 guppy-workspace-hack = { version = "0.1", default-features = false }
-h2 = { version = "0.3.17", default-features = false }
+h2 = { version = "0.3", default-features = false }
 hakari = { version = "0.13", default-features = false, features = ["cli-support"] }
 half = { version = "1", default-features = false }
 hashbrown-594e8ee84c453af0 = { package = "hashbrown", version = "0.13", features = ["raw"] }
@@ -946,7 +946,7 @@ group-5ef9efb8ec2df382 = { package = "group", version = "0.12", default-features
 guppy = { version = "0.15", default-features = false, features = ["rayon1", "summaries"] }
 guppy-summaries = { version = "0.7", default-features = false }
 guppy-workspace-hack = { version = "0.1", default-features = false }
-h2 = { version = "0.3.17", default-features = false }
+h2 = { version = "0.3", default-features = false }
 hakari = { version = "0.13", default-features = false, features = ["cli-support"] }
 half = { version = "1", default-features = false }
 hashbrown-594e8ee84c453af0 = { package = "hashbrown", version = "0.13", features = ["raw"] }
