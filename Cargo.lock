@@ -9958,7 +9958,7 @@ dependencies = [
 
 [[package]]
 name = "sui-surfer"
-version = "0.33.0"
+version = "0.34.0"
 dependencies = [
  "async-trait",
  "bcs",

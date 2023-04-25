@@ -45,55 +45,53 @@ impl SurferTask {
             .unwrap()
             .get_node_handle()
             .unwrap();
-        validator
-            .with_async(|node| async {
-                for obj in node.state().db().iter_live_object_set() {
-                    match obj {
-                        LiveObject::Normal(obj) => {
-                            if let Some(struct_tag) = obj.struct_tag() {
-                                let obj_ref = obj.compute_object_reference();
-                                match obj.owner {
-                                    Owner::Immutable => {
-                                        immutable_objects
-                                            .write()
-                                            .await
+        let all_live_objects: Vec<_> =
+            validator.with(|node| node.state().db().iter_live_object_set().collect());
+        for obj in all_live_objects {
+            match obj {
+                LiveObject::Normal(obj) => {
+                    if let Some(struct_tag) = obj.struct_tag() {
+                        let obj_ref = obj.compute_object_reference();
+                        match obj.owner {
+                            Owner::Immutable => {
+                                immutable_objects
+                                    .write()
+                                    .await
+                                    .entry(struct_tag)
+                                    .or_default()
+                                    .push(obj_ref);
+                            }
+                            Owner::Shared {
+                                initial_shared_version,
+                            } => {
+                                shared_objects
+                                    .write()
+                                    .await
+                                    .entry(struct_tag)
+                                    .or_default()
+                                    .push((obj_ref.0, initial_shared_version));
+                            }
+                            Owner::AddressOwner(address) => {
+                                if let Some((gas_object, owned_objects)) =
+                                    accounts.get_mut(&address)
+                                {
+                                    if obj.is_gas_coin() && gas_object.is_none() {
+                                        gas_object.replace(obj_ref);
+                                    } else {
+                                        owned_objects
                                             .entry(struct_tag)
                                             .or_default()
-                                            .push(obj_ref);
+                                            .insert(obj_ref);
                                     }
-                                    Owner::Shared {
-                                        initial_shared_version,
-                                    } => {
-                                        shared_objects
-                                            .write()
-                                            .await
-                                            .entry(struct_tag)
-                                            .or_default()
-                                            .push((obj_ref.0, initial_shared_version));
-                                    }
-                                    Owner::AddressOwner(address) => {
-                                        if let Some((gas_object, owned_objects)) =
-                                            accounts.get_mut(&address)
-                                        {
-                                            if obj.is_gas_coin() && gas_object.is_none() {
-                                                gas_object.replace(obj_ref);
-                                            } else {
-                                                owned_objects
-                                                    .entry(struct_tag)
-                                                    .or_default()
-                                                    .insert(obj_ref);
-                                            }
-                                        }
-                                    }
-                                    Owner::ObjectOwner(_) => (),
                                 }
                             }
+                            Owner::ObjectOwner(_) => (),
                         }
-                        LiveObject::Wrapped(_) => (),
                     }
                 }
-            })
-            .await;
+                LiveObject::Wrapped(_) => (),
+            }
+        }
         let entry_functions = Arc::new(RwLock::new(vec![]));
         accounts
             .into_iter()

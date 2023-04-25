@@ -14,5 +14,5 @@ async fn smoke_test() {
     path.extend(["tests", "move_building_blocks"]);
     let results = sui_surfer::run::<DefaultSurfStrategy>(Duration::from_secs(30), vec![path]).await;
     assert!(results.num_successful_transactions > 0);
-    assert!(results.unique_move_functions_called.len() > 0);
+    assert!(!results.unique_move_functions_called.is_empty());
 }
