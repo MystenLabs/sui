@@ -55,3 +55,23 @@ export const SplitPanesWithStateSaveOnRefresh: StoryObj<SplitPanesProps> = {
         autoSaveId: 'split-panes',
     },
 };
+
+export const HorizontalSplitPanesWithCollapsibleButton: StoryObj<SplitPanesProps> =
+    {
+        ...SplitPanesStory,
+        args: {
+            direction: 'horizontal',
+            collapsible: true,
+            collapsibleButtons: [true, false],
+        },
+    };
+
+export const VerticalSplitPanesWithCollapsibleButton: StoryObj<SplitPanesProps> =
+    {
+        ...SplitPanesStory,
+        args: {
+            direction: 'vertical',
+            collapsible: true,
+            collapsibleButtons: [true, false],
+        },
+    };
