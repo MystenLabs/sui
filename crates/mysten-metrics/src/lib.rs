@@ -20,6 +20,8 @@ mod guards;
 pub mod histogram;
 pub use guards::*;
 
+pub mod scoped_timer;
+
 #[derive(Debug)]
 pub struct Metrics {
     pub tasks: IntGaugeVec,
