@@ -6,7 +6,7 @@ Includes collection of transfer policies, kiosk extensions and libraries to work
 
 ## Published Envs
 
-Currently Sui Testnet us the only supported environment, to access it, import the package directly in your Move.toml:
+Currently Sui Testnet is the only supported environment, to access it, import the package directly in your Move.toml:
 
 ```toml
 [dependencies]

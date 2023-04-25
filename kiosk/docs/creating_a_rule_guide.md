@@ -179,7 +179,7 @@ module examples::witness_rule {
     struct Rule<phantom W> has drop {}
     struct Config has store, drop {}
 
-    /// No special arguments are requied to set this Rule, but the
+    /// No special arguments are required to set this Rule, but the
     /// publisher now needs to specify a Witness type
     public fun set<T, W>(/* .... */) {
         policy::add_rule(Rule<W> {}, policy, cap, Config {})
