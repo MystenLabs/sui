@@ -482,7 +482,7 @@ impl IndexStore {
             &self.tables.transactions_to_addr,
             mutated_objects.filter_map(|(_, owner)| {
                 owner
-                    .get_owner_address()
+                    .get_address_owner_address()
                     .ok()
                     .map(|addr| ((addr, sequence), digest))
             }),
