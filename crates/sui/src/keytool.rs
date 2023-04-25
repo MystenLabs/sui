@@ -345,7 +345,8 @@ impl KeyToolCommand {
                 let response = kms.sign(request).await.unwrap();
                 let sig_bytes_der = response.signature.map(|b| b.to_vec()).unwrap_or_default();     
                 let mut sig = secpSig::from_der(&sig_bytes_der).unwrap();
-                let _ = secpSig::normalize_s(&mut sig);
+                let mut sig = secpSig::from_der(&sig_bytes_der).unwrap();
+                let _ = sig.normalize_s();```
                 let sig_bytes = secpSig::serialize_compact(&sig);
 
 
