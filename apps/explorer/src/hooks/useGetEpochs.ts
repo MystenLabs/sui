@@ -6,7 +6,7 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 
 export const DEFAULT_EPOCHS_LIMIT = 20;
 
-// Fetch transaction blocks
+// Fetch epochs
 export function useGetEpochs(limit = DEFAULT_EPOCHS_LIMIT) {
     const rpc = useRpcClient();
 

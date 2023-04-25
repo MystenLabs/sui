@@ -9,7 +9,7 @@ import { TxTimeType } from '../tx-time/TxTimeType';
 import { CheckpointSequenceLink, EpochLink } from '~/ui/InternalLink';
 import { Text } from '~/ui/Text';
 
-// Generate table data from the transaction data
+// Generate table data from the epochs data
 export const genTableDataFromEpochsData = (results: EpochPage) => ({
     data: results?.data.map((epoch) => ({
         epoch: (
