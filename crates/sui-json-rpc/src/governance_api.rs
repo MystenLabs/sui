@@ -34,6 +34,7 @@ use crate::api::{GovernanceReadApiServer, JsonRpcMetrics};
 use crate::error::Error;
 use crate::{with_tracing, ObjectProvider, SuiRpcModule};
 
+#[derive(Clone)]
 pub struct GovernanceReadApi {
     state: Arc<AuthorityState>,
     pub metrics: Arc<JsonRpcMetrics>,
@@ -95,7 +96,7 @@ impl GovernanceReadApi {
                             return Err(Error::UserInputError(UserInputError::ObjectNotFound {
                                 object_id: oref.0,
                                 version: None,
-                            }))
+                            }));
                         }
                     }
                 }
@@ -103,7 +104,7 @@ impl GovernanceReadApi {
                     return Err(Error::UserInputError(UserInputError::ObjectNotFound {
                         object_id: id,
                         version: None,
-                    }))
+                    }));
                 }
             }
         }
@@ -112,13 +113,20 @@ impl GovernanceReadApi {
     }
 
     async fn get_stakes(&self, owner: SuiAddress) -> Result<Vec<DelegatedStake>, Error> {
+        let timer = self.metrics.get_stake_sui_latency.start_timer();
         let stakes = self.get_staked_sui(owner).await?;
         if stakes.is_empty() {
             return Ok(vec![]);
         }
+        drop(timer);
 
-        self.get_delegated_stakes(stakes.iter().map(|s| (s.clone(), true)).collect())
-            .await
+        let _timer = self.metrics.get_delegated_sui_latency.start_timer();
+
+        let self_clone = self.clone();
+        spawn_monitored_task!(
+            self_clone.get_delegated_stakes(stakes.into_iter().map(|s| (s, true)).collect())
+        )
+        .await?
     }
 
     async fn get_delegated_stakes(
