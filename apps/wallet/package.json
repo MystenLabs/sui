@@ -99,7 +99,6 @@
         "stylelint-config-prettier-scss": "^0.0.1",
         "stylelint-config-standard-scss": "^5.0.0",
         "stylelint-webpack-plugin": "^3.3.0",
-        "svgtofont": "^3.23.1",
         "ts-loader": "^9.4.2",
         "ts-node": "^10.9.1",
         "tsconfig-paths": "^4.2.0",
