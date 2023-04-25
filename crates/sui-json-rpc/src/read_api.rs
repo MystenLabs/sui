@@ -138,7 +138,7 @@ impl ReadApi {
         opts: Option<SuiTransactionBlockResponseOptions>,
     ) -> Result<Vec<SuiTransactionBlockResponse>, Error> {
         let num_digests = digests.len();
-        if num_digests > QUERY_MAX_RESULT_LIMIT {
+        if num_digests > *QUERY_MAX_RESULT_LIMIT {
             return Err(anyhow!(UserInputError::SizeLimitExceeded {
                 limit: "multi get transaction input limit".to_string(),
                 value: QUERY_MAX_RESULT_LIMIT.to_string()
@@ -458,7 +458,7 @@ impl ReadApiServer for ReadApi {
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiObjectResponse>> {
         info!("multi_get_objects");
-        if object_ids.len() <= QUERY_MAX_RESULT_LIMIT {
+        if object_ids.len() <= *QUERY_MAX_RESULT_LIMIT {
             self.metrics
                 .get_objects_limit
                 .report(object_ids.len() as u64);
@@ -553,7 +553,7 @@ impl ReadApiServer for ReadApi {
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiPastObjectResponse>> {
         info!("try_multi_get_past_objects");
-        if past_objects.len() <= QUERY_MAX_RESULT_LIMIT {
+        if past_objects.len() <= *QUERY_MAX_RESULT_LIMIT {
             let mut futures = vec![];
             for past_object in past_objects {
                 futures.push(self.try_get_past_object(
