@@ -159,7 +159,7 @@ impl LocalExec {
     /// Such as fetching from local DB from snapshot
     pub async fn multi_download_latest(
         &self,
-        objs: &Vec<ObjectID>,
+        objs: &[ObjectID],
     ) -> Result<Vec<Object>, LocalExecError> {
         let mut num_retries_for_timeout = self.num_retries_for_timeout as i64;
         while num_retries_for_timeout >= 0 {
@@ -211,9 +211,7 @@ impl LocalExec {
             exec_store_events: Arc::new(Mutex::new(Vec::new())),
             metrics,
             storage: Storage::default(),
-            fetcher: RemoteFetcher {
-                rpc_client: client.clone(),
-            },
+            fetcher: RemoteFetcher { rpc_client: client },
             // TODO: make this configurable
             num_retries_for_timeout: RPC_TIMEOUT_ERR_NUM_RETRIES,
             sleep_period_for_timeout: RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
@@ -324,10 +322,12 @@ impl LocalExec {
         }
 
         let o = block_on(self.multi_download(&[(*object_id, version)])).map(|mut q| {
-            q.pop().expect(&format!(
-                "Downloaded obj response cannot be empty {:?}",
-                (*object_id, version)
-            ))
+            q.pop().unwrap_or_else(|| {
+                panic!(
+                    "Downloaded obj response cannot be empty {:?}",
+                    (*object_id, version)
+                )
+            })
         })?;
 
         let o_ref = o.compute_object_reference();
@@ -350,10 +350,8 @@ impl LocalExec {
             self.multi_download_latest(&vec![*object_id])
         })
         .map(|mut q| {
-            q.pop().expect(&format!(
-                "Downloaded obj response cannot be empty {}",
-                *object_id
-            ))
+            q.pop()
+                .unwrap_or_else(|| panic!("Downloaded obj response cannot be empty {}", *object_id))
         });
 
         match resp {
@@ -553,10 +551,8 @@ impl LocalExec {
                 !self.system_package_ids().contains(obj_id),
                 "All system packages should be downloaded already"
             );
-        } else {
-            if let Some(obj) = self.storage.live_objects_store.get(obj_id) {
-                return Ok(Some(obj.clone()));
-            };
+        } else if let Some(obj) = self.storage.live_objects_store.get(obj_id) {
+            return Ok(Some(obj.clone()));
         }
 
         let Some(o) =  self.download_latest_object(obj_id)? else { return Ok(None) };
@@ -1107,7 +1103,7 @@ impl LocalExec {
         self.multi_download_and_store(&gas_refs).await?;
 
         // Fetch the input objects we know from the raw transaction
-        let input_objs = self.resolve_download_input_objects(&tx_info).await?;
+        let input_objs = self.resolve_download_input_objects(tx_info).await?;
 
         // Prep the object runtime for dynamic fields
         // Download the child objects accessed at the version right before the execution of this TX

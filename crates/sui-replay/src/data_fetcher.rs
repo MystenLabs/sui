@@ -73,9 +73,9 @@ impl DataFetcher for RemoteFetcher {
             .await
             .into_iter()
             .collect::<Result<Vec<Vec<_>>, _>>()
-            .map_err(|q: SuiRpcError| LocalExecError::from(q))?
+            .map_err(LocalExecError::from)?
             .iter()
-            .flat_map(|q| q)
+            .flatten()
             .map(|q| convert_past_obj_response(q.clone()))
             .collect::<Result<Vec<_>, _>>()
     }
@@ -93,10 +93,10 @@ impl DataFetcher for RemoteFetcher {
             .await
             .into_iter()
             .collect::<Result<Vec<Vec<_>>, _>>()
-            .map_err(|q: SuiRpcError| LocalExecError::from(q))?
+            .map_err(LocalExecError::from)?
             .iter()
-            .flat_map(|q| q)
-            .map(|q| obj_from_sui_obj_response(q))
+            .flatten()
+            .map(obj_from_sui_obj_response)
             .collect::<Result<Vec<_>, _>>()
     }
 

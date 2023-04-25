@@ -143,8 +143,7 @@ pub async fn execute_replay_command(
             );
 
             let range: Vec<_> = (start..=end).collect();
-            let mut task_count = 0;
-            for checkpoints in range.chunks(checkpoints_per_task) {
+            for (task_count, checkpoints) in range.chunks(checkpoints_per_task).enumerate() {
                 let checkpoints = checkpoints.to_vec();
                 let rpc_url = rpc_url.clone();
                 let safety = safety.clone();
