@@ -1,6 +1,6 @@
 {
   "name": "@mysten/wallet-adapter-all-wallets",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "description": "Module exporting all integrated wallets for Sui Wallet Adapter",
   "license": "Apache-2.0",
   "author": "Mysten Labs <build@mystenlabs.com>",
