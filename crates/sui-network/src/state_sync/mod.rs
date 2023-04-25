@@ -280,76 +280,76 @@ where
     pub async fn start(mut self) {
         info!("State-Synchronizer started");
 
-        let mut interval = tokio::time::interval(self.config.interval_period());
-        let mut peer_events = {
-            let (subscriber, peers) = self.network.subscribe().unwrap();
-            for peer_id in peers {
-                self.spawn_get_latest_from_peer(peer_id);
-            }
-            subscriber
-        };
+        // let mut interval = tokio::time::interval(self.config.interval_period());
+        // let mut peer_events = {
+        //     let (subscriber, peers) = self.network.subscribe().unwrap();
+        //     for peer_id in peers {
+        //         self.spawn_get_latest_from_peer(peer_id);
+        //     }
+        //     subscriber
+        // };
 
-        // Initialize checkpoint watermark metrics
-        self.metrics.set_highest_verified_checkpoint(
-            *self
-                .store
-                .get_highest_verified_checkpoint()
-                .expect("store operation should not fail")
-                .sequence_number(),
-        );
-        self.metrics.set_highest_synced_checkpoint(
-            *self
-                .store
-                .get_highest_synced_checkpoint()
-                .expect("store operation should not fail")
-                .sequence_number(),
-        );
+        // // Initialize checkpoint watermark metrics
+        // self.metrics.set_highest_verified_checkpoint(
+        //     *self
+        //         .store
+        //         .get_highest_verified_checkpoint()
+        //         .expect("store operation should not fail")
+        //         .sequence_number(),
+        // );
+        // self.metrics.set_highest_synced_checkpoint(
+        //     *self
+        //         .store
+        //         .get_highest_synced_checkpoint()
+        //         .expect("store operation should not fail")
+        //         .sequence_number(),
+        // );
 
-        loop {
-            tokio::select! {
-                now = interval.tick() => {
-                    self.handle_tick(now.into_std());
-                },
-                maybe_message = self.mailbox.recv() => {
-                    // Once all handles to our mailbox have been dropped this
-                    // will yield `None` and we can terminate the event loop
-                    if let Some(message) = maybe_message {
-                        self.handle_message(message);
-                    } else {
-                        break;
-                    }
-                },
-                peer_event = peer_events.recv() => {
-                    self.handle_peer_event(peer_event);
-                },
-                Some(task_result) = self.tasks.join_next() => {
-                    match task_result {
-                        Ok(()) => {},
-                        Err(e) => {
-                            if e.is_cancelled() {
-                                // avoid crashing on ungraceful shutdown
-                            } else if e.is_panic() {
-                                // propagate panics.
-                                std::panic::resume_unwind(e.into_panic());
-                            } else {
-                                panic!("task failed: {e}");
-                            }
-                        },
-                    };
+        // loop {
+        //     tokio::select! {
+        //         now = interval.tick() => {
+        //             self.handle_tick(now.into_std());
+        //         },
+        //         maybe_message = self.mailbox.recv() => {
+        //             // Once all handles to our mailbox have been dropped this
+        //             // will yield `None` and we can terminate the event loop
+        //             if let Some(message) = maybe_message {
+        //                 self.handle_message(message);
+        //             } else {
+        //                 break;
+        //             }
+        //         },
+        //         peer_event = peer_events.recv() => {
+        //             self.handle_peer_event(peer_event);
+        //         },
+        //         Some(task_result) = self.tasks.join_next() => {
+        //             match task_result {
+        //                 Ok(()) => {},
+        //                 Err(e) => {
+        //                     if e.is_cancelled() {
+        //                         // avoid crashing on ungraceful shutdown
+        //                     } else if e.is_panic() {
+        //                         // propagate panics.
+        //                         std::panic::resume_unwind(e.into_panic());
+        //                     } else {
+        //                         panic!("task failed: {e}");
+        //                     }
+        //                 },
+        //             };
 
-                    if matches!(&self.sync_checkpoint_contents_task, Some(t) if t.is_finished()) {
-                        self.sync_checkpoint_contents_task = None;
-                    }
+        //             if matches!(&self.sync_checkpoint_contents_task, Some(t) if t.is_finished()) {
+        //                 self.sync_checkpoint_contents_task = None;
+        //             }
 
-                    if matches!(&self.sync_checkpoint_summaries_task, Some(t) if t.is_finished()) {
-                        self.sync_checkpoint_summaries_task = None;
-                    }
-                },
-            }
+        //             if matches!(&self.sync_checkpoint_summaries_task, Some(t) if t.is_finished()) {
+        //                 self.sync_checkpoint_summaries_task = None;
+        //             }
+        //         },
+        //     }
 
-            self.maybe_start_checkpoint_summary_sync_task();
-            self.maybe_start_checkpoint_contents_sync_task();
-        }
+        //     self.maybe_start_checkpoint_summary_sync_task();
+        //     self.maybe_start_checkpoint_contents_sync_task();
+        // }
 
         info!("State-Synchronizer ended");
     }
