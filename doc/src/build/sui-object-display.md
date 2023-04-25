@@ -26,7 +26,7 @@ The basic set of properties suggested includes:
 The following code sample demonstrates how the `Display` for an example `Hero` module varies based on the `name`, `id`, and `image_url` properties of the type `Hero`.
 The following represents the template the `init` function defines:
 
-```rust
+```json
 {
     "name": "{name}",
     "link": "https://sui-heroes.io/hero/{id}",
@@ -35,7 +35,9 @@ The following represents the template the `init` function defines:
     "project_url": "https://sui-heroes.io",
     "creator": "Unknown Sui Fan"
 }
+```
 
+```rust
 /// Example of an unlimited "Sui Hero" collection - anyone can
 /// mint their Hero. Shows how to initialize the `Publisher` and how
 /// to use it to get the `Display<Hero>` object - a way to describe a
