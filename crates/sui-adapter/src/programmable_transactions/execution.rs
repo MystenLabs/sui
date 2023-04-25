@@ -16,7 +16,7 @@ use move_binary_format::{
 use move_core_types::{
     account_address::AccountAddress,
     identifier::IdentStr,
-    language_storage::{ModuleId, TypeTag},
+    language_storage::{ModuleId, StructTag, TypeTag},
     u256::U256,
 };
 use move_vm_runtime::{
@@ -43,10 +43,10 @@ use sui_types::{
     },
     metrics::LimitsMetrics,
     move_package::{
-        normalize_deserialized_modules, MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt,
-        UpgradeTicket,
+        normalize_deserialized_modules, MovePackage, TypeOrigin, UpgradeCap, UpgradePolicy,
+        UpgradeReceipt, UpgradeTicket,
     },
-    SUI_FRAMEWORK_ADDRESS,
+    Identifier, SUI_FRAMEWORK_ADDRESS,
 };
 use sui_verifier::{
     private_generics::{EVENT_MODULE, PRIVATE_TRANSFER_FUNCTIONS, TRANSFER_MODULE},
@@ -615,6 +615,30 @@ fn execute_move_upgrade<S: StorageView, Mode: ExecutionMode>(
     let Some(package) = package_obj.data.try_as_package() else {
         invariant_violation!("Newly created package object is not a package");
     };
+
+    // Populate loader with all previous types.
+    if !context.protocol_config.disallow_adding_abilities_on_upgrade() {
+        for TypeOrigin { module_name, struct_name, package: origin } in package.type_origin_table() {
+            if package.id() == *origin {
+                continue;
+            }
+
+            let Ok(module) = Identifier::new(module_name.as_str()) else {
+                continue;
+            };
+
+            let Ok(name) = Identifier::new(struct_name.as_str()) else {
+                continue;
+            };
+
+            let _ = context.load_type(&TypeTag::Struct(Box::new(StructTag {
+                address: (*origin).into(),
+                module,
+                name,
+                type_params: vec![],
+            })));
+        }
+    }
 
     context.set_linkage(package)?;
     let res = publish_and_verify_modules(context, runtime_id, &modules);
