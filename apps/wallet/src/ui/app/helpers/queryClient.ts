@@ -20,8 +20,9 @@ export const queryClient = new QueryClient({
             // Disable automatic interval fetching
             refetchInterval: 0,
             refetchIntervalInBackground: false,
-            refetchOnMount: false,
             refetchOnWindowFocus: false,
+
+            refetchOnMount: true,
         },
     },
 });
