@@ -1049,6 +1049,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
+        legacy_digest: false,
     }
     .execute(context)
     .await?;

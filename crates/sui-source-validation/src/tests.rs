@@ -607,8 +607,11 @@ async fn upgrade_package(
 ) -> ObjectRef {
     let package = compile_package(package);
     let with_unpublished_deps = false;
+    let hash_modules = true;
     let package_bytes = package.get_package_bytes(with_unpublished_deps);
-    let package_digest = package.get_package_digest(with_unpublished_deps).to_vec();
+    let package_digest = package
+        .get_package_digest(with_unpublished_deps, hash_modules)
+        .to_vec();
     let package_deps = package.dependency_ids.published.into_values().collect();
 
     upgrade_package_with_wallet(
