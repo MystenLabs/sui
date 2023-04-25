@@ -8,7 +8,7 @@ import { createContext, useContext } from 'react';
 
 import { type ExtractProps } from './types';
 
-type TabSize = 'md' | 'lg';
+type TabSize = 'md' | 'lg' | 'sm';
 
 const TabSizeContext = createContext<TabSize | null | undefined>(null);
 
@@ -36,13 +36,14 @@ export function TabGroup({ size, ...props }: TabGroupProps) {
 
 const tabStyles = cva(
     [
-        'border-b border-transparent ui-selected:border-gray-65 font-semibold text-steel-dark hover:text-steel-darker active:text-steel pb-2 -mb-px',
+        'border-b border-transparent ui-selected:border-gray-65 font-semibold text-steel-dark disabled:text-steel-dark hover:text-steel-darker active:text-steel pb-2 -mb-px',
     ],
     {
         variants: {
             size: {
                 lg: 'text-heading4 ui-selected:text-steel-darker',
                 md: 'text-body ui-selected:text-steel-darker',
+                sm: 'text-captionSmall font-medium pb-0.5 disabled:opacity-40 ui-selected:text-steel-darker',
             },
         },
         defaultVariants: {
@@ -62,17 +63,20 @@ export function Tab({ ...props }: TabProps) {
 export type TabListProps = ExtractProps<typeof HeadlessTab.List> & {
     fullWidth?: boolean;
     disableBottomBorder?: boolean;
+    lessSpacing?: boolean;
 };
 
 export function TabList({
     fullWidth,
     disableBottomBorder,
+    lessSpacing,
     ...props
 }: TabListProps) {
     return (
         <HeadlessTab.List
             className={clsx(
-                'flex gap-6 border-gray-45',
+                'flex border-gray-45',
+                lessSpacing ? 'gap-2' : 'gap-6',
                 fullWidth && 'flex-1',
                 !disableBottomBorder && 'border-b'
             )}

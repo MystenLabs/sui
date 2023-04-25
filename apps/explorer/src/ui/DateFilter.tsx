@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 
-import { Tab, TabGroup, TabList } from './Tabs';
+import { FilterList } from './FilterList';
 
 export type DateFilterOption = 'D' | 'W' | 'M' | 'ALL';
 
@@ -22,20 +22,5 @@ export function DateFilter({
     value,
     onChange,
 }: DateFilterProps) {
-    const selectedIndex = options.indexOf(value);
-
-    return (
-        <TabGroup
-            selectedIndex={selectedIndex}
-            onChange={(index) => {
-                onChange(options[index]);
-            }}
-        >
-            <TabList disableBottomBorder>
-                {options.map((option) => (
-                    <Tab key={option}>{option}</Tab>
-                ))}
-            </TabList>
-        </TabGroup>
-    );
+    return <FilterList {...{ options, value, onChange }} />;
 }
