@@ -524,6 +524,7 @@ pub fn make_certificates_with_slow_nodes(
                 &mut rand,
                 committee,
             );
+
             let (_, certificate) = mock_certificate(committee, *name, round, this_cert_parents);
             certificates.push_back(certificate.clone());
             next_parents.push(certificate);
@@ -585,6 +586,13 @@ pub fn this_cert_parents_with_slow_nodes(
 
         parents.insert(parent.digest());
     }
+
+    assert!(
+        committee.reached_quorum(total_stake),
+        "Not enough parents by stake provided. Expected at least {} but instead got {}",
+        committee.quorum_threshold(),
+        total_stake
+    );
 
     parents
 }
