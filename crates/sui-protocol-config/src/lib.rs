@@ -171,6 +171,9 @@ struct FeatureFlags {
     // If true, disallow changing struct type parameters during package upgrades
     #[serde(skip_serializing_if = "is_false")]
     disallow_change_struct_type_params_on_upgrade: bool,
+    // If true, checks no extra bytes in a compiled module
+    #[serde(skip_serializing_if = "is_false")]
+    no_extraneous_module_bytes: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -690,6 +693,10 @@ impl ProtocolConfig {
         self.feature_flags
             .disallow_change_struct_type_params_on_upgrade
     }
+
+    pub fn no_extraneous_module_bytes(&self) -> bool {
+        self.feature_flags.no_extraneous_module_bytes
+    }
 }
 
 // Special getters
@@ -1112,6 +1119,7 @@ impl ProtocolConfig {
                 let mut cfg = Self::get_for_version_impl(version - 1);
                 cfg.feature_flags
                     .disallow_change_struct_type_params_on_upgrade = true;
+                cfg.feature_flags.no_extraneous_module_bytes = true;
                 cfg
             }
             9 => {

@@ -930,9 +930,9 @@ impl SuiNode {
                 // TODO: without this sleep, the consensus message is not delivered reliably.
                 tokio::time::sleep(Duration::from_millis(1)).await;
 
-                let max_binary_format_version = cur_epoch_store
-                    .protocol_config()
-                    .move_binary_format_version();
+                let config = cur_epoch_store.protocol_config();
+                let max_binary_format_version = config.move_binary_format_version();
+                let no_extraneous_module_bytes = config.no_extraneous_module_bytes();
                 let transaction =
                     ConsensusTransaction::new_capability_notification(AuthorityCapabilities::new(
                         self.state.name,
@@ -940,7 +940,10 @@ impl SuiNode {
                             .supported_protocol_versions
                             .expect("Supported versions should be populated"),
                         self.state
-                            .get_available_system_packages(max_binary_format_version)
+                            .get_available_system_packages(
+                                max_binary_format_version,
+                                no_extraneous_module_bytes,
+                            )
                             .await,
                     ));
                 info!(?transaction, "submitting capabilities to consensus");

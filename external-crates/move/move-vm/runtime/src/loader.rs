@@ -981,9 +981,11 @@ impl Loader {
 
         // for bytes obtained from the data store, they should always deserialize and verify.
         // It is an invariant violation if they don't.
-        let module = CompiledModule::deserialize_with_max_version(
+        let module = CompiledModule::deserialize_with_config(
             &bytes,
             self.vm_config.max_binary_format_version,
+            self.vm_config()
+                .check_no_extraneous_bytes_during_deserialization,
         )
         .map_err(|err| {
             let msg = format!("Deserialization error: {:?}", err);

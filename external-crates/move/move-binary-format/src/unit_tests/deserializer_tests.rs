@@ -3,10 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    file_format::{CompiledModule, CompiledScript},
+    file_format::{basic_test_module, CompiledModule, CompiledScript},
     file_format_common::*,
 };
-use move_core_types::vm_status::StatusCode;
+use move_core_types::{metadata::Metadata, vm_status::StatusCode};
 
 fn malformed_simple_versioned_test(version: u32) {
     // bad uleb (more than allowed for table count)
@@ -256,4 +256,115 @@ fn deserialize_invalid_script_no_signature() {
             .major_status(),
         StatusCode::INDEX_OUT_OF_BOUNDS
     );
+}
+
+#[test]
+fn deserialize_trailing_bytes() {
+    let module = basic_test_module();
+    let bytes = {
+        let mut v = vec![];
+        module.serialize(&mut v).unwrap();
+        v
+    };
+    let test = |bytes| {
+        // ok with flag false
+        CompiledModule::deserialize_with_config(
+            bytes,
+            VERSION_MAX,
+            /*check_no_extraneous_bytes*/ false,
+        )
+        .unwrap();
+        // error with flag true
+        let status_code = CompiledModule::deserialize_with_config(
+            bytes,
+            VERSION_MAX,
+            /*check_no_extraneous_bytes*/ true,
+        )
+        .unwrap_err()
+        .major_status();
+        assert_eq!(status_code, StatusCode::TRAILING_BYTES);
+    };
+    // simple trailing byte
+    let test1 = {
+        let mut v = bytes.clone();
+        v.push(0);
+        v
+    };
+    test(&test1);
+
+    // many bytes
+    let test2 = {
+        let mut v = bytes.clone();
+        v.push(3);
+        v.push(1);
+        v.push(0);
+        v.push(10);
+        v
+    };
+    test(&test2);
+
+    // another module
+    let test3 = {
+        let mut v = bytes.clone();
+        v.extend(bytes);
+        v
+    };
+    test(&test3);
+}
+
+#[test]
+fn no_metadata() {
+    let test = |bytes| {
+        // ok with flag false
+        CompiledModule::deserialize_with_config(
+            bytes,
+            VERSION_MAX,
+            /*check_no_extraneous_bytes*/ false,
+        )
+        .unwrap();
+        // error with flag true
+        let status_code = CompiledModule::deserialize_with_config(
+            bytes,
+            VERSION_MAX,
+            /*check_no_extraneous_bytes*/ true,
+        )
+        .unwrap_err()
+        .major_status();
+        assert_eq!(status_code, StatusCode::MALFORMED);
+    };
+    // empty metadata
+    let mut module = basic_test_module();
+    module.metadata.push(Metadata {
+        key: vec![],
+        value: vec![],
+    });
+    let test2 = {
+        let mut v = vec![];
+        module.serialize(&mut v).unwrap();
+        v
+    };
+    test(&test2);
+
+    // lots of metadata
+    let metadata_bytes = {
+        let module = basic_test_module();
+        let mut v = vec![];
+        module.serialize(&mut v).unwrap();
+        v
+    };
+    let mut module = basic_test_module();
+    module.metadata.push(Metadata {
+        key: metadata_bytes.clone(),
+        value: metadata_bytes.clone(),
+    });
+    module.metadata.push(Metadata {
+        key: metadata_bytes.clone(),
+        value: metadata_bytes.clone(),
+    });
+    let test2 = {
+        let mut v = vec![];
+        module.serialize(&mut v).unwrap();
+        v
+    };
+    test(&test2);
 }

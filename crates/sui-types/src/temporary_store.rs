@@ -53,6 +53,7 @@ pub struct InnerTemporaryStore {
     pub loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
     pub events: TransactionEvents,
     pub max_binary_format_version: u32,
+    pub no_extraneous_module_bytes: bool,
 }
 
 impl InnerTemporaryStore {
@@ -124,6 +125,7 @@ where
                 return Ok(Some(Arc::new(p.deserialize_module(
                     &id.name().into(),
                     self.temp_store.max_binary_format_version,
+                    self.temp_store.no_extraneous_module_bytes,
                 )?)));
             }
         }
@@ -286,6 +288,7 @@ impl<S> TemporaryStore<S> {
             events: TransactionEvents { data: self.events },
             max_binary_format_version: self.protocol_config.move_binary_format_version(),
             loaded_child_objects: self.loaded_child_objects,
+            no_extraneous_module_bytes: self.protocol_config.no_extraneous_module_bytes(),
         }
     }
 
@@ -1586,6 +1589,7 @@ impl<S: GetModule<Error = SuiError, Item = CompiledModule>> GetModule for Tempor
                     .deserialize_module(
                         &module_id.name().to_owned(),
                         self.protocol_config.move_binary_format_version(),
+                        self.protocol_config.no_extraneous_module_bytes(),
                     )?,
             ))
         } else {

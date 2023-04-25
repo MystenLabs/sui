@@ -120,6 +120,7 @@ impl MoveUtilsServer for MoveUtils {
                     normalize_modules(
                         p.serialized_module_map().values(),
                         /* max_binary_format_version */ VERSION_MAX,
+                        /* no_extraneous_module_bytes */ false,
                     )
                     .map_err(|e| anyhow!("{e}"))
                 }
