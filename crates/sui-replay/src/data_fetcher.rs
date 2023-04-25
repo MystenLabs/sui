@@ -16,6 +16,7 @@ use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectID, SequenceNumber, VersionNumber};
 use sui_types::digests::TransactionDigest;
 use sui_types::object::Object;
+use tracing::error;
 
 /// This trait defines the interfaces for fetching data from some local or remote store
 #[async_trait]
@@ -38,6 +39,11 @@ pub(crate) trait DataFetcher {
         &self,
         tx_digest: &TransactionDigest,
     ) -> Result<SuiTransactionBlockResponse, LocalExecError>;
+
+    async fn get_loaded_child_objects(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> Result<Vec<(ObjectID, SequenceNumber)>, LocalExecError>;
 }
 
 pub struct RemoteFetcher {
@@ -120,6 +126,33 @@ impl DataFetcher for RemoteFetcher {
             .get_transaction_with_options(*tx_digest, tx_fetch_opts)
             .await
             .map_err(LocalExecError::from)
+    }
+
+    async fn get_loaded_child_objects(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> Result<Vec<(ObjectID, SequenceNumber)>, LocalExecError> {
+        let loaded_child_objs = match self
+            .rpc_client
+            .read_api()
+            .get_loaded_child_objects(*tx_digest)
+            .await
+        {
+            Ok(objs) => objs,
+            Err(e) => {
+                error!("Error getting dynamic fields loaded objects: {}. This RPC server might not support this feature yet", e);
+                return Err(LocalExecError::UnableToGetDynamicFieldLoadedObjects {
+                    rpc_err: e.to_string(),
+                });
+            }
+        };
+
+        // Fetch the refs
+        Ok(loaded_child_objs
+            .loaded_child_objects
+            .iter()
+            .map(|obj| (obj.object_id(), obj.sequence_number()))
+            .collect::<Vec<_>>())
     }
 }
 

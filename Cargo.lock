@@ -9739,6 +9739,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
+ "typed-store",
  "workspace-hack",
 ]
 

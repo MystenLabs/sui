@@ -180,6 +180,35 @@ impl LocalExec {
         Err(LocalExecError::SuiRpcRequestTimeout)
     }
 
+    pub async fn fetch_loaded_child_refs(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> Result<Vec<(ObjectID, SequenceNumber)>, LocalExecError> {
+        // Get the child objects loaded
+        self.fetcher.get_loaded_child_objects(tx_digest).await
+    }
+
+    /// Gets all the epoch change events
+    pub async fn get_epoch_change_events(
+        &self,
+        reverse: bool,
+    ) -> Result<impl Iterator<Item = SuiEvent>, LocalExecError> {
+        let struct_tag_str = EPOCH_CHANGE_STRUCT_TAG.to_string();
+        let struct_tag = parse_struct_tag(&struct_tag_str)?;
+
+        // TODO: Should probably limit/page this but okay for now?
+        Ok(self
+            .client
+            .event_api()
+            .query_events(EventFilter::MoveEventType(struct_tag), None, None, reverse)
+            .await
+            .map_err(|e| LocalExecError::UnableToQuerySystemEvents {
+                rpc_err: e.to_string(),
+            })?
+            .data
+            .into_iter())
+    }
+
     pub async fn new_from_fn_url(http_url: &str) -> Result<Self, LocalExecError> {
         Ok(Self::new(
             SuiClientBuilder::default()
@@ -502,34 +531,6 @@ impl LocalExec {
         ids
     }
 
-    pub async fn fetch_loaded_child_refs(
-        &mut self,
-        tx_digest: &TransactionDigest,
-    ) -> Result<Vec<(ObjectID, SequenceNumber)>, LocalExecError> {
-        // Get the child objects loaded
-        let loaded_child_objs = match self
-            .client
-            .read_api()
-            .get_loaded_child_objects(*tx_digest)
-            .await
-        {
-            Ok(objs) => objs,
-            Err(e) => {
-                error!("Error getting dynamic fields loaded objects: {}. This RPC server might not support this feature yet", e);
-                return Err(LocalExecError::UnableToGetDynamicFieldLoadedObjects {
-                    rpc_err: e.to_string(),
-                });
-            }
-        };
-
-        // Fetch the refs
-        Ok(loaded_child_objs
-            .loaded_child_objects
-            .iter()
-            .map(|obj| (obj.object_id(), obj.sequence_number()))
-            .collect::<Vec<_>>())
-    }
-
     /// This is the only function which accesses the network during execution
     pub fn get_or_download_object(
         &self,
@@ -832,27 +833,6 @@ impl LocalExec {
             .find(|(_, rg)| epoch_id >= rg.epoch_start)
             .map(|(p, _rg)| Ok(ProtocolConfig::get_for_version((*p).into())))
             .unwrap_or_else(|| Err(LocalExecError::ProtocolVersionNotFound { epoch: epoch_id }))
-    }
-
-    /// Gets all the epoch change events
-    pub async fn get_epoch_change_events(
-        &self,
-        reverse: bool,
-    ) -> Result<impl Iterator<Item = SuiEvent>, LocalExecError> {
-        let struct_tag_str = EPOCH_CHANGE_STRUCT_TAG.to_string();
-        let struct_tag = parse_struct_tag(&struct_tag_str)?;
-
-        // TODO: Should probably limit/page this but okay for now?
-        Ok(self
-            .client
-            .event_api()
-            .query_events(EventFilter::MoveEventType(struct_tag), None, None, reverse)
-            .await
-            .map_err(|e| LocalExecError::UnableToQuerySystemEvents {
-                rpc_err: e.to_string(),
-            })?
-            .data
-            .into_iter())
     }
 
     pub async fn checkpoints_for_epoch(&self, epoch_id: u64) -> Result<(u64, u64), LocalExecError> {

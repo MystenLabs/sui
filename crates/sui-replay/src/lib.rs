@@ -13,6 +13,7 @@ use tracing::{error, info};
 mod data_fetcher;
 mod replay;
 mod types;
+mod db_rider;
 
 #[derive(Parser, Clone)]
 #[clap(rename_all = "kebab-case")]
