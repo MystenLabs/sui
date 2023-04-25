@@ -10,6 +10,7 @@ import NetworkEnv from './NetworkEnv';
 import Permissions from './Permissions';
 import { Connections } from './connections';
 import Keyring from './keyring';
+import * as Qredo from './qredo';
 import { isSessionStorageSupported } from './storage-utils';
 import { openInNewTab } from '_shared/utils';
 import { MSG_CONNECT } from '_src/content-script/keep-bg-alive';
@@ -123,4 +124,8 @@ NetworkEnv.on('changed', async (network) => {
         event: 'walletStatusChange',
         change: { network },
     });
+});
+
+Browser.windows.onRemoved.addListener(async (id) => {
+    await Qredo.handleOnWindowClosed(id, connections);
 });
