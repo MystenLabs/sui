@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use embedded_reconfig_observer::EmbeddedReconfigObserver;
 use fullnode_reconfig_observer::FullNodeReconfigObserver;
 use futures::{stream::FuturesUnordered, StreamExt};
-use mysten_metrics::GaugeGuard;
+use mysten_metrics::{spawn_monitored_task, GaugeGuard};
 use prometheus::Registry;
 use rand::Rng;
 use roaring::RoaringBitmap;
@@ -30,7 +30,6 @@ use sui_json_rpc_types::{
 };
 use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::messages::CallArg;
 use sui_types::messages::ObjectArg;
 use sui_types::messages::TransactionEvents;
 use sui_types::messages::{Argument, TransactionEffects};
@@ -56,8 +55,10 @@ use sui_types::{
     base_types::{AuthorityName, SuiAddress},
     sui_system_state::SuiSystemStateTrait,
 };
+use sui_types::{committee::CommitteeWithNetworkMetadata, messages::CallArg};
 use sui_types::{error::SuiError, gas::GasCostSummary};
 use tokio::{
+    sync::{broadcast, mpsc},
     task::JoinSet,
     time::{sleep, timeout},
 };
@@ -246,6 +247,7 @@ pub struct LocalValidatorAggregatorProxy {
     qd: Arc<QuorumDriver<NetworkAuthorityClient>>,
     committee: Committee,
     clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,
+    streamer: CertifiedTransactionStreamer,
     requests: Mutex<JoinSet<()>>,
 }
 
@@ -267,12 +269,14 @@ impl LocalValidatorAggregatorProxy {
             DEFAULT_REQUEST_TIMEOUT_SEC,
         )
         .unwrap();
+        let streamer = CertifiedTransactionStreamer::new(committee.clone());
 
         Self::new_impl(
             aggregator,
             registry,
             reconfig_fullnode_rpc_url,
             clients,
+            streamer,
             committee.committee,
         )
         .await
@@ -283,6 +287,7 @@ impl LocalValidatorAggregatorProxy {
         registry: &Registry,
         reconfig_fullnode_rpc_url: Option<&str>,
         clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,
+        streamer: CertifiedTransactionStreamer,
         committee: Committee,
     ) -> Self {
         let quorum_driver_metrics = Arc::new(QuorumDriverMetrics::new(registry));
@@ -325,6 +330,7 @@ impl LocalValidatorAggregatorProxy {
             _qd_handler: qd_handler,
             qd,
             clients,
+            streamer,
             committee,
             requests: Mutex::new(JoinSet::new()),
         }
@@ -612,6 +618,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             _qd_handler: qdh,
             qd,
             clients: self.clients.clone(),
+            streamer: self.streamer.clone(),
             committee: self.committee.clone(),
             requests: Mutex::new(JoinSet::new()),
         })
@@ -907,4 +914,41 @@ pub fn convert_move_call_args(
                 .unwrap(),
         })
         .collect()
+}
+
+#[derive(Debug, Clone)]
+struct CertifiedTransactionStreamer {
+    tx_streamer: broadcast::Sender<(CertifiedTransaction, mpsc::Sender<TransactionEffects>)>,
+}
+
+impl CertifiedTransactionStreamer {
+    fn new(committee: CommitteeWithNetworkMetadata) -> Self {
+        let (tx_streamer, rx_streamer) = broadcast::channel(1_000_000);
+        let clients = make_authority_clients_with_timeout_config(
+            &committee,
+            DEFAULT_CONNECT_TIMEOUT_SEC,
+            DEFAULT_REQUEST_TIMEOUT_SEC,
+        )
+        .unwrap();
+        for (name, client) in clients {
+            let mut rx_streamer = rx_streamer.resubscribe();
+            spawn_monitored_task!(async move {
+                let mut tx_batch = Vec::new();
+                let mut effects_batch = Vec::new();
+                while let Ok((certified_tx, tx_effects)) = rx_streamer.recv().await {
+                    tx_batch.push(certified_tx);
+                    effects_batch.push(tx_effects);
+                    while let Ok((certified_tx, tx_effects)) = rx_streamer.try_recv() {
+                        tx_batch.push(certified_tx);
+                        effects_batch.push(tx_effects);
+                    }
+                    // client
+                    //     .submit_transaction(certified_tx, tx_effects)
+                    //     .await
+                    //     .unwrap();
+                }
+            });
+        }
+        Self { tx_streamer }
+    }
 }

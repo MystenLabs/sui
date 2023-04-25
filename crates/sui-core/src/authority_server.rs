@@ -4,6 +4,7 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
+use futures::{stream::FuturesOrdered, StreamExt};
 use mysten_metrics::spawn_monitored_task;
 use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
@@ -562,6 +563,35 @@ impl Validator for ValidatorService {
                 v.expect("handle_certificate should not return none with wait_for_effects=true"),
             )
         })
+    }
+
+    async fn commit_certificates(
+        &self,
+        request: tonic::Request<CommitCertificatesRequest>,
+    ) -> Result<tonic::Response<CommitCertificatesResponse>, tonic::Status> {
+        let request = request.into_inner();
+        let mut response = CommitCertificatesResponse {
+            results: Vec::with_capacity(request.certificates.len()),
+        };
+        let mut results = FuturesOrdered::new();
+        for certificate in request.certificates {
+            results.push_back(self.handle_certificate(tonic::Request::new(certificate)));
+        }
+        while let Some(result) = results.next().await {
+            match result {
+                Ok(resp) => {
+                    response.results.push(resp.into_inner());
+                }
+                Err(e) => {
+                    if response.results.is_empty() {
+                        return Err(e);
+                    } else {
+                        return Ok(tonic::Response::new(response));
+                    }
+                }
+            }
+        }
+        return Ok(tonic::Response::new(response));
     }
 
     async fn object_info(

@@ -12,7 +12,7 @@ use crate::{authority::AuthorityState, authority_client::AuthorityAPI};
 use async_trait::async_trait;
 use mysten_metrics::spawn_monitored_task;
 use sui_config::genesis::Genesis;
-use sui_types::messages::TransactionEvents;
+use sui_types::messages::{CommitCertificatesResponse, TransactionEvents};
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{
     crypto::AuthorityKeyPair,
@@ -76,6 +76,13 @@ impl AuthorityAPI for LocalAuthorityClient {
         spawn_monitored_task!(Self::handle_certificate(state, certificate, fault_config))
             .await
             .unwrap()
+    }
+
+    async fn commit_certificates(
+        &self,
+        _certificates: Vec<CertifiedTransaction>,
+    ) -> Result<CommitCertificatesResponse, SuiError> {
+        unimplemented!()
     }
 
     async fn handle_object_info_request(
@@ -212,6 +219,13 @@ impl AuthorityAPI for MockAuthorityApi {
         unimplemented!()
     }
 
+    async fn commit_certificates(
+        &self,
+        _certificates: Vec<CertifiedTransaction>,
+    ) -> Result<CommitCertificatesResponse, SuiError> {
+        unimplemented!()
+    }
+
     /// Handle Object information requests for this account.
     async fn handle_object_info_request(
         &self,
@@ -274,6 +288,13 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
         &self,
         _certificate: CertifiedTransaction,
     ) -> Result<HandleCertificateResponse, SuiError> {
+        unimplemented!()
+    }
+
+    async fn commit_certificates(
+        &self,
+        _certificates: Vec<CertifiedTransaction>,
+    ) -> Result<CommitCertificatesResponse, SuiError> {
         unimplemented!()
     }
 
