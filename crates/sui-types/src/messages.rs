@@ -2170,6 +2170,16 @@ pub struct HandleCertificateResponse {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CommitCertificatesRequest {
+    pub certificates: Vec<CertifiedTransaction>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CommitCertificatesResponse {
+    pub results: Vec<HandleCertificateResponse>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SubmitCertificateResponse {
     /// If transaction is already executed, return same result as handle_certificate
     pub executed: Option<HandleCertificateResponse>,

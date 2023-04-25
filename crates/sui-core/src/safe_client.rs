@@ -382,6 +382,13 @@ where
         Ok(verified)
     }
 
+    pub async fn commit_certificates(
+        &self,
+        _request: CommitCertificatesRequest,
+    ) -> Result<CommitCertificatesResponse, SuiError> {
+        unimplemented!()
+    }
+
     pub async fn handle_object_info_request(
         &self,
         request: ObjectInfoRequest,
