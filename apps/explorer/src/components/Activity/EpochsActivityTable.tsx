@@ -10,7 +10,7 @@ import { genTableDataFromEpochsData } from './utils';
 
 import { useGetEpochs } from '~/hooks/useGetEpochs';
 import { Link } from '~/ui/Link';
-import { Pagination } from '~/ui/Pagination';
+import { Pagination, useCursorPagination } from '~/ui/Pagination';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
 import { Text } from '~/ui/Text';
@@ -28,17 +28,8 @@ export function EpochsActivityTable({
     disablePagination,
     initialLimit = DEFAULT_EPOCHS_LIMIT,
 }: Props) {
-    const [currentPage, setCurrentPage] = useState(0);
     const [limit, setLimit] = useState(initialLimit);
     const rpc = useRpcClient();
-    const {
-        data,
-        isLoading,
-        isFetching,
-        isFetchingNextPage,
-        fetchNextPage,
-        hasNextPage,
-    } = useGetEpochs(limit);
 
     const { data: count } = useQuery(
         ['epochs', 'current'],
@@ -48,14 +39,20 @@ export function EpochsActivityTable({
         }
     );
 
-    const cardData =
-        data && Boolean(data.pages[currentPage])
-            ? genTableDataFromEpochsData(data.pages[currentPage])
-            : undefined;
+    const epochs = useGetEpochs(limit);
+    const { data, isFetching, pagination, isLoading, isError } =
+        useCursorPagination(epochs);
+
+    const cardData = data ? genTableDataFromEpochsData(data) : undefined;
 
     return (
         <div className="flex flex-col space-y-5 text-left xl:pr-10">
-            {isLoading || isFetching || isFetchingNextPage || !cardData ? (
+            {isError && (
+                <div className="pt-2 font-sans font-semibold text-issue-dark">
+                    Failed to load Epochs
+                </div>
+            )}
+            {isLoading || isFetching || !cardData ? (
                 <PlaceholderTable
                     rowCount={limit}
                     rowHeight="16px"
@@ -86,32 +83,8 @@ export function EpochsActivityTable({
             )}
 
             <div className="flex justify-between">
-                {(hasNextPage || data?.pages.length) && !disablePagination ? (
-                    <Pagination
-                        onNext={() => {
-                            if (isLoading || isFetching) {
-                                return;
-                            }
-
-                            // Make sure we are at the end before fetching another page
-                            if (
-                                data &&
-                                currentPage === data?.pages.length - 1 &&
-                                !isLoading &&
-                                !isFetching
-                            ) {
-                                fetchNextPage();
-                            }
-                            setCurrentPage(currentPage + 1);
-                        }}
-                        hasNext={
-                            Boolean(hasNextPage) &&
-                            Boolean(data?.pages[currentPage])
-                        }
-                        hasPrev={currentPage !== 0}
-                        onPrev={() => setCurrentPage(currentPage - 1)}
-                        onFirst={() => setCurrentPage(0)}
-                    />
+                {!disablePagination ? (
+                    <Pagination {...pagination} />
                 ) : (
                     <Link to="/recent?tab=epochs" after={<ArrowRight12 />}>
                         More Epochs
@@ -129,7 +102,7 @@ export function EpochsActivityTable({
                             value={limit}
                             onChange={(e) => {
                                 setLimit(Number(e.target.value));
-                                setCurrentPage(0);
+                                pagination.onFirst();
                             }}
                         >
                             <option value={20}>20 Per Page</option>
