@@ -5,19 +5,19 @@ import { type BasePayload, isBasePayload } from './BasePayload';
 import { type Payload } from './Payload';
 import { type QredoConnectInput } from '_src/dapp-interface/WalletStandardInterface';
 
-type methods = {
+type Methods = {
     connect: QredoConnectInput;
     connectResponse: { allowed: boolean };
 };
 
-export interface QredoConnectPayload<M extends keyof methods>
+export interface QredoConnectPayload<M extends keyof Methods>
     extends BasePayload {
     type: 'qredo-connect';
     method: M;
-    args: methods[M];
+    args: Methods[M];
 }
 
-export function isQredoConnectPayload<M extends keyof methods>(
+export function isQredoConnectPayload<M extends keyof Methods>(
     payload: Payload,
     method: M
 ): payload is QredoConnectPayload<M> {
