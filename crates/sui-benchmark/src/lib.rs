@@ -10,7 +10,7 @@ use prometheus::Registry;
 use rand::Rng;
 use roaring::RoaringBitmap;
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, VecDeque},
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -30,9 +30,8 @@ use sui_json_rpc_types::{
 };
 use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::messages::ObjectArg;
+use sui_types::messages::Argument;
 use sui_types::messages::TransactionEvents;
-use sui_types::messages::{Argument, TransactionEffects};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_types::{
@@ -56,11 +55,11 @@ use sui_types::{
     sui_system_state::SuiSystemStateTrait,
 };
 use sui_types::{committee::CommitteeWithNetworkMetadata, messages::CallArg};
+use sui_types::{crypto::AuthorityPublicKeyBytes, messages::ObjectArg};
 use sui_types::{error::SuiError, gas::GasCostSummary};
 use tokio::{
     sync::{broadcast, mpsc},
-    task::JoinSet,
-    time::{sleep, timeout},
+    time::sleep,
 };
 use tracing::{error, info, warn};
 
@@ -248,7 +247,6 @@ pub struct LocalValidatorAggregatorProxy {
     committee: Committee,
     clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,
     streamer: CertifiedTransactionStreamer,
-    requests: Mutex<JoinSet<()>>,
 }
 
 impl LocalValidatorAggregatorProxy {
@@ -332,7 +330,6 @@ impl LocalValidatorAggregatorProxy {
             clients,
             streamer,
             committee,
-            requests: Mutex::new(JoinSet::new()),
         }
     }
 }
@@ -513,54 +510,25 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         // Send the certificate to all validators.
         let _cert_guard = GaugeGuard::acquire(&auth_agg.metrics.inflight_certificates);
         loop {
-            let mut futures = FuturesUnordered::new();
+            let (tx_effects, mut rx_effects) = mpsc::channel(100);
             total_stake = 0;
             let mut transaction_effects = None;
             let mut transaction_events = None;
-            for (name, client) in self.clients.iter() {
-                let client = client.clone();
-                let certificate = certified_transaction.clone();
-                let name = *name;
-                futures.push(async move {
-                    client
-                        .handle_certificate(certificate)
-                        .map(move |r| (r, name))
-                        .await
-                });
-            }
-            auth_agg
-                .metrics
-                .inflight_certificate_requests
-                .add(futures.len() as i64);
-
+            let _ = self
+                .streamer
+                .tx_streamer
+                .send((certified_transaction.clone(), tx_effects));
             // Wait for the replies from a quorum of validators.
-            while let Some((response, name)) = futures.next().await {
-                auth_agg.metrics.inflight_certificate_requests.dec();
-                match response {
-                    // If all goes well, the validators reply with signed effects.
-                    Ok(HandleCertificateResponse {
-                        signed_effects,
-                        events,
-                    }) => {
-                        let author = signed_effects.auth_sig().authority;
-                        if signed_effects.data() != &TransactionEffects::default() {
-                            transaction_effects = Some(signed_effects.data().clone());
-                        }
-                        transaction_events = Some(events);
-                        total_stake += self.committee.weight(&author);
-                    }
-
-                    // This typically happens when the validators are overloaded and the certificate is
-                    // immediately rejected.
-                    Err(e) => {
-                        auth_agg
-                            .metrics
-                            .process_cert_errors
-                            .with_label_values(&[&name.concise().to_string(), e.as_ref()])
-                            .inc();
-                        tracing::warn!("Failed to submit certificate: {e}")
-                    }
-                }
+            while let Some((response, _name)) = rx_effects.recv().await {
+                let HandleCertificateResponse {
+                    signed_effects,
+                    events,
+                } = response;
+                // If all goes well, the validators reply with signed effects.
+                let author = signed_effects.auth_sig().authority;
+                transaction_effects = Some(signed_effects.data().clone());
+                transaction_events = Some(events);
+                total_stake += self.committee.weight(&author);
 
                 if transaction_effects.is_some() && total_stake >= self.committee.quorum_threshold()
                 {
@@ -573,24 +541,6 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             if transaction_effects.is_none() || total_stake < self.committee.quorum_threshold() {
                 warn!("Failed to submit certificate to quorum of validators");
                 continue;
-            }
-
-            // Wait for 10 more seconds on remaining requests asynchronously.
-            {
-                let auth_agg = auth_agg.clone();
-                let mut requests = self.requests.lock().unwrap();
-                requests.spawn(async move {
-                    let _ = timeout(Duration::from_secs(600), async {
-                        while futures.next().await.is_some() {
-                            auth_agg.metrics.inflight_certificate_requests.dec();
-                        }
-                    })
-                    .await;
-                    auth_agg
-                        .metrics
-                        .inflight_certificate_requests
-                        .sub(futures.len() as i64);
-                });
             }
 
             // Package the certificate and effects to return.
@@ -620,7 +570,6 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             clients: self.clients.clone(),
             streamer: self.streamer.clone(),
             committee: self.committee.clone(),
-            requests: Mutex::new(JoinSet::new()),
         })
     }
 
@@ -918,7 +867,10 @@ pub fn convert_move_call_args(
 
 #[derive(Debug, Clone)]
 struct CertifiedTransactionStreamer {
-    tx_streamer: broadcast::Sender<(CertifiedTransaction, mpsc::Sender<TransactionEffects>)>,
+    tx_streamer: broadcast::Sender<(
+        CertifiedTransaction,
+        mpsc::Sender<(HandleCertificateResponse, AuthorityPublicKeyBytes)>,
+    )>,
 }
 
 impl CertifiedTransactionStreamer {
@@ -933,19 +885,58 @@ impl CertifiedTransactionStreamer {
         for (name, client) in clients {
             let mut rx_streamer = rx_streamer.resubscribe();
             spawn_monitored_task!(async move {
-                let mut tx_batch = Vec::new();
-                let mut effects_batch = Vec::new();
-                while let Ok((certified_tx, tx_effects)) = rx_streamer.recv().await {
-                    tx_batch.push(certified_tx);
-                    effects_batch.push(tx_effects);
-                    while let Ok((certified_tx, tx_effects)) = rx_streamer.try_recv() {
-                        tx_batch.push(certified_tx);
-                        effects_batch.push(tx_effects);
+                let mut tx_batch: VecDeque<CertifiedTransaction> = VecDeque::new();
+                let mut effects_batch: VecDeque<
+                    mpsc::Sender<(HandleCertificateResponse, AuthorityPublicKeyBytes)>,
+                > = VecDeque::new();
+                loop {
+                    match rx_streamer.recv().await {
+                        Ok((certified_tx, tx_effects)) => {
+                            tx_batch.push_back(certified_tx);
+                            effects_batch.push_back(tx_effects);
+                        }
+                        Err(_) => {
+                            return;
+                        }
                     }
-                    // client
-                    //     .submit_transaction(certified_tx, tx_effects)
-                    //     .await
-                    //     .unwrap();
+                    let mut i = 0;
+                    while i < 10_000 {
+                        match rx_streamer.try_recv() {
+                            Ok((certified_tx, tx_effects)) => {
+                                tx_batch.push_back(certified_tx);
+                                effects_batch.push_back(tx_effects);
+                            }
+                            Err(_) => {
+                                break;
+                            }
+                        }
+                        i += 1;
+                    }
+                    for _ in 0..3 {
+                        match client
+                            .commit_certificates(tx_batch.clone().into_iter().collect())
+                            .await
+                        {
+                            Ok(resp) => {
+                                for effects in resp.results {
+                                    let _ = tx_batch.pop_front().unwrap();
+                                    let effects_sender = effects_batch.pop_front().unwrap();
+                                    let _ = effects_sender.send((effects, name)).await;
+                                }
+                                break;
+                            }
+                            Err(e) => {
+                                // This typically happens when the validators are overloaded and the certificate is
+                                // immediately rejected.
+                                // metrics
+                                //     .process_cert_errors
+                                //     .with_label_values(&[&name.concise().to_string(), e.as_ref()])
+                                //     .inc();
+                                tracing::warn!("Failed to submit certificate: {e}");
+                                sleep(Duration::from_secs(1)).await;
+                            }
+                        }
+                    }
                 }
             });
         }
