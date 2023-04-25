@@ -36,8 +36,8 @@ pub struct SamplingInterval {
 
 impl Default for SamplingInterval {
     fn default() -> Self {
-        // Enabled with 10 second interval
-        SamplingInterval::new(Duration::ZERO, 100)
+        // Enabled with 60 second interval
+        SamplingInterval::new(Duration::from_secs(60), 0)
     }
 }
 
@@ -60,6 +60,9 @@ impl SamplingInterval {
             after_num_ops,
             counter,
         }
+    }
+    pub fn new_from_self(&self) -> SamplingInterval {
+        SamplingInterval::new(self.once_every_duration, self.after_num_ops)
     }
     pub fn sample(&self) -> bool {
         if self.once_every_duration.is_zero() {
