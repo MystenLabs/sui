@@ -240,6 +240,7 @@ impl ColumnFamilyMetrics {
 pub struct OperationMetrics {
     pub rocksdb_iter_latency_seconds: HistogramVec,
     pub rocksdb_iter_bytes: HistogramVec,
+    pub rocksdb_iter_keys: HistogramVec,
     pub rocksdb_get_latency_seconds: HistogramVec,
     pub rocksdb_get_bytes: HistogramVec,
     pub rocksdb_multiget_latency_seconds: HistogramVec,
@@ -265,6 +266,13 @@ impl OperationMetrics {
             .unwrap(),
             rocksdb_iter_bytes: register_histogram_vec_with_registry!(
                 "rocksdb_iter_bytes",
+                "Rocksdb iter size in bytes",
+                &["cf_name"],
+                registry,
+            )
+            .unwrap(),
+            rocksdb_iter_keys: register_histogram_vec_with_registry!(
+                "rocksdb_iter_keys",
                 "Rocksdb iter size in bytes",
                 &["cf_name"],
                 registry,
