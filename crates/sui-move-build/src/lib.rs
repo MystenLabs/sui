@@ -40,6 +40,7 @@ use move_package::{
 };
 use move_symbol_pool::Symbol;
 use serde_reflection::Registry;
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_types::{
     base_types::ObjectID,
     error::{SuiError, SuiResult},
@@ -199,7 +200,12 @@ pub fn build_from_resolution_graph(
                     error: err.to_string(),
                 }
             })?;
-            sui_bytecode_verifier::verify_module(m, &fn_info)?;
+            // TODO make this configurable
+            sui_bytecode_verifier::verify_module(
+                &ProtocolConfig::get_for_version(ProtocolVersion::MAX),
+                m,
+                &fn_info,
+            )?;
         }
         // TODO(https://github.com/MystenLabs/sui/issues/69): Run Move linker
     }

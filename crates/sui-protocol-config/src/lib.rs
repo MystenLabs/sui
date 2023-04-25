@@ -157,6 +157,9 @@ struct FeatureFlags {
     // protocol version.
     #[serde(skip_serializing_if = "is_false")]
     advance_to_highest_supported_protocol_version: bool,
+    // If true, disallow entry modifiers on entry functions
+    #[serde(skip_serializing_if = "is_false")]
+    ban_entry_init: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -660,6 +663,10 @@ impl ProtocolConfig {
         self.feature_flags
             .advance_to_highest_supported_protocol_version
     }
+
+    pub fn ban_entry_init(&self) -> bool {
+        self.feature_flags.ban_entry_init
+    }
 }
 
 // Special getters
@@ -1065,6 +1072,7 @@ impl ProtocolConfig {
                     .disable_invariant_violation_check_in_swap_loc = true;
                 cfg.feature_flags
                     .advance_to_highest_supported_protocol_version = true;
+                cfg.feature_flags.ban_entry_init = true;
                 cfg
             }
             // Use this template when making changes:
