@@ -348,7 +348,7 @@ async fn execute_tx(
     info!("Executing {:?}", tx.digest());
     let tx_digest = *tx.digest();
     let resp = sui_client
-        .quorum_driver()
+        .quorum_driver_api()
         .execute_transaction_block(
             tx,
             SuiTransactionBlockResponseOptions::full_content(),

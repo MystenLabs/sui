@@ -728,7 +728,7 @@ impl ValidatorProxy for FullNodeProxy {
             // SuiClient times out after 60s
             match self
                 .sui_client
-                .quorum_driver()
+                .quorum_driver_api()
                 .execute_transaction_block(
                     tx.clone(),
                     SuiTransactionBlockResponseOptions::new().with_effects(),

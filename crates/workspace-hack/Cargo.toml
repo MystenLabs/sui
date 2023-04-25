@@ -26,9 +26,9 @@ aho-corasick = { version = "0.7" }
 aliasable = { version = "0.1" }
 alloc-no-stdlib = { version = "2", default-features = false }
 alloc-stdlib = { version = "0.2", default-features = false }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "691e43c3f4df5e33b898a91cb1a808f68f76f52e", default-features = false }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "691e43c3f4df5e33b898a91cb1a808f68f76f52e", default-features = false }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "691e43c3f4df5e33b898a91cb1a808f68f76f52e", default-features = false }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "05322deb1795a5d482630740bc938fa7f067c58f", default-features = false }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "05322deb1795a5d482630740bc938fa7f067c58f", default-features = false }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "05322deb1795a5d482630740bc938fa7f067c58f", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace"] }
@@ -681,10 +681,10 @@ aho-corasick = { version = "0.7" }
 aliasable = { version = "0.1" }
 alloc-no-stdlib = { version = "2", default-features = false }
 alloc-stdlib = { version = "0.2", default-features = false }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "691e43c3f4df5e33b898a91cb1a808f68f76f52e", default-features = false }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "691e43c3f4df5e33b898a91cb1a808f68f76f52e", default-features = false }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "691e43c3f4df5e33b898a91cb1a808f68f76f52e", default-features = false }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "691e43c3f4df5e33b898a91cb1a808f68f76f52e", default-features = false }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "05322deb1795a5d482630740bc938fa7f067c58f", default-features = false }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "05322deb1795a5d482630740bc938fa7f067c58f", default-features = false }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "05322deb1795a5d482630740bc938fa7f067c58f", default-features = false }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "05322deb1795a5d482630740bc938fa7f067c58f", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace"] }

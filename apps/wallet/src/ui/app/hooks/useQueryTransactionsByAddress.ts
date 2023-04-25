@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFeatureValue } from '@growthbook/growthbook-react';
 import { useRpcClient } from '@mysten/core';
 import {
     type SuiTransactionBlockResponse,
@@ -8,8 +9,14 @@ import {
 } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 
+import { FEATURES } from '_src/shared/experimentation/features';
+
 export function useQueryTransactionsByAddress(address: SuiAddress | null) {
     const rpc = useRpcClient();
+    const refetchInterval = useFeatureValue(
+        FEATURES.WALLET_ACTIVITY_REFETCH_INTERVAL,
+        20_000
+    );
 
     return useQuery(
         ['transactions-by-address', address],
@@ -54,6 +61,6 @@ export function useQueryTransactionsByAddress(address: SuiAddress | null) {
 
             return uniqueList;
         },
-        { enabled: !!address, staleTime: 10 * 1000 }
+        { enabled: !!address, staleTime: 10 * 1000, refetchInterval }
     );
 }

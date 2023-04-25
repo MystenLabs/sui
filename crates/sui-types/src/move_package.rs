@@ -12,7 +12,7 @@ use crate::{
 };
 use derive_more::Display;
 use fastcrypto::hash::HashFunction;
-use move_binary_format::file_format::{Ability, CompiledModule};
+use move_binary_format::file_format::CompiledModule;
 use move_binary_format::normalized;
 use move_binary_format::{
     access::ModuleAccess,
@@ -136,8 +136,8 @@ impl UpgradePolicy {
     }
 
     fn compatibility_check_for_protocol(protocol_config: &ProtocolConfig) -> Compatibility {
-        let disallowed_new_abilities = if protocol_config.disallow_adding_key_ability() {
-            AbilitySet::singleton(Ability::Key)
+        let disallowed_new_abilities = if protocol_config.disallow_adding_abilities_on_upgrade() {
+            AbilitySet::ALL
         } else {
             AbilitySet::EMPTY
         };
@@ -231,12 +231,13 @@ impl MovePackage {
         Ok(pkg)
     }
 
-    pub fn digest(&self) -> [u8; 32] {
+    pub fn digest(&self, hash_modules: bool) -> [u8; 32] {
         Self::compute_digest_for_modules_and_deps(
             self.module_map.values(),
             self.linkage_table
                 .values()
                 .map(|UpgradeInfo { upgraded_id, .. }| upgraded_id),
+            hash_modules,
         )
     }
 
@@ -245,18 +246,31 @@ impl MovePackage {
     pub fn compute_digest_for_modules_and_deps<'a>(
         modules: impl IntoIterator<Item = &'a Vec<u8>>,
         object_ids: impl IntoIterator<Item = &'a ObjectID>,
+        hash_modules: bool,
     ) -> [u8; 32] {
-        let mut bytes: Vec<&[u8]> = modules
-            .into_iter()
-            .map(|x| x.as_ref())
-            .chain(object_ids.into_iter().map(|obj_id| obj_id.as_ref()))
-            .collect();
+        let mut module_digests: Vec<[u8; 32]>;
+        let mut components: Vec<&[u8]> = vec![];
+        if !hash_modules {
+            for module in modules {
+                components.push(module.as_ref())
+            }
+        } else {
+            module_digests = vec![];
+            for module in modules {
+                let mut digest = DefaultHash::default();
+                digest.update(module);
+                module_digests.push(digest.finalize().digest);
+            }
+            components.extend(module_digests.iter().map(|d| d.as_ref()))
+        }
+
+        components.extend(object_ids.into_iter().map(|o| o.as_ref()));
         // NB: sorting so the order of the modules and the order of the dependencies does not matter.
-        bytes.sort();
+        components.sort();
 
         let mut digest = DefaultHash::default();
-        for b in bytes {
-            digest.update(b);
+        for c in components {
+            digest.update(c);
         }
         digest.finalize().digest
     }

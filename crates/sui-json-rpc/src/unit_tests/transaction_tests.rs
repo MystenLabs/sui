@@ -191,7 +191,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
             let tx = to_sender_signed_transaction(data, keystore.get_key(address).unwrap());
 
             let response = client
-                .quorum_driver()
+                .quorum_driver_api()
                 .execute_transaction_block(
                     tx,
                     SuiTransactionBlockResponseOptions::new(),

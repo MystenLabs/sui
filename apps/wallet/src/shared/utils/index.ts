@@ -28,7 +28,7 @@ export function usePageView() {
 
     useEffect(() => {
         if (growthBook) {
-            setAttributes(growthBook, { apiEnv, customRPC });
+            setAttributes({ apiEnv, customRPC });
         }
 
         trackPageview({

@@ -16,27 +16,6 @@
     @apply mb-2 mt-1 border-b-[1px] border-[#f0f1f2] text-lg font-[500] text-gray-100 md:border-0;
 }
 
-.moretxbtn {
-    @apply cursor-pointer bg-transparent pl-0 pr-0 text-left text-sm font-normal text-[#636870] transition-colors duration-200 ease-in-out hover:text-gray-80;
-}
-
-.moretxbtn::after {
-    margin: 5px;
-    content: '';
-    background-image: url('../../assets/SVGIcons/chevron-down.svg');
-    @apply text-sm;
-
-    width: 12px;
-    height: 12px;
-    position: absolute;
-    margin-top: 4px;
-    transform: rotate(0deg);
-}
-
-.viewless::after {
-    transform: rotate(180deg);
-}
-
 .objectidlists {
     @apply text-sm;
 }

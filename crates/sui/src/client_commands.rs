@@ -191,6 +191,10 @@ pub enum SuiClientCommands {
         #[clap(long)]
         with_unpublished_dependencies: bool,
 
+        /// Use the legacy digest calculation algorithm
+        #[clap(long)]
+        legacy_digest: bool,
+
         /// Do not sign/submit transaction, output base64-encoded serialized output
         #[clap(long)]
         serialize_output: bool,
@@ -506,6 +510,7 @@ impl SuiClientCommands {
                 gas_budget,
                 skip_dependency_verification,
                 with_unpublished_dependencies,
+                legacy_digest,
                 serialize_output,
             } => {
                 let sender = context.try_get_object_owner(&gas).await?;
@@ -558,8 +563,8 @@ impl SuiClientCommands {
                 // policy at the moment. To change the policy you can call a Move function in the
                 // `package` module to change this policy.
                 let upgrade_policy = upgrade_cap.policy;
-                let package_digest =
-                    compiled_package.get_package_digest(with_unpublished_dependencies);
+                let package_digest = compiled_package
+                    .get_package_digest(with_unpublished_dependencies, !legacy_digest);
 
                 let data = client
                     .transaction_builder()
@@ -1458,7 +1463,7 @@ impl WalletContext {
     ) -> anyhow::Result<SuiTransactionBlockResponse> {
         let client = self.get_client().await?;
         Ok(client
-            .quorum_driver()
+            .quorum_driver_api()
             .execute_transaction_block(
                 tx,
                 SuiTransactionBlockResponseOptions::new()

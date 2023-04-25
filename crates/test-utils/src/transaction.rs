@@ -166,7 +166,7 @@ pub async fn publish_package_with_wallet(
     };
 
     let resp = client
-        .quorum_driver()
+        .quorum_driver_api()
         .execute_transaction_block(
             transaction,
             SuiTransactionBlockResponseOptions::new().with_object_changes(),
@@ -258,7 +258,7 @@ pub async fn upgrade_package_with_wallet(
     };
 
     let resp = client
-        .quorum_driver()
+        .quorum_driver_api()
         .execute_transaction_block(
             transaction,
             SuiTransactionBlockResponseOptions::new().with_object_changes(),
@@ -320,7 +320,7 @@ pub async fn submit_move_transaction(
     debug!(?tx_digest, "submitting move transaction");
 
     let resp = client
-        .quorum_driver()
+        .quorum_driver_api()
         .execute_transaction_block(
             tx,
             SuiTransactionBlockResponseOptions::full_content(),
@@ -614,7 +614,7 @@ pub async fn delete_devnet_nft(
         .unwrap();
     let client = context.get_client().await.unwrap();
     let resp = client
-        .quorum_driver()
+        .quorum_driver_api()
         .execute_transaction_block(
             tx,
             SuiTransactionBlockResponseOptions::full_content(),

@@ -147,6 +147,21 @@ module sui::kiosk {
         price: u64
     }
 
+    /// Emitted when an item was purchased from the `Kiosk`. Can be used
+    /// to track finalized sales across the network. The event is emitted
+    /// in both cases: when an item is purchased via the `PurchaseCap` or
+    /// when it's purchased directly (via `list` + `purchase`).
+    ///
+    /// The `price` is also emitted and might differ from the `price` set
+    /// in the `ItemListed` event. This is because the `PurchaseCap` only
+    /// sets a minimum price for the item, and the actual price is defined
+    /// by the trading module / extension.
+    struct ItemPurchased<phantom T: key + store> has copy, drop {
+        kiosk: ID,
+        id: ID,
+        price: u64
+    }
+
     // === Kiosk packing and unpacking ===
 
     /// Creates a new `Kiosk` with a matching `KioskOwnerCap`.
@@ -255,6 +270,7 @@ module sui::kiosk {
         self: &mut Kiosk, cap: &KioskOwnerCap, id: ID, price: u64
     ) {
         assert!(object::id(self) == cap.for, ENotOwner);
+        assert!(has_item(self, id), EItemNotFound);
         assert!(!is_listed_exclusively(self, id), EListedExclusively);
 
         df::add(&mut self.id, Listing { id, is_exclusive: false }, price);
@@ -288,6 +304,8 @@ module sui::kiosk {
         balance::join(&mut self.profits, coin::into_balance(payment));
         df::remove_if_exists<Lock, bool>(&mut self.id, Lock { id });
 
+        event::emit(ItemPurchased<T> { kiosk: object::id(self), id, price });
+
         (inner, transfer_policy::new_request(id, price, object::id(self)))
     }
 
@@ -299,6 +317,7 @@ module sui::kiosk {
         self: &mut Kiosk, cap: &KioskOwnerCap, id: ID, min_price: u64, ctx: &mut TxContext
     ): PurchaseCap<T> {
         assert!(object::id(self) == cap.for, ENotOwner);
+        assert!(has_item(self, id), EItemNotFound);
         assert!(!is_listed(self, id), EAlreadyListed);
 
         let uid = object::new(ctx);
@@ -395,10 +414,20 @@ module sui::kiosk {
         &mut self.id
     }
 
-    /// Allow or disallow `uid_mut` access via the `allow_extensions` setting.
+    /// Allow or disallow `uid` and `uid_mut` access via the `allow_extensions` setting.
     public fun set_allow_extensions(self: &mut Kiosk, cap: &KioskOwnerCap, allow_extensions: bool) {
         assert!(object::id(self) == cap.for, ENotOwner);
         self.allow_extensions = allow_extensions;
+    }
+
+    /// Get the immutable `UID` for dynamic field access.
+    /// Aborts if `allow_extensions` set to `false`.
+    ///
+    /// Given the &UID can be used for reading keys and authorization,
+    /// its access
+    public fun uid(self: &Kiosk): &UID {
+        assert!(self.allow_extensions, EExtensionsDisabled);
+        &self.id
     }
 
     /// Get the mutable `UID` for dynamic field access and extensions.

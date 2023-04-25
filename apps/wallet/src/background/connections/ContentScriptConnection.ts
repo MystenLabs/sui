@@ -10,6 +10,7 @@ import Browser from 'webextension-polyfill';
 
 import NetworkEnv from '../NetworkEnv';
 import { Window } from '../Window';
+import { requestUserApproval } from '../qredo';
 import { Connection } from './Connection';
 import { createMessage } from '_messages';
 import { type ErrorPayload, isBasePayload } from '_payloads';
@@ -27,6 +28,7 @@ import {
 } from '_payloads/transactions';
 import Permissions from '_src/background/Permissions';
 import Transactions from '_src/background/Transactions';
+import { isQredoConnectPayload } from '_src/shared/messaging/messages/payloads/QredoConnect';
 import {
     isSignMessageRequest,
     type SignMessageRequest,
@@ -168,6 +170,8 @@ export class ContentScriptConnection extends Connection {
                         msg.id
                     )
                 );
+            } else if (isQredoConnectPayload(payload, 'connect')) {
+                await requestUserApproval(payload.args, this, msg);
             } else {
                 throw new Error(
                     `Unknown message, ${JSON.stringify(msg.payload)}`

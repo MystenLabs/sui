@@ -110,14 +110,10 @@ pub async fn send_and_confirm_transaction_with_execution_error(
 pub async fn init_state_validator_with_fullnode() -> (Arc<AuthorityState>, Arc<AuthorityState>) {
     use sui_types::crypto::get_authority_key_pair;
 
-    let network_config = sui_config::builder::ConfigBuilder::new_with_temp_dir().build();
-    let validator = TestAuthorityBuilder::new()
-        .with_network_config(&network_config)
-        .build()
-        .await;
+    let validator = TestAuthorityBuilder::new().build().await;
     let fullnode_key_pair = get_authority_key_pair().1;
     let fullnode = TestAuthorityBuilder::new()
-        .with_genesis_and_keypair(&network_config.genesis, &fullnode_key_pair)
+        .with_keypair(&fullnode_key_pair)
         .build()
         .await;
     (validator, fullnode)
@@ -412,8 +408,12 @@ pub async fn upgrade_package_on_single_authority(
 ) -> SuiResult<ObjectID> {
     let package = build_test_modules_with_dep_addr(path, dep_original_addresses, dep_id_mapping);
 
-    let modules = package.get_package_bytes(false);
-    let digest = package.get_package_digest(false).to_vec();
+    let with_unpublished_deps = false;
+    let hash_modules = true;
+    let modules = package.get_package_bytes(with_unpublished_deps);
+    let digest = package
+        .get_package_digest(with_unpublished_deps, hash_modules)
+        .to_vec();
 
     let rgp = state.epoch_store_for_testing().reference_gas_price();
     let data = TransactionData::new_upgrade(

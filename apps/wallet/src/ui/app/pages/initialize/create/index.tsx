@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ArrowRight16 } from '@mysten/icons';
+import { ArrowRight16, Check12 } from '@mysten/icons';
 import { Formik, Form, Field } from 'formik';
 import { useNavigate } from 'react-router-dom';
 
@@ -10,7 +10,6 @@ import { Button } from '_app/shared/ButtonUI';
 import { CardLayout } from '_app/shared/card-layout';
 import { Text } from '_app/shared/text';
 import ExternalLink from '_components/external-link';
-import Icon, { SuiIcons } from '_components/icon';
 import { useAppDispatch } from '_hooks';
 import PasswordFields from '_pages/initialize/shared/password-fields';
 import { createVault } from '_redux/slices/account';
@@ -60,10 +59,7 @@ const CreatePage = () => {
                                         className="peer/terms invisible"
                                     />
                                     <span className="absolute top-0 left-0.5 h-5 w-5 bg-white peer-checked/terms:bg-success peer-checked/terms:shadow-none  border-gray-50 border rounded shadow-button flex justify-center items-center">
-                                        <Icon
-                                            icon={SuiIcons.Checkmark}
-                                            className="text-white text-[8px] font-semibold"
-                                        />
+                                        <Check12 className="text-white text-body font-semibold" />
                                     </span>
                                     <Text
                                         variant="bodySmall"
@@ -73,7 +69,6 @@ const CreatePage = () => {
                                         I read and agreed to the{' '}
                                         <ExternalLink
                                             href={ToS_LINK}
-                                            showIcon={false}
                                             className="text-[#1F6493] no-underline"
                                         >
                                             Terms of Services

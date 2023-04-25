@@ -8,8 +8,8 @@ import { genTableDataFromTxData } from '../transactions/TxCardUtils';
 
 import {
     DEFAULT_TRANSACTIONS_LIMIT,
-    useGetTransactionBlocksForAddress,
-} from '~/hooks/useGetTransactionBlocksForAddress';
+    useGetTransactionBlocks,
+} from '~/hooks/useGetTransactionBlocks';
 import { Heading } from '~/ui/Heading';
 import { Pagination } from '~/ui/Pagination';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
@@ -89,7 +89,7 @@ function TransactionBlocksForAddress({
         isFetchingNextPage,
         fetchNextPage,
         hasNextPage,
-    } = useGetTransactionBlocksForAddress(address, {
+    } = useGetTransactionBlocks({
         [filterValue]: address,
     } as TransactionFilter);
 
@@ -168,9 +168,11 @@ function TransactionBlocksForAddress({
 
                                 filterValue,
                             });
-                            // setCurrentPage(currentPage + 1);
                         }}
-                        hasNext={Boolean(hasNextPage)}
+                        hasNext={
+                            Boolean(hasNextPage) &&
+                            Boolean(data?.pages[currentPage])
+                        }
                         hasPrev={currentPageState[filterValue] !== 0}
                         onPrev={() =>
                             dispatch({

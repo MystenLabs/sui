@@ -5,6 +5,7 @@
 
 use move_binary_format::file_format::CompiledModule;
 use move_bytecode_verifier::meter::DummyMeter;
+use sui_protocol_config::ProtocolConfig;
 use sui_types::{error::ExecutionError, move_package::FnInfoMap};
 
 use crate::{
@@ -14,6 +15,7 @@ use crate::{
 
 /// Helper for a "canonical" verification of a module.
 pub fn verify_module(
+    config: &ProtocolConfig,
     module: &CompiledModule,
     fn_info_map: &FnInfoMap,
 ) -> Result<(), ExecutionError> {
@@ -21,6 +23,6 @@ pub fn verify_module(
     global_storage_access_verifier::verify_module(module)?;
     id_leak_verifier::verify_module(module, &mut DummyMeter)?;
     private_generics::verify_module(module)?;
-    entry_points_verifier::verify_module(module, fn_info_map)?;
+    entry_points_verifier::verify_module(config, module, fn_info_map)?;
     one_time_witness_verifier::verify_module(module, fn_info_map)
 }

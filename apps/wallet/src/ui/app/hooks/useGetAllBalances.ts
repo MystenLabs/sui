@@ -12,7 +12,7 @@ export function useGetAllBalances(address?: SuiAddress | null) {
     const rpc = useRpcClient();
     const refetchInterval = useFeatureValue(
         FEATURES.WALLET_BALANCE_REFETCH_INTERVAL,
-        8_000
+        20_000
     );
 
     return useQuery(
@@ -22,6 +22,11 @@ export function useGetAllBalances(address?: SuiAddress | null) {
                 ({ coinType: a }, { coinType: b }) =>
                     Coin.getCoinSymbol(a).localeCompare(Coin.getCoinSymbol(b))
             ),
-        { enabled: !!address, refetchInterval }
+        {
+            enabled: !!address,
+            refetchInterval,
+            // NOTE: We lower the stale time here so that balances are more often refetched on page load.
+            staleTime: 5_000,
+        }
     );
 }

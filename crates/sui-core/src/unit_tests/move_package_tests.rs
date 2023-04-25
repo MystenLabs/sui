@@ -4,7 +4,7 @@
 use move_binary_format::file_format::CompiledModule;
 
 use sui_adapter::adapter::{default_verifier_config, run_metered_move_bytecode_verifier_impl};
-use sui_move_build::{BuildConfig, CompiledPackage};
+use sui_move_build::{BuildConfig, CompiledPackage, SuiPackageHooks};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::ObjectID,
@@ -227,8 +227,9 @@ fn test_upgrade_linkage_digest_to_new_dep() {
 
     // Make sure that we compute the package digest off of the update dependencies and not the old
     // dependencies in the linkage table.
+    let hash_modules = true;
     assert_eq!(
-        b_new.digest(),
+        b_new.digest(hash_modules),
         MovePackage::compute_digest_for_modules_and_deps(
             &build_test_modules("B")
                 .iter()
@@ -238,7 +239,8 @@ fn test_upgrade_linkage_digest_to_new_dep() {
                     bytes
                 })
                 .collect::<Vec<_>>(),
-            [&c_id2]
+            [&c_id2],
+            hash_modules,
         )
     )
 }
@@ -333,12 +335,15 @@ fn package_digest_changes_with_dep_upgrades_and_in_sync_with_move_package_digest
 
     let b_v2 = MovePackage::new_initial(&build_test_modules("Bv2"), u64::MAX, [&c_v2]).unwrap();
 
-    let local_v1 = build_test_package("B").get_package_digest(false);
-    let local_v2 = build_test_package("Bv2").get_package_digest(false);
+    let with_unpublished_deps = false;
+    let hash_modules = true;
+    let local_v1 = build_test_package("B").get_package_digest(with_unpublished_deps, hash_modules);
+    let local_v2 =
+        build_test_package("Bv2").get_package_digest(with_unpublished_deps, hash_modules);
 
-    assert_ne!(b_pkg.digest(), b_v2.digest());
-    assert_eq!(b_pkg.digest(), local_v1);
-    assert_eq!(b_v2.digest(), local_v2);
+    assert_ne!(b_pkg.digest(hash_modules), b_v2.digest(hash_modules));
+    assert_eq!(b_pkg.digest(hash_modules), local_v1);
+    assert_eq!(b_v2.digest(hash_modules), local_v2);
     assert_ne!(local_v1, local_v2);
 }
 
@@ -445,6 +450,7 @@ pub fn build_test_modules(test_dir: &str) -> Vec<CompiledModule> {
 
 #[tokio::test]
 async fn test_metered_move_bytecode_verifier() {
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let path =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../sui-framework/packages/sui-framework");
     let compiled_package = BuildConfig::new_for_testing().build(path).unwrap();

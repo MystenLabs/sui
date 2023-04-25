@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "0.33.0"
+    "version": "0.34.0"
   },
   "methods": [
     {
@@ -1477,7 +1477,7 @@
           "name": "Extended API"
         }
       ],
-      "description": "Return the list of objects owned by an address. Note that if the address owns more than `QUERY_MAX_RESULT_LIMIT_OBJECTS` objects, the pagination is not accurate, because previous page may have been updated when the next page is fetched. Please use suix_queryObjects if this is a concern.",
+      "description": "Return the list of objects owned by an address. Note that if the address owns more than `QUERY_MAX_RESULT_LIMIT` objects, the pagination is not accurate, because previous page may have been updated when the next page is fetched. Please use suix_queryObjects if this is a concern.",
       "params": [
         {
           "name": "address",
@@ -1503,7 +1503,7 @@
         },
         {
           "name": "limit",
-          "description": "Max number of items returned per page, default to [QUERY_MAX_RESULT_LIMIT_OBJECTS] if not specified.",
+          "description": "Max number of items returned per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.",
           "schema": {
             "type": "integer",
             "format": "uint",
@@ -2920,17 +2920,6 @@
           },
           "digest": {
             "$ref": "#/components/schemas/ObjectDigest"
-          },
-          "lockedUntilEpoch": {
-            "default": null,
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/BigInt_for_uint64"
-              },
-              {
-                "type": "null"
-              }
-            ]
           },
           "previousTransaction": {
             "$ref": "#/components/schemas/TransactionDigest"

@@ -252,9 +252,23 @@ impl CheckpointExecutor {
 
         fail_point!("highest-executed-checkpoint");
 
-        self.checkpoint_store
-            .delete_full_checkpoint_contents(seq)
-            .expect("Failed to delete full checkpoint contents");
+        // We store a fixed number of additional FullCheckpointContents after execution is complete
+        // for use in state sync.
+        const NUM_SAVED_FULL_CHECKPOINT_CONTENTS: u64 = 5_000;
+        if seq >= NUM_SAVED_FULL_CHECKPOINT_CONTENTS {
+            let prune_seq = seq - NUM_SAVED_FULL_CHECKPOINT_CONTENTS;
+            let prune_checkpoint = self
+                .checkpoint_store
+                .get_checkpoint_by_sequence_number(prune_seq)
+                .expect("Failed to fetch checkpoint")
+                .expect("Failed to retrieve earlier checkpoint by sequence number");
+            self.checkpoint_store
+                .delete_full_checkpoint_contents(prune_seq)
+                .expect("Failed to delete full checkpoint contents");
+            self.checkpoint_store
+                .delete_contents_digest_sequence_number_mapping(&prune_checkpoint.content_digest)
+                .expect("Failed to delete contents digest -> sequence number mapping");
+        }
 
         self.checkpoint_store
             .update_highest_executed_checkpoint(checkpoint)

@@ -90,6 +90,10 @@ pub struct CheckpointStore {
     /// Maps checkpoint contents digest to checkpoint contents
     checkpoint_content: DBMap<CheckpointContentsDigest, CheckpointContents>,
 
+    /// Maps checkpoint contents digest to checkpoint sequence number
+    checkpoint_sequence_by_contents_digest:
+        DBMap<CheckpointContentsDigest, CheckpointSequenceNumber>,
+
     /// Stores entire checkpoint contents from state sync, indexed by sequence number, for
     /// efficient reads of full checkpoints. Entries from this table are deleted after state
     /// accumulation has completed.
@@ -178,6 +182,20 @@ impl CheckpointStore {
         self.certified_checkpoints
             .get(&sequence_number)
             .map(|maybe_checkpoint| maybe_checkpoint.map(|c| c.into()))
+    }
+
+    pub fn get_sequence_number_by_contents_digest(
+        &self,
+        digest: &CheckpointContentsDigest,
+    ) -> Result<Option<CheckpointSequenceNumber>, TypedStoreError> {
+        self.checkpoint_sequence_by_contents_digest.get(digest)
+    }
+
+    pub fn delete_contents_digest_sequence_number_mapping(
+        &self,
+        digest: &CheckpointContentsDigest,
+    ) -> Result<(), TypedStoreError> {
+        self.checkpoint_sequence_by_contents_digest.remove(digest)
     }
 
     pub fn get_latest_certified_checkpoint(&self) -> Option<VerifiedCheckpoint> {
@@ -363,11 +381,21 @@ impl CheckpointStore {
         checkpoint: &VerifiedCheckpoint,
         full_contents: VerifiedCheckpointContents,
     ) -> Result<(), TypedStoreError> {
+        self.checkpoint_sequence_by_contents_digest
+            .insert(&checkpoint.content_digest, checkpoint.sequence_number())?;
         let full_contents = full_contents.into_inner();
-        self.full_checkpoint_content
-            .insert(checkpoint.sequence_number(), &full_contents)?;
+
+        let mut batch = self.full_checkpoint_content.batch();
+        batch.insert_batch(
+            &self.full_checkpoint_content,
+            [(checkpoint.sequence_number(), &full_contents)],
+        )?;
+
         let contents = full_contents.into_checkpoint_contents();
-        self.insert_checkpoint_contents(contents)
+
+        batch.insert_batch(&self.checkpoint_content, [(contents.digest(), &contents)])?;
+
+        batch.write()
     }
 
     pub fn delete_full_checkpoint_contents(

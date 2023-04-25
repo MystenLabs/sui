@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui_system::msim_extra_1 {
-    struct Type has drop, store {
+    struct Type has drop {
         x: u64
     }
 
