@@ -10,8 +10,8 @@ use prometheus::Registry;
 use rand::Rng;
 use roaring::RoaringBitmap;
 use std::{
-    collections::BTreeMap,
-    sync::{Arc, Mutex},
+    collections::{BTreeMap, VecDeque},
+    sync::Arc,
     time::Duration,
 };
 use sui_config::genesis::Genesis;
@@ -56,14 +56,15 @@ use sui_types::{
     base_types::{AuthorityName, SuiAddress},
     sui_system_state::SuiSystemStateTrait,
 };
-use sui_types::{committee::CommitteeWithNetworkMetadata, messages::CallArg};
-use sui_types::{error::SuiError, gas::GasCostSummary};
+use sui_types::{
+    committee::CommitteeWithNetworkMetadata, crypto::AuthorityPublicKeyBytes, error::SuiError,
+    gas::GasCostSummary,
+};
 use tokio::{
     sync::{broadcast, mpsc},
-    task::JoinSet,
-    time::{sleep, timeout},
+    time::sleep,
 };
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 pub mod bank;
 pub mod benchmark_setup;
@@ -249,7 +250,6 @@ pub struct LocalValidatorAggregatorProxy {
     committee: Committee,
     clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,
     streamer: CertifiedTransactionStreamer,
-    requests: Mutex<JoinSet<()>>,
 }
 
 impl LocalValidatorAggregatorProxy {
@@ -333,7 +333,6 @@ impl LocalValidatorAggregatorProxy {
             clients,
             streamer,
             committee,
-            requests: Mutex::new(JoinSet::new()),
         }
     }
 }
@@ -401,6 +400,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
     }
 
     async fn execute_bench_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
+        let auth_agg = self.qd.authority_aggregator().load();
         // Store the epoch number; we read it from the votes and use it later to create the certificate.
         let mut epoch = 0;
 
@@ -440,9 +440,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                 // This typically happens when the validators are overloaded and the transaction is
                 // immediately rejected.
                 Err(e) => {
-                    self.qd
-                        .authority_aggregator()
-                        .load()
+                    auth_agg
                         .metrics
                         .process_tx_errors
                         .with_label_values(&[&name.concise().to_string(), e.as_ref()])
@@ -500,76 +498,48 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         };
 
         // Send the certificate to all validators.
-        let mut futures = FuturesUnordered::new();
-        total_stake = 0;
-        let mut transaction_effects = None;
-        let mut transaction_events = None;
-        for (name, client) in self.clients.iter() {
-            let client = client.clone();
-            let certificate = certified_transaction.clone();
-            let name = *name;
-            futures.push(async move {
-                client
-                    .handle_certificate(certificate)
-                    .map(move |r| (r, name))
-                    .await
-            });
-        }
-
-        // Wait for the replies from a quorum of validators.
-        while let Some((response, name)) = futures.next().await {
-            match response {
-                // If all goes well, the validators reply with signed effects.
-                Ok(HandleCertificateResponse {
+        loop {
+            let (tx_effects, mut rx_effects) = mpsc::channel(100);
+            total_stake = 0;
+            let mut transaction_effects = None;
+            let mut transaction_events = None;
+            let _ = self
+                .streamer
+                .tx_streamer
+                .send((certified_transaction.clone(), tx_effects));
+            // Wait for the replies from a quorum of validators.
+            while let Some((response, _name)) = rx_effects.recv().await {
+                let HandleCertificateResponse {
                     signed_effects,
                     events,
-                }) => {
-                    let author = signed_effects.auth_sig().authority;
-                    transaction_effects = Some(signed_effects.data().clone());
-                    transaction_events = Some(events);
-                    total_stake += self.committee.weight(&author);
-                }
+                } = response;
+                // If all goes well, the validators reply with signed effects.
+                let author = signed_effects.auth_sig().authority;
+                transaction_effects = Some(signed_effects.data().clone());
+                transaction_events = Some(events);
+                total_stake += self.committee.weight(&author);
 
-                // This typically happens when the validators are overloaded and the certificate is
-                // immediately rejected.
-                Err(e) => {
-                    self.qd
-                        .authority_aggregator()
-                        .load()
-                        .metrics
-                        .process_cert_errors
-                        .with_label_values(&[&name.concise().to_string(), e.as_ref()])
-                        .inc();
-                    tracing::warn!("Failed to submit certificate: {e}")
+                if transaction_effects.is_some() && total_stake >= self.committee.quorum_threshold()
+                {
+                    break;
                 }
             }
 
-            if total_stake >= self.committee.quorum_threshold() {
-                break;
+            // Abort if we failed to submit the certificate to enough validators. This typically
+            // happens when the validators are overloaded and the requests timed out.
+            if transaction_effects.is_none() || total_stake < self.committee.quorum_threshold() {
+                warn!("Failed to submit certificate to quorum of validators");
+                continue;
             }
-        }
 
-        // Abort if we failed to submit the certificate to enough validators. This typically
-        // happens when the validators are overloaded and the requests timed out.
-        if transaction_effects.is_none() || total_stake < self.committee.quorum_threshold() {
-            bail!("Failed to submit certificate to quorum of validators");
+            // Package the certificate and effects to return.
+            let signed_material = certified_transaction.auth_sig().clone();
+            let effects = ExecutionEffects::CertifiedTransactionEffects(
+                Envelope::new_from_data_and_sig(transaction_effects.unwrap(), signed_material),
+                transaction_events.unwrap(),
+            );
+            return Ok(effects);
         }
-
-        // Wait for 10 more seconds on remaining requests asynchronously.
-        {
-            let mut requests = self.requests.lock().unwrap();
-            requests.spawn(async move {
-                let _ = timeout(Duration::from_secs(10), futures.collect::<Vec<_>>()).await;
-            });
-        }
-
-        // Package the certificate and effects to return.
-        let signed_material = certified_transaction.auth_sig().clone();
-        let effects = ExecutionEffects::CertifiedTransactionEffects(
-            Envelope::new_from_data_and_sig(transaction_effects.unwrap(), signed_material),
-            transaction_events.unwrap(),
-        );
-        Ok(effects)
     }
 
     fn clone_committee(&self) -> Committee {
@@ -589,7 +559,6 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             clients: self.clients.clone(),
             streamer: self.streamer.clone(),
             committee: self.committee.clone(),
-            requests: Mutex::new(JoinSet::new()),
         })
     }
 
@@ -887,7 +856,10 @@ pub fn convert_move_call_args(
 
 #[derive(Debug, Clone)]
 struct CertifiedTransactionStreamer {
-    tx_streamer: broadcast::Sender<(CertifiedTransaction, mpsc::Sender<TransactionEffects>)>,
+    tx_streamer: broadcast::Sender<(
+        CertifiedTransaction,
+        mpsc::Sender<(HandleCertificateResponse, AuthorityPublicKeyBytes)>,
+    )>,
 }
 
 impl CertifiedTransactionStreamer {
@@ -902,19 +874,58 @@ impl CertifiedTransactionStreamer {
         for (name, client) in clients {
             let mut rx_streamer = rx_streamer.resubscribe();
             spawn_monitored_task!(async move {
-                let mut tx_batch = Vec::new();
-                let mut effects_batch = Vec::new();
-                while let Ok((certified_tx, tx_effects)) = rx_streamer.recv().await {
-                    tx_batch.push(certified_tx);
-                    effects_batch.push(tx_effects);
-                    while let Ok((certified_tx, tx_effects)) = rx_streamer.try_recv() {
-                        tx_batch.push(certified_tx);
-                        effects_batch.push(tx_effects);
+                let mut tx_batch: VecDeque<CertifiedTransaction> = VecDeque::new();
+                let mut effects_batch: VecDeque<
+                    mpsc::Sender<(HandleCertificateResponse, AuthorityPublicKeyBytes)>,
+                > = VecDeque::new();
+                loop {
+                    match rx_streamer.recv().await {
+                        Ok((certified_tx, tx_effects)) => {
+                            tx_batch.push_back(certified_tx);
+                            effects_batch.push_back(tx_effects);
+                        }
+                        Err(_) => {
+                            return;
+                        }
                     }
-                    // client
-                    //     .submit_transaction(certified_tx, tx_effects)
-                    //     .await
-                    //     .unwrap();
+                    let mut i = 0;
+                    while i < 10_000 {
+                        match rx_streamer.try_recv() {
+                            Ok((certified_tx, tx_effects)) => {
+                                tx_batch.push_back(certified_tx);
+                                effects_batch.push_back(tx_effects);
+                            }
+                            Err(_) => {
+                                break;
+                            }
+                        }
+                        i += 1;
+                    }
+                    for _ in 0..3 {
+                        match client
+                            .commit_certificates(tx_batch.clone().into_iter().collect())
+                            .await
+                        {
+                            Ok(resp) => {
+                                for effects in resp.results {
+                                    let _ = tx_batch.pop_front().unwrap();
+                                    let effects_sender = effects_batch.pop_front().unwrap();
+                                    let _ = effects_sender.send((effects, name)).await;
+                                }
+                                break;
+                            }
+                            Err(e) => {
+                                // This typically happens when the validators are overloaded and the certificate is
+                                // immediately rejected.
+                                // metrics
+                                //     .process_cert_errors
+                                //     .with_label_values(&[&name.concise().to_string(), e.as_ref()])
+                                //     .inc();
+                                tracing::warn!("Failed to submit certificate: {e}");
+                                sleep(Duration::from_secs(1)).await;
+                            }
+                        }
+                    }
                 }
             });
         }
