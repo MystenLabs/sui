@@ -3,7 +3,6 @@
 
 import { BehaviorSubject, filter, switchMap, takeUntil } from 'rxjs';
 
-import FeatureGating from '../FeatureGating';
 import NetworkEnv from '../NetworkEnv';
 import { Connection } from './Connection';
 import { createMessage } from '_messages';
@@ -20,6 +19,7 @@ import Permissions from '_src/background/Permissions';
 import Tabs from '_src/background/Tabs';
 import Transactions from '_src/background/Transactions';
 import Keyring from '_src/background/keyring';
+import { growthbook } from '_src/shared/experimentation/features';
 
 import type { Message } from '_messages';
 import type { PortChannelName } from '_messaging/PortChannelName';
@@ -114,11 +114,13 @@ export class UiConnection extends Connection {
                 isBasePayload(payload) &&
                 payload.type === 'get-features'
             ) {
+                await growthbook.loadFeatures();
                 this.send(
                     createMessage<LoadedFeaturesPayload>(
                         {
                             type: 'features-response',
-                            features: await FeatureGating.getLoadedFeatures(),
+                            features: growthbook.getFeatures(),
+                            attributes: growthbook.getAttributes(),
                         },
                         id
                     )

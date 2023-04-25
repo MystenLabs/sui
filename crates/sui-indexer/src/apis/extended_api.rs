@@ -6,8 +6,7 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 
 use sui_json_rpc::api::{
-    validate_limit, ExtendedApiServer, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS,
-    QUERY_MAX_RESULT_LIMIT_OBJECTS,
+    validate_limit, ExtendedApiServer, QUERY_MAX_RESULT_LIMIT, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS,
 };
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
@@ -35,7 +34,7 @@ impl<S: IndexerStore> ExtendedApi<S> {
         cursor: Option<CheckpointedObjectID>,
         limit: Option<usize>,
     ) -> Result<QueryObjectsPage, IndexerError> {
-        let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_OBJECTS)?;
+        let limit = validate_limit(limit, *QUERY_MAX_RESULT_LIMIT)?;
 
         let at_checkpoint = if let Some(CheckpointedObjectID {
             at_checkpoint: Some(cp),

@@ -34,7 +34,7 @@ async function init() {
     store.dispatch(initAppType(getFromLocationSearch(window.location.search)));
     await thunkExtras.background.init(store.dispatch);
     const { apiEnv, customRPC } = store.getState().app;
-    setAttributes(growthbook, { apiEnv, customRPC });
+    setAttributes({ apiEnv, customRPC });
 }
 
 function renderApp() {

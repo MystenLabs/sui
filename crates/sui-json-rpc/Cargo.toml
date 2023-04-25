@@ -31,6 +31,7 @@ thiserror = "1.0.37"
 bcs = "0.1.4"
 eyre = "0.6.8"
 num_cpus = "1.15.0"
+once_cell = "1.16"
 
 tap = "1.0"
 
@@ -46,6 +47,7 @@ sui-transaction-builder = { path = "../sui-transaction-builder" }
 mysten-metrics = { path = "../mysten-metrics" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 shared-crypto = { path = "../shared-crypto" }
+typed-store.workspace = true
 
 [dev-dependencies]
 sui-config = { path = "../sui-config" }

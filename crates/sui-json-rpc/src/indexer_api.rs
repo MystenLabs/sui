@@ -32,7 +32,7 @@ use sui_types::event::EventID;
 
 use crate::api::{
     cap_page_limit, validate_limit, IndexerApiServer, JsonRpcMetrics, ReadApiServer,
-    QUERY_MAX_RESULT_LIMIT_OBJECTS,
+    QUERY_MAX_RESULT_LIMIT,
 };
 use crate::SuiRpcModule;
 
@@ -95,7 +95,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         limit: Option<usize>,
     ) -> RpcResult<ObjectsPage> {
         info!("indexer_get_owned_objects");
-        let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_OBJECTS)?;
+        let limit = validate_limit(limit, *QUERY_MAX_RESULT_LIMIT)?;
         self.metrics.get_owned_objects_limit.report(limit as u64);
         let SuiObjectResponseQuery { filter, options } = query.unwrap_or_default();
         let options = options.unwrap_or_default();

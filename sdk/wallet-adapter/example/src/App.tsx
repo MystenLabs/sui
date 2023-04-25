@@ -5,6 +5,7 @@ import "./App.css";
 import { ConnectButton, useWalletKit } from "@mysten/wallet-kit";
 import { TransactionBlock } from "@mysten/sui.js";
 import { useEffect } from "react";
+import { QredoConnectButton } from "./QredoConnectButton";
 
 function App() {
   const {
@@ -65,6 +66,11 @@ function App() {
         >
           Sign message
         </button>
+      </div>
+      <hr />
+      <div>
+        <h3>Qredo Connect</h3>
+        <QredoConnectButton />
       </div>
     </div>
   );

@@ -10,8 +10,6 @@ module deepbook::custodian {
 
     friend deepbook::clob;
 
-    // Custodian for limit orders.
-
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
     const EUserBalanceDoesNotExist: u64 = 1;
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
@@ -23,6 +21,7 @@ module deepbook::custodian {
 
     struct AccountCap has key, store { id: UID }
 
+    // Custodian for limit orders.
     struct Custodian<phantom T> has key, store {
         id: UID,
         /// Map from an AccountCap object ID to an Account object
@@ -37,7 +36,7 @@ module deepbook::custodian {
     public(friend) fun account_balance<Asset>(
         custodian: &Custodian<Asset>,
         user: ID
-    ): (u64, u64){
+    ): (u64, u64) {
         let account_balances = table::borrow(&custodian.account_balances, user);
         let avail_balance = balance::value(&account_balances.available_balance);
         let locked_balance = balance::value(&account_balances.locked_balance);
@@ -51,22 +50,13 @@ module deepbook::custodian {
         }
     }
 
-    public(friend) fun withdraw_base_asset<BaseAsset>(
-        custodian: &mut Custodian<BaseAsset>,
+    public(friend) fun withdraw_asset<Asset>(
+        custodian: &mut Custodian<Asset>,
         quantity: u64,
         account_cap: &AccountCap,
         ctx: &mut TxContext
-    ): Coin<BaseAsset> {
-        coin::from_balance(decrease_user_available_balance<BaseAsset>(custodian, account_cap, quantity), ctx)
-    }
-
-    public(friend) fun withdraw_quote_asset<QuoteAsset>(
-        custodian: &mut Custodian<QuoteAsset>,
-        quantity: u64,
-        account_cap: &AccountCap,
-        ctx: &mut TxContext
-    ): Coin<QuoteAsset> {
-        coin::from_balance(decrease_user_available_balance<QuoteAsset>(custodian, account_cap, quantity), ctx)
+    ): Coin<Asset> {
+        coin::from_balance(decrease_user_available_balance<Asset>(custodian, account_cap, quantity), ctx)
     }
 
     public(friend) fun increase_user_available_balance<T>(

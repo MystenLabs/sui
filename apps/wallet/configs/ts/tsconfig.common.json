@@ -43,7 +43,6 @@
             "_values/*": ["./src/ui/styles/values/*"],
             "_utils": ["./src/ui/styles/utils"],
             "_utils/*": ["./src/ui/styles/utils/*"],
-            "_font-icons/*": ["./font-icons/*"],
             "@mysten/sui.js": ["../../sdk/typescript/src/"],
             "@mysten/bcs": ["../../sdk/bcs/src/"],
             "@mysten/ledgerjs-hw-app-sui": [
