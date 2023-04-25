@@ -83,7 +83,7 @@ pub enum KeyToolCommand {
         intent: Option<Intent>,
     },
     /// Create signature using leveraging AWS KMS. Pass in a key-id to leverage Amazon
-    /// KMS to sing a message.
+    /// KMS to sign a message.
     /// Any signature commits to a [struct IntentMessage] consisting of the Base64 encoded
     /// of the BCS serialized transaction bytes itself (the result of
     /// [transaction builder API](https://docs.sui.io/sui-jsonrpc) and its intent. If
@@ -305,15 +305,16 @@ impl KeyToolCommand {
                 println!("Digest to sign: {:?}", Base64::encode(digest));
                
                 // Set up the KMS client, expect to use env vars or whatever the AWS
-                // SDK prefers.
-                // Length of Pubkey - 33, sig - 64
-                
+                // SDK prefers.                
                 let region = Region::default();
                 let kms = KmsClient::new(region);
 
                 // Get Pub key from keyid. This is in DER Format from AWS
                 let req = GetPublicKeyRequest { grant_tokens: None, key_id: keyid.to_string() };
-                let pubkey_resp = kms.get_public_key(req).await.unwrap();
+                let pubkey_resp = kms.get_public_key(req).await.
+                    map_err(|e| { 
+                        anyhow!("No Public key Found: {:?}", e)
+                })?;
                 let public_key_bytes = pubkey_resp.public_key.unwrap_or_default();
                 let public_key: &[u8] = &public_key_bytes.to_vec(); // Vec of bytes
 
@@ -345,16 +346,13 @@ impl KeyToolCommand {
                 let response = kms.sign(request).await.unwrap();
                 let sig_bytes_der = response.signature.map(|b| b.to_vec()).unwrap_or_default();     
                 let mut sig = secpSig::from_der(&sig_bytes_der).unwrap();
-                let mut sig = secpSig::from_der(&sig_bytes_der).unwrap();
-                let _ = sig.normalize_s();```
+                let _ = sig.normalize_s();
                 let sig_bytes = secpSig::serialize_compact(&sig);
-
 
                 //println!("Sig Bytes {:?}", sig_bytes);
                 //println!("Public Key Compact bytes {:?}", pkey_compact);
             
-                // TODO, just plopping more things into flag
-                let mut flag = vec![0x01];
+                let mut flag = vec![SignatureScheme::Secp256k1.flag()];
                 flag.extend(sig_bytes);
                 flag.extend(pkey_compact);
                 
