@@ -12,7 +12,6 @@ use sui_json_rpc_types::SuiObjectResponse;
 use sui_json_rpc_types::SuiPastObjectResponse;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
-use sui_sdk::error::Error as SuiRpcError;
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectID, SequenceNumber, VersionNumber};
 use sui_types::digests::TransactionDigest;

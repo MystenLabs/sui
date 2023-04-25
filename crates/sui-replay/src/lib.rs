@@ -166,7 +166,6 @@ pub async fn execute_replay_command(
                     );
                     (succeeded, total, time)
                 }));
-                task_count += 1;
             }
 
             let mut total_tx = 0;
