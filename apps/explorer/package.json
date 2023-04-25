@@ -57,7 +57,8 @@
         "react-router-dom": "^6.10.0",
         "topojson-client": "^3.1.0",
         "web-vitals": "^3.3.1",
-        "zod": "^3.21.4"
+        "zod": "^3.21.4",
+        "date-fns": "^2.29.3"
     },
     "devDependencies": {
         "@babel/core": "^7.21.4",
