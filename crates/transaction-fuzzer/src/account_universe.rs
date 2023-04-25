@@ -28,7 +28,7 @@ static UNIVERSE_SIZE: Lazy<usize> = Lazy::new(|| {
                 panic!("Could not parse universe size, aborting: {:?}", err);
             }
         },
-        Err(env::VarError::NotPresent) => 20,
+        Err(env::VarError::NotPresent) => 30,
         Err(err) => {
             panic!(
                 "Could not read universe size from the environment, aborting: {:?}",
@@ -100,15 +100,14 @@ pub fn log_balance_strategy(min_balance: u64, max_balance: u64) -> impl Strategy
 pub fn run_and_assert_universe(
     universe: AccountUniverseGen,
     transaction_gens: Vec<impl AUTransactionGen + Clone>,
+    executor: &mut Executor,
 ) -> Result<(), TestCaseError> {
-    let mut executor = Executor::new();
-    let mut universe = universe.setup(&mut executor);
+    let mut universe = universe.setup(executor);
     let (transactions, expected_values): (Vec<_>, Vec<_>) = transaction_gens
         .iter()
-        .map(|transaction_gen| transaction_gen.clone().apply(&mut universe, &mut executor))
+        .map(|transaction_gen| transaction_gen.clone().apply(&mut universe, executor))
         .unzip();
     let outputs = executor.execute_transactions(transactions);
-
     prop_assert_eq!(outputs.len(), expected_values.len());
 
     for (idx, (output, expected)) in outputs.iter().zip(&expected_values).enumerate() {
@@ -120,8 +119,7 @@ pub fn run_and_assert_universe(
             output
         );
     }
-
-    assert_accounts_match(&universe, &executor)
+    assert_accounts_match(&universe, executor)
 }
 
 pub fn assert_accounts_match(

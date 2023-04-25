@@ -25,6 +25,7 @@ use prometheus::{
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use sui_config::transaction_deny_config::TransactionDenyConfig;
+use sui_types::metrics::LimitsMetrics;
 use sui_types::TypeTag;
 use tap::TapFallible;
 use tokio::sync::mpsc::unbounded_channel;
@@ -52,7 +53,7 @@ use sui_json_rpc_types::{
     SuiMoveValue, SuiObjectDataFilter, SuiTransactionBlockData, SuiTransactionBlockEvents,
 };
 use sui_macros::{fail_point, fail_point_async};
-use sui_protocol_config::SupportedProtocolVersions;
+use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_storage::indexes::{CoinInfo, ObjectIndexChanges};
 use sui_storage::IndexStore;
 use sui_types::committee::{EpochId, ProtocolVersion};
@@ -208,6 +209,8 @@ pub struct AuthorityMetrics {
     pub consensus_handler_scores: IntGaugeVec,
     pub consensus_committed_subdags: IntCounterVec,
     pub consensus_committed_certificates: IntCounterVec,
+
+    pub limits_metrics: Arc<LimitsMetrics>,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -454,6 +457,7 @@ impl AuthorityMetrics {
                 registry,
             )
                 .unwrap(),
+            limits_metrics: Arc::new(LimitsMetrics::new(registry)),
         }
     }
 }
@@ -1032,6 +1036,7 @@ impl AuthorityState {
                 gas_status,
                 &epoch_store.epoch_start_config().epoch_data(),
                 epoch_store.protocol_config(),
+                self.metrics.limits_metrics.clone(),
                 // TODO: would be nice to pass the whole NodeConfig here, but it creates a
                 // cyclic dependency w/ sui-adapter
                 self.expensive_safety_check_config
@@ -1139,6 +1144,7 @@ impl AuthorityState {
                 gas_status,
                 &epoch_store.epoch_start_config().epoch_data(),
                 epoch_store.protocol_config(),
+                self.metrics.limits_metrics.clone(),
                 false, // enable_expensive_checks
             );
         let tx_digest = *effects.transaction_digest();
@@ -1254,6 +1260,7 @@ impl AuthorityState {
                 gas_status,
                 &epoch_store.epoch_start_config().epoch_data(),
                 protocol_config,
+                self.metrics.limits_metrics.clone(),
                 false, // enable_expensive_checks
             );
 
@@ -1748,6 +1755,7 @@ impl AuthorityState {
             rx_execution_shutdown
         ));
 
+        // TODO: This doesn't belong to the constructor of AuthorityState.
         state
             .create_owner_index_if_empty(genesis_objects, &epoch_store)
             .expect("Error indexing genesis objects.");
@@ -2063,7 +2071,7 @@ impl AuthorityState {
         }
     }
 
-    pub async fn get_move_object<T>(&self, object_id: &ObjectID) -> SuiResult<T>
+    pub fn get_move_object<T>(&self, object_id: &ObjectID) -> SuiResult<T>
     where
         T: DeserializeOwned,
     {
@@ -2092,7 +2100,7 @@ impl AuthorityState {
             .get_dynamic_fields_iterator(table, None)
             .ok()?
             .find(|df| key_bcs == df.bcs_name)?;
-        let field: Field<K, V> = self.get_move_object(&df.object_id).await.ok()?;
+        let field: Field<K, V> = self.get_move_object(&df.object_id).ok()?;
         Some(field.value)
     }
 
@@ -2245,7 +2253,7 @@ impl AuthorityState {
             .map(|info| info.object_id);
         let mut move_objects = vec![];
         for id in object_ids {
-            move_objects.push(self.get_move_object(&id).await?)
+            move_objects.push(self.get_move_object(&id)?)
         }
         Ok(move_objects)
     }
@@ -2605,7 +2613,15 @@ impl AuthorityState {
 
         let limit = limit + 1;
         let mut event_keys = match query {
-            EventFilter::All(..) => index_store.all_events(tx_num, event_num, limit, descending)?,
+            EventFilter::All(filters) => {
+                if filters.is_empty() {
+                    index_store.all_events(tx_num, event_num, limit, descending)?
+                } else {
+                    return Err(anyhow!(
+                        "This query type does not currently support filter combinations."
+                    ));
+                }
+            }
             EventFilter::Transaction(digest) => {
                 index_store.events_by_transaction(&digest, tx_num, event_num, limit, descending)?
             }
@@ -3177,13 +3193,19 @@ impl AuthorityState {
         Some(res)
     }
 
-    fn choose_protocol_version_and_system_packages(
+    fn is_protocol_version_supported(
         current_protocol_version: ProtocolVersion,
+        proposed_protocol_version: ProtocolVersion,
+        protocol_config: &ProtocolConfig,
         committee: &Committee,
         capabilities: Vec<AuthorityCapabilities>,
         mut buffer_stake_bps: u64,
-    ) -> (ProtocolVersion, Vec<ObjectRef>) {
-        let next_protocol_version = current_protocol_version + 1;
+    ) -> Option<(ProtocolVersion, Vec<ObjectRef>)> {
+        if proposed_protocol_version > current_protocol_version + 1
+            && !protocol_config.advance_to_highest_supported_protocol_version()
+        {
+            return None;
+        }
 
         if buffer_stake_bps > 10000 {
             warn!("clamping buffer_stake_bps to 10000");
@@ -3213,7 +3235,7 @@ impl AuthorityState {
                 // against any change, because framework upgrades always require a protocol version
                 // bump.
                 cap.supported_protocol_versions
-                    .is_version_supported(next_protocol_version)
+                    .is_version_supported(proposed_protocol_version)
                     .then_some((cap.available_system_packages, cap.authority))
             })
             .collect();
@@ -3248,16 +3270,39 @@ impl AuthorityState {
                     ?quorum_threshold,
                     ?buffer_stake_bps,
                     ?effective_threshold,
-                    ?next_protocol_version,
+                    ?proposed_protocol_version,
                     ?packages,
                     "support for upgrade"
                 );
 
                 let has_support = total_votes >= effective_threshold;
-                has_support.then_some((next_protocol_version, packages))
+                has_support.then_some((proposed_protocol_version, packages))
             })
-            // if there was no majority, there is no upgrade
-            .unwrap_or((current_protocol_version, vec![]))
+    }
+
+    fn choose_protocol_version_and_system_packages(
+        current_protocol_version: ProtocolVersion,
+        protocol_config: &ProtocolConfig,
+        committee: &Committee,
+        capabilities: Vec<AuthorityCapabilities>,
+        buffer_stake_bps: u64,
+    ) -> (ProtocolVersion, Vec<ObjectRef>) {
+        let mut next_protocol_version = current_protocol_version;
+        let mut system_packages = vec![];
+
+        while let Some((version, packages)) = Self::is_protocol_version_supported(
+            current_protocol_version,
+            next_protocol_version + 1,
+            protocol_config,
+            committee,
+            capabilities.clone(),
+            buffer_stake_bps,
+        ) {
+            next_protocol_version = version;
+            system_packages = packages;
+        }
+
+        (next_protocol_version, system_packages)
     }
 
     /// Creates and execute the advance epoch transaction to effects without committing it to the database.
@@ -3284,8 +3329,11 @@ impl AuthorityState {
         let (next_epoch_protocol_version, next_epoch_system_packages) =
             Self::choose_protocol_version_and_system_packages(
                 epoch_store.protocol_version(),
+                epoch_store.protocol_config(),
                 epoch_store.committee(),
-                epoch_store.get_capabilities()?,
+                epoch_store
+                    .get_capabilities()
+                    .expect("read capabilities from db cannot fail"),
                 buffer_stake_bps,
             );
 

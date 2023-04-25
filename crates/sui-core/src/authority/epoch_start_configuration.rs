@@ -56,14 +56,6 @@ impl EpochStartConfiguration {
         ))
     }
 
-    pub fn new_for_testing() -> Self {
-        Self::new_v2(
-            EpochStartSystemState::new_for_testing(),
-            CheckpointDigest::default(),
-            EpochFlag::default_flags_for_new_epoch(),
-        )
-    }
-
     pub fn epoch_data(&self) -> EpochData {
         EpochData::new(
             self.epoch_start_state().epoch(),

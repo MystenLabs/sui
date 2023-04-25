@@ -23,6 +23,7 @@ serde_with = "2.1.0"
 serde_yaml = "0.8.26"
 tempfile = "3.3.0"
 tracing = "0.1.36"
+prometheus = "0.13.3"
 
 narwhal-config = { path = "../../narwhal/config" }
 shared-crypto = { path = "../shared-crypto" }

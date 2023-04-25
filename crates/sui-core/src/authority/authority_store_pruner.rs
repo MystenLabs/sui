@@ -155,68 +155,54 @@ impl AuthorityStorePruner {
             .get_highest_executed_checkpoint()?
             .map(|c| (c.sequence_number, c.epoch()))
             .unwrap_or_default();
-        let mut checkpoints_in_batch = 0;
-        let mut batch_effects = vec![];
-        let mut network_total_transactions = 0;
 
         debug!(
             "Starting object pruning. Current epoch: {}. Latest pruned checkpoint: {}",
             current_epoch, checkpoint_number
         );
-        let iter = checkpoint_store
-            .certified_checkpoints
-            .iter()
-            .skip_to(&(checkpoint_number + 1))?
-            .map(|(k, ckpt)| (k, ckpt.into_inner()));
 
-        #[allow(clippy::explicit_counter_loop)]
-        for (_, checkpoint) in iter {
-            checkpoint_number = *checkpoint.sequence_number();
-            // Skipping because  checkpoint's epoch or checkpoint number is too new.
-            // We have to respect the highest executed checkpoint watermark because there might be
-            // parts of the system that still require access to old object versions (i.e. state accumulator)
-            if (current_epoch < checkpoint.epoch() + config.num_epochs_to_retain)
-                || (checkpoint_number > highest_executed_checkpoint)
-            {
-                break;
-            }
-            checkpoints_in_batch += 1;
-            if network_total_transactions == checkpoint.network_total_transactions {
-                continue;
-            }
-            network_total_transactions = checkpoint.network_total_transactions;
+        loop {
+            let checkpoints: Vec<_> = checkpoint_store
+                .certified_checkpoints
+                .iter()
+                .skip_to(&(checkpoint_number + 1))?
+                .take(config.max_checkpoints_in_batch)
+                .map(|(_, ckpt)| ckpt.into_inner())
+                // Filtering out transactions whose epoch or checkpoint number is too new.
+                // We have to respect the highest executed checkpoint watermark because there might be
+                // parts of the system that still require access to old object versions (i.e. state accumulator)
+                .filter(|checkpoint| {
+                    checkpoint.epoch() + config.num_epochs_to_retain <= current_epoch
+                        && *checkpoint.sequence_number() <= highest_executed_checkpoint
+                })
+                .collect();
 
-            let content = checkpoint_store
-                .get_checkpoint_contents(&checkpoint.content_digest)?
-                .ok_or_else(|| anyhow::anyhow!("checkpoint content data is missing"))?;
+            checkpoint_number = checkpoints
+                .last()
+                .map(|c| *c.sequence_number())
+                .unwrap_or(checkpoint_number);
+            let is_last_iteration = checkpoints.len() < config.max_checkpoints_in_batch;
+
+            let digests: Vec<_> = checkpoints.into_iter().map(|c| c.content_digest).collect();
+            let execution_digests = checkpoint_store
+                .multi_get_checkpoint_content(&digests)?
+                .into_iter()
+                .flat_map(|contents| {
+                    contents
+                        .expect("checkpoint content is missing")
+                        .into_inner()
+                })
+                .map(|tx| tx.effects);
+
             let effects = perpetual_db
                 .effects
-                .multi_get(content.iter().map(|tx| tx.effects))?;
+                .multi_get(execution_digests)?
+                .into_iter()
+                .map(|effects| effects.expect("missing effects in pruner"))
+                .collect();
 
-            if effects.iter().any(|effect| effect.is_none()) {
-                return Err(anyhow::anyhow!("transaction effects data is missing"));
-            }
-            batch_effects.extend(effects.into_iter().flatten());
-
-            if batch_effects.len() >= config.max_transactions_in_batch
-                || checkpoints_in_batch >= config.max_checkpoints_in_batch
-            {
-                Self::prune_effects(
-                    batch_effects,
-                    perpetual_db,
-                    objects_lock_table,
-                    checkpoint_number,
-                    deletion_method,
-                    metrics.clone(),
-                )
-                .await?;
-                batch_effects = vec![];
-                checkpoints_in_batch = 0;
-            }
-        }
-        if !batch_effects.is_empty() {
             Self::prune_effects(
-                batch_effects,
+                effects,
                 perpetual_db,
                 objects_lock_table,
                 checkpoint_number,
@@ -224,12 +210,11 @@ impl AuthorityStorePruner {
                 metrics.clone(),
             )
             .await?;
+
+            if is_last_iteration {
+                return Ok(());
+            }
         }
-        debug!(
-            "Finished pruner iteration. Latest pruned checkpoint: {}",
-            checkpoint_number
-        );
-        Ok(())
     }
 
     fn setup_objects_pruning(

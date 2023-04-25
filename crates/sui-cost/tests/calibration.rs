@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use insta::assert_snapshot;
 use move_cli::base::reroot_path;
 use move_disassembler::disassembler::Disassembler;
-use move_package::BuildConfig;
+use sui_move_build::BuildConfig;
 
 const TEST_MODULE_DATA_DIR: &str = "../sui-framework/packages/sui-framework/tests";
 
@@ -36,16 +36,16 @@ async fn test_bytecode_disassemble_snapshot() -> Result<(), anyhow::Error> {
 
 fn disassemble_test_module(name: String) -> anyhow::Result<String> {
     let path = PathBuf::from(TEST_MODULE_DATA_DIR);
-    let config = BuildConfig {
-        test_mode: true,
-        ..Default::default()
-    };
+    let mut config = BuildConfig::new_for_testing();
+    config.config.test_mode = true;
     let package_name: Option<String> = None;
     let module_name = name;
 
     let rerooted_path = reroot_path(Some(path))?;
 
-    let package = config.compile_package(&rerooted_path, &mut std::io::sink())?;
+    let package = config
+        .config
+        .compile_package(&rerooted_path, &mut std::io::sink())?;
     let needle_package = package_name
         .as_deref()
         .unwrap_or(package.compiled_package_info.package_name.as_str());

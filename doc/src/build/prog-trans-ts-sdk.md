@@ -2,11 +2,11 @@
 title: Sui Programmable Transaction Blocks with the TS SDK
 ---
 
-In Sui, all user-initiated transactions are called Programmable Transaction Blocks.
+In Sui, all user-initiated transactions are called Programmable Transaction blocks.
 
 ## Get Started
 
-To get started using Programmable Transaction Blocks, make sure that you have the latest TypeScript SDK installed.
+To get started using Programmable Transaction blocks, make sure that you have the latest TypeScript SDK installed.
 
 This example starts by constructing a transaction block to send Sui. If you are familiar with the legacy Sui transaction types, this is similar to a `paySui` transaction. To construct transactions, import the `TransactionBlock` class, and construct it:
 
@@ -59,11 +59,11 @@ signer.signAndExecuteTransactionBlock({ transactionBlock: txb });
 
 ## Inputs and transactions
 
-Programmable Transaction Blocks have two key concepts: inputs and transactions.
+Programmable Transaction blocks have two key concepts: inputs and transactions.
 
 Inputs are values that are used as arguments to the transactions in the transaction block. Inputs can either be an object reference (either to an owned object, an immutable object, or a shared object), or a pure BCS value (for example, an encoded string used as an argument to a move call).
 
-Transactions are steps of execution in the transaction block. You can also use the result of previous transaction as an argument to future transactions. By combining multiple transactions together, Programmable Transaction Blocks provide a flexible way to create complex transactions.
+Transactions are steps of execution in the transaction block. You can also use the result of previous transaction as an argument to future transactions. By combining multiple transactions together, Programmable Transaction blocks provide a flexible way to create complex transactions.
 
 ## Constructing inputs
 
@@ -217,7 +217,7 @@ function handleSignRequest(input) {
 }
 ```
 
-## Sponsored Transaction Blocks
+## Sponsored transaction blocks
 
 The transaction block builder can support sponsored transaction blocks by using the `onlyTransactionKind` flag when building the transaction block.
 

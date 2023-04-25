@@ -32,15 +32,19 @@ async fn main() -> Result<(), IndexerError> {
         indexer_config.rpc_client_url.as_str(),
     )?;
     let indexer_metrics = IndexerMetrics::new(&registry);
-    let (blocking_cp, async_cp) = new_pg_connection_pool(&indexer_config.db_url)
-        .await
-        .map_err(|e| {
-            error!(
-                "Failed creating Postgres connection pool with error {:?}",
-                e
-            );
+    let db_url = indexer_config.get_db_url().map_err(|e| {
+        IndexerError::PgPoolConnectionError(format!(
+            "Failed parsing database url with error {:?}",
             e
-        })?;
+        ))
+    })?;
+    let (blocking_cp, async_cp) = new_pg_connection_pool(&db_url).await.map_err(|e| {
+        error!(
+            "Failed creating Postgres connection pool with error {:?}",
+            e
+        );
+        e
+    })?;
     if indexer_config.reset_db {
         let mut conn = get_pg_pool_connection(&blocking_cp).map_err(|e| {
             error!(
@@ -52,8 +56,7 @@ async fn main() -> Result<(), IndexerError> {
         reset_database(&mut conn, /* drop_all */ true).map_err(|e| {
             let db_err_msg = format!(
                 "Failed resetting database with url: {:?} and error: {:?}",
-                indexer_config.db_url.clone(),
-                e
+                db_url, e
             );
             error!("{}", db_err_msg);
             IndexerError::PostgresResetError(db_err_msg)

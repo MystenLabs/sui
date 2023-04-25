@@ -52,6 +52,12 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
         mutable: true,
     };
     for gas_object in test_gas_objects() {
+        // Object digest may be different in genesis than originally generated.
+        let gas_object = authority
+            .get_object(&gas_object.id())
+            .await
+            .unwrap()
+            .unwrap();
         // Make a sample transaction.
         let module = "object_basics";
         let function = "create";

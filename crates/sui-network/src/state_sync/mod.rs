@@ -57,7 +57,7 @@ use std::{
 };
 use sui_config::p2p::StateSyncConfig;
 use sui_types::{
-    digests::{CheckpointContentsDigest, CheckpointDigest},
+    digests::CheckpointDigest,
     messages_checkpoint::{
         CertifiedCheckpointSummary as Checkpoint, CheckpointSequenceNumber, FullCheckpointContents,
         VerifiedCheckpoint, VerifiedCheckpointContents,
@@ -89,7 +89,7 @@ pub use generated::{
 };
 pub use server::GetCheckpointSummaryRequest;
 
-use self::metrics::Metrics;
+use self::{metrics::Metrics, server::CheckpointContentsDownloadLimitLayer};
 
 /// A handle to the StateSync subsystem.
 ///
@@ -260,6 +260,7 @@ struct StateSyncEventLoop<S> {
     tasks: JoinSet<()>,
     sync_checkpoint_summaries_task: Option<AbortHandle>,
     sync_checkpoint_contents_task: Option<AbortHandle>,
+    download_limit_layer: Option<CheckpointContentsDownloadLimitLayer>,
 
     store: S,
     peer_heights: Arc<RwLock<PeerHeights>>,
@@ -501,6 +502,10 @@ where
             self.config.timeout(),
         );
         self.tasks.spawn(task);
+
+        if let Some(layer) = self.download_limit_layer.as_ref() {
+            layer.maybe_prune_map();
+        }
     }
 
     fn maybe_start_checkpoint_summary_sync_task(&mut self) {
@@ -1011,6 +1016,7 @@ async fn sync_checkpoint_contents<S>(
         .pipe(futures::stream::iter)
         .buffered(checkpoint_content_download_concurrency);
 
+    let mut checkpoint_contents_sync_error = false;
     while let Some(maybe_checkpoint) = checkpoint_contents_stream.next().await {
         match maybe_checkpoint {
             Ok((checkpoint, num_txns)) => {
@@ -1030,6 +1036,7 @@ async fn sync_checkpoint_contents<S>(
                 highest_synced = checkpoint;
             }
             Err(err) => {
+                checkpoint_contents_sync_error = true;
                 debug!("unable to sync contents of checkpoint: {err}");
                 break;
             }
@@ -1040,6 +1047,11 @@ async fn sync_checkpoint_contents<S>(
     if let Some(sender) = sender.upgrade() {
         let message = StateSyncMessage::SyncedCheckpoint(Box::new(highest_synced));
         let _ = sender.send(message).await;
+    }
+
+    // Add a delay if any checkpoint contents failed to sync, to prevent fast retry loops.
+    if checkpoint_contents_sync_error {
+        tokio::time::sleep(Duration::from_secs(10)).await;
     }
 }
 
@@ -1068,7 +1080,7 @@ where
         .collect::<Vec<_>>();
     rand::seq::SliceRandom::shuffle(peers.as_mut_slice(), &mut rng);
 
-    let Some(contents) = get_full_checkpoint_contents(&mut peers, &store, checkpoint.content_digest, timeout).await else {
+    let Some(contents) = get_full_checkpoint_contents(&mut peers, &store, &checkpoint, timeout).await else {
         return Err(anyhow!("unable to sync checkpoint contents for checkpoint {}", checkpoint.sequence_number()));
     };
 
@@ -1080,16 +1092,22 @@ where
 async fn get_full_checkpoint_contents<S>(
     peers: &mut [StateSyncClient<anemo::Peer>],
     store: S,
-    digest: CheckpointContentsDigest,
+    checkpoint: &VerifiedCheckpoint,
     timeout: Duration,
 ) -> Option<FullCheckpointContents>
 where
     S: WriteStore,
     <S as ReadStore>::Error: std::error::Error,
 {
+    let digest = checkpoint.content_digest;
     if let Some(contents) = store
-        .get_full_checkpoint_contents(&digest)
+        .get_full_checkpoint_contents_by_sequence_number(*checkpoint.sequence_number())
         .expect("store operation should not fail")
+        .or_else(|| {
+            store
+                .get_full_checkpoint_contents(&digest)
+                .expect("store operation should not fail")
+        })
     {
         return Some(contents);
     }
@@ -1109,7 +1127,7 @@ where
             if contents.verify_digests(digest).is_ok() {
                 let verified_contents = VerifiedCheckpointContents::new_unchecked(contents.clone());
                 store
-                    .insert_checkpoint_contents(verified_contents)
+                    .insert_checkpoint_contents(checkpoint, verified_contents)
                     .expect("store operation should not fail");
                 return Some(contents);
             }

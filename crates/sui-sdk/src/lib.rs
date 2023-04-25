@@ -28,7 +28,7 @@ use sui_transaction_builder::{DataReader, TransactionBuilder};
 pub use sui_types as types;
 use sui_types::base_types::{ObjectID, ObjectInfo, SuiAddress};
 
-use crate::apis::{CoinReadApi, EventApi, GovernanceApi, QuorumDriver, ReadApi};
+use crate::apis::{CoinReadApi, EventApi, GovernanceApi, QuorumDriverApi, ReadApi};
 use crate::error::{Error, SuiRpcResult};
 
 pub mod apis;
@@ -108,7 +108,7 @@ impl SuiClientBuilder {
         let rpc = RpcClient { http, ws, info };
         let api = Arc::new(rpc);
         let read_api = Arc::new(ReadApi::new(api.clone()));
-        let quorum_driver = QuorumDriver::new(api.clone());
+        let quorum_driver_api = QuorumDriverApi::new(api.clone());
         let event_api = EventApi::new(api.clone());
         let transaction_builder = TransactionBuilder::new(read_api.clone());
         let coin_read_api = CoinReadApi::new(api.clone());
@@ -120,7 +120,7 @@ impl SuiClientBuilder {
             read_api,
             coin_read_api,
             event_api,
-            quorum_driver,
+            quorum_driver_api,
             governance_api,
         })
     }
@@ -177,7 +177,7 @@ pub struct SuiClient {
     read_api: Arc<ReadApi>,
     coin_read_api: CoinReadApi,
     event_api: EventApi,
-    quorum_driver: QuorumDriver,
+    quorum_driver_api: QuorumDriverApi,
     governance_api: GovernanceApi,
 }
 
@@ -242,8 +242,8 @@ impl SuiClient {
     pub fn event_api(&self) -> &EventApi {
         &self.event_api
     }
-    pub fn quorum_driver(&self) -> &QuorumDriver {
-        &self.quorum_driver
+    pub fn quorum_driver_api(&self) -> &QuorumDriverApi {
+        &self.quorum_driver_api
     }
     pub fn governance_api(&self) -> &GovernanceApi {
         &self.governance_api

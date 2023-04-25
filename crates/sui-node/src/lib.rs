@@ -1158,6 +1158,7 @@ pub async fn build_server(
         server.register_module(TransactionExecutionApi::new(
             state.clone(),
             transaction_orchestrator.clone(),
+            metrics.clone(),
         ))?;
     }
 

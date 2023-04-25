@@ -21,11 +21,11 @@ use sui_types::{
 
 use std::{collections::BTreeSet, path::PathBuf, str::FromStr, sync::Arc};
 
+use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::{
     authority_test_utils::build_test_modules_with_dep_addr,
-    authority_tests::{execute_programmable_transaction, init_state},
-    move_integration_tests::build_and_publish_test_package_with_upgrade_cap,
-    AuthorityState,
+    authority_tests::execute_programmable_transaction,
+    move_integration_tests::build_and_publish_test_package_with_upgrade_cap, AuthorityState,
 };
 
 macro_rules! move_call {
@@ -114,7 +114,7 @@ impl UpgradeStateRunner {
         let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
         let gas_object_id = ObjectID::random();
         let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
-        let authority_state = init_state().await;
+        let authority_state = TestAuthorityBuilder::new().build().await;
         authority_state.insert_genesis_object(gas_object).await;
 
         let (package, upgrade_cap) = build_and_publish_test_package_with_upgrade_cap(

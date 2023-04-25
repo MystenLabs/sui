@@ -4,6 +4,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt,
+    sync::Arc,
 };
 
 use move_binary_format::{
@@ -15,7 +16,7 @@ use move_binary_format::{
 use move_core_types::{
     account_address::AccountAddress,
     identifier::IdentStr,
-    language_storage::{ModuleId, TypeTag},
+    language_storage::{ModuleId, StructTag, TypeTag},
     u256::U256,
 };
 use move_vm_runtime::{
@@ -28,28 +29,26 @@ use sui_move_natives::object_runtime::ObjectRuntime;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::{
-        MoveObjectType, ObjectID, SuiAddress, TxContext, TX_CONTEXT_MODULE_NAME,
-        TX_CONTEXT_STRUCT_NAME,
+        MoveObjectType, ObjectID, SuiAddress, TxContext, TxContextKind, RESOLVED_ASCII_STR,
+        RESOLVED_STD_OPTION, RESOLVED_UTF8_STR, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
     },
     coin::Coin,
     error::{ExecutionError, ExecutionErrorKind},
     event::Event,
     gas::{SuiGasStatus, SuiGasStatusAPI},
-    id::UID,
+    id::{RESOLVED_SUI_ID, UID},
     messages::{
         Argument, Command, CommandArgumentError, PackageUpgradeError, ProgrammableMoveCall,
         ProgrammableTransaction,
     },
+    metrics::LimitsMetrics,
     move_package::{
-        normalize_deserialized_modules, MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt,
-        UpgradeTicket,
+        normalize_deserialized_modules, MovePackage, TypeOrigin, UpgradeCap, UpgradePolicy,
+        UpgradeReceipt, UpgradeTicket,
     },
-    SUI_FRAMEWORK_ADDRESS,
+    Identifier, SUI_FRAMEWORK_ADDRESS,
 };
 use sui_verifier::{
-    entry_points_verifier::{
-        TxContextKind, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_SUI_ID, RESOLVED_UTF8_STR,
-    },
     private_generics::{EVENT_MODULE, PRIVATE_TRANSFER_FUNCTIONS, TRANSFER_MODULE},
     INIT_FN_NAME,
 };
@@ -62,6 +61,7 @@ sui_macros::checked_arithmetic! {
 
 pub fn execute<S: StorageView, Mode: ExecutionMode>(
     protocol_config: &ProtocolConfig,
+    metrics: Arc<LimitsMetrics>,
     vm: &MoveVM,
     state_view: &mut S,
     tx_context: &mut TxContext,
@@ -72,6 +72,7 @@ pub fn execute<S: StorageView, Mode: ExecutionMode>(
     let ProgrammableTransaction { inputs, commands } = pt;
     let mut context = ExecutionContext::new(
         protocol_config,
+        metrics,
         vm,
         state_view,
         tx_context,
@@ -615,6 +616,30 @@ fn execute_move_upgrade<S: StorageView, Mode: ExecutionMode>(
         invariant_violation!("Newly created package object is not a package");
     };
 
+    // Populate loader with all previous types.
+    if !context.protocol_config.disallow_adding_abilities_on_upgrade() {
+        for TypeOrigin { module_name, struct_name, package: origin } in package.type_origin_table() {
+            if package.id() == *origin {
+                continue;
+            }
+
+            let Ok(module) = Identifier::new(module_name.as_str()) else {
+                continue;
+            };
+
+            let Ok(name) = Identifier::new(struct_name.as_str()) else {
+                continue;
+            };
+
+            let _ = context.load_type(&TypeTag::Struct(Box::new(StructTag {
+                address: (*origin).into(),
+                module,
+                name,
+                type_params: vec![],
+            })));
+        }
+    }
+
     context.set_linkage(package)?;
     let res = publish_and_verify_modules(context, runtime_id, &modules);
     context.reset_linkage();
@@ -664,7 +689,7 @@ fn check_compatibility<'a, S: StorageView>(
             ));
         };
 
-        if let Err(e) = policy.check_compatibility(&cur_module, &new_module) {
+        if let Err(e) = policy.check_compatibility(&cur_module, &new_module, context.protocol_config) {
             return Err(ExecutionError::new_with_source(
                 ExecutionErrorKind::PackageUpgradeError {
                     upgrade_error: PackageUpgradeError::IncompatibleUpgrade,
@@ -826,7 +851,7 @@ fn publish_and_verify_modules<S: StorageView>(
     for module in modules {
         // Run Sui bytecode verifier, which runs some additional checks that assume the Move
         // bytecode verifier has passed.
-        sui_verifier::verifier::verify_module(module, &BTreeMap::new())?;
+        sui_verifier::verifier::verify_module(context.protocol_config, module, &BTreeMap::new())?;
     }
 
     Ok(())
@@ -941,6 +966,14 @@ fn check_visibility_and_signature<S: StorageView, Mode: ExecutionMode>(
             ),
         ));
     };
+
+    // entry on init is now banned, so ban invoking it
+    if !from_init && function == INIT_FN_NAME && context.protocol_config.ban_entry_init() {
+        return Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::NonEntryFunctionInvoked,
+            "Cannot call 'init'",
+        ));
+    }
 
     let last_instr: CodeOffset = fdef
         .code

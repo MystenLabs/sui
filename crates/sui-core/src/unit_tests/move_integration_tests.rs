@@ -15,13 +15,15 @@ use move_core_types::{
 };
 
 use sui_types::{
-    error::ExecutionErrorKind, programmable_transaction_builder::ProgrammableTransactionBuilder,
+    base_types::{RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR},
+    error::ExecutionErrorKind,
+    programmable_transaction_builder::ProgrammableTransactionBuilder,
     utils::to_sender_signed_transaction,
 };
 
 use move_core_types::language_storage::TypeTag;
 
-use sui_move_build::BuildConfig;
+use sui_move_build::{BuildConfig, SuiPackageHooks};
 use sui_types::{
     crypto::{get_key_pair, AccountKeyPair},
     error::SuiError,
@@ -30,9 +32,6 @@ use sui_types::{
 
 use std::{collections::HashSet, path::PathBuf};
 use std::{env, str::FromStr};
-use sui_verifier::entry_points_verifier::{
-    RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR,
-};
 
 #[tokio::test]
 #[cfg_attr(msim, ignore)]
@@ -2801,6 +2800,7 @@ pub async fn build_and_try_publish_test_package(
     gas_price: u64,
     with_unpublished_deps: bool,
 ) -> (Transaction, SignedTransactionEffects) {
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["src", "unit_tests", "data", test_dir]);
 

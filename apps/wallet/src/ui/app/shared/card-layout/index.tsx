@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Sui, ThumbUpFill32 } from '@mysten/icons';
+
 import { Heading } from '_app/shared/heading';
 import { Text } from '_app/shared/text';
-import Icon, { SuiIcons } from '_components/icon';
 
 import type { ReactNode } from 'react';
 
@@ -27,19 +28,13 @@ export function CardLayout({
             {icon === 'success' ? (
                 <div className="rounded-full w-12 h-12 border-dotted border-success border-2 flex items-center justify-center mb-2.5 p-1">
                     <div className="bg-success rounded-full h-8 w-8 flex items-center justify-center">
-                        <Icon
-                            icon={SuiIcons.ThumbsUp}
-                            className="text-white text-2xl"
-                        />
+                        <ThumbUpFill32 className="text-white text-2xl" />
                     </div>
                 </div>
             ) : null}
             {icon === 'sui' ? (
                 <div className="flex flex-col flex-nowrap items-center justify-center rounded-full w-16 h-16 bg-sui mb-7">
-                    <Icon
-                        icon={SuiIcons.SuiLogoIcon}
-                        className="text-white text-4xl"
-                    />
+                    <Sui className="text-white text-4xl" />
                 </div>
             ) : null}
             {headerCaption ? (

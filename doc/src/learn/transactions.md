@@ -66,7 +66,7 @@ Inputs: A list of unique object references pointing to mutable objects owned by 
 
 Here's an example showing how objects and transactions are connected to each other in Sui.
 
-In the following example we have two objects:
+In the following example there are two objects:
  * Object A with 5 SUI coins that belongs to Tom
  * Object B with 2 SUI coins that belongs to John
 

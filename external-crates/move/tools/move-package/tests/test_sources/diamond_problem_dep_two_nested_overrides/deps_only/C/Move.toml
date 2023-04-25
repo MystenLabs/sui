@@ -1,0 +1,6 @@
+[package]
+name = "C"
+version = "0.0.0"
+
+[dependencies]
+E = { local = "../E", version = "2.0.0" }

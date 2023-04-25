@@ -15,7 +15,6 @@ use sui_config::genesis::Genesis;
 use sui_types::messages::TransactionEvents;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{
-    committee::Committee,
     crypto::AuthorityKeyPair,
     error::SuiError,
     messages::{
@@ -114,9 +113,10 @@ impl AuthorityAPI for LocalAuthorityClient {
 }
 
 impl LocalAuthorityClient {
-    pub async fn new(committee: Committee, secret: AuthorityKeyPair, genesis: &Genesis) -> Self {
+    pub async fn new(secret: AuthorityKeyPair, genesis: &Genesis) -> Self {
         let state = TestAuthorityBuilder::new()
-            .build(committee, &secret, genesis)
+            .with_genesis_and_keypair(genesis, &secret)
+            .build()
             .await;
         Self {
             state,

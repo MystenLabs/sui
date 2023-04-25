@@ -101,7 +101,7 @@ impl TicTacToe {
 
         let response = self
             .client
-            .quorum_driver()
+            .quorum_driver_api()
             .execute_transaction_block(
                 Transaction::from_data(
                     create_game_call,
@@ -206,7 +206,7 @@ impl TicTacToe {
             // Execute the transaction.
             let response = self
                 .client
-                .quorum_driver()
+                .quorum_driver_api()
                 .execute_transaction_block(
                     Transaction::from_data(
                         place_mark_call,

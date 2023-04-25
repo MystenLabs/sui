@@ -2620,7 +2620,7 @@ async fn test_move_call_delete() {
 
 #[tokio::test]
 async fn test_get_latest_parent_entry_genesis() {
-    let authority_state = init_state().await;
+    let authority_state = TestAuthorityBuilder::new().build().await;
     // There should not be any object with ID zero
     assert!(authority_state
         .get_object_or_tombstone(ObjectID::ZERO)
@@ -2764,12 +2764,14 @@ async fn test_account_state_unknown_account() {
 #[tokio::test]
 async fn test_authority_persist() {
     async fn init_state(
-        committee: Committee,
+        genesis: &Genesis,
         authority_key: AuthorityKeyPair,
         store: Arc<AuthorityStore>,
     ) -> Arc<AuthorityState> {
         TestAuthorityBuilder::new()
-            .build_with_store(committee, &authority_key, store, &[])
+            .with_genesis_and_keypair(genesis, &authority_key)
+            .with_store(store)
+            .build()
             .await
     }
 
@@ -2787,7 +2789,7 @@ async fn test_authority_persist() {
         AuthorityStore::open_with_committee_for_testing(&path, None, &committee, &genesis, 0)
             .await
             .unwrap();
-    let authority = init_state(committee, authority_key, store).await;
+    let authority = init_state(&genesis, authority_key, store).await;
 
     // Create an object
     let recipient = dbg_addr(2);
@@ -2812,7 +2814,7 @@ async fn test_authority_persist() {
         AuthorityStore::open_with_committee_for_testing(&path, None, &committee, &genesis, 0)
             .await
             .unwrap();
-    let authority2 = init_state(committee, authority_key, store).await;
+    let authority2 = init_state(&genesis, authority_key, store).await;
     let obj2 = authority2.get_object(&object_id).await.unwrap().unwrap();
 
     // Check the object is present
@@ -2983,7 +2985,7 @@ async fn test_valid_immutable_clock_parameter() {
 async fn test_genesis_sui_system_state_object() {
     // This test verifies that we can read the genesis SuiSystemState object.
     // And its Move layout matches the definition in Rust (so that we can deserialize it).
-    let authority_state = init_state().await;
+    let authority_state = TestAuthorityBuilder::new().build().await;
     let wrapper = authority_state
         .get_object(&SUI_SYSTEM_STATE_OBJECT_ID)
         .await
@@ -3907,7 +3909,7 @@ pub fn find_by_id(fx: &[(ObjectRef, Owner)], id: ObjectID) -> Option<ObjectRef> 
 pub async fn init_state_with_objects_and_object_basics<I: IntoIterator<Item = Object>>(
     objects: I,
 ) -> (Arc<AuthorityState>, ObjectRef) {
-    let state = init_state().await;
+    let state = TestAuthorityBuilder::new().build().await;
     for obj in objects {
         state.insert_genesis_object(obj).await;
     }
@@ -3920,7 +3922,7 @@ pub async fn init_state_with_ids_and_object_basics<
 >(
     objects: I,
 ) -> (Arc<AuthorityState>, ObjectRef) {
-    let state = init_state().await;
+    let state = TestAuthorityBuilder::new().build().await;
     for (address, object_id) in objects {
         let obj = Object::with_id_owner_for_testing(object_id, address);
         state.insert_genesis_object(obj).await;
@@ -4616,6 +4618,7 @@ fn test_choose_next_system_packages() {
     let committee = Committee::new_simple_test_committee().0;
     let v = &committee.voting_rights;
     let mut protocol_config = ProtocolConfig::get_for_max_version();
+    protocol_config.set_advance_to_highest_supported_protocol_version_for_testing(false);
     protocol_config.set_buffer_stake_for_protocol_upgrade_bps_for_testing(7500);
 
     // all validators agree on new system packages, but without a new protocol version, so no
@@ -4631,6 +4634,7 @@ fn test_choose_next_system_packages() {
         (ver(1), vec![]),
         AuthorityState::choose_protocol_version_and_system_packages(
             ProtocolVersion::MIN,
+            &protocol_config,
             &committee,
             capabilities,
             protocol_config.buffer_stake_for_protocol_upgrade_bps(),
@@ -4649,6 +4653,7 @@ fn test_choose_next_system_packages() {
         (ver(1), vec![]),
         AuthorityState::choose_protocol_version_and_system_packages(
             ProtocolVersion::MIN,
+            &protocol_config,
             &committee,
             capabilities.clone(),
             protocol_config.buffer_stake_for_protocol_upgrade_bps(),
@@ -4662,6 +4667,7 @@ fn test_choose_next_system_packages() {
         (ver(2), sort(vec![o1, o2])),
         AuthorityState::choose_protocol_version_and_system_packages(
             ProtocolVersion::MIN,
+            &protocol_config,
             &committee,
             capabilities,
             protocol_config.buffer_stake_for_protocol_upgrade_bps(),
@@ -4680,6 +4686,7 @@ fn test_choose_next_system_packages() {
         (ver(1), vec![]),
         AuthorityState::choose_protocol_version_and_system_packages(
             ProtocolVersion::MIN,
+            &protocol_config,
             &committee,
             capabilities,
             protocol_config.buffer_stake_for_protocol_upgrade_bps(),
@@ -4698,6 +4705,7 @@ fn test_choose_next_system_packages() {
         (ver(2), sort(vec![o1, o2])),
         AuthorityState::choose_protocol_version_and_system_packages(
             ProtocolVersion::MIN,
+            &protocol_config,
             &committee,
             capabilities,
             protocol_config.buffer_stake_for_protocol_upgrade_bps(),
@@ -4716,6 +4724,27 @@ fn test_choose_next_system_packages() {
         (ver(1), vec![]),
         AuthorityState::choose_protocol_version_and_system_packages(
             ProtocolVersion::MIN,
+            &protocol_config,
+            &committee,
+            capabilities,
+            protocol_config.buffer_stake_for_protocol_upgrade_bps(),
+        )
+    );
+
+    // all validators support 3, but with this protocol config we cannot advance multiple
+    // versions at once.
+    let capabilities = vec![
+        make_capabilities!(3, v[0].0, vec![o1, o2]),
+        make_capabilities!(3, v[1].0, vec![o1, o2]),
+        make_capabilities!(3, v[2].0, vec![o1, o2]),
+        make_capabilities!(3, v[3].0, vec![o1, o2]),
+    ];
+
+    assert_eq!(
+        (ver(2), sort(vec![o1, o2])),
+        AuthorityState::choose_protocol_version_and_system_packages(
+            ProtocolVersion::MIN,
+            &protocol_config,
             &committee,
             capabilities,
             protocol_config.buffer_stake_for_protocol_upgrade_bps(),
@@ -4734,6 +4763,69 @@ fn test_choose_next_system_packages() {
         (ver(1), vec![]),
         AuthorityState::choose_protocol_version_and_system_packages(
             ProtocolVersion::MIN,
+            &protocol_config,
+            &committee,
+            capabilities,
+            protocol_config.buffer_stake_for_protocol_upgrade_bps(),
+        )
+    );
+
+    protocol_config.set_advance_to_highest_supported_protocol_version_for_testing(true);
+
+    // skip straight to version 3
+    let capabilities = vec![
+        make_capabilities!(3, v[0].0, vec![o1, o2]),
+        make_capabilities!(3, v[1].0, vec![o1, o2]),
+        make_capabilities!(3, v[2].0, vec![o1, o2]),
+        make_capabilities!(3, v[3].0, vec![o1, o3]),
+    ];
+
+    assert_eq!(
+        (ver(3), sort(vec![o1, o2])),
+        AuthorityState::choose_protocol_version_and_system_packages(
+            ProtocolVersion::MIN,
+            &protocol_config,
+            &committee,
+            capabilities,
+            protocol_config.buffer_stake_for_protocol_upgrade_bps(),
+        )
+    );
+
+    let capabilities = vec![
+        make_capabilities!(3, v[0].0, vec![o1, o2]),
+        make_capabilities!(3, v[1].0, vec![o1, o2]),
+        make_capabilities!(4, v[2].0, vec![o1, o2]),
+        make_capabilities!(5, v[3].0, vec![o1, o2]),
+    ];
+
+    // packages are identical between all currently supported versions, so we can upgrade to
+    // 3 which is the highest supported version
+    assert_eq!(
+        (ver(3), sort(vec![o1, o2])),
+        AuthorityState::choose_protocol_version_and_system_packages(
+            ProtocolVersion::MIN,
+            &protocol_config,
+            &committee,
+            capabilities,
+            protocol_config.buffer_stake_for_protocol_upgrade_bps(),
+        )
+    );
+
+    let capabilities = vec![
+        make_capabilities!(2, v[0].0, vec![]),
+        make_capabilities!(2, v[1].0, vec![]),
+        make_capabilities!(3, v[2].0, vec![o1, o2]),
+        make_capabilities!(3, v[3].0, vec![o1, o3]),
+    ];
+
+    // Even though 2f+1 validators agree on version 2, we don't have an agreement about the
+    // packages. In this situation it is likely that (v2, []) is a valid upgrade, but we don't have
+    // a way to detect that. The upgrade simply won't happen until everyone moves to 3.
+    assert_eq!(
+        (ver(1), sort(vec![])),
+        AuthorityState::choose_protocol_version_and_system_packages(
+            ProtocolVersion::MIN,
+            &protocol_config,
             &committee,
             capabilities,
             protocol_config.buffer_stake_for_protocol_upgrade_bps(),

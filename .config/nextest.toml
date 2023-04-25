@@ -18,10 +18,10 @@ failure-output = "immediate-final"
 status-level = "skip"
 # Do not cancel the test run on the first failure.
 fail-fast = false
-# Retry failing tests in order to not block builds on flaky tests
-retries = 2
-# Mark tests as slow after 3 hours, kill them right after
-slow-timeout = { period = "3h", terminate-after = 1 }
+# Do not retry failing tests
+retries = 0
+# Mark tests as slow after 4 hours, kill them right after
+slow-timeout = { period = "4h", terminate-after = 1 }
 
 [profile.simtestnightly]
 # Print out output for failing tests as soon as they fail, and also at the end

@@ -10,16 +10,13 @@ import { useFaucetRateLimiter } from './useFaucetRateLimiter';
 import { API_ENV_TO_INFO } from '_app/ApiProvider';
 import { Button, type ButtonProps } from '_app/shared/ButtonUI';
 import { useAppSelector } from '_hooks';
-import { trackEvent } from '_shared/plausible';
 
 export type FaucetRequestButtonProps = {
     variant?: ButtonProps['variant'];
-    trackEventSource: 'home' | 'settings';
 };
 
 function FaucetRequestButton({
     variant = 'primary',
-    trackEventSource,
 }: FaucetRequestButtonProps) {
     const network = useAppSelector(({ app }) => app.apiEnv);
     const networkName = API_ENV_TO_INFO[network].name.replace(/sui\s*/gi, '');
@@ -45,9 +42,6 @@ function FaucetRequestButton({
                     error: (error) => (
                         <FaucetMessageInfo error={error.message} />
                     ),
-                });
-                trackEvent('RequestGas', {
-                    props: { source: trackEventSource, networkName },
                 });
             }}
             loading={mutation.isMutating}

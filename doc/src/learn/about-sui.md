@@ -36,7 +36,7 @@ This breakthrough is possible only with Sui's novel data model. Thanks to its ob
 - Better user experience for web3 apps
 - [Narwhal and Bullshark](../learn/architecture/consensus.md) DAG-based mempool and efficient Byzantine Fault Tolerant (BFT) consensus
 
-Sui is the only blockchain today that can scale with the growth of web3 while achieving industry-leading performance, cost, programmability, and usability. We see Sui as the first internet-scale programmable blockchain platform, a foundational layer for web3.
+Sui is the only blockchain today that can scale with the growth of web3 while achieving industry-leading performance, cost, programmability, and usability. Sui is the first internet-scale programmable blockchain platform, a foundational layer for web3.
 
 ## Unparalleled scalability, immediate settlement
 
@@ -49,7 +49,7 @@ Today, users of existing blockchains pay a considerable tax as network usage inc
 
 Sui scales horizontally to meet the demands of applications. Network capacity grows in proportion to the increase in Sui validators' processing power by adding workers, resulting in low gas fees even during high network traffic. This scalability characteristic is in sharp contrast to other blockchains with rigid bottlenecks.
 
-By design, Sui validators (nodes) can effectively scale the network throughput infinitely to meet the demand of builders and creators. We believe Sui can do for web3 what broadband internet did for web2.
+By design, Sui validators (nodes) can effectively scale the network throughput infinitely to meet the demand of builders and creators. Sui can do for web3 what broadband internet did for web2.
 
 **Note:** As of Mar. 19, 2022, an non-optimized single-worker Sui validator running on an 8-core M1 Macbook Pro can execute and commit 120,000 token transfer transactions per second (TPS). Throughput scales linearly with the number of cores–the same machine processes 25,000 TPS in a single core configuration.
 
@@ -61,7 +61,7 @@ Sui Move smart contracts power Sui applications. Sui Move is a dialect of the Mo
 
 Sui Move's design prevents issues such as [reentrancy vulnerabilities](https://en.wikipedia.org/wiki/Reentrancy_(computing)), [poison tokens](https://www.theblock.co/post/112339/creative-attacker-steals-76000-in-rune-by-giving-out-free-tokens), and [spoofed token approvals](https://www.theverge.com/2022/2/20/22943228/opensea-phishing-hack-smart-contract-bug-stolen-nft) that attackers have leveraged to steal millions on other platforms. Its emphasis on safety and expressivity makes it easier for developers to transition from web2 to web3 without understanding the intricacies of the underlying infrastructure.
 
-We are confident that Sui Move is well-positioned to become the de-facto execution environment not only for Sui but for every next-generation smart contract platform.
+Sui Move is well-positioned to become the de-facto execution environment not only for Sui but for every next-generation smart contract platform.
 
 ## Ability to define rich and composable on-chain assets
 
@@ -71,7 +71,7 @@ Rich on-chain assets enable new applications and economies based on utility with
 
 ## Better user experience for web3 apps
 
-We want to make Sui the most accessible smart contract platform, empowering developers to create great user experiences in web3. To usher in the next billion users, we will empower developers with various tools to take advantage of the power of the Sui blockchain. The Sui Development Kit (SDK) will enable developers to build without boundaries.
+Sui aims to make Sui the most accessible smart contract platform, empowering developers to create great user experiences in web3. To usher in the next billion users, Sui empowers developers with various tools to take advantage of the power of the Sui blockchain. The Sui Development Kit (SDK) will enable developers to build without boundaries.
 
 ## Build cool stuff
 

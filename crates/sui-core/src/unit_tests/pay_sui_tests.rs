@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::authority_tests::{
-    init_state, init_state_with_committee, send_and_confirm_transaction,
-};
+use crate::authority::authority_tests::{init_state_with_committee, send_and_confirm_transaction};
+use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::AuthorityState;
 use futures::future::join_all;
 use std::collections::HashMap;
@@ -391,7 +390,7 @@ async fn execute_pay_sui(
     sender_key: AccountKeyPair,
     gas_budget: u64,
 ) -> PaySuiTransactionBlockExecutionResult {
-    let authority_state = init_state().await;
+    let authority_state = TestAuthorityBuilder::new().build().await;
 
     let input_coin_refs: Vec<ObjectRef> = input_coin_objects
         .iter()
@@ -427,6 +426,8 @@ async fn execute_pay_all_sui(
 ) -> PaySuiTransactionBlockExecutionResult {
     let dir = tempfile::TempDir::new().unwrap();
     let network_config = sui_config::builder::ConfigBuilder::new(&dir)
+        // TODO: fix numbers in tests to not depend on rgp being 1
+        .with_reference_gas_price(1)
         .with_objects(
             input_coin_objects
                 .clone()

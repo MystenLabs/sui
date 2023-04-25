@@ -18,5 +18,5 @@ export async function createWallet(page: Page, extensionUrl: string) {
     await page
         .locator('label', { has: page.locator('input[type=checkbox]') })
         .click();
-    await page.getByRole('button', { name: /Open Sui Wallet/ }).click();
+    await page.getByRole('link', { name: /Open Sui Wallet/ }).click();
 }

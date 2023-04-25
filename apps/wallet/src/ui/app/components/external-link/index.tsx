@@ -3,8 +3,6 @@
 
 import { memo } from 'react';
 
-import Icon from '_components/icon';
-
 import type { ReactNode } from 'react';
 
 export type ExternalLinkProps = {
@@ -12,7 +10,6 @@ export type ExternalLinkProps = {
     className?: string;
     children: ReactNode;
     title?: string;
-    showIcon?: boolean;
     onClick?(): void;
 };
 
@@ -21,7 +18,6 @@ function ExternalLink({
     className,
     children,
     title,
-    showIcon = true,
     onClick,
 }: ExternalLinkProps) {
     return (
@@ -34,7 +30,6 @@ function ExternalLink({
             onClick={onClick}
         >
             {children}
-            {showIcon ? <Icon icon="link-45deg" /> : null}
         </a>
     );
 }

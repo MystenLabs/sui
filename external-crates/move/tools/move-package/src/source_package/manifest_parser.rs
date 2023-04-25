@@ -334,6 +334,11 @@ pub fn parse_dependency(dep_name: &str, mut tval: TV) -> Result<PM::Dependency> 
         .transpose()?;
     let version = table.remove("version").map(parse_version).transpose()?;
     let digest = table.remove("digest").map(parse_digest).transpose()?;
+    let dep_override = table
+        .remove("override")
+        .map(parse_dep_override)
+        .transpose()?
+        .map_or(false, |o| o);
 
     let kind = match (
         table.remove("local"),
@@ -350,7 +355,10 @@ pub fn parse_dependency(dep_name: &str, mut tval: TV) -> Result<PM::Dependency> 
                 bail!("Local source path not a string")
             };
 
-            PM::DependencyKind::Local(local)
+            PM::DependencyKind::Local(
+                // with allow_cwd_parent set to true, it never fails
+                PM::normalize_path(local, true /* allow_cwd_parent */).unwrap(),
+            )
         }
 
         (None, subdir, Some(git_url), None) => {
@@ -433,6 +441,7 @@ pub fn parse_dependency(dep_name: &str, mut tval: TV) -> Result<PM::Dependency> 
         subst,
         version,
         digest,
+        dep_override,
     }))
 }
 
@@ -500,6 +509,13 @@ fn parse_digest(tval: TV) -> Result<PM::PackageDigest> {
         .as_str()
         .ok_or_else(|| format_err!("Invalid package digest"))?;
     Ok(PM::PackageDigest::from(digest_str))
+}
+
+fn parse_dep_override(tval: TV) -> Result<PM::DepOverride> {
+    if !tval.is_bool() {
+        bail!("Invalid dependency override value");
+    }
+    Ok(tval.as_bool().unwrap())
 }
 
 // check that only recognized names are provided at the top-level

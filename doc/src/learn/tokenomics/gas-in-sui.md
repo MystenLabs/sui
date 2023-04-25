@@ -31,7 +31,7 @@ Importantly, though, Sui’s computation gas schedule is built coarsely with a b
 
 Using coarse bucketing accomplishes two important goals:
 * Frees developers from optimizing their smart contracts to deliver marginal gains in gas costs via "gas golfing" — instead, can focus on step-function improvements in their products and services.
-* Gives Sui protocol devs the freedom to adjust per-instruction gas costs and experiment with new gas metering schemes without creating significant disruption for builders. We expect this will happen frequently, so it's important that builders do *not* rely on a per-instruction gas costs remaining stable over time.
+* Gives Sui protocol devs the freedom to adjust per-instruction gas costs and experiment with new gas metering schemes without creating significant disruption for builders. This can happen frequently, so it's important that builders do *not* rely on a per-instruction gas costs remaining stable over time.
 
 | Bucket Lower Threshold | Bucket Upper Threshold | Computation Units |
 | --- | --- | --- |

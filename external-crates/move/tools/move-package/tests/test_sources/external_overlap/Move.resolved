@@ -25,24 +25,25 @@ ResolvedGraph {
             ],
             "A": [
                 (
-                    "Root",
-                    Incoming,
-                ),
-                (
                     "ADep",
                     Outgoing,
+                ),
+                (
+                    "Root",
+                    Incoming,
                 ),
             ],
         },
         package_table: {
             "A": Package {
                 kind: Local(
-                    "./deps_only/A",
+                    "deps_only/A",
                 ),
                 version: None,
                 resolver: Some(
                     "../resolvers/successful.sh",
                 ),
+                overridden_path: false,
             },
             "ADep": Package {
                 kind: Local(
@@ -50,6 +51,7 @@ ResolvedGraph {
                 ),
                 version: None,
                 resolver: None,
+                overridden_path: false,
             },
         },
         always_deps: {
@@ -101,6 +103,7 @@ ResolvedGraph {
                             subst: None,
                             version: None,
                             digest: None,
+                            dep_override: false,
                         },
                     ),
                 },
@@ -158,11 +161,12 @@ ResolvedGraph {
                     "ADep": Internal(
                         InternalDependency {
                             kind: Local(
-                                "./deps_only/ADep",
+                                "deps_only/ADep",
                             ),
                             subst: None,
                             version: None,
                             digest: None,
+                            dep_override: false,
                         },
                     ),
                 },

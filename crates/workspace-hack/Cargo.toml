@@ -26,12 +26,13 @@ aho-corasick = { version = "0.7" }
 aliasable = { version = "0.1" }
 alloc-no-stdlib = { version = "2", default-features = false }
 alloc-stdlib = { version = "0.2", default-features = false }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "691e43c3f4df5e33b898a91cb1a808f68f76f52e", default-features = false }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "691e43c3f4df5e33b898a91cb1a808f68f76f52e", default-features = false }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "691e43c3f4df5e33b898a91cb1a808f68f76f52e", default-features = false }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "05322deb1795a5d482630740bc938fa7f067c58f", default-features = false }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "05322deb1795a5d482630740bc938fa7f067c58f", default-features = false }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "05322deb1795a5d482630740bc938fa7f067c58f", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace"] }
+arbitrary = { version = "1", default-features = false, features = ["derive_arbitrary"] }
 arc-swap = { version = "1", default-features = false, features = ["serde"] }
 ark-bls12-381 = { version = "0.4" }
 ark-bn254 = { version = "0.4" }
@@ -251,7 +252,7 @@ group-5ef9efb8ec2df382 = { package = "group", version = "0.12", default-features
 guppy = { version = "0.15", default-features = false, features = ["rayon1", "summaries"] }
 guppy-summaries = { version = "0.7", default-features = false }
 guppy-workspace-hack = { version = "0.1", default-features = false }
-h2 = { version = "0.3", default-features = false }
+h2 = { version = "0.3.17", default-features = false }
 hakari = { version = "0.13", default-features = false, features = ["cli-support"] }
 half = { version = "1", default-features = false }
 hashbrown-594e8ee84c453af0 = { package = "hashbrown", version = "0.13", features = ["raw"] }
@@ -344,7 +345,7 @@ move-bytecode-viewer = { path = "../../external-crates/move/tools/move-bytecode-
 move-cli = { path = "../../external-crates/move/tools/move-cli", default-features = false }
 move-command-line-common = { path = "../../external-crates/move/move-command-line-common", default-features = false }
 move-compiler = { path = "../../external-crates/move/move-compiler", default-features = false }
-move-core-types = { path = "../../external-crates/move/move-core/types", features = ["address32"] }
+move-core-types = { path = "../../external-crates/move/move-core/types", features = ["address32", "fuzzing"] }
 move-coverage = { path = "../../external-crates/move/tools/move-coverage" }
 move-disassembler = { path = "../../external-crates/move/tools/move-disassembler" }
 move-docgen = { path = "../../external-crates/move/move-prover/move-docgen", default-features = false }
@@ -680,13 +681,14 @@ aho-corasick = { version = "0.7" }
 aliasable = { version = "0.1" }
 alloc-no-stdlib = { version = "2", default-features = false }
 alloc-stdlib = { version = "0.2", default-features = false }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "691e43c3f4df5e33b898a91cb1a808f68f76f52e", default-features = false }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "691e43c3f4df5e33b898a91cb1a808f68f76f52e", default-features = false }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "691e43c3f4df5e33b898a91cb1a808f68f76f52e", default-features = false }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "691e43c3f4df5e33b898a91cb1a808f68f76f52e", default-features = false }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "05322deb1795a5d482630740bc938fa7f067c58f", default-features = false }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "05322deb1795a5d482630740bc938fa7f067c58f", default-features = false }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "05322deb1795a5d482630740bc938fa7f067c58f", default-features = false }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "05322deb1795a5d482630740bc938fa7f067c58f", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace"] }
+arbitrary = { version = "1", default-features = false, features = ["derive_arbitrary"] }
 arc-swap = { version = "1", default-features = false, features = ["serde"] }
 ark-bls12-381 = { version = "0.4" }
 ark-bn254 = { version = "0.4" }
@@ -848,6 +850,7 @@ der-ca01ad9e24f5d932 = { package = "der", version = "0.7", default-features = fa
 der-parser = { version = "8", features = ["bigint"] }
 derivative = { version = "2", default-features = false, features = ["use_core"] }
 derive-syn-parse = { version = "0.1", default-features = false }
+derive_arbitrary = { version = "1", default-features = false }
 derive_builder = { version = "0.12" }
 derive_builder_core = { version = "0.12", default-features = false }
 derive_builder_macro = { version = "0.12", default-features = false }
@@ -943,7 +946,7 @@ group-5ef9efb8ec2df382 = { package = "group", version = "0.12", default-features
 guppy = { version = "0.15", default-features = false, features = ["rayon1", "summaries"] }
 guppy-summaries = { version = "0.7", default-features = false }
 guppy-workspace-hack = { version = "0.1", default-features = false }
-h2 = { version = "0.3", default-features = false }
+h2 = { version = "0.3.17", default-features = false }
 hakari = { version = "0.13", default-features = false, features = ["cli-support"] }
 half = { version = "1", default-features = false }
 hashbrown-594e8ee84c453af0 = { package = "hashbrown", version = "0.13", features = ["raw"] }
@@ -1049,7 +1052,7 @@ move-bytecode-viewer = { path = "../../external-crates/move/tools/move-bytecode-
 move-cli = { path = "../../external-crates/move/tools/move-cli", default-features = false }
 move-command-line-common = { path = "../../external-crates/move/move-command-line-common", default-features = false }
 move-compiler = { path = "../../external-crates/move/move-compiler", default-features = false }
-move-core-types = { path = "../../external-crates/move/move-core/types", features = ["address32"] }
+move-core-types = { path = "../../external-crates/move/move-core/types", features = ["address32", "fuzzing"] }
 move-coverage = { path = "../../external-crates/move/tools/move-coverage" }
 move-disassembler = { path = "../../external-crates/move/tools/move-disassembler" }
 move-docgen = { path = "../../external-crates/move/move-prover/move-docgen", default-features = false }

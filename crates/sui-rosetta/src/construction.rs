@@ -134,7 +134,7 @@ pub async fn submit(
 
     let response = context
         .client
-        .quorum_driver()
+        .quorum_driver_api()
         .execute_transaction_block(
             signed_tx,
             SuiTransactionBlockResponseOptions::new()
@@ -271,7 +271,7 @@ pub async fn metadata(
         context
             .client
             .coin_read_api()
-            .select_coins(sender, None, total_amount.into(), None, vec![])
+            .select_coins(sender, None, total_amount.into(), vec![])
             .await
             .ok()
     } else {

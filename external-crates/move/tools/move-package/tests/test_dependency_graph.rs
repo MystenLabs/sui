@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     fs::{self, File},
     io::Write,
     path::PathBuf,
@@ -184,7 +184,15 @@ fn merge_simple() {
     )
     .expect("Reading inner");
 
-    assert!(outer.merge(inner, Symbol::from("")).is_ok());
+    assert!(outer
+        .merge(
+            Symbol::from("A"),
+            Symbol::from("A"),
+            inner,
+            Symbol::from(""),
+            &BTreeMap::new(),
+        )
+        .is_ok());
 
     assert_eq!(
         outer.topological_order(),
@@ -214,7 +222,15 @@ fn merge_into_root() {
     )
     .expect("Reading inner");
 
-    assert!(outer.merge(inner, Symbol::from("")).is_ok());
+    assert!(outer
+        .merge(
+            Symbol::from("Root"),
+            Symbol::from("A"),
+            inner,
+            Symbol::from(""),
+            &BTreeMap::new(),
+        )
+        .is_ok());
 
     assert_eq!(
         outer.topological_order(),
@@ -243,7 +259,7 @@ fn merge_detached() {
     )
     .expect("Reading inner");
 
-    let Err(err) = outer.merge(inner, Symbol::from("")) else {
+    let Err(err) = outer.merge(Symbol::from("OtherDep"), Symbol::from("A"), inner, Symbol::from(""), &BTreeMap::new()) else {
         panic!("Inner's root is not part of outer's graph, so this should fail");
     };
 
@@ -267,7 +283,7 @@ fn merge_after_calculating_always_deps() {
     )
     .expect("Reading inner");
 
-    let Err(err) = outer.merge(inner, Symbol::from("")) else {
+    let Err(err) = outer.merge(Symbol::from("A"),Symbol::from("A"), inner, Symbol::from(""), &BTreeMap::new()) else {
         panic!("Outer's always deps have already been calculated so this should fail");
     };
 
@@ -295,7 +311,15 @@ fn merge_overlapping() {
     )
     .expect("Reading inner");
 
-    assert!(outer.merge(inner, Symbol::from("")).is_ok());
+    assert!(outer
+        .merge(
+            Symbol::from("B"),
+            Symbol::from("A"),
+            inner,
+            Symbol::from(""),
+            &BTreeMap::new(),
+        )
+        .is_ok());
 }
 
 #[test]
@@ -319,7 +343,7 @@ fn merge_overlapping_different_deps() {
     )
     .expect("Reading inner");
 
-    let Err(err) = outer.merge(inner, Symbol::from("")) else {
+    let Err(err) = outer.merge(Symbol::from("B"),Symbol::from("A"), inner, Symbol::from(""), &BTreeMap::new()) else {
         panic!("Outer and inner mention package A which has different dependencies in both.");
     };
 
@@ -347,7 +371,7 @@ fn merge_cyclic() {
     )
     .expect("Reading inner");
 
-    let Err(err) = outer.merge(inner, Symbol::from("")) else {
+    let Err(err) = outer.merge(Symbol::from("B"), Symbol::from("Root"), inner, Symbol::from(""), &BTreeMap::new()) else {
         panic!("Inner refers back to outer's root");
     };
 

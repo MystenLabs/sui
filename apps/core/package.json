@@ -25,7 +25,7 @@
         "@mysten/sui.js": "workspace:*",
         "@sentry/react": "^7.47.0",
         "@sentry/tracing": "^7.47.0",
-        "@tanstack/react-query": "^4.29.1",
+        "@tanstack/react-query": "^4.29.3",
         "bignumber.js": "^9.1.1",
         "decimal.js": "^10.4.3",
         "posthog-js": "^1.53.1",
