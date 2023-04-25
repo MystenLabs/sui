@@ -48,9 +48,16 @@ function MyTokens() {
             {balance?.length ? (
                 <div className="flex flex-1 justify-start flex-col w-full mt-6">
                     <Text variant="caption" color="steel" weight="semibold">
-                        MY COINS
+                        My Coins
                     </Text>
-                    <div className="flex flex-col w-full justify-center divide-y divide-solid divide-steel/20 divide-x-0 px-1.5">
+                    <div className="flex flex-col w-full max-h-44 justify-start divide-y divide-solid divide-steel/20 divide-x-0 px-1.5 overflow-y-scroll pb-1">
+                        {balance.map(({ coinType, totalBalance }) => (
+                            <CoinBalance
+                                type={coinType}
+                                balance={BigInt(totalBalance)}
+                                key={coinType}
+                            />
+                        ))}
                         {balance.map(({ coinType, totalBalance }) => (
                             <CoinBalance
                                 type={coinType}
