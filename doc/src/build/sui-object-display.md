@@ -17,7 +17,7 @@ The basic set of properties suggested includes:
 **description** - A description for the object. The description is displayed when users view the object.
 **link** - A link to the object to use in an application.
 **image_url** - A URL or a blob with the image for the object.
-**thumbnail_url** - A URL to a **smaller** image to use in wallets, explorers and other products as a preview.
+**thumbnail_url** - A URL to a **smaller** image to use in wallets, explorers, and other products as a preview.
 **project_url** - A link to a website associated with the object or creator.
 **creator** - A string that indicates the object creator.
 
