@@ -19,7 +19,7 @@
 /// the owner to use `list` or `list_with_purchase_cap` methods if they
 /// wish to move the item somewhere else.
 ///
-module sui::kiosk_lock_rule {
+module kiosk::kiosk_lock_rule {
     use sui::kiosk::{Self, Kiosk};
     use sui::transfer_policy::{
         Self as policy,

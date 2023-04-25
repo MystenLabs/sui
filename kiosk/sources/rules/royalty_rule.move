@@ -27,7 +27,7 @@
 /// acceptable and the `amount_bp` to the percentage of the purchase price.
 /// The higher of the two will be used.
 ///
-module sui::royalty_rule {
+module kiosk::royalty_rule {
     use sui::sui::SUI;
     use sui::coin::{Self, Coin};
     use sui::tx_context::TxContext;
