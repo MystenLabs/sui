@@ -15,7 +15,6 @@ use move_core_types::identifier::Identifier;
 use sui_core::event_handler::EventHandler;
 use sui_json_rpc::api::{
     validate_limit, IndexerApiClient, IndexerApiServer, QUERY_MAX_RESULT_LIMIT,
-    QUERY_MAX_RESULT_LIMIT_OBJECTS,
 };
 use sui_json_rpc::indexer_api::spawn_subscription;
 use sui_json_rpc::SuiRpcModule;
@@ -75,7 +74,7 @@ impl<S: IndexerStore> IndexerApi<S> {
         limit: Option<usize>,
         descending_order: Option<bool>,
     ) -> Result<TransactionBlocksPage, IndexerError> {
-        let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT)?;
+        let limit = validate_limit(limit, *QUERY_MAX_RESULT_LIMIT)?;
         let is_descending = descending_order.unwrap_or_default();
         let cursor_str = cursor.map(|digest| digest.to_string());
         let mut tx_vec_from_db = match query.filter {
@@ -285,7 +284,7 @@ impl<S: IndexerStore> IndexerApi<S> {
             None => Ok((address, None)),
         }?;
         let options = options.unwrap_or_default();
-        let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_OBJECTS)?;
+        let limit = validate_limit(limit, *QUERY_MAX_RESULT_LIMIT)?;
 
         // NOTE: fetch one more object to check if there is next page
         let mut objects = self
