@@ -32,11 +32,11 @@ pub struct EntryFunction {
 
 #[derive(Default)]
 pub struct SurfStatistics {
-    num_successful_transactions: u64,
-    num_failed_transactions: u64,
-    num_owned_obj_transactions: u64,
-    num_shared_obj_transactions: u64,
-    unique_move_functions_called: HashSet<(ObjectID, String, String)>,
+    pub num_successful_transactions: u64,
+    pub num_failed_transactions: u64,
+    pub num_owned_obj_transactions: u64,
+    pub num_shared_obj_transactions: u64,
+    pub unique_move_functions_called: HashSet<(ObjectID, String, String)>,
 }
 
 impl SurfStatistics {

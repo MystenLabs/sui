@@ -26,9 +26,10 @@ pub struct SurferTask {
 impl SurferTask {
     pub async fn create_surfer_tasks<S: Default + SurfStrategy>(
         cluster: Arc<TestCluster>,
-        rng: &mut StdRng,
+        seed: u64,
         exit_rcv: watch::Receiver<()>,
     ) -> Vec<SurferTask> {
+        let mut rng = StdRng::seed_from_u64(seed);
         let immutable_objects: ImmObjects = Arc::new(RwLock::new(HashMap::new()));
         let shared_objects: SharedObjects = Arc::new(RwLock::new(HashMap::new()));
 

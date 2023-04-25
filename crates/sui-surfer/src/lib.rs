@@ -22,13 +22,16 @@ mod surf_strategy;
 mod surfer_state;
 mod surfer_task;
 
-const VALIDATOR_COUNT: usize = 4;
+const VALIDATOR_COUNT: usize = 7;
 const EPOCH_DURATION_MS: u64 = 120000;
 
 const ACCOUNT_NUM: usize = 20;
 const GAS_OBJECT_COUNT: usize = 3;
 
-pub async fn run<S: SurfStrategy + Default>(run_duration: Duration, package_paths: Vec<PathBuf>) {
+pub async fn run<S: SurfStrategy + Default>(
+    run_duration: Duration,
+    package_paths: Vec<PathBuf>,
+) -> SurfStatistics {
     let cluster = Arc::new(
         TestClusterBuilder::new()
             .with_num_validators(VALIDATOR_COUNT)
@@ -49,13 +52,13 @@ pub async fn run<S: SurfStrategy + Default>(run_duration: Duration, package_path
         VALIDATOR_COUNT, EPOCH_DURATION_MS
     );
 
-    let mut rng = rand::thread_rng();
-    let seed = rng.gen::<u64>();
+    let seed = rand::thread_rng().gen::<u64>();
     info!("Initial Seed: {:?}", seed);
     let mut rng = StdRng::seed_from_u64(seed);
     let (exit_sender, exit_rcv) = watch::channel(());
 
-    let mut tasks = SurferTask::create_surfer_tasks::<S>(cluster.clone(), &mut rng, exit_rcv).await;
+    let mut tasks =
+        SurferTask::create_surfer_tasks::<S>(cluster.clone(), rng.gen::<u64>(), exit_rcv).await;
     info!("Created {} surfer tasks", tasks.len());
 
     for path in package_paths {
@@ -74,9 +77,8 @@ pub async fn run<S: SurfStrategy + Default>(run_duration: Duration, package_path
     tokio::time::sleep(run_duration).await;
     exit_sender.send(()).unwrap();
     let all_stats: Result<Vec<_>, _> = join_all(handles).await.into_iter().collect();
-    let final_stats = SurfStatistics::aggregate(all_stats.unwrap());
-    final_stats.print_stats();
-    info!("Finished surfing");
+    SurfStatistics::aggregate(all_stats.unwrap())
+
     // TODO: Right now it will panic here complaining about dropping a tokio runtime
     // inside of another tokio runtime. Reason unclear.
 }
