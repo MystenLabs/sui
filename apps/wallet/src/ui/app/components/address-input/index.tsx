@@ -77,9 +77,7 @@ export function AddressInput({
 
                 <div
                     onClick={clearAddress}
-                    className={cx(
-                        'flex bg-gray-40 items-center justify-center w-12 p-0.5 mr-0 right-0 max-w-[20%] mx-3.5 cursor-pointer'
-                    )}
+                    className="flex bg-gray-40 items-center justify-center w-12 p-0.5 mr-0 right-0 max-w-[20%] mx-3.5 cursor-pointer"
                 >
                     {meta.touched && field.value ? (
                         <HamburgerOpen24 className="h-3 w-3 text-steel-darker" />
