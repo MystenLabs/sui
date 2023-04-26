@@ -17,9 +17,9 @@ Interestingly, cryptographic agility allows users to mix and match key schemes i
 example, one can pick a single Ed25519 mnemonic-based key and two ECDSA secp256r1 key to create a multisig account that 
 always requires the Ed25519 key, but also one of the ECDSA secp256r1 keys to sign. A potential application of the above
 structure is using mobile secure enclave stored keys as 2FA; note that currently iPhone and high-end Android devices 
-support ECDSA secp256r1 enclave-stored keys only).
+support ECDSA secp256r1 enclave-stored keys only.
 
-![Sui tokenomics flow](../../../static/cryptography/sui_multisig_structures.png "Multisig Sui supported structures")
+![Sui tokenomics flow](../../../static/cryptography/sui_multisig_structures_old.png "Multisig Sui supported structures")
 *Examples of Sui supported multisig structures.*
 
 ## Step 1: Add keys to Sui keystore
