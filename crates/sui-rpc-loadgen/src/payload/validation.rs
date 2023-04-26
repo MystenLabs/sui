@@ -71,7 +71,8 @@ pub(crate) async fn check_transactions(
                     digests.to_vec(),
                     SuiTransactionBlockResponseOptions::new()
                         .with_effects()
-                        .with_input(), // todo(Will) support options for this
+                        .with_input()
+                        .with_events(), // todo(Will) support options for this
                 )
                 .await
         }))
