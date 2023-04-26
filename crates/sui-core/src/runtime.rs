@@ -10,9 +10,9 @@ use tracing::warn;
 
 pub struct SuiRuntimes {
     // Order in this struct is the order in which runtimes are stopped
+    pub json_rpc: Runtime,
     pub sui_node: Runtime,
     pub metrics: Runtime,
-    pub json_rpc: Runtime,
 }
 
 impl SuiRuntimes {
