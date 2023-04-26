@@ -10109,6 +10109,7 @@ dependencies = [
  "bcs",
  "bimap",
  "clap 3.2.23",
+ "fastcrypto",
  "move-binary-format",
  "move-bytecode-utils",
  "move-command-line-common",
