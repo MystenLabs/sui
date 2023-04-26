@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ChevronLeft16, ChevronUp16 } from '@mysten/icons';
+import { ChevronLeft12, ChevronUp12 } from '@mysten/icons';
 import clsx from 'clsx';
 import { type ReactNode, useRef, useState } from 'react';
 import {
@@ -29,17 +29,16 @@ function ResizeHandle({
 }: ResizeHandleProps) {
     const [isDragging, setIsDragging] = useState(false);
 
-    const ChevronButton = isHorizontal ? ChevronLeft16 : ChevronUp16;
+    const ChevronButton = isHorizontal ? ChevronLeft12 : ChevronUp12;
 
     return (
         <PanelResizeHandle
-            className={clsx('group', isHorizontal ? 'px-2' : 'py-2')}
+            className={clsx('group/container', isHorizontal ? 'px-3' : 'py-3')}
             onDragging={setIsDragging}
         >
             <div
-                data-is-dragging={isDragging}
                 className={clsx(
-                    'relative bg-gray-45 group-hover:bg-sui data-[is-dragging=true]:bg-hero',
+                    'relative border border-gray-45 group-hover/container:border-hero',
                     isHorizontal ? 'h-full w-px' : 'h-px'
                 )}
             >
@@ -49,19 +48,22 @@ function ResizeHandle({
                         onClick={togglePanelCollapse}
                         data-is-dragging={isDragging}
                         className={clsx([
-                            'flex cursor-pointer items-center rounded-full',
-                            'border border-gray-45 bg-white text-gray-70',
-                            'hover:bg-sui hover:text-white group-hover:block',
-                            isCollapsed ? 'block' : 'hidden',
+                            'group/button',
+                            'flex h-6 w-6 cursor-pointer items-center justify-center rounded-full',
+                            'border-2 border-gray-45 bg-white text-gray-70 group-hover/container:border-hero-dark',
+                            'hover:bg-hero-dark hover:text-white',
                             isHorizontal
                                 ? 'absolute left-1/2 top-[5%] -translate-x-2/4'
                                 : 'absolute left-[5%] top-1/2 -translate-y-2/4',
                         ])}
                     >
                         <ChevronButton
-                            height={16}
-                            width={16}
-                            className={clsx(isCollapsed && 'rotate-180')}
+                            height={12}
+                            width={12}
+                            className={clsx(
+                                'text-gray-45 group-hover/button:text-white group-hover/container:text-hero',
+                                isCollapsed && 'rotate-180'
+                            )}
                         />
                     </button>
                 )}
