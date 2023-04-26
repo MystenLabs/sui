@@ -1117,10 +1117,10 @@ where
     }
 
     fn record_rpc_error_maybe(&self, name: ConciseAuthorityPublicKeyBytesRef, error: &SuiError) {
-        if let SuiError::RpcError(message, _code) = error {
+        if let SuiError::RpcError(_message, code) = error {
             self.metrics
                 .total_rpc_err
-                .with_label_values(&[&name.to_string(), message.as_str()])
+                .with_label_values(&[&name.to_string(), code.as_str()])
                 .inc();
         }
     }
