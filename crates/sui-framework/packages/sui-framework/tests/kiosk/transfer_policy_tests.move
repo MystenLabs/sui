@@ -138,6 +138,38 @@ module sui::transfer_policy_tests {
         wrapup(policy, cap, ctx);
     }
 
+    struct USD {}
+
+    #[test]
+    fun custom_policy() {
+        let ctx = &mut ctx();
+        let (policy, cap) = prepare(ctx);
+
+        policy::add_custom_policy<Asset, USD>(&mut policy, &cap, ctx);
+        assert!(policy::has_custom_policy<Asset, USD>(&policy), 0);
+
+        let request = policy::new_custom_request<Asset, USD>(
+            fresh_id(ctx), 10_000, fresh_id(ctx)
+        );
+
+        let usd_policy = policy::borrow_custom_policy_mut<Asset, USD>(
+            &mut policy, &cap, ctx
+        );
+
+        policy::confirm_custom_request(&policy, request);
+        wrapup(policy, cap, ctx);
+    }
+
+    use sui::coin::Coin;
+
+    public fun mint_c<C>(amount: u64, ctx: &mut TxContext): Coin<C> {
+        coin::mint_for_testing(amount, ctx)
+    }
+
+    public fun burn_c<C>(coin: Coin<C>): u64 {
+        coin::burn_for_testing<C>(coin)
+    }
+
     public fun prepare(ctx: &mut TxContext): (TransferPolicy<Asset>, TransferPolicyCap<Asset>) {
         let publisher = package::test_claim(OTW {}, ctx);
         let (policy, cap) = policy::new<Asset>(&publisher, ctx);

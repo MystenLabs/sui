@@ -43,6 +43,13 @@ module kiosk::kiosk_lock_rule {
         policy::add_rule(Rule {}, policy, cap, Config {})
     }
 
+    /// 
+    public fun add_custom<T>(
+        policy: &mut TransferPolicy<T>, cap: &TransferPolicyCap<T>
+    ) {
+        custom_policy::add_rule(Rule {}, policy, cap, config)
+    }
+
     /// Buyer: Prove the item was locked in the Kiosk to get the receipt and
     /// unblock the transfer request confirmation.
     public fun prove<T>(request: &mut TransferRequest<T>, kiosk: &Kiosk) {

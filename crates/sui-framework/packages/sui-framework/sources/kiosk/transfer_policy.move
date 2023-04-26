@@ -40,7 +40,7 @@ module sui::transfer_policy {
     /// A completed rule is not set in the `TransferPolicy`.
     const EIllegalRule: u64 = 1;
     /// A Rule is not set.
-    const EUnknownRequrement: u64 = 2;
+    const EUnknownRequirement: u64 = 2;
     /// Attempting to create a Rule that is already set.
     const ERuleAlreadySet: u64 = 3;
     /// Trying to `withdraw` or `close_and_withdraw` with a wrong Cap.
@@ -64,6 +64,12 @@ module sui::transfer_policy {
         /// Collected Receipts. Used to verify that all of the rules
         /// were followed and `TransferRequest` can be confirmed.
         receipts: VecSet<TypeName>
+    }
+
+    /// A wrapper around `TransferRequest` that allows to handle custom Coin
+    /// scenarios.
+    struct CustomTransferRequest<phantom T, phantom C> {
+        request: TransferRequest<T>,
     }
 
     /// A unique capability that allows the owner of the `T` to authorize
@@ -107,6 +113,12 @@ module sui::transfer_policy {
         item: ID, paid: u64, from: ID
     ): TransferRequest<T> {
         TransferRequest { item, paid, from, receipts: vec_set::empty() }
+    }
+
+    public fun new_custom_request<T, C>(
+        item: ID, paid: u64, from: ID
+    ): CustomTransferRequest<T, C> {
+        CustomTransferRequest { request: new_request(item, paid, from) }
     }
 
     /// Register a type in the Kiosk system and receive an `TransferPolicyCap`
@@ -188,19 +200,74 @@ module sui::transfer_policy {
         (item, paid, from)
     }
 
-    // === Rules Logic ===
+    // === Custom Coin support ===
 
-    /// Add a custom Rule to the `TransferPolicy`. Once set, `TransferRequest` must
-    /// receive a confirmation of the rule executed so the hot potato can be unpacked.
+    struct CustomPolicyKey<phantom Coin> has copy, store, drop {}
+    struct CustomBalanceKey<phantom Coin> has copy, store, drop {}
+
+    /// Adds support for custom coin to the `TransferPolicy`.
+    public fun add_custom_policy<T, C>(
+        self: &mut TransferPolicy<T>,
+        cap: &TransferPolicyCap<T>,
+        ctx: &mut TxContext
+    ) {
+        assert!(object::id(self) == cap.policy_id, ENotOwner);
+
+        df::add(&mut self.id, CustomPolicyKey<C> {}, TransferPolicy<T> {
+            id: object::new(ctx),
+            rules: vec_set::empty(),
+            // this buddy is with us forever now. ;)
+            // will always be zero.
+            balance: balance::zero()
+        });
+    }
+
+    /// Check if the `TransferPolicy` supports a custom coin.
+    public fun has_custom_policy<T, C>(self: &TransferPolicy<T>): bool {
+        df::exists_(&self.id, CustomPolicyKey<C> {})
+    }
+
+    public fun confirm_custom_request<T, C>(
+        self: &TransferPolicy<T>,
+        request: CustomTransferRequest<T, C>
+    ): (ID, u64, ID) {
+        let self = df::borrow(&self.id, CustomPolicyKey<C> {});
+        let CustomTransferRequest { request } = request;
+        confirm_request(self, request)
+    }
+
+    public fun add_to_balance_custom<T, Rule: drop, C>(
+        _: Rule, policy: &mut TransferPolicy<T>, _coin: Coin<C>
+    ) {
+        assert!(has_rule<T, Rule>(policy), EUnknownRequirement);
+        assert!(has_custom_policy<T, C>(policy), EUnknownRequirement);
+        abort 1337
+    }
+
+    public fun borrow_custom_policy_mut<T, C>(
+        self: &mut TransferPolicy<T>
+    ): &TransferPolicy<T> {
+        df::borrow_mut(&mut self.id, CustomPolicyKey<C> {})
+    }
+
+    // === Rules Logic: SUI ===
+
+    /// Add a custom Rule to the `TransferPolicy`. Once set, `TransferRequest`
+    /// must receive a confirmation of the rule executed so the hot potato can
+    /// be unpacked.
     ///
     /// - T: the type to which TransferPolicy<T> is applied.
     /// - Rule: the witness type for the Custom rule
     /// - Config: a custom configuration for the rule
     ///
-    /// Config requires `drop` to allow creators to remove any policy at any moment,
-    /// even if graceful unpacking has not been implemented in a "rule module".
+    /// Config requires `drop` to allow creators to remove any policy at any
+    /// moment, even if graceful unpacking has not been implemented in the
+    /// "rule module".
     public fun add_rule<T, Rule: drop, Config: store + drop>(
-        _: Rule, policy: &mut TransferPolicy<T>, cap: &TransferPolicyCap<T>, cfg: Config
+        _: Rule,
+        policy: &mut TransferPolicy<T>,
+        cap: &TransferPolicyCap<T>,
+        cfg: Config
     ) {
         assert!(object::id(policy) == cap.policy_id, ENotOwner);
         assert!(!has_rule<T, Rule>(policy), ERuleAlreadySet);
@@ -219,7 +286,7 @@ module sui::transfer_policy {
     public fun add_to_balance<T, Rule: drop>(
         _: Rule, policy: &mut TransferPolicy<T>, coin: Coin<SUI>
     ) {
-        assert!(has_rule<T, Rule>(policy), EUnknownRequrement);
+        assert!(has_rule<T, Rule>(policy), EUnknownRequirement);
         coin::put(&mut policy.balance, coin)
     }
 
@@ -262,6 +329,24 @@ module sui::transfer_policy {
     /// Read the `rules` field from the `TransferPolicy`.
     public fun rules<T>(self: &TransferPolicy<T>): &VecSet<TypeName> {
         &self.rules
+    }
+
+    // === Fields access: CustomTransferRequest ===
+
+    /// Get the `request` field from the `CustomTransferRequest`.
+    /// Useful for reading the original `TransferRequest`.
+    public fun request<T, C>(
+        self: &CustomTransferRequest<T, C>
+    ): &TransferRequest<T> {
+        &self.request
+    }
+
+    /// Get a mutable reference to the `request` field from the
+    /// `CustomTransferRequest`. Should be used to add receipts to the request.
+    public fun request_mut<T, C>(
+        self: &mut CustomTransferRequest<T, C>
+    ): &mut TransferRequest<T> {
+        &mut self.request
     }
 
     // === Fields access: TransferRequest ===

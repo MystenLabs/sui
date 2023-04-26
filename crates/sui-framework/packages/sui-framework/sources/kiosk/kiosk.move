@@ -39,7 +39,8 @@ module sui::kiosk {
     use sui::transfer_policy::{
         Self,
         TransferPolicy,
-        TransferRequest
+        TransferRequest,
+        // CustomTransferRequest
     };
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
@@ -277,6 +278,18 @@ module sui::kiosk {
         event::emit(ItemListed<T> { kiosk: object::id(self), id, price })
     }
 
+    // public fun custom_list<T: key + store, C>(
+    //     self: &mut Kiosk, cap: &KioskOwnerCap, id: ID, price: u64
+    // ) {
+    //     abort 0
+    // }
+
+    // public fun custom_purchase<T: key + store, C>(
+    //     self: &mut Kiosk, id: ID, payment: Coin<C>
+    // ): (T, CustomTransferRequest<T>) {
+    //     abort 0
+    // }
+
     /// Calls `place` and `list` together - simplifies the flow.
     public fun place_and_list<T: key + store>(
         self: &mut Kiosk, cap: &KioskOwnerCap, item: T, price: u64
@@ -286,13 +299,13 @@ module sui::kiosk {
         list<T>(self, cap, id, price)
     }
 
-    /// Make a trade: pay the owner of the item and request a Transfer to the `target`
-    /// kiosk (to prevent item being taken by the approving party).
+    /// Make a trade: pay the owner of the item and request a Transfer to the
+    /// `target` kiosk (to prevent item being taken by the approving party).
     ///
-    /// Received `TransferRequest` needs to be handled by the publisher of the T,
-    /// if they have a method implemented that allows a trade, it is possible to
-    /// request their approval (by calling some function) so that the trade can be
-    /// finalized.
+    /// Received `TransferRequest` needs to be handled by the publisher of the
+    /// T, if they have a method implemented that allows a trade, it is possible
+    /// to request their approval (by calling some function) so that the trade
+    /// can be finalized.
     public fun purchase<T: key + store>(
         self: &mut Kiosk, id: ID, payment: Coin<SUI>
     ): (T, TransferRequest<T>) {
@@ -349,8 +362,9 @@ module sui::kiosk {
         purchase<T>(self, item_id, payment)
     }
 
-    /// Return the `PurchaseCap` without making a purchase; remove an active offer and
-    /// allow the item for taking. Can only be returned to its `Kiosk`, aborts otherwise.
+    /// Return the `PurchaseCap` without making a purchase; remove an active
+    /// offer and allow the item for taking. Can only be returned to its
+    /// `Kiosk`, aborts otherwise.
     public fun return_purchase_cap<T: key + store>(
         self: &mut Kiosk, purchase_cap: PurchaseCap<T>
     ) {
@@ -415,7 +429,9 @@ module sui::kiosk {
     }
 
     /// Allow or disallow `uid` and `uid_mut` access via the `allow_extensions` setting.
-    public fun set_allow_extensions(self: &mut Kiosk, cap: &KioskOwnerCap, allow_extensions: bool) {
+    public fun set_allow_extensions(
+        self: &mut Kiosk, cap: &KioskOwnerCap, allow_extensions: bool
+    ) {
         assert!(object::id(self) == cap.for, ENotOwner);
         self.allow_extensions = allow_extensions;
     }
@@ -470,7 +486,9 @@ module sui::kiosk {
 
     /// Mutably borrow an item from the `Kiosk`.
     /// Item can be `borrow_mut`ed only if it's not `is_listed`.
-    public fun borrow_mut<T: key + store>(self: &mut Kiosk, cap: &KioskOwnerCap, id: ID): &mut T {
+    public fun borrow_mut<T: key + store>(
+        self: &mut Kiosk, cap: &KioskOwnerCap, id: ID
+    ): &mut T {
         assert!(object::id(self) == cap.for, ENotOwner);
         assert!(has_item(self, id), EItemNotFound);
         assert!(!is_listed(self, id), EItemIsListed);
@@ -480,7 +498,9 @@ module sui::kiosk {
 
     /// Take the item from the `Kiosk` with a guarantee that it will be returned.
     /// Item can be `borrow_val`-ed only if it's not `is_listed`.
-    public fun borrow_val<T: key + store>(self: &mut Kiosk, cap: &KioskOwnerCap, id: ID): (T, Borrow) {
+    public fun borrow_val<T: key + store>(
+        self: &mut Kiosk, cap: &KioskOwnerCap, id: ID
+    ): (T, Borrow) {
         assert!(object::id(self) == cap.for, ENotOwner);
         assert!(has_item(self, id), EItemNotFound);
         assert!(!is_listed(self, id), EItemIsListed);
@@ -491,8 +511,11 @@ module sui::kiosk {
         )
     }
 
-    /// Return the borrowed item to the `Kiosk`. This method cannot be avoided if `borrow_val` is used.
-    public fun return_val<T: key + store>(self: &mut Kiosk, item: T, borrow: Borrow) {
+    /// Return the borrowed item to the `Kiosk`. This method cannot be avoided
+    /// if `borrow_val` is used.
+    public fun return_val<T: key + store>(
+        self: &mut Kiosk, item: T, borrow: Borrow
+    ) {
         let Borrow { kiosk_id, item_id } = borrow;
 
         assert!(object::id(self) == kiosk_id, EWrongKiosk);
