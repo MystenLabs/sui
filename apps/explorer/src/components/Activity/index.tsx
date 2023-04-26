@@ -4,7 +4,7 @@
 import { useState } from 'react';
 // import toast from 'react-hot-toast';
 
-import { CheckpointsActivityTable } from './CheckpointsActivityTable';
+import { CheckpointsTable } from '../checkpoints/CheckpointsTable';
 import { TransactionsActivityTable } from './TransactionsActivityTable';
 
 import { EpochsTable } from '~/pages/epochs/EpochsTable';
@@ -88,7 +88,7 @@ export function Activity({
                         />
                     </TabPanel>
                     <TabPanel>
-                        <CheckpointsActivityTable
+                        <CheckpointsTable
                             refetchInterval={refetchInterval}
                             initialLimit={initialLimit}
                             disablePagination={disablePagination}

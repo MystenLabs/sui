@@ -6,11 +6,11 @@ import { ArrowRight12 } from '@mysten/icons';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
-import { genTableDataFromCheckpointsData } from './utils';
+import { genTableDataFromCheckpointsData } from '../Activity/utils';
 
 import { useGetCheckpoints } from '~/hooks/useGetCheckpoints';
 import { Link } from '~/ui/Link';
-import { Pagination } from '~/ui/Pagination';
+import { Pagination, useCursorPagination } from '~/ui/Pagination';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
 import { Text } from '~/ui/Text';
@@ -26,23 +26,14 @@ interface Props {
     maxCursor?: string;
 }
 
-export function CheckpointsActivityTable({
+export function CheckpointsTable({
     disablePagination,
     initialLimit = DEFAULT_CHECKPOINTS_LIMIT,
     initialCursor,
     maxCursor,
 }: Props) {
-    const [currentPage, setCurrentPage] = useState(0);
     const [limit, setLimit] = useState(initialLimit);
     const rpc = useRpcClient();
-    const {
-        data,
-        isLoading,
-        isFetching,
-        isFetchingNextPage,
-        fetchNextPage,
-        hasNextPage,
-    } = useGetCheckpoints(initialCursor, limit);
 
     const countQuery = useQuery(['checkpoints', 'count'], () =>
         rpc.getLatestCheckpointSequenceNumber()
@@ -54,27 +45,20 @@ export function CheckpointsActivityTable({
         return Number(countQuery.data ?? 0);
     }, [countQuery.data, initialCursor, maxCursor]);
 
-    const cardData =
-        data && Boolean(data.pages[currentPage])
-            ? genTableDataFromCheckpointsData(data.pages[currentPage])
-            : undefined;
+    const checkpoints = useGetCheckpoints(initialCursor, limit);
 
-    const evaluateHasNextPage = () => {
-        let goToNextPage =
-            Boolean(hasNextPage) && Boolean(data?.pages[currentPage]);
+    const { data, isFetching, pagination, isLoading, isError } =
+        useCursorPagination(checkpoints);
+    const cardData = data ? genTableDataFromCheckpointsData(data) : undefined;
 
-        if (maxCursor) {
-            // Used for checkpoints on epochs
-            goToNextPage =
-                goToNextPage &&
-                Number(data?.pages[currentPage].nextCursor) > Number(maxCursor);
-        }
-
-        return goToNextPage;
-    };
     return (
         <div className="flex flex-col space-y-5 text-left xl:pr-10">
-            {isLoading || isFetching || isFetchingNextPage || !cardData ? (
+            {isError && (
+                <div className="pt-2 font-sans font-semibold text-issue-dark">
+                    Failed to load Checkpoints
+                </div>
+            )}
+            {isLoading || isFetching || !cardData ? (
                 <PlaceholderTable
                     rowCount={Number(limit)}
                     rowHeight="16px"
@@ -96,28 +80,12 @@ export function CheckpointsActivityTable({
             )}
 
             <div className="flex justify-between">
-                {(hasNextPage || data?.pages.length) && !disablePagination ? (
+                {!disablePagination ? (
                     <Pagination
-                        onNext={() => {
-                            if (isLoading || isFetching) {
-                                return;
-                            }
-
-                            // Make sure we are at the end before fetching another page
-                            if (
-                                data &&
-                                currentPage === data?.pages.length - 1 &&
-                                !isLoading &&
-                                !isFetching
-                            ) {
-                                fetchNextPage();
-                            }
-                            setCurrentPage(currentPage + 1);
-                        }}
-                        hasNext={evaluateHasNextPage()}
-                        hasPrev={currentPage !== 0}
-                        onPrev={() => setCurrentPage(currentPage - 1)}
-                        onFirst={() => setCurrentPage(0)}
+                        {...pagination}
+                        hasNext={
+                            Number(data && data.nextCursor) > Number(maxCursor)
+                        }
                     />
                 ) : (
                     <Link to="/recent?tab=checkpoints" after={<ArrowRight12 />}>
@@ -136,7 +104,7 @@ export function CheckpointsActivityTable({
                             value={limit}
                             onChange={(e) => {
                                 setLimit(Number(e.target.value));
-                                setCurrentPage(0);
+                                pagination.onFirst();
                             }}
                         >
                             <option value={20}>20 Per Page</option>

@@ -12,7 +12,7 @@ import { EpochProgress } from './stats/EpochProgress';
 import { EpochStats } from './stats/EpochStats';
 import { ValidatorStatus } from './stats/ValidatorStatus';
 
-import { CheckpointsActivityTable } from '~/components/Activity/CheckpointsActivityTable';
+import { CheckpointsTable } from '~/components/checkpoints/CheckpointsTable';
 import { useEnhancedRpcClient } from '~/hooks/useEnhancedRpc';
 import { Banner } from '~/ui/Banner';
 import { Card } from '~/ui/Card';
@@ -141,7 +141,7 @@ export default function EpochDetail() {
                 </TabList>
                 <TabPanels className="mt-4">
                     <TabPanel>
-                        <CheckpointsActivityTable
+                        <CheckpointsTable
                             initialCursor={
                                 epochData.endOfEpochInfo?.lastCheckpointId
                             }
