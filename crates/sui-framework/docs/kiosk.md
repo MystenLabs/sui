@@ -41,6 +41,7 @@ be used to implement application-specific transfer rules.
 -  [Struct `Lock`](#0x2_kiosk_Lock)
 -  [Struct `ItemListed`](#0x2_kiosk_ItemListed)
 -  [Struct `ItemPurchased`](#0x2_kiosk_ItemPurchased)
+-  [Struct `ItemDelisted`](#0x2_kiosk_ItemDelisted)
 -  [Constants](#@Constants_0)
 -  [Function `new`](#0x2_kiosk_new)
 -  [Function `close_and_withdraw`](#0x2_kiosk_close_and_withdraw)
@@ -51,6 +52,7 @@ be used to implement application-specific transfer rules.
 -  [Function `take`](#0x2_kiosk_take)
 -  [Function `list`](#0x2_kiosk_list)
 -  [Function `place_and_list`](#0x2_kiosk_place_and_list)
+-  [Function `delist`](#0x2_kiosk_delist)
 -  [Function `purchase`](#0x2_kiosk_purchase)
 -  [Function `list_with_purchase_cap`](#0x2_kiosk_list_with_purchase_cap)
 -  [Function `purchase_with_cap`](#0x2_kiosk_purchase_with_cap)
@@ -457,6 +459,41 @@ by the trading module / extension.
 
 </details>
 
+<a name="0x2_kiosk_ItemDelisted"></a>
+
+## Struct `ItemDelisted`
+
+Emitted when an item was delisted by the safe owner. Can be used
+to close tracked offers.
+
+
+<pre><code><b>struct</b> <a href="kiosk.md#0x2_kiosk_ItemDelisted">ItemDelisted</a>&lt;T: store, key&gt; <b>has</b> <b>copy</b>, drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code><a href="kiosk.md#0x2_kiosk">kiosk</a>: <a href="object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>id: <a href="object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
 <a name="@Constants_0"></a>
 
 ## Constants
@@ -568,6 +605,16 @@ Trying to close a Kiosk and it has items in it.
 
 
 <pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_ENotEmpty">ENotEmpty</a>: u64 = 3;
+</code></pre>
+
+
+
+<a name="0x2_kiosk_ENotListed"></a>
+
+Delisting an item that is not listed.
+
+
+<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_ENotListed">ENotListed</a>: u64 = 12;
 </code></pre>
 
 
@@ -873,6 +920,40 @@ Calls <code>place</code> and <code>list</code> together - simplifies the flow.
     <b>let</b> id = <a href="object.md#0x2_object_id">object::id</a>(&item);
     <a href="kiosk.md#0x2_kiosk_place">place</a>(self, cap, item);
     <a href="kiosk.md#0x2_kiosk_list">list</a>&lt;T&gt;(self, cap, id, price)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_kiosk_delist"></a>
+
+## Function `delist`
+
+Remove an existing listing from the <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code> and keep the item in the
+user Kiosk. Can only be performed by the owner of the <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_delist">delist</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, id: <a href="object.md#0x2_object_ID">object::ID</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_delist">delist</a>&lt;T: key + store&gt;(
+    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID
+) {
+    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_item">has_item</a>(self, id), <a href="kiosk.md#0x2_kiosk_EItemNotFound">EItemNotFound</a>);
+    <b>assert</b>!(!<a href="kiosk.md#0x2_kiosk_is_listed_exclusively">is_listed_exclusively</a>(self, id), <a href="kiosk.md#0x2_kiosk_EListedExclusively">EListedExclusively</a>);
+    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_is_listed">is_listed</a>(self, id), <a href="kiosk.md#0x2_kiosk_ENotListed">ENotListed</a>);
+
+    df::remove&lt;<a href="kiosk.md#0x2_kiosk_Listing">Listing</a>, u64&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>false</b> });
+    <a href="event.md#0x2_event_emit">event::emit</a>(<a href="kiosk.md#0x2_kiosk_ItemDelisted">ItemDelisted</a>&lt;T&gt; { <a href="kiosk.md#0x2_kiosk">kiosk</a>: <a href="object.md#0x2_object_id">object::id</a>(self), id })
 }
 </code></pre>
 

@@ -70,6 +70,8 @@ module sui::kiosk {
     const EItemMismatch: u64 = 10;
     /// An is not found while trying to borrow.
     const EItemNotFound: u64 = 11;
+    /// Delisting an item that is not listed.
+    const ENotListed: u64 = 12;
 
     /// An object which allows selling collectibles within "kiosk" ecosystem.
     /// By default gives the functionality to list an item openly - for anyone
@@ -160,6 +162,13 @@ module sui::kiosk {
         kiosk: ID,
         id: ID,
         price: u64
+    }
+
+    /// Emitted when an item was delisted by the safe owner. Can be used
+    /// to close tracked offers.
+    struct ItemDelisted<phantom T: key + store> has copy, drop {
+        kiosk: ID,
+        id: ID
     }
 
     // === Kiosk packing and unpacking ===
@@ -284,6 +293,20 @@ module sui::kiosk {
         let id = object::id(&item);
         place(self, cap, item);
         list<T>(self, cap, id, price)
+    }
+
+    /// Remove an existing listing from the `Kiosk` and keep the item in the
+    /// user Kiosk. Can only be performed by the owner of the `Kiosk`.
+    public fun delist<T: key + store>(
+        self: &mut Kiosk, cap: &KioskOwnerCap, id: ID
+    ) {
+        assert!(object::id(self) == cap.for, ENotOwner);
+        assert!(has_item(self, id), EItemNotFound);
+        assert!(!is_listed_exclusively(self, id), EListedExclusively);
+        assert!(is_listed(self, id), ENotListed);
+
+        df::remove<Listing, u64>(&mut self.id, Listing { id, is_exclusive: false });
+        event::emit(ItemDelisted<T> { kiosk: object::id(self), id })
     }
 
     /// Make a trade: pay the owner of the item and request a Transfer to the `target`
