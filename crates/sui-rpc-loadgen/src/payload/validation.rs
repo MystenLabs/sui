@@ -69,7 +69,9 @@ pub(crate) async fn check_transactions(
                 .read_api()
                 .multi_get_transactions_with_options(
                     digests.to_vec(),
-                    SuiTransactionBlockResponseOptions::full_content(), // todo(Will) support options for this
+                    SuiTransactionBlockResponseOptions::new()
+                        .with_effects()
+                        .with_input(), // todo(Will) support options for this
                 )
                 .await
         }))
