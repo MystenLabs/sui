@@ -9570,6 +9570,7 @@ dependencies = [
  "fastcrypto",
  "futures",
  "git-version",
+ "mysten-common",
  "mysten-metrics",
  "mysten-network",
  "narwhal-network",
@@ -10019,8 +10020,10 @@ dependencies = [
 name = "sui-telemetry"
 version = "0.1.0"
 dependencies = [
+ "fastcrypto",
  "reqwest",
  "serde 1.0.152",
+ "sui-core",
  "tokio",
  "tracing",
  "workspace-hack",

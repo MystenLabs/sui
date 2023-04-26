@@ -27,7 +27,7 @@ use serde::Serialize;
 use sui_config::transaction_deny_config::TransactionDenyConfig;
 use sui_types::metrics::LimitsMetrics;
 use sui_types::TypeTag;
-use tap::TapFallible;
+use tap::{TapFallible, TapOptional};
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::{oneshot, Semaphore};
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
@@ -133,7 +133,7 @@ mod batch_verification_tests;
 
 #[cfg(feature = "test-utils")]
 pub mod authority_test_utils;
-
+use once_cell::sync::OnceCell;
 pub mod authority_per_epoch_store;
 pub mod authority_per_epoch_store_pruner;
 
@@ -145,6 +145,8 @@ pub mod test_authority_builder;
 
 pub(crate) mod authority_notify_read;
 pub(crate) mod authority_store;
+
+static CHAIN_IDENTIFIER: OnceCell<CheckpointDigest> = OnceCell::new();
 
 pub type ReconfigConsensusMessage = (
     AuthorityKeyPair,
@@ -2077,6 +2079,22 @@ impl AuthorityState {
                 }
             }
         }
+    }
+
+    /// Chain Identifier is the digest of the genesis checkpoint.
+    pub fn get_chain_identifier(&self) -> Option<CheckpointDigest> {
+        if let Some(digest) = CHAIN_IDENTIFIER.get() {
+            return Some(*digest);
+        }
+
+        let checkpoint = self
+            .get_checkpoint_by_sequence_number(0)
+            .tap_err(|e| error!("Failed to get genesis checkpoint: {:?}", e))
+            .ok()?
+            .tap_none(|| error!("Genesis checkpoint is missing from DB"))?;
+        // It's ok if the value is already set due to data races.
+        let _ = CHAIN_IDENTIFIER.set(*checkpoint.digest());
+        Some(*checkpoint.digest())
     }
 
     pub fn get_move_object<T>(&self, object_id: &ObjectID) -> SuiResult<T>
