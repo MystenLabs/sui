@@ -124,7 +124,7 @@ fn main() {
         let state = node.state();
         loop {
             send_telemetry_event(state.clone(), is_validator).await;
-            sleep(Duration::from_secs(3600)).await;
+            sleep(Duration::from_secs(60)).await;
         }
     });
 
