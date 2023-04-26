@@ -19,7 +19,7 @@ always requires the Ed25519 key, but also one of the ECDSA secp256r1 keys to sig
 structure is using mobile secure enclave stored keys as 2FA; note that currently iPhone and high-end Android devices 
 support ECDSA secp256r1 enclave-stored keys only.
 
-![Sui tokenomics flow](../../../static/cryptography/sui_multisig_structures_old.png "Multisig Sui supported structures")
+![Sui tokenomics flow](../../../static/cryptography/sui_multisig_structures.png "Multisig Sui supported structures")
 *Examples of Sui supported multisig structures.*
 
 ## Step 1: Add keys to Sui keystore
