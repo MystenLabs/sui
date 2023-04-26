@@ -877,6 +877,7 @@ module deepbook::clob {
         // If the bid order is not completely filled, inject the remaining quantity to the bids Critbit Tree according to the input price and order id.
         // If limit ask order, vice versa.
         assert!(quantity > 0, EInvalidQuantity);
+        assert!(price > 0, EInvalidPrice);
         assert!(price % pool.tick_size == 0, EInvalidPrice);
         assert!(quantity % pool.lot_size == 0, EInvalidQuantity);
         assert!(expire_timestamp > clock::timestamp_ms(clock), EInvalidExpireTimestamp);
