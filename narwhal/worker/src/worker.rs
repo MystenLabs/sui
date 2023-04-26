@@ -438,6 +438,8 @@ impl Worker {
         client: NetworkClient,
         network: anemo::Network,
     ) -> Vec<JoinHandle<()>> {
+        info!("Starting handler for transactions");
+
         let (tx_batch_maker, rx_batch_maker) = channel_with_total(
             CHANNEL_CAPACITY,
             &channel_metrics.tx_batch_maker,
