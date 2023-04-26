@@ -351,6 +351,7 @@ pub(crate) fn explain_publish_error(
                 check_friend_linking: false,
                 check_private_entry_linking: true,
                 disallowed_new_abilities: AbilitySet::EMPTY,
+                disallow_change_struct_type_params: false,
             })
             .check(&old_api, &new_api)
             .is_err()
@@ -364,6 +365,7 @@ pub(crate) fn explain_publish_error(
                 check_friend_linking: false,
                 check_private_entry_linking: true,
                 disallowed_new_abilities: AbilitySet::EMPTY,
+                disallow_change_struct_type_params: false,
             })
             .check(&old_api, &new_api)
             .is_err()
