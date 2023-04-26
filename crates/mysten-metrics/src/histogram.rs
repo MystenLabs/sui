@@ -17,6 +17,7 @@ use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::time::Instant;
 use tracing::{debug, error};
+use crate::monitored_scope;
 
 type Point = u64;
 type HistogramMessage = (HistogramLabels, Point);
@@ -256,6 +257,7 @@ impl HistogramCollector {
 
 impl HistogramReporter {
     pub fn report(&mut self, labeled_data: HashMap<HistogramLabels, Vec<Point>>) {
+        let _scope = monitored_scope("HistogramReporter::report");
         let mut reset_labels = self.known_labels.clone();
         for (label, mut data) in labeled_data {
             self.known_labels.insert(label.clone());
