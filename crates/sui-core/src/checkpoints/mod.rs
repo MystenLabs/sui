@@ -384,10 +384,18 @@ impl CheckpointStore {
         self.checkpoint_sequence_by_contents_digest
             .insert(&checkpoint.content_digest, checkpoint.sequence_number())?;
         let full_contents = full_contents.into_inner();
-        self.full_checkpoint_content
-            .insert(checkpoint.sequence_number(), &full_contents)?;
+
+        let mut batch = self.full_checkpoint_content.batch();
+        batch.insert_batch(
+            &self.full_checkpoint_content,
+            [(checkpoint.sequence_number(), &full_contents)],
+        )?;
+
         let contents = full_contents.into_checkpoint_contents();
-        self.insert_checkpoint_contents(contents)
+
+        batch.insert_batch(&self.checkpoint_content, [(contents.digest(), &contents)])?;
+
+        batch.write()
     }
 
     pub fn delete_full_checkpoint_contents(
