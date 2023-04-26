@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { GrowthBookProvider, useFeatureIsOn } from '@growthbook/growthbook-react';
+import {
+    GrowthBookProvider,
+    useFeatureIsOn,
+} from '@growthbook/growthbook-react';
 import { RpcClientContext } from '@mysten/core';
 import { WalletKitProvider } from '@mysten/wallet-kit';
 import { QueryClientProvider } from '@tanstack/react-query';
