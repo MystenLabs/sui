@@ -12,7 +12,7 @@ use move_core_types::resolver::{LinkageResolver, ModuleResolver, ResourceResolve
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use sui_protocol_config::ProtocolConfig;
-use tracing::trace;
+use tracing::{info, trace};
 
 use crate::committee::EpochId;
 use crate::messages::TransactionEvents;
@@ -118,6 +118,7 @@ where
     type Item = Arc<CompiledModule>;
 
     fn get_module_by_id(&self, id: &ModuleId) -> anyhow::Result<Option<Self::Item>, Self::Error> {
+        println!("FULL NODE CHECK: temporary store {:?}", id);
         let obj = self.temp_store.written.get(&ObjectID::from(*id.address()));
         if let Some((_, o, _)) = obj {
             if let Some(p) = o.data.try_as_package() {
@@ -1577,6 +1578,7 @@ impl<S: GetModule<Error = SuiError, Item = CompiledModule>> GetModule for Tempor
     type Item = CompiledModule;
 
     fn get_module_by_id(&self, module_id: &ModuleId) -> Result<Option<Self::Item>, Self::Error> {
+        println!("FULL NODE CHECK: temporary storage get_module_by_id - {:?}", module_id);
         let package_id = &ObjectID::from(*module_id.address());
         if let Some((obj, _)) = self.written.get(package_id) {
             Ok(Some(
@@ -1589,6 +1591,7 @@ impl<S: GetModule<Error = SuiError, Item = CompiledModule>> GetModule for Tempor
                     )?,
             ))
         } else {
+            println!("FULL NODE CHECK: temporary storage get_module_by_id - failed asking store");
             self.store.get_module_by_id(module_id)
         }
     }

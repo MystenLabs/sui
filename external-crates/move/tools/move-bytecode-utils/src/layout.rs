@@ -520,9 +520,20 @@ impl StructLayoutBuilder {
         resolver: &impl GetModule,
         layout_type: LayoutType,
     ) -> Result<MoveStructLayout> {
+        println!("FULL NODE CHECK: build_from_name {:?}", declaring_module);
         let module = match resolver.get_module_by_id(declaring_module) {
-            Err(_) | Ok(None) => bail!("Could not find module"),
-            Ok(Some(m)) => m,
+            Err(err) => {
+                println!("FULL NODE CHECK: build_from_name failed {:?} {:?}", err, declaring_module);
+                bail!("Could not find module")
+            }
+            Ok(None) => {
+                println!("FULL NODE CHECK: build_from_name failed {:?}", declaring_module);
+                bail!("Could not find module")
+            },
+            Ok(Some(m)) => {
+                println!("FULL NODE CHECK: build_from_name success {:?}", declaring_module);
+                m
+            },
         };
         let def = module
             .borrow()

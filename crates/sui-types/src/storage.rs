@@ -33,6 +33,7 @@ use std::convert::Infallible;
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 use tap::Pipe;
+use tracing::info;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub enum WriteKind {
@@ -160,6 +161,7 @@ pub fn get_module<S: BackingPackageStore>(
     store: S,
     module_id: &ModuleId,
 ) -> Result<Option<Vec<u8>>, SuiError> {
+    println!("FULL NODE CHECK: authority store {:?}", module_id);
     Ok(store
         .get_package(&ObjectID::from(*module_id.address()))?
         .and_then(|package| {
@@ -174,6 +176,7 @@ pub fn get_module_by_id<S: BackingPackageStore>(
     store: S,
     id: &ModuleId,
 ) -> anyhow::Result<Option<CompiledModule>, SuiError> {
+    println!("FULL NODE CHECK: store {:?}", id);
     Ok(get_module(store, id)?.map(|bytes| CompiledModule::deserialize(&bytes).unwrap()))
 }
 
@@ -618,7 +621,7 @@ impl ReadStore for SharedInMemoryStore {
             return Ok(contents);
         }
 
-        // Otherwise gather it from the indivdual components.
+        // Otherwise gather it from the individual components.
         inner
             .get_checkpoint_contents(digest)
             .map(|contents| {

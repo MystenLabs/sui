@@ -134,6 +134,7 @@ impl GetModule for InMemoryStorage {
     type Item = CompiledModule;
 
     fn get_module_by_id(&self, id: &ModuleId) -> anyhow::Result<Option<Self::Item>, Self::Error> {
+        println!("FULL NODE CHECK: memory store {:?}", id);
         get_module_by_id(self, id)
     }
 }
