@@ -24,13 +24,13 @@ use sui_types::signature::GenericSignature;
 use tracing::info;
 use rusoto_core::Region;
 use rusoto_kms::{Kms, KmsClient, SignRequest, GetPublicKeyRequest};
-use secp256k1::ecdsa::Signature as secpSig;
+//use secp256k1::ecdsa::Signature as secpSig;
 use openssl::ec::{EcGroup, PointConversionForm};
 use openssl::nid::Nid;
 use openssl::pkey::PKey;
 use fastcrypto::traits::{ToFromBytes};
 use fastcrypto::secp256k1::{Secp256k1PublicKey};
-
+use fastcrypto::secp256k1::ecdsa::Signature as secpSig;
 #[cfg(test)]
 #[path = "unit_tests/keytool_tests.rs"]
 mod keytool_tests;
