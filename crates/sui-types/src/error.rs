@@ -201,6 +201,8 @@ pub enum UserInputError {
 pub enum SuiObjectResponseError {
     #[error("Object {:?} does not exist.", object_id)]
     NotExists { object_id: ObjectID },
+    #[error("Cannot find dynamic field for parent object {:?}.", parent_object_id)]
+    DynamicFieldNotFound { parent_object_id: ObjectID },
     #[error(
         "Object has been deleted object_id: {:?} at version: {:?} in digest {:?}",
         object_id,
