@@ -47,16 +47,20 @@ use std::future::Future;
 use std::sync::Arc;
 
 /// Wrap SuiNode to allow correct access to SuiNode in simulator tests.
-pub struct SuiNodeHandle(Arc<SuiNode>);
+pub struct SuiNodeHandle(Option<Arc<SuiNode>>);
 
 impl SuiNodeHandle {
     pub fn new(node: Arc<SuiNode>) -> Self {
-        Self(node)
+        Self(Some(node))
+    }
+
+    fn inner(&self) -> &Arc<SuiNode> {
+        self.0.as_ref().unwrap()
     }
 
     pub fn with<T>(&self, cb: impl FnOnce(&SuiNode) -> T) -> T {
         let _guard = self.guard();
-        cb(&self.0)
+        cb(self.inner())
     }
 }
 
@@ -72,14 +76,14 @@ impl SuiNodeHandle {
         F: FnOnce(&'a SuiNode) -> R,
         R: Future<Output = T>,
     {
-        cb(&self.0).await
+        cb(self.inner()).await
     }
 }
 
 #[cfg(msim)]
 impl SuiNodeHandle {
     fn guard(&self) -> sui_simulator::runtime::NodeEnterGuard {
-        self.0.sim_node.enter_node()
+        self.inner().sim_node.enter_node()
     }
 
     pub async fn with_async<'a, F, R, T>(&'a self, cb: F) -> T
@@ -87,8 +91,23 @@ impl SuiNodeHandle {
         F: FnOnce(&'a SuiNode) -> R,
         R: Future<Output = T>,
     {
-        let fut = cb(&self.0);
-        self.0.sim_node.await_future_in_node(fut).await
+        let fut = cb(self.0.as_ref().unwrap());
+        self.inner().sim_node.await_future_in_node(fut).await
+    }
+}
+
+#[cfg(msim)]
+impl Drop for SuiNodeHandle {
+    fn drop(&mut self) {
+        let node_id = self.inner().sim_node.id();
+        // Shut down the sim node, but only if we were the last holder of a reference to the sui
+        // node.
+        let sui_node_arc = self.0.take().unwrap();
+        let sui_node = Arc::downgrade(&sui_node_arc);
+        drop(sui_node_arc);
+        if sui_node.upgrade().is_none() {
+            sui_simulator::runtime::Handle::try_current().map(|h| h.delete_node(node_id));
+        }
     }
 }
 
