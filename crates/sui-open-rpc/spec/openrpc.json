@@ -1622,6 +1622,27 @@
       }
     },
     {
+      "name": "suix_getValidatorsApy",
+      "tags": [
+        {
+          "name": "Governance Read API"
+        }
+      ],
+      "description": "Return the validator APY",
+      "params": [],
+      "result": {
+        "name": "BTreeMap<SuiAddress,f64>",
+        "required": true,
+        "schema": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      }
+    },
+    {
       "name": "suix_queryEvents",
       "tags": [
         {
