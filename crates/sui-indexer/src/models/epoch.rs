@@ -105,6 +105,7 @@ impl DBEpochInfo {
             first_checkpoint_id: self.first_checkpoint_id as u64,
             epoch_start_timestamp: self.epoch_start_timestamp as u64,
             end_of_epoch_info,
+            reference_gas_price: self.reference_gas_price.map(|v| v as u64),
         })
     }
 }
