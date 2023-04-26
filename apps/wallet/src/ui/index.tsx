@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { GrowthBookProvider } from '@growthbook/growthbook-react';
-import { PostHogAnalyticsProvider, RpcClientContext } from '@mysten/core';
+import { RpcClientContext } from '@mysten/core';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { Fragment, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -59,31 +59,29 @@ function AppWrapper() {
 
     return (
         <GrowthBookProvider growthbook={growthbook}>
-            <PostHogAnalyticsProvider projectApiKey="phc_oJAUptxSr0KC1JOYN6KNbkTUZU00NDvujz7hy1MBHVe">
-                <HashRouter>
-                    <SuiLedgerClientProvider>
-                        {/*
-                         * NOTE: We set a key here to force the entire react tree to be re-created when the network changes so that
-                         * the RPC client instance (api.instance.fullNode) is updated correctly. In the future, we should look into
-                         * making the API provider instance a reactive value and moving it out of the redux-thunk middleware
-                         */}
-                        <Fragment key={network}>
-                            <PersistQueryClientProvider
-                                client={queryClient}
-                                persistOptions={{ persister }}
+            <HashRouter>
+                <SuiLedgerClientProvider>
+                    {/*
+                     * NOTE: We set a key here to force the entire react tree to be re-created when the network changes so that
+                     * the RPC client instance (api.instance.fullNode) is updated correctly. In the future, we should look into
+                     * making the API provider instance a reactive value and moving it out of the redux-thunk middleware
+                     */}
+                    <Fragment key={network}>
+                        <PersistQueryClientProvider
+                            client={queryClient}
+                            persistOptions={{ persister }}
+                        >
+                            <RpcClientContext.Provider
+                                value={api.instance.fullNode}
                             >
-                                <RpcClientContext.Provider
-                                    value={api.instance.fullNode}
-                                >
-                                    <ErrorBoundary>
-                                        <App />
-                                    </ErrorBoundary>
-                                </RpcClientContext.Provider>
-                            </PersistQueryClientProvider>
-                        </Fragment>
-                    </SuiLedgerClientProvider>
-                </HashRouter>
-            </PostHogAnalyticsProvider>
+                                <ErrorBoundary>
+                                    <App />
+                                </ErrorBoundary>
+                            </RpcClientContext.Provider>
+                        </PersistQueryClientProvider>
+                    </Fragment>
+                </SuiLedgerClientProvider>
+            </HashRouter>
         </GrowthBookProvider>
     );
 }
