@@ -4,11 +4,9 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
+use mysten_metrics::histogram::Histogram as MystenHistogram;
 use mysten_metrics::spawn_monitored_task;
-use prometheus::{
-    register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
-    Registry,
-};
+use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use std::{io, sync::Arc};
 use sui_network::{
     api::{Validator, ValidatorServer},
@@ -137,21 +135,17 @@ impl AuthorityServer {
 
 pub struct ValidatorServiceMetrics {
     pub signature_errors: IntCounter,
-    pub tx_verification_latency: Histogram,
-    pub cert_verification_latency: Histogram,
-    pub consensus_latency: Histogram,
-    pub handle_transaction_latency: Histogram,
-    pub submit_certificate_consensus_latency: Histogram,
-    pub handle_certificate_consensus_latency: Histogram,
-    pub handle_certificate_non_consensus_latency: Histogram,
+    pub tx_verification_latency: MystenHistogram,
+    pub cert_verification_latency: MystenHistogram,
+    pub consensus_latency: MystenHistogram,
+    pub handle_transaction_latency: MystenHistogram,
+    pub submit_certificate_consensus_latency: MystenHistogram,
+    pub handle_certificate_consensus_latency: MystenHistogram,
+    pub handle_certificate_non_consensus_latency: MystenHistogram,
 
     num_rejected_tx_in_epoch_boundary: IntCounter,
     num_rejected_cert_in_epoch_boundary: IntCounter,
 }
-
-const LATENCY_SEC_BUCKETS: &[f64] = &[
-    0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
-];
 
 impl ValidatorServiceMetrics {
     pub fn new(registry: &Registry) -> Self {
@@ -162,55 +156,41 @@ impl ValidatorServiceMetrics {
                 registry,
             )
             .unwrap(),
-            tx_verification_latency: register_histogram_with_registry!(
+            tx_verification_latency: MystenHistogram::new_in_registry(
                 "validator_service_tx_verification_latency",
                 "Latency of verifying a transaction",
-                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
-            )
-            .unwrap(),
-            cert_verification_latency: register_histogram_with_registry!(
+            ),
+            cert_verification_latency: MystenHistogram::new_in_registry(
                 "validator_service_cert_verification_latency",
                 "Latency of verifying a certificate",
-                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
-            )
-            .unwrap(),
-            consensus_latency: register_histogram_with_registry!(
+            ),
+            consensus_latency: MystenHistogram::new_in_registry(
                 "validator_service_consensus_latency",
                 "Time spent between submitting a shared obj txn to consensus and getting result",
-                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
-            )
-            .unwrap(),
-            handle_transaction_latency: register_histogram_with_registry!(
+            ),
+            handle_transaction_latency: MystenHistogram::new_in_registry(
                 "validator_service_handle_transaction_latency",
                 "Latency of handling a transaction",
-                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
-            )
-            .unwrap(),
-            handle_certificate_consensus_latency: register_histogram_with_registry!(
+            ),
+            handle_certificate_consensus_latency: MystenHistogram::new_in_registry(
                 "validator_service_handle_certificate_consensus_latency",
                 "Latency of handling a consensus transaction certificate",
-                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
-            )
-            .unwrap(),
-            submit_certificate_consensus_latency: register_histogram_with_registry!(
+            ),
+            submit_certificate_consensus_latency: MystenHistogram::new_in_registry(
                 "validator_service_submit_certificate_consensus_latency",
                 "Latency of submit_certificate RPC handler",
-                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
-            )
-            .unwrap(),
-            handle_certificate_non_consensus_latency: register_histogram_with_registry!(
+            ),
+            handle_certificate_non_consensus_latency: MystenHistogram::new_in_registry(
                 "validator_service_handle_certificate_non_consensus_latency",
                 "Latency of handling a non-consensus transaction certificate",
-                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
-            )
-            .unwrap(),
+            ),
             num_rejected_tx_in_epoch_boundary: register_int_counter_with_registry!(
                 "validator_service_num_rejected_tx_in_epoch_boundary",
                 "Number of rejected transaction during epoch transitioning",
@@ -338,9 +318,9 @@ impl ValidatorService {
             Arc::clone(&consensus_adapter),
             transaction.data(),
         )?;
-        let _metrics_guard = metrics.handle_transaction_latency.start_timer();
-        let tx_verif_metrics_guard = metrics.tx_verification_latency.start_timer();
+        let _handel_tx_metrics_guard = metrics.handle_transaction_latency.start_timer();
 
+        let tx_verif_metrics_guard = metrics.tx_verification_latency.start_timer();
         let transaction = epoch_store
             .signature_verifier
             .verify_tx(transaction.data())
@@ -348,7 +328,7 @@ impl ValidatorService {
             .tap_err(|_| {
                 metrics.signature_errors.inc();
             })?;
-        tx_verif_metrics_guard.stop_and_record();
+        drop(tx_verif_metrics_guard);
 
         let tx_digest = transaction.digest();
 
