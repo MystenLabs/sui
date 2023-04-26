@@ -99,17 +99,19 @@ async fn main() -> Result<()> {
         use_indexer_experimental_methods,
     } = args;
 
-    // Auto genesis if path is none and sui directory doesn't exists.
-    // if config.is_none() && !sui_config_dir()?.join(SUI_NETWORK_CONFIG).exists() {
-    //     genesis(None, None, None, false, None, None).await?;
-    // }
-
-    let sui_config_dir = sui_config_dir()?;
-    fs::create_dir_all(&sui_config_dir)?;
-    let keystore_path = sui_config_dir.join(SUI_KEYSTORE_FILENAME);
-    let existing_keys = FileBasedKeystore::new(&keystore_path)?.addresses();
-    println!("existing_keys_addresses: {:?}", existing_keys);
-    let genesis_config = GenesisConfig::for_local_testing_with_addresses_and_faucet(existing_keys);
+    // Notes: In order to save all the information from a previous genesis, we need to pass down the
+    // genesis files of the previous sui-test-validators. In this implementation we make our genesis
+    // compatitible with ./sui genesis so that it can be used for both sui-test-validator and sui-start.
+    let genesis_config_option = if let Some(config) = config {
+        let sui_config_dir = sui_config_dir()?;
+        let keystore_path = sui_config_dir.join(SUI_KEYSTORE_FILENAME);
+        let existing_keys = FileBasedKeystore::new(&keystore_path)?.addresses();
+        Some(GenesisConfig::for_local_testing_with_addresses_and_faucet(
+            existing_keys,
+        ))
+    } else {
+        None
+    };
 
     let cluster = LocalNewCluster::start(
         &ClusterTestOpt {
@@ -123,21 +125,20 @@ async fn main() -> Result<()> {
             epoch_duration_ms: Some(epoch_duration_ms),
             use_indexer_experimental_methods,
         },
-        Some(genesis_config),
-        // None,
+        genesis_config_option,
     )
     .await?;
 
     println!("Fullnode RPC URL: {}", cluster.fullnode_url());
 
-    if with_indexer {
-        println!(
-            "Indexer RPC URL: {}",
-            cluster.indexer_url().clone().unwrap_or_default()
-        );
-    }
+    // if with_indexer {
+    //     println!(
+    //         "Indexer RPC URL: {}",
+    //         cluster.indexer_url().clone().unwrap_or_default()
+    //     );
+    // }
 
-    start_faucet(&cluster, faucet_port).await?;
+    // start_faucet(&cluster, faucet_port).await?;
 
     Ok(())
 }

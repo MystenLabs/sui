@@ -173,7 +173,8 @@ impl Cluster for LocalNewCluster {
         options: &ClusterTestOpt,
         genesis_config: Option<GenesisConfig>,
     ) -> Result<Self, anyhow::Error> {
-        // Let the faucet account hold 1000 gas objects on genesis
+        // Let the faucet account hold 100 gas objects on genesis and we reuse existing config
+        // if it was provided.
         let genesis_config = if let Some(config) = genesis_config {
             config
         } else {
