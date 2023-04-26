@@ -23,6 +23,7 @@ use sui_core::consensus_adapter::LazyNarwhalClient;
 use sui_json_rpc::api::JsonRpcMetrics;
 use sui_types::sui_system_state::SuiSystemState;
 use tap::tap::TapFallible;
+use tokio::runtime::Handle;
 use tokio::sync::broadcast;
 use tokio::sync::oneshot;
 use tokio::sync::{watch, Mutex};
@@ -156,9 +157,10 @@ impl SuiNode {
     pub async fn start(
         config: &NodeConfig,
         registry_service: RegistryService,
+        custom_rpc_runtime: Option<Handle>,
     ) -> Result<Arc<SuiNode>> {
         let (sender, receiver) = oneshot::channel();
-        Self::start_async(config, registry_service, sender).await?;
+        Self::start_async(config, registry_service, sender, custom_rpc_runtime).await?;
         Ok(receiver.await?)
     }
 
@@ -166,6 +168,7 @@ impl SuiNode {
         config: &NodeConfig,
         registry_service: RegistryService,
         node_sender: oneshot::Sender<Arc<SuiNode>>,
+        custom_rpc_runtime: Option<Handle>,
     ) -> Result<()> {
         let mut config = config.clone();
         if config.supported_protocol_versions.is_none() {
@@ -364,6 +367,7 @@ impl SuiNode {
             &transaction_orchestrator.clone(),
             &config,
             &prometheus_registry,
+            custom_rpc_runtime,
         )
         .await?;
 
@@ -1141,6 +1145,7 @@ pub async fn build_server(
     transaction_orchestrator: &Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
     config: &NodeConfig,
     prometheus_registry: &Registry,
+    custom_runtime: Option<Handle>,
 ) -> Result<Option<ServerHandle>> {
     // Validators do not expose these APIs
     if config.consensus_config().is_some() {
@@ -1170,7 +1175,9 @@ pub async fn build_server(
     ))?;
     server.register_module(MoveUtils::new(state.clone()))?;
 
-    let rpc_server_handle = server.start(config.json_rpc_address).await?;
+    let rpc_server_handle = server
+        .start(config.json_rpc_address, custom_runtime)
+        .await?;
 
     Ok(Some(rpc_server_handle))
 }
