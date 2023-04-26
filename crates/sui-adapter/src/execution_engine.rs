@@ -654,7 +654,7 @@ fn advance_epoch<S: ObjectStore + BackingPackageStore + ParentSync + ChildObject
     );
 
     #[cfg(msim)]
-    let result = maybe_modify_result(result);
+    let result = maybe_modify_result(result, change_epoch.epoch);
 
     if result.is_err() {
         tracing::error!(
