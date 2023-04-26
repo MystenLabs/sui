@@ -36,7 +36,7 @@ pub async fn start_test_indexer(
     let store = PgIndexerStore::new(async_pool, blocking_pool, indexer_metrics.clone()).await;
     let store_clone = store.clone();
     let handle = tokio::spawn(async move {
-        Indexer::start(&config, &registry, store_clone, indexer_metrics).await
+        Indexer::start(&config, &registry, store_clone, indexer_metrics, None).await
     });
     Ok((store, handle))
 }

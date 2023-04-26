@@ -794,7 +794,7 @@ async fn test_validator_node_has_no_transaction_orchestrator() {
     let configs = test_and_configure_authority_configs(1);
     let validator_config = &configs.validator_configs()[0];
     let registry_service = RegistryService::new(Registry::new());
-    let node = SuiNode::start(validator_config, registry_service)
+    let node = SuiNode::start(validator_config, registry_service, None)
         .await
         .unwrap();
     assert!(node.transaction_orchestrator().is_none());

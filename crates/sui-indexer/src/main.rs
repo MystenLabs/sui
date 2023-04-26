@@ -64,5 +64,5 @@ async fn main() -> Result<(), IndexerError> {
     }
     let store = PgIndexerStore::new(async_cp, blocking_cp, indexer_metrics.clone()).await;
 
-    Indexer::start(&indexer_config, &registry, store, indexer_metrics).await
+    Indexer::start(&indexer_config, &registry, store, indexer_metrics, None).await
 }

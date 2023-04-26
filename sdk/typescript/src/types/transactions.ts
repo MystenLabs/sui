@@ -276,6 +276,9 @@ export type SuiTransactionBlockResponseQuery = {
 };
 
 export type TransactionFilter =
+  | { Checkpoint: string }
+  | { FromAndToAddress: { from: string; to: string } }
+  | { TransactionKind: string }
   | {
       MoveFunction: {
         package: ObjectId;

@@ -195,7 +195,10 @@ where
         info!("Indexer object checkpoint download & index task started...");
         // NOTE: important not to cast i64 to u64 here,
         // because -1 will be returned when checkpoints table is empty.
-        let last_seq_from_db = self.state.get_latest_checkpoint_sequence_number().await?;
+        let last_seq_from_db = self
+            .state
+            .get_latest_object_checkpoint_sequence_number()
+            .await?;
         if last_seq_from_db > 0 {
             info!("Resuming from checkpoint {last_seq_from_db}");
         }
@@ -425,7 +428,7 @@ where
                     events,
                     object_changes: _tx_object_changes,
                     addresses: _,
-                    packages,
+                    packages: _,
                     input_objects: _,
                     move_calls: _,
                     recipients: _,
@@ -466,24 +469,6 @@ where
                 //             addresses_handler.state.persist_addresses(&addresses).await;
                 //     }
                 // });
-
-                let packages_handler = self.clone();
-                spawn_monitored_task!(async move {
-                    let mut package_commit_res =
-                        packages_handler.state.persist_packages(&packages).await;
-                    while let Err(e) = package_commit_res {
-                        warn!(
-                            "Indexer package commit failed with error: {:?}, retrying after {:?} milli-secs...",
-                            e, DB_COMMIT_RETRY_INTERVAL_IN_MILLIS
-                        );
-                        tokio::time::sleep(std::time::Duration::from_millis(
-                            DB_COMMIT_RETRY_INTERVAL_IN_MILLIS,
-                        ))
-                        .await;
-                        package_commit_res =
-                            packages_handler.state.persist_packages(&packages).await;
-                    }
-                });
 
                 // MUSTFIX(gegaowp): temp. turn off tx index table commit to reduce short-term storage consumption.
                 // this include recipients, input_objects and move_calls.
@@ -570,14 +555,32 @@ where
                     events: _,
                     object_changes: tx_object_changes,
                     addresses: _,
-                    packages: _,
+                    packages,
                     input_objects: _,
                     move_calls: _,
                     recipients: _,
                 } = indexed_checkpoint;
                 let checkpoint_seq = checkpoint.sequence_number;
 
-                // NOTE: commit object changes in the curren task to stick to the original order.
+                let packages_handler = self.clone();
+                spawn_monitored_task!(async move {
+                    let mut package_commit_res =
+                        packages_handler.state.persist_packages(&packages).await;
+                    while let Err(e) = package_commit_res {
+                        warn!(
+                            "Indexer package commit failed with error: {:?}, retrying after {:?} milli-secs...",
+                            e, DB_COMMIT_RETRY_INTERVAL_IN_MILLIS
+                        );
+                        tokio::time::sleep(std::time::Duration::from_millis(
+                            DB_COMMIT_RETRY_INTERVAL_IN_MILLIS,
+                        ))
+                        .await;
+                        package_commit_res =
+                            packages_handler.state.persist_packages(&packages).await;
+                    }
+                });
+
+                // NOTE: commit object changes in the current task to stick to the original order.
                 let object_db_guard = self.metrics.object_db_commit_latency.start_timer();
                 let mut object_changes_commit_res = self
                     .state
