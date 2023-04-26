@@ -693,10 +693,14 @@ impl ReadApiServer for ReadApi {
         let object_cache = ObjectProviderCache::new(self.state.clone());
         if opts.show_balance_changes {
             if let Some(effects) = &temp_response.effects {
-                let balance_changes =
-                    get_balance_changes_from_effect(&object_cache, effects, input_objects, None)
+                let effects = effects.clone();
+                let balance_changes = spawn_monitored_task!(async move {
+                    get_balance_changes_from_effect(&object_cache, &effects, input_objects, None)
                         .await
-                        .map_err(Error::SuiError)?;
+                        .map_err(Error::SuiError)
+                })
+                .await
+                .map_err(|e| anyhow!(e))??;
                 temp_response.balance_changes = Some(balance_changes);
             }
         }
@@ -706,15 +710,21 @@ impl ReadApiServer for ReadApi {
                 (&temp_response.effects, &temp_response.transaction)
             {
                 let sender = input.data().intent_message().value.sender();
-                let object_changes = get_object_changes(
-                    &object_cache,
-                    sender,
-                    effects.modified_at_versions(),
-                    effects.all_changed_objects(),
-                    effects.all_deleted(),
-                )
+                let effects = effects.clone();
+                let object_cache = ObjectProviderCache::new(self.state.clone());
+                let object_changes = spawn_monitored_task!(async move {
+                    get_object_changes(
+                        &object_cache,
+                        sender,
+                        effects.modified_at_versions(),
+                        effects.all_changed_objects(),
+                        effects.all_deleted(),
+                    )
+                    .await
+                    .map_err(Error::SuiError)
+                })
                 .await
-                .map_err(Error::SuiError)?;
+                .map_err(|e| anyhow!(e))??;
                 temp_response.object_changes = Some(object_changes);
             }
         }
@@ -729,9 +739,14 @@ impl ReadApiServer for ReadApi {
         opts: Option<SuiTransactionBlockResponseOptions>,
     ) -> RpcResult<Vec<SuiTransactionBlockResponse>> {
         info!("multi_get_transaction_blocks");
-        Ok(self
-            .multi_get_transaction_blocks_internal(digests, opts)
-            .await?)
+        let cloned_self = self.clone();
+        Ok(spawn_monitored_task!(async move {
+            cloned_self
+                .multi_get_transaction_blocks_internal(digests, opts)
+                .await
+        })
+        .await
+        .map_err(|e| anyhow!(e))??)
     }
 
     #[instrument(skip(self))]
