@@ -133,7 +133,7 @@ mod batch_verification_tests;
 
 #[cfg(feature = "test-utils")]
 pub mod authority_test_utils;
-
+use once_cell::sync::OnceCell;
 pub mod authority_per_epoch_store;
 pub mod authority_per_epoch_store_pruner;
 
@@ -145,6 +145,8 @@ pub mod test_authority_builder;
 
 pub(crate) mod authority_notify_read;
 pub(crate) mod authority_store;
+
+static CHAIN_IDENTIFIER: OnceCell<CheckpointDigest> = OnceCell::new();
 
 pub type ReconfigConsensusMessage = (
     AuthorityKeyPair,
@@ -2077,6 +2079,19 @@ impl AuthorityState {
                 }
             }
         }
+    }
+
+    /// Chain Identifier is the digest of the genesis checkpoint.
+    pub fn get_chain_identifier(&self) -> Option<CheckpointDigest> {
+        if let Some(digest) = CHAIN_IDENTIFIER.get() {
+            return Some(*digest);
+        }
+
+        let checkpoint = self.get_checkpoint_by_sequence_number(0).ok()??;
+        let _ = CHAIN_IDENTIFIER
+            .set(*checkpoint.digest())
+            .tap_err(|e| error!("failed to set chain identifier: {:?}", e));
+        Some(*checkpoint.digest())
     }
 
     pub fn get_move_object<T>(&self, object_id: &ObjectID) -> SuiResult<T>

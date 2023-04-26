@@ -10,7 +10,7 @@ use sui_node::metrics;
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_telemetry::send_telemetry_event;
 use sui_types::multiaddr::Multiaddr;
-use tokio::sync::oneshot;
+use tokio::sync::broadcast;
 use tokio::time::sleep;
 use tracing::{error, info};
 
@@ -96,18 +96,13 @@ fn main() {
     }
 
     let is_validator = config.consensus_config().is_some();
-    runtimes.metrics.spawn(async move {
-        loop {
-            sleep(Duration::from_secs(3600)).await;
-            send_telemetry_event(is_validator).await;
-        }
-    });
 
     let admin_interface_port = config.admin_interface_port;
 
     // Run node in a separate runtime so that admin/monitoring functions continue to work
     // if it deadlocks.
-    let (sender, receiver) = oneshot::channel();
+    let (sender, mut receiver) = broadcast::channel(1);
+    let mut receiver_clone = receiver.resubscribe();
     runtimes.sui_node.spawn(async move {
         if let Err(e) = sui_node::SuiNode::start_async(&config, registry_service, sender).await {
             error!("Failed to start node: {e:?}");
@@ -120,8 +115,17 @@ fn main() {
     });
 
     runtimes.metrics.spawn(async move {
-        let node = receiver.await.unwrap();
-        sui_node::admin::run_admin_server(node.clone(), admin_interface_port, filter_handle).await
+        let node = receiver.recv().await.unwrap();
+        sui_node::admin::run_admin_server(node, admin_interface_port, filter_handle).await
+    });
+
+    runtimes.metrics.spawn(async move {
+        let node = receiver_clone.recv().await.unwrap();
+        let state = node.state();
+        loop {
+            send_telemetry_event(state.clone(), is_validator).await;
+            sleep(Duration::from_secs(3600)).await;
+        }
     });
 
     // wait for SIGINT on the main thread

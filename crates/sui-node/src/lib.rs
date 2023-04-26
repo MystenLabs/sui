@@ -157,15 +157,15 @@ impl SuiNode {
         config: &NodeConfig,
         registry_service: RegistryService,
     ) -> Result<Arc<SuiNode>> {
-        let (sender, receiver) = oneshot::channel();
+        let (sender, mut receiver) = broadcast::channel(1);
         Self::start_async(config, registry_service, sender).await?;
-        Ok(receiver.await?)
+        Ok(receiver.recv().await?)
     }
 
     pub async fn start_async(
         config: &NodeConfig,
         registry_service: RegistryService,
-        node_sender: oneshot::Sender<Arc<SuiNode>>,
+        node_sender: broadcast::Sender<Arc<SuiNode>>,
     ) -> Result<()> {
         let mut config = config.clone();
         if config.supported_protocol_versions.is_none() {
