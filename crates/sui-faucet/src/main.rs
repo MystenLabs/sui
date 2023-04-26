@@ -18,11 +18,11 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use sui::client_commands::WalletContext;
 use sui_config::{sui_config_dir, SUI_CLIENT_CONFIG};
 use sui_faucet::{
     Faucet, FaucetConfig, FaucetRequest, FaucetResponse, RequestMetricsLayer, SimpleFaucet,
 };
+use sui_sdk::wallet_context::WalletContext;
 use tower::{limit::RateLimitLayer, ServiceBuilder};
 use tower_http::cors::{Any, CorsLayer};
 use tracing::{info, warn};

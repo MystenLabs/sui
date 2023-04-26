@@ -2,11 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use core::fmt;
-use std::sync::Arc;
 use std::{
-    collections::BTreeSet,
     fmt::{Debug, Display, Formatter, Write},
-    path::{Path, PathBuf},
+    path::PathBuf,
     time::Instant,
 };
 
@@ -30,12 +28,10 @@ use sui_types::digests::TransactionDigest;
 use sui_types::error::SuiError;
 
 use shared_crypto::intent::Intent;
-use sui_config::{Config, PersistedConfig};
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    DynamicFieldPage, SuiData, SuiObjectData, SuiObjectDataFilter, SuiObjectResponse,
-    SuiObjectResponseQuery, SuiRawData, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
-    SuiTransactionBlockResponseOptions,
+    DynamicFieldPage, SuiData, SuiObjectResponse, SuiObjectResponseQuery, SuiRawData,
+    SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_json_rpc_types::{SuiExecutionStatus, SuiObjectDataOptions};
 use sui_keys::keystore::AccountKeystore;
@@ -44,20 +40,20 @@ use sui_move_build::{
     gather_published_ids, BuildConfig, CompiledPackage, PackageDependencies, PublishedAtError,
 };
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
+use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::SuiClient;
 use sui_types::crypto::SignatureScheme;
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::move_package::UpgradeCap;
 use sui_types::signature::GenericSignature;
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, SuiAddress},
+    base_types::{ObjectID, SuiAddress},
     gas_coin::GasCoin,
-    messages::{Transaction, VerifiedTransaction},
+    messages::Transaction,
     object::Owner,
     parse_sui_type_tag,
 };
-use tokio::sync::RwLock;
-use tracing::{info, warn};
+use tracing::info;
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
@@ -1287,197 +1283,6 @@ async fn compile_package(
         eprintln!("{}", "Skipping dependency verification".bold().yellow());
     }
     Ok((dependencies, compiled_modules, compiled_package, package_id))
-}
-
-pub struct WalletContext {
-    pub config: PersistedConfig<SuiClientConfig>,
-    request_timeout: Option<std::time::Duration>,
-    client: Arc<RwLock<Option<SuiClient>>>,
-}
-
-impl WalletContext {
-    pub async fn new(
-        config_path: &Path,
-        request_timeout: Option<std::time::Duration>,
-    ) -> Result<Self, anyhow::Error> {
-        let config: SuiClientConfig = PersistedConfig::read(config_path).map_err(|err| {
-            anyhow!(
-                "Cannot open wallet config file at {:?}. Err: {err}",
-                config_path
-            )
-        })?;
-
-        let config = config.persisted(config_path);
-        let context = Self {
-            config,
-            request_timeout,
-            client: Default::default(),
-        };
-        Ok(context)
-    }
-
-    pub async fn get_client(&self) -> Result<SuiClient, anyhow::Error> {
-        let read = self.client.read().await;
-
-        Ok(if let Some(client) = read.as_ref() {
-            client.clone()
-        } else {
-            drop(read);
-            let client = self
-                .config
-                .get_active_env()?
-                .create_rpc_client(self.request_timeout)
-                .await?;
-            if let Err(e) = client.check_api_version() {
-                warn!("{e}");
-                eprintln!("{}", format!("[warn] {e}").yellow().bold());
-            }
-            self.client.write().await.insert(client).clone()
-        })
-    }
-
-    pub fn active_address(&mut self) -> Result<SuiAddress, anyhow::Error> {
-        if self.config.keystore.addresses().is_empty() {
-            return Err(anyhow!(
-                "No managed addresses. Create new address with `new-address` command."
-            ));
-        }
-
-        // Ok to unwrap because we checked that config addresses not empty
-        // Set it if not exists
-        self.config.active_address = Some(
-            self.config
-                .active_address
-                .unwrap_or(*self.config.keystore.addresses().get(0).unwrap()),
-        );
-
-        Ok(self.config.active_address.unwrap())
-    }
-
-    /// Get the latest object reference given a object id
-    pub async fn get_object_ref(&self, object_id: ObjectID) -> Result<ObjectRef, anyhow::Error> {
-        let client = self.get_client().await?;
-        Ok(client
-            .read_api()
-            .get_object_with_options(object_id, SuiObjectDataOptions::new())
-            .await?
-            .into_object()?
-            .object_ref())
-    }
-
-    /// Get all the gas objects (and conveniently, gas amounts) for the address
-    pub async fn gas_objects(
-        &self,
-        address: SuiAddress,
-    ) -> Result<Vec<(u64, SuiObjectData)>, anyhow::Error> {
-        let client = self.get_client().await?;
-
-        let mut objects: Vec<SuiObjectResponse> = Vec::new();
-        let mut cursor = None;
-        loop {
-            let response = client
-                .read_api()
-                .get_owned_objects(
-                    address,
-                    Some(SuiObjectResponseQuery::new(
-                        Some(SuiObjectDataFilter::StructType(GasCoin::type_())),
-                        Some(SuiObjectDataOptions::full_content()),
-                    )),
-                    cursor,
-                    None,
-                )
-                .await?;
-
-            objects.extend(response.data);
-
-            if response.has_next_page {
-                cursor = response.next_cursor;
-            } else {
-                break;
-            }
-        }
-
-        // TODO: We should ideally fetch the objects from local cache
-        let mut values_objects = Vec::new();
-
-        for object in objects {
-            let o = object.data;
-            if let Some(o) = o {
-                let gas_coin = GasCoin::try_from(&o)?;
-                values_objects.push((gas_coin.value(), o.clone()));
-            }
-        }
-
-        Ok(values_objects)
-    }
-
-    pub async fn get_object_owner(&self, id: &ObjectID) -> Result<SuiAddress, anyhow::Error> {
-        let client = self.get_client().await?;
-        let object = client
-            .read_api()
-            .get_object_with_options(*id, SuiObjectDataOptions::new().with_owner())
-            .await?
-            .into_object()?;
-        Ok(object
-            .owner
-            .ok_or_else(|| anyhow!("Owner field is None"))?
-            .get_owner_address()?)
-    }
-
-    pub async fn try_get_object_owner(
-        &self,
-        id: &Option<ObjectID>,
-    ) -> Result<Option<SuiAddress>, anyhow::Error> {
-        if let Some(id) = id {
-            Ok(Some(self.get_object_owner(id).await?))
-        } else {
-            Ok(None)
-        }
-    }
-
-    /// Find a gas object which fits the budget
-    pub async fn gas_for_owner_budget(
-        &self,
-        address: SuiAddress,
-        budget: u64,
-        forbidden_gas_objects: BTreeSet<ObjectID>,
-    ) -> Result<(u64, SuiObjectData), anyhow::Error> {
-        for o in self.gas_objects(address).await.unwrap() {
-            if o.0 >= budget && !forbidden_gas_objects.contains(&o.1.object_id) {
-                return Ok((o.0, o.1));
-            }
-        }
-        Err(anyhow!(
-            "No non-argument gas objects found with value >= budget {budget}"
-        ))
-    }
-
-    pub async fn get_reference_gas_price(&self) -> Result<u64, anyhow::Error> {
-        let client = self.get_client().await?;
-        let gas_price = client.governance_api().get_reference_gas_price().await?;
-        Ok(gas_price)
-    }
-
-    pub async fn execute_transaction_block(
-        &self,
-        tx: VerifiedTransaction,
-    ) -> anyhow::Result<SuiTransactionBlockResponse> {
-        let client = self.get_client().await?;
-        Ok(client
-            .quorum_driver_api()
-            .execute_transaction_block(
-                tx,
-                SuiTransactionBlockResponseOptions::new()
-                    .with_effects()
-                    .with_events()
-                    .with_input()
-                    .with_events()
-                    .with_object_changes()
-                    .with_balance_changes(),
-                Some(sui_types::messages::ExecuteTransactionRequestType::WaitForLocalExecution),
-            )
-            .await?)
-    }
 }
 
 impl Display for SuiClientCommandResult {
