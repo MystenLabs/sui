@@ -23,7 +23,7 @@ import { DefaultRpcClient } from '~/utils/api/DefaultRpcClient';
 import { growthbook } from '~/utils/growthbook';
 import { queryClient } from '~/utils/queryClient';
 
-export function LayoutContent() {
+export function Layout() {
     const [network, setNetwork] = useNetwork();
     const jsonRpcProvider = useMemo(() => DefaultRpcClient(network), [network]);
     const networkOutage = useFeatureIsOn('explorer-network-outage');
