@@ -33,6 +33,8 @@ pub struct Compatibility {
     pub check_private_entry_linking: bool,
     /// The set of abilities that cannot be added to an already exisiting type.
     pub disallowed_new_abilities: AbilitySet,
+    /// Don't allow generic type parameters in structs to change their abilities or constraints.
+    pub disallow_change_struct_type_params: bool,
 }
 
 impl Default for Compatibility {
@@ -43,6 +45,7 @@ impl Default for Compatibility {
             check_friend_linking: true,
             check_private_entry_linking: true,
             disallowed_new_abilities: AbilitySet::EMPTY,
+            disallow_change_struct_type_params: true,
         }
     }
 }
@@ -59,6 +62,7 @@ impl Compatibility {
             check_friend_linking: false,
             check_private_entry_linking: false,
             disallowed_new_abilities: AbilitySet::EMPTY,
+            disallow_change_struct_type_params: false,
         }
     }
 
@@ -89,11 +93,12 @@ impl Compatibility {
                 break;
             };
 
-            if !struct_abilities_compatibile(
+            if !struct_abilities_compatible(
                 self.disallowed_new_abilities,
                 old_struct.abilities,
                 new_struct.abilities,
-            ) || !struct_type_parameters_compatibile(
+            ) || !struct_type_parameters_compatible(
+                self.disallow_change_struct_type_params,
                 &old_struct.type_parameters,
                 &new_struct.type_parameters,
             ) {
@@ -161,7 +166,7 @@ impl Compatibility {
             // Check signature compatibility
             if old_func.parameters != new_func.parameters
                 || old_func.return_ != new_func.return_
-                || !fun_type_parameters_compatibile(
+                || !fun_type_parameters_compatible(
                     &old_func.type_parameters,
                     &new_func.type_parameters,
                 )
@@ -217,7 +222,7 @@ impl Compatibility {
 // When upgrading, the new abilities must be a superset of the old abilities.
 // Adding an ability is fine as long as it's not in the disallowed_new_abilities,
 // but removing an ability could cause existing usages to fail.
-fn struct_abilities_compatibile(
+fn struct_abilities_compatible(
     disallowed_new_abilities: AbilitySet,
     old_abilities: AbilitySet,
     new_abilities: AbilitySet,
@@ -231,14 +236,15 @@ fn struct_abilities_compatibile(
 
 // When upgrading, the new type parameters must be the same length, and the new type parameter
 // constraints must be compatible
-fn fun_type_parameters_compatibile(
+fn fun_type_parameters_compatible(
     old_type_parameters: &[AbilitySet],
     new_type_parameters: &[AbilitySet],
 ) -> bool {
     old_type_parameters.len() == new_type_parameters.len()
         && old_type_parameters.iter().zip(new_type_parameters).all(
             |(old_type_parameter_constraint, new_type_parameter_constraint)| {
-                type_parameter_constraints_compatibile(
+                type_parameter_constraints_compatible(
+                    false, // generic abilities can change for functions
                     *old_type_parameter_constraint,
                     *new_type_parameter_constraint,
                 )
@@ -246,40 +252,56 @@ fn fun_type_parameters_compatibile(
         )
 }
 
-fn struct_type_parameters_compatibile(
+fn struct_type_parameters_compatible(
+    disallow_changing_generic_abilities: bool,
     old_type_parameters: &[StructTypeParameter],
     new_type_parameters: &[StructTypeParameter],
 ) -> bool {
     old_type_parameters.len() == new_type_parameters.len()
         && old_type_parameters.iter().zip(new_type_parameters).all(
             |(old_type_parameter, new_type_parameter)| {
-                type_parameter_phantom_decl_compatibile(old_type_parameter, new_type_parameter)
-                    && type_parameter_constraints_compatibile(
-                        old_type_parameter.constraints,
-                        new_type_parameter.constraints,
-                    )
+                type_parameter_phantom_decl_compatible(
+                    disallow_changing_generic_abilities,
+                    old_type_parameter,
+                    new_type_parameter,
+                ) && type_parameter_constraints_compatible(
+                    disallow_changing_generic_abilities,
+                    old_type_parameter.constraints,
+                    new_type_parameter.constraints,
+                )
             },
         )
 }
 
 // When upgrading, the new constraints must be a subset of (or equal to) the old constraints.
 // Removing an ability is fine, but adding an ability could cause existing callsites to fail
-fn type_parameter_constraints_compatibile(
+fn type_parameter_constraints_compatible(
+    disallow_changing_generic_abilities: bool,
     old_type_constraints: AbilitySet,
     new_type_constraints: AbilitySet,
 ) -> bool {
-    new_type_constraints.is_subset(old_type_constraints)
+    if disallow_changing_generic_abilities {
+        old_type_constraints == new_type_constraints
+    } else {
+        new_type_constraints.is_subset(old_type_constraints)
+    }
 }
 
 // Adding a phantom annotation to a parameter won't break clients because that can only increase the
 // the set of abilities in struct instantiations. Put it differently, adding phantom declarations
 // relaxes the requirements for clients.
-fn type_parameter_phantom_decl_compatibile(
+fn type_parameter_phantom_decl_compatible(
+    disallow_changing_generic_abilities: bool,
     old_type_parameter: &StructTypeParameter,
     new_type_parameter: &StructTypeParameter,
 ) -> bool {
-    // old_type_paramter.is_phantom => new_type_parameter.is_phantom
-    !old_type_parameter.is_phantom || new_type_parameter.is_phantom
+    if disallow_changing_generic_abilities {
+        // phantom/non-phantom cannot change from one version to the next.
+        old_type_parameter.is_phantom == new_type_parameter.is_phantom
+    } else {
+        // old_type_paramter.is_phantom => new_type_parameter.is_phantom
+        !old_type_parameter.is_phantom || new_type_parameter.is_phantom
+    }
 }
 
 /// A simpler, and stricter compatibility checker relating to the inclusion of the old module in
