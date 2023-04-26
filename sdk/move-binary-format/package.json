@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "Move Binary Format implementation in WASM",
   "type": "module",
+  "private": true,
   "scripts": {
     "build": "wasm-pack build --target web --scope mysten",
     "build:dev": "wasm-pack build --target nodejs --debug --scope mysten",
