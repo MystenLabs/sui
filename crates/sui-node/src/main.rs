@@ -108,8 +108,12 @@ fn main() {
     // Run node in a separate runtime so that admin/monitoring functions continue to work
     // if it deadlocks.
     let (sender, receiver) = oneshot::channel();
+    let rpc_runtime = runtimes.json_rpc.handle().clone();
     runtimes.sui_node.spawn(async move {
-        if let Err(e) = sui_node::SuiNode::start_async(&config, registry_service, sender).await {
+        if let Err(e) =
+            sui_node::SuiNode::start_async(&config, registry_service, sender, Some(rpc_runtime))
+                .await
+        {
             error!("Failed to start node: {e:?}");
             std::process::exit(1)
         }
