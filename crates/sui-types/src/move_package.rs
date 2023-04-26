@@ -147,6 +147,8 @@ impl UpgradePolicy {
             check_friend_linking: false,
             check_private_entry_linking: false,
             disallowed_new_abilities,
+            disallow_change_struct_type_params: protocol_config
+                .disallow_change_struct_type_params_on_upgrade(),
         }
     }
 
