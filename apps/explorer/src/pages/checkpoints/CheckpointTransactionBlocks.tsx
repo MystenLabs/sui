@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type TransactionFilter } from '@mysten/sui.js';
 import { useState } from 'react';
 
 import { genTableDataFromTxData } from '~/components/transactions/TxCardUtils';
@@ -12,12 +11,12 @@ import { TableCard } from '~/ui/TableCard';
 
 const DEFAULT_TRANSACTIONS_LIMIT = 20;
 
-export function CheckpointTransactionBlocks({ id }: { id?: string }) {
+export function CheckpointTransactionBlocks({ id }: { id: string }) {
     const [limit, setLimit] = useState(DEFAULT_TRANSACTIONS_LIMIT);
     const transactions = useGetTransactionBlocks(
         {
             Checkpoint: id,
-        } as TransactionFilter,
+        },
         limit
     );
 
