@@ -52,8 +52,7 @@ use sui_types::signature::GenericSignature;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{parse_sui_struct_tag, SUI_FRAMEWORK_OBJECT_ID};
 use sui_types::coin::CoinMetadata;
-use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType, Field};
-use sui_types::TypeTag;
+use sui_types::balance::Supply;
 
 
 struct Examples {
@@ -108,7 +107,6 @@ impl RpcExampleProvider {
             self.sui_get_latest_checkpoint_sequence_number(),
             self.suix_get_coins(),
             self.suix_get_total_supply(),
-            self.suix_getDynamicFieldObject(),
         ]
         .into_iter()
         .map(|example| (example.function_name, example.examples))
@@ -687,7 +685,6 @@ impl RpcExampleProvider {
             locked_balance: HashMap::new(),
         };
         
-        //println!("{}", serde_json::to_string_pretty(&y).unwrap());
         Examples::new(
             "suix_getAllBalances",
             vec![ExamplePairing::new(
@@ -836,8 +833,8 @@ impl RpcExampleProvider {
         let mut coin = ObjectID::new(self.rng.gen()).to_string();
         coin.push_str("::acoin::ACOIN");
 
-        let result = Value {
-            value: "12023692".to_string()
+        let result = Supply {
+            value: 12023692
         };
 
         Examples::new(
@@ -849,25 +846,4 @@ impl RpcExampleProvider {
             )]
         )
     }
-
-    fn suix_getDynamicFieldObject(&mut self) -> Examples {
-        
-        
-        let name = DynamicFieldName {
-            type_: TypeTag::new("0x2::sui::SUI".to_string()),
-            value: SuiJsonValue::from("name_value").to_json_value(),
-        };
-
-        Examples::new(
-            "suix_getDynamicFieldObject",
-            vec![ExamplePairing::new(
-                "Get",
-                vec![("name", json!(name))],
-                json!("")
-            )]
-        )
-    }
-
-
-
 }
