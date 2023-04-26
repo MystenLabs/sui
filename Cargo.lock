@@ -9196,6 +9196,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-keys",
  "sui-node",
+ "sui-sdk",
  "sui-types",
  "tap",
  "telemetry-subscribers",
@@ -9854,6 +9855,7 @@ dependencies = [
  "async-trait",
  "bcs",
  "clap 3.2.23",
+ "colored",
  "dirs",
  "fastcrypto",
  "futures",
@@ -9877,6 +9879,7 @@ dependencies = [
  "test-utils",
  "thiserror",
  "tokio",
+ "tracing",
  "workspace-hack",
 ]
 

@@ -6,7 +6,6 @@ use serde_json::json;
 use shared_crypto::intent::Intent;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use sui::client_commands::WalletContext;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_core::authority_client::AuthorityAPI;
 pub use sui_core::test_utils::{
@@ -20,6 +19,7 @@ use sui_json_rpc_types::{
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::json::SuiJsonValue;
+use sui_sdk::wallet_context::WalletContext;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::committee::Committee;

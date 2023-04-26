@@ -17,7 +17,6 @@ use tracing::info;
 
 use mysten_metrics::RegistryService;
 use shared_crypto::intent::Intent;
-use sui::client_commands::WalletContext;
 use sui_config::builder::{ProtocolVersionsConfig, SupportedProtocolVersionsCallback};
 use sui_config::genesis_config::{AccountConfig, GenesisConfig};
 use sui_config::node::DBCheckpointConfig;
@@ -30,6 +29,7 @@ use sui_node::SuiNodeHandle;
 use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
 use sui_sdk::error::SuiRpcResult;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
+use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_swarm::memory::{Swarm, SwarmBuilder};
 use sui_types::base_types::{AuthorityName, ObjectID, SuiAddress};

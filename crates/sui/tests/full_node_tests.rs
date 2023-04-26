@@ -12,7 +12,7 @@ use move_core_types::value::MoveStructLayout;
 use mysten_metrics::RegistryService;
 use prometheus::Registry;
 use serde_json::json;
-use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext};
+use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_json_rpc_types::EventFilter;
 use sui_json_rpc_types::{
     type_and_fields_from_move_struct, SuiEvent, SuiExecutionStatus, SuiTransactionBlockEffectsAPI,
@@ -21,6 +21,7 @@ use sui_json_rpc_types::{
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
 use sui_node::SuiNode;
+use sui_sdk::wallet_context::WalletContext;
 use sui_tool::restore_from_db_checkpoint;
 use sui_types::base_types::{ObjectRef, SequenceNumber};
 use sui_types::crypto::{get_key_pair, SuiKeyPair};

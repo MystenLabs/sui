@@ -34,6 +34,7 @@ sui-json-rpc-types= { path = "../sui-json-rpc-types" }
 sui-types = { path = "../sui-types" }
 sui-config = { path = "../sui-config" }
 sui-keys = { path = "../sui-keys" }
+sui-sdk = { path = "../sui-sdk" }
 mysten-metrics = { path = "../../crates/mysten-metrics" }
 telemetry-subscribers.workspace = true
 typed-store.workspace = true
