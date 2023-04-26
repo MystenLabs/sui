@@ -4,6 +4,7 @@
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::AuthorityStore;
 use crate::transaction_signing_filter;
+use mysten_metrics::new_scoped_timer;
 use std::collections::{BTreeMap, HashSet};
 use sui_adapter::adapter::run_metered_move_bytecode_verifier;
 use sui_config::transaction_deny_config::TransactionDenyConfig;
@@ -142,6 +143,7 @@ pub async fn check_certificate_input(
     epoch_store: &AuthorityPerEpochStore,
     cert: &VerifiedExecutableTransaction,
 ) -> SuiResult<(SuiGasStatus, InputObjects)> {
+    let _timer = new_scoped_timer!("check_certificate_input");
     let protocol_version = epoch_store.protocol_version();
 
     // This should not happen - validators should not have signed the txn in the first place.

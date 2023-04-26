@@ -20,6 +20,7 @@ use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use tokio::time::Instant;
 use tracing::{debug, info, trace};
 
+use mysten_metrics::new_scoped_timer;
 use sui_protocol_config::ProtocolConfig;
 use sui_storage::mutex_table::{MutexGuard, MutexTable, RwLockGuard, RwLockTable};
 use sui_types::accumulator::Accumulator;
@@ -806,6 +807,7 @@ impl AuthorityStore {
         transaction: &VerifiedTransaction,
         effects: &TransactionEffects,
     ) -> SuiResult {
+        let _timer = new_scoped_timer!("update_state");
         let _locks = self
             .acquire_read_locks_for_indirect_objects(&inner_temporary_store)
             .await;
