@@ -1900,18 +1900,29 @@ impl AuthorityState {
         accumulator: Arc<StateAccumulator>,
         enable_state_consistency_check: bool,
     ) {
+        info!(
+            "Performing sui conservation consistency check for epoch {}",
+            cur_epoch_store.epoch()
+        );
+
         if let Err(err) = self.database.expensive_check_sui_conservation() {
             if cfg!(debug_assertions) {
                 panic!("{}", err);
             } else {
                 // We cannot panic in production yet because it is known that there are some
                 // inconsistencies in testnet. We will enable this once we make it balanced again in testnet.
-                warn!("System consistency check failed: {}", err);
+                warn!("Sui conservation consistency check failed: {}", err);
             }
+        } else {
+            info!("Sui conservation consistency check passed");
         }
 
         // check for root state hash consistency with live object set
         if enable_state_consistency_check {
+            info!(
+                "Performing state consistency check for epoch {}",
+                cur_epoch_store.epoch()
+            );
             self.database.expensive_check_is_consistent_state(
                 checkpoint_executor,
                 accumulator,

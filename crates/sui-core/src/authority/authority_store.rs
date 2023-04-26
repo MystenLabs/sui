@@ -1634,6 +1634,8 @@ impl AuthorityStore {
                     root_state_hash, live_object_set_hash
                 );
             }
+        } else {
+            info!("State consistency check passed");
         }
 
         if !panic {
