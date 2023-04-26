@@ -28,13 +28,13 @@ use sui_swarm::memory::Swarm;
 use sui_types::crypto::{SignatureScheme, SuiKeyPair};
 
 use crate::client_commands::{SuiClientCommands, WalletContext};
-use crate::config::{SuiClientConfig, SuiEnv};
 use crate::console::start_console;
 use crate::fire_drill::{run_fire_drill, FireDrill};
 use crate::genesis_ceremony::{run, Ceremony};
 use crate::keytool::KeyToolCommand;
 use crate::validator_commands::SuiValidatorCommand;
 use sui_move::{self, execute_move_command};
+use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Parser)]

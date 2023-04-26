@@ -1,4 +1,3 @@
-// Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -8,13 +7,10 @@ use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-pub use sui_config::utils;
-pub use sui_config::Config;
-pub use sui_config::PersistedConfig;
-use sui_config::SUI_DEV_NET_URL;
+use crate::{SuiClient, SuiClientBuilder};
+use sui_config::{Config, SUI_DEV_NET_URL};
 use sui_keys::keystore::AccountKeystore;
 use sui_keys::keystore::Keystore;
-use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::base_types::*;
 
 #[serde_as]
