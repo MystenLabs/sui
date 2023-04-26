@@ -73,8 +73,7 @@ pub(crate) async fn check_transactions(
                         .with_effects()
                         .with_input()
                         .with_events()
-                        .with_balance_changes()
-                        .with_object_changes(), // todo(Will) support options for this
+                        .with_balance_changes(), // todo(Will) support options for this
                 )
                 .await
         }))
