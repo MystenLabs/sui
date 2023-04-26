@@ -138,7 +138,7 @@ impl AuthorityStorePruner {
     }
 
     /// Prunes old object versions based on effects from all checkpoints from epochs eligible for pruning
-    async fn prune_objects_for_eligible_epochs(
+    pub async fn prune_objects_for_eligible_epochs(
         perpetual_db: &Arc<AuthorityPerpetualTables>,
         checkpoint_store: &Arc<CheckpointStore>,
         objects_lock_table: &Arc<RwLockTable<ObjectContentDigest>>,

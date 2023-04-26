@@ -302,7 +302,15 @@ impl SuiNode {
             .zip(db_checkpoint_config.object_store_config.as_ref())
         {
             Some((path, config)) => {
-                let handler = DBCheckpointHandler::new(path, config, 60)?;
+                let handler = DBCheckpointHandler::new(
+                    path,
+                    config,
+                    60,
+                    checkpoint_store.clone(),
+                    db_checkpoint_config
+                        .prune_and_compact_before_upload
+                        .unwrap_or(false),
+                )?;
                 Some(handler.start())
             }
             None => None,

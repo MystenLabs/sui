@@ -9135,6 +9135,7 @@ dependencies = [
  "tracing",
  "typed-store",
  "typed-store-derive",
+ "url",
  "workspace-hack",
 ]
 
