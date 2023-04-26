@@ -17,7 +17,7 @@ use sui_swarm::memory::Swarm;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
-use sui_types::crypto::{get_key_pair, AccountKeyPair};
+use sui_types::crypto::{get_key_pair, get_key_pair_from_rng, AccountKeyPair};
 use test_utils::network::{TestCluster, TestClusterBuilder};
 use tracing::info;
 
@@ -211,8 +211,10 @@ impl Cluster for LocalNewCluster {
             test_cluster.swarm.config_mut().account_keys
         );
 
-        let faucet_key = test_cluster.swarm.config_mut().account_keys.swap_remove(0);
-        let faucet_address = SuiAddress::from(faucet_key.public());
+        // let faucet_key = test_cluster.swarm.config_mut().account_keys.swap_remove(0);
+        let (faucet_address, faucet_key) = get_key_pair_from_rng(&mut rand::rngs::OsRng);
+
+        // let faucet_address = SuiAddress::from(faucet_key.public());
         info!(?faucet_address, "faucet_address");
 
         // This cluster has fullnode handle, safe to unwrap

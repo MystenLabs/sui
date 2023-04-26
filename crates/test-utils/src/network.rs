@@ -21,7 +21,8 @@ use sui::{client_commands::WalletContext, config::SuiClientConfig};
 use sui_config::builder::{ProtocolVersionsConfig, SupportedProtocolVersionsCallback};
 use sui_config::genesis_config::GenesisConfig;
 use sui_config::node::DBCheckpointConfig;
-use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
+use sui_config::sui_config_dir;
+use sui_config::{Config, NetworkConfig, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{FullnodeConfigBuilder, NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
 use sui_json_rpc_types::{SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
@@ -481,6 +482,18 @@ impl TestClusterBuilder {
 
     /// Start a Swarm and set up WalletConfig
     async fn start_swarm(&mut self) -> Result<Swarm, anyhow::Error> {
+        // Load the config of the Sui authority.
+        // let network_config_path = config
+        //     .clone()
+        //     .unwrap_or(sui_config_dir()?.join(SUI_NETWORK_CONFIG));
+        let network_config_path = sui_config_dir()?.join(SUI_NETWORK_CONFIG);
+        let network_config: NetworkConfig =
+            PersistedConfig::read(&network_config_path).map_err(|err| {
+                err.context(format!(
+                    "Cannot open Sui network config file at {:?}",
+                    network_config_path
+                ))
+            })?;
         let mut builder: SwarmBuilder = Swarm::builder()
             .committee_size(
                 NonZeroUsize::new(self.num_validators.unwrap_or(NUM_VALIDAOTR)).unwrap(),
@@ -495,17 +508,16 @@ impl TestClusterBuilder {
             builder = builder.with_genesis_config(genesis_config);
         }
 
-        let mut swarm = builder.build();
+        let mut swarm = builder.from_network_config(sui_config_dir()?, network_config);
         swarm.launch().await?;
 
         let dir = swarm.dir();
 
-        let network_path = dir.join(SUI_NETWORK_CONFIG);
+        // let network_path = dir.join(SUI_NETWORK_CONFIG);
         let wallet_path = dir.join(SUI_CLIENT_CONFIG);
-        println!("keystore_filename in swarm: {:?}", SUI_KEYSTORE_FILENAME);
-        let keystore_path = dir.join(SUI_KEYSTORE_FILENAME);
-
-        swarm.config().save(&network_path)?;
+        // let keystore_path = dir.join(SUI_KEYSTORE_FILENAME);
+        let keystore_path = sui_config_dir()?.join(SUI_KEYSTORE_FILENAME);
+        // swarm.config().save(&network_path)?;
         let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
         for key in &swarm.config().account_keys {
             println!("key: {:?}", key);

@@ -8993,6 +8993,7 @@ dependencies = [
  "jsonrpsee",
  "move-core-types",
  "prometheus",
+ "rand 0.8.5",
  "reqwest",
  "serde 1.0.152",
  "serde_json",
