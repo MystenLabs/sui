@@ -1,4 +1,4 @@
-FROM rust:1.65.0 AS chef
+FROM rust:1.68.2 AS chef
 ARG PROFILE=release
 WORKDIR sui
 RUN apt-get update && apt-get install -y cmake clang

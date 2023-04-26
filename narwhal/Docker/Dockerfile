@@ -6,7 +6,7 @@ ARG BUILD_MODE="release"
 #################################################################
 # Stage 0
 #################################################################
-FROM rust:1.65.0 AS chef
+FROM rust:1.68.2 AS chef
 WORKDIR "$WORKDIR/sui"
 ARG BUILD_MODE
 
