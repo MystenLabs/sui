@@ -94,7 +94,7 @@ function TransactionBlocksForAddress({
     } as TransactionFilter);
 
     const currentPage = currentPageState[filterValue];
-    const cardData = data
+    const cardData = data && data.pages[currentPage]
         ? genTableDataFromTxData(data.pages[currentPage].data)
         : undefined;
 
@@ -157,7 +157,7 @@ function TransactionBlocksForAddress({
                             if (
                                 data &&
                                 currentPageState[filterValue] ===
-                                    data?.pages.length - 1 &&
+                                data?.pages.length - 1 &&
                                 !isLoading &&
                                 !isFetching
                             ) {
