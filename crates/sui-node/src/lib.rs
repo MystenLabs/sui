@@ -18,6 +18,7 @@ use anyhow::anyhow;
 use anyhow::Result;
 use arc_swap::ArcSwap;
 use futures::TryFutureExt;
+use mysten_common::sync::async_once_cell::AsyncOnceCell;
 use prometheus::Registry;
 use sui_core::consensus_adapter::LazyNarwhalClient;
 use sui_json_rpc::api::JsonRpcMetrics;
@@ -159,15 +160,21 @@ impl SuiNode {
         registry_service: RegistryService,
         custom_rpc_runtime: Option<Handle>,
     ) -> Result<Arc<SuiNode>> {
-        let (sender, receiver) = oneshot::channel();
-        Self::start_async(config, registry_service, sender, custom_rpc_runtime).await?;
-        Ok(receiver.await?)
+        let node_one_cell = Arc::new(AsyncOnceCell::<Arc<SuiNode>>::new());
+        Self::start_async(
+            config,
+            registry_service,
+            node_one_cell.clone(),
+            custom_rpc_runtime,
+        )
+        .await?;
+        Ok(node_one_cell.get().await)
     }
 
     pub async fn start_async(
         config: &NodeConfig,
         registry_service: RegistryService,
-        node_sender: oneshot::Sender<Arc<SuiNode>>,
+        node_once_cell: Arc<AsyncOnceCell<Arc<SuiNode>>>,
         custom_rpc_runtime: Option<Handle>,
     ) -> Result<()> {
         let mut config = config.clone();
@@ -451,9 +458,9 @@ impl SuiNode {
         let node_copy = node.clone();
         spawn_monitored_task!(async move { Self::monitor_reconfiguration(node_copy).await });
 
-        node_sender
-            .send(node)
-            .map_err(|_e| anyhow!("Failed to send node"))?;
+        node_once_cell
+            .set(node)
+            .expect("Failed to set Arc<Node> in node_once_cell");
         Ok(())
     }
 

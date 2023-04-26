@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::Parser;
+use mysten_common::sync::async_once_cell::AsyncOnceCell;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 use sui_config::{Config, NodeConfig};
 use sui_core::runtime::SuiRuntimes;
@@ -10,7 +12,6 @@ use sui_node::metrics;
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_telemetry::send_telemetry_event;
 use sui_types::multiaddr::Multiaddr;
-use tokio::sync::oneshot;
 use tokio::time::sleep;
 use tracing::{error, info};
 
@@ -96,23 +97,23 @@ fn main() {
     }
 
     let is_validator = config.consensus_config().is_some();
-    runtimes.metrics.spawn(async move {
-        loop {
-            sleep(Duration::from_secs(3600)).await;
-            send_telemetry_event(is_validator).await;
-        }
-    });
 
     let admin_interface_port = config.admin_interface_port;
 
     // Run node in a separate runtime so that admin/monitoring functions continue to work
     // if it deadlocks.
-    let (sender, receiver) = oneshot::channel();
+    let node_one_cell = Arc::new(AsyncOnceCell::<Arc<sui_node::SuiNode>>::new());
+    let node_one_cell_clone = node_one_cell.clone();
     let rpc_runtime = runtimes.json_rpc.handle().clone();
+
     runtimes.sui_node.spawn(async move {
-        if let Err(e) =
-            sui_node::SuiNode::start_async(&config, registry_service, sender, Some(rpc_runtime))
-                .await
+        if let Err(e) = sui_node::SuiNode::start_async(
+            &config,
+            registry_service,
+            node_one_cell_clone,
+            Some(rpc_runtime),
+        )
+        .await
         {
             error!("Failed to start node: {e:?}");
             std::process::exit(1)
@@ -123,9 +124,19 @@ fn main() {
         }
     });
 
+    let node_one_cell_clone = node_one_cell.clone();
     runtimes.metrics.spawn(async move {
-        let node = receiver.await.unwrap();
-        sui_node::admin::run_admin_server(node.clone(), admin_interface_port, filter_handle).await
+        let node = node_one_cell_clone.get().await;
+        sui_node::admin::run_admin_server(node, admin_interface_port, filter_handle).await
+    });
+
+    runtimes.metrics.spawn(async move {
+        let node = node_one_cell.get().await;
+        let state = node.state();
+        loop {
+            send_telemetry_event(state.clone(), is_validator).await;
+            sleep(Duration::from_secs(3600)).await;
+        }
     });
 
     // wait for SIGINT on the main thread
