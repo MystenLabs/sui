@@ -11,11 +11,11 @@ const SvgChevronLeft12 = (props: SVGProps<SVGSVGElement>) => (
     {...props}
   >
     <path
+      d="M7 3L4 6L7 9"
       stroke="currentColor"
+      strokeWidth="1.5"
       strokeLinecap="round"
       strokeLinejoin="round"
-      strokeWidth={1.5}
-      d="M8 3 5 6l3 3"
     />
   </svg>
 );

@@ -177,26 +177,33 @@ impl AuthorityStorePruner {
                 })
                 .collect();
 
-            checkpoint_number = checkpoints
-                .last()
-                .map(|c| *c.sequence_number())
-                .unwrap_or(checkpoint_number);
-            let is_last_iteration = checkpoints.len() < config.max_checkpoints_in_batch;
+            let mut is_last_iteration = checkpoints.len() < config.max_checkpoints_in_batch;
 
-            let digests: Vec<_> = checkpoints.into_iter().map(|c| c.content_digest).collect();
+            let digests: Vec<_> = checkpoints.iter().map(|c| c.content_digest).collect();
             let execution_digests = checkpoint_store
                 .multi_get_checkpoint_content(&digests)?
                 .into_iter()
-                .flat_map(|contents| {
+                .map(|contents| {
                     contents
                         .expect("checkpoint content is missing")
                         .into_inner()
-                })
-                .map(|tx| tx.effects);
+                        .into_iter()
+                        .map(|tx| tx.effects)
+                });
+
+            let mut digests = vec![];
+            for (idx, checkpoint_digests) in execution_digests.enumerate() {
+                checkpoint_number = *checkpoints[idx].sequence_number();
+                digests.extend(checkpoint_digests);
+                if digests.len() >= config.max_transactions_in_batch {
+                    is_last_iteration = false;
+                    break;
+                }
+            }
 
             let effects = perpetual_db
                 .effects
-                .multi_get(execution_digests)?
+                .multi_get(digests)?
                 .into_iter()
                 .map(|effects| effects.expect("missing effects in pruner"))
                 .collect();

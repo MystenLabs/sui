@@ -276,7 +276,7 @@ impl OperationMetrics {
             .unwrap(),
             rocksdb_iter_keys: register_histogram_vec_with_registry!(
                 "rocksdb_iter_keys",
-                "Rocksdb iter size in bytes",
+                "Rocksdb iter num keys",
                 &["cf_name"],
                 registry,
             )
@@ -408,6 +408,8 @@ pub struct ReadPerfContextMetrics {
     pub bloom_sst_miss_count: IntCounterVec,
     pub key_lock_wait_time: IntCounterVec,
     pub key_lock_wait_count: IntCounterVec,
+    pub internal_delete_skipped_count: IntCounterVec,
+    pub internal_skipped_count: IntCounterVec,
 }
 
 impl ReadPerfContextMetrics {
@@ -617,6 +619,20 @@ impl ReadPerfContextMetrics {
                 registry,
             )
             .unwrap(),
+            internal_delete_skipped_count: register_int_counter_vec_with_registry!(
+                "internal_delete_skipped_count",
+                "Total number of deleted keys skipped during iteration",
+                &["cf_name"],
+                registry,
+            )
+                .unwrap(),
+            internal_skipped_count: register_int_counter_vec_with_registry!(
+                "internal_skipped_count",
+                "Totall number of internal keys skipped during iteration",
+                &["cf_name"],
+                registry,
+            )
+                .unwrap(),
         }
     }
 
@@ -711,6 +727,12 @@ impl ReadPerfContextMetrics {
             self.key_lock_wait_count
                 .with_label_values(&[cf_name])
                 .inc_by(perf_context.metric(PerfMetric::KeyLockWaitCount));
+            self.internal_delete_skipped_count
+                .with_label_values(&[cf_name])
+                .inc_by(perf_context.metric(PerfMetric::InternalDeleteSkippedCount));
+            self.internal_skipped_count
+                .with_label_values(&[cf_name])
+                .inc_by(perf_context.metric(PerfMetric::InternalKeySkippedCount));
         });
     }
 }
