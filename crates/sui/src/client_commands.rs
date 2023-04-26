@@ -10,7 +10,6 @@ use std::{
     time::Instant,
 };
 
-use crate::config::{Config, PersistedConfig, SuiClientConfig, SuiEnv};
 use anyhow::{anyhow, ensure};
 use bip32::DerivationPath;
 use clap::*;
@@ -31,6 +30,7 @@ use sui_types::digests::TransactionDigest;
 use sui_types::error::SuiError;
 
 use shared_crypto::intent::Intent;
+use sui_config::{Config, PersistedConfig};
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     DynamicFieldPage, SuiData, SuiObjectData, SuiObjectDataFilter, SuiObjectResponse,
@@ -43,6 +43,7 @@ use sui_move_build::{
     build_from_resolution_graph, check_invalid_dependencies, check_unpublished_dependencies,
     gather_published_ids, BuildConfig, CompiledPackage, PackageDependencies, PublishedAtError,
 };
+use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::SuiClient;
 use sui_types::crypto::SignatureScheme;
 use sui_types::dynamic_field::DynamicFieldType;

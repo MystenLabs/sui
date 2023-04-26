@@ -18,7 +18,6 @@ use tokio::time::sleep;
 use sui::client_commands::SwitchResponse;
 use sui::{
     client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext},
-    config::SuiClientConfig,
     sui_commands::SuiCommand,
 };
 use sui_config::{
@@ -37,6 +36,7 @@ use sui_json_rpc_types::{
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore};
 use sui_macros::sim_test;
 use sui_move_build::{BuildConfig, SuiPackageHooks};
+use sui_sdk::sui_client_config::SuiClientConfig;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
     Ed25519SuiSignature, Secp256k1SuiSignature, SignatureScheme, SuiKeyPair, SuiSignatureInner,

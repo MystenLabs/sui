@@ -33,6 +33,7 @@ use crate::error::{Error, SuiRpcResult};
 
 pub mod apis;
 pub mod error;
+pub mod sui_client_config;
 pub const SUI_COIN_TYPE: &str = "0x2::sui::SUI";
 const WAIT_FOR_TX_TIMEOUT_SEC: u64 = 60;
 

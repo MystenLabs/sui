@@ -9862,6 +9862,7 @@ dependencies = [
  "move-core-types",
  "serde 1.0.152",
  "serde_json",
+ "serde_with",
  "shared-crypto",
  "sui",
  "sui-adapter",
