@@ -30,7 +30,6 @@ inquire = "0.6.0"
 rusoto_core = { version = "0.48.0" }
 rusoto_kms = { version = "0.48.0" }
 openssl = "0.10.37"
-secp256k1= "0.27.0"
 aws-config = "0.55.1"
 
 sui-core = { path = "../sui-core" }

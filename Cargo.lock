@@ -9432,7 +9432,6 @@ dependencies = [
  "rusoto_kms",
  "rustyline",
  "rustyline-derive",
- "secp256k1",
  "serde 1.0.152",
  "serde_json",
  "serde_with",
