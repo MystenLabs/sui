@@ -3,7 +3,7 @@
 
 import { type CheckpointPage } from '@mysten/sui.js/src/types/checkpoints';
 
-import { TxTableCol, TxTableHeader } from '../transactions/TxCardUtils';
+import { TxTableCol } from '../transactions/TxCardUtils';
 import { TxTimeType } from '../tx-time/TxTimeType';
 
 import { CheckpointLink } from '~/ui/InternalLink';
@@ -39,19 +39,19 @@ export const genTableDataFromCheckpointsData = (data: CheckpointPage) => ({
     })),
     columns: [
         {
-            header: () => <TxTableHeader label="Digest" />,
+            header: () => 'Digest',
             accessorKey: 'digest',
         },
         {
-            header: () => <TxTableHeader label="Sequence Number" />,
+            header: () => 'Sequence Number',
             accessorKey: 'sequenceNumber',
         },
         {
-            header: () => <TxTableHeader label="Time" />,
+            header: () => 'Time',
             accessorKey: 'time',
         },
         {
-            header: () => <TxTableHeader label="Transaction Block Count" />,
+            header: () => 'Transaction Block Count',
             accessorKey: 'transactionBlockCount',
         },
     ],
