@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 7;
+const MAX_PROTOCOL_VERSION: u64 = 8;
 
 // Record history of protocol version allocations here:
 //
@@ -29,6 +29,8 @@ const MAX_PROTOCOL_VERSION: u64 = 7;
 //            advance_to_highest_supported_protocol_version,
 //            disable init functions becoming entry,
 //            hash module bytes individually before computing package digest.
+// Version 8: Disallow changing abilities and type constraints for type parameters in structs
+//            during upgrades.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -165,6 +167,9 @@ struct FeatureFlags {
     // If true, hash module bytes individually when calculating package digests for upgrades
     #[serde(skip_serializing_if = "is_false")]
     package_digest_hash_module: bool,
+    // If true, disallow changing struct type parameters during package upgrades
+    #[serde(skip_serializing_if = "is_false")]
+    disallow_change_struct_type_params_on_upgrade: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -676,6 +681,11 @@ impl ProtocolConfig {
     pub fn package_digest_hash_module(&self) -> bool {
         self.feature_flags.package_digest_hash_module
     }
+
+    pub fn disallow_change_struct_type_params_on_upgrade(&self) -> bool {
+        self.feature_flags
+            .disallow_change_struct_type_params_on_upgrade
+    }
 }
 
 // Special getters
@@ -1083,6 +1093,12 @@ impl ProtocolConfig {
                     .advance_to_highest_supported_protocol_version = true;
                 cfg.feature_flags.ban_entry_init = true;
                 cfg.feature_flags.package_digest_hash_module = true;
+                cfg
+            }
+            8 => {
+                let mut cfg = Self::get_for_version_impl(version - 1);
+                cfg.feature_flags
+                    .disallow_change_struct_type_params_on_upgrade = true;
                 cfg
             }
             // Use this template when making changes:

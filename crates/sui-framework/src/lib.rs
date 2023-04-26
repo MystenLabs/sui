@@ -219,6 +219,7 @@ pub async fn compare_system_package<S: ObjectStore>(
         check_friend_linking: false,
         check_private_entry_linking: true,
         disallowed_new_abilities: AbilitySet::ALL,
+        disallow_change_struct_type_params: true,
     };
 
     let new_pkg = new_object
