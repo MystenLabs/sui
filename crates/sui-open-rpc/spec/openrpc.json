@@ -4638,6 +4638,24 @@
             "type": "object",
             "required": [
               "code",
+              "parent_object_id"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "dynamicFieldNotFound"
+                ]
+              },
+              "parent_object_id": {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "code",
               "digest",
               "object_id",
               "version"
