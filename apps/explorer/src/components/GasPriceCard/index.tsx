@@ -15,6 +15,7 @@ import { ParentSize } from '@visx/responsive';
 import clsx from 'clsx';
 import { useMemo, useState } from 'react';
 
+import { ErrorBoundary } from '../error-boundary/ErrorBoundary';
 import { Graph } from './Graph';
 import { type EpochGasInfo } from './types';
 
@@ -203,25 +204,22 @@ export function GasPriceCard() {
                                 />
                             </div>
                             <div className="relative flex-1 self-stretch">
-                                {historicalData ? (
-                                    <ParentSize className="absolute">
-                                        {(parent) => (
-                                            <Graph
-                                                width={parent.width}
-                                                height={parent.height}
-                                                data={graphEpochs}
-                                                durationDays={
-                                                    GRAPH_DURATIONS_MAP[
-                                                        selectedGraphDuration
-                                                    ]
-                                                }
-                                                onHoverElement={
-                                                    setHoveredElement
-                                                }
-                                            />
-                                        )}
-                                    </ParentSize>
-                                ) : null}
+                                <ErrorBoundary>
+                                    {historicalData ? (
+                                        <ParentSize className="absolute">
+                                            {(parent) => (
+                                                <Graph
+                                                    width={parent.width}
+                                                    height={parent.height}
+                                                    data={graphEpochs}
+                                                    onHoverElement={
+                                                        setHoveredElement
+                                                    }
+                                                />
+                                            )}
+                                        </ParentSize>
+                                    ) : null}
+                                </ErrorBoundary>
                             </div>
                         </>
                     ) : (

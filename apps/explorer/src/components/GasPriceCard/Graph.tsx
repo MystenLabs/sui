@@ -7,7 +7,7 @@ import { localPoint } from '@visx/event';
 import { scaleTime, scaleLinear } from '@visx/scale';
 import { LinePath } from '@visx/shape';
 import clsx from 'clsx';
-import { bisector } from 'd3-array';
+import { bisector, extent } from 'd3-array';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { throttle } from 'throttle-debounce';
 
@@ -30,51 +30,31 @@ export type GraphProps = {
     data: EpochGasInfo[];
     width: number;
     height: number;
-    durationDays: number;
     onHoverElement: (value: EpochGasInfo | null) => void;
 };
-export function Graph({
-    data,
-    width,
-    height,
-    durationDays,
-    onHoverElement,
-}: GraphProps) {
+export function Graph({ data, width, height, onHoverElement }: GraphProps) {
     const graphTop = 0;
     const graphButton = Math.max(height - 20, 0);
-    const xScale = useMemo(() => {
-        const today = new Date();
-        today.setHours(0);
-        today.setMinutes(0);
-        today.setSeconds(0);
-        today.setMilliseconds(0);
-        const minDate = new Date(today);
-        minDate.setTime(
-            minDate.getTime() - (durationDays - 1) * ONE_DAY_MILLIS
-        );
-        const minGraphDate = Math.min(
-            ...data.filter(isDefined).map(({ date }) => date!.getTime())
-        );
-        return scaleTime<number>({
-            domain: [
-                new Date(Math.min(minDate.getTime(), minGraphDate)),
-                today,
-            ],
-            nice: 'day',
-            range: [SIDE_MARGIN, width - SIDE_MARGIN],
-        });
-    }, [durationDays, width, data]);
-    const yScale = useMemo(() => {
-        const prices = [
-            ...data
-                .filter(isDefined)
-                .map(({ referenceGasPrice }) => Number(referenceGasPrice!)),
-        ];
-        return scaleLinear<number>({
-            domain: [Math.min(...prices), Math.max(...prices)],
-            range: [graphTop, graphButton],
-        });
-    }, [data, graphTop, graphButton]);
+    const xScale = useMemo(
+        () =>
+            scaleTime<number>({
+                domain: extent(data, ({ date }) => date) as [Date, Date],
+                range: [SIDE_MARGIN, width - SIDE_MARGIN],
+            }),
+        [width, data]
+    );
+    const yScale = useMemo(
+        () =>
+            scaleLinear<number>({
+                domain: extent(data, ({ referenceGasPrice }) =>
+                    referenceGasPrice !== null
+                        ? Number(referenceGasPrice)
+                        : null
+                ) as [number, number],
+                range: [graphTop, graphButton],
+            }),
+        [data, graphTop, graphButton]
+    );
     const [isTooltipVisible, setIsTooltipVisible] = useState(false);
     const [tooltipX, setTooltipX] = useState(SIDE_MARGIN);
     const [hoveredElement, setHoveredElement] = useState<EpochGasInfo | null>(
@@ -96,18 +76,19 @@ export function Graph({
     );
     const prevHandleTooltipThrottled = useRef<typeof handleTooltipThrottled>();
     useEffect(() => {
-        console.log('set prevHandleTooltipThrottled', handleTooltipThrottled);
         prevHandleTooltipThrottled.current = handleTooltipThrottled;
         return () => {
-            console.log(
-                'clear prevHandleTooltipThrottled',
-                prevHandleTooltipThrottled?.current
-            );
             prevHandleTooltipThrottled?.current?.cancel?.({
                 upcomingOnly: true,
             });
         };
     }, [handleTooltipThrottled]);
+    const totalDays = useMemo(() => {
+        const domain = xScale.domain();
+        return Math.floor(
+            (domain[1].getTime() - domain[0].getTime()) / ONE_DAY_MILLIS
+        );
+    }, [xScale]);
     return (
         <svg
             width={width}
@@ -148,10 +129,10 @@ export function Graph({
                     className: 'text-subtitle font-medium fill-steel font-sans',
                 }}
                 scale={xScale}
-                tickFormat={(data) => formatDate(data as Date)}
+                tickFormat={(date) => formatDate(date as Date)}
                 hideTicks
                 hideAxisLine
-                numTicks={Math.min(durationDays, 15)}
+                numTicks={Math.min(totalDays || 0, 15)}
             />
             <rect
                 x={SIDE_MARGIN}
