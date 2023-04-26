@@ -35,6 +35,7 @@ sui-protocol-config = { path = "../sui-protocol-config" }
 sui-telemetry = { path = "../sui-telemetry" }
 sui-types = { path = "../sui-types" }
 mysten-metrics = { path = "../mysten-metrics" }
+mysten-common = { path = "../mysten-common" }
 narwhal-network = { path = "../../narwhal/network" }
 narwhal-types = { path = "../../narwhal/types" }
 typed-store.workspace = true
