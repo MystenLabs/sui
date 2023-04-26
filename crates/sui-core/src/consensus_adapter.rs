@@ -206,13 +206,13 @@ impl LazyNarwhalClient {
     async fn get(&self) -> Arc<ArcSwap<LocalNarwhalClient>> {
         // Narwhal may not have started and created LocalNarwhalClient, so retry in a loop.
         // Retries should only happen on Sui process start.
-        if let Ok(client) = timeout(Duration::from_secs(30), async {
+        const NARWHAL_WORKER_START_TIMEOUT: Duration = Duration::from_secs(30);
+        if let Ok(client) = timeout(NARWHAL_WORKER_START_TIMEOUT, async {
             loop {
                 match LocalNarwhalClient::get_global(&self.addr) {
                     Some(c) => return c,
                     None => {
                         sleep(Duration::from_millis(100)).await;
-                        continue;
                     }
                 };
             }
@@ -221,7 +221,10 @@ impl LazyNarwhalClient {
         {
             return client;
         }
-        panic!("Timed out waiting for Narwhal to start on {}!", self.addr);
+        panic!(
+            "Timed out after {:?} waiting for Narwhal worker ({}) to start!",
+            NARWHAL_WORKER_START_TIMEOUT, self.addr,
+        );
     }
 }
 
