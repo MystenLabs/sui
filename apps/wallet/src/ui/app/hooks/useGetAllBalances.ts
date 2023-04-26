@@ -25,7 +25,6 @@ export function useGetAllBalances(address?: SuiAddress | null) {
         {
             enabled: !!address,
             refetchInterval,
-            refetchOnMount: true,
             // NOTE: We lower the stale time here so that balances are more often refetched on page load.
             staleTime: 5_000,
         }

@@ -3,7 +3,7 @@
 use anyhow::anyhow;
 use bip32::DerivationPath;
 use clap::*;
-use fastcrypto::encoding::{decode_bytes_hex, Base64, Encoding};
+use fastcrypto::encoding::{decode_bytes_hex, Base64, Encoding, Hex};
 use fastcrypto::hash::HashFunction;
 use fastcrypto::traits::KeyPair;
 use shared_crypto::intent::{Intent, IntentMessage};
@@ -73,7 +73,7 @@ pub enum KeyToolCommand {
         #[clap(long)]
         intent: Option<Intent>,
     },
-    /// Add a new key to sui.key based on the input mnemonic phrase, the key scheme flag {ed25519 | secp256k1 | secp256r1}
+    /// Add a new key to sui.keystore based on the input mnemonic phrase, the key scheme flag {ed25519 | secp256k1 | secp256r1}
     /// and an optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1
     /// or m/74'/784'/0'/0/0 for secp256r1. Supports mnemonic phrase of word length 12, 15, 18`, 21, 24.
     Import {
@@ -81,6 +81,12 @@ pub enum KeyToolCommand {
         key_scheme: SignatureScheme,
         derivation_path: Option<DerivationPath>,
     },
+    /// Convert private key from wallet format (hex of 32 byte private key) to sui.keystore format
+    /// (base64 of 33 byte flag || private key) or vice versa.
+    Convert {
+        value: String,
+    },
+
     /// This reads the content at the provided file path. The accepted format can be
     /// [enum SuiKeyPair] (Base64 encoded of 33-byte `flag || privkey`) or `type AuthorityKeyPair`
     /// (Base64 encoded `privkey`). This prints out the account keypair as Base64 encoded `flag || privkey`,
@@ -227,6 +233,28 @@ impl KeyToolCommand {
                     keystore.import_from_mnemonic(&mnemonic_phrase, key_scheme, derivation_path)?;
                 info!("Key imported for address [{address}]");
             }
+
+            KeyToolCommand::Convert { value } => match Base64::decode(&value) {
+                Ok(decoded) => {
+                    assert_eq!(decoded.len(), 33);
+                    info!(
+                        "Wallet formatted private key: 0x{}",
+                        Hex::encode(&decoded[1..])
+                    );
+                }
+                Err(_) => match Hex::decode(&value) {
+                    Ok(decoded) => {
+                        assert_eq!(decoded.len(), 32);
+                        let mut res = Vec::new();
+                        res.extend_from_slice(&[SignatureScheme::ED25519.flag()]);
+                        res.extend_from_slice(&decoded);
+                        info!("Keystore formatted private key: {:?}", Base64::encode(&res));
+                    }
+                    Err(_) => {
+                        info!("Invalid private key format");
+                    }
+                },
+            },
 
             KeyToolCommand::Base64PubKeyToAddress { base64_key } => {
                 let pk = PublicKey::decode_base64(&base64_key)

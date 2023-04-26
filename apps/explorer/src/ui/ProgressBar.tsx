@@ -9,7 +9,7 @@ export interface ProgressBarProps {
 
 export function ProgressBar({ progress }: ProgressBarProps) {
     return (
-        <div className="w-full rounded-full bg-gray-45">
+        <div className="w-full rounded-full bg-white">
             <motion.div
                 className="rounded-full bg-gradient-to-r from-success via-success/50 to-success py-1"
                 initial={{ width: 0 }}

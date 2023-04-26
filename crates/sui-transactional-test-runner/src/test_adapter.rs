@@ -6,6 +6,7 @@
 use crate::{args::*, programmable_transaction_test_parser::parser::ParsedCommand};
 use anyhow::bail;
 use bimap::btree::BiBTreeMap;
+use fastcrypto::hash::MultisetHash;
 use move_binary_format::{file_format::CompiledScript, CompiledModule};
 use move_bytecode_utils::module_cache::GetModule;
 use move_command_line_common::{
@@ -39,10 +40,14 @@ use std::{
 };
 use sui_adapter::execution_engine;
 use sui_adapter::{adapter::new_move_vm, execution_mode};
-use sui_core::transaction_input_checker::check_objects;
+use sui_core::{
+    state_accumulator::{accumulate_effects, WrappedObject},
+    transaction_input_checker::check_objects,
+};
 use sui_framework::BuiltInFramework;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_protocol_config::ProtocolConfig;
+use sui_types::accumulator::Accumulator;
 use sui_types::MOVE_STDLIB_OBJECT_ID;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, SUI_ADDRESS_LENGTH},
@@ -761,6 +766,21 @@ fn merge_output(left: Option<String>, right: Option<String>) -> Option<String> {
     }
 }
 
+fn accumulate_in_memory_store(store: &InMemoryStorage) -> Accumulator {
+    let mut acc = Accumulator::default();
+    for (_, obj) in store.objects().iter() {
+        acc.insert(obj.compute_object_reference().2);
+    }
+
+    for (id, version) in store.wrapped().iter() {
+        acc.insert(
+            bcs::to_bytes(&WrappedObject::new(*id, *version))
+                .expect("Failed to serialize WrappedObject"),
+        );
+    }
+    acc
+}
+
 impl<'a> SuiTestAdapter<'a> {
     fn upgrade_package(
         &mut self,
@@ -800,8 +820,12 @@ impl<'a> SuiTestAdapter<'a> {
 
         SuiValue::Object(upgrade_capability).into_argument(&mut builder, self)?; // Argument::Input(0)
         let upgrade_arg = builder.pure(policy).unwrap();
-        let digest: Vec<u8> =
-            MovePackage::compute_digest_for_modules_and_deps(&modules_bytes, &dependencies).into();
+        let digest: Vec<u8> = MovePackage::compute_digest_for_modules_and_deps(
+            &modules_bytes,
+            &dependencies,
+            /* hash_modules */ true,
+        )
+        .into();
         let digest_arg = builder.pure(digest).unwrap();
 
         let upgrade_ticket = builder.programmable_move_call(
@@ -1005,10 +1029,21 @@ impl<'a> SuiTestAdapter<'a> {
             .collect();
         let mut wrapped_ids: Vec<_> = effects.wrapped().iter().map(|(id, _, _)| *id).collect();
         let gas_summary = effects.gas_cost_summary();
+
+        let effects_accum =
+            accumulate_effects(&*self.storage, vec![effects.clone()], &self.protocol_config);
+
+        let mut before = accumulate_in_memory_store(&self.storage);
+
         // update storage
         Arc::get_mut(&mut self.storage)
             .unwrap()
             .finish(inner.written, inner.deleted);
+
+        let after = accumulate_in_memory_store(&self.storage);
+
+        before.union(&effects_accum);
+        assert_eq!(before.digest(), after.digest());
 
         // make sure objects that have previously not been in storage get assigned a fake id.
         let mut might_need_fake_id: Vec<_> = created_ids

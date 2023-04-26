@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { usePostHog } from 'posthog-js/react';
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 
@@ -12,7 +11,6 @@ import { useNetwork } from '~/context';
 export function usePageView() {
     const [network] = useNetwork();
     const { pathname } = useLocation();
-    const postHog = usePostHog();
 
     useEffect(() => {
         // Send a pageview to Plausible
@@ -26,7 +24,5 @@ export function usePageView() {
                 source: pathname,
             },
         });
-
-        postHog?.capture('$pageview', { url: pathname, network });
-    }, [network, pathname, postHog]);
+    }, [network, pathname]);
 }

@@ -1,0 +1,12 @@
+[package]
+name = "Kiosk"
+version = "0.0.1"
+
+# for Sui testnet
+published-at = "0x43bb2146b6d4985f3b4a9538ae9187eccc1d9d6e4d9f54bc569164951d8eeeb1"
+
+[dependencies]
+Sui = { local = "../crates/sui-framework/packages/sui-framework" }
+
+[addresses]
+kiosk = "0x0"

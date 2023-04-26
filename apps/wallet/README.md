@@ -1,9 +1,3 @@
-## A note on Security
-
-**DISCLAIMER:** This code is provided for demonstration purposes only. The Sui Wallet has not been thoroughly tested, verified, or audited.
-There are known security issues with the current implementation of the Sui Wallet. Currently, the wallet is not password protected, and the mnemonic is not encrypted in storage.
-Please do not use the code or derivatives in production without proper diligence.
-
 # Sui Wallet
 
 A Chrome extension wallet for [Sui](https://sui.io).

@@ -16,7 +16,7 @@ use move_binary_format::{
 use move_core_types::{
     account_address::AccountAddress,
     identifier::IdentStr,
-    language_storage::{ModuleId, TypeTag},
+    language_storage::{ModuleId, StructTag, TypeTag},
     u256::U256,
 };
 use move_vm_runtime::{
@@ -43,10 +43,10 @@ use sui_types::{
     },
     metrics::LimitsMetrics,
     move_package::{
-        normalize_deserialized_modules, MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt,
-        UpgradeTicket,
+        normalize_deserialized_modules, MovePackage, TypeOrigin, UpgradeCap, UpgradePolicy,
+        UpgradeReceipt, UpgradeTicket,
     },
-    SUI_FRAMEWORK_ADDRESS,
+    Identifier, SUI_FRAMEWORK_ADDRESS,
 };
 use sui_verifier::{
     private_generics::{EVENT_MODULE, PRIVATE_TRANSFER_FUNCTIONS, TRANSFER_MODULE},
@@ -587,7 +587,11 @@ fn execute_move_upgrade<S: StorageView, Mode: ExecutionMode>(
 
     // Check digest.
     let computed_digest =
-        MovePackage::compute_digest_for_modules_and_deps(&module_bytes, &dep_ids).to_vec();
+        MovePackage::compute_digest_for_modules_and_deps(
+            &module_bytes,
+            &dep_ids,
+            context.protocol_config.package_digest_hash_module(),
+        ).to_vec();
     if computed_digest != upgrade_ticket.digest {
         return Err(ExecutionError::from_kind(
             ExecutionErrorKind::PackageUpgradeError {
@@ -615,6 +619,30 @@ fn execute_move_upgrade<S: StorageView, Mode: ExecutionMode>(
     let Some(package) = package_obj.data.try_as_package() else {
         invariant_violation!("Newly created package object is not a package");
     };
+
+    // Populate loader with all previous types.
+    if !context.protocol_config.disallow_adding_abilities_on_upgrade() {
+        for TypeOrigin { module_name, struct_name, package: origin } in package.type_origin_table() {
+            if package.id() == *origin {
+                continue;
+            }
+
+            let Ok(module) = Identifier::new(module_name.as_str()) else {
+                continue;
+            };
+
+            let Ok(name) = Identifier::new(struct_name.as_str()) else {
+                continue;
+            };
+
+            let _ = context.load_type(&TypeTag::Struct(Box::new(StructTag {
+                address: (*origin).into(),
+                module,
+                name,
+                type_params: vec![],
+            })));
+        }
+    }
 
     context.set_linkage(package)?;
     let res = publish_and_verify_modules(context, runtime_id, &modules);
@@ -827,7 +855,7 @@ fn publish_and_verify_modules<S: StorageView>(
     for module in modules {
         // Run Sui bytecode verifier, which runs some additional checks that assume the Move
         // bytecode verifier has passed.
-        sui_verifier::verifier::verify_module(module, &BTreeMap::new())?;
+        sui_verifier::verifier::verify_module(context.protocol_config, module, &BTreeMap::new())?;
     }
 
     Ok(())
@@ -942,6 +970,14 @@ fn check_visibility_and_signature<S: StorageView, Mode: ExecutionMode>(
             ),
         ));
     };
+
+    // entry on init is now banned, so ban invoking it
+    if !from_init && function == INIT_FN_NAME && context.protocol_config.ban_entry_init() {
+        return Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::NonEntryFunctionInvoked,
+            "Cannot call 'init'",
+        ));
+    }
 
     let last_instr: CodeOffset = fdef
         .code

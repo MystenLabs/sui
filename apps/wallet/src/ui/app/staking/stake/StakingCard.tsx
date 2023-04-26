@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFeatureIsOn } from '@growthbook/growthbook-react';
 import { useCoinDecimals } from '@mysten/core';
 import { ArrowLeft16 } from '@mysten/icons';
 import {
@@ -41,6 +42,7 @@ import Loading from '_components/loading';
 import { parseAmount } from '_helpers';
 import { useSigner, useGetCoinBalance } from '_hooks';
 import { Coin } from '_redux/slices/sui-objects/Coin';
+import { FEATURES } from '_src/shared/experimentation/features';
 import { trackEvent } from '_src/shared/plausible';
 
 import type { FormikHelpers } from 'formik';
@@ -63,6 +65,9 @@ function StakingCard() {
     const unstake = searchParams.get('unstake') === 'true';
     const { data: allDelegation, isLoading } = useGetDelegatedStake(
         accountAddress || ''
+    );
+    const effectsOnlySharedTransactions = useFeatureIsOn(
+        FEATURES.WALLET_EFFECTS_ONLY_SHARED_TRANSACTION as string
     );
 
     const { data: system, isLoading: validatorsIsloading } = useSystemState();
@@ -137,6 +142,9 @@ function StakingCard() {
                 );
                 return await signer.signAndExecuteTransactionBlock({
                     transactionBlock,
+                    requestType: effectsOnlySharedTransactions
+                        ? 'WaitForEffectsCert'
+                        : 'WaitForLocalExecution',
                     options: {
                         showInput: true,
                         showEffects: true,
@@ -164,6 +172,9 @@ function StakingCard() {
                 const transactionBlock = createUnstakeTransaction(stakedSuiId);
                 return await signer.signAndExecuteTransactionBlock({
                     transactionBlock,
+                    requestType: effectsOnlySharedTransactions
+                        ? 'WaitForEffectsCert'
+                        : 'WaitForLocalExecution',
                     options: {
                         showInput: true,
                         showEffects: true,
@@ -226,7 +237,8 @@ function StakingCard() {
                     `/receipt?${new URLSearchParams({
                         txdigest: txDigest,
                         from: 'stake',
-                    }).toString()}`
+                    }).toString()}`,
+                    { state: { response } }
                 );
             } catch (error) {
                 toast.error(

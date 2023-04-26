@@ -139,9 +139,7 @@ impl EpochStartConfigTrait for EpochStartConfigurationV2 {
 
 impl EpochFlag {
     pub fn default_flags_for_new_epoch() -> Vec<Self> {
-        vec![]
-        // todo - enable after switching to single DBBatch in consensus handler
-        // vec![EpochFlag::InMemoryCheckpointRoots]
+        vec![EpochFlag::InMemoryCheckpointRoots]
     }
 }
 

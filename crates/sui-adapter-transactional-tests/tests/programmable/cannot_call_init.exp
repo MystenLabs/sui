@@ -10,4 +10,4 @@ gas summary: computation_cost: 1000000, storage_cost: 3898800,  storage_rebate: 
 
 task 2 'programmable'. lines 13-14:
 Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Can only call `entry` or `public` functions"), command: Some(0) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot call 'init'"), command: Some(0) } }

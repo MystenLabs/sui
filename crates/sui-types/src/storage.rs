@@ -373,6 +373,7 @@ pub struct InMemoryStore {
     highest_synced_checkpoint: Option<(CheckpointSequenceNumber, CheckpointDigest)>,
     checkpoints: HashMap<CheckpointDigest, VerifiedCheckpoint>,
     full_checkpoint_contents: HashMap<CheckpointSequenceNumber, FullCheckpointContents>,
+    contents_digest_to_sequence_number: HashMap<CheckpointContentsDigest, CheckpointSequenceNumber>,
     sequence_number_to_digest: HashMap<CheckpointSequenceNumber, CheckpointDigest>,
     checkpoint_contents: HashMap<CheckpointContentsDigest, CheckpointContents>,
     transactions: HashMap<TransactionDigest, VerifiedTransaction>,
@@ -411,6 +412,13 @@ impl InMemoryStore {
             .and_then(|digest| self.get_checkpoint_by_digest(digest))
     }
 
+    pub fn get_sequence_number_by_contents_digest(
+        &self,
+        digest: &CheckpointContentsDigest,
+    ) -> Option<CheckpointSequenceNumber> {
+        self.contents_digest_to_sequence_number.get(digest).copied()
+    }
+
     pub fn get_highest_verified_checkpoint(&self) -> Option<&VerifiedCheckpoint> {
         self.highest_verified_checkpoint
             .as_ref()
@@ -441,6 +449,8 @@ impl InMemoryStore {
             self.effects
                 .insert(tx.effects.digest(), tx.effects.to_owned());
         }
+        self.contents_digest_to_sequence_number
+            .insert(checkpoint.content_digest, *checkpoint.sequence_number());
         let contents = contents.into_inner();
         self.full_checkpoint_contents
             .insert(*checkpoint.sequence_number(), contents.clone());
@@ -599,7 +609,17 @@ impl ReadStore for SharedInMemoryStore {
         &self,
         digest: &CheckpointContentsDigest,
     ) -> Result<Option<FullCheckpointContents>, Self::Error> {
-        self.inner()
+        // First look to see if we saved the complete contents already.
+        let inner = self.inner();
+        let contents = inner
+            .get_sequence_number_by_contents_digest(digest)
+            .and_then(|seq_num| inner.full_checkpoint_contents.get(&seq_num).cloned());
+        if contents.is_some() {
+            return Ok(contents);
+        }
+
+        // Otherwise gather it from the indivdual components.
+        inner
             .get_checkpoint_contents(digest)
             .map(|contents| {
                 FullCheckpointContents::from_checkpoint_contents(&self, contents.to_owned())
