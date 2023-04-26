@@ -7,6 +7,7 @@ import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import { TopValidatorsCard } from '../../components/top-validators-card/TopValidatorsCard';
 
 import { Activity } from '~/components/Activity';
+import { GasPriceCard } from '~/components/GasPriceCard';
 import { HomeMetrics } from '~/components/HomeMetrics';
 import { Card } from '~/ui/Card';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
@@ -31,6 +32,8 @@ function Home() {
                 </Suspense>
             </ErrorBoundary>
 
+            <GasPriceCard />
+            <div>Remove me</div>
             <ErrorBoundary>
                 <Activity initialLimit={TRANSACTIONS_LIMIT} disablePagination />
             </ErrorBoundary>

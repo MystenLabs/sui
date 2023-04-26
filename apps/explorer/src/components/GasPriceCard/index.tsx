@@ -4,6 +4,7 @@
 import {
     CoinFormat,
     formatBalance,
+    formatDate,
     useCoinDecimals,
     useGetReferenceGasPrice,
     useRpcClient,
@@ -11,6 +12,7 @@ import {
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 import { ParentSize } from '@visx/responsive';
+import clsx from 'clsx';
 import { useMemo, useState } from 'react';
 
 import { Graph } from './Graph';
@@ -118,6 +120,16 @@ export function GasPriceCard() {
             ) || [],
         [historicalData, selectedGraphDuration]
     );
+    const [hoveredElement, setHoveredElement] = useState<EpochGasInfo | null>(
+        null
+    );
+    const formattedHoveredPrice = useGasPriceFormat(
+        hoveredElement?.referenceGasPrice ?? null,
+        selectedUnit
+    );
+    const formattedHoveredDate = hoveredElement?.date
+        ? formatDate(hoveredElement?.date, ['month', 'day', 'year'])
+        : '-';
     return (
         <Card bg="default" spacing="lg">
             <div className="flex flex-col gap-5">
@@ -148,7 +160,7 @@ export function GasPriceCard() {
                         </Stats>
                     ) : null}
                 </div>
-                <div className="flex min-h-[30vh] flex-1 flex-col items-center justify-center rounded-xl bg-white pt-2">
+                <div className="flex min-h-[180px] flex-1 flex-col items-center justify-center overflow-hidden rounded-xl bg-white pt-2">
                     {isDataLoading ? (
                         <>
                             <LoadingSpinner />
@@ -159,19 +171,28 @@ export function GasPriceCard() {
                     ) : historicalData ? (
                         <>
                             <div className="flex flex-row self-stretch pr-2">
-                                <div className="ml-3 mt-1 flex min-w-0 flex-col flex-nowrap gap-0.5 rounded-md border border-solid border-gray-45 px-2 py-1.5">
+                                <div
+                                    className={clsx(
+                                        'ml-3 mt-1 flex min-w-0 flex-col flex-nowrap gap-0.5 rounded-md border border-solid border-gray-45 px-2 py-1.5',
+                                        hoveredElement?.date
+                                            ? 'visible'
+                                            : 'invisible'
+                                    )}
+                                >
                                     <Text
                                         variant="caption/semibold"
                                         color="hero-dark"
                                         truncate
                                     >
-                                        420 MIST
+                                        {formattedHoveredPrice
+                                            ? `${formattedHoveredPrice} ${selectedUnit}`
+                                            : '-'}
                                     </Text>
                                     <Text
                                         variant="subtitleSmallExtra/medium"
                                         color="steel-darker"
                                     >
-                                        March 30, 2023
+                                        {formattedHoveredDate}
                                     </Text>
                                 </div>
                                 <div className="flex-1" />
@@ -193,6 +214,9 @@ export function GasPriceCard() {
                                                     GRAPH_DURATIONS_MAP[
                                                         selectedGraphDuration
                                                     ]
+                                                }
+                                                onHoverElement={
+                                                    setHoveredElement
                                                 }
                                             />
                                         )}
