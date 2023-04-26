@@ -426,7 +426,7 @@ where
                     checkpoint,
                     transactions,
                     events,
-                    object_changes: _tx_object_changes,
+                    object_changes: _,
                     addresses: _,
                     packages: _,
                     input_objects: _,
@@ -557,7 +557,7 @@ where
                     addresses: _,
                     packages,
                     input_objects: _,
-                    move_calls: _,
+                    move_calls,
                     recipients: _,
                 } = indexed_checkpoint;
                 let checkpoint_seq = checkpoint.sequence_number;
@@ -577,6 +577,30 @@ where
                         .await;
                         package_commit_res =
                             packages_handler.state.persist_packages(&packages).await;
+                    }
+                });
+
+                let transactions_handler = self.clone();
+                spawn_monitored_task!(async move {
+                    // NOTE: only index move_calls for Explorer metrics for now,
+                    // will re-enable others later.
+                    let mut transaction_index_tables_commit_res = transactions_handler
+                        .state
+                        .persist_transaction_index_tables(&[], &move_calls, &[])
+                        .await;
+                    while let Err(e) = transaction_index_tables_commit_res {
+                        warn!(
+                            "Indexer transaction index tables commit failed with error: {:?}, retrying after {:?} milli-secs...",
+                            e, DB_COMMIT_RETRY_INTERVAL_IN_MILLIS
+                        );
+                        tokio::time::sleep(std::time::Duration::from_millis(
+                            DB_COMMIT_RETRY_INTERVAL_IN_MILLIS,
+                        ))
+                        .await;
+                        transaction_index_tables_commit_res = transactions_handler
+                            .state
+                            .persist_transaction_index_tables(&[], &move_calls, &[])
+                            .await;
                     }
                 });
 
