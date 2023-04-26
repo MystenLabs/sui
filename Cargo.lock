@@ -4033,9 +4033,9 @@ checksum = "ce23b50ad8242c51a442f3ff322d56b02f08852c77e4c0b4d3fd684abc89c683"
 
 [[package]]
 name = "indexmap"
-version = "1.9.2"
+version = "1.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1885e79c1fc4b10f0e172c475f458b7f7b93061064d98c3293e98c5ba0c8b399"
+checksum = "bd070e393353796e801d209ad339e89596eb4c8d430d18ede6a1cced8fafbd99"
 dependencies = [
  "autocfg",
  "hashbrown 0.12.3",
@@ -9958,6 +9958,36 @@ dependencies = [
  "tracing",
  "typed-store",
  "typed-store-derive",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-surfer"
+version = "0.34.0"
+dependencies = [
+ "async-trait",
+ "bcs",
+ "clap 3.2.23",
+ "futures",
+ "indexmap",
+ "move-binary-format",
+ "move-core-types",
+ "move-package",
+ "prometheus",
+ "rand 0.8.5",
+ "sui-config",
+ "sui-core",
+ "sui-json-rpc-types",
+ "sui-macros",
+ "sui-move-build",
+ "sui-protocol-config",
+ "sui-simulator",
+ "sui-swarm",
+ "sui-types",
+ "telemetry-subscribers",
+ "test-utils",
+ "tokio",
+ "tracing",
  "workspace-hack",
 ]
 
