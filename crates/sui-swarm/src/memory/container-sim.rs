@@ -61,7 +61,9 @@ impl Container {
                 let startup_sender = startup_sender.clone();
                 async move {
                     let registry_service = mysten_metrics::RegistryService::new(Registry::new());
-                    let server = SuiNode::start(&config, registry_service).await.unwrap();
+                    let server = SuiNode::start(&config, registry_service, None)
+                        .await
+                        .unwrap();
 
                     startup_sender.send(Arc::downgrade(&server)).ok();
 
