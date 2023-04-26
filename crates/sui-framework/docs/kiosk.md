@@ -59,6 +59,7 @@ be used to implement application-specific transfer rules.
 -  [Function `return_purchase_cap`](#0x2_kiosk_return_purchase_cap)
 -  [Function `withdraw`](#0x2_kiosk_withdraw)
 -  [Function `has_item`](#0x2_kiosk_has_item)
+-  [Function `has_item_with_type`](#0x2_kiosk_has_item_with_type)
 -  [Function `is_locked`](#0x2_kiosk_is_locked)
 -  [Function `is_listed`](#0x2_kiosk_is_listed)
 -  [Function `is_listed_exclusively`](#0x2_kiosk_is_listed_exclusively)
@@ -886,7 +887,7 @@ Performs an authorization check to make sure only owner can sell.
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID, price: u64
 ) {
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
-    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_item">has_item</a>(self, id), <a href="kiosk.md#0x2_kiosk_EItemNotFound">EItemNotFound</a>);
+    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_item_with_type">has_item_with_type</a>&lt;T&gt;(self, id), <a href="kiosk.md#0x2_kiosk_EItemNotFound">EItemNotFound</a>);
     <b>assert</b>!(!<a href="kiosk.md#0x2_kiosk_is_listed_exclusively">is_listed_exclusively</a>(self, id), <a href="kiosk.md#0x2_kiosk_EListedExclusively">EListedExclusively</a>);
 
     df::add(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>false</b> }, price);
@@ -948,7 +949,7 @@ user Kiosk. Can only be performed by the owner of the <code><a href="kiosk.md#0x
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID
 ) {
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
-    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_item">has_item</a>(self, id), <a href="kiosk.md#0x2_kiosk_EItemNotFound">EItemNotFound</a>);
+    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_item_with_type">has_item_with_type</a>&lt;T&gt;(self, id), <a href="kiosk.md#0x2_kiosk_EItemNotFound">EItemNotFound</a>);
     <b>assert</b>!(!<a href="kiosk.md#0x2_kiosk_is_listed_exclusively">is_listed_exclusively</a>(self, id), <a href="kiosk.md#0x2_kiosk_EListedExclusively">EListedExclusively</a>);
     <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_is_listed">is_listed</a>(self, id), <a href="kiosk.md#0x2_kiosk_ENotListed">ENotListed</a>);
 
@@ -1025,7 +1026,7 @@ for any price equal or higher than the <code>min_price</code>.
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID, min_price: u64, ctx: &<b>mut</b> TxContext
 ): <a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a>&lt;T&gt; {
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
-    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_item">has_item</a>(self, id), <a href="kiosk.md#0x2_kiosk_EItemNotFound">EItemNotFound</a>);
+    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_item_with_type">has_item_with_type</a>&lt;T&gt;(self, id), <a href="kiosk.md#0x2_kiosk_EItemNotFound">EItemNotFound</a>);
     <b>assert</b>!(!<a href="kiosk.md#0x2_kiosk_is_listed">is_listed</a>(self, id), <a href="kiosk.md#0x2_kiosk_EAlreadyListed">EAlreadyListed</a>);
 
     <b>let</b> uid = <a href="object.md#0x2_object_new">object::new</a>(ctx);
@@ -1155,7 +1156,7 @@ Withdraw profits from the Kiosk.
 
 ## Function `has_item`
 
-Check whether the an <code>item</code> is present in the <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code>.
+Check whether the <code>item</code> is present in the <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_has_item">has_item</a>(self: &<a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, id: <a href="object.md#0x2_object_ID">object::ID</a>): bool
@@ -1169,6 +1170,31 @@ Check whether the an <code>item</code> is present in the <code><a href="kiosk.md
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_has_item">has_item</a>(self: &<a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, id: ID): bool {
     dof::exists_(&self.id, <a href="kiosk.md#0x2_kiosk_Item">Item</a> { id })
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_kiosk_has_item_with_type"></a>
+
+## Function `has_item_with_type`
+
+Check whether the <code>item</code> is present in the <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code> and has type T.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_has_item_with_type">has_item_with_type</a>&lt;T: store, key&gt;(self: &<a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, id: <a href="object.md#0x2_object_ID">object::ID</a>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_has_item_with_type">has_item_with_type</a>&lt;T: key + store&gt;(self: &<a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, id: ID): bool {
+    dof::exists_with_type&lt;<a href="kiosk.md#0x2_kiosk_Item">Item</a>, T&gt;(&self.id, <a href="kiosk.md#0x2_kiosk_Item">Item</a> { id })
 }
 </code></pre>
 
@@ -1493,7 +1519,8 @@ Get mutable access to <code>profits</code> - useful for extendability.
 
 ## Function `borrow`
 
-Immutably borrow an item from the <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code>. Any item can be <code><a href="borrow.md#0x2_borrow">borrow</a></code>ed at any time.
+Immutably borrow an item from the <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code>. Any item can be <code><a href="borrow.md#0x2_borrow">borrow</a></code>ed
+at any time.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="borrow.md#0x2_borrow">borrow</a>&lt;T: store, key&gt;(self: &<a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, id: <a href="object.md#0x2_object_ID">object::ID</a>): &T
@@ -1505,7 +1532,9 @@ Immutably borrow an item from the <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="borrow.md#0x2_borrow">borrow</a>&lt;T: key + store&gt;(self: &<a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID): &T {
+<pre><code><b>public</b> <b>fun</b> <a href="borrow.md#0x2_borrow">borrow</a>&lt;T: key + store&gt;(
+    self: &<a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID
+): &T {
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_item">has_item</a>(self, id), <a href="kiosk.md#0x2_kiosk_EItemNotFound">EItemNotFound</a>);
 
@@ -1534,7 +1563,9 @@ Item can be <code>borrow_mut</code>ed only if it's not <code>is_listed</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_borrow_mut">borrow_mut</a>&lt;T: key + store&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID): &<b>mut</b> T {
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_borrow_mut">borrow_mut</a>&lt;T: key + store&gt;(
+    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID
+): &<b>mut</b> T {
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_item">has_item</a>(self, id), <a href="kiosk.md#0x2_kiosk_EItemNotFound">EItemNotFound</a>);
     <b>assert</b>!(!<a href="kiosk.md#0x2_kiosk_is_listed">is_listed</a>(self, id), <a href="kiosk.md#0x2_kiosk_EItemIsListed">EItemIsListed</a>);
@@ -1564,7 +1595,9 @@ Item can be <code>borrow_val</code>-ed only if it's not <code>is_listed</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_borrow_val">borrow_val</a>&lt;T: key + store&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID): (T, <a href="kiosk.md#0x2_kiosk_Borrow">Borrow</a>) {
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_borrow_val">borrow_val</a>&lt;T: key + store&gt;(
+    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID
+): (T, <a href="kiosk.md#0x2_kiosk_Borrow">Borrow</a>) {
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_item">has_item</a>(self, id), <a href="kiosk.md#0x2_kiosk_EItemNotFound">EItemNotFound</a>);
     <b>assert</b>!(!<a href="kiosk.md#0x2_kiosk_is_listed">is_listed</a>(self, id), <a href="kiosk.md#0x2_kiosk_EItemIsListed">EItemIsListed</a>);
@@ -1584,7 +1617,8 @@ Item can be <code>borrow_val</code>-ed only if it's not <code>is_listed</code>.
 
 ## Function `return_val`
 
-Return the borrowed item to the <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code>. This method cannot be avoided if <code>borrow_val</code> is used.
+Return the borrowed item to the <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code>. This method cannot be avoided
+if <code>borrow_val</code> is used.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_return_val">return_val</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, item: T, <a href="borrow.md#0x2_borrow">borrow</a>: <a href="kiosk.md#0x2_kiosk_Borrow">kiosk::Borrow</a>)
@@ -1596,7 +1630,9 @@ Return the borrowed item to the <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_return_val">return_val</a>&lt;T: key + store&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, item: T, <a href="borrow.md#0x2_borrow">borrow</a>: <a href="kiosk.md#0x2_kiosk_Borrow">Borrow</a>) {
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_return_val">return_val</a>&lt;T: key + store&gt;(
+    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, item: T, <a href="borrow.md#0x2_borrow">borrow</a>: <a href="kiosk.md#0x2_kiosk_Borrow">Borrow</a>
+) {
     <b>let</b> <a href="kiosk.md#0x2_kiosk_Borrow">Borrow</a> { kiosk_id, item_id } = <a href="borrow.md#0x2_borrow">borrow</a>;
 
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == kiosk_id, <a href="kiosk.md#0x2_kiosk_EWrongKiosk">EWrongKiosk</a>);

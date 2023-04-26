@@ -279,7 +279,7 @@ module sui::kiosk {
         self: &mut Kiosk, cap: &KioskOwnerCap, id: ID, price: u64
     ) {
         assert!(object::id(self) == cap.for, ENotOwner);
-        assert!(has_item(self, id), EItemNotFound);
+        assert!(has_item_with_type<T>(self, id), EItemNotFound);
         assert!(!is_listed_exclusively(self, id), EListedExclusively);
 
         df::add(&mut self.id, Listing { id, is_exclusive: false }, price);
@@ -301,7 +301,7 @@ module sui::kiosk {
         self: &mut Kiosk, cap: &KioskOwnerCap, id: ID
     ) {
         assert!(object::id(self) == cap.for, ENotOwner);
-        assert!(has_item(self, id), EItemNotFound);
+        assert!(has_item_with_type<T>(self, id), EItemNotFound);
         assert!(!is_listed_exclusively(self, id), EListedExclusively);
         assert!(is_listed(self, id), ENotListed);
 
@@ -340,7 +340,7 @@ module sui::kiosk {
         self: &mut Kiosk, cap: &KioskOwnerCap, id: ID, min_price: u64, ctx: &mut TxContext
     ): PurchaseCap<T> {
         assert!(object::id(self) == cap.for, ENotOwner);
-        assert!(has_item(self, id), EItemNotFound);
+        assert!(has_item_with_type<T>(self, id), EItemNotFound);
         assert!(!is_listed(self, id), EAlreadyListed);
 
         let uid = object::new(ctx);
@@ -403,9 +403,14 @@ module sui::kiosk {
 
     // === Kiosk fields access ===
 
-    /// Check whether the an `item` is present in the `Kiosk`.
+    /// Check whether the `item` is present in the `Kiosk`.
     public fun has_item(self: &Kiosk, id: ID): bool {
         dof::exists_(&self.id, Item { id })
+    }
+
+    /// Check whether the `item` is present in the `Kiosk` and has type T.
+    public fun has_item_with_type<T: key + store>(self: &Kiosk, id: ID): bool {
+        dof::exists_with_type<Item, T>(&self.id, Item { id })
     }
 
     /// Check whether an item with the `id` is locked in the `Kiosk`. Meaning
@@ -483,8 +488,11 @@ module sui::kiosk {
 
     // === Item borrowing ===
 
-    /// Immutably borrow an item from the `Kiosk`. Any item can be `borrow`ed at any time.
-    public fun borrow<T: key + store>(self: &Kiosk, cap: &KioskOwnerCap, id: ID): &T {
+    /// Immutably borrow an item from the `Kiosk`. Any item can be `borrow`ed
+    /// at any time.
+    public fun borrow<T: key + store>(
+        self: &Kiosk, cap: &KioskOwnerCap, id: ID
+    ): &T {
         assert!(object::id(self) == cap.for, ENotOwner);
         assert!(has_item(self, id), EItemNotFound);
 
@@ -493,7 +501,9 @@ module sui::kiosk {
 
     /// Mutably borrow an item from the `Kiosk`.
     /// Item can be `borrow_mut`ed only if it's not `is_listed`.
-    public fun borrow_mut<T: key + store>(self: &mut Kiosk, cap: &KioskOwnerCap, id: ID): &mut T {
+    public fun borrow_mut<T: key + store>(
+        self: &mut Kiosk, cap: &KioskOwnerCap, id: ID
+    ): &mut T {
         assert!(object::id(self) == cap.for, ENotOwner);
         assert!(has_item(self, id), EItemNotFound);
         assert!(!is_listed(self, id), EItemIsListed);
@@ -503,7 +513,9 @@ module sui::kiosk {
 
     /// Take the item from the `Kiosk` with a guarantee that it will be returned.
     /// Item can be `borrow_val`-ed only if it's not `is_listed`.
-    public fun borrow_val<T: key + store>(self: &mut Kiosk, cap: &KioskOwnerCap, id: ID): (T, Borrow) {
+    public fun borrow_val<T: key + store>(
+        self: &mut Kiosk, cap: &KioskOwnerCap, id: ID
+    ): (T, Borrow) {
         assert!(object::id(self) == cap.for, ENotOwner);
         assert!(has_item(self, id), EItemNotFound);
         assert!(!is_listed(self, id), EItemIsListed);
@@ -514,8 +526,11 @@ module sui::kiosk {
         )
     }
 
-    /// Return the borrowed item to the `Kiosk`. This method cannot be avoided if `borrow_val` is used.
-    public fun return_val<T: key + store>(self: &mut Kiosk, item: T, borrow: Borrow) {
+    /// Return the borrowed item to the `Kiosk`. This method cannot be avoided
+    /// if `borrow_val` is used.
+    public fun return_val<T: key + store>(
+        self: &mut Kiosk, item: T, borrow: Borrow
+    ) {
         let Borrow { kiosk_id, item_id } = borrow;
 
         assert!(object::id(self) == kiosk_id, EWrongKiosk);

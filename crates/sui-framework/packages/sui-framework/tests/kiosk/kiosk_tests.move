@@ -113,6 +113,49 @@ module sui::kiosk_tests {
     }
 
     #[test]
+    #[expected_failure(abort_code = sui::kiosk::EListedExclusively)]
+    fun test_delist_listed_exclusively() {
+        let ctx = &mut test::ctx();
+        let (asset, item_id) = test::get_asset(ctx);
+        let (kiosk, owner_cap) = test::get_kiosk(ctx);
+
+        kiosk::place(&mut kiosk, &owner_cap, asset);
+        let _cap = kiosk::list_with_purchase_cap<Asset>(
+            &mut kiosk, &owner_cap, item_id, 100, ctx
+        );
+
+        kiosk::delist<Asset>(&mut kiosk, &owner_cap, item_id);
+        abort 1337
+    }
+
+    struct WrongAsset has key, store { id: sui::object::UID }
+
+    #[test]
+    #[expected_failure(abort_code = sui::kiosk::EItemNotFound)]
+    fun test_delist_wrong_type() {
+        let ctx = &mut test::ctx();
+        let (asset, item_id) = test::get_asset(ctx);
+        let (kiosk, owner_cap) = test::get_kiosk(ctx);
+
+        kiosk::place(&mut kiosk, &owner_cap, asset);
+        kiosk::delist<WrongAsset>(&mut kiosk, &owner_cap, item_id);
+
+        abort 1337
+    }
+
+    #[test]
+    #[expected_failure(abort_code = sui::kiosk::EItemNotFound)]
+    fun test_delist_no_item() {
+        let ctx = &mut test::ctx();
+        let (_asset, item_id) = test::get_asset(ctx);
+        let (kiosk, owner_cap) = test::get_kiosk(ctx);
+
+        kiosk::delist<Asset>(&mut kiosk, &owner_cap, item_id);
+
+        abort 1337
+    }
+
+    #[test]
     #[expected_failure(abort_code = sui::kiosk::EIncorrectAmount)]
     fun test_purchase_wrong_amount() {
         let ctx = &mut test::ctx();
