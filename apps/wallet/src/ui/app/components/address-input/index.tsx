@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { HamburgerOpen24, QrCode } from '@mysten/icons';
 import { cx } from 'class-variance-authority';
 import { useField, useFormikContext } from 'formik';
 import { useCallback, useMemo } from 'react';
@@ -77,12 +78,15 @@ export function AddressInput({
                 <div
                     onClick={clearAddress}
                     className={cx(
-                        'flex bg-gray-40 items-center justify-center w-12 p-0.5 mr-0 right-0 max-w-[20%] mx-3.5',
-                        meta.touched && field.value
-                            ? 'cursor-pointer text-steel-darker text-body font-medium sui-icons-close'
-                            : "bg-[url('_assets/images/qr-code.svg')] bg-no-repeat bg-center pr-0"
+                        'flex bg-gray-40 items-center justify-center w-12 p-0.5 mr-0 right-0 max-w-[20%] mx-3.5 cursor-pointer'
                     )}
-                ></div>
+                >
+                    {meta.touched && field.value ? (
+                        <HamburgerOpen24 className="h-3 w-3 text-steel-darker" />
+                    ) : (
+                        <QrCode className="h-5 w-5 text-steel-darker" />
+                    )}
+                </div>
             </div>
 
             {meta.touched ? (
