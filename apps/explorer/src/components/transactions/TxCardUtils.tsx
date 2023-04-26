@@ -17,7 +17,7 @@ import { TxTimeType } from '../tx-time/TxTimeType';
 
 import { AddressLink, TransactionLink } from '~/ui/InternalLink';
 
-export function TxTableHeader({ label }: { label: string }) {
+function TxTableHeader({ label }: { label: string }) {
     return <div className="pl-3">{label}</div>;
 }
 
