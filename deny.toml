@@ -52,7 +52,9 @@ ignore = [
     # potential segfault in the time crate, brought by chrono et al.
     "RUSTSEC-2020-0071",
     # potential segfault in localtime_r, brought by chrono et al.
-    "RUSTSEC-2020-0159"
+    "RUSTSEC-2020-0159",
+    # potential DOS
+    "RUSTSEC-2023-0034"
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories

@@ -69,6 +69,7 @@ export function validatorsTableData(
                     img: img,
                     address: validator.suiAddress,
                     lastReward: lastReward ? Number(lastReward) : null,
+                    votingPower: Number(validator.votingPower) / 100,
                     atRisk: isAtRisk
                         ? VALIDATOR_LOW_STAKE_GRACE_PERIOD -
                           Number(atRiskValidator[1])
@@ -173,6 +174,18 @@ export function validatorsTableData(
                     ) : (
                         <Text variant="bodySmall/medium" color="steel-darker">
                             --
+                        </Text>
+                    );
+                },
+            },
+            {
+                header: 'Voting Power',
+                accessorKey: 'votingPower',
+                cell: (props: any) => {
+                    const votingPower = props.getValue();
+                    return (
+                        <Text variant="bodySmall/medium" color="steel-darker">
+                            {votingPower}%
                         </Text>
                     );
                 },

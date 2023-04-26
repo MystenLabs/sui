@@ -36,8 +36,8 @@ pub struct SamplingInterval {
 
 impl Default for SamplingInterval {
     fn default() -> Self {
-        // Enabled with 10 second interval
-        SamplingInterval::new(Duration::ZERO, 100)
+        // Enabled with 60 second interval
+        SamplingInterval::new(Duration::from_secs(60), 0)
     }
 }
 
@@ -60,6 +60,9 @@ impl SamplingInterval {
             after_num_ops,
             counter,
         }
+    }
+    pub fn new_from_self(&self) -> SamplingInterval {
+        SamplingInterval::new(self.once_every_duration, self.after_num_ops)
     }
     pub fn sample(&self) -> bool {
         if self.once_every_duration.is_zero() {
@@ -240,6 +243,7 @@ impl ColumnFamilyMetrics {
 pub struct OperationMetrics {
     pub rocksdb_iter_latency_seconds: HistogramVec,
     pub rocksdb_iter_bytes: HistogramVec,
+    pub rocksdb_iter_keys: HistogramVec,
     pub rocksdb_get_latency_seconds: HistogramVec,
     pub rocksdb_get_bytes: HistogramVec,
     pub rocksdb_multiget_latency_seconds: HistogramVec,
@@ -265,6 +269,13 @@ impl OperationMetrics {
             .unwrap(),
             rocksdb_iter_bytes: register_histogram_vec_with_registry!(
                 "rocksdb_iter_bytes",
+                "Rocksdb iter size in bytes",
+                &["cf_name"],
+                registry,
+            )
+            .unwrap(),
+            rocksdb_iter_keys: register_histogram_vec_with_registry!(
+                "rocksdb_iter_keys",
                 "Rocksdb iter size in bytes",
                 &["cf_name"],
                 registry,

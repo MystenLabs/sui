@@ -4,10 +4,9 @@
 import mitt from 'mitt';
 import Browser from 'webextension-polyfill';
 
-import FeatureGating from './FeatureGating';
 import { API_ENV_TO_INFO, DEFAULT_API_ENV } from '_app/ApiProvider';
 import { API_ENV } from '_src/shared/api-env';
-import { FEATURES } from '_src/shared/experimentation/features';
+import { FEATURES, growthbook } from '_src/shared/experimentation/features';
 import { isValidUrl } from '_src/shared/utils';
 
 export type NetworkEnvType =
@@ -51,10 +50,10 @@ class NetworkEnv {
     off = this.#events.off;
 
     async #isNetworkAvailable(apiEnv: API_ENV) {
-        const growthBook = await FeatureGating.getGrowthBook();
+        await growthbook.loadFeatures();
         return (
             (apiEnv === API_ENV.testNet &&
-                growthBook.isOn(FEATURES.USE_TEST_NET_ENDPOINT)) ||
+                growthbook.isOn(FEATURES.USE_TEST_NET_ENDPOINT)) ||
             apiEnv !== API_ENV.testNet
         );
     }

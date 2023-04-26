@@ -6,7 +6,12 @@ import { Check32 } from '@mysten/icons';
 import { getExecutionStatusType } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
-import { Navigate, useSearchParams, useNavigate } from 'react-router-dom';
+import {
+    Navigate,
+    useSearchParams,
+    useNavigate,
+    useLocation,
+} from 'react-router-dom';
 
 import Alert from '_components/alert';
 import Loading from '_components/loading';
@@ -15,6 +20,7 @@ import ReceiptCard from '_components/receipt-card';
 import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
 
 function ReceiptPage() {
+    const location = useLocation();
     const [searchParams] = useSearchParams();
     const [showModal, setShowModal] = useState(true);
     const activeAddress = useActiveAddress();
@@ -37,7 +43,12 @@ function ReceiptPage() {
                 },
             });
         },
-        { enabled: !!transactionId, retry: 8 }
+        {
+            enabled: !!transactionId,
+            retry: 8,
+            // The initial data can be provided from the previous page in the event that we already have it from the execution.
+            initialData: location.state?.response,
+        }
     );
 
     const navigate = useNavigate();

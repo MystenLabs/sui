@@ -186,8 +186,11 @@ class Tabs {
                 if (aTab.url === option.url) {
                     return true;
                 }
+                if (!aTab.url) {
+                    return false;
+                }
                 try {
-                    const tabURL = new URL(aTab.url || '');
+                    const tabURL = new URL(aTab.url);
                     if (tabURL.hash.startsWith('#/locked?url=')) {
                         inAppRedirectUrl = decodeURIComponent(
                             tabURL.hash.replace('#/locked?url=', '')
@@ -201,7 +204,7 @@ class Tabs {
                 }
                 if (
                     option.match &&
-                    option.match({ url: aTab.url || '', inAppRedirectUrl })
+                    option.match({ url: aTab.url, inAppRedirectUrl })
                 ) {
                     return true;
                 }

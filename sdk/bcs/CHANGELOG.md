@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.7.1
+
+### Patch Changes
+
+- b4f0bfc76: Fix type definitions for package exports.
+
 ## 0.7.0
 
 ### Minor Changes

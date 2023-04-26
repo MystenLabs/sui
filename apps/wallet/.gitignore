@@ -1,10 +1,2 @@
 configs/environment/.env
-font-icons/output/*
-!font-icons/output/sui-icons.eot
-!font-icons/output/sui-icons.scss
-!font-icons/output/sui-icons.ts
-!font-icons/output/sui-icons.ttf
-!font-icons/output/sui-icons.woff
-!font-icons/output/sui-icons.woff2
-!font-icons/output/sui-icons.svg
 web-ext-artifacts

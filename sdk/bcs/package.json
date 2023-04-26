@@ -1,6 +1,6 @@
 {
   "name": "@mysten/bcs",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "BCS - Canonical Binary Serialization implementation for JavaScript",
   "license": "Apache-2.0",
   "author": "Mysten Labs <build@mystenlabs.com>",
@@ -9,6 +9,7 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "source": "./src/index.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"

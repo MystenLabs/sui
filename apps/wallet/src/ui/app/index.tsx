@@ -4,6 +4,7 @@
 import { useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
+import { QredoConnectInfoPage } from './pages/qredo-connect/QredoConnectInfoPage';
 import { AppType } from './redux/slices/app/AppType';
 import { Staking } from './staking/home';
 import ForgotPasswordPage from '_app/wallet/forgot-password-page';
@@ -88,6 +89,10 @@ const App = () => {
                 <Route
                     path="approve/:requestID"
                     element={<ApprovalRequestPage />}
+                />
+                <Route
+                    path="qredo-connect/:requestID"
+                    element={<QredoConnectInfoPage />}
                 />
             </Route>
 
