@@ -3,7 +3,7 @@ title: Sui Multi-Signature
 ---
 
 Sui supports `k` out of `n` multi-weight multi-scheme multi-signature (multisig) transactions where `n <= 10`. 
-A multisig transaction is one that requires more than one private key to authorize it. This topic demonstrate the 
+A multisig transaction is one that requires more than one private key to authorize it. This topic demonstrates the 
 workflow to create a multisig transaction in Sui, and then submit it using the Sui CLI against a local network. To learn
 how to set up a local network, see [Sui Local Network](../build/sui-local-network.md).
 
