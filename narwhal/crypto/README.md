@@ -1,1 +1,1 @@
-Most of the cryptographic libraries (Ed25519, Secp256k1, BLS12-381) used by Narwhal are now in [fastcrypto](https://github.com/MystenLabs/fastcrypto).
+Most of the cryptographic libraries used by Narwhal are now in [fastcrypto](https://github.com/MystenLabs/fastcrypto).

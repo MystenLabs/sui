@@ -180,3 +180,12 @@ $SUI_BINARY validator leave-committee
 ```
 
 Then you will be removed from committee starting from next epoch.
+
+### Generate the payload to create PoP
+
+Serialize the payload that is used to generate Proof of Possession. This is allows the signer to take the payload offline for an Authority protocol BLS keypair to sign.
+
+``` bash
+$SUI_BINARY validator serialize-payload-pop --account-address $ACCOUNT_ADDRESS --protocol-public-key $BLS_PUBKEY
+Serialized payload: $PAYLOAD_TO_SIGN
+```
