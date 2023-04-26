@@ -22,7 +22,7 @@ import { ActiveCoinsCard } from '_components/active-coins-card';
 import Overlay from '_components/overlay';
 import { trackEvent } from '_src/shared/plausible';
 import { getSignerOperationErrorMessage } from '_src/ui/app/helpers/errorMessages';
-import { useSigner } from '_src/ui/app/hooks';
+import { useSigner, useTransactionGasBudget } from '_src/ui/app/hooks';
 import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
 
 import type { SubmitProps } from './SendTokenForm';
@@ -97,6 +97,9 @@ function TransferCoinPage() {
         },
     });
 
+    // Get gas budget to prevent sending transaction without gas validation
+    const { data: gasBudget } = useTransactionGasBudget(address, transaction);
+
     if (!coinType) {
         return <Navigate to="/" replace={true} />;
     }
@@ -135,9 +138,8 @@ function TransferCoinPage() {
                                 type="button"
                                 variant="primary"
                                 onClick={() => executeTransfer.mutateAsync()}
-                                size="tall"
                                 text="Send Now"
-                                disabled={coinType === null}
+                                disabled={coinType === null || !gasBudget}
                                 after={<ArrowRight16 />}
                                 loading={executeTransfer.isLoading}
                             />
