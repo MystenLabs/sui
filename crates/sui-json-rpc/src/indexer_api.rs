@@ -353,7 +353,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 }?;
                 return Ok(Some(addr));
             }
-            return Ok(None);
+            Ok(None)
         })
     }
 
