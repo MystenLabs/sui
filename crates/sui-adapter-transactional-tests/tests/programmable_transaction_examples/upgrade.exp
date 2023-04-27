@@ -1,0 +1,41 @@
+processed 11 tasks
+
+init:
+A: object(0,0)
+
+task 1 'publish'. lines 8-18:
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 4354800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'publish'. lines 20-23:
+created: object(2,0), object(2,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5076800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3 'publish'. lines 25-28:
+created: object(3,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 3442800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5 'programmable'. lines 36-41:
+created: object(5,0), object(5,1)
+mutated: object(0,0), object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 7052800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 6 'programmable'. lines 43-45:
+Error: Transaction Effects Status: Move Runtime Abort. Location: p::n::bar (function index 0) at offset 6, Abort Code: 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: p, name: Identifier("n") }, function: 0, instruction: 6, function_name: Some("bar") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("p::n::bar at offset 6"), exec_state: Some(ExecutionState { stack_trace: [(Some(ModuleId { address: p, name: Identifier("m") }), FunctionDefinitionIndex(0), 1)] }), location: Module(ModuleId { address: p, name: Identifier("n") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 6)] }), command: Some(1) } }
+
+task 8 'programmable'. lines 49-51:
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 9 'publish'. lines 53-58:
+created: object(9,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 5768400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 10 'run'. lines 60-60:
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

@@ -115,13 +115,14 @@ pub struct SuiTestAdapter<'a> {
     gas_price: u64,
     protocol_config: ProtocolConfig,
     metrics: Arc<LimitsMetrics>,
-    staged_modules: BTreeMap<Symbol, StagedPackage>,
+    pub(crate) staged_modules: BTreeMap<Symbol, StagedPackage>,
 }
 
-struct StagedPackage {
+pub(crate) struct StagedPackage {
     file: NamedTempFile,
     syntax: SyntaxChoice,
     modules: Vec<(Option<Symbol>, CompiledModule)>,
+    pub(crate) digest: Vec<u8>,
 }
 
 struct TestAccount {
@@ -764,7 +765,10 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 store_modules(self, syntax, data, modules);
                 Ok(merge_output(warnings_opt, output))
             }
-            SuiSubcommand::StagePackage(StagePackageCommand { syntax }) => {
+            SuiSubcommand::StagePackage(StagePackageCommand {
+                syntax,
+                dependencies,
+            }) => {
                 let syntax = syntax.unwrap_or_else(|| self.default_syntax());
                 let (warnings_opt, output, data, modules) = compile_any(
                     self,
@@ -793,10 +797,27 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                         );
                     }
                 }
+                let dependencies =
+                    self.get_dependency_ids(dependencies, /* include_std */ true)?;
+                let module_bytes = modules
+                    .iter()
+                    .map(|(_, m)| {
+                        let mut buf = vec![];
+                        m.serialize(&mut buf).unwrap();
+                        buf
+                    })
+                    .collect::<Vec<_>>();
+                let digest = MovePackage::compute_digest_for_modules_and_deps(
+                    module_bytes.iter(),
+                    &dependencies,
+                    /* hash_modules */ true,
+                )
+                .to_vec();
                 let staged = StagedPackage {
                     file: data,
                     syntax,
                     modules,
+                    digest,
                 };
                 let prev = self.staged_modules.insert(package_name, staged);
                 if prev.is_some() {
@@ -823,9 +844,10 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                                 .serialized_module_map()
                                 .iter()
                                 .map(|(_, published_module_bytes)| {
-                                    let module =
-                                        CompiledModule::deserialize(published_module_bytes)
-                                            .unwrap();
+                                    let module = CompiledModule::deserialize_with_defaults(
+                                        published_module_bytes,
+                                    )
+                                    .unwrap();
                                     (Some(*address_sym), module)
                                 })
                                 .collect()
@@ -838,6 +860,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                         let value: AccountAddress = bcs::from_bytes(&bytes)?;
                         (value, None)
                     }
+                    SuiValue::Digest(_) => bail!("digest is not supported as an input"),
                     SuiValue::ObjVec(_) => bail!("obj vec is not supported as an input"),
                 };
                 let value = NumericalAddress::new(value.into_bytes(), NumberFormat::Hex);
@@ -851,6 +874,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                         file,
                         syntax,
                         modules: _,
+                        digest: _,
                     } = staged;
                     store_modules(self, syntax, file, package)
                 }
@@ -908,19 +932,7 @@ impl<'a> SuiTestAdapter<'a> {
             .collect::<anyhow::Result<Vec<Vec<u8>>>>()?;
         let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
 
-        let mut dependencies: Vec<_> = dependencies
-            .into_iter()
-            .map(|d| {
-                let Some(addr) = self.compiled_state.named_address_mapping.get(&d) else {
-                    bail!("There is no published module address corresponding to name address {d}");
-                };
-                let id: ObjectID = addr.into_inner().into();
-                Ok(id)
-            })
-            .collect::<Result<_, _>>()?;
-        // we are assuming that all packages depend on Move Stdlib and Sui Framework, so these
-        // don't have to be provided explicitly as parameters
-        dependencies.extend([MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID]);
+        let dependencies = self.get_dependency_ids(dependencies, /* include_std */ true)?;
 
         let mut builder = ProgrammableTransactionBuilder::new();
 
@@ -1387,6 +1399,29 @@ impl<'a> SuiTestAdapter<'a> {
 
     fn next_task(&mut self) {
         self.next_fake = (self.next_fake.0 + 1, 0)
+    }
+
+    fn get_dependency_ids(
+        &self,
+        dependencies: Vec<String>,
+        include_std: bool,
+    ) -> anyhow::Result<Vec<ObjectID>> {
+        let mut dependencies: Vec<_> = dependencies
+            .into_iter()
+            .map(|d| {
+                let Some(addr) = self.compiled_state.named_address_mapping.get(&d) else {
+                bail!("There is no published module address corresponding to name address {d}");
+            };
+                let id: ObjectID = addr.into_inner().into();
+                Ok(id)
+            })
+            .collect::<Result<_, _>>()?;
+        // we are assuming that all packages depend on Move Stdlib and Sui Framework, so these
+        // don't have to be provided explicitly as parameters
+        if include_std {
+            dependencies.extend([MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID]);
+        }
+        Ok(dependencies)
     }
 }
 

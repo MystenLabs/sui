@@ -5,7 +5,7 @@
 
 //# init --addresses p=0x0 q=0x0 r=0x0 --accounts A
 
-//# package
+//# stage-package
 module p::m {
     public fun foo(x: u64) {
         p::n::bar(x)
@@ -18,7 +18,7 @@ module p::n {
 }
 
 
-//# package
+//# stage-package
 module q::m {
     public fun x(): u64 { 0 }
 }
