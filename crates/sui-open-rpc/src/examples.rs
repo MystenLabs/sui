@@ -97,7 +97,7 @@ impl RpcExampleProvider {
             self.execute_transaction_example(),
             self.get_checkpoint_example(),
             self.get_checkpoints(),
-            self.sui_get_committee_info(), 
+            self.sui_get_committee_info(),
             self.sui_get_reference_gas_price(),
             self.suix_get_all_balances(),
             self.suix_get_all_coins(),
@@ -766,7 +766,7 @@ impl RpcExampleProvider {
             vec![ExamplePairing::new(
                 "Get the metadata for the coin type in the request.",
                 vec![(
-                    "coin_type", 
+                    "coin_type",
                     json!("0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC".to_string()),
                 )],
                 json!(result),
