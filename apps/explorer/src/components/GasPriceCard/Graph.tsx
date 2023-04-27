@@ -17,7 +17,7 @@ function formatDate(date: Date) {
     return ['S', 'M', 'T', 'W', 'T', 'F', 'S'][date.getDay()];
 }
 
-function isDefined(d: EpochGasInfo) {
+export function isDefined(d: EpochGasInfo) {
     return d.date !== null && d.referenceGasPrice !== null;
 }
 

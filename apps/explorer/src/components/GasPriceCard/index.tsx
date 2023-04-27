@@ -16,7 +16,7 @@ import clsx from 'clsx';
 import { useMemo, useState } from 'react';
 
 import { ErrorBoundary } from '../error-boundary/ErrorBoundary';
-import { Graph } from './Graph';
+import { Graph, isDefined } from './Graph';
 import { type EpochGasInfo } from './types';
 
 import { Card } from '~/ui/Card';
@@ -100,14 +100,24 @@ function useGasPriceFormat(gasPrice: bigint | null, unit: 'MIST' | 'SUI') {
 
 export function GasPriceCard() {
     const [selectedUnit, setSelectedUnit] = useState<UnitsType>(UNITS[0]);
-    const { data: currentEpochGasPrice, isLoading: isCurrentLoading } =
+    // use this to show current gas price for envs that historical data is not available
+    const { data: backupCurrentEpochGasPrice, isLoading: isCurrentLoading } =
         useGetReferenceGasPrice();
     const [average7Epochs, isAverage7EpochsLoading] = useGasPriceAverage(7);
     const { data: historicalData, isLoading: isHistoricalLoading } =
         useHistoricalGasPrices();
     const isDataLoading = isHistoricalLoading || isCurrentLoading;
+    const lastGasPriceInHistoricalData = useMemo(
+        () =>
+            historicalData?.filter(isDefined).pop()?.referenceGasPrice ?? null,
+        [historicalData]
+    );
     const formattedCurrentGasPrice = useGasPriceFormat(
-        isDataLoading ? null : currentEpochGasPrice ?? null,
+        isDataLoading
+            ? null
+            : lastGasPriceInHistoricalData ??
+                  backupCurrentEpochGasPrice ??
+                  null,
         selectedUnit
     );
     const formattedAverageGasPrice = useGasPriceFormat(
