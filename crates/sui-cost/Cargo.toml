@@ -16,6 +16,7 @@ strum = { version = "0.24", features = ["derive"] }
 strum_macros = "0.24"
 bcs = "0.1.4"
 sui-core = { path = "../sui-core" }
+sui-test-transaction-builder = { path = "../sui-test-transaction-builder" }
 
 [dev-dependencies]
 insta = { version = "1.21.1", features = ["redactions", "json"] }

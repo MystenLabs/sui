@@ -17,7 +17,6 @@ use test_utils::authority::{
     spawn_fullnode, spawn_test_authorities, test_authority_configs,
     test_authority_configs_with_objects,
 };
-use test_utils::messages::make_transactions_with_wallet_context;
 use test_utils::network::wait_for_nodes_transition_to_epoch;
 use test_utils::network::TestClusterBuilder;
 use test_utils::transaction::wait_for_tx;
@@ -41,7 +40,7 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     .unwrap();
 
     let txn_count = 4;
-    let mut txns = make_transactions_with_wallet_context(context, txn_count).await;
+    let mut txns = context.batch_make_transfer_transactions(txn_count).await;
     assert!(
         txns.len() >= txn_count,
         "Expect at least {} txns. Do we generate enough gas objects during genesis?",
@@ -108,7 +107,7 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
 
     let txn_count = 2;
     let context = &mut test_cluster.wallet;
-    let mut txns = make_transactions_with_wallet_context(context, txn_count).await;
+    let mut txns = context.batch_make_transfer_transactions(txn_count).await;
     assert!(
         txns.len() >= txn_count,
         "Expect at least {} txns. Do we generate enough gas objects during genesis?",

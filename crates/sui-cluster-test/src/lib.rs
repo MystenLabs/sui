@@ -20,7 +20,6 @@ use sui_types::base_types::TransactionDigest;
 use sui_types::object::Owner;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
-use test_utils::messages::make_transactions_with_wallet_context;
 
 use shared_crypto::intent::Intent;
 use sui_sdk::SuiClient;
@@ -132,8 +131,10 @@ impl TestContext {
 
     /// See `make_transactions_with_wallet_context` for potential caveats
     /// of this helper function.
-    pub async fn make_transactions(&mut self, max_txn_num: usize) -> Vec<VerifiedTransaction> {
-        make_transactions_with_wallet_context(self.get_wallet_mut(), max_txn_num).await
+    pub async fn make_transactions(&self, max_txn_num: usize) -> Vec<VerifiedTransaction> {
+        self.get_wallet()
+            .batch_make_transfer_transactions(max_txn_num)
+            .await
     }
 
     pub async fn build_transaction_remotely(

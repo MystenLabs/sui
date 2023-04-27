@@ -31,6 +31,7 @@ use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_PUBLISH;
 use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN;
 use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_TRANSFER;
 
+use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::messages::{CallArg, ObjectArg, Transaction, TransactionData, VerifiedTransaction};
 use sui_types::messages_grpc::{
@@ -46,8 +47,7 @@ use tracing::{debug, info};
 
 use crate::authority::get_client;
 use crate::messages::{
-    create_publish_move_package_transaction, make_tx_certs_and_signed_effects,
-    make_tx_certs_and_signed_effects_with_committee,
+    make_tx_certs_and_signed_effects, make_tx_certs_and_signed_effects_with_committee,
 };
 
 pub fn make_publish_package(
@@ -56,14 +56,9 @@ pub fn make_publish_package(
     gas_price: u64,
 ) -> VerifiedTransaction {
     let (sender, keypair) = deterministic_random_account_key();
-    create_publish_move_package_transaction(
-        gas_object,
-        path,
-        sender,
-        &keypair,
-        gas_price * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-        gas_price,
-    )
+    TestTransactionBuilder::new(sender, gas_object, gas_price)
+        .publish(path)
+        .build_and_sign(&keypair)
 }
 
 pub async fn publish_package(

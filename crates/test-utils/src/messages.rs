@@ -4,18 +4,16 @@
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::language_storage::TypeTag;
-use std::path::PathBuf;
 use sui_core::test_utils::dummy_transaction_effects;
 use sui_keys::keystore::AccountKeystore;
-use sui_move_build::BuildConfig;
 use sui_sdk::wallet_context::WalletContext;
+use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
-use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::committee::Committee;
 use sui_types::crypto::{
-    deterministic_random_account_key, get_key_pair, AccountKeyPair, AuthorityKeyPair,
-    AuthorityPublicKeyBytes, AuthoritySignInfo, KeypairTraits, Signature, Signer,
+    deterministic_random_account_key, AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfo,
+    KeypairTraits, Signature, Signer,
 };
 use sui_types::effects::SignedTransactionEffects;
 use sui_types::messages::CallArg;
@@ -32,47 +30,6 @@ use sui_types::{
     SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
     SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
-
-/// A helper function to make Transactions with controlled accounts in WalletContext.
-/// Particularly, the wallet needs to own gas objects for transactions.
-/// However, if this function is called multiple times without any "sync" actions
-/// on gas object management, txns may fail and objects may be locked.
-///
-/// The param is called `max_txn_num` because it does not always return the exact
-/// same amount of Transactions, for example when there are not enough gas objects
-/// controlled by the WalletContext. Caller should rely on the return value to
-/// check the count.
-pub async fn make_transactions_with_wallet_context(
-    context: &mut WalletContext,
-    max_txn_num: usize,
-) -> Vec<VerifiedTransaction> {
-    let recipient = get_key_pair::<AuthorityKeyPair>().0;
-    let accounts_and_objs = context.get_all_accounts_and_gas_objects().await.unwrap();
-    let mut res = Vec::with_capacity(max_txn_num);
-
-    let gas_price = context.get_reference_gas_price().await.unwrap();
-    for (address, objs) in accounts_and_objs {
-        for obj in objs {
-            if res.len() >= max_txn_num {
-                return res;
-            }
-            let data = TransactionData::new_transfer_sui(
-                recipient,
-                address,
-                Some(2),
-                obj,
-                gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
-                gas_price,
-            );
-            let tx = to_sender_signed_transaction(
-                data,
-                context.config.keystore.get_key(&address).unwrap(),
-            );
-            res.push(tx);
-        }
-    }
-    res
-}
 
 pub async fn make_staking_transaction_with_wallet_context(
     context: &mut WalletContext,
@@ -92,41 +49,6 @@ pub async fn make_staking_transaction_with_wallet_context(
         context.config.keystore.get_key(&sender).unwrap(),
         gas_price,
     )
-}
-
-pub async fn make_counter_increment_transaction_with_wallet_context(
-    context: &WalletContext,
-    sender: SuiAddress,
-    counter_id: ObjectID,
-    counter_initial_shared_version: SequenceNumber,
-    gas_object_ref: Option<ObjectRef>,
-) -> VerifiedTransaction {
-    let gas_object_ref = match gas_object_ref {
-        Some(obj_ref) => obj_ref,
-        None => context
-            .get_one_gas_object_owned_by_address(sender)
-            .await
-            .unwrap()
-            .unwrap(),
-    };
-    let rgp = context.get_reference_gas_price().await.unwrap();
-    let data = TransactionData::new_move_call(
-        sender,
-        SUI_FRAMEWORK_OBJECT_ID,
-        "counter".parse().unwrap(),
-        "increment".parse().unwrap(),
-        Vec::new(),
-        gas_object_ref,
-        vec![CallArg::Object(ObjectArg::SharedObject {
-            id: counter_id,
-            initial_shared_version: counter_initial_shared_version,
-            mutable: true,
-        })],
-        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
-        rgp,
-    )
-    .unwrap();
-    to_sender_signed_transaction(data, context.config.keystore.get_key(&sender).unwrap())
 }
 
 /// Make a few different test transaction containing the same shared object.
@@ -173,31 +95,6 @@ pub fn test_shared_object_transactions(
     transactions
 }
 
-/// Make a transaction to publish a test move contracts package.
-pub fn create_publish_move_package_transaction(
-    gas_object_ref: ObjectRef,
-    path: PathBuf,
-    sender: SuiAddress,
-    keypair: &AccountKeyPair,
-    gas_budget: u64,
-    gas_price: u64,
-) -> VerifiedTransaction {
-    let compiled_package = BuildConfig::new_for_testing().build(path).unwrap();
-    let all_module_bytes =
-        compiled_package.get_package_bytes(/* with_unpublished_deps */ false);
-    let dependencies = compiled_package.get_dependency_original_package_ids();
-
-    let data = TransactionData::new_module(
-        sender,
-        gas_object_ref,
-        all_module_bytes,
-        dependencies,
-        gas_budget,
-        gas_price,
-    );
-    to_sender_signed_transaction(data, keypair)
-}
-
 pub fn make_transfer_object_transaction_with_wallet_context(
     object_ref: ObjectRef,
     gas_object: ObjectRef,
@@ -215,56 +112,6 @@ pub fn make_transfer_object_transaction_with_wallet_context(
         gas_price,
     );
     to_sender_signed_transaction(data, context.config.keystore.get_key(&sender).unwrap())
-}
-
-pub fn make_counter_create_transaction(
-    gas_object: ObjectRef,
-    package_id: ObjectID,
-    sender: SuiAddress,
-    keypair: &AccountKeyPair,
-    gas_price: u64,
-) -> VerifiedTransaction {
-    let data = TransactionData::new_move_call(
-        sender,
-        package_id,
-        "counter".parse().unwrap(),
-        "create".parse().unwrap(),
-        Vec::new(),
-        gas_object,
-        vec![],
-        gas_price * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
-        gas_price,
-    )
-    .unwrap();
-    to_sender_signed_transaction(data, keypair)
-}
-
-pub fn make_counter_increment_transaction(
-    gas_object: ObjectRef,
-    package_id: ObjectID,
-    counter_id: ObjectID,
-    counter_initial_shared_version: SequenceNumber,
-    sender: SuiAddress,
-    keypair: &AccountKeyPair,
-    gas_price: u64,
-) -> VerifiedTransaction {
-    let data = TransactionData::new_move_call(
-        sender,
-        package_id,
-        "counter".parse().unwrap(),
-        "increment".parse().unwrap(),
-        Vec::new(),
-        gas_object,
-        vec![CallArg::Object(ObjectArg::SharedObject {
-            id: counter_id,
-            initial_shared_version: counter_initial_shared_version,
-            mutable: true,
-        })],
-        gas_price * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
-        gas_price,
-    )
-    .unwrap();
-    to_sender_signed_transaction(data, keypair)
 }
 
 pub fn make_staking_transaction(

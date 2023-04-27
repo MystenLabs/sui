@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use itertools::Itertools;
+use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
@@ -23,7 +24,6 @@ use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::SuiResult;
 use sui_types::messages::{VerifiedCertificate, VerifiedTransaction};
 use sui_types::object::{Object, Owner};
-use test_utils::messages::{make_counter_create_transaction, make_counter_increment_transaction};
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::time::{sleep, timeout};
 
@@ -322,7 +322,9 @@ async fn test_execution_with_dependencies() {
 
     // Initialize a shared counter, re-using gas_ref_0 so it has to execute after tx1.
     let gas_ref = get_latest_ref(authority_clients[0].clone(), gas_objects[0][0].id()).await;
-    let tx2 = make_counter_create_transaction(gas_ref, package, *addr1, key1, rgp);
+    let tx2 = TestTransactionBuilder::new(*addr1, gas_ref, rgp)
+        .call_counter_create(package)
+        .build_and_sign(key1);
     let (cert, effects2) =
         execute_owned_on_first_three_authorities(&authority_clients, &aggregator.committee, &tx2)
             .await;
@@ -377,15 +379,13 @@ async fn test_execution_with_dependencies() {
             gas_objects[source_index][i * 7 % NUM_GAS_OBJECTS_PER_ACCOUNT].id(),
         )
         .await;
-        let shared_tx = make_counter_increment_transaction(
-            gas_ref,
-            package,
-            shared_counter_ref.0,
-            shared_counter_initial_version,
-            *source_addr,
-            source_key,
-            rgp,
-        );
+        let shared_tx = TestTransactionBuilder::new(*source_addr, gas_ref, rgp)
+            .call_counter_increment(
+                package,
+                shared_counter_ref.0,
+                shared_counter_initial_version,
+            )
+            .build_and_sign(source_key);
         let (cert, effects) = execute_shared_on_first_three_authorities(
             &authority_clients,
             &aggregator.committee,
@@ -452,7 +452,7 @@ async fn test_per_object_overload() {
     telemetry_subscribers::init_for_testing();
 
     // Initialize a network with 1 account and 2000 gas objects.
-    let (addr, key) = get_key_pair();
+    let (addr, key): (_, AccountKeyPair) = get_key_pair();
     const NUM_GAS_OBJECTS_PER_ACCOUNT: usize = 2000;
     let gas_objects = (0..NUM_GAS_OBJECTS_PER_ACCOUNT)
         .map(|_| Object::with_owner_for_testing(addr))
@@ -471,7 +471,9 @@ async fn test_per_object_overload() {
 
     // Create a shared counter.
     let gas_ref = get_latest_ref(authority_clients[0].clone(), gas_objects[0].id()).await;
-    let create_counter_txn = make_counter_create_transaction(gas_ref, package, addr, &key, rgp);
+    let create_counter_txn = TestTransactionBuilder::new(addr, gas_ref, rgp)
+        .call_counter_create(package)
+        .build_and_sign(&key);
     let create_counter_cert = try_sign_on_first_three_authorities(
         &authority_clients,
         &aggregator.committee,
@@ -523,15 +525,13 @@ async fn test_per_object_overload() {
     let num_txns = MAX_PER_OBJECT_QUEUE_LENGTH + 1;
     for gas_object in gas_objects.iter().take(num_txns) {
         let gas_ref = get_latest_ref(authority_clients[0].clone(), gas_object.id()).await;
-        let shared_txn = make_counter_increment_transaction(
-            gas_ref,
-            package,
-            shared_counter_ref.0,
-            shared_counter_initial_version,
-            addr,
-            &key,
-            rgp,
-        );
+        let shared_txn = TestTransactionBuilder::new(addr, gas_ref, rgp)
+            .call_counter_increment(
+                package,
+                shared_counter_ref.0,
+                shared_counter_initial_version,
+            )
+            .build_and_sign(&key);
         let shared_cert = try_sign_on_first_three_authorities(
             &authority_clients,
             &aggregator.committee,
@@ -547,16 +547,13 @@ async fn test_per_object_overload() {
 
     // Trying to sign a new transaction would now fail.
     let gas_ref = get_latest_ref(authority_clients[0].clone(), gas_objects[num_txns].id()).await;
-    let shared_txn = make_counter_increment_transaction(
-        gas_ref,
-        package,
-        shared_counter_ref.0,
-        shared_counter_initial_version,
-        addr,
-        &key,
-        rgp,
-    );
-
+    let shared_txn = TestTransactionBuilder::new(addr, gas_ref, rgp)
+        .call_counter_increment(
+            package,
+            shared_counter_ref.0,
+            shared_counter_initial_version,
+        )
+        .build_and_sign(&key);
     let res = ValidatorService::check_execution_overload(authorities[3].clone(), shared_txn.data());
     let message = format!("{res:?}");
     assert!(
