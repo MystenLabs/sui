@@ -19,7 +19,7 @@ use move_binary_format::{
 use std::time::Instant;
 
 pub const DEFAULT_MAX_CONSTANT_VECTOR_LEN: u64 = 1024 * 1024;
-pub const DEFAULT_MAX_IDENTIFIER_LENGTH: u64 = 96;
+pub const DEFAULT_MAX_IDENTIFIER_LENGTH: u64 = 128;
 
 #[derive(Debug, Clone)]
 pub struct VerifierConfig {
