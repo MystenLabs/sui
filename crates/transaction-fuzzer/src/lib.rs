@@ -3,6 +3,7 @@
 
 pub mod account_universe;
 pub mod executor;
+pub mod programmable_transaction_gen;
 pub mod transaction_data_gen;
 pub mod type_arg_fuzzer;
 
