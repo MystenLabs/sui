@@ -1705,6 +1705,7 @@ impl AuthorityState {
         db_checkpoint_config: &DBCheckpointConfig,
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
         transaction_deny_config: TransactionDenyConfig,
+        indirect_objects_threshold: usize,
     ) -> Arc<Self> {
         Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
 
@@ -1727,6 +1728,7 @@ impl AuthorityState {
             pruning_config,
             epoch_store.epoch_start_state().epoch_duration_ms(),
             prometheus_registry,
+            indirect_objects_threshold,
         );
         let state = Arc::new(AuthorityState {
             name,
