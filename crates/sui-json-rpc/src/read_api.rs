@@ -166,12 +166,10 @@ impl ReadApi {
         if opts.require_input() {
             let state = self.state.clone();
             let digest_clone = digests.clone();
-            let transactions = spawn_monitored_task!(async move {
+            let transactions =
                 state.multi_get_executed_transactions(&digest_clone).tap_err(
                     |err| debug!(digests=?digest_clone, "Failed to multi get transaction: {:?}", err),
-                )
-            })
-                .await??;
+                )?;
 
             for ((_digest, cache_entry), txn) in
                 temp_response.iter_mut().zip(transactions.into_iter())
@@ -184,12 +182,9 @@ impl ReadApi {
         if opts.require_effects() {
             let state = self.state.clone();
             let digests_clone = digests.clone();
-            let effects_list = spawn_monitored_task!(async move {
-                state.multi_get_executed_effects(&digests_clone).tap_err(
-                    |err| debug!(digests=?digests_clone, "Failed to multi get effects: {:?}", err),
-                )
-            })
-            .await??;
+            let effects_list = state.multi_get_executed_effects(&digests_clone).tap_err(
+                |err| debug!(digests=?digests_clone, "Failed to multi get effects: {:?}", err),
+            )?;
             for ((_digest, cache_entry), e) in
                 temp_response.iter_mut().zip(effects_list.into_iter())
             {
@@ -199,11 +194,11 @@ impl ReadApi {
 
         let state = self.state.clone();
         let digests_clone = digests.clone();
-        let checkpoint_seq_list = spawn_monitored_task!(async move {
+        let checkpoint_seq_list =
             state
             .multi_get_transaction_checkpoint(&digests_clone)
             .tap_err(
-                |err| debug!(digests=?digests_clone, "Failed to multi get checkpoint sequence number: {:?}", err))}).await??;
+                |err| debug!(digests=?digests_clone, "Failed to multi get checkpoint sequence number: {:?}", err))?;
         for ((_digest, cache_entry), seq) in temp_response
             .iter_mut()
             .zip(checkpoint_seq_list.into_iter())
@@ -742,9 +737,14 @@ impl ReadApiServer for ReadApi {
         opts: Option<SuiTransactionBlockResponseOptions>,
     ) -> RpcResult<Vec<SuiTransactionBlockResponse>> {
         with_tracing!("multi_get_transaction_blocks", async move {
-            Ok(self
-                .multi_get_transaction_blocks_internal(digests, opts)
-                .await?)
+            let cloned_self = self.clone();
+            Ok(spawn_monitored_task!(async move {
+                cloned_self
+                    .multi_get_transaction_blocks_internal(digests, opts)
+                    .await
+            })
+            .await
+            .map_err(|e| anyhow!(e))??)
         })
     }
 
