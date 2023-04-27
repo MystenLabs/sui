@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use fastcrypto::{
-    bls12381::{min_pk, min_sig},
+    bls12381::{min_pk, min_sig, pairing},
     traits::{ToFromBytes, VerifyingKey},
 };
 use move_binary_format::errors::PartialVMResult;
@@ -160,4 +160,65 @@ pub fn bls12381_min_pk_verify(
         cost,
         smallvec![Value::bool(public_key.verify(&msg_ref, &signature).is_ok())],
     ))
+}
+
+pub fn bls12381_min_sig_pairing(
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.is_empty());
+    debug_assert!(args.len() == 2);
+
+    // // Load the cost parameters from the protocol config
+    // let bls12381_bls12381_min_pk_verify_cost_params = &context
+    //     .extensions()
+    //     .get::<NativesCostTable>()
+    //     .bls12381_bls12381_min_pk_verify_cost_params
+    //     .clone();
+
+    // // Charge the base cost for this oper
+    // native_charge_gas_early_exit!(
+    //     context,
+    //     bls12381_bls12381_min_pk_verify_cost_params.bls12381_bls12381_min_pk_verify_cost_base
+    // );
+
+    let g2 = pop_arg!(args, VectorRef);
+    let g1 = pop_arg!(args, VectorRef);
+
+    let g1_ref = g1.as_bytes_ref();
+    let g2_ref = g2.as_bytes_ref();
+
+    // // Charge the arg size dependent costs
+    // native_charge_gas_early_exit!(
+    //     context,
+    //     bls12381_bls12381_min_pk_verify_cost_params
+    //         .bls12381_bls12381_min_pk_verify_msg_cost_per_byte
+    //         * (msg_ref.len() as u64).into()
+    //         + bls12381_bls12381_min_pk_verify_cost_params
+    //             .bls12381_bls12381_min_pk_verify_msg_cost_per_block
+    //             * (((msg_ref.len() + BLS12381_BLOCK_SIZE - 1) / BLS12381_BLOCK_SIZE) as u64).into()
+    // );
+
+    // let cost = context.gas_used();
+
+    let g1 =
+        match <min_sig::BLS12381Signature as ToFromBytes>::from_bytes(&signature_bytes_ref) {
+            Ok(signature) => signature,
+            Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+        };
+
+    let g2 =
+        match <min_sig::BLS12381PublicKey as ToFromBytes>::from_bytes(&public_key_bytes_ref) {
+            Ok(public_key) => match public_key.validate() {
+                Ok(_) => public_key,
+                Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+            },
+            Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+        };
+
+        Ok(NativeResult::ok(
+            context.gas_used(),
+            smallvec![Value::vector_u8(pairing(g1.as_bytes(), g2.as_bytes()))],
+        ))
 }
