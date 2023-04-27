@@ -85,7 +85,7 @@ export function CheckpointsTable({
                         {...pagination}
                         hasNext={
                             Number(data && data.nextCursor) >
-                                Number(maxCursor) || pagination.hasNext
+                                Number(maxCursor) && pagination.hasNext
                         }
                     />
                 ) : (
