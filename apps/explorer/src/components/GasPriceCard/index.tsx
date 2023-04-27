@@ -181,7 +181,7 @@ export function GasPriceCard() {
                                 loading data
                             </Text>
                         </div>
-                    ) : historicalData ? (
+                    ) : historicalData?.length ? (
                         <>
                             <div className="flex flex-row self-stretch pr-2">
                                 <div
