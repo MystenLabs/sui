@@ -9404,7 +9404,9 @@ dependencies = [
 name = "sui-json-rpc-types"
 version = "0.0.0"
 dependencies = [
+ "afl",
  "anyhow",
+ "arbitrary",
  "bcs",
  "colored",
  "enum_dispatch",
@@ -9413,6 +9415,7 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
+ "quinn-proto",
  "schemars",
  "serde 1.0.152",
  "serde_json",
@@ -11933,7 +11936,6 @@ dependencies = [
  "aead",
  "aes",
  "aes-gcm",
- "afl",
  "ahash 0.7.6",
  "ahash 0.8.2",
  "aho-corasick",
@@ -12756,7 +12758,6 @@ dependencies = [
  "winreg",
  "wyz",
  "x509-parser",
- "xdg",
  "yaml-rust",
  "yansi",
  "yasna",
