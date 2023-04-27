@@ -33,27 +33,30 @@ export type GraphProps = {
     onHoverElement: (value: EpochGasInfo | null) => void;
 };
 export function Graph({ data, width, height, onHoverElement }: GraphProps) {
-    const graphTop = 0;
-    const graphButton = Math.max(height - 20, 0);
+    // remove not defined data (graph displays better and helps with hovering/selecting hovered element)
+    const adjData = useMemo(() => data.filter(isDefined), [data]);
+    const graphTop = 5;
+    const graphButton = Math.max(height - 35, 0);
     const xScale = useMemo(
         () =>
             scaleTime<number>({
-                domain: extent(data, ({ date }) => date) as [Date, Date],
+                domain: extent(adjData, ({ date }) => date) as [Date, Date],
                 range: [SIDE_MARGIN, width - SIDE_MARGIN],
+                nice: 'hour',
             }),
-        [width, data]
+        [width, adjData]
     );
     const yScale = useMemo(
         () =>
             scaleLinear<number>({
-                domain: extent(data, ({ referenceGasPrice }) =>
+                domain: extent(adjData, ({ referenceGasPrice }) =>
                     referenceGasPrice !== null
                         ? Number(referenceGasPrice)
                         : null
                 ) as [number, number],
-                range: [graphTop, graphButton],
+                range: [graphButton, graphTop],
             }),
-        [data, graphTop, graphButton]
+        [adjData, graphTop, graphButton]
     );
     const [isTooltipVisible, setIsTooltipVisible] = useState(false);
     const [tooltipX, setTooltipX] = useState(SIDE_MARGIN);
@@ -66,12 +69,12 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
     const handleTooltip = useCallback(
         (x: number) => {
             const xDate = xScale.invert(x);
-            const epochIndex = bisectDate(data, xDate, 0);
-            const selectedEpoch = data[epochIndex];
+            const epochIndex = bisectDate(adjData, xDate, 0);
+            const selectedEpoch = adjData[epochIndex];
             setTooltipX(x);
             setHoveredElement(selectedEpoch);
         },
-        [xScale, data]
+        [xScale, adjData]
     );
     const handleTooltipThrottledRef = useRef(throttle(100, handleTooltip));
     useEffect(() => {
@@ -95,9 +98,9 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
         >
             <line
                 x1={0}
-                y1={graphTop + 5}
+                y1={graphTop - 5}
                 x2={0}
-                y2={graphButton - 5}
+                y2={graphButton + 10}
                 className={clsx(
                     'stroke-gray-60 transition-all duration-75',
                     isTooltipVisible ? 'visible' : 'invisible'
@@ -107,14 +110,10 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
             />
             <LinePath<EpochGasInfo>
                 curve={curveLinear}
-                data={data}
+                data={adjData}
                 x={(d) => xScale(d.date!.getTime())}
                 y={(d) => yScale(Number(d.referenceGasPrice!))}
                 width="1"
-                markerMid="url(#marker-circle)"
-                markerStart="url(#marker-circle)"
-                markerEnd="url(#marker-circle)"
-                defined={isDefined}
             />
             <AxisBottom
                 top={height - 30}
@@ -134,9 +133,9 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
             />
             <rect
                 x={SIDE_MARGIN}
-                y={graphTop}
+                y={graphTop - 5}
                 width={Math.max(0, width - SIDE_MARGIN * 2)}
-                height={graphButton - graphTop}
+                height={Math.max(0, graphButton - graphTop + 5)}
                 fill="transparent"
                 stroke="none"
                 onMouseEnter={(e) => {

@@ -41,6 +41,8 @@ function useHistoricalGasPrices() {
     return useQuery<EpochGasInfo[]>(
         ['get', 'last 30 epochs gas price'],
         async () => {
+            // TODO: update this to get the gas price from the epoch itself rather than the previous one
+            // once this is deployed https://github.com/MystenLabs/sui/pull/11388
             // every epoch contains the gas price for the next one
             const epochs = (
                 await rpc.getEpochs({
