@@ -163,12 +163,12 @@ export function GasPriceCard() {
                 </div>
                 <div className="flex min-h-[180px] flex-1 flex-col items-center justify-center overflow-hidden rounded-xl bg-white pt-2">
                     {isDataLoading ? (
-                        <>
+                        <div className="flex flex-col items-center gap-1">
                             <LoadingSpinner />
                             <Text color="steel" variant="body/medium">
                                 loading data
                             </Text>
-                        </>
+                        </div>
                     ) : historicalData ? (
                         <>
                             <div className="flex flex-row self-stretch pr-2">
