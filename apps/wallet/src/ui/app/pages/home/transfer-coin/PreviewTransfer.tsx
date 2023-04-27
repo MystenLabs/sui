@@ -2,13 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useCoinDecimals } from '@mysten/core';
-import { type TransactionBlock } from '@mysten/sui.js';
 
 import { Text } from '_app/shared/text';
 import { TxnAddress } from '_components/receipt-card/TxnAddress';
 import { TxnAmount } from '_components/receipt-card/TxnAmount';
 import { parseAmount } from '_helpers';
-import { useTransactionGasBudget } from '_src/ui/app/hooks';
 import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
 import { GAS_SYMBOL } from '_src/ui/app/redux/slices/sui-objects/Coin';
 
@@ -17,7 +15,7 @@ export type PreviewTransferProps = {
     to: string;
     amount: string;
     approximation?: boolean;
-    transaction: TransactionBlock | null;
+    gasBudget?: string;
 };
 
 export function PreviewTransfer({
@@ -25,15 +23,11 @@ export function PreviewTransfer({
     to,
     amount,
     approximation,
-    transaction,
+    gasBudget,
 }: PreviewTransferProps) {
     const accountAddress = useActiveAddress();
     const [decimals] = useCoinDecimals(coinType);
     const amountWithoutDecimals = parseAmount(amount, decimals);
-    const { data: gasBudget } = useTransactionGasBudget(
-        accountAddress,
-        transaction
-    );
 
     return (
         <div className="divide-y divide-solid divide-steel/20 divide-x-0 flex flex-col px-2.5 w-full">
