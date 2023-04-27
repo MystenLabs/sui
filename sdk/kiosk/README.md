@@ -31,7 +31,7 @@ const getKiosk = async () => {
 
     const { data: res, nextCursor, hasNextPage } =  await fetchKiosk(provider, kioskAddress, {limit: 100}); // could also add `cursor` for pagination
     
-    console.log(res);           // { listings: [], items: [],  itemIds: {},  listingIds: {} }
+    console.log(res);           // { listings: [], items: [],  itemIds: [],  listingIds: [] }
     console.log(nextCursor);    // null
     console.log(hasNextPage);   // false
 }

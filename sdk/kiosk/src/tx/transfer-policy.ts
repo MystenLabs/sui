@@ -4,8 +4,12 @@
 import { TransactionArgument, TransactionBlock } from '@mysten/sui.js';
 import { ObjectArgument, objArg } from '../utils';
 
+/** The Transfer Policy module. */
+export const TRANSFER_POLICY_MODULE = '0x2::transfer_policy';
+
 /**
  * Call the `transfer_policy::new` function to create a new transfer policy.
+ * Returns `transferPolicyCap`
  */
 export function createTransferPolicy(
     tx: TransactionBlock,
@@ -13,8 +17,8 @@ export function createTransferPolicy(
     publisher: ObjectArgument,
 ): TransactionArgument {
     let [transferPolicy, transferPolicyCap] = tx.moveCall({
-        target: `0x2::transfer_policy::new`,
-        typeArguments: [],
+        target: `${TRANSFER_POLICY_MODULE}::new`,
+        typeArguments: [itemType],
         arguments: [objArg(tx, publisher)],
     });
 
@@ -37,12 +41,11 @@ export function withdrawFromPolicy(
     policyCap: ObjectArgument,
     amount: string | bigint | null,
 ): TransactionArgument {
-    let amountArg = amount !== null
-        ? tx.pure([], 'vector<u64>')
-        : tx.pure([amount], 'vector<u64>');
+
+    let amountArg = amount !== null ? tx.pure([], 'vector<u64>') : tx.pure([amount], 'vector<u64>');
 
     let [profits] = tx.moveCall({
-        target: `0x2::transfer_policy::withdraw`,
+        target: `${TRANSFER_POLICY_MODULE}::withdraw`,
         typeArguments: [itemType],
         arguments: [
             objArg(tx, policy),
@@ -53,6 +56,23 @@ export function withdrawFromPolicy(
 
     return profits;
 }
+
+/**
+ * Call the `transfer_policy::confirm_request` function to unblock the
+ * transaction.
+ */
+export function confirmRequest(
+    tx: TransactionBlock,
+    itemType: string,
+    policy: ObjectArgument,
+    request: TransactionArgument
+  ): void {
+    tx.moveCall({
+      target: `${TRANSFER_POLICY_MODULE}::confirm_request`,
+      typeArguments: [itemType],
+      arguments: [objArg(tx, policy), request],
+    });
+  }
 
 /**
  * Calls the `transfer_policy::remove_rule` function to remove a Rule from the transfer policy's ruleset.
@@ -67,7 +87,7 @@ export function removeTransferPolicyRule(
 ): void {
 
     tx.moveCall({
-        target: `0x2::transfer_policy::remove_rule`,
+        target: `${TRANSFER_POLICY_MODULE}::remove_rule`,
         typeArguments: [
             itemType,
             ruleType,
@@ -77,3 +97,4 @@ export function removeTransferPolicyRule(
     });
 
 }
+
