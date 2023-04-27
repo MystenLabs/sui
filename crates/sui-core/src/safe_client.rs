@@ -382,6 +382,13 @@ where
         Ok(verified)
     }
 
+    pub async fn handle_certificate_v2(
+        &self,
+        certificate: CertifiedTransaction,
+    ) -> Result<HandleCertificateResponseV2, SuiError> {
+        todo!()
+    }
+
     pub async fn handle_object_info_request(
         &self,
         request: ObjectInfoRequest,
