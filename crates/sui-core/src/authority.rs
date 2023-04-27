@@ -1668,6 +1668,38 @@ impl AuthorityState {
         })
     }
 
+    pub fn load_fastpath_input_objects(
+        &self,
+        effects: &TransactionEffects,
+    ) -> Result<Vec<Object>, SuiError> {
+        let clock_ref = effects
+            .shared_objects()
+            .iter()
+            .find(|(id, _, _)| id.is_clock());
+
+        if let Some((id, version, digest)) = clock_ref {
+            let clock_obj = self
+                .database
+                .get_object_by_key(id, *version)?
+                .ok_or_else(|| {
+                    SuiError::from(UserInputError::ObjectNotFound {
+                        object_id: *id,
+                        version: Some(*version),
+                    })
+                })?;
+            let digest_matches = clock_obj.compute_object_reference().2 == *digest;
+            debug_assert!(digest_matches);
+            if !digest_matches {
+                error!("Clock object digest mismatch");
+                Ok(vec![])
+            } else {
+                Ok(vec![clock_obj])
+            }
+        } else {
+            Ok(vec![])
+        }
+    }
+
     fn check_protocol_version(
         supported_protocol_versions: SupportedProtocolVersions,
         current_version: ProtocolVersion,
