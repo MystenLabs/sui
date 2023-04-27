@@ -45,8 +45,7 @@ use tracing::{debug, info};
 
 use crate::authority::get_client;
 use crate::messages::{
-    create_publish_move_package_transaction, get_account_and_gas_coins,
-    get_gas_object_with_wallet_context, make_tx_certs_and_signed_effects,
+    create_publish_move_package_transaction, make_tx_certs_and_signed_effects,
     make_tx_certs_and_signed_effects_with_committee,
 };
 
@@ -389,8 +388,7 @@ pub async fn create_devnet_nft(
     context: &mut WalletContext,
     nfts_package: ObjectID,
 ) -> Result<(SuiAddress, ObjectID, TransactionDigest), anyhow::Error> {
-    let (sender, gas_objects) = get_account_and_gas_coins(context).await?.swap_remove(0);
-    let gas_object = gas_objects.get(0).unwrap().id();
+    let (sender, gas_object) = context.get_one_gas_object().await?.unwrap();
     let gas_price = context.get_reference_gas_price().await?;
 
     let args_json = json!([
@@ -409,7 +407,7 @@ pub async fn create_devnet_nft(
         function: "mint".into(),
         type_args: vec![],
         args,
-        gas: Some(*gas_object),
+        gas: Some(gas_object.0),
         gas_budget: TEST_ONLY_GAS_UNIT_FOR_GENERIC * gas_price,
         serialize_output: false,
     }
@@ -450,8 +448,10 @@ pub async fn transfer_sui(
         None => context.config.keystore.addresses().get(1).cloned().unwrap(),
         Some(addr) => addr,
     };
-    let gas_ref = get_gas_object_with_wallet_context(context, &sender)
+    let gas_ref = context
+        .get_one_gas_object_owned_by_address(sender)
         .await
+        .unwrap()
         .unwrap();
 
     let res = SuiClientCommands::TransferSui {
@@ -586,8 +586,10 @@ pub async fn delete_devnet_nft(
     nfts_package: ObjectID,
     nft_to_delete: ObjectRef,
 ) -> SuiTransactionBlockResponse {
-    let gas = get_gas_object_with_wallet_context(context, sender)
+    let gas = context
+        .get_one_gas_object_owned_by_address(*sender)
         .await
+        .unwrap()
         .unwrap_or_else(|| panic!("Expect {sender} to have at least one gas object"));
     let rgp = context.get_reference_gas_price().await.unwrap();
     let data = TransactionData::new_move_call(

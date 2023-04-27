@@ -3,7 +3,6 @@
 
 #[cfg(msim)]
 mod test {
-    use move_core_types::language_storage::StructTag;
     use rand::{distributions::uniform::SampleRange, thread_rng, Rng};
     use std::path::PathBuf;
     use std::str::FromStr;
@@ -30,7 +29,6 @@ mod test {
     use sui_simulator::{configs::*, SimConfig};
     use sui_types::base_types::{ObjectRef, SuiAddress};
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
-    use test_utils::messages::get_sui_gas_object_with_wallet_context;
     use test_utils::network::{TestCluster, TestClusterBuilder};
     use tracing::{error, info};
     use typed_store::traits::Map;
@@ -369,7 +367,7 @@ mod test {
     struct TestInitData {
         keystore_path: PathBuf,
         genesis: Genesis,
-        pub all_gas: Vec<(StructTag, ObjectRef)>,
+        pub primary_gas: ObjectRef,
         pub sender: SuiAddress,
     }
 
@@ -379,8 +377,12 @@ mod test {
             Self {
                 keystore_path: test_cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME),
                 genesis: test_cluster.swarm.config().genesis.clone(),
-                all_gas: get_sui_gas_object_with_wallet_context(&test_cluster.wallet, &sender)
-                    .await,
+                primary_gas: test_cluster
+                    .wallet
+                    .get_one_gas_object_owned_by_address(sender)
+                    .await
+                    .unwrap()
+                    .unwrap(),
                 sender,
             }
         }
@@ -390,14 +392,13 @@ mod test {
         let TestInitData {
             keystore_path,
             genesis,
-            all_gas,
+            primary_gas,
             sender,
         } = init_data;
 
         let ed25519_keypair =
             Arc::new(get_ed25519_keypair_from_keystore(keystore_path, &sender).unwrap());
-        let (_, gas) = all_gas.get(0).unwrap();
-        let primary_coin = (gas.clone(), sender, ed25519_keypair.clone());
+        let primary_coin = (primary_gas, sender, ed25519_keypair.clone());
 
         let registry = prometheus::Registry::new();
         let proxy: Arc<dyn ValidatorProxy + Send + Sync> =
