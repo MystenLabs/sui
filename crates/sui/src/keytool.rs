@@ -347,15 +347,15 @@ impl KeyToolCommand {
 
                 // Parse the PEM-encoded public key and extract the raw bytes
                 // Compresses into 33 bytes
-                let group = EcGroup::from_curve_name(Nid::SECP256K1).unwrap();
-                let pkey = PKey::public_key_from_der(public_key).unwrap();
+                let group = EcGroup::from_curve_name(Nid::SECP256K1)?;
+                let pkey = PKey::public_key_from_der(public_key)?;
                 let pkey_compact_result = pkey.ec_key().unwrap().public_key().to_bytes(&group,
                     PointConversionForm::COMPRESSED,
                     &mut openssl::bn::BigNumContext::new().unwrap(),);
-                let pkey_compact = pkey_compact_result.unwrap();
+                let pkey_compact = pkey_compact_result?;
 
                 // Generates Corresponding Sui Address from public key
-                let secp_pk = Secp256k1PublicKey::from_bytes(&pkey_compact).unwrap();
+                let secp_pk = Secp256k1PublicKey::from_bytes(&pkey_compact)?;
                 println!(
                         "Address For Corresponding KMS Key: {}",
                         Into::<SuiAddress>::into(&secp_pk),
@@ -370,9 +370,9 @@ impl KeyToolCommand {
                     ..Default::default()
                 };
                 // Sign the message, normalize the signature and then compacts it
-                let response = kms.sign(request).await.unwrap();
+                let response = kms.sign(request).await?;
                 let sig_bytes_der = response.signature.map(|b| b.to_vec()).unwrap_or_default();     
-                let mut sig = secpSig::from_der(&sig_bytes_der).unwrap();
+                let mut sig = secpSig::from_der(&sig_bytes_der)?;
                 sig.normalize_s();
                 let sig_bytes = secpSig::serialize_compact(&sig);
 
