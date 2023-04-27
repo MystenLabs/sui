@@ -21,7 +21,7 @@ use sui_json_rpc::api::{
 use sui_json_rpc_types::SuiLoadedChildObjectsResponse;
 use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, Coin, CoinPage, DelegatedStake,
-    DryRunTransactionBlockResponse, DynamicFieldPage, EventFilter, EventPage, ObjectsPage,
+    DryRunTransactionBlockResponse, DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page,
     SuiCoinMetadata, SuiCommittee, SuiEvent, SuiGetPastObjectRequest, SuiMoveNormalizedModule,
     SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiPastObjectResponse,
     SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
@@ -29,6 +29,7 @@ use sui_json_rpc_types::{
 };
 use sui_types::balance::Supply;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest};
+use sui_types::dynamic_field::DynamicFieldName;
 use sui_types::error::TRANSACTION_NOT_FOUND_MSG_PREFIX;
 use sui_types::event::EventID;
 use sui_types::messages::{ExecuteTransactionRequestType, TransactionData, VerifiedTransaction};
@@ -70,6 +71,40 @@ impl ReadApi {
             .api
             .http
             .get_dynamic_fields(object_id, cursor, limit)
+            .await?)
+    }
+
+    pub async fn get_dynamic_field_object(
+        &self,
+        object_id: ObjectID,
+        name: DynamicFieldName,
+    ) -> SuiRpcResult<SuiObjectResponse> {
+        Ok(self
+            .api
+            .http
+            .get_dynamic_field_object(object_id, name)
+            .await?)
+    }
+
+    pub async fn resolve_name_service_address(&self, name: String) -> SuiRpcResult<SuiAddress> {
+        Ok(self
+            .api
+            .http
+            .resolve_name_service_address(name)
+            .await?
+            .unwrap())
+    }
+
+    pub async fn resolve_name_service_names(
+        &self,
+        address: SuiAddress,
+        cursor: Option<ObjectID>,
+        limit: Option<usize>,
+    ) -> SuiRpcResult<Page<String, ObjectID>> {
+        Ok(self
+            .api
+            .http
+            .resolve_name_service_names(address, cursor, limit)
             .await?)
     }
 
