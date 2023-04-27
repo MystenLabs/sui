@@ -96,10 +96,7 @@ impl CoinReadApi {
         let package_id = *package_id;
 
         spawn_monitored_task!(async move {
-            let publish_txn_digest = state
-                .get_object_read(&package_id)?
-                .into_object()?
-                .previous_transaction;
+            let publish_txn_digest = state.find_publish_txn_digest(package_id)?;
 
             let (_, effect) = state
                 .get_executed_transaction_and_effects(publish_txn_digest)
