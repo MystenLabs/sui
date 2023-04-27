@@ -108,7 +108,7 @@ pub struct StateSyncConfig {
     ///
     /// If unspecified, this will default to `50,000`.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub checkpoint_content_download_tx_concurrency: Option<u32>,
+    pub checkpoint_content_download_tx_concurrency: Option<u64>,
 
     /// Set the timeout that should be used when sending most state-sync RPC requests.
     ///
@@ -188,8 +188,8 @@ impl StateSyncConfig {
             .unwrap_or(CHECKPOINT_CONTENT_DOWNLOAD_CONCURRENCY)
     }
 
-    pub fn checkpoint_content_download_tx_concurrency(&self) -> u32 {
-        const CHECKPOINT_CONTENT_DOWNLOAD_TX_CONCURRENCY: u32 = 50_000;
+    pub fn checkpoint_content_download_tx_concurrency(&self) -> u64 {
+        const CHECKPOINT_CONTENT_DOWNLOAD_TX_CONCURRENCY: u64 = 50_000;
 
         self.checkpoint_content_download_tx_concurrency
             .unwrap_or(CHECKPOINT_CONTENT_DOWNLOAD_TX_CONCURRENCY)

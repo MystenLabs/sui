@@ -66,7 +66,7 @@ use sui_types::{
 };
 use tap::{Pipe, TapFallible, TapOptional};
 use tokio::{
-    sync::{broadcast, mpsc, watch, OwnedSemaphorePermit, Semaphore},
+    sync::{broadcast, mpsc, watch},
     task::{AbortHandle, JoinSet},
 };
 use tracing::{debug, info, trace, warn};
@@ -997,7 +997,7 @@ async fn sync_checkpoint_contents<S>(
     checkpoint_event_sender: broadcast::Sender<VerifiedCheckpoint>,
     metrics: Metrics,
     checkpoint_content_download_concurrency: usize,
-    checkpoint_content_download_tx_concurrency: u32,
+    checkpoint_content_download_tx_concurrency: u64,
     timeout: Duration,
     mut target_sequence_channel: watch::Receiver<CheckpointSequenceNumber>,
 ) where
@@ -1013,9 +1013,7 @@ async fn sync_checkpoint_contents<S>(
     let mut highest_started_network_total_transactions = highest_synced.network_total_transactions;
     let mut checkpoint_contents_tasks = FuturesOrdered::new();
 
-    let tx_concurrency_semaphore = Arc::new(Semaphore::new(
-        checkpoint_content_download_tx_concurrency as usize,
-    ));
+    let mut tx_concurrency_remaining = checkpoint_content_download_tx_concurrency;
 
     loop {
         tokio::select! {
@@ -1040,6 +1038,7 @@ async fn sync_checkpoint_contents<S>(
                             highest_synced.network_total_transactions + num_txns,
                             checkpoint.network_total_transactions
                         );
+                        tx_concurrency_remaining += num_txns;
 
                         store
                             .update_highest_synced_checkpoint(&checkpoint)
@@ -1050,7 +1049,7 @@ async fn sync_checkpoint_contents<S>(
                         highest_synced = checkpoint;
 
                     }
-                    Err((checkpoint, permit)) => {
+                    Err(checkpoint) => {
                         let _: &VerifiedCheckpoint = &checkpoint;  // type hint
                         debug!("unable to sync contents of checkpoint {}", checkpoint.sequence_number());
                         // Try again after a delay.
@@ -1061,7 +1060,6 @@ async fn sync_checkpoint_contents<S>(
                             timeout,
                             checkpoint,
                             Some(Duration::from_secs(10)),
-                            permit,
                         ));
                     }
                 }
@@ -1079,35 +1077,24 @@ async fn sync_checkpoint_contents<S>(
                     "BUG: store should have all checkpoints older than highest_verified_checkpoint",
                 );
 
-            let tx_count: u32 = (next_checkpoint.network_total_transactions
-                - highest_started_network_total_transactions)
-                .try_into()
-                .expect("tx count of one checkpoint should fit into u32");
-            match tx_concurrency_semaphore
-                .clone()
-                .try_acquire_many_owned(tx_count)
-            {
-                Ok(permit) => {
-                    highest_started_network_total_transactions =
-                        next_checkpoint.network_total_transactions;
-                    current_sequence += 1;
-                    checkpoint_contents_tasks.push_back(sync_one_checkpoint_contents(
-                        network.clone(),
-                        &store,
-                        peer_heights.clone(),
-                        timeout,
-                        next_checkpoint,
-                        None,
-                        permit,
-                    ));
-                }
-                Err(tokio::sync::TryAcquireError::NoPermits) => {
-                    // We've reached the tx concurrency limit, so we can't start any more tasks
-                    // for now.
-                    break;
-                }
-                Err(e) => panic!("unexpected error acquiring semaphore permit: {e}"),
+            // Enforce transaction count concurrency limit.
+            let tx_count = next_checkpoint.network_total_transactions
+                - highest_started_network_total_transactions;
+            if tx_count > tx_concurrency_remaining {
+                break;
             }
+            tx_concurrency_remaining -= tx_count;
+
+            highest_started_network_total_transactions = next_checkpoint.network_total_transactions;
+            current_sequence += 1;
+            checkpoint_contents_tasks.push_back(sync_one_checkpoint_contents(
+                network.clone(),
+                &store,
+                peer_heights.clone(),
+                timeout,
+                next_checkpoint,
+                None,
+            ));
         }
 
         if highest_synced.sequence_number() % checkpoint_content_download_concurrency as u64 == 0
@@ -1129,8 +1116,7 @@ async fn sync_one_checkpoint_contents<S>(
     timeout: Duration,
     checkpoint: VerifiedCheckpoint,
     delay: Option<Duration>,
-    permit: OwnedSemaphorePermit,
-) -> Result<(VerifiedCheckpoint, u64), (VerifiedCheckpoint, OwnedSemaphorePermit)>
+) -> Result<(VerifiedCheckpoint, u64), VerifiedCheckpoint>
 where
     S: WriteStore + Clone,
     <S as ReadStore>::Error: std::error::Error,
@@ -1155,7 +1141,7 @@ where
     rand::seq::SliceRandom::shuffle(peers.as_mut_slice(), &mut rng);
 
     let Some(contents) = get_full_checkpoint_contents(&mut peers, &store, &checkpoint, timeout).await else {
-        return Err((checkpoint, permit));
+        return Err(checkpoint);
     };
 
     let num_txns = contents.size() as u64;
