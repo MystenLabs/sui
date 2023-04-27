@@ -121,7 +121,6 @@ impl Executor {
             .1
             .into_data();
 
-        println!("PUBLISH STATUS: {:#?}", effects.status());
         assert!(
             matches!(effects.status(), ExecutionStatus::Success { .. }),
             "{:?}",
