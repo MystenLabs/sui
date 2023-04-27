@@ -50,6 +50,7 @@ use crate::api::JsonRpcMetrics;
 use crate::api::{validate_limit, ReadApiServer};
 use crate::api::{QUERY_MAX_RESULT_LIMIT, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS};
 use crate::error::Error;
+use crate::with_tracing;
 use crate::{
     get_balance_changes_from_effect, get_object_changes, ObjectProviderCache, SuiRpcModule,
 };
@@ -406,49 +407,50 @@ impl ReadApiServer for ReadApi {
         object_id: ObjectID,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiObjectResponse> {
-        info!("get_object");
-        let state = self.state.clone();
-        let object_read = spawn_monitored_task!(async move {
-            state.get_object_read(&object_id).map_err(|e| {
-                warn!(?object_id, "Failed to get object: {:?}", e);
-                anyhow!("{e}")
+        with_tracing!("get_object", async move {
+            let state = self.state.clone();
+            let object_read = spawn_monitored_task!(async move {
+                state.get_object_read(&object_id).map_err(|e| {
+                    warn!(?object_id, "Failed to get object: {:?}", e);
+                    anyhow!("{e}")
+                })
             })
-        })
-        .await
-        .map_err(|e| anyhow!(e))??;
-        let options = options.unwrap_or_default();
+            .await
+            .map_err(|e| anyhow!(e))??;
+            let options = options.unwrap_or_default();
 
-        match object_read {
-            ObjectRead::NotExists(id) => Ok(SuiObjectResponse::new_with_error(
-                SuiObjectResponseError::NotExists { object_id: id },
-            )),
-            ObjectRead::Exists(object_ref, o, layout) => {
-                let mut display_fields = None;
-                if options.show_display {
-                    match get_display_fields(self, &o, &layout) {
-                        Ok(rendered_fields) => display_fields = Some(rendered_fields),
-                        Err(e) => {
-                            return Ok(SuiObjectResponse::new(
-                                Some((object_ref, o, layout, options, None).try_into()?),
-                                Some(SuiObjectResponseError::DisplayError {
-                                    error: e.to_string(),
-                                }),
-                            ));
+            match object_read {
+                ObjectRead::NotExists(id) => Ok(SuiObjectResponse::new_with_error(
+                    SuiObjectResponseError::NotExists { object_id: id },
+                )),
+                ObjectRead::Exists(object_ref, o, layout) => {
+                    let mut display_fields = None;
+                    if options.show_display {
+                        match get_display_fields(self, &o, &layout) {
+                            Ok(rendered_fields) => display_fields = Some(rendered_fields),
+                            Err(e) => {
+                                return Ok(SuiObjectResponse::new(
+                                    Some((object_ref, o, layout, options, None).try_into()?),
+                                    Some(SuiObjectResponseError::DisplayError {
+                                        error: e.to_string(),
+                                    }),
+                                ));
+                            }
                         }
                     }
+                    Ok(SuiObjectResponse::new_with_data(
+                        (object_ref, o, layout, options, display_fields).try_into()?,
+                    ))
                 }
-                Ok(SuiObjectResponse::new_with_data(
-                    (object_ref, o, layout, options, display_fields).try_into()?,
-                ))
+                ObjectRead::Deleted((object_id, version, digest)) => Ok(
+                    SuiObjectResponse::new_with_error(SuiObjectResponseError::Deleted {
+                        object_id,
+                        version,
+                        digest,
+                    }),
+                ),
             }
-            ObjectRead::Deleted((object_id, version, digest)) => Ok(
-                SuiObjectResponse::new_with_error(SuiObjectResponseError::Deleted {
-                    object_id,
-                    version,
-                    digest,
-                }),
-            ),
-        }
+        })
     }
 
     #[instrument(skip(self))]
@@ -457,46 +459,47 @@ impl ReadApiServer for ReadApi {
         object_ids: Vec<ObjectID>,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiObjectResponse>> {
-        info!("multi_get_objects");
-        if object_ids.len() <= *QUERY_MAX_RESULT_LIMIT {
-            self.metrics
-                .get_objects_limit
-                .report(object_ids.len() as u64);
-            let mut futures = vec![];
-            for object_id in object_ids {
-                futures.push(self.get_object(object_id, options.clone()));
-            }
-            let results = join_all(futures).await;
+        with_tracing!("multi_get_objects", async move {
+            if object_ids.len() <= *QUERY_MAX_RESULT_LIMIT {
+                self.metrics
+                    .get_objects_limit
+                    .report(object_ids.len() as u64);
+                let mut futures = vec![];
+                for object_id in object_ids {
+                    futures.push(self.get_object(object_id, options.clone()));
+                }
+                let results = join_all(futures).await;
 
-            let objects_result: Result<Vec<SuiObjectResponse>, String> = results
-                .into_iter()
-                .map(|result| match result {
-                    Ok(response) => Ok(response),
-                    Err(error) => {
-                        error!("Failed to fetch object with error: {error:?}");
-                        Err(format!("Error: {}", error))
-                    }
+                let objects_result: Result<Vec<SuiObjectResponse>, String> = results
+                    .into_iter()
+                    .map(|result| match result {
+                        Ok(response) => Ok(response),
+                        Err(error) => {
+                            error!("Failed to fetch object with error: {error:?}");
+                            Err(format!("Error: {}", error))
+                        }
+                    })
+                    .collect();
+
+                let objects = objects_result.map_err(|err| {
+                    Error::UnexpectedError(format!("Failed to fetch objects with error: {}", err))
+                })?;
+
+                self.metrics
+                    .get_objects_result_size
+                    .report(objects.len() as u64);
+                self.metrics
+                    .get_objects_result_size_total
+                    .inc_by(objects.len() as u64);
+                Ok(objects)
+            } else {
+                Err(anyhow!(UserInputError::SizeLimitExceeded {
+                    limit: "input limit".to_string(),
+                    value: QUERY_MAX_RESULT_LIMIT.to_string()
                 })
-                .collect();
-
-            let objects = objects_result.map_err(|err| {
-                Error::UnexpectedError(format!("Failed to fetch objects with error: {}", err))
-            })?;
-
-            self.metrics
-                .get_objects_result_size
-                .report(objects.len() as u64);
-            self.metrics
-                .get_objects_result_size_total
-                .inc_by(objects.len() as u64);
-            Ok(objects)
-        } else {
-            Err(anyhow!(UserInputError::SizeLimitExceeded {
-                limit: "input limit".to_string(),
-                value: QUERY_MAX_RESULT_LIMIT.to_string()
-            })
-            .into())
-        }
+                .into())
+            }
+        })
     }
 
     #[instrument(skip(self))]
@@ -506,44 +509,47 @@ impl ReadApiServer for ReadApi {
         version: SequenceNumber,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiPastObjectResponse> {
-        info!("try_get_past_object");
-        let state = self.state.clone();
-        let past_read = spawn_monitored_task!(async move {
+        with_tracing!("try_get_past_object", async move {
+            let state = self.state.clone();
+            let past_read = spawn_monitored_task!(async move {
             state.get_past_object_read(&object_id, version)
             .map_err(|e| {
                 error!("Failed to call try_get_past_object for object: {object_id:?} version: {version:?} with error: {e:?}");
                 anyhow!("{e}")
             })}).await.map_err(|e| anyhow!(e))??;
-        let options = options.unwrap_or_default();
-        match past_read {
-            PastObjectRead::ObjectNotExists(id) => Ok(SuiPastObjectResponse::ObjectNotExists(id)),
-            PastObjectRead::VersionFound(object_ref, o, layout) => {
-                let display_fields = if options.show_display {
-                    // TODO (jian): api breaking change to also modify past objects.
-                    Some(get_display_fields(self, &o, &layout)?)
-                } else {
-                    None
-                };
-                Ok(SuiPastObjectResponse::VersionFound(
-                    (object_ref, o, layout, options, display_fields).try_into()?,
-                ))
+            let options = options.unwrap_or_default();
+            match past_read {
+                PastObjectRead::ObjectNotExists(id) => {
+                    Ok(SuiPastObjectResponse::ObjectNotExists(id))
+                }
+                PastObjectRead::VersionFound(object_ref, o, layout) => {
+                    let display_fields = if options.show_display {
+                        // TODO (jian): api breaking change to also modify past objects.
+                        Some(get_display_fields(self, &o, &layout)?)
+                    } else {
+                        None
+                    };
+                    Ok(SuiPastObjectResponse::VersionFound(
+                        (object_ref, o, layout, options, display_fields).try_into()?,
+                    ))
+                }
+                PastObjectRead::ObjectDeleted(oref) => {
+                    Ok(SuiPastObjectResponse::ObjectDeleted(oref.into()))
+                }
+                PastObjectRead::VersionNotFound(id, seq_num) => {
+                    Ok(SuiPastObjectResponse::VersionNotFound(id, seq_num))
+                }
+                PastObjectRead::VersionTooHigh {
+                    object_id,
+                    asked_version,
+                    latest_version,
+                } => Ok(SuiPastObjectResponse::VersionTooHigh {
+                    object_id,
+                    asked_version,
+                    latest_version,
+                }),
             }
-            PastObjectRead::ObjectDeleted(oref) => {
-                Ok(SuiPastObjectResponse::ObjectDeleted(oref.into()))
-            }
-            PastObjectRead::VersionNotFound(id, seq_num) => {
-                Ok(SuiPastObjectResponse::VersionNotFound(id, seq_num))
-            }
-            PastObjectRead::VersionTooHigh {
-                object_id,
-                asked_version,
-                latest_version,
-            } => Ok(SuiPastObjectResponse::VersionTooHigh {
-                object_id,
-                asked_version,
-                latest_version,
-            }),
-        }
+        })
     }
 
     #[instrument(skip(self))]
@@ -552,44 +558,46 @@ impl ReadApiServer for ReadApi {
         past_objects: Vec<SuiGetPastObjectRequest>,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiPastObjectResponse>> {
-        info!("try_multi_get_past_objects");
-        if past_objects.len() <= *QUERY_MAX_RESULT_LIMIT {
-            let mut futures = vec![];
-            for past_object in past_objects {
-                futures.push(self.try_get_past_object(
-                    past_object.object_id,
-                    past_object.version,
-                    options.clone(),
-                ));
-            }
-            let results = join_all(futures).await;
+        with_tracing!("try_multi_get_past_objects", async move {
+            if past_objects.len() <= *QUERY_MAX_RESULT_LIMIT {
+                let mut futures = vec![];
+                for past_object in past_objects {
+                    futures.push(self.try_get_past_object(
+                        past_object.object_id,
+                        past_object.version,
+                        options.clone(),
+                    ));
+                }
+                let results = join_all(futures).await;
 
-            let (oks, errs): (Vec<_>, Vec<_>) = results.into_iter().partition(Result::is_ok);
-            let success = oks.into_iter().filter_map(Result::ok).collect();
-            let errors: Vec<_> = errs.into_iter().filter_map(Result::err).collect();
-            if !errors.is_empty() {
-                let error_string = errors
-                    .iter()
-                    .map(|e| e.to_string())
-                    .collect::<Vec<String>>()
-                    .join("; ");
-                Err(anyhow!("{error_string}").into())
+                let (oks, errs): (Vec<_>, Vec<_>) = results.into_iter().partition(Result::is_ok);
+                let success = oks.into_iter().filter_map(Result::ok).collect();
+                let errors: Vec<_> = errs.into_iter().filter_map(Result::err).collect();
+                if !errors.is_empty() {
+                    let error_string = errors
+                        .iter()
+                        .map(|e| e.to_string())
+                        .collect::<Vec<String>>()
+                        .join("; ");
+                    Err(anyhow!("{error_string}").into())
+                } else {
+                    Ok(success)
+                }
             } else {
-                Ok(success)
+                Err(anyhow!(UserInputError::SizeLimitExceeded {
+                    limit: "input limit".to_string(),
+                    value: QUERY_MAX_RESULT_LIMIT.to_string()
+                })
+                .into())
             }
-        } else {
-            Err(anyhow!(UserInputError::SizeLimitExceeded {
-                limit: "input limit".to_string(),
-                value: QUERY_MAX_RESULT_LIMIT.to_string()
-            })
-            .into())
-        }
+        })
     }
 
     #[instrument(skip(self))]
     async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt<u64>> {
-        info!("get_total_transaction_blocks");
-        Ok(self.state.get_total_transaction_blocks()?.into())
+        with_tracing!("get_total_transaction_blocks", async move {
+            Ok(self.state.get_total_transaction_blocks()?.into())
+        })
     }
 
     #[instrument(skip(self))]
@@ -598,49 +606,48 @@ impl ReadApiServer for ReadApi {
         digest: TransactionDigest,
         opts: Option<SuiTransactionBlockResponseOptions>,
     ) -> RpcResult<SuiTransactionBlockResponse> {
-        info!("get_transaction_block");
-        let opts = opts.unwrap_or_default();
-        let mut temp_response = IntermediateTransactionResponse::new(digest);
+        with_tracing!("get_transaction_block", async move {
+            let opts = opts.unwrap_or_default();
+            let mut temp_response = IntermediateTransactionResponse::new(digest);
 
-        // Fetch transaction to determine existence
-        let state = self.state.clone();
-        let transaction = spawn_monitored_task!(async move {
-            state
-                .get_executed_transaction(digest)
-                .await
-                .tap_err(|err| debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err))
-        })
-        .await
-        .map_err(|e| anyhow!(e))??;
-        let input_objects = transaction
-            .data()
-            .inner()
-            .intent_message
-            .value
-            .input_objects()
-            .unwrap_or_default();
-
-        // the input is needed for object_changes to retrieve the sender address.
-        if opts.require_input() {
-            temp_response.transaction = Some(transaction);
-        }
-
-        // Fetch effects when `show_events` is true because events relies on effects
-        if opts.require_effects() {
+            // Fetch transaction to determine existence
             let state = self.state.clone();
-            temp_response.effects = Some(
-                spawn_monitored_task!(async move {
-                    state.get_executed_effects(digest).tap_err(
-                        |err| debug!(tx_digest=?digest, "Failed to get effects: {:?}", err),
-                    )
-                })
-                .await
-                .map_err(|e| anyhow!(e))??,
-            );
-        }
+            let transaction = spawn_monitored_task!(async move {
+                state.get_executed_transaction(digest).await.tap_err(
+                    |err| debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err),
+                )
+            })
+            .await
+            .map_err(|e| anyhow!(e))??;
+            let input_objects = transaction
+                .data()
+                .inner()
+                .intent_message
+                .value
+                .input_objects()
+                .unwrap_or_default();
 
-        let state = self.state.clone();
-        if let Some((_, seq)) = spawn_monitored_task!(async move{
+            // the input is needed for object_changes to retrieve the sender address.
+            if opts.require_input() {
+                temp_response.transaction = Some(transaction);
+            }
+
+            // Fetch effects when `show_events` is true because events relies on effects
+            if opts.require_effects() {
+                let state = self.state.clone();
+                temp_response.effects = Some(
+                    spawn_monitored_task!(async move {
+                        state.get_executed_effects(digest).tap_err(
+                            |err| debug!(tx_digest=?digest, "Failed to get effects: {:?}", err),
+                        )
+                    })
+                    .await
+                    .map_err(|e| anyhow!(e))??,
+                );
+            }
+
+            let state = self.state.clone();
+            if let Some((_, seq)) = spawn_monitored_task!(async move{
             state.get_transaction_checkpoint_sequence(&digest)
             .map_err(|e| {
                 error!("Failed to retrieve checkpoint sequence for transaction {digest:?} with error: {e:?}");
@@ -650,10 +657,10 @@ impl ReadApiServer for ReadApi {
             temp_response.checkpoint_seq = Some(seq);
         }
 
-        if let Some(checkpoint_seq) = &temp_response.checkpoint_seq {
-            let state = self.state.clone();
-            let checkpoint_seq = *checkpoint_seq;
-            let checkpoint = spawn_monitored_task!(async move {
+            if let Some(checkpoint_seq) = &temp_response.checkpoint_seq {
+                let state = self.state.clone();
+                let checkpoint_seq = *checkpoint_seq;
+                let checkpoint = spawn_monitored_task!(async move {
                 state
                 // safe to unwrap because we have checked `is_some` above
                 .get_checkpoint_by_sequence_number(checkpoint_seq)
@@ -662,16 +669,17 @@ impl ReadApiServer for ReadApi {
                     anyhow!("{e}"
                 )
                 })}).await.map_err(|e|anyhow!(e))??;
-            // TODO(chris): we don't need to fetch the whole checkpoint summary
-            temp_response.timestamp = checkpoint.as_ref().map(|c| c.timestamp_ms);
-        }
+                // TODO(chris): we don't need to fetch the whole checkpoint summary
+                temp_response.timestamp = checkpoint.as_ref().map(|c| c.timestamp_ms);
+            }
 
-        if opts.show_events && temp_response.effects.is_some() {
-            // safe to unwrap because we have checked is_some
-            if let Some(event_digest) = temp_response.effects.as_ref().unwrap().events_digest() {
-                let state = self.state.clone();
-                let event_digest = *event_digest;
-                let events = spawn_monitored_task!(async move{
+            if opts.show_events && temp_response.effects.is_some() {
+                // safe to unwrap because we have checked is_some
+                if let Some(event_digest) = temp_response.effects.as_ref().unwrap().events_digest()
+                {
+                    let state = self.state.clone();
+                    let event_digest = *event_digest;
+                    let events = spawn_monitored_task!(async move{
                     state
                     .get_transaction_events(&event_digest)
                     .map_err(|e|
@@ -679,47 +687,52 @@ impl ReadApiServer for ReadApi {
                             error!("Failed to call get transaction events for events digest: {event_digest:?} with error {e:?}");
                             Error::from(e)
                         })}).await.map_err(|e|anyhow!(e))??;
-                match to_sui_transaction_events(self, digest, events) {
-                    Ok(e) => temp_response.events = Some(e),
-                    Err(e) => temp_response.errors.push(e.to_string()),
-                };
-            } else {
-                // events field will be Some if and only if `show_events` is true and
-                // there is no error in converting fetching events
-                temp_response.events = Some(SuiTransactionBlockEvents::default());
+                    match to_sui_transaction_events(self, digest, events) {
+                        Ok(e) => temp_response.events = Some(e),
+                        Err(e) => temp_response.errors.push(e.to_string()),
+                    };
+                } else {
+                    // events field will be Some if and only if `show_events` is true and
+                    // there is no error in converting fetching events
+                    temp_response.events = Some(SuiTransactionBlockEvents::default());
+                }
             }
-        }
 
-        let object_cache = ObjectProviderCache::new(self.state.clone());
-        if opts.show_balance_changes {
-            if let Some(effects) = &temp_response.effects {
-                let balance_changes =
-                    get_balance_changes_from_effect(&object_cache, effects, input_objects, None)
-                        .await
-                        .map_err(Error::SuiError)?;
-                temp_response.balance_changes = Some(balance_changes);
+            let object_cache = ObjectProviderCache::new(self.state.clone());
+            if opts.show_balance_changes {
+                if let Some(effects) = &temp_response.effects {
+                    let balance_changes = get_balance_changes_from_effect(
+                        &object_cache,
+                        effects,
+                        input_objects,
+                        None,
+                    )
+                    .await
+                    .map_err(Error::SuiError)?;
+                    temp_response.balance_changes = Some(balance_changes);
+                }
             }
-        }
 
-        if opts.show_object_changes {
-            if let (Some(effects), Some(input)) =
-                (&temp_response.effects, &temp_response.transaction)
-            {
-                let sender = input.data().intent_message().value.sender();
-                let object_changes = get_object_changes(
-                    &object_cache,
-                    sender,
-                    effects.modified_at_versions(),
-                    effects.all_changed_objects(),
-                    effects.all_deleted(),
-                )
-                .await
-                .map_err(Error::SuiError)?;
-                temp_response.object_changes = Some(object_changes);
+            if opts.show_object_changes {
+                if let (Some(effects), Some(input)) =
+                    (&temp_response.effects, &temp_response.transaction)
+                {
+                    let sender = input.data().intent_message().value.sender();
+                    let object_changes = get_object_changes(
+                        &object_cache,
+                        sender,
+                        effects.modified_at_versions(),
+                        effects.all_changed_objects(),
+                        effects.all_deleted(),
+                    )
+                    .await
+                    .map_err(Error::SuiError)?;
+                    temp_response.object_changes = Some(object_changes);
+                }
             }
-        }
-        let epoch_store = self.state.load_epoch_store_one_call_per_task();
-        convert_to_response(temp_response, &opts, epoch_store.module_cache())
+            let epoch_store = self.state.load_epoch_store_one_call_per_task();
+            convert_to_response(temp_response, &opts, epoch_store.module_cache())
+        })
     }
 
     #[instrument(skip(self))]
@@ -728,17 +741,18 @@ impl ReadApiServer for ReadApi {
         digests: Vec<TransactionDigest>,
         opts: Option<SuiTransactionBlockResponseOptions>,
     ) -> RpcResult<Vec<SuiTransactionBlockResponse>> {
-        info!("multi_get_transaction_blocks");
-        Ok(self
-            .multi_get_transaction_blocks_internal(digests, opts)
-            .await?)
+        with_tracing!("multi_get_transaction_blocks", async move {
+            Ok(self
+                .multi_get_transaction_blocks_internal(digests, opts)
+                .await?)
+        })
     }
 
     #[instrument(skip(self))]
     async fn get_events(&self, transaction_digest: TransactionDigest) -> RpcResult<Vec<SuiEvent>> {
-        info!("get_events");
-        let state = self.state.clone();
-        spawn_monitored_task!(async move{
+        with_tracing!("get_events", async move {
+            let state = self.state.clone();
+            spawn_monitored_task!(async move{
             let store = state.load_epoch_store_one_call_per_task();
             let effect = state.get_executed_effects(transaction_digest)?;
             let events = if let Some(event_digest) = effect.events_digest() {
@@ -768,24 +782,27 @@ impl ReadApiServer for ReadApi {
         };
         Ok(events)
         }).await.map_err(|e| anyhow!(e))?
+        })
     }
 
     #[instrument(skip(self))]
     async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<BigInt<u64>> {
-        info!("get_latest_checkpoint_sequence_number");
-        Ok(self
-            .state
-            .get_latest_checkpoint_sequence_number()
-            .map_err(|e| {
-                anyhow!("Latest checkpoint sequence number was not found with error :{e}")
-            })?
-            .into())
+        with_tracing!("get_latest_checkpoint_sequence_number", async move {
+            Ok(self
+                .state
+                .get_latest_checkpoint_sequence_number()
+                .map_err(|e| {
+                    anyhow!("Latest checkpoint sequence number was not found with error :{e}")
+                })?
+                .into())
+        })
     }
 
     #[instrument(skip(self))]
     async fn get_checkpoint(&self, id: CheckpointId) -> RpcResult<Checkpoint> {
-        info!("get_checkpoint");
-        Ok(self.get_checkpoint_internal(id)?)
+        with_tracing!("get_checkpoint", async move {
+            Ok(self.get_checkpoint_internal(id)?)
+        })
     }
 
     #[instrument(skip(self))]
@@ -796,39 +813,40 @@ impl ReadApiServer for ReadApi {
         limit: Option<usize>,
         descending_order: bool,
     ) -> RpcResult<CheckpointPage> {
-        info!("get_checkpoints");
-        let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS)?;
+        with_tracing!("get_checkpoints", async move {
+            let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS)?;
 
-        let state = self.state.clone();
+            let state = self.state.clone();
 
-        self.metrics.get_checkpoints_limit.report(limit as u64);
+            self.metrics.get_checkpoints_limit.report(limit as u64);
 
-        let mut data = spawn_monitored_task!(async move {
-            state.get_checkpoints(cursor.map(|s| *s), limit as u64 + 1, descending_order)
-        })
-        .await
-        .map_err(|e| anyhow!(e))??;
+            let mut data = spawn_monitored_task!(async move {
+                state.get_checkpoints(cursor.map(|s| *s), limit as u64 + 1, descending_order)
+            })
+            .await
+            .map_err(|e| anyhow!(e))??;
 
-        let has_next_page = data.len() > limit;
-        data.truncate(limit);
+            let has_next_page = data.len() > limit;
+            data.truncate(limit);
 
-        let next_cursor = if has_next_page {
-            data.last().cloned().map(|d| d.sequence_number.into())
-        } else {
-            None
-        };
+            let next_cursor = if has_next_page {
+                data.last().cloned().map(|d| d.sequence_number.into())
+            } else {
+                None
+            };
 
-        self.metrics
-            .get_checkpoints_result_size
-            .report(data.len() as u64);
-        self.metrics
-            .get_checkpoints_result_size_total
-            .inc_by(data.len() as u64);
+            self.metrics
+                .get_checkpoints_result_size
+                .report(data.len() as u64);
+            self.metrics
+                .get_checkpoints_result_size_total
+                .inc_by(data.len() as u64);
 
-        Ok(CheckpointPage {
-            data,
-            next_cursor,
-            has_next_page,
+            Ok(CheckpointPage {
+                data,
+                next_cursor,
+                has_next_page,
+            })
         })
     }
 
@@ -839,9 +857,10 @@ impl ReadApiServer for ReadApi {
         limit: Option<BigInt<u64>>,
         descending_order: bool,
     ) -> RpcResult<CheckpointPage> {
-        info!("get_checkpoints_deprecated_limit");
-        self.get_checkpoints(cursor, limit.map(|l| *l as usize), descending_order)
-            .await
+        with_tracing!("get_checkpoints_deprecated_limit", async move {
+            self.get_checkpoints(cursor, limit.map(|l| *l as usize), descending_order)
+                .await
+        })
     }
 
     #[instrument(skip(self))]
@@ -849,20 +868,24 @@ impl ReadApiServer for ReadApi {
         &self,
         digest: TransactionDigest,
     ) -> RpcResult<SuiLoadedChildObjectsResponse> {
-        info!("get_loaded_child_objects");
-        Ok(SuiLoadedChildObjectsResponse {
-            loaded_child_objects: match self.state.loaded_child_object_versions(&digest).map_err(
-                |e| {
-                    error!("Failed to get loaded child objects at {digest:?} with error: {e:?}");
-                    Error::SuiError(e)
+        with_tracing!("get_loaded_child_objects", async move {
+            Ok(SuiLoadedChildObjectsResponse {
+                loaded_child_objects: match self
+                    .state
+                    .loaded_child_object_versions(&digest)
+                    .map_err(|e| {
+                        error!(
+                            "Failed to get loaded child objects at {digest:?} with error: {e:?}"
+                        );
+                        Error::SuiError(e)
+                    })? {
+                    Some(v) => v
+                        .into_iter()
+                        .map(|q| SuiLoadedChildObject::new(q.0, q.1))
+                        .collect::<Vec<_>>(),
+                    None => vec![],
                 },
-            )? {
-                Some(v) => v
-                    .into_iter()
-                    .map(|q| SuiLoadedChildObject::new(q.0, q.1))
-                    .collect::<Vec<_>>(),
-                None => vec![],
-            },
+            })
         })
     }
 }
