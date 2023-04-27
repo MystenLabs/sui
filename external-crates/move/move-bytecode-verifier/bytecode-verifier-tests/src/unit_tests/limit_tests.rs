@@ -3,11 +3,14 @@
 
 use move_binary_format::file_format::*;
 use move_bytecode_verifier::{
-    limits::LimitsVerifier, verify_module_with_config_for_test, VerifierConfig,
+    limits::LimitsVerifier, verifier::DEFAULT_MAX_IDENTIFIER_LENGTH,
+    verify_module_with_config_for_test, VerifierConfig,
 };
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, vm_status::StatusCode,
 };
+
+use crate::unit_tests::production_config;
 
 #[test]
 fn test_function_handle_type_instantiation() {
@@ -590,6 +593,58 @@ fn max_mixed_config_test() {
 }
 
 #[test]
+fn max_identifier_len() {
+    let config = production_config();
+    let max_ident = "z".repeat(
+        config
+            .max_idenfitier_len
+            .unwrap_or(DEFAULT_MAX_IDENTIFIER_LENGTH) as usize,
+    );
+    let good_module = leaf_module(&max_ident);
+
+    let res = LimitsVerifier::verify_module(&config, &good_module);
+    assert!(res.is_ok());
+
+    let config = production_config();
+    let max_ident = "z".repeat(
+        (config
+            .max_idenfitier_len
+            .unwrap_or(DEFAULT_MAX_IDENTIFIER_LENGTH) as usize)
+            / 2,
+    );
+    let good_module = leaf_module(&max_ident);
+
+    let res = LimitsVerifier::verify_module(&config, &good_module);
+    assert!(res.is_ok());
+
+    let over_max_ident = "z".repeat(
+        1 + config
+            .max_idenfitier_len
+            .unwrap_or(DEFAULT_MAX_IDENTIFIER_LENGTH) as usize,
+    );
+    let bad_module = leaf_module(&over_max_ident);
+    let res = LimitsVerifier::verify_module(&config, &bad_module);
+
+    assert_eq!(
+        res.unwrap_err().major_status(),
+        StatusCode::IDENTIFIER_TOO_LONG,
+    );
+
+    let over_max_ident = "zx".repeat(
+        1 + config
+            .max_idenfitier_len
+            .unwrap_or(DEFAULT_MAX_IDENTIFIER_LENGTH) as usize,
+    );
+    let bad_module = leaf_module(&over_max_ident);
+    let res = LimitsVerifier::verify_module(&config, &bad_module);
+
+    assert_eq!(
+        res.unwrap_err().major_status(),
+        StatusCode::IDENTIFIER_TOO_LONG,
+    );
+}
+
+#[test]
 fn max_vec_len() {
     let config = VerifierConfig {
         max_constant_vector_len: Some(0xFFFF - 1),
@@ -832,4 +887,148 @@ fn leaf_module(name: &str) -> CompiledModule {
     module.identifiers[0] = Identifier::new(name).unwrap();
     module.address_identifiers[0] = AccountAddress::ONE;
     module
+}
+
+fn some() {
+    use move_binary_format::file_format::*;
+    use move_core_types::{
+        account_address::AccountAddress, identifier::Identifier, vm_status::StatusCode,
+    };
+
+    let module = CompiledModule {
+        version: 6,
+        self_module_handle_idx: ModuleHandleIndex(0),
+        module_handles: vec![
+            ModuleHandle {
+                address: AddressIdentifierIndex(0),
+                name: IdentifierIndex(8),
+            },
+            ModuleHandle {
+                address: AddressIdentifierIndex(1),
+                name: IdentifierIndex(7),
+            },
+            ModuleHandle {
+                address: AddressIdentifierIndex(1),
+                name: IdentifierIndex(9),
+            },
+        ],
+        struct_handles: vec![
+            StructHandle {
+                module: ModuleHandleIndex(0),
+                name: IdentifierIndex(0),
+                abilities: AbilitySet::singleton(Ability::Key),
+                type_parameters: vec![],
+            },
+            StructHandle {
+                module: ModuleHandleIndex(1),
+                name: IdentifierIndex(2),
+                abilities: AbilitySet::singleton(Ability::Store),
+                type_parameters: vec![],
+            },
+            StructHandle {
+                module: ModuleHandleIndex(2),
+                name: IdentifierIndex(1),
+                abilities: AbilitySet::singleton(Ability::Drop),
+                type_parameters: vec![],
+            },
+        ],
+        function_handles: vec![
+            FunctionHandle {
+                module: ModuleHandleIndex(0),
+                name: IdentifierIndex(5),
+                parameters: SignatureIndex(0),
+                return_: SignatureIndex(1),
+                type_parameters: vec![],
+            },
+            FunctionHandle {
+                module: ModuleHandleIndex(1),
+                name: IdentifierIndex(3),
+                parameters: SignatureIndex(2),
+                return_: SignatureIndex(1),
+                type_parameters: vec![],
+            },
+            FunctionHandle {
+                module: ModuleHandleIndex(1),
+                name: IdentifierIndex(6),
+                parameters: SignatureIndex(3),
+                return_: SignatureIndex(2),
+                type_parameters: vec![],
+            },
+        ],
+        field_handles: vec![],
+        friend_decls: vec![],
+        struct_def_instantiations: vec![],
+        function_instantiations: vec![],
+        field_instantiations: vec![],
+        signatures: vec![
+            Signature(vec![
+                SignatureToken::U64,
+                SignatureToken::MutableReference(Box::new(SignatureToken::Struct(
+                    StructHandleIndex(2),
+                ))),
+            ]),
+            Signature(vec![]),
+            Signature(vec![SignatureToken::Struct(StructHandleIndex(1))]),
+            Signature(vec![SignatureToken::MutableReference(Box::new(
+                SignatureToken::Struct(StructHandleIndex(2)),
+            ))]),
+            Signature(vec![
+                SignatureToken::Struct(StructHandleIndex(1)),
+                SignatureToken::Struct(StructHandleIndex(0)),
+            ]),
+        ],
+        identifiers: vec![
+            Identifier::new("Foo").unwrap(),
+            Identifier::new("TxContext").unwrap(),
+            Identifier::new("UID").unwrap(),
+            Identifier::new("delete").unwrap(),
+            Identifier::new("id").unwrap(),
+            Identifier::new("main").unwrap(),
+            Identifier::new("new").unwrap(),
+            Identifier::new("object").unwrap(),
+            Identifier::new("poc").unwrap(),
+            Identifier::new("tx_context").unwrap(),
+        ],
+        address_identifiers: vec![AccountAddress::ZERO, AccountAddress::TWO],
+        constant_pool: vec![],
+        metadata: vec![],
+        struct_defs: vec![StructDefinition {
+            struct_handle: StructHandleIndex(0),
+            field_information: StructFieldInformation::Declared(vec![FieldDefinition {
+                name: IdentifierIndex(4),
+                signature: TypeSignature(SignatureToken::Struct(StructHandleIndex(1))),
+            }]),
+        }],
+        function_defs: vec![FunctionDefinition {
+            function: FunctionHandleIndex(0),
+            visibility: Visibility::Public,
+            is_entry: true,
+            acquires_global_resources: vec![],
+            code: Some(CodeUnit {
+                locals: SignatureIndex(4),
+                code: vec![
+                    Bytecode::CopyLoc(1),
+                    Bytecode::Call(FunctionHandleIndex(2)),
+                    Bytecode::Pack(StructDefinitionIndex(0)),
+                    Bytecode::Unpack(StructDefinitionIndex(0)),
+                    Bytecode::StLoc(2),
+                    Bytecode::Branch(6),
+                    Bytecode::MoveLoc(2),
+                    Bytecode::Call(FunctionHandleIndex(1)),
+                    Bytecode::CopyLoc(1),
+                    Bytecode::Call(FunctionHandleIndex(2)),
+                    Bytecode::Pack(StructDefinitionIndex(0)),
+                    Bytecode::StLoc(3),
+                    Bytecode::Branch(13),
+                    Bytecode::MoveLoc(3),
+                    Bytecode::Unpack(StructDefinitionIndex(0)),
+                    Bytecode::Call(FunctionHandleIndex(1)),
+                    Bytecode::CopyLoc(1),
+                    Bytecode::Call(FunctionHandleIndex(2)),
+                    Bytecode::StLoc(2),
+                    Bytecode::Branch(6),
+                ],
+            }),
+        }],
+    };
 }
