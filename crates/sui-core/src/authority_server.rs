@@ -544,6 +544,13 @@ impl Validator for ValidatorService {
         })
     }
 
+    async fn handle_certificate_v2(
+        &self,
+        request: tonic::Request<CertifiedTransaction>,
+    ) -> Result<tonic::Response<HandleCertificateResponseV2>, tonic::Status> {
+        todo!()
+    }
+
     async fn object_info(
         &self,
         request: tonic::Request<ObjectInfoRequest>,

@@ -2168,6 +2168,14 @@ pub struct HandleCertificateResponse {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct HandleCertificateResponseV2 {
+    pub signed_effects: SignedTransactionEffects,
+    pub events: TransactionEvents,
+    // objects returned along with the response for faster execution on fullnodes.
+    pub objects: Vec<Object>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SubmitCertificateResponse {
     /// If transaction is already executed, return same result as handle_certificate
     pub executed: Option<HandleCertificateResponse>,
