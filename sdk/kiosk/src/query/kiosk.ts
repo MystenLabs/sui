@@ -47,8 +47,8 @@ export type KioskItem = {
 export type KioskData = {
   items: KioskItem[];
   listings: KioskListing[];
-  itemIds: Set<string>;
-  listingIds: Set<string>;
+  itemIds: string[];
+  listingIds: string[];
 };
 
 export type PagedKioskData = {
@@ -71,7 +71,7 @@ export async function fetchKiosk(
     (acc, val) => {
       switch (val.name.type) {
         case '0x2::kiosk::Item':
-          acc.itemIds.add(val.objectId);
+          acc.itemIds.push(val.objectId);
           acc.items.push({
             itemId: val.objectId,
             itemType: val.objectType,
@@ -79,7 +79,7 @@ export async function fetchKiosk(
           });
           break;
         case '0x2::kiosk::Listing':
-          acc.listingIds.add(val.objectId);
+          acc.listingIds.push(val.objectId);
           acc.listings.push({
             itemId: val.name.value.id,
             listingId: val.objectId,
@@ -90,7 +90,7 @@ export async function fetchKiosk(
       }
       return acc;
     },
-    { listings: [], items: [], itemIds: new Set(), listingIds: new Set() },
+    { listings: [], items: [], itemIds: [], listingIds: [] },
   );
 
   return {

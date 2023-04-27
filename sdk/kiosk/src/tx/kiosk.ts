@@ -8,7 +8,6 @@ import {
 } from '@mysten/sui.js';
 
 import { ObjectArgument, objArg } from '../utils';
-import { TransferRequest } from './transfer-request';
 
 /** The Kiosk module. */
 export const KIOSK_MODULE = '0x2::kiosk';
@@ -37,8 +36,8 @@ export function createKioskAndShare(tx: TransactionBlock): TransactionArgument {
 
   tx.moveCall({
     target: `0x2::transfer::public_share_object`,
-    arguments: [kiosk],
     typeArguments: [KIOSK_TYPE],
+    arguments: [kiosk],
   });
 
   return kioskOwnerCap;
@@ -54,14 +53,12 @@ export function place(
   kiosk: ObjectArgument,
   kioskCap: ObjectArgument,
   item: ObjectArgument,
-) {
+): void {
   tx.moveCall({
     target: `${KIOSK_MODULE}::place`,
     typeArguments: [itemType],
     arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), objArg(tx, item)],
   });
-
-  return tx;
 }
 
 /**
@@ -79,7 +76,7 @@ export function lock(
   kioskCap: ObjectArgument,
   policy: ObjectArgument,
   item: ObjectArgument,
-) {
+): void {
   tx.moveCall({
     target: `${KIOSK_MODULE}::lock`,
     typeArguments: [itemType],
@@ -127,7 +124,7 @@ export function list(
   kioskCap: ObjectArgument,
   itemId: SuiAddress,
   price: string | bigint,
-) {
+): void {
   tx.moveCall({
     target: `${KIOSK_MODULE}::list`,
     typeArguments: [itemType],
@@ -138,8 +135,6 @@ export function list(
       tx.pure(price, 'u64'),
     ],
   });
-
-  return tx;
 }
 
 /**
@@ -153,7 +148,7 @@ export function placeAndList(
   kioskCap: ObjectArgument,
   item: ObjectArgument,
   price: string | bigint,
-) {
+): void {
   tx.moveCall({
     target: `${KIOSK_MODULE}::place_and_list`,
     typeArguments: [itemType],
@@ -164,8 +159,6 @@ export function placeAndList(
       tx.pure(price, 'u64'),
     ],
   });
-
-  return tx;
 }
 
 /**
@@ -178,7 +171,7 @@ export function purchase(
   kiosk: ObjectArgument,
   itemId: SuiAddress,
   payment: ObjectArgument,
-): [TransactionArgument, TransferRequest] {
+): [TransactionArgument, TransactionArgument] {
   let [item, transferRequest] = tx.moveCall({
     target: `${KIOSK_MODULE}::purchase`,
     typeArguments: [itemType],
@@ -189,7 +182,7 @@ export function purchase(
     ],
   });
 
-  return [item, { ...transferRequest, itemType } as TransferRequest];
+  return [item, transferRequest];
 }
 
 /**
@@ -202,10 +195,8 @@ export function withdrawFromKiosk(
   kioskCap: ObjectArgument,
   amount: string | bigint | null,
 ): TransactionArgument {
-  let amountArg =
-    amount !== null
-      ? tx.pure(amount, 'vector<u64>')
-      : tx.pure([], 'vector<u64>');
+
+  let amountArg = amount !== null ? tx.pure([amount], 'vector<u64>') : tx.pure([], 'vector<u64>');
 
   let [coin] = tx.moveCall({
     target: `${KIOSK_MODULE}::withdraw`,
@@ -299,12 +290,10 @@ export function returnValue(
   kiosk: ObjectArgument,
   item: TransactionArgument,
   promise: TransactionArgument,
-) {
+): void {
   tx.moveCall({
     target: `${KIOSK_MODULE}::return_value`,
     typeArguments: [itemType],
     arguments: [objArg(tx, kiosk), item, promise],
   });
-
-  return null;
 }

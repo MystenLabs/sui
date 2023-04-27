@@ -17,6 +17,7 @@
   },
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "source": "./src/index.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
@@ -26,7 +27,7 @@
     "build": "pnpm build:types && pnpm build:tsup",
     "build:tsup": "tsup ./src/index.ts --format esm,cjs --sourcemap",
     "build:types": "tsc --build",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\""
   },
   "dependencies": {
     "@mysten/sui.js": "workspace:*"
