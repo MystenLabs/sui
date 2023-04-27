@@ -5,6 +5,7 @@ import {
     formatPercentageDisplay,
     useGetRollingAverageApys,
     useGetTimeBeforeEpochNumber,
+    useGetSystemState,
 } from '@mysten/core';
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
 
@@ -14,7 +15,6 @@ import { NUM_OF_EPOCH_BEFORE_EARNING } from '_src/shared/constants';
 import { CountDownTimer } from '_src/ui/app/shared/countdown-timer';
 import { Text } from '_src/ui/app/shared/text';
 import { IconTooltip } from '_src/ui/app/shared/tooltip';
-import { useSystemState } from '_src/ui/app/staking/useSystemState';
 
 import type { SuiEvent } from '@mysten/sui.js';
 
@@ -24,7 +24,7 @@ type StakeTxnCardProps = {
 
 // For Staked Transaction use moveEvent Field to get the validator address, delegation amount, epoch
 export function StakeTxnCard({ event }: StakeTxnCardProps) {
-    const { data: system } = useSystemState();
+    const { data: system } = useGetSystemState();
     const validatorAddress = event.parsedJson?.validator_address;
     const stakedAmount = event.parsedJson?.amount;
     const stakedEpoch = Number(event.parsedJson?.epoch || 0);
@@ -52,6 +52,7 @@ export function StakeTxnCard({ event }: StakeTxnCardProps) {
                         showAddress
                         iconSize="md"
                         size="body"
+                        activeEpoch={event.parsedJson?.epoch}
                     />
                 </div>
             )}
@@ -63,7 +64,7 @@ export function StakeTxnCard({ event }: StakeTxnCardProps) {
                 />
             )}
             <div className="flex flex-col">
-                <div className="flex justify-between w-full py-3.5">
+                <div className="flex justify-between w-full pt-3.5">
                     <div className="flex gap-1 items-baseline text-steel">
                         <Text
                             variant="body"

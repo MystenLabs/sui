@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeatureIsOn } from '@growthbook/growthbook-react';
-import { useCoinDecimals } from '@mysten/core';
+import { useCoinDecimals, useGetSystemState } from '@mysten/core';
 import { ArrowLeft16 } from '@mysten/icons';
 import {
     getTransactionDigest,
@@ -21,7 +21,6 @@ import { getSignerOperationErrorMessage } from '../../helpers/errorMessages';
 import { getDelegationDataByStakeId } from '../getDelegationByStakeId';
 import { getStakeSuiBySuiId } from '../getStakeSuiBySuiId';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
-import { useSystemState } from '../useSystemState';
 import StakeForm from './StakeForm';
 import { UnStakeForm } from './UnstakeForm';
 import { ValidatorFormDetail } from './ValidatorFormDetail';
@@ -70,7 +69,8 @@ function StakingCard() {
         FEATURES.WALLET_EFFECTS_ONLY_SHARED_TRANSACTION as string
     );
 
-    const { data: system, isLoading: validatorsIsloading } = useSystemState();
+    const { data: system, isLoading: validatorsIsloading } =
+        useGetSystemState();
 
     const totalTokenBalance = useMemo(() => {
         if (!allDelegation) return 0n;
