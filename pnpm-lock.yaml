@@ -538,6 +538,9 @@ importers:
       '@storybook/theming':
         specifier: 7.0.4
         version: 7.0.4(react-dom@18.2.0)(react@18.2.0)
+      '@svgr/webpack':
+        specifier: ^7.0.0
+        version: 7.0.0
       '@types/dotenv-webpack':
         specifier: ^7.0.3
         version: 7.0.3(esbuild@0.17.16)(webpack-cli@5.0.1)
@@ -2123,6 +2126,16 @@ packages:
 
   /@babel/plugin-transform-property-literals@7.18.6(@babel/core@7.21.4):
     resolution: {integrity: sha512-cYcs6qlgafTud3PAzrrRNbQtfpQ8+y/+M5tKmksS9+M1ckbH6kzY8MrexEM9mcA6JDsukE19iIRvAyYl463sMg==}
+    engines: {node: '>=6.9.0'}
+    peerDependencies:
+      '@babel/core': ^7.0.0-0
+    dependencies:
+      '@babel/core': 7.21.4
+      '@babel/helper-plugin-utils': 7.20.2
+    dev: true
+
+  /@babel/plugin-transform-react-constant-elements@7.21.3(@babel/core@7.21.4):
+    resolution: {integrity: sha512-4DVcFeWe/yDYBLp0kBmOGFJ6N2UYg7coGid1gdxb4co62dy/xISDMaYBXBVXEDhfgMk7qkbcYiGtwd5Q/hwDDQ==}
     engines: {node: '>=6.9.0'}
     peerDependencies:
       '@babel/core': ^7.0.0-0
@@ -5724,6 +5737,22 @@ packages:
       cosmiconfig: 8.1.3
       deepmerge: 4.3.1
       svgo: 3.0.2
+    dev: true
+
+  /@svgr/webpack@7.0.0:
+    resolution: {integrity: sha512-XWzIhLTr5WYns/cNFXpXrmFy+LFf2xp60VnNUBZCpM1CGTx47FCDuUj2DQjxirMf2L6CP2jTRELK8ef01TecFQ==}
+    engines: {node: '>=14'}
+    dependencies:
+      '@babel/core': 7.21.4
+      '@babel/plugin-transform-react-constant-elements': 7.21.3(@babel/core@7.21.4)
+      '@babel/preset-env': 7.21.4(@babel/core@7.21.4)
+      '@babel/preset-react': 7.18.6(@babel/core@7.21.4)
+      '@babel/preset-typescript': 7.21.4(@babel/core@7.21.4)
+      '@svgr/core': 7.0.0
+      '@svgr/plugin-jsx': 7.0.0
+      '@svgr/plugin-svgo': 7.0.0(@svgr/core@7.0.0)
+    transitivePeerDependencies:
+      - supports-color
     dev: true
 
   /@swc/helpers@0.4.14:
@@ -13859,6 +13888,7 @@ packages:
       title: 3.5.3
       unist-util-remove: 3.1.1
       unist-util-visit: 4.1.2
+      zod: 3.21.4
     transitivePeerDependencies:
       - supports-color
     dev: false

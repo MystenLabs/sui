@@ -164,6 +164,12 @@ const commonConfig: () => Promise<Configuration> = async () => {
                     test: /\.(png|jpg|jpeg|gif)$/,
                     type: 'asset/resource',
                 },
+                {
+                    test: /\.svg$/i,
+                    issuer: /\.[jt]sx?$/,
+                    resourceQuery: { not: [/url/] },
+                    use: ['@svgr/webpack'],
+                },
             ],
         },
         plugins: [

@@ -11,6 +11,7 @@ import {
 import { SUI_TYPE_ARG, Coin } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
+import { useOnrampProviders } from '../onramp/useOnrampProviders';
 import { CoinActivitiesCard } from './CoinActivityCard';
 import { TokenIconLink } from './TokenIconLink';
 import CoinBalance from './coin-balance';
@@ -85,6 +86,8 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
     } = useGetCoinBalance(activeCoinType, accountAddress);
     const networkOutage = useFeatureIsOn('wallet-network-outage');
 
+    const { providers } = useOnrampProviders();
+
     const tokenBalance = coinBalance?.totalBalance || BigInt(0);
 
     const coinSymbol = useMemo(
@@ -135,9 +138,12 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                             icon={
                                 <WalletActionBuy24 className="shrink-0 h-6 w-6" />
                             }
-                            to="/"
-                            disabled={true}
-                            text="Buy & Sell"
+                            to="/onramp"
+                            text="Buy"
+                            disabled={
+                                (coinType && coinType !== SUI_TYPE_ARG) ||
+                                !providers?.length
+                            }
                         />
 
                         <IconLink

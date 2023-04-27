@@ -32,11 +32,11 @@
     display: flex;
     justify-content: center;
     width: 100%;
-    height: calc(100% - 128px);
     padding: 20px;
     overflow: auto;
     background: colors.$white;
     border-radius: 0 0 20px 20px;
+    position: relative;
 }
 
 .close-overlay {
