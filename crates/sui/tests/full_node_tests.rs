@@ -38,9 +38,7 @@ use sui_types::utils::to_sender_signed_transaction_with_multi_signers;
 use sui_types::{base_types::ObjectID, messages::TransactionInfoRequest};
 use test_utils::authority::test_and_configure_authority_configs;
 use test_utils::messages::make_transactions_with_wallet_context;
-use test_utils::messages::{
-    get_gas_object_with_wallet_context, make_transfer_object_transaction_with_wallet_context,
-};
+use test_utils::messages::make_transfer_object_transaction_with_wallet_context;
 use test_utils::network::{start_fullnode_from_config, TestClusterBuilder};
 use test_utils::transaction::{
     create_devnet_nft, delete_devnet_nft, increment_counter,
@@ -957,9 +955,11 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
     let (object_ref_v1, object_v1, _) = get_obj_read_from_node(&node, object_id).await?;
 
     // Transfer the object from sender to recipient
-    let gas_ref = get_gas_object_with_wallet_context(context, &sender)
+    let gas_ref = context
+        .get_one_gas_object_owned_by_address(sender)
         .await
-        .expect("Expect at least one available gas object");
+        .unwrap()
+        .unwrap();
     let nft_transfer_tx = make_transfer_object_transaction_with_wallet_context(
         object_ref_v1,
         gas_ref,
