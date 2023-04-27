@@ -113,8 +113,3 @@ const withdraw = async () => {
 ```
 
 </details>
-
-
-
-You can find functionality for all the other aspects 
-like withdrawing from transfer policies, locking, 
