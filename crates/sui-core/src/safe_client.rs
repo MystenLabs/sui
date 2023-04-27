@@ -362,7 +362,42 @@ where
         })
     }
 
+    fn verify_certificate_response_v2(
+        &self,
+        digest: &TransactionDigest,
+        response: HandleCertificateResponseV2,
+    ) -> SuiResult<HandleCertificateResponseV2> {
+        Ok(HandleCertificateResponseV2 {
+            signed_effects: self.check_signed_effects_plain(
+                digest,
+                response.signed_effects,
+                None,
+            )?,
+            events: response.events,
+            objects: response.objects,
+        })
+    }
+
     /// Execute a certificate.
+    pub async fn handle_certificate_v2(
+        &self,
+        certificate: CertifiedTransaction,
+    ) -> Result<HandleCertificateResponseV2, SuiError> {
+        let digest = *certificate.digest();
+        let _timer = self.metrics.handle_certificate_latency.start_timer();
+        let response = self
+            .authority_client
+            .handle_certificate_v2(certificate)
+            .await?;
+
+        let verified = check_error!(
+            self.address,
+            self.verify_certificate_response_v2(&digest, response),
+            "Client error in handle_certificate"
+        )?;
+        Ok(verified)
+    }
+
     pub async fn handle_certificate(
         &self,
         certificate: CertifiedTransaction,
@@ -380,13 +415,6 @@ where
             "Client error in handle_certificate"
         )?;
         Ok(verified)
-    }
-
-    pub async fn handle_certificate_v2(
-        &self,
-        certificate: CertifiedTransaction,
-    ) -> Result<HandleCertificateResponseV2, SuiError> {
-        todo!()
     }
 
     pub async fn handle_object_info_request(

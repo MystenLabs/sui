@@ -31,6 +31,12 @@ pub trait AuthorityAPI {
         certificate: CertifiedTransaction,
     ) -> Result<HandleCertificateResponse, SuiError>;
 
+    /// Execute a certificate.
+    async fn handle_certificate_v2(
+        &self,
+        certificate: CertifiedTransaction,
+    ) -> Result<HandleCertificateResponseV2, SuiError>;
+
     /// Handle Object information requests for this account.
     async fn handle_object_info_request(
         &self,
@@ -107,6 +113,18 @@ impl AuthorityAPI for NetworkAuthorityClient {
     ) -> Result<HandleCertificateResponse, SuiError> {
         self.client()
             .handle_certificate(certificate)
+            .await
+            .map(tonic::Response::into_inner)
+            .map_err(Into::into)
+    }
+
+    /// Execute a certificate.
+    async fn handle_certificate_v2(
+        &self,
+        certificate: CertifiedTransaction,
+    ) -> Result<HandleCertificateResponseV2, SuiError> {
+        self.client()
+            .handle_certificate_v2(certificate)
             .await
             .map(tonic::Response::into_inner)
             .map_err(Into::into)

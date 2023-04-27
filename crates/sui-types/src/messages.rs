@@ -2167,6 +2167,15 @@ pub struct HandleCertificateResponse {
     pub events: TransactionEvents,
 }
 
+impl From<HandleCertificateResponseV2> for HandleCertificateResponse {
+    fn from(v2: HandleCertificateResponseV2) -> Self {
+        Self {
+            signed_effects: v2.signed_effects,
+            events: v2.events,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct HandleCertificateResponseV2 {
     pub signed_effects: SignedTransactionEffects,
