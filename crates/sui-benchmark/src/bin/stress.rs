@@ -203,10 +203,14 @@ async fn main() -> Result<()> {
                         let serialized = serde_json::to_string(&benchmark_stats)?;
                         std::fs::write(curr_benchmark_stats_path, serialized)?;
                     }
+                    let num_error_txes = benchmark_stats.num_error_txes;
+                    if num_error_txes > 0 {
+                        return Err(anyhow!("{} transactions ended in an error", num_error_txes));
+                    }
                 }
-                Err(e) => eprintln!("{e}"),
+                Err(e) => return Err(anyhow!("{e}")),
             },
-            Err(e) => eprintln!("{e:?}"),
+            Err(e) => return Err(anyhow!("{e:?}")),
         }
         Ok(())
     }

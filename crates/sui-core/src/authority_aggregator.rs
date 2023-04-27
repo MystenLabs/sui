@@ -1530,7 +1530,7 @@ where
         let timeout_after_quorum = self.timeouts.post_quorum_timeout;
 
         let cert_ref = certificate;
-        let threshold = self.committee.quorum_threshold();
+        let _threshold = self.committee.quorum_threshold();
         let validity = self.committee.validity_threshold();
 
         // info!(
@@ -1542,7 +1542,7 @@ where
         //     "Broadcasting certificate to authorities"
         // );
         // TODO: We show the below messages for debugging purposes re. incident #267. When this is fixed, we should remove them again.
-        let cert_bytes = fastcrypto::encoding::Base64::encode(bcs::to_bytes(&cert_ref).unwrap());
+        let _cert_bytes = fastcrypto::encoding::Base64::encode(bcs::to_bytes(&cert_ref).unwrap());
         // info!(
         //     ?tx_digest,
         //     ?cert_bytes,
