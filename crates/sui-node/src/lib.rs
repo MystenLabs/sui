@@ -316,7 +316,6 @@ impl SuiNode {
                     path,
                     object_store_config,
                     60,
-                    checkpoint_store.clone(),
                     db_checkpoint_config
                         .prune_and_compact_before_upload
                         .unwrap_or(true),

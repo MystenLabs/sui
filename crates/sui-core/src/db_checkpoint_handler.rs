@@ -26,6 +26,7 @@ use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::Sender;
 use tracing::{debug, error, info};
+use typed_store::rocks::MetricConf;
 use url::Url;
 
 pub const SUCCESS_MARKER: &str = "_SUCCESS";
@@ -43,8 +44,6 @@ pub struct DBCheckpointHandler {
     interval: Duration,
     /// File markers which signal that local db checkpoint can be garbage collected
     gc_markers: Vec<String>,
-    /// Checkpoint store
-    checkpoint_store: Arc<CheckpointStore>,
     /// Boolean flag to enable/disable object pruning and manual compaction before upload
     prune_and_compact_before_upload: bool,
     /// Indirect object config for pruner
@@ -56,7 +55,6 @@ impl DBCheckpointHandler {
         input_path: &std::path::Path,
         output_object_store_config: &ObjectStoreConfig,
         interval_s: u64,
-        checkpoint_store: Arc<CheckpointStore>,
         prune_and_compact_before_upload: bool,
         indirect_objects_threshold: usize,
     ) -> Result<Self> {
@@ -71,7 +69,6 @@ impl DBCheckpointHandler {
             output_object_store: output_object_store_config.make()?,
             interval: Duration::from_secs(interval_s),
             gc_markers: vec![UPLOAD_COMPLETED_MARKER.to_string()],
-            checkpoint_store,
             prune_and_compact_before_upload,
             indirect_objects_threshold,
         })
@@ -80,7 +77,6 @@ impl DBCheckpointHandler {
         input_object_store_config: &ObjectStoreConfig,
         output_object_store_config: &ObjectStoreConfig,
         interval_s: u64,
-        checkpoint_store: Arc<CheckpointStore>,
         prune_and_compact_before_upload: bool,
     ) -> Result<Self> {
         Ok(DBCheckpointHandler {
@@ -93,7 +89,6 @@ impl DBCheckpointHandler {
             output_object_store: output_object_store_config.make()?,
             interval: Duration::from_secs(interval_s),
             gc_markers: vec![UPLOAD_COMPLETED_MARKER.to_string(), TEST_MARKER.to_string()],
-            checkpoint_store,
             prune_and_compact_before_upload,
             indirect_objects_threshold: 0,
         })
@@ -118,6 +113,12 @@ impl DBCheckpointHandler {
     }
     async fn prune_and_compact(&self, db_path: PathBuf, epoch: u32) -> Result<()> {
         let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path.join("store"), None));
+        let checkpoint_store = Arc::new(CheckpointStore::open_tables_read_write(
+            db_path.join("checkpoints"),
+            MetricConf::default(),
+            None,
+            None,
+        ));
         let config = AuthorityStorePruningConfig {
             num_epochs_to_retain: 0,
             ..Default::default()
@@ -130,7 +131,7 @@ impl DBCheckpointHandler {
         );
         AuthorityStorePruner::prune_objects_for_eligible_epochs(
             &perpetual_db,
-            &self.checkpoint_store,
+            &checkpoint_store,
             &lock_table,
             config,
             metrics,
@@ -292,11 +293,9 @@ impl DBCheckpointHandler {
 
 #[cfg(test)]
 mod tests {
-    use crate::checkpoints::CheckpointStore;
     use crate::db_checkpoint_handler::{
         DBCheckpointHandler, SUCCESS_MARKER, TEST_MARKER, UPLOAD_COMPLETED_MARKER,
     };
-    use narwhal_test_utils::temp_dir;
     use std::fs;
     use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
     use tempfile::TempDir;
@@ -330,14 +329,10 @@ mod tests {
             directory: Some(remote_checkpoint_dir_path.to_path_buf()),
             ..Default::default()
         };
-        // Create a temporary checkpoint store to initialize the db checkpoint handler, we are not
-        // actually going to trigger pruning in the test
-        let checkpoint_store = CheckpointStore::new(&temp_dir());
         let db_checkpoint_handler = DBCheckpointHandler::new_for_test(
             &input_store_config,
             &output_store_config,
             10,
-            checkpoint_store,
             false,
         )?;
         let local_checkpoints_by_epoch = db_checkpoint_handler
@@ -398,14 +393,10 @@ mod tests {
             directory: Some(remote_checkpoint_dir_path.to_path_buf()),
             ..Default::default()
         };
-        // Create a temporary checkpoint store to initialize the db checkpoint handler, we are not
-        // actually going to trigger pruning in the test
-        let checkpoint_store = CheckpointStore::new(&temp_dir());
         let db_checkpoint_handler = DBCheckpointHandler::new_for_test(
             &input_store_config,
             &output_store_config,
             10,
-            checkpoint_store,
             false,
         )?;
 
