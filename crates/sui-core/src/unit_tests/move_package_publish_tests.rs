@@ -391,7 +391,7 @@ async fn test_publish_extraneous_bytes_modules() {
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
     let mut modules = correct_modules.clone();
     let new_bytes = {
-        let mut m = CompiledModule::deserialize(&modules[0]).unwrap();
+        let mut m = CompiledModule::deserialize_with_defaults(&modules[0]).unwrap();
         m.metadata.push(move_core_types::metadata::Metadata {
             key: vec![0],
             value: vec![1],

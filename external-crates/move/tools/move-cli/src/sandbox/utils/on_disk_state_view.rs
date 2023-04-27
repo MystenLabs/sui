@@ -249,7 +249,7 @@ impl OnDiskStateView {
                 let module: CompiledModule;
                 let script: CompiledScript;
                 let view = if is_module {
-                    module = CompiledModule::deserialize(&bytes)
+                    module = CompiledModule::deserialize_with_defaults(&bytes)
                         .map_err(|e| anyhow!("Failure deserializing module: {:?}", e))?;
                     BinaryIndexedView::Module(&module)
                 } else {
@@ -393,7 +393,7 @@ impl OnDiskStateView {
     pub fn get_all_modules(&self) -> Result<Vec<CompiledModule>> {
         self.module_paths()
             .map(|path| {
-                CompiledModule::deserialize(&Self::get_bytes(&path)?.unwrap())
+                CompiledModule::deserialize_with_defaults(&Self::get_bytes(&path)?.unwrap())
                     .map_err(|e| anyhow!("Failed to deserialized module: {:?}", e))
             })
             .collect::<Result<Vec<CompiledModule>>>()

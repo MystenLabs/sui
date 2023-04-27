@@ -46,7 +46,7 @@ fn malformed_simple_versioned_test(version: u32) {
     let mut binary = BinaryConstants::MOVE_MAGIC.to_vec();
     binary.extend(version.to_le_bytes()); // version
     binary.push(0); // table count
-    let res = CompiledModule::deserialize(&binary);
+    let res = CompiledModule::deserialize_with_defaults(&binary);
     assert_eq!(
         res.expect_err("Expected no table count").major_status(),
         StatusCode::MALFORMED
@@ -56,7 +56,7 @@ fn malformed_simple_versioned_test(version: u32) {
     let mut binary = BinaryConstants::MOVE_MAGIC.to_vec();
     binary.extend(version.to_le_bytes()); // version
     binary.push(10); // table count
-    let res = CompiledModule::deserialize(&binary);
+    let res = CompiledModule::deserialize_with_defaults(&binary);
     assert_eq!(
         res.expect_err("Expected no table header").major_status(),
         StatusCode::MALFORMED
@@ -82,7 +82,7 @@ fn malformed_simple_versioned_test(version: u32) {
     binary.push(1); // table type
     binary.push(100); // bad table offset
     binary.push(10); // table length
-    let res = CompiledModule::deserialize(&binary);
+    let res = CompiledModule::deserialize_with_defaults(&binary);
     assert_eq!(
         res.expect_err("Expected bad table offset").major_status(),
         StatusCode::BAD_HEADER_TABLE
@@ -99,7 +99,7 @@ fn malformed_simple_versioned_test(version: u32) {
     binary.push(100); // bad table offset
     binary.push(10); // table length
     binary.resize(binary.len() + 5000, 0);
-    let res = CompiledModule::deserialize(&binary);
+    let res = CompiledModule::deserialize_with_defaults(&binary);
     assert_eq!(
         res.expect_err("Expected bad table offset").major_status(),
         StatusCode::BAD_HEADER_TABLE
@@ -127,7 +127,7 @@ fn malformed_simple_versioned_test(version: u32) {
     binary.push(0); // table offset
     binary.push(10); // table length
     binary.resize(binary.len() + 10, 0);
-    let res = CompiledModule::deserialize(&binary);
+    let res = CompiledModule::deserialize_with_defaults(&binary);
     assert_eq!(
         res.expect_err("Expected unknown table").major_status(),
         StatusCode::UNKNOWN_TABLE_TYPE

@@ -34,7 +34,7 @@ impl CompiledScript {
 
 impl CompiledModule {
     /// Deserialize a &[u8] slice into a `CompiledModule` instance.
-    pub fn deserialize(binary: &[u8]) -> BinaryLoaderResult<Self> {
+    pub fn deserialize_with_defaults(binary: &[u8]) -> BinaryLoaderResult<Self> {
         Self::deserialize_with_config(
             binary,
             VERSION_MAX,

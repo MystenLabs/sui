@@ -32,6 +32,7 @@ const MAX_PROTOCOL_VERSION: u64 = 9;
 // Version 8: Disallow changing abilities and type constraints for type parameters in structs
 //            during upgrades.
 // Version 9: Limit the length of Move idenfitiers to 128.
+//            Disallow extraneous module bytes.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1119,13 +1120,13 @@ impl ProtocolConfig {
                 let mut cfg = Self::get_for_version_impl(version - 1);
                 cfg.feature_flags
                     .disallow_change_struct_type_params_on_upgrade = true;
-                cfg.feature_flags.no_extraneous_module_bytes = true;
                 cfg
             }
             9 => {
                 let mut cfg = Self::get_for_version_impl(version - 1);
                 // Limits the length of a Move identifier
                 cfg.max_move_identifier_len = Some(128);
+                cfg.feature_flags.no_extraneous_module_bytes = true;
                 cfg
             }
             // Use this template when making changes:

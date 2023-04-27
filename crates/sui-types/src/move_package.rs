@@ -492,7 +492,7 @@ impl MovePackage {
     /// `MovePackage::id()` in the case of package upgrades).
     pub fn original_package_id(&self) -> ObjectID {
         let bytes = self.module_map.values().next().expect("Empty module map");
-        let module = CompiledModule::deserialize(bytes)
+        let module = CompiledModule::deserialize_with_defaults(bytes)
             .expect("A Move package contains a module that cannot be deserialized");
         (*module.address()).into()
     }
@@ -610,7 +610,7 @@ where
     for bytecode in modules {
         // this function is only from JSON RPC - it is OK to deserialize with max Move binary
         // version
-        let module = CompiledModule::deserialize(bytecode).map_err(|error| {
+        let module = CompiledModule::deserialize_with_defaults(bytecode).map_err(|error| {
             SuiError::ModuleDeserializationFailure {
                 error: error.to_string(),
             }

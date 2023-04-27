@@ -54,7 +54,7 @@ impl SystemPackage {
     pub fn modules(&self) -> Vec<CompiledModule> {
         self.bytes
             .iter()
-            .map(|b| CompiledModule::deserialize(b).unwrap())
+            .map(|b| CompiledModule::deserialize_with_defaults(b).unwrap())
             .collect()
     }
 

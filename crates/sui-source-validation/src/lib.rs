@@ -277,7 +277,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
         for (storage_id, pkg) in addresses.zip(resp) {
             let SuiRawMovePackage { module_map, .. } = pkg?;
             for (name, bytes) in module_map {
-                let Ok(module) = CompiledModule::deserialize(&bytes) else {
+                let Ok(module) = CompiledModule::deserialize_with_defaults(&bytes) else {
                     err.push(SourceVerificationError::OnChainDependencyDeserializationError {
                         address: storage_id,
                         module: name.into(),
