@@ -27,6 +27,7 @@ use move_vm_types::loaded_data::runtime_types::{StructType, Type};
 use serde::{de::DeserializeSeed, Deserialize};
 use sui_move_natives::object_runtime::ObjectRuntime;
 use sui_protocol_config::ProtocolConfig;
+use sui_types::execution_status::{CommandArgumentError, PackageUpgradeError};
 use sui_types::{
     base_types::{
         MoveObjectType, ObjectID, SuiAddress, TxContext, TxContextKind, RESOLVED_ASCII_STR,
@@ -37,10 +38,7 @@ use sui_types::{
     event::Event,
     gas::{SuiGasStatus, SuiGasStatusAPI},
     id::{RESOLVED_SUI_ID, UID},
-    messages::{
-        Argument, Command, CommandArgumentError, PackageUpgradeError, ProgrammableMoveCall,
-        ProgrammableTransaction,
-    },
+    messages::{Argument, Command, ProgrammableMoveCall, ProgrammableTransaction},
     metrics::LimitsMetrics,
     move_package::{
         normalize_deserialized_modules, MovePackage, TypeOrigin, UpgradeCap, UpgradePolicy,
@@ -926,7 +924,7 @@ struct LoadedFunctionInfo {
     signature: LoadedFunctionInstantiation,
     /// Object or type information for the return values
     return_value_kinds: Vec<ValueKind>,
-    /// Definitio index of the function
+    /// Definition index of the function
     index: FunctionDefinitionIndex,
     /// The length of the function used for setting error information, or 0 if native
     last_instr: CodeOffset,

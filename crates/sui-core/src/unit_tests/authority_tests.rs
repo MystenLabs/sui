@@ -34,6 +34,7 @@ use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::epoch_data::EpochData;
 use sui_types::error::UserInputError;
+use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::gas::SuiCostTable;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::Data;

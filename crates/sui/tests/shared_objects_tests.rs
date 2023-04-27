@@ -6,8 +6,7 @@ use std::time::{Duration, SystemTime};
 use sui_core::authority_client::AuthorityAPI;
 use sui_core::consensus_adapter::position_submit_certificate;
 use sui_types::messages::{
-    CallArg, CommandArgumentError, ExecutionFailureStatus, ExecutionStatus, ObjectArg,
-    ObjectInfoRequest, TransactionEffectsAPI, TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    CallArg, ObjectArg, ObjectInfoRequest, TransactionEffectsAPI, TEST_ONLY_GAS_UNIT_FOR_GENERIC,
 };
 use test_utils::authority::get_client;
 use test_utils::transaction::{
@@ -20,6 +19,7 @@ use test_utils::{
 
 use sui_macros::sim_test;
 use sui_types::event::Event;
+use sui_types::execution_status::{CommandArgumentError, ExecutionFailureStatus, ExecutionStatus};
 use sui_types::object::{generate_test_gas_objects, Object};
 use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION};
 

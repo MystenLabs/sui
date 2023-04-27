@@ -5,7 +5,7 @@
 use crate::{
     base_types::*,
     committee::{Committee, EpochId, StakeUnit},
-    messages::{CommandIndex, ExecutionFailureStatus},
+    messages::CommandIndex,
     object::Owner,
 };
 
@@ -36,6 +36,7 @@ macro_rules! fp_ensure {
     };
 }
 use crate::digests::TransactionEventsDigest;
+use crate::execution_status::ExecutionFailureStatus;
 pub(crate) use fp_ensure;
 
 #[macro_export]

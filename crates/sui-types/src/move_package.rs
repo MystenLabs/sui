@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::execution_status::PackageUpgradeError;
 use crate::{
     base_types::{ObjectID, SequenceNumber},
     crypto::DefaultHash,
     error::{ExecutionError, ExecutionErrorKind, SuiError, SuiResult},
     id::{ID, UID},
-    messages::PackageUpgradeError,
     object::OBJECT_START_VERSION,
     SUI_FRAMEWORK_ADDRESS,
 };
