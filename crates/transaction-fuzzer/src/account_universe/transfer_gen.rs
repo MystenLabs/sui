@@ -28,6 +28,7 @@ use sui_types::{
 };
 
 const GAS_UNIT_PRICE: u64 = 2;
+const DEAFULT_TRANSFER_AMOUNT: u64 = 1;
 const P2P_COMPUTE_GAS_USAGE: u64 = 1000;
 const P2P_SUCCESS_STORAGE_USAGE: u64 = 1976000;
 const P2P_FAILURE_STORAGE_USAGE: u64 = 988000;
@@ -69,6 +70,14 @@ pub struct P2PTransferGenRandomGasRandomPrice {
     #[proptest(strategy = "gas_budget_selection_strategy()")]
     gas: u64,
     #[proptest(strategy = "gas_price_selection_strategy()")]
+    gas_price: u64,
+}
+
+#[derive(Arbitrary, Clone, Debug)]
+#[proptest(params = "(u64, u64)")]
+pub struct P2PTransferGenGasPriceInRange {
+    sender_receiver: AccountPairGen,
+    #[proptest(strategy = "params.0 ..= params.1")]
     gas_price: u64,
 }
 
@@ -279,6 +288,24 @@ impl AUTransactionGen for P2PTransferGenRandomGas {
     }
 }
 
+impl AUTransactionGen for P2PTransferGenGasPriceInRange {
+    fn apply(
+        &self,
+        universe: &mut AccountUniverse,
+        exec: &mut Executor,
+    ) -> (VerifiedTransaction, ExecutionResult) {
+        P2PTransferGenRandomGasRandomPriceRandomSponsorship {
+            sender_receiver: self.sender_receiver.clone(),
+            amount: DEAFULT_TRANSFER_AMOUNT,
+            gas: p2p_success_gas(self.gas_price),
+            gas_price: self.gas_price,
+            gas_coins: 1,
+            sponsorship: TransactionSponsorship::None,
+        }
+        .apply(universe, exec)
+    }
+}
+
 impl AUTransactionGen for P2PTransferGenRandomGasRandomPrice {
     fn apply(
         &self,
@@ -334,6 +361,7 @@ struct RunInfo {
 impl RunInfo {
     pub fn new(
         payer_balance: u64,
+        rgp: u64,
         p2p: &P2PTransferGenRandomGasRandomPriceRandomSponsorship,
     ) -> Self {
         let to_deduct = p2p.amount as u128 + p2p.gas as u128;
@@ -343,7 +371,7 @@ impl RunInfo {
         let gas_budget_too_high = p2p.gas > PROTOCOL_CONFIG.max_tx_gas();
         let gas_budget_too_low = p2p.gas < PROTOCOL_CONFIG.base_tx_cost_fixed();
         let not_enough_gas = p2p.gas < p2p_success_gas(p2p.gas_price);
-        let gas_price_too_low = p2p.gas_price < 1;
+        let gas_price_too_low = p2p.gas_price < rgp;
         let gas_price_too_high = p2p.gas_price >= PROTOCOL_CONFIG.max_gas_price();
         let gas_price_greater_than_budget = p2p.gas_price > p2p.gas;
         let gas_units_too_low = p2p.gas_price > 0
@@ -403,7 +431,7 @@ impl AUTransactionGen for P2PTransferGenRandomGasRandomPriceRandomSponsorship {
         let signed_txn = self.sponsorship.sign_transaction(&account_triple, tx_data);
         let payer = self.sponsorship.sponsor(&mut account_triple);
         // *sender.current_balances.last().unwrap();
-        let run_info = RunInfo::new(gas_balance, self);
+        let run_info = RunInfo::new(gas_balance, exec.get_reference_gas_price(), self);
         let status = match run_info {
             RunInfo {
                 enough_max_gas: true,
@@ -436,7 +464,7 @@ impl AUTransactionGen for P2PTransferGenRandomGasRandomPriceRandomSponsorship {
             } => Err(SuiError::UserInputError {
                 error: UserInputError::GasPriceUnderRGP {
                     gas_price: self.gas_price,
-                    reference_gas_price: 1,
+                    reference_gas_price: exec.get_reference_gas_price(),
                 },
             }),
             RunInfo {
