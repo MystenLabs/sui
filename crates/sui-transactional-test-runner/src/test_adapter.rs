@@ -32,6 +32,7 @@ use move_transactional_test_runner::{
 use move_vm_runtime::{move_vm::MoveVM, session::SerializedReturnValues};
 use once_cell::sync::Lazy;
 use rand::{rngs::StdRng, Rng, SeedableRng};
+use std::collections::HashSet;
 use std::fmt::{self, Write};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -1004,6 +1005,7 @@ impl<'a> SuiTestAdapter<'a> {
             &self.protocol_config,
             self.metrics.clone(),
             false, // enable_expensive_checks
+            &HashSet::new(),
         );
         let mut created_ids: Vec<_> = effects
             .created()
