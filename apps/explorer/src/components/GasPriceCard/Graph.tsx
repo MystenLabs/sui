@@ -73,17 +73,20 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
             const selectedEpoch = adjData[epochIndex];
             setTooltipX(x);
             setHoveredElement(selectedEpoch);
+            setIsTooltipVisible(true);
         },
         [xScale, adjData]
     );
-    const handleTooltipThrottledRef = useRef(throttle(100, handleTooltip));
+    const [handleTooltipThrottled, setHandleTooltipThrottled] =
+        useState<ReturnType<typeof throttle>>();
+    const handleTooltipThrottledRef = useRef<ReturnType<typeof throttle>>();
     useEffect(() => {
         handleTooltipThrottledRef.current = throttle(100, handleTooltip);
+        setHandleTooltipThrottled(() => handleTooltipThrottledRef.current);
         return () => {
             handleTooltipThrottledRef?.current?.cancel?.();
         };
     }, [handleTooltip]);
-    const handleTooltipThrottled = handleTooltipThrottledRef.current;
     const totalDays = useMemo(() => {
         const domain = xScale.domain();
         return Math.floor(
@@ -102,8 +105,8 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
                 x2={0}
                 y2={graphButton + 10}
                 className={clsx(
-                    'stroke-gray-60 transition-all duration-75',
-                    isTooltipVisible ? 'visible' : 'invisible'
+                    'stroke-gray-60 transition-opacity duration-75',
+                    isTooltipVisible ? 'opacity-100' : 'opacity-0'
                 )}
                 strokeWidth="1"
                 transform={`translate(${tooltipX})`}
@@ -139,14 +142,13 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
                 fill="transparent"
                 stroke="none"
                 onMouseEnter={(e) => {
-                    handleTooltipThrottled(localPoint(e)?.x || SIDE_MARGIN);
-                    setIsTooltipVisible(true);
+                    handleTooltipThrottled?.(localPoint(e)?.x || SIDE_MARGIN);
                 }}
                 onMouseMove={(e) => {
-                    handleTooltipThrottled(localPoint(e)?.x || SIDE_MARGIN);
+                    handleTooltipThrottled?.(localPoint(e)?.x || SIDE_MARGIN);
                 }}
                 onMouseLeave={() => {
-                    handleTooltipThrottled.cancel({ upcomingOnly: true });
+                    handleTooltipThrottled?.cancel({ upcomingOnly: true });
                     setIsTooltipVisible(false);
                     setHoveredElement(null);
                 }}
