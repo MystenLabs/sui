@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 8;
+const MAX_PROTOCOL_VERSION: u64 = 9;
 
 // Record history of protocol version allocations here:
 //
@@ -31,6 +31,7 @@ const MAX_PROTOCOL_VERSION: u64 = 8;
 //            hash module bytes individually before computing package digest.
 // Version 8: Disallow changing abilities and type constraints for type parameters in structs
 //            during upgrades.
+// Version 9: Limit the length of Move idenfitiers to 128.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -330,6 +331,9 @@ pub struct ProtocolConfig {
 
     /// Maximum length of a vector in Move. Enforced by the VM during execution, and for constants, by the verifier.
     max_move_vector_len: Option<u64>,
+
+    /// Maximum length of an `Identifier` in Move. Enforced by the bytecode verifier at signing.
+    max_move_identifier_len: Option<u64>,
 
     /// Maximum number of back edges in Move function. Enforced by the bytecode verifier at signing.
     max_back_edges_per_function: Option<u64>,
@@ -701,6 +705,12 @@ impl ProtocolConfig {
     pub fn max_size_written_objects_system_tx_as_option(&self) -> Option<u64> {
         self.max_size_written_objects_system_tx
     }
+
+    /// We don't want to use the default getter which unwraps and could panic.
+    /// Instead we want to be able to selectively fetch this value
+    pub fn max_move_identifier_len_as_option(&self) -> Option<u64> {
+        self.max_move_identifier_len
+    }
 }
 
 #[cfg(not(msim))]
@@ -1034,6 +1044,9 @@ impl ProtocolConfig {
                 scoring_decision_mad_divisor: None,
                 scoring_decision_cutoff_value: None,
 
+              // Limits the length of a Move identifier
+              max_move_identifier_len: None,
+
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
             },
@@ -1099,6 +1112,12 @@ impl ProtocolConfig {
                 let mut cfg = Self::get_for_version_impl(version - 1);
                 cfg.feature_flags
                     .disallow_change_struct_type_params_on_upgrade = true;
+                cfg
+            }
+            9 => {
+                let mut cfg = Self::get_for_version_impl(version - 1);
+                // Limits the length of a Move identifier
+                cfg.max_move_identifier_len = Some(128);
                 cfg
             }
             // Use this template when making changes:

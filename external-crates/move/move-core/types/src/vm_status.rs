@@ -617,6 +617,7 @@ pub enum StatusCode {
     RESERVED_VERIFICATION_ERROR_5 = 1127,
 
     TOO_MANY_VECTOR_ELEMENTS = 1128,
+    IDENTIFIER_TOO_LONG = 1129,
 
     // These are errors that the VM might raise if a violation of internal
     // invariants takes place.
