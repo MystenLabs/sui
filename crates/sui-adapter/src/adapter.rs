@@ -90,6 +90,7 @@ pub fn default_verifier_config(
         max_basic_blocks_in_script: None,
         max_per_fun_meter_units,
         max_per_mod_meter_units,
+        max_idenfitier_len: protocol_config.max_move_identifier_len_as_option() // Before protocol version 9, there was no limit
     }
 }
 

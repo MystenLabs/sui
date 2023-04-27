@@ -1,9 +1,11 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::unit_tests::production_config;
 use move_binary_format::file_format::*;
 use move_bytecode_verifier::{
-    limits::LimitsVerifier, verify_module_with_config_for_test, VerifierConfig,
+    limits::LimitsVerifier, verifier::DEFAULT_MAX_IDENTIFIER_LENGTH,
+    verify_module_with_config_for_test, VerifierConfig,
 };
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, vm_status::StatusCode,
@@ -586,6 +588,58 @@ fn max_mixed_config_test() {
     assert_eq!(
         res.unwrap_err().major_status(),
         StatusCode::MAX_FUNCTION_DEFINITIONS_REACHED,
+    );
+}
+
+#[test]
+fn max_identifier_len() {
+    let config = production_config();
+    let max_ident = "z".repeat(
+        config
+            .max_idenfitier_len
+            .unwrap_or(DEFAULT_MAX_IDENTIFIER_LENGTH) as usize,
+    );
+    let good_module = leaf_module(&max_ident);
+
+    let res = LimitsVerifier::verify_module(&config, &good_module);
+    assert!(res.is_ok());
+
+    let config = production_config();
+    let max_ident = "z".repeat(
+        (config
+            .max_idenfitier_len
+            .unwrap_or(DEFAULT_MAX_IDENTIFIER_LENGTH) as usize)
+            / 2,
+    );
+    let good_module = leaf_module(&max_ident);
+
+    let res = LimitsVerifier::verify_module(&config, &good_module);
+    assert!(res.is_ok());
+
+    let over_max_ident = "z".repeat(
+        1 + config
+            .max_idenfitier_len
+            .unwrap_or(DEFAULT_MAX_IDENTIFIER_LENGTH) as usize,
+    );
+    let bad_module = leaf_module(&over_max_ident);
+    let res = LimitsVerifier::verify_module(&config, &bad_module);
+
+    assert_eq!(
+        res.unwrap_err().major_status(),
+        StatusCode::IDENTIFIER_TOO_LONG,
+    );
+
+    let over_max_ident = "zx".repeat(
+        1 + config
+            .max_idenfitier_len
+            .unwrap_or(DEFAULT_MAX_IDENTIFIER_LENGTH) as usize,
+    );
+    let bad_module = leaf_module(&over_max_ident);
+    let res = LimitsVerifier::verify_module(&config, &bad_module);
+
+    assert_eq!(
+        res.unwrap_err().major_status(),
+        StatusCode::IDENTIFIER_TOO_LONG,
     );
 }
 

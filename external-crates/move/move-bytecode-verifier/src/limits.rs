@@ -33,6 +33,7 @@ impl<'a> LimitsVerifier<'a> {
         limit_check.verify_function_handles(config)?;
         limit_check.verify_struct_handles(config)?;
         limit_check.verify_type_nodes(config)?;
+        limit_check.verify_identifiers(config)?;
         limit_check.verify_definitions(config)
     }
 
@@ -196,6 +197,22 @@ impl<'a> LimitsVerifier<'a> {
                     return Err(verification_error(
                         StatusCode::INVALID_CONSTANT_TYPE,
                         IndexKind::ConstantPool,
+                        idx as TableIndex,
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Verifies the lengths of all identifers are valid
+    fn verify_identifiers(&self, config: &VerifierConfig) -> PartialVMResult<()> {
+        if let Some(max_idenfitier_len) = config.max_idenfitier_len {
+            for (idx, identifier) in self.resolver.identifiers().iter().enumerate() {
+                if identifier.len() > (max_idenfitier_len as usize) {
+                    return Err(verification_error(
+                        StatusCode::IDENTIFIER_TOO_LONG,
+                        IndexKind::Identifier,
                         idx as TableIndex,
                     ));
                 }

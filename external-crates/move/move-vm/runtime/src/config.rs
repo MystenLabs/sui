@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::file_format_common::VERSION_MAX;
-use move_bytecode_verifier::{verifier::MAX_CONSTANT_VECTOR_LEN, VerifierConfig};
+use move_bytecode_verifier::{verifier::DEFAULT_MAX_CONSTANT_VECTOR_LEN, VerifierConfig};
 
 /// Dynamic config options for the Move VM.
 pub struct VMConfig {
@@ -36,7 +36,7 @@ pub struct VMRuntimeLimitsConfig {
 impl Default for VMRuntimeLimitsConfig {
     fn default() -> Self {
         Self {
-            vector_len_max: MAX_CONSTANT_VECTOR_LEN,
+            vector_len_max: DEFAULT_MAX_CONSTANT_VECTOR_LEN,
         }
     }
 }
