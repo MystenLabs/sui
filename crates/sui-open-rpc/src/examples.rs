@@ -336,7 +336,7 @@ impl RpcExampleProvider {
         let page = (0..4)
             .map(|idx| Checkpoint {
                 epoch: 5000,
-                sequence_number: seq+1+idx,
+                sequence_number: seq + 1 + idx,
                 digest: CheckpointDigest::new(self.rng.gen()),
                 network_total_transactions: 792385,
                 previous_digest: Some(CheckpointDigest::new(self.rng.gen())),
@@ -347,7 +347,7 @@ impl RpcExampleProvider {
                 checkpoint_commitments: vec![],
                 validator_signature: AggregateAuthoritySignature::default(),
             })
-        .collect::<Vec<_>>();
+            .collect::<Vec<_>>();
         let pagelen = page.len() as u64;
         let result = CheckpointPage {
             data: page,
@@ -654,7 +654,7 @@ impl RpcExampleProvider {
             "suix_getCommitteeInfo",
             vec![ExamplePairing::new(
                 "Get committee information for epoch 5000.",
-                vec![ ("epoch", json!(epoch.to_string()))],
+                vec![("epoch", json!(epoch.to_string()))],
                 json!(suicomm),
             )],
         )
@@ -662,7 +662,7 @@ impl RpcExampleProvider {
 
     fn sui_get_reference_gas_price(&mut self) -> Examples {
         let result = 1000;
-        
+
         Examples::new(
             "suix_getReferenceGasPrice",
             vec![ExamplePairing::new(
@@ -707,7 +707,6 @@ impl RpcExampleProvider {
                 balance: 200000000,
                 //locked_until_epoch: None,
                 previous_transaction: TransactionDigest::new(self.rng.gen()),
-
             })
             .collect::<Vec<_>>();
         let page = CoinPage {
@@ -768,8 +767,8 @@ impl RpcExampleProvider {
                 "Get the metadata for the coin type in the request.",
                 vec![(
                     "coin_type", 
-                    json!("0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC".to_string())),
-                ],
+                    json!("0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC".to_string()),
+                )],
                 json!(result),
             )],
         )
@@ -799,7 +798,6 @@ impl RpcExampleProvider {
                 balance: 200000000,
                 //locked_until_epoch: None,
                 previous_transaction: TransactionDigest::new(self.rng.gen()),
-
             })
             .collect::<Vec<_>>();
 
