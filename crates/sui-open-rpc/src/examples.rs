@@ -19,14 +19,14 @@ use sui_json::SuiJsonValue;
 use sui_json_rpc::error::Error;
 use sui_json_rpc_types::SuiTypeTag;
 use sui_json_rpc_types::{
-    Balance, Checkpoint, CheckpointId, CheckpointPage, EventPage, MoveCallParams, ObjectChange, OwnedObjectRef,
-    RPCTransactionRequestParams, SuiData, SuiEvent, SuiExecutionStatus, SuiObjectData,
-    SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectRef, SuiObjectResponse,
-    SuiObjectResponseQuery, SuiParsedData, SuiPastObjectResponse, SuiTransactionBlock,
-    SuiTransactionBlockData, SuiTransactionBlockEffects, SuiTransactionBlockEffectsV1,
-    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    Balance, Checkpoint, CheckpointId, CheckpointPage, Coin, CoinPage, EventPage, MoveCallParams,
+    ObjectChange, OwnedObjectRef, RPCTransactionRequestParams, SuiCommittee, SuiData, SuiEvent,
+    SuiExecutionStatus, SuiObjectData, SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectRef,
+    SuiObjectResponse, SuiObjectResponseQuery, SuiParsedData, SuiPastObjectResponse,
+    SuiTransactionBlock, SuiTransactionBlockData, SuiTransactionBlockEffects,
+    SuiTransactionBlockEffectsV1, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
     SuiTransactionBlockResponseQuery, TransactionBlockBytes, TransactionBlocksPage,
-    TransferObjectParams, SuiCommittee, Coin, CoinPage,
+    TransferObjectParams,
 };
 use sui_open_rpc::ExamplePairing;
 use sui_types::balance::Supply;
@@ -36,7 +36,7 @@ use sui_types::base_types::{
     TransactionDigest,
 };
 use sui_types::coin::CoinMetadata;
-use sui_types::committee::{Committee};
+use sui_types::committee::Committee;
 use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AggregateAuthoritySignature};
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::event::EventID;
