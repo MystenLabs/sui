@@ -139,7 +139,7 @@
       },
       "examples": [
         {
-          "name": "Execute an transaction with serialized signatures",
+          "name": "Execute a transaction with serialized signatures.",
           "params": [
             {
               "name": "tx_bytes",
@@ -316,7 +316,7 @@
       },
       "examples": [
         {
-          "name": "Get checkpoint",
+          "name": "Get checkpoint information for the checkpoint ID in the request.",
           "params": [
             {
               "name": "id",
@@ -388,7 +388,111 @@
         "schema": {
           "$ref": "#/components/schemas/Page_for_Checkpoint_and_BigInt_for_uint64"
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Get a paginated list in descending order of all checkpoints starting at the provided cursor. Each page of results has a maximum number of checkpoints set by the provided limit.",
+          "params": [
+            {
+              "name": "cursor",
+              "value": "1004"
+            },
+            {
+              "name": "limit",
+              "value": 4
+            },
+            {
+              "name": "descending_order",
+              "value": false
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": {
+              "data": [
+                {
+                  "epoch": "5000",
+                  "sequenceNumber": "1005",
+                  "digest": "BuwtTiJoYef2Po6mYmmWNwMKY3scn3AXPixX17JSj7ec",
+                  "networkTotalTransactions": "792385",
+                  "previousDigest": "27kMxoKi7ZQp6fV1GinA8cdbe6x9iuEuSoXCf9diWpg4",
+                  "epochRollingGasCostSummary": {
+                    "computationCost": "0",
+                    "storageCost": "0",
+                    "storageRebate": "0",
+                    "nonRefundableStorageFee": "0"
+                  },
+                  "timestampMs": "1676911928",
+                  "transactions": [
+                    "E7FY3GzZHyb9YrXc1G5TWgwxSf11o59BxQ3uq9XRUzi8"
+                  ],
+                  "checkpointCommitments": [],
+                  "validatorSignature": "wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                },
+                {
+                  "epoch": "5000",
+                  "sequenceNumber": "1006",
+                  "digest": "Gn3CQbNsDT7pxQQqjs2u344FPVgjy8PVV3N1kRP9jhWa",
+                  "networkTotalTransactions": "792385",
+                  "previousDigest": "GsPDh3rJZzPJ8977gZEf9a5QZo2h7eup7v2ioNk9kvZX",
+                  "epochRollingGasCostSummary": {
+                    "computationCost": "0",
+                    "storageCost": "0",
+                    "storageRebate": "0",
+                    "nonRefundableStorageFee": "0"
+                  },
+                  "timestampMs": "1676911928",
+                  "transactions": [
+                    "AthhkECez6HHQoSts5tqCNi6GsWQbmqr8gPZh5EqfcHP"
+                  ],
+                  "checkpointCommitments": [],
+                  "validatorSignature": "wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                },
+                {
+                  "epoch": "5000",
+                  "sequenceNumber": "1007",
+                  "digest": "26ci3tkYanGG4EnTYky3pRjTajscESPvvJtusfd9MACb",
+                  "networkTotalTransactions": "792385",
+                  "previousDigest": "HsE5ovGGAMCvQT53ykzTosVvcbr3qNQi2ic5RPyCyANn",
+                  "epochRollingGasCostSummary": {
+                    "computationCost": "0",
+                    "storageCost": "0",
+                    "storageRebate": "0",
+                    "nonRefundableStorageFee": "0"
+                  },
+                  "timestampMs": "1676911928",
+                  "transactions": [
+                    "6MQ4CZ7MQQ6svRfnqR58oSLWQbYznqGFuEzhw1n3oZKq"
+                  ],
+                  "checkpointCommitments": [],
+                  "validatorSignature": "wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                },
+                {
+                  "epoch": "5000",
+                  "sequenceNumber": "1008",
+                  "digest": "FLu28Qbjp9dApF1cujWXNS9RoTcmEFzr4LK7VBw6i5Yx",
+                  "networkTotalTransactions": "792385",
+                  "previousDigest": "EscNSizxsxqh71PsvWbLWSxmhqSfcmXNYd1MFhJ1hEZz",
+                  "epochRollingGasCostSummary": {
+                    "computationCost": "0",
+                    "storageCost": "0",
+                    "storageRebate": "0",
+                    "nonRefundableStorageFee": "0"
+                  },
+                  "timestampMs": "1676911928",
+                  "transactions": [
+                    "6ecApRqbEcBv8pwemff6njmj4HBcC2etu3RYWmdQfrZ"
+                  ],
+                  "checkpointCommitments": [],
+                  "validatorSignature": "wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                }
+              ],
+              "nextCursor": "1008",
+              "hasNextPage": true
+            }
+          }
+        }
+      ]
     },
     {
       "name": "sui_getEvents",
@@ -420,7 +524,7 @@
       },
       "examples": [
         {
-          "name": "Return the Events emitted by a transaction",
+          "name": "Return the events the transaction in the request emits.",
           "params": [
             {
               "name": "transaction_digest",
@@ -471,7 +575,17 @@
         "schema": {
           "$ref": "#/components/schemas/BigInt_for_uint64"
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Get the sequence number for the latest checkpoint.",
+          "params": [],
+          "result": {
+            "name": "Result",
+            "value": "507021"
+          }
+        }
+      ]
     },
     {
       "name": "sui_getLoadedChildObjects",
@@ -711,7 +825,7 @@
       },
       "examples": [
         {
-          "name": "Get Object data",
+          "name": "Get Object data for the ID in the request.",
           "params": [
             {
               "name": "object_id",
@@ -778,11 +892,11 @@
       },
       "examples": [
         {
-          "name": "Get total number of transactions",
+          "name": "Get total number of transactions on the network.",
           "params": [],
           "result": {
             "name": "Result",
-            "value": 100
+            "value": "2451485"
           }
         }
       ]
@@ -821,7 +935,7 @@
       },
       "examples": [
         {
-          "name": "Return the transaction response object for specified transaction digest",
+          "name": "Return the transaction response object for specified transaction digest.",
           "params": [
             {
               "name": "digest",
@@ -1081,7 +1195,7 @@
       },
       "examples": [
         {
-          "name": "Get Past Object data",
+          "name": "Get Past Object data.",
           "params": [
             {
               "name": "object_id",
@@ -1201,7 +1315,29 @@
             "$ref": "#/components/schemas/Balance"
           }
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Get all balances for the address in the request.",
+          "params": [
+            {
+              "name": "owner",
+              "value": "0xe4a25ab1250e8d40d270f1bdfb076e697da3d7064ffd121168fea245f41987bb"
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": [
+              {
+                "coinType": "0x2::sui::SUI",
+                "coinObjectCount": 15,
+                "totalBalance": "3000000000",
+                "lockedBalance": {}
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "name": "suix_getAllCoins",
@@ -1243,7 +1379,59 @@
         "schema": {
           "$ref": "#/components/schemas/Page_for_Coin_and_ObjectID"
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Get all coins for the address in the request body. Begin listing the coins that are after the provided `cursor` value and return only the `limit` amount of results per page.",
+          "params": [
+            {
+              "name": "owner",
+              "value": "0x8ed5999079e1d0bc50201d79d05c061f8dde264724ab51a21c752e81c51b2063"
+            },
+            {
+              "name": "cursor",
+              "value": "0x57d828266c36b53865bb5fe48a1f388f5a97d0d8dfe64f09f709f06c32088994"
+            },
+            {
+              "name": "limit",
+              "value": 3
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": {
+              "data": [
+                {
+                  "coinType": "0x2::sui::SUI",
+                  "coinObjectId": "0x0294cbba1d4980fbaf0a4dbfbcc39033d817566297f9de95703e326f7b6c5bb0",
+                  "version": "103626",
+                  "digest": "8R7nCaCDaZPiEvCHkJQBYDFH95q4WspBaXdWTaZ95AHu",
+                  "balance": "200000000",
+                  "previousTransaction": "An1pV7rG2hm1mmoN5ELhebHJh2YXYLhybwyKLHi4pMHW"
+                },
+                {
+                  "coinType": "0x2::sui::SUI",
+                  "coinObjectId": "0x0ed513f80254082f1fadc9347718cef986a866efa6db5c1bd60446af9ce59a85",
+                  "version": "103626",
+                  "digest": "EocxbiEndjvydxtyuq2BrmYG3LS3pTYvncJmKCT3sTkY",
+                  "balance": "200000000",
+                  "previousTransaction": "BRzotf9VWtzyCjpwvWbXgzLhxJFyk8LGTcxjqwnPJjCT"
+                },
+                {
+                  "coinType": "0x2::sui::SUI",
+                  "coinObjectId": "0x6c527fab7c2d096141f5975e3c6bd5c95f041a8493ad7e9934be26e69152d2c2",
+                  "version": "103626",
+                  "digest": "GeJTxsrX8DHxsrwVVy9DED612NnMf9mVbDCPw5A5BqyR",
+                  "balance": "200000000",
+                  "previousTransaction": "BBpGBYzv2CfqqxnHvH2koFrA8fUcerJKWVfaCh74DMoL"
+                }
+              ],
+              "nextCursor": "0x9230e672044bb2b0954ae5935392c72fa08e0e5dfd566e977968fa81937919da",
+              "hasNextPage": true
+            }
+          }
+        }
+      ]
     },
     {
       "name": "suix_getBalance",
@@ -1276,7 +1464,31 @@
         "schema": {
           "$ref": "#/components/schemas/Balance"
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Get the balance of the specified type of coin for the address in the request.",
+          "params": [
+            {
+              "name": "owner",
+              "value": "0xad43a9870a2e587891825debff541cf4e08b5c5f7296ff9840e6f0b185af9398"
+            },
+            {
+              "name": "coin_type",
+              "value": "0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC"
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": {
+              "coinType": "0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC",
+              "coinObjectCount": 15,
+              "totalBalance": "15",
+              "lockedBalance": {}
+            }
+          }
+        }
+      ]
     },
     {
       "name": "suix_getCoinMetadata",
@@ -1301,7 +1513,31 @@
         "schema": {
           "$ref": "#/components/schemas/SuiCoinMetadata"
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Get the metadata for the coin type in the request.",
+          "params": [
+            {
+              "name": "coin_type",
+              "value": "0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC"
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": {
+              "id": {
+                "id": "0x4cde8cf3870302c062944303fab7b475b723f72ea7072ddb502e90be432231b6"
+              },
+              "decimals": 9,
+              "name": "Usdc",
+              "symbol": "USDC",
+              "description": "Stable coin.",
+              "icon_url": null
+            }
+          }
+        }
+      ]
     },
     {
       "name": "suix_getCoins",
@@ -1350,7 +1586,63 @@
         "schema": {
           "$ref": "#/components/schemas/Page_for_Coin_and_ObjectID"
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Get all SUI coins owned by the address provided. Return a paginated list of `limit` results per page. Similar to `suix_getAllCoins`, but provides a way to filter by coin type.",
+          "params": [
+            {
+              "name": "owner",
+              "value": "0xdee1af33100f0e6f7e769678d059761bff8a8f3944642e4c33a6e4fb0b55f8fa"
+            },
+            {
+              "name": "coin_type",
+              "value": "0x2::sui::SUI"
+            },
+            {
+              "name": "cursor",
+              "value": "0xd4a2083747b76856a5a8e30db5a798a7354340b6ea78a66f50921841ab5359ec"
+            },
+            {
+              "name": "limit",
+              "value": 3
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": {
+              "data": [
+                {
+                  "coinType": "0x2::sui::SUI",
+                  "coinObjectId": "0xce36fadaa22f2a0d48a53f22e2e901ea2a5bf44fdd5bb94a1d83b6efc4dd779f",
+                  "version": "103626",
+                  "digest": "aSKFBbCJzVnkvRfM8s4SFRb8nXy1koRJy81BPkmVycs",
+                  "balance": "200000000",
+                  "previousTransaction": "GEuMBLKybrmn5b85BoCrJjUcJvJbvX2wXvnR7HWjn6o5"
+                },
+                {
+                  "coinType": "0x2::sui::SUI",
+                  "coinObjectId": "0x65295231e0d2c7c86867fcc63161269c5c0c73b02229486bbaff319209dfb829",
+                  "version": "103626",
+                  "digest": "BZaQotH3DMRWtK1o2VGnwrXD5cAycfjThBPjNfZnXY2Y",
+                  "balance": "200000000",
+                  "previousTransaction": "DHhRSwt5SM3cnsMmzZYqejMBU6iUsSXJP4VibrFiGgSb"
+                },
+                {
+                  "coinType": "0x2::sui::SUI",
+                  "coinObjectId": "0xd1ec22c06f1ee4e451ceab2edc89f74730e683ebee65578cb3bc9237ba6fca01",
+                  "version": "103626",
+                  "digest": "AybTBN63S6bCc4Ta1Gm2boT6J2SkJNprNwhXXCqxvR23",
+                  "balance": "200000000",
+                  "previousTransaction": "6ut4RrYN5WcG2oPQP6AMTLpMAmxoProJUEDTAZP3V7TQ"
+                }
+              ],
+              "nextCursor": "0xd1ec22c06f1ee4e451ceab2edc89f74730e683ebee65578cb3bc9237ba6fca01",
+              "hasNextPage": true
+            }
+          }
+        }
+      ]
     },
     {
       "name": "suix_getCommitteeInfo",
@@ -1375,7 +1667,42 @@
         "schema": {
           "$ref": "#/components/schemas/CommitteeInfo"
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Get committee information for epoch 5000.",
+          "params": [
+            {
+              "name": "epoch",
+              "value": "5000"
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": {
+              "epoch": "5000",
+              "validators": [
+                [
+                  "jc/20VUECmVvSBmxMRG1LFdGqGunLzlfuv4uw4R9HoFA5iSnUf32tfIFC8cgXPnTAATJCwx0Cv/TJs5nPMKyOi0k1T4q/rKG38Zo/UBgCJ1tKxe3md02+Q0zLlSnozjU",
+                  "2500"
+                ],
+                [
+                  "mfJe9h+AMrkUY2RgmCxcxvE07x3a52ZX8sv+wev8jQlzdAgN9vzw3Li8Sw2OCvXYDrv/K0xZn1T0LWMS38MUJ2B4wcw0fru+xRmL4lhRPzhrkw0CwnSagD4jMJVevRoQ",
+                  "2500"
+                ],
+                [
+                  "rd7vlNiYyI5A297/kcXxBfnPLHR/tvK8N+wD1ske2y4aV4z1RL6LCTHiXyQ9WbDDDZihbOO6HWzx1/UEJpkusK2zE0sFW+gUDS218l+wDYP45CIr8B/WrJOh/0152ljy",
+                  "2500"
+                ],
+                [
+                  "s/1e+1yHJAOkrRPxGZUTYG0jNUqEUkmuoVdWTCP/PBXGyeZSty10DoysuTy8wGhrDsDMDBx2C/tCtDZRn8WoBUt2UzqXqfI5h9CX75ax8lJrsgc/oQp3GZQXcjR+8nT0",
+                  "2500"
+                ]
+              ]
+            }
+          }
+        }
+      ]
     },
     {
       "name": "suix_getDynamicFieldObject",
@@ -1534,7 +1861,17 @@
         "schema": {
           "$ref": "#/components/schemas/BigInt_for_uint64"
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Get reference gas price information for the network.",
+          "params": [],
+          "result": {
+            "name": "Result",
+            "value": 1000
+          }
+        }
+      ]
     },
     {
       "name": "suix_getStakes",
@@ -1619,7 +1956,24 @@
         "schema": {
           "$ref": "#/components/schemas/Supply"
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Get total supply for the type of coin provided.",
+          "params": [
+            {
+              "name": "coin_type",
+              "value": "0x7a3dc01f282420ae0d4dc2f8623f7e6956c4b75a738cf80e869ecbccf96ef8ba::acoin::ACOIN"
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": {
+              "value": "12023692"
+            }
+          }
+        }
+      ]
     },
     {
       "name": "suix_queryEvents",
@@ -1720,7 +2074,7 @@
       },
       "examples": [
         {
-          "name": "Return the transaction digest for specified query criteria",
+          "name": "Return the transaction digest for specified query criteria.",
           "params": [
             {
               "name": "query",
