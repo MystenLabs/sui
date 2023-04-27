@@ -106,8 +106,8 @@ async fn transaction_manager_basics() {
 
     // Notify TM about transaction commit
     transaction_manager.notify_commit(
-        transaction.digest(),
-        vec![],
+        &[*transaction.digest()],
+        &[],
         &state.epoch_store_for_testing(),
     );
 
@@ -153,8 +153,8 @@ async fn transaction_manager_basics() {
 
     // Notify TM about transaction commit
     transaction_manager.notify_commit(
-        transaction.digest(),
-        vec![],
+        &[*transaction.digest()],
+        &[],
         &state.epoch_store_for_testing(),
     );
 
@@ -270,8 +270,8 @@ async fn transaction_manager_read_lock() {
     assert_eq!(transaction_manager.inflight_queue_len(), 3);
 
     // Notify TM about read-only transaction commit
-    transaction_manager.notify_commit(tx_0.digest(), vec![], &state.epoch_store_for_testing());
-    transaction_manager.notify_commit(tx_1.digest(), vec![], &state.epoch_store_for_testing());
+    transaction_manager.notify_commit(&[*tx_0.digest()], &[], &state.epoch_store_for_testing());
+    transaction_manager.notify_commit(&[*tx_1.digest()], &[], &state.epoch_store_for_testing());
 
     // TM should output the default-lock transaction eventually.
     let tx_2 = rx_ready_certificates.recv().await.unwrap().0;
@@ -280,6 +280,6 @@ async fn transaction_manager_read_lock() {
     assert_eq!(transaction_manager.inflight_queue_len(), 1);
 
     // Notify TM about default-lock transaction commit
-    transaction_manager.notify_commit(tx_2.digest(), vec![], &state.epoch_store_for_testing());
+    transaction_manager.notify_commit(&[*tx_2.digest()], &[], &state.epoch_store_for_testing());
     transaction_manager.check_empty_for_testing();
 }

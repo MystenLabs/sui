@@ -364,7 +364,7 @@ impl SuiNode {
                     ),
                 );
             state
-                .try_execute_immediately(&transaction, None, &epoch_store)
+                .try_execute_immediately(vec![transaction], vec![None], &epoch_store)
                 .instrument(span)
                 .await
                 .unwrap();

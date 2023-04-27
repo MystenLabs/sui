@@ -11,9 +11,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use anyhow::anyhow;
-use itertools::Itertools;
+use itertools::{izip, Itertools};
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
+use once_cell::sync::OnceCell;
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -28,8 +29,11 @@ use sui_types::base_types::{
 use sui_types::base_types::{ObjectInfo, ObjectRef};
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{self, DynamicFieldInfo};
-use sui_types::effects::TransactionEvents;
 use sui_types::error::{SuiError, SuiResult, UserInputError};
+use sui_types::messages::{
+    TransactionDataAPI, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
+    VerifiedExecutableTransaction,
+};
 use sui_types::object::Owner;
 use sui_types::parse_sui_struct_tag;
 use sui_types::temporary_store::TxCoins;
@@ -255,6 +259,12 @@ fn coin_index_table_default_config() -> DBOptions {
     }
 }
 
+fn should_invalidate_caches() -> bool {
+    static INVALIDATE_CACHES: OnceCell<bool> = OnceCell::new();
+    *INVALIDATE_CACHES
+        .get_or_init(|| read_size_from_env(ENV_VAR_INVALIDATE_INSTEAD_OF_UPDATE).unwrap_or(0) > 0)
+}
+
 impl IndexStore {
     pub fn new(path: PathBuf, registry: &Registry, max_type_length: Option<u64>) -> Self {
         let tables =
@@ -288,7 +298,7 @@ impl IndexStore {
         digest: &TransactionDigest,
         batch: &mut DBBatch,
         object_index_changes: &ObjectIndexChanges,
-        tx_coins: Option<TxCoins>,
+        tx_coins: Option<&TxCoins>,
     ) -> SuiResult<IndexStoreCacheUpdates> {
         // In production if this code path is hit, we should expect `tx_coins` to not be None.
         // However, in many tests today we do not distinguish validator and/or fullnode, so
@@ -425,21 +435,113 @@ impl IndexStore {
         Ok(cache_updates)
     }
 
-    pub async fn index_tx(
+    pub async fn index_transactions(
         &self,
+        // TODO: index_tx really just need the transaction data here.
+        transactions: &[VerifiedExecutableTransaction],
+        effects: &[TransactionEffects],
+        events: &[TransactionEvents],
+        object_index_changes: &[Option<ObjectIndexChanges>],
+        timestamp_ms: u64,
+        tx_coins: Option<&[TxCoins]>,
+        loaded_child_objects: Vec<BTreeMap<ObjectID, SequenceNumber>>,
+    ) -> SuiResult<u64> {
+        assert_eq!(events.len(), object_index_changes.len());
+        assert_eq!(events.len(), transactions.len());
+        assert_eq!(events.len(), effects.len());
+
+        let mut batch = self.tables.transactions_from_addr.batch();
+        let mut sum = 0;
+
+        let coin_slice = tx_coins.unwrap_or(&[]);
+
+        let tx_coins_iter = coin_slice
+            .iter()
+            .map(Some)
+            .chain(std::iter::repeat(None))
+            .take(transactions.len());
+
+        let mut cache_updates_vec = Vec::new();
+
+        for (tx, effects, events, changes, tx_coins, loaded_child_objects) in izip!(
+            transactions,
+            effects,
+            events,
+            object_index_changes,
+            tx_coins_iter,
+            loaded_child_objects.into_iter()
+        ) {
+            let Some(changes) = changes else {
+                continue;
+            };
+
+            let (count, cache_updates) = self
+                .index_tx(
+                    &mut batch,
+                    tx.data().intent_message().value.sender(),
+                    tx.data()
+                        .intent_message()
+                        .value
+                        .input_objects()?
+                        .iter()
+                        .map(|o| o.object_id()),
+                    effects
+                        .all_changed_objects()
+                        .into_iter()
+                        .map(|(obj_ref, owner, _kind)| (*obj_ref, *owner)),
+                    tx.data()
+                        .intent_message()
+                        .value
+                        .move_calls()
+                        .into_iter()
+                        .map(|(package, module, function)| {
+                            (*package, module.to_owned(), function.to_owned())
+                        }),
+                    events,
+                    changes,
+                    tx.digest(),
+                    timestamp_ms,
+                    tx_coins,
+                    loaded_child_objects,
+                )
+                .await?;
+            sum += count;
+            cache_updates_vec.push(cache_updates);
+        }
+
+        batch.write()?;
+
+        if !should_invalidate_caches() {
+            // We cannot update the cache before updating the db or else on failing to write to db
+            // we will update the cache (when we retry to index this transaction again we would have
+            // updated the cache twice). However, this only means cache is eventually consistent with
+            // the db (within a very short delay)
+            for cache_updates in cache_updates_vec {
+                self.update_per_coin_type_cache(cache_updates.per_coin_type_balance_changes)
+                    .await?;
+                self.update_all_balance_cache(cache_updates.all_balance_changes)
+                    .await?;
+            }
+        }
+
+        Ok(sum)
+    }
+
+    async fn index_tx(
+        &self,
+        batch: &mut DBBatch,
         sender: SuiAddress,
         active_inputs: impl Iterator<Item = ObjectID>,
         mutated_objects: impl Iterator<Item = (ObjectRef, Owner)> + Clone,
         move_functions: impl Iterator<Item = (ObjectID, Identifier, Identifier)> + Clone,
         events: &TransactionEvents,
-        object_index_changes: ObjectIndexChanges,
+        object_index_changes: &ObjectIndexChanges,
         digest: &TransactionDigest,
         timestamp_ms: u64,
-        tx_coins: Option<TxCoins>,
+        tx_coins: Option<&TxCoins>,
         loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
-    ) -> SuiResult<u64> {
+    ) -> SuiResult<(u64, IndexStoreCacheUpdates)> {
         let sequence = self.next_sequence_number.fetch_add(1, Ordering::SeqCst);
-        let mut batch = self.tables.transactions_from_addr.batch();
 
         batch.insert_batch(
             &self.tables.transaction_order,
@@ -495,27 +597,27 @@ impl IndexStore {
 
         // Coin Index
         let cache_updates = self
-            .index_coin(digest, &mut batch, &object_index_changes, tx_coins)
+            .index_coin(digest, batch, object_index_changes, tx_coins)
             .await?;
 
         // Owner index
         batch.delete_batch(
             &self.tables.owner_index,
-            object_index_changes.deleted_owners.into_iter(),
+            object_index_changes.deleted_owners.iter(),
         )?;
         batch.delete_batch(
             &self.tables.dynamic_field_index,
-            object_index_changes.deleted_dynamic_fields.into_iter(),
+            object_index_changes.deleted_dynamic_fields.iter(),
         )?;
 
         batch.insert_batch(
             &self.tables.owner_index,
-            object_index_changes.new_owners.into_iter(),
+            object_index_changes.new_owners.iter().cloned(),
         )?;
 
         batch.insert_batch(
             &self.tables.dynamic_field_index,
-            object_index_changes.new_dynamic_fields.into_iter(),
+            object_index_changes.new_dynamic_fields.iter().cloned(),
         )?;
 
         // events
@@ -596,19 +698,7 @@ impl IndexStore {
             .await?;
         }
 
-        batch.write()?;
-
-        if !invalidate_caches {
-            // We cannot update the cache before updating the db or else on failing to write to db
-            // we will update the cache (when we retry to index this transaction again we would have
-            // updated the cache twice). However, this only means cache is eventually consistent with
-            // the db (within a very short delay)
-            self.update_per_coin_type_cache(cache_updates.per_coin_type_balance_changes)
-                .await?;
-            self.update_all_balance_cache(cache_updates.all_balance_changes)
-                .await?;
-        }
-        Ok(sequence)
+        Ok((sequence, cache_updates))
     }
 
     pub fn next_sequence_number(&self) -> TxSequenceNumber {
@@ -1603,7 +1693,7 @@ mod tests {
                 object_index_changes,
                 &TransactionDigest::random(),
                 1234,
-                Some(tx_coins),
+                Some(&tx_coins),
                 BTreeMap::new(),
             )
             .await?;
@@ -1655,7 +1745,7 @@ mod tests {
                 object_index_changes,
                 &TransactionDigest::random(),
                 1234,
-                Some(tx_coins),
+                Some(&tx_coins),
                 BTreeMap::new(),
             )
             .await?;

@@ -222,12 +222,12 @@ impl<'a> TestAuthorityBuilder<'a> {
         // explicitly makes sure all genesis objects are ready for use.
         state
             .try_execute_immediately(
-                &VerifiedExecutableTransaction::new_from_checkpoint(
+                vec![VerifiedExecutableTransaction::new_from_checkpoint(
                     VerifiedTransaction::new_unchecked(genesis.transaction().clone()),
                     genesis.epoch(),
                     genesis.checkpoint().sequence_number,
-                ),
-                None,
+                )],
+                vec![None],
                 &state.epoch_store_for_testing(),
             )
             .await

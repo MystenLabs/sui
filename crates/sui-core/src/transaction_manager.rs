@@ -7,6 +7,7 @@ use std::{
     sync::Arc,
 };
 
+use itertools::izip;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
@@ -130,10 +131,10 @@ impl Inner {
     // Checks if there is any transaction waiting on the lock of input_key, and try to
     // update transactions that can acquire the lock.
     // Must ensure input_key is available in storage before calling this function.
-    fn try_acquire_lock(&mut self, input_key: InputKey) -> Vec<PendingCertificate> {
+    fn try_acquire_lock(&mut self, input_key: &InputKey) -> Vec<PendingCertificate> {
         let mut ready_certificates = Vec::new();
 
-        let Some(lock_queue) = self.lock_waiters.get_mut(&input_key) else {
+        let Some(lock_queue) = self.lock_waiters.get_mut(input_key) else {
             // No transaction is waiting on the object yet.
             return ready_certificates;
         };
@@ -148,7 +149,7 @@ impl Inner {
             std::mem::swap(&mut digests, &mut lock_queue.default_waiters);
         };
         if lock_queue.is_empty() {
-            self.lock_waiters.remove(&input_key);
+            self.lock_waiters.remove(input_key);
         }
         if digests.is_empty() {
             return ready_certificates;
@@ -168,10 +169,10 @@ impl Inner {
         for digest in digests {
             // Pending certificate must exist.
             let pending_cert = self.pending_certificates.get_mut(&digest).unwrap();
-            let lock_mode = pending_cert.acquiring_locks.remove(&input_key).unwrap();
+            let lock_mode = pending_cert.acquiring_locks.remove(input_key).unwrap();
             assert!(pending_cert
                 .acquired_locks
-                .insert(input_key, lock_mode)
+                .insert(*input_key, lock_mode)
                 .is_none());
             // When a certificate has all locks acquired, it is ready to execute.
             if pending_cert.acquiring_locks.is_empty() {
@@ -283,7 +284,8 @@ impl TransactionManager {
             // skip already executed txes
             if self.authority_store.is_tx_already_executed(&digest)? {
                 // also ensure the transaction will not be retried after restart.
-                let _ = epoch_store.remove_pending_execution(&digest);
+                // TODO: use a single call to remove_pending_execution_digests
+                let _ = epoch_store.remove_pending_execution_digests(&[digest]);
                 self.metrics
                     .transaction_manager_num_enqueued_certificates
                     .with_label_values(&["already_executed"])
@@ -344,7 +346,8 @@ impl TransactionManager {
                     inner.epoch, pending_cert.certificate
                 );
                 // also ensure the transaction will not be retried after restart.
-                let _ = epoch_store.remove_pending_execution(&digest);
+                // TODO: remove all pending execution digests in a single call
+                let _ = epoch_store.remove_pending_execution_digests(&[digest]);
                 continue;
             }
 
@@ -367,7 +370,7 @@ impl TransactionManager {
             // skip already executed txes
             if self.authority_store.is_tx_already_executed(&digest)? {
                 // also ensure the transaction will not be retried after restart.
-                let _ = epoch_store.remove_pending_execution(&digest);
+                let _ = epoch_store.remove_pending_execution_digests(&[digest]);
                 self.metrics
                     .transaction_manager_num_enqueued_certificates
                     .with_label_values(&["already_executed"])
@@ -511,7 +514,7 @@ impl TransactionManager {
     ) {
         let mut inner = self.inner.write();
         let _scope = monitored_scope("TransactionManager::objects_available::wlock");
-        self.objects_available_locked(&mut inner, epoch_store, input_keys);
+        self.objects_available_locked(&mut inner, epoch_store, &input_keys);
         inner.maybe_shrink_capacity();
     }
 
@@ -519,7 +522,7 @@ impl TransactionManager {
         &self,
         inner: &mut Inner,
         epoch_store: &AuthorityPerEpochStore,
-        input_keys: Vec<InputKey>,
+        input_keys: &[InputKey],
     ) {
         if inner.epoch != epoch_store.epoch() {
             warn!(
@@ -552,8 +555,8 @@ impl TransactionManager {
     /// Notifies TransactionManager about a transaction that has been committed.
     pub(crate) fn notify_commit(
         &self,
-        digest: &TransactionDigest,
-        output_object_keys: Vec<InputKey>,
+        digests: &[TransactionDigest],
+        output_object_keys: &[Vec<InputKey>],
         epoch_store: &AuthorityPerEpochStore,
     ) {
         {
@@ -561,9 +564,15 @@ impl TransactionManager {
             let _scope = monitored_scope("TransactionManager::notify_commit::wlock");
 
             if inner.epoch != epoch_store.epoch() {
-                warn!("Ignoring committed certificate from wrong epoch. Expected={} Actual={} CertificateDigest={:?}", inner.epoch, epoch_store.epoch(), digest);
+                warn!(
+                    "Ignoring committed transactions from wrong epoch. Expected={} Actual={}",
+                    inner.epoch,
+                    epoch_store.epoch()
+                );
                 return;
             }
+
+            for (digest, output_object_keys) in izip!(digests, output_object_keys) {
             let Some(acquired_locks) = inner.executing_certificates.remove(digest) else {
                 trace!("{:?} not found in executing certificates, likely because it is a system transaction", digest);
                 return;
@@ -580,7 +589,7 @@ impl TransactionManager {
                     "Certificate {:?} not found among readonly lock holders",
                     digest
                 );
-                for ready_cert in inner.try_acquire_lock(key) {
+                    for ready_cert in inner.try_acquire_lock(&key) {
                     self.certificate_ready(&mut inner, ready_cert);
                 }
             }
@@ -589,11 +598,12 @@ impl TransactionManager {
                 .set(inner.executing_certificates.len() as i64);
 
             self.objects_available_locked(&mut inner, epoch_store, output_object_keys);
+            }
 
             inner.maybe_shrink_capacity();
         }
 
-        let _ = epoch_store.remove_pending_execution(digest);
+        epoch_store.remove_pending_execution_digests(digests).ok();
     }
 
     /// Sends the ready certificate for execution.

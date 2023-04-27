@@ -7,8 +7,12 @@ use std::{
 };
 
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
-use sui_types::digests::TransactionEffectsDigest;
-use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::{
+    digests::TransactionEffectsDigest,
+    messages::{MultiTxBatch, VerifiedExecutableTransaction},
+};
+use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::OwnedSemaphorePermit;
 use tokio::{
     sync::{mpsc::UnboundedReceiver, oneshot, Semaphore},
     time::sleep,
@@ -97,15 +101,19 @@ pub async fn execution_process(
             loop {
                 attempts += 1;
                 let res = authority
-                    .try_execute_immediately(&certificate, expected_effects_digest, &epoch_store)
+                    .try_execute_immediately(
+                        vec![certificate],
+                        vec![expected_effects_digest],
+                        &epoch_store,
+                    )
                     .await;
                 if let Err(e) = res {
                     if attempts == EXECUTION_MAX_ATTEMPTS {
-                        panic!("Failed to execute certified transaction {digest:?} after {attempts} attempts! error={e} certificate={certificate:?}");
+                        panic!("Failed to execute transaction batch {batch_id:?} after {attempts} attempts! error={e}");
                     }
                     // Assume only transient failure can happen. Permanent failure is probably
                     // a bug. There is nothing that can be done to recover from permanent failures.
-                    error!(tx_digest=?digest, "Failed to execute certified transaction {digest:?}! attempt {attempts}, {e}");
+                    error!("Failed to execute transaction batch {batch_id:?}! attempt {attempts}, {e}");
                     sleep(EXECUTION_FAILURE_RETRY_INTERVAL).await;
                 } else {
                     break;

@@ -12,7 +12,7 @@ use arc_swap::{ArcSwap, Guard};
 use chrono::prelude::*;
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
-use itertools::Itertools;
+use itertools::{izip, Itertools};
 use move_binary_format::CompiledModule;
 use move_core_types::language_storage::ModuleId;
 use parking_lot::Mutex;
@@ -788,24 +788,26 @@ impl AuthorityState {
     #[instrument(level = "trace", skip_all)]
     pub async fn try_execute_immediately(
         &self,
-        certificate: &VerifiedExecutableTransaction,
-        expected_effects_digest: Option<TransactionEffectsDigest>,
+        transactions: Vec<VerifiedExecutableTransaction>,
+        expected_effects_digests: Vec<Option<TransactionEffectsDigest>>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
+    ) -> SuiResult<(Vec<TransactionEffects>, Vec<Option<ExecutionError>>)> {
         let _scope = monitored_scope("Execution::try_execute_immediately");
         let _metrics_guard = self.metrics.internal_execution_latency.start_timer();
-        let tx_digest = *certificate.digest();
-        debug!("execute_certificate_internal");
 
         // This acquires a lock on the tx digest to prevent multiple concurrent executions of the
         // same tx. While we don't need this for safety (tx sequencing is ultimately atomic), it is
         // very common to receive the same tx multiple times simultaneously due to gossip, so we
         // may as well hold the lock and save the cpu time for other requests.
-        let tx_guard = epoch_store.acquire_tx_guard(certificate).await?;
+        let tx_guards = epoch_store.acquire_tx_guards(transactions.iter()).await?;
 
-        self.process_certificate(tx_guard, certificate, expected_effects_digest, epoch_store)
-            .await
-            .tap_err(|e| info!(?tx_digest, "process_certificate failed: {e}"))
+        self.process_certificates(
+            tx_guards,
+            transactions,
+            expected_effects_digests,
+            epoch_store,
+        )
+        .await
     }
 
     /// Test only wrapper for `try_execute_immediately()` above, useful for checking errors if the
@@ -815,15 +817,19 @@ impl AuthorityState {
         certificate: &VerifiedCertificate,
     ) -> SuiResult<(VerifiedSignedTransactionEffects, Option<ExecutionError>)> {
         let epoch_store = self.epoch_store_for_testing();
-        let (effects, execution_error_opt) = self
+        let (effects, errors) = self
             .try_execute_immediately(
-                &VerifiedExecutableTransaction::new_from_certificate(certificate.clone()),
-                None,
+                vec![VerifiedExecutableTransaction::new_from_certificate(
+                    certificate.clone(),
+                )],
+                vec![None],
                 &epoch_store,
             )
             .await?;
-        let signed_effects = self.sign_effects(effects, &epoch_store)?;
-        Ok((signed_effects, execution_error_opt))
+
+        let effects = self.sign_effects(effects.into_iter().next().unwrap(), &epoch_store)?;
+        let error = errors.into_iter().next().unwrap();
+        Ok((effects, error))
     }
 
     pub async fn notify_read_effects(
@@ -845,24 +851,22 @@ impl AuthorityState {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub(crate) async fn process_certificate(
+    pub(crate) async fn process_certificates(
         &self,
-        tx_guard: CertTxGuard,
-        certificate: &VerifiedExecutableTransaction,
-        expected_effects_digest: Option<TransactionEffectsDigest>,
+        tx_guards: Vec<CertTxGuard>,
+        mut transactions: Vec<VerifiedExecutableTransaction>,
+        mut expected_effects_digests: Vec<Option<TransactionEffectsDigest>>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
-        let digest = *certificate.digest();
-        // The cert could have been processed by a concurrent attempt of the same cert, so check if
-        // the effects have already been written.
-        if let Some(effects) = self.database.get_executed_effects(&digest)? {
-            tx_guard.release();
-            return Ok((effects, None));
-        }
+    ) -> SuiResult<(Vec<TransactionEffects>, Vec<Option<ExecutionError>>)> {
+        let num_txns = transactions.len();
+        let digests: Vec<_> = transactions.iter().map(|cert| *cert.digest()).collect();
+        let mut executed_effects = self.database.multi_get_executed_effects(&digests)?;
+
         let execution_guard = self
             .database
-            .execution_lock_for_executable_transaction(certificate)
+            .execution_lock_for_executable_transactions(&transactions)
             .await;
+
         // Any caller that verifies the signatures on the certificate will have already checked the
         // epoch. But paths that don't verify sigs (e.g. execution from checkpoint, reading from db)
         // present the possibility of an epoch mismatch. If this cert is not finalzied in previous
@@ -870,14 +874,14 @@ impl AuthorityState {
         let execution_guard = match execution_guard {
             Ok(execution_guard) => execution_guard,
             Err(err) => {
-                tx_guard.release();
+                tx_guards.release();
                 return Err(err);
             }
         };
         // Since we obtain a reference to the epoch store before taking the execution lock, it's
         // possible that reconfiguration has happened and they no longer match.
         if *execution_guard != epoch_store.epoch() {
-            tx_guard.release();
+            tx_guards.release();
             info!("The epoch of the execution_guard doesn't match the epoch store");
             return Err(SuiError::WrongEpoch {
                 expected_epoch: epoch_store.epoch(),
@@ -885,92 +889,121 @@ impl AuthorityState {
             });
         }
 
-        // Errors originating from prepare_certificate may be transient (failure to read locks) or
+        // remove executed txns from the list
+        // Suppress clippy warning - need range loop to use swap_remove()
+        #[allow(clippy::needless_range_loop)]
+        for i in 0..num_txns {
+            if i >= transactions.len() {
+                break;
+            }
+            let is_executed = executed_effects[i].is_some();
+            if is_executed {
+                transactions.swap_remove(i);
+                expected_effects_digests.swap_remove(i);
+            }
+        }
+
+        // Errors originating from prepare_certificates may be transient (failure to read locks) or
         // non-transient (transaction input is invalid, move vm errors). However, all errors from
         // this function occur before we have written anything to the db, so we commit the tx
         // guard and rely on the client to retry the tx (if it was transient).
-        let (inner_temporary_store, effects, execution_error_opt) = match self
-            .prepare_certificate(&execution_guard, certificate, epoch_store)
+        let (temporary_stores, effects, execution_errors) = match self
+            .prepare_certificates(
+                &execution_guard,
+                &transactions,
+                &expected_effects_digests,
+                epoch_store,
+            )
             .await
         {
             Err(e) => {
-                info!(name = ?self.name, ?digest, "Error preparing transaction: {e}");
-                tx_guard.release();
+                tx_guards.release();
                 return Err(e);
             }
             Ok(res) => res,
         };
 
-        if let Some(expected_effects_digest) = expected_effects_digest {
-            if effects.digest() != expected_effects_digest {
-                error!(
-                    tx_digest = ?digest,
-                    ?expected_effects_digest,
-                    actual_effects = ?effects,
-                    "fork detected!"
-                );
-                panic!(
-                    "Transaction {} is expected to have effects digest {}, but got {}!",
-                    digest,
-                    expected_effects_digest,
-                    effects.digest(),
-                );
-            }
-        }
-
         fail_point_async!("crash");
 
-        self.commit_cert_and_notify(
-            certificate,
-            inner_temporary_store,
+        self.commit_certs_and_notify(
+            &transactions,
+            &temporary_stores,
             &effects,
-            tx_guard,
+            tx_guards,
             execution_guard,
             epoch_store,
         )
         .await?;
-        Ok((effects, execution_error_opt))
+
+        let mut results_iter = izip!(effects.into_iter(), execution_errors.into_iter());
+        let mut execution_errors_ret = Vec::with_capacity(num_txns);
+
+        for effects_mut in executed_effects.iter_mut() {
+            if effects_mut.is_none() {
+                let (effects, execution_error_opt) = results_iter
+                    .next()
+                    .expect("We should have the same number of execution results as transactions");
+                *effects_mut = Some(effects);
+                execution_errors_ret.push(execution_error_opt);
+            } else {
+                execution_errors_ret.push(None);
+            }
+        }
+
+        assert!(
+            results_iter.next().is_none(),
+            "all results should have been consumed"
+        );
+        assert_eq!(execution_errors_ret.len(), num_txns);
+
+        Ok((
+            executed_effects.into_iter().map(|e| e.unwrap()).collect(),
+            execution_errors_ret,
+        ))
     }
 
-    async fn commit_cert_and_notify(
+    async fn commit_certs_and_notify(
         &self,
-        certificate: &VerifiedExecutableTransaction,
-        inner_temporary_store: InnerTemporaryStore,
-        effects: &TransactionEffects,
-        tx_guard: CertTxGuard,
+        transactions: &[VerifiedExecutableTransaction],
+        inner_temporary_stores: &[InnerTemporaryStore],
+        effects: &[TransactionEffects],
+        tx_guards: Vec<CertTxGuard>,
         _execution_guard: ExecutionLockReadGuard<'_>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         let _scope: Option<mysten_metrics::MonitoredScopeGuard> =
             monitored_scope("Execution::commit_cert_and_notify");
-
-        let input_object_count = inner_temporary_store.objects.len();
-        let shared_object_count = effects.shared_objects().len();
-        let digest = *certificate.digest();
-
-        // If commit_certificate returns an error, tx_guard will be dropped and the certificate
-        // will be persisted in the log for later recovery.
-        let output_keys: Vec<_> = inner_temporary_store
-            .written
+        let input_object_count = inner_temporary_stores
             .iter()
-            .map(|(_, ((id, seq, _), obj, _))| InputKey(*id, (!obj.is_package()).then_some(*seq)))
+            .map(|inner_temporary_store| inner_temporary_store.objects.len())
+            .sum::<usize>();
+
+        let shared_object_count = effects
+            .iter()
+            .map(|e| e.shared_objects().len())
+            .sum::<usize>();
+
+        let output_keys: Vec<_> = inner_temporary_stores
+            .iter()
+            .map(|inner_temporary_store| {
+                inner_temporary_store
+                    .written
+                    .iter()
+                    .map(|(_, ((id, seq, _), obj, _))| {
+                        InputKey(*id, (!obj.is_package()).then_some(*seq))
+                    })
+                    .collect::<Vec<_>>()
+            })
             .collect();
 
-        let events = inner_temporary_store.events.clone();
-
-        let loaded_child_objects = if self.is_fullnode(epoch_store) {
-            // We only care about this for full nodes
-            inner_temporary_store.loaded_child_objects.clone()
-        } else {
-            BTreeMap::new()
-        };
+        let digests: Vec<_> = transactions.iter().map(|cert| *cert.digest()).collect();
 
         let tx_coins = self
-            .commit_certificate(inner_temporary_store, certificate, effects, epoch_store)
+            .commit_certificates(inner_temporary_stores, transactions, effects, epoch_store)
             .await?;
 
         // commit_certificate finished, the tx is fully committed to the store.
-        tx_guard.commit_tx();
+        tx_guards.commit_tx();
 
         // Notifies transaction manager about transaction and output objects committed.
         // This provides necessary information to transaction manager to start executing
@@ -980,17 +1013,16 @@ impl AuthorityState {
         // objects into storage. Otherwise, the transaction manager may schedule a transaction
         // before the output objects are actually available.
         self.transaction_manager
-            .notify_commit(&digest, output_keys, epoch_store);
+            .notify_commit(&digests, &output_keys, epoch_store);
 
         // index certificate
         let _ = self
-            .post_process_one_tx(
-                certificate,
+            .post_process_transactions(
+                transactions,
+                inner_temporary_stores,
                 effects,
-                &events,
                 epoch_store,
-                tx_coins,
-                loaded_child_objects,
+                tx_coins.as_deref(),
             )
             .await
             .tap_err(|e| error!("tx post processing failed: {e}"));
@@ -1003,9 +1035,12 @@ impl AuthorityState {
             self.metrics.shared_obj_tx.inc();
         }
 
-        if certificate.is_sponsored_tx() {
-            self.metrics.sponsored_tx.inc();
-        }
+        self.metrics.sponsored_tx.inc_by(
+            transactions
+                .iter()
+                .filter(|cert| cert.is_sponsored_tx())
+                .count() as u64,
+        );
 
         self.metrics
             .num_input_objs
@@ -1013,84 +1048,112 @@ impl AuthorityState {
         self.metrics
             .num_shared_objects
             .observe(shared_object_count as f64);
-        self.metrics.batch_size.observe(
-            certificate
-                .data()
-                .intent_message()
-                .value
-                .kind()
-                .num_commands() as f64,
-        );
+        transactions.iter().for_each(|t| {
+            self.metrics
+                .batch_size
+                .observe(t.data().intent_message().value.kind().num_commands() as f64)
+        });
 
         Ok(())
     }
 
-    /// prepare_certificate validates the transaction input, and executes the certificate,
+    /// prepare_certificates validates the transaction input, and executes the certificate,
     /// returning effects, output objects, events, etc.
     ///
     /// It reads state from the db (both owned and shared locks), but it has no side effects.
     ///
-    /// It can be generally understood that a failure of prepare_certificate indicates a
+    /// It can be generally understood that a failure of prepare_certificates indicates a
     /// non-transient error, e.g. the transaction input is somehow invalid, the correct
     /// locks are not held, etc. However, this is not entirely true, as a transient db read error
     /// may also cause this function to fail.
     #[instrument(level = "trace", skip_all)]
-    async fn prepare_certificate(
+    #[allow(clippy::type_complexity)]
+    async fn prepare_certificates(
         &self,
         _execution_guard: &ExecutionLockReadGuard<'_>,
-        certificate: &VerifiedExecutableTransaction,
+        certificates: &[VerifiedExecutableTransaction],
+        expected_effects_digests: &[Option<TransactionEffectsDigest>],
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<(
-        InnerTemporaryStore,
-        TransactionEffects,
-        Option<ExecutionError>,
+        Vec<InnerTemporaryStore>,
+        Vec<TransactionEffects>,
+        Vec<Option<ExecutionError>>,
     )> {
         let _scope = monitored_scope("Execution::prepare_certificate");
         let _metrics_guard = self.metrics.prepare_certificate_latency.start_timer();
 
-        // check_certificate_input also checks shared object locks when loading the shared objects.
-        let (gas_status, input_objects) = transaction_input_checker::check_certificate_input(
-            &self.database,
-            epoch_store,
-            certificate,
-        )
-        .await?;
+        let mut temporary_stores = Vec::new();
+        let mut returned_effects = Vec::new();
+        let mut execution_errors = Vec::new();
 
-        let owned_object_refs = input_objects.filter_owned_objects();
-        self.check_owned_locks(&owned_object_refs).await?;
+        for (certificate, expected_effects_digest) in izip!(certificates, expected_effects_digests)
+        {
+            let tx_digest = *certificate.digest();
+            // check_certificate_input also checks shared object locks when loading the shared objects.
+            let (gas_status, input_objects) = transaction_input_checker::check_certificate_input(
+                &self.database,
+                epoch_store,
+                certificate,
+            )
+            .await
+            .tap_err(|e| info!(?tx_digest, "check_certificate_input failed: {e}"))?;
 
-        let shared_object_refs = input_objects.filter_shared_objects();
-        let transaction_dependencies = input_objects.transaction_dependencies();
-        let temporary_store = TemporaryStore::new(
-            self.database.clone(),
-            input_objects,
-            *certificate.digest(),
-            epoch_store.protocol_config(),
-        );
-        let transaction_data = &certificate.data().intent_message().value;
-        let (kind, signer, gas) = transaction_data.execution_parts();
-        let (inner_temp_store, effects, execution_error_opt) =
-            execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
-                shared_object_refs,
-                temporary_store,
-                kind,
-                signer,
-                &gas,
+            let owned_object_refs = input_objects.filter_owned_objects();
+            self.check_owned_locks(&owned_object_refs).await?;
+
+            let shared_object_refs = input_objects.filter_shared_objects();
+            let transaction_dependencies = input_objects.transaction_dependencies();
+            let temporary_store = TemporaryStore::new(
+                self.database.clone(),
+                input_objects,
                 *certificate.digest(),
-                transaction_dependencies,
-                epoch_store.move_vm(),
-                gas_status,
-                &epoch_store.epoch_start_config().epoch_data(),
                 epoch_store.protocol_config(),
-                self.metrics.limits_metrics.clone(),
-                // TODO: would be nice to pass the whole NodeConfig here, but it creates a
-                // cyclic dependency w/ sui-adapter
-                self.expensive_safety_check_config
-                    .enable_deep_per_tx_sui_conservation_check(),
-                self.certificate_deny_config.certificate_deny_set(),
             );
+            let transaction_data = &certificate.data().intent_message().value;
+            let (kind, signer, gas) = transaction_data.execution_parts();
+            let (inner_temp_store, effects, execution_error_opt) =
+                execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
+                    shared_object_refs,
+                    temporary_store,
+                    kind,
+                    signer,
+                    &gas,
+                    *certificate.digest(),
+                    transaction_dependencies,
+                    epoch_store.move_vm(),
+                    gas_status,
+                    &epoch_store.epoch_start_config().epoch_data(),
+                    epoch_store.protocol_config(),
+                    self.metrics.limits_metrics.clone(),
+                    // TODO: would be nice to pass the whole NodeConfig here, but it creates a
+                    // cyclic dependency w/ sui-adapter
+                    self.expensive_safety_check_config
+                        .enable_deep_per_tx_sui_conservation_check(),
+                    self.certificate_deny_config.certificate_deny_set(),
+                );
 
-        Ok((inner_temp_store, effects, execution_error_opt.err()))
+            if let Some(expected_effects_digest) = expected_effects_digest {
+                if effects.digest() != *expected_effects_digest {
+                    error!(
+                        ?tx_digest,
+                        ?expected_effects_digest,
+                        actual_effects = ?effects,
+                        "fork detected!"
+                    );
+                    panic!(
+                        "Transaction {} is expected to have effects digest {}, but got {}!",
+                        tx_digest,
+                        expected_effects_digest,
+                        effects.digest(),
+                    );
+                }
+            }
+
+            temporary_stores.push(inner_temp_store);
+            returned_effects.push(effects);
+            execution_errors.push(execution_error_opt.err());
+        }
+        Ok((temporary_stores, returned_effects, execution_errors))
     }
 
     pub async fn dry_exec_transaction(
@@ -1336,55 +1399,6 @@ impl AuthorityState {
         self.database.is_tx_already_executed(digest)
     }
 
-    #[instrument(level = "debug", skip_all, err)]
-    async fn index_tx(
-        &self,
-        indexes: &IndexStore,
-        digest: &TransactionDigest,
-        // TODO: index_tx really just need the transaction data here.
-        cert: &VerifiedExecutableTransaction,
-        effects: &TransactionEffects,
-        events: &TransactionEvents,
-        timestamp_ms: u64,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-        tx_coins: Option<TxCoins>,
-        loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
-    ) -> SuiResult<u64> {
-        let changes = self
-            .process_object_index(effects, epoch_store)
-            .tap_err(|e| warn!("{e}"))?;
-
-        indexes
-            .index_tx(
-                cert.data().intent_message().value.sender(),
-                cert.data()
-                    .intent_message()
-                    .value
-                    .input_objects()?
-                    .iter()
-                    .map(|o| o.object_id()),
-                effects
-                    .all_changed_objects()
-                    .into_iter()
-                    .map(|(obj_ref, owner, _kind)| (*obj_ref, *owner)),
-                cert.data()
-                    .intent_message()
-                    .value
-                    .move_calls()
-                    .into_iter()
-                    .map(|(package, module, function)| {
-                        (*package, module.to_owned(), function.to_owned())
-                    }),
-                events,
-                changes,
-                digest,
-                timestamp_ms,
-                tx_coins,
-                loaded_child_objects,
-            )
-            .await
-    }
-
     fn process_object_index(
         &self,
         effects: &TransactionEffects,
@@ -1554,41 +1568,58 @@ impl AuthorityState {
     }
 
     #[instrument(level = "debug", skip_all, err)]
-    async fn post_process_one_tx(
+    async fn post_process_transactions(
         &self,
-        certificate: &VerifiedExecutableTransaction,
-        effects: &TransactionEffects,
-        events: &TransactionEvents,
+        transactions: &[VerifiedExecutableTransaction],
+        inner_temporary_stores: &[InnerTemporaryStore],
+        effects: &[TransactionEffects],
         epoch_store: &Arc<AuthorityPerEpochStore>,
-        tx_coins: Option<TxCoins>,
-        loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
+        tx_coins: Option<&[TxCoins]>,
     ) -> SuiResult {
-        if self.indexes.is_none() {
+        let Some(indexes) = &self.indexes else {
             return Ok(());
-        }
+        };
 
-        let tx_digest = certificate.digest();
+        let changes: Vec<_> = effects
+            .iter()
+            .map(|e| {
+                self.process_object_index(e, epoch_store)
+                    .tap_err(|e| warn!("{e}"))
+                    .ok()
+            })
+            .collect();
+
+        let loaded_child_objects: Vec<_> = inner_temporary_stores
+            .iter()
+            .map(|s| s.loaded_child_objects.clone())
+            .collect();
+
+        let events: Vec<_> = inner_temporary_stores
+            .iter()
+            .map(|s| s.events.clone())
+            .collect();
+
         let timestamp_ms = Self::unixtime_now_ms();
-        // Index tx
-        if let Some(indexes) = &self.indexes {
-            let res = self
-                .index_tx(
-                    indexes.as_ref(),
-                    tx_digest,
-                    certificate,
-                    effects,
-                    events,
-                    timestamp_ms,
-                    epoch_store,
-                    tx_coins,
-                    loaded_child_objects,
-                )
-                .await
-                .tap_ok(|_| self.metrics.post_processing_total_tx_indexed.inc())
-                .tap_err(|e| error!(?tx_digest, "Post processing - Couldn't index tx: {e}"));
-            let effects: SuiTransactionBlockEffects = effects.clone().try_into()?;
-            // Emit events
-            if res.is_ok() {
+        indexes
+            .index_transactions(
+                transactions,
+                effects,
+                &events,
+                &changes,
+                timestamp_ms,
+                tx_coins,
+                loaded_child_objects,
+            )
+            .await?;
+        let effects: SuiTransactionBlockEffects = effects.clone().try_into()?;
+
+        self.metrics
+            .post_processing_total_tx_indexed
+            .inc_by(transactions.len() as u64);
+
+        for (effects, events) in izip!(effects, events) {
+            let tx_digest = effects.transaction_digest();
+
                 self.subscription_handler
                     .process_tx(
                         certificate.data().transaction_data(),
@@ -1598,26 +1629,26 @@ impl AuthorityState {
                             *tx_digest,
                             Some(timestamp_ms),
                             epoch_store.module_cache(),
-                        )?,
-                    )
-                    .await
-                    .tap_ok(|_| {
-                        self.metrics
-                            .post_processing_total_tx_had_event_processed
-                            .inc()
-                    })
-                    .tap_err(|e| {
-                        warn!(
-                            ?tx_digest,
-                            "Post processing - Couldn't process events for tx: {}", e
                         )
-                    })?;
+                    )?,
+                )
+                .await
+                .tap_ok(|_| {
+                    self.metrics
+                        .post_processing_total_tx_had_event_processed
+                        .inc()
+                })
+                .tap_err(|e| {
+                    warn!(
+                        ?tx_digest,
+                        "Post processing - Couldn't process events for tx: {}", e
+                    )
+                })?;
 
-                self.metrics
-                    .post_processing_total_events_emitted
-                    .inc_by(events.data.len() as u64);
-            }
-        };
+            self.metrics
+                .post_processing_total_events_emitted
+                .inc_by(events.data.len() as u64);
+        }
         Ok(())
     }
 
@@ -3035,83 +3066,89 @@ impl AuthorityState {
     // Returns coin objects for indexing for fullnode if indexing is enabled.
     fn fullnode_only_get_tx_coins_for_indexing(
         &self,
-        inner_temporary_store: &InnerTemporaryStore,
+        inner_temporary_stores: &[InnerTemporaryStore],
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> Option<TxCoins> {
+    ) -> Option<Vec<TxCoins>> {
         if self.indexes.is_none() || self.is_validator(epoch_store) {
             return None;
         }
-        let written_coin_objects = inner_temporary_store
-            .written
-            .iter()
-            .filter_map(|(k, v)| {
-                if v.1.is_coin() {
-                    Some((*k, v.clone()))
-                } else {
-                    None
-                }
-            })
-            .collect::<WrittenObjects>();
-        let input_coin_objects = inner_temporary_store
-            .objects
-            .iter()
-            .filter_map(|(k, v)| {
-                if v.is_coin() {
-                    Some((*k, v.clone()))
-                } else {
-                    None
-                }
-            })
-            .collect::<ObjectMap>();
-        Some((input_coin_objects, written_coin_objects))
+
+        Some(
+            inner_temporary_stores
+                .iter()
+                .map(|inner_temporary_store| {
+                    let written_coin_objects = inner_temporary_store
+                        .written
+                        .iter()
+                        .filter_map(|(k, v)| {
+                            if v.1.is_coin() {
+                                Some((*k, v.clone()))
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<WrittenObjects>();
+                    let input_coin_objects = inner_temporary_store
+                        .objects
+                        .iter()
+                        .filter_map(|(k, v)| {
+                            if v.is_coin() {
+                                Some((*k, v.clone()))
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<ObjectMap>();
+                    (input_coin_objects, written_coin_objects)
+                })
+                .collect::<Vec<_>>(),
+        )
     }
 
     /// Commit effects of transaction execution to data store.
     #[instrument(level = "trace", skip_all)]
-    pub(crate) async fn commit_certificate(
+    pub(crate) async fn commit_certificates(
         &self,
-        inner_temporary_store: InnerTemporaryStore,
-        certificate: &VerifiedExecutableTransaction,
-        effects: &TransactionEffects,
+        inner_temporary_stores: &[InnerTemporaryStore],
+        transactions: &[VerifiedExecutableTransaction],
+        effects: &[TransactionEffects],
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<Option<TxCoins>> {
+    ) -> SuiResult<Option<Vec<TxCoins>>> {
         let _metrics_guard = self.metrics.commit_certificate_latency.start_timer();
 
-        let tx_digest = certificate.digest();
         // Only need to sign effects if we are a validator.
-        let effects_sig = if self.is_validator(epoch_store) {
-            Some(AuthoritySignInfo::new(
-                epoch_store.epoch(),
-                effects,
-                Intent::sui_app(IntentScope::TransactionEffects),
-                self.name,
-                &*self.secret,
-            ))
+        let effects_sigs = if self.is_validator(epoch_store) {
+            Some(
+                effects
+                    .iter()
+                    .map(|e| {
+                        AuthoritySignInfo::new(
+                            epoch_store.epoch(),
+                            e,
+                            Intent::sui_app(IntentScope::TransactionEffects),
+                            self.name,
+                            &*self.secret,
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+            )
         } else {
             None
         };
 
         // Returns coin objects for indexing for fullnode if indexing is enabled.
         let tx_coins =
-            self.fullnode_only_get_tx_coins_for_indexing(&inner_temporary_store, epoch_store);
+            self.fullnode_only_get_tx_coins_for_indexing(inner_temporary_stores, epoch_store);
 
         // The insertion to epoch_store is not atomic with the insertion to the perpetual store. This is OK because
         // we insert to the epoch store first. And during lookups we always look up in the perpetual store first.
-        epoch_store.insert_tx_cert_and_effects_signature(
-            tx_digest,
-            certificate.certificate_sig(),
-            effects_sig.as_ref(),
-        )?;
+        epoch_store.insert_tx_cert_and_effects_signature(transactions, effects_sigs.as_deref())?;
 
         // Allow testing what happens if we crash here.
         fail_point_async!("crash");
 
         self.database
-            .update_state(
-                inner_temporary_store,
-                &certificate.clone().into_unsigned(),
-                effects,
-            )
+            .update_state(inner_temporary_stores, transactions, effects)
             .await
             .tap_ok(|_| {
                 debug!("commit_certificate finished");
@@ -3573,13 +3610,18 @@ impl AuthorityState {
             ));
         }
 
+        let executable_txns = &[executable_tx];
         let execution_guard = self
             .database
-            .execution_lock_for_executable_transaction(&executable_tx)
+            .execution_lock_for_executable_transactions(executable_txns)
             .await?;
-        let (temporary_store, effects, _execution_error_opt) = self
-            .prepare_certificate(&execution_guard, &executable_tx, epoch_store)
+        let (temporary_stores, effects, _execution_error_opt) = self
+            .prepare_certificates(&execution_guard, executable_txns, &[None], epoch_store)
             .await?;
+
+        let temporary_store = temporary_stores.into_iter().next().unwrap();
+        let effects = effects.into_iter().next().unwrap();
+
         let system_obj = temporary_store
             .get_sui_system_state_object()
             .expect("change epoch tx must write to system object");
@@ -3678,6 +3720,21 @@ impl AuthorityState {
             .unwrap()
             .send(())
             .unwrap();
+    }
+}
+
+trait TxGuardVec {
+    fn release(self);
+    fn commit_tx(self);
+}
+
+impl TxGuardVec for Vec<CertTxGuard> {
+    fn release(self) {
+        self.into_iter().for_each(|guard| guard.release());
+    }
+
+    fn commit_tx(self) {
+        self.into_iter().for_each(|guard| guard.commit_tx());
     }
 }
 

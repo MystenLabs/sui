@@ -2114,3 +2114,29 @@ impl Display for CertifiedTransaction {
         write!(f, "{}", writer)
     }
 }
+
+// NOTE: do not add Hash or Eq or anything like that - this is only for logging.
+// Collisions are possible!
+#[derive(Clone, Copy)]
+pub struct BatchId(u64);
+
+impl std::fmt::Debug for BatchId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:016x}", self.0)
+    }
+}
+pub trait MultiTxBatch {
+    fn batch_id(&self) -> BatchId;
+}
+
+impl MultiTxBatch for Vec<VerifiedExecutableTransaction> {
+    fn batch_id(&self) -> BatchId {
+        let digests = self.iter().map(|tx| tx.digest());
+        let mut hasher = DefaultHasher::new();
+        for digest in digests {
+            let bytes = &digest.inner()[0..8];
+            hasher.write(bytes);
+        }
+        BatchId(hasher.finish())
+    }
+}
