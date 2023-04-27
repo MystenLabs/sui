@@ -63,26 +63,24 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
     useEffect(() => {
         onHoverElement(hoveredElement);
     }, [onHoverElement, hoveredElement]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    const handleTooltipThrottled = useCallback(
-        throttle(100, (x: number) => {
+    const handleTooltip = useCallback(
+        (x: number) => {
             const xDate = xScale.invert(x);
             const epochIndex = bisectDate(data, xDate, 0);
             const selectedEpoch = data[epochIndex];
             setTooltipX(x);
             setHoveredElement(selectedEpoch);
-        }),
+        },
         [xScale, data]
     );
-    const prevHandleTooltipThrottled = useRef<typeof handleTooltipThrottled>();
+    const handleTooltipThrottledRef = useRef(throttle(100, handleTooltip));
     useEffect(() => {
-        prevHandleTooltipThrottled.current = handleTooltipThrottled;
+        handleTooltipThrottledRef.current = throttle(100, handleTooltip);
         return () => {
-            prevHandleTooltipThrottled?.current?.cancel?.({
-                upcomingOnly: true,
-            });
+            handleTooltipThrottledRef?.current?.cancel?.();
         };
-    }, [handleTooltipThrottled]);
+    }, [handleTooltip]);
+    const handleTooltipThrottled = handleTooltipThrottledRef.current;
     const totalDays = useMemo(() => {
         const domain = xScale.domain();
         return Math.floor(
@@ -141,7 +139,8 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
                 height={graphButton - graphTop}
                 fill="transparent"
                 stroke="none"
-                onMouseEnter={() => {
+                onMouseEnter={(e) => {
+                    handleTooltipThrottled(localPoint(e)?.x || SIDE_MARGIN);
                     setIsTooltipVisible(true);
                 }}
                 onMouseMove={(e) => {
