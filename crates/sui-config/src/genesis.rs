@@ -31,16 +31,14 @@ use sui_types::crypto::{
     AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfo, AuthoritySignature,
     SuiAuthoritySignature, ToFromBytes,
 };
+use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::epoch_data::EpochData;
 use sui_types::gas::SuiGasStatus;
 use sui_types::gas_coin::{GasCoin, TOTAL_SUPPLY_MIST};
 use sui_types::governance::StakedSui;
 use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::message_envelope::Message;
-use sui_types::messages::{
-    CallArg, Command, InputObjectKind, InputObjects, Transaction, TransactionEffects,
-    TransactionEvents,
-};
+use sui_types::messages::{CallArg, Command, InputObjectKind, InputObjects, Transaction};
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary, VerifiedCheckpoint,
 };

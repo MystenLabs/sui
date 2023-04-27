@@ -21,9 +21,9 @@ use sui_open_rpc::Module;
 use sui_types::balance::Supply;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::coin::{CoinMetadata, TreasuryCap};
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::SuiError;
 use sui_types::gas_coin::GAS;
-use sui_types::messages::TransactionEffectsAPI;
 use sui_types::object::{Object, Owner};
 use sui_types::parse_sui_struct_tag;
 

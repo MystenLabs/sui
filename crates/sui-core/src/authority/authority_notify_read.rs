@@ -11,8 +11,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 use sui_types::base_types::{TransactionDigest, TransactionEffectsDigest};
+use sui_types::effects::TransactionEffects;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::SuiResult;
-use sui_types::messages::{TransactionEffects, TransactionEffectsAPI};
 use tracing::trace;
 
 #[async_trait]

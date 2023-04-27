@@ -23,13 +23,13 @@ use sui_types::crypto::{
     generate_proof_of_possession, get_account_key_pair, get_key_pair_from_rng, AccountKeyPair,
     KeypairTraits, ToFromBytes,
 };
+use sui_types::effects::{CertifiedTransactionEffects, TransactionEffectsAPI};
 use sui_types::error::SuiError;
 use sui_types::gas::GasCostSummary;
 use sui_types::message_envelope::Message;
 use sui_types::messages::{
-    CallArg, CertifiedTransactionEffects, ObjectArg, TransactionData, TransactionDataAPI,
-    TransactionEffectsAPI, TransactionExpiration, VerifiedTransaction,
-    TEST_ONLY_GAS_UNIT_FOR_GENERIC, TEST_ONLY_GAS_UNIT_FOR_STAKING,
+    CallArg, ObjectArg, TransactionData, TransactionDataAPI, TransactionExpiration,
+    VerifiedTransaction, TEST_ONLY_GAS_UNIT_FOR_GENERIC, TEST_ONLY_GAS_UNIT_FOR_STAKING,
     TEST_ONLY_GAS_UNIT_FOR_TRANSFER, TEST_ONLY_GAS_UNIT_FOR_VALIDATOR,
 };
 use sui_types::object::{

@@ -31,9 +31,10 @@ use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_PUBLISH;
 use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN;
 use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_TRANSFER;
 
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::messages::{
     CallArg, ObjectArg, ObjectInfoRequest, ObjectInfoResponse, Transaction, TransactionData,
-    TransactionEffects, TransactionEffectsAPI, TransactionEvents, VerifiedTransaction,
+    VerifiedTransaction,
 };
 use sui_types::messages::{ExecuteTransactionRequestType, HandleCertificateResponseV2};
 use sui_types::move_package::UpgradePolicy;

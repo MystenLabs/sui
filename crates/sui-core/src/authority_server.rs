@@ -12,6 +12,7 @@ use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
 };
+use sui_types::effects::{TransactionEffectsAPI, TransactionEvents};
 use sui_types::multiaddr::Multiaddr;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{error::*, messages::*};
@@ -318,7 +319,7 @@ impl ValidatorService {
             Arc::clone(&consensus_adapter),
             transaction.data(),
         )?;
-        let _handel_tx_metrics_guard = metrics.handle_transaction_latency.start_timer();
+        let _handle_tx_metrics_guard = metrics.handle_transaction_latency.start_timer();
 
         let tx_verif_metrics_guard = metrics.tx_verification_latency.start_timer();
         let transaction = epoch_store

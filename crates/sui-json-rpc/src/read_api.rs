@@ -35,12 +35,10 @@ use sui_types::collection_types::VecMap;
 use sui_types::crypto::default_hash;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::display::DisplayVersionUpdatedEvent;
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::error::{SuiObjectResponseError, UserInputError};
 use sui_types::messages::TransactionDataAPI;
-use sui_types::messages::{
-    TransactionData, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
-    VerifiedTransaction,
-};
+use sui_types::messages::{TransactionData, VerifiedTransaction};
 use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointTimestamp};
 use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, Object, ObjectRead, PastObjectRead};

@@ -11,8 +11,8 @@ use sui_types::coin::PAY_JOIN_FUNC_NAME;
 use sui_types::coin::PAY_MODULE_NAME;
 use sui_types::coin::PAY_SPLIT_VEC_FUNC_NAME;
 use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
+use sui_types::messages::VerifiedTransaction;
 use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_GENERIC;
-use sui_types::messages::{TransactionEffectsAPI, VerifiedTransaction};
 use sui_types::object::{generate_test_gas_objects, Object};
 use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 use sui_types::{
@@ -35,6 +35,7 @@ use test_utils::{
 use serde::{Deserialize, Serialize};
 use strum_macros::Display;
 use strum_macros::EnumString;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::execution_status::ExecutionStatus;
 
 #[derive(

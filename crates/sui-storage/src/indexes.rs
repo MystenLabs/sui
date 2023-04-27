@@ -28,8 +28,8 @@ use sui_types::base_types::{
 use sui_types::base_types::{ObjectInfo, ObjectRef};
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{self, DynamicFieldInfo};
+use sui_types::effects::TransactionEvents;
 use sui_types::error::{SuiError, SuiResult, UserInputError};
-use sui_types::messages::TransactionEvents;
 use sui_types::object::Owner;
 use sui_types::parse_sui_struct_tag;
 use sui_types::temporary_store::TxCoins;
@@ -317,7 +317,7 @@ impl IndexStore {
         let (input_coins, written_coins) = tx_coins.unwrap();
         // 1. Delete old owner if the object is deleted or transferred to a new owner,
         // by looking at `object_index_changes.deleted_owners`.
-        // Objects in `deleted_owners` must be owned by `Owner::Address` befoer the tx,
+        // Objects in `deleted_owners` must be owned by `Owner::Address` before the tx,
         // hence must appear in the tx inputs.
         // They also mut be coin type (see `AuthorityState::commit_certificate`).
         let coin_delete_keys = object_index_changes
@@ -354,7 +354,7 @@ impl IndexStore {
         // For a object to appear in `new_owners`, it must be owned by `Owner::Address` after the tx.
         // It also must not be deleted, hence appear in written_coins (see `AuthorityState::commit_certificate`)
         // It also must be a coin type (see `AuthorityState::commit_certificate`).
-        // Here the coin could be transfered to a new address, to simply have the metadata changed (digest, balance etc)
+        // Here the coin could be transferred to a new address, to simply have the metadata changed (digest, balance etc)
         // due to a successful or failed transaction.
         let coin_add_keys = object_index_changes
         .new_owners
@@ -1545,8 +1545,8 @@ mod tests {
     use std::env::temp_dir;
     use sui_types::base_types::{ObjectInfo, ObjectType, SuiAddress};
     use sui_types::digests::TransactionDigest;
+    use sui_types::effects::TransactionEvents;
     use sui_types::gas_coin::GAS;
-    use sui_types::messages::TransactionEvents;
     use sui_types::object;
     use sui_types::object::Owner;
     use sui_types::storage::WriteKind;

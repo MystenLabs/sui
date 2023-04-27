@@ -27,13 +27,14 @@ use sui_types::crypto::{
     NetworkKeyPair, SuiKeyPair,
 };
 use sui_types::crypto::{AuthorityKeyPair, Signer};
+use sui_types::effects::{SignedTransactionEffects, TransactionEffects};
 use sui_types::error::SuiError;
+use sui_types::messages::ObjectArg;
 use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS;
 use sui_types::messages::{
     CallArg, SignedTransaction, TransactionData, VerifiedTransaction,
     TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
-use sui_types::messages::{ObjectArg, SignedTransactionEffects};
 use sui_types::utils::create_fake_transaction;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
@@ -41,7 +42,7 @@ use sui_types::{
     committee::Committee,
     crypto::{AuthoritySignInfo, AuthoritySignature},
     message_envelope::Message,
-    messages::{CertifiedTransaction, Transaction, TransactionEffects},
+    messages::{CertifiedTransaction, Transaction},
     object::Object,
 };
 use tokio::time::timeout;

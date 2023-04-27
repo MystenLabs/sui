@@ -19,8 +19,9 @@ use std::sync::Arc;
 
 use fastcrypto::hash::MultisetHash;
 use sui_types::accumulator::Accumulator;
+use sui_types::effects::TransactionEffects;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::SuiResult;
-use sui_types::messages::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::messages_checkpoint::{CheckpointSequenceNumber, ECMHLiveObjectSetDigest};
 use typed_store::rocks::TypedStoreError;
 

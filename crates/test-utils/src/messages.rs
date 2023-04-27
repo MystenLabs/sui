@@ -17,8 +17,8 @@ use sui_types::crypto::{
     deterministic_random_account_key, get_key_pair, AccountKeyPair, AuthorityKeyPair,
     AuthorityPublicKeyBytes, AuthoritySignInfo, KeypairTraits, Signature, Signer,
 };
+use sui_types::effects::SignedTransactionEffects;
 use sui_types::messages::CallArg;
-use sui_types::messages::SignedTransactionEffects;
 use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_GENERIC;
 use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_TRANSFER;
 use sui_types::messages::{

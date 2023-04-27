@@ -13,6 +13,8 @@ use crate::crypto::{
 pub use crate::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
 use crate::dynamic_field::DynamicFieldInfo;
 use crate::dynamic_field::DynamicFieldType;
+use crate::effects::TransactionEffects;
+use crate::effects::TransactionEffectsAPI;
 use crate::epoch_data::EpochData;
 use crate::error::ExecutionErrorKind;
 use crate::error::SuiError;
@@ -23,8 +25,6 @@ use crate::governance::StakedSui;
 use crate::governance::STAKED_SUI_STRUCT_NAME;
 use crate::governance::STAKING_POOL_MODULE_NAME;
 use crate::messages::Transaction;
-use crate::messages::TransactionEffects;
-use crate::messages::TransactionEffectsAPI;
 use crate::messages::VerifiedTransaction;
 use crate::messages_checkpoint::CheckpointTimestamp;
 use crate::multisig::MultiSigPublicKey;

@@ -14,7 +14,8 @@ use std::{sync::Arc, time::Duration};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_storage::mutex_table::RwLockTable;
 use sui_types::base_types::SequenceNumber;
-use sui_types::messages::{TransactionEffects, TransactionEffectsAPI};
+use sui_types::effects::TransactionEffects;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::{
     base_types::{ObjectID, VersionNumber},
@@ -324,7 +325,8 @@ mod tests {
     use prometheus::Registry;
     use sui_storage::mutex_table::RwLockTable;
     use sui_types::base_types::{ObjectDigest, VersionNumber};
-    use sui_types::messages::{TransactionEffects, TransactionEffectsAPI};
+    use sui_types::effects::TransactionEffects;
+    use sui_types::effects::TransactionEffectsAPI;
     use sui_types::{
         base_types::{ObjectID, SequenceNumber},
         object::Object,

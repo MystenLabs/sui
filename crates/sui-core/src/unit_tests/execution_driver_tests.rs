@@ -18,10 +18,9 @@ use itertools::Itertools;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::SuiResult;
-use sui_types::messages::{
-    TransactionEffects, TransactionEffectsAPI, VerifiedCertificate, VerifiedTransaction,
-};
+use sui_types::messages::{VerifiedCertificate, VerifiedTransaction};
 use sui_types::object::{Object, Owner};
 use test_utils::messages::{make_counter_create_transaction, make_counter_increment_transaction};
 use tokio::sync::mpsc::UnboundedReceiver;
