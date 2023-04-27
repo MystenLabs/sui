@@ -21,7 +21,7 @@ use tokio::sync::OwnedMutexGuard;
 
 use crate::mutex_table::MutexTable;
 use crate::sharded_lru::ShardedLruCache;
-use sui_json_rpc_types::SuiObjectDataFilter;
+use sui_json_rpc_types::{SuiObjectDataFilter, TransactionFilter};
 use sui_types::base_types::{
     ObjectDigest, ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxSequenceNumber,
 };
@@ -32,7 +32,6 @@ use sui_types::error::{SuiError, SuiResult, UserInputError};
 use sui_types::messages::TransactionEvents;
 use sui_types::object::Owner;
 use sui_types::parse_sui_struct_tag;
-use sui_types::query::TransactionFilter;
 use sui_types::temporary_store::TxCoins;
 use tokio::task::spawn_blocking;
 use tracing::{debug, trace};

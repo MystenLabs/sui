@@ -2237,6 +2237,37 @@
       }
     },
     {
+      "name": "suix_subscribeTransaction",
+      "tags": [
+        {
+          "name": "Extended API"
+        },
+        {
+          "name": "Websocket"
+        },
+        {
+          "name": "PubSub"
+        }
+      ],
+      "description": "Subscribe to a stream of Sui transaction effects",
+      "params": [
+        {
+          "name": "filter",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/TransactionFilter"
+          }
+        }
+      ],
+      "result": {
+        "name": "SuiTransactionBlockEffects",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionBlockEffects"
+        }
+      }
+    },
+    {
       "name": "unsafe_batchTransaction",
       "tags": [
         {

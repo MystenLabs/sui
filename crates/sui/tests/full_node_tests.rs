@@ -13,11 +13,11 @@ use mysten_metrics::RegistryService;
 use prometheus::Registry;
 use serde_json::json;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
-use sui_json_rpc_types::EventFilter;
 use sui_json_rpc_types::{
     type_and_fields_from_move_struct, SuiEvent, SuiExecutionStatus, SuiTransactionBlockEffectsAPI,
     SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
+use sui_json_rpc_types::{EventFilter, TransactionFilter};
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
 use sui_node::SuiNode;
@@ -35,7 +35,6 @@ use sui_types::messages::{
 };
 use sui_types::object::{Object, ObjectRead, Owner, PastObjectRead};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::query::TransactionFilter;
 use sui_types::utils::{
     to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
 };

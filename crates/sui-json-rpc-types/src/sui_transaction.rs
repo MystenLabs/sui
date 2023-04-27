@@ -5,7 +5,7 @@ use std::fmt::{self, Display, Formatter, Write};
 
 use crate::balance_changes::BalanceChange;
 use crate::object_changes::ObjectChange;
-use crate::{Page, SuiEvent, SuiObjectRef};
+use crate::{Filter, Page, SuiEvent, SuiObjectRef};
 use enum_dispatch::enum_dispatch;
 use fastcrypto::encoding::Base64;
 use move_binary_format::access::ModuleAccess;
@@ -35,9 +35,9 @@ use sui_types::messages::{
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Owner;
 use sui_types::parse_sui_type_tag;
-use sui_types::query::TransactionFilter;
 use sui_types::signature::GenericSignature;
 use sui_types::storage::{DeleteKind, WriteKind};
+use sui_types::sui_serde::Readable;
 use sui_types::sui_serde::{
     BigInt, SequenceNumber as AsSequenceNumber, SuiTypeTag as AsSuiTypeTag,
 };
@@ -1593,4 +1593,85 @@ impl SuiLoadedChildObject {
 #[serde(rename_all = "camelCase", rename = "LoadedChildObjectsResponse")]
 pub struct SuiLoadedChildObjectsResponse {
     pub loaded_child_objects: Vec<SuiLoadedChildObject>,
+}
+
+#[derive(Clone)]
+pub struct EffectsWithInput {
+    pub effects: SuiTransactionBlockEffects,
+    pub input: TransactionData,
+}
+
+impl From<EffectsWithInput> for SuiTransactionBlockEffects {
+    fn from(e: EffectsWithInput) -> Self {
+        e.effects
+    }
+}
+
+#[serde_as]
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize)]
+pub enum TransactionFilter {
+    /// Query by checkpoint.
+    Checkpoint(
+        #[schemars(with = "BigInt<u64>")]
+        #[serde_as(as = "Readable<BigInt<u64>, _>")]
+        CheckpointSequenceNumber,
+    ),
+    /// Query by move function.
+    MoveFunction {
+        package: ObjectID,
+        module: Option<String>,
+        function: Option<String>,
+    },
+    /// Query by input object.
+    InputObject(ObjectID),
+    /// Query by changed object, including created, mutated and unwrapped objects.
+    ChangedObject(ObjectID),
+    /// Query by sender address.
+    FromAddress(SuiAddress),
+    /// Query by recipient address.
+    ToAddress(SuiAddress),
+    /// Query by sender and recipient address.
+    FromAndToAddress { from: SuiAddress, to: SuiAddress },
+    /// Query by transaction kind
+    TransactionKind(String),
+}
+
+impl Filter<EffectsWithInput> for TransactionFilter {
+    fn matches(&self, item: &EffectsWithInput) -> bool {
+        match self {
+            TransactionFilter::InputObject(o) => {
+                let Ok(input_objects) = item.input.input_objects() else {
+                    return false;
+                };
+                input_objects.iter().any(|object| object.object_id() == *o)
+            }
+            TransactionFilter::ChangedObject(o) => item
+                .effects
+                .mutated()
+                .iter()
+                .any(|oref: &OwnedObjectRef| &oref.reference.object_id == o),
+            TransactionFilter::FromAddress(a) => &item.input.sender() == a,
+            TransactionFilter::ToAddress(a) => {
+                let mutated: &[OwnedObjectRef] = item.effects.mutated();
+                mutated.iter().chain(item.effects.unwrapped().iter()).any(|oref: &OwnedObjectRef| {
+                    matches!(oref.owner, Owner::AddressOwner(owner) if owner == *a)
+                })
+            }
+            TransactionFilter::FromAndToAddress { from, to } => {
+                Self::FromAddress(*from).matches(item) && Self::ToAddress(*to).matches(item)
+            }
+            TransactionFilter::MoveFunction {
+                package,
+                module,
+                function,
+            } => item.input.move_calls().into_iter().any(|(p, m, f)| {
+                p == package
+                    && (module.is_none() || matches!(module,  Some(m2) if m2 == &m.to_string()))
+                    && (function.is_none() || matches!(function, Some(f2) if f2 == &f.to_string()))
+            }),
+            TransactionFilter::TransactionKind(kind) => item.input.kind().to_string() == *kind,
+            // these filters are not supported, rpc will reject these filters on subscription
+            TransactionFilter::Checkpoint(_) => false,
+        }
+    }
 }
