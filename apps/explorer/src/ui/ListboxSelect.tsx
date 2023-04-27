@@ -21,15 +21,10 @@ export function ListboxSelect<T extends string>({
         <Listbox value={value} onChange={onSelect}>
             {({ open }) => (
                 <div className="relative">
-                    <Listbox.Button className="flex w-full flex-nowrap items-center gap-1 overflow-hidden rounded-lg border border-solid p-2 transition-all ui-open:border-steel ui-not-open:border-transparent ui-not-open:hover:border-steel">
-                        <Text
-                            variant="captionSmall/normal"
-                            color="steel-darker"
-                        >
-                            {value}
-                        </Text>
+                    <Listbox.Button className="group flex w-full flex-nowrap items-center gap-1 overflow-hidden rounded-lg border border-solid p-2 text-steel transition-all hover:text-steel-darker ui-open:border-steel ui-not-open:border-transparent ui-not-open:hover:border-steel">
+                        <Text variant="captionSmall/normal">{value}</Text>
                         <ChevronDown16
-                            className="text-gray-400 pointer-events-none h-4 w-4 text-steel"
+                            className="text-gray-400 pointer-events-none h-4 w-4 text-gray-45 transition-all group-hover:text-steel"
                             aria-hidden="true"
                         />
                     </Listbox.Button>
@@ -39,7 +34,7 @@ export function ListboxSelect<T extends string>({
                         leaveFrom="opacity-100"
                         leaveTo="opacity-0"
                     >
-                        <Listbox.Options className="absolute right-2.5 top-2.5 z-10 max-h-60 w-max max-w-xs overflow-auto rounded-lg bg-white p-2 shadow">
+                        <Listbox.Options className="absolute right-0 top-0 z-10 max-h-60 w-max max-w-xs overflow-auto rounded-lg bg-white p-2 shadow">
                             {options.map((aValue, index) => (
                                 <Listbox.Option
                                     key={index}

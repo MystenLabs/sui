@@ -14,7 +14,7 @@ import { throttle } from 'throttle-debounce';
 import { type EpochGasInfo } from './types';
 
 function formatDate(date: Date) {
-    return ['S', 'M', 'T', 'W', 'T', 'F', 'S'][date.getDay()];
+    return String(date.getDate());
 }
 
 export function isDefined(d: EpochGasInfo) {
