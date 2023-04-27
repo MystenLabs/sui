@@ -54,5 +54,6 @@ pub mod signature_verifier;
 
 pub mod runtime;
 mod transaction_signing_filter;
+pub mod watcher;
 
 pub const SUI_CORE_VERSION: &str = env!("CARGO_PKG_VERSION");

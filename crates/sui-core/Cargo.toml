@@ -85,6 +85,7 @@ more-asserts="0.3.1"
 pretty_assertions = "1.2.1"
 serde-reflection = "0.3.6"
 serde_yaml = "0.8.26"
+libc = { version = "0.2" }
 
 move-symbol-pool.workspace = true
 
