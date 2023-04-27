@@ -36,13 +36,13 @@ export function TabGroup({ size, ...props }: TabGroupProps) {
 
 const tabStyles = cva(
     [
-        'border-b border-transparent ui-selected:border-gray-65 font-semibold text-steel-dark disabled:text-steel-dark hover:text-steel-darker active:text-steel pb-2 -mb-px',
+        'border-b border-transparent ui-selected:border-gray-65 font-semibold text-steel-dark disabled:text-steel-dark hover:text-steel-darker active:text-steel -mb-px',
     ],
     {
         variants: {
             size: {
-                lg: 'text-heading4 ui-selected:text-steel-darker',
-                md: 'text-body ui-selected:text-steel-darker',
+                lg: 'text-heading4 ui-selected:text-steel-darker pb-2',
+                md: 'text-body ui-selected:text-steel-darker pb-2',
                 sm: 'text-captionSmall font-medium pb-0.5 disabled:opacity-40 ui-selected:text-steel-darker',
             },
         },
