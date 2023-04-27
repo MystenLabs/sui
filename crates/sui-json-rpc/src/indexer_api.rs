@@ -13,6 +13,7 @@ use jsonrpsee::{RpcModule, SubscriptionSink};
 use move_bytecode_utils::layout::TypeLayoutBuilder;
 use serde::Serialize;
 use sui_json::SuiJsonValue;
+use sui_types::error::SuiObjectResponseError;
 use sui_types::MOVE_STDLIB_ADDRESS;
 use tracing::{instrument, warn};
 
@@ -277,14 +278,17 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
             let id = self
                 .state
                 .get_dynamic_field_object_id(parent_object_id, name_type, &name_bcs_value)
-                .map_err(|e| anyhow!("{e}"))?
-                .ok_or_else(|| {
-                    anyhow!("Cannot find dynamic field [{name:?}] for object [{parent_object_id}].")
-                })?;
+                .map_err(|e| anyhow!("{e}"))?;
             // TODO(chris): add options to `get_dynamic_field_object` API as well
-            self.read_api
-                .get_object(id, Some(SuiObjectDataOptions::full_content()))
-                .await
+            if let Some(id) = id {
+                self.read_api
+                    .get_object(id, Some(SuiObjectDataOptions::full_content()))
+                    .await
+            } else {
+                Ok(SuiObjectResponse::new_with_error(
+                    SuiObjectResponseError::DynamicFieldNotFound { parent_object_id },
+                ))
+            }
         })
     }
 
