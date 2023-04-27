@@ -42,7 +42,7 @@ export function withdrawFromPolicy(
     amount: string | bigint | null,
 ): TransactionArgument {
 
-    let amountArg = amount !== null ? tx.pure([], 'vector<u64>') : tx.pure([amount], 'vector<u64>');
+    let amountArg = amount !== null ? tx.pure([amount], 'vector<u64>') : tx.pure([], 'vector<u64>');
 
     let [profits] = tx.moveCall({
         target: `${TRANSFER_POLICY_MODULE}::withdraw`,
