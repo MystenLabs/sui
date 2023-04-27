@@ -111,11 +111,13 @@ export function DelegationDetailCard({
                 <Content>
                     <div className="justify-center w-full flex flex-col items-center">
                         {hasInactiveValidatorDelegation ? (
-                            <Alert className="mb-3">
-                                Unstake SUI from this inactive validator and
-                                stake on an active validator to start earning
-                                rewards again.
-                            </Alert>
+                            <div className="mb-3">
+                                <Alert>
+                                    Unstake SUI from this inactive validator and
+                                    stake on an active validator to start
+                                    earning rewards again.
+                                </Alert>
+                            </div>
                         ) : null}
                         <div className="w-full flex">
                             <Card
