@@ -31,7 +31,7 @@ const MAX_PROTOCOL_VERSION: u64 = 9;
 //            hash module bytes individually before computing package digest.
 // Version 8: Disallow changing abilities and type constraints for type parameters in structs
 //            during upgrades.
-// Version 9: Limit the length of Move idenfitiers to 96.
+// Version 9: Limit the length of Move idenfitiers to 128.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1117,7 +1117,7 @@ impl ProtocolConfig {
             9 => {
                 let mut cfg = Self::get_for_version_impl(version - 1);
                 // Limits the length of a Move identifier
-                cfg.max_move_identifier_len = Some(96);
+                cfg.max_move_identifier_len = Some(128);
                 cfg
             }
             // Use this template when making changes:
