@@ -82,8 +82,6 @@ function GasBudgetEstimation({
         setFieldValue('gasBudgetEst', gasBudget, true);
     }, [gasBudget, setFieldValue, values.amount]);
 
-    if (!gasBudget) return null;
-
     return (
         <div className="px-2 my-2 flex w-full gap-2 justify-between">
             <div className="flex gap-1">
@@ -92,7 +90,7 @@ function GasBudgetEstimation({
                 </Text>
             </div>
             <Text variant="body" color="gray-90" weight="medium">
-                {gasBudget} {GAS_SYMBOL}
+                {gasBudget ? gasBudget + ' ' + GAS_SYMBOL : '--'}
             </Text>
         </div>
     );
