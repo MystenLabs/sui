@@ -71,7 +71,6 @@
     "devDependencies": {
         "@babel/core": "^7.21.4",
         "@playwright/test": "^1.32.3",
-        "@savvywombat/tailwindcss-grid-areas": "^3.0.1",
         "@storybook/addon-a11y": "7.0.4",
         "@storybook/addon-essentials": "7.0.4",
         "@storybook/addons": "7.0.4",

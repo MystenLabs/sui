@@ -217,7 +217,6 @@ export default {
     plugins: [
         require('@headlessui/tailwindcss'),
         require('@tailwindcss/aspect-ratio'),
-        require('@savvywombat/tailwindcss-grid-areas'),
         require('@tailwindcss/forms')({
             strategy: 'class',
         }),

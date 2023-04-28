@@ -31,34 +31,28 @@ function Home() {
     return isHomePageRedesignEnabled ? (
         <div
             data-testid="home-page"
-            className="grid grid-cols-1 gap-x-4 gap-y-4 grid-areas-condensedHomePage md:grid-cols-[200px,1fr] md:grid-areas-homePage lg:grid-cols-[200px,454px,1fr] lg:grid-areas-fullHomePage"
+            className="grid grid-cols-1 gap-x-4 gap-y-4 md:grid-cols-[200px,1fr] lg:grid-cols-[200px,454px,1fr]"
         >
-            <div className="grid-in-tps">
-                <NetworkTPS />
-            </div>
-            <div className="grid-in-sui-token">
-                <SuiTokenCard />
-            </div>
-            <div className="overflow-hidden grid-in-network">
+            <NetworkTPS />
+            <SuiTokenCard />
+            <div className="overflow-hidden md:col-span-full lg:col-auto">
                 <OnTheNetwork />
             </div>
-            <div className="grid-in-epoch">
-                <CurrentEpoch />
-            </div>
-            <div className="grid-in-checkpoint">
+            <CurrentEpoch />
+            <div className="md:row-start-4 lg:row-start-3">
                 <Checkpoint />
             </div>
-            <div className="grid-in-gas-price">
+            <div className="md:row-start-3 md:row-end-5 lg:row-start-2 lg:row-end-4">
                 <GasPriceCard />
             </div>
-            <div className="grid-in-node-map">
+            <div className="md:col-span-full lg:col-auto lg:row-start-2 lg:row-end-4">
                 <ErrorBoundary>
                     <Suspense fallback={<Card height="full" />}>
                         <NodeMap minHeight="100%" />
                     </Suspense>
                 </ErrorBoundary>
             </div>
-            <div className="mt-5 grid-in-activity">
+            <div className="mt-5 md:col-span-full lg:col-span-2 lg:row-span-2">
                 <ErrorBoundary>
                     <Activity
                         initialLimit={TRANSACTIONS_LIMIT}
@@ -68,7 +62,7 @@ function Home() {
             </div>
             <div
                 data-testid="validators-table"
-                className="mt-5 grid-in-validator"
+                className="mt-5 md:col-span-full lg:col-auto"
             >
                 <TabGroup size="lg">
                     <TabList>
@@ -83,7 +77,7 @@ function Home() {
                     </TabPanels>
                 </TabGroup>
             </div>
-            <div className="mt-5 bg-gray-60 grid-in-packages">
+            <div className="mt-5 bg-gray-60 md:col-span-full lg:col-auto">
                 Popular packages
             </div>
         </div>
