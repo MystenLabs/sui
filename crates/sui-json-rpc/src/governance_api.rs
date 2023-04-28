@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::anyhow;
 use std::cmp::max;
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -139,14 +140,18 @@ impl GovernanceReadApi {
         let system_state_summary: SuiSystemStateSummary =
             system_state.clone().into_sui_system_state_summary();
 
-        let mut rates = exchange_rates(&self.state, system_state_summary.epoch)
+        let rates = exchange_rates(&self.state, system_state_summary.epoch)
             .await?
-            .into_iter();
+            .into_iter()
+            .map(|rates| (rates.pool_id, rates))
+            .collect::<BTreeMap<_, _>>();
 
         let mut delegated_stakes = vec![];
         for (pool_id, stakes) in pools {
             // Rate table and rate can be null when the pool is not active
-            let Some(rate_table) = rates.find(|r| r.pool_id == pool_id) else { continue; };
+            let rate_table = rates
+                .get(&pool_id)
+                .ok_or_else(|| anyhow!("Cannot find rates for staking pool {pool_id}"))?;
             let current_rate = rate_table.rates.first().map(|(_, rate)| rate);
 
             let mut delegations = vec![];
@@ -265,7 +270,7 @@ impl GovernanceReadApiServer for GovernanceReadApi {
                     (29.0, rates.rates.get(29))
                 };
                 if let Some((_, rate_n_days)) = rates_n {
-                    (rate_n_days.rate() / latest_rate.rate()).powf(360.0 / (n + 1.0)) - 1.0
+                    (rate_n_days.rate() / latest_rate.rate()).powf(365.0 / (n + 1.0)) - 1.0
                 } else {
                     0.0
                 }
@@ -304,11 +309,14 @@ async fn exchange_rates(
     for validator in system_state_summary.active_validators {
         tables.push((
             validator.sui_address,
+            validator.staking_pool_id,
             validator.exchange_rates_id,
             validator.exchange_rates_size,
             true,
         ));
     }
+
+    // Get inactive validator rate tables
     for df in state.get_dynamic_fields(
         system_state_summary.inactive_pools_id,
         None,
@@ -325,6 +333,7 @@ async fn exchange_rates(
         )?;
         tables.push((
             validator.sui_address,
+            validator.staking_pool_id,
             validator.exchange_rates_id,
             validator.exchange_rates_size,
             false,
@@ -332,7 +341,8 @@ async fn exchange_rates(
     }
 
     let mut exchange_rates = vec![];
-    for (address, exchange_rates_id, exchange_rates_size, active) in tables {
+    // Get exchange rates for each validator
+    for (address, pool_id, exchange_rates_id, exchange_rates_size, active) in tables {
         let mut rates = state
             .get_dynamic_fields(exchange_rates_id, None, exchange_rates_size as usize)?
             .into_iter()
@@ -354,7 +364,7 @@ async fn exchange_rates(
 
         exchange_rates.push(ValidatorExchangeRates {
             address,
-            pool_id: exchange_rates_id,
+            pool_id,
             active,
             rates,
         });
