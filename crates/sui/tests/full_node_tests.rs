@@ -1109,8 +1109,10 @@ async fn test_pass_back_clock_object() -> Result<(), anyhow::Error> {
     let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
     let package_ref = publish_basics_package(context, sender).await;
 
-    let gas_obj = get_gas_object_with_wallet_context(context, &sender)
+    let gas_obj = context
+        .get_one_gas_object_owned_by_address(sender)
         .await
+        .unwrap()
         .unwrap();
 
     let transaction_orchestrator = node
