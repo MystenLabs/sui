@@ -47,7 +47,7 @@ export function Layout() {
                                 <div className="w-full">
                                     <Header />
                                     <main className="relative z-10 min-h-screen bg-offwhite">
-                                        <section className="mx-auto max-w-[1440px] px-5 py-10 2xl:px-0">
+                                        <section className="mx-auto max-w-[1440px] px-5 py-10 md:px-10 2xl:px-0">
                                             {networkOutage && (
                                                 <div className="pb-2.5">
                                                     <Banner

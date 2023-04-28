@@ -85,7 +85,7 @@ export function EpochProgress({
                         <Heading variant="heading6/medium" color="steel-darker">
                             {label}
                         </Heading>
-                        <ProgressBar progress={progress} />
+                        <ProgressBar progress={progress || 0} />
                     </div>
                 ) : null}
             </div>
