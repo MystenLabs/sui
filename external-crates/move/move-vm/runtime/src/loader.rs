@@ -2522,61 +2522,28 @@ impl Loader {
         if depth > VALUE_DEPTH_MAX {
             return Err(PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED));
         }
+        *count += 1;
         Ok(match ty {
-            Type::Bool => {
-                *count += 1;
-                MoveTypeLayout::Bool
-            }
-            Type::U8 => {
-                *count += 1;
-                MoveTypeLayout::U8
-            }
-            Type::U16 => {
-                *count += 1;
-                MoveTypeLayout::U16
-            }
-            Type::U32 => {
-                *count += 1;
-                MoveTypeLayout::U32
-            }
-            Type::U64 => {
-                *count += 1;
-                MoveTypeLayout::U64
-            }
-            Type::U128 => {
-                *count += 1;
-                MoveTypeLayout::U128
-            }
-            Type::U256 => {
-                *count += 1;
-                MoveTypeLayout::U256
-            }
-            Type::Address => {
-                *count += 1;
-                MoveTypeLayout::Address
-            }
-            Type::Signer => {
-                *count += 1;
-                MoveTypeLayout::Signer
-            }
-            Type::Vector(ty) => {
-                *count += 1;
-                MoveTypeLayout::Vector(Box::new(self.type_to_type_layout_impl(
-                    ty,
-                    count,
-                    depth + 1,
-                )?))
-            }
+            Type::Bool => MoveTypeLayout::Bool,
+            Type::U8 => MoveTypeLayout::U8,
+            Type::U16 => MoveTypeLayout::U16,
+            Type::U32 => MoveTypeLayout::U32,
+            Type::U64 => MoveTypeLayout::U64,
+            Type::U128 => MoveTypeLayout::U128,
+            Type::U256 => MoveTypeLayout::U256,
+            Type::Address => MoveTypeLayout::Address,
+            Type::Signer => MoveTypeLayout::Signer,
+            Type::Vector(ty) => MoveTypeLayout::Vector(Box::new(self.type_to_type_layout_impl(
+                ty,
+                count,
+                depth + 1,
+            )?)),
             Type::Struct(gidx) => {
-                *count += 1;
                 MoveTypeLayout::Struct(self.struct_gidx_to_type_layout(*gidx, &[], count, depth)?)
             }
-            Type::StructInstantiation(gidx, ty_args) => {
-                *count += 1;
-                MoveTypeLayout::Struct(
-                    self.struct_gidx_to_type_layout(*gidx, ty_args, count, depth)?,
-                )
-            }
+            Type::StructInstantiation(gidx, ty_args) => MoveTypeLayout::Struct(
+                self.struct_gidx_to_type_layout(*gidx, ty_args, count, depth)?,
+            ),
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -2653,6 +2620,7 @@ impl Loader {
         if depth > VALUE_DEPTH_MAX {
             return Err(PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED));
         }
+        *count += 1;
         Ok(match ty {
             Type::Bool => MoveTypeLayout::Bool,
             Type::U8 => MoveTypeLayout::U8,
