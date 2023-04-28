@@ -7,7 +7,6 @@ import { StatsWrapper } from './HomeMetrics/FormattedStatsAmount';
 
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
-import { Text } from '~/ui/Text';
 
 export function SuiTokenCard() {
     return (
