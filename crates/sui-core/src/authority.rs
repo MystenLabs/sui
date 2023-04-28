@@ -2289,10 +2289,27 @@ impl AuthorityState {
                 ObjectType::Struct(s) => &type_ == s,
                 ObjectType::Package => false,
             })
-            .map(|info| info.object_id);
+            .map(|info| ObjectKey(info.object_id, info.version))
+            .collect::<Vec<_>>();
         let mut move_objects = vec![];
-        for id in object_ids {
-            move_objects.push(self.get_move_object(&id)?)
+
+        let objects = self.database.multi_get_object_by_key(&object_ids)?;
+
+        for (o, id) in objects.into_iter().zip(object_ids) {
+            let object = o.ok_or_else(|| {
+                SuiError::from(UserInputError::ObjectNotFound {
+                    object_id: id.0,
+                    version: Some(id.1),
+                })
+            })?;
+            let move_object = object.data.try_as_move().ok_or_else(|| {
+                SuiError::from(UserInputError::MovePackageAsObject { object_id: id.0 })
+            })?;
+            move_objects.push(bcs::from_bytes(move_object.contents()).map_err(|e| {
+                SuiError::ObjectDeserializationError {
+                    error: format!("{e}"),
+                }
+            })?);
         }
         Ok(move_objects)
     }
