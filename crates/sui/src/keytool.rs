@@ -22,6 +22,20 @@ use sui_types::messages::TransactionData;
 use sui_types::multisig::{MultiSig, MultiSigPublicKey, ThresholdUnit, WeightUnit};
 use sui_types::signature::GenericSignature;
 use tracing::info;
+use yubikey::piv::{AlgorithmId, SlotId};
+use yubikey::piv::{sign_data};
+use yubikey::{PinPolicy, TouchPolicy};
+use yubikey::MgmKey;
+//use yubikey::reader::Context;
+use yubikey::certificate;
+use x509::SubjectPublicKeyInfo;
+use openssl::ec::{EcGroup, PointConversionForm};
+use openssl::nid::Nid;
+use openssl::ec::*;
+use openssl::bn::BigNumContext;
+
+use fastcrypto::secp256r1::{Secp256r1PublicKey, Secp256r1Signature};
+use fastcrypto::traits::ToFromBytes;
 #[cfg(test)]
 #[path = "unit_tests/keytool_tests.rs"]
 mod keytool_tests;
@@ -43,6 +57,12 @@ pub enum KeyToolCommand {
         key_scheme: SignatureScheme,
         word_length: Option<String>,
         derivation_path: Option<DerivationPath>,
+    },
+    SignSk {
+        #[clap(long)]
+        data: String,
+        #[clap(long)]
+        intent: Option<Intent>,
     },
     /// This reads the content at the provided file path. The accepted format can be
     /// [enum SuiKeyPair] (Base64 encoded of 33-byte `flag || privkey`) or `type AuthorityKeyPair`
@@ -149,6 +169,91 @@ impl KeyToolCommand {
                         file, scheme
                     );
                 }
+            }
+            KeyToolCommand::SignSk {
+                data,
+                intent
+            } => {
+                println!("Raw tx_bytes to execute: {}", data);
+                let intent = intent.unwrap_or_else(Intent::sui_transaction);
+                println!("Intent: {:?}", intent);
+                let msg: TransactionData =
+                    bcs::from_bytes(&Base64::decode(&data).map_err(|e| {
+                        anyhow!("Cannot deserialize data as TransactionData {:?}", e)
+                    })?)?;
+                let intent_msg = IntentMessage::new(intent, msg);
+                println!(
+                    "Raw intent message: {:?}",
+                    Base64::encode(bcs::to_bytes(&intent_msg)?)
+                );
+                let mut hasher = DefaultHash::default();
+                hasher.update(bcs::to_bytes(&intent_msg)?);
+                let digest = hasher.finalize().digest;
+                println!("Digest to sign: {:?}", Base64::encode(digest));
+
+
+                //let reader = Context::open()?;
+                //let management_key = MgmKey::from_bytes(managementpin.as_bytes())?;
+                let mut piv = yubikey::YubiKey::open()?;
+                let a= piv.authenticate(MgmKey::default())?;
+                println!("Auth : {:?}", a);
+
+                //let slot = SlotId::Retired(RetiredSlotId::R12);
+                let slot = SlotId::Signature;
+                let algorithm = AlgorithmId::EccP256;
+                //let p = generate(&mut piv, slot, algorithm, PinPolicy::Once, TouchPolicy::Cached)?;
+                //println!("Public Key Info : {:?}", p);
+                //piv.verify_pin(pin_val.as_bytes())?;
+                let cert = certificate::Certificate::read(&mut piv, slot)?;
+                let public_key_bytes = cert.subject_pki().public_key();
+                let public_key: &[u8] = &public_key_bytes.to_vec(); // Vec of bytes
+                println!("Public Key bytes : {:?}", public_key_bytes);
+                let mut ctx = BigNumContext::new()?;
+
+                let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1).unwrap();
+                let point = EcPoint::from_bytes(&group, &public_key, &mut ctx)?;
+                let pkey = EcKey::from_public_key(&group, &point)?;
+
+                //let pkey = EcKey::public_key_from_der(public_key).unwrap();
+
+                println!("Pkey ec : {:?}", pkey);
+
+                let pkey_compact_result = pkey.public_key().to_bytes(&group,
+                    PointConversionForm::COMPRESSED,
+                    &mut ctx,);
+                let pkey_compact = pkey_compact_result.unwrap();
+                let secp_pk = Secp256r1PublicKey::from_bytes(&pkey_compact).unwrap();
+                println!(
+                    "Address For Corresponding Yubikey 9c Signature Key: {}",
+                    Into::<SuiAddress>::into(&secp_pk),
+            );
+
+            let digest_vec_bytes:  &[u8]= &digest.to_vec();
+            let sig_bytes = sign_data(&mut piv,
+                    digest_vec_bytes,
+                    algorithm,
+                    slot);
+
+            let sig_bytes_der: &[u8] = &sig_bytes.map(|b| b.to_vec()).unwrap_or_default(); 
+
+            // let sig_bytes = Secp256r1Signature::serialize_compact(&sig);
+            let secpsig: Secp256r1Signature =  Secp256r1Signature::from_der(sig_bytes_der)?;
+            let normalized_sig = secpsig.normalize()?;
+            let sig_bytes: &[u8] = normalized_sig.as_ref();
+            println!("Un-Normalized Sig Bytes {:?}", secpsig.as_ref());
+            println!("Normalized Sig Bytes {:?}", sig_bytes);
+            println!("Public Key Compact bytes {:?}", pkey_compact);
+
+            let mut flag = vec![SignatureScheme::Secp256r1.flag()];
+            flag.extend(sig_bytes);
+            flag.extend(pkey_compact);
+
+            let serialized_sig =  Base64::encode(&flag);
+            println!(
+                "Serialized signature (`flag || sig || pk` in Base64): {:?}",
+                serialized_sig
+            );
+
             }
             KeyToolCommand::Show { file } => {
                 let res = read_keypair_from_file(&file);

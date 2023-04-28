@@ -59,6 +59,9 @@ move-core-types.workspace = true
 move-package.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 csv = "1.2.1"
+yubikey = "0.7.0"
+x509 = "0.2.0"
+openssl = "0.10.37"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemalloc-ctl = "^0.5"
