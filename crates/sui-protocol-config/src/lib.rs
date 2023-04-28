@@ -26,13 +26,13 @@ const MAX_PROTOCOL_VERSION: u64 = 9;
 // Version 6: Change to how bytes are charged in the gas meter, increase buffer stake to 0.5f
 // Version 7: Disallow adding new abilities to types during package upgrades,
 //            disable_invariant_violation_check_in_swap_loc,
-//            advance_to_highest_supported_protocol_version,
 //            disable init functions becoming entry,
 //            hash module bytes individually before computing package digest.
 // Version 8: Disallow changing abilities and type constraints for type parameters in structs
 //            during upgrades.
 // Version 9: Limit the length of Move idenfitiers to 128.
-//            Disallow extraneous module bytes.
+//            Disallow extraneous module bytes,
+//            advance_to_highest_supported_protocol_version,
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1110,8 +1110,6 @@ impl ProtocolConfig {
                 cfg.feature_flags.disallow_adding_abilities_on_upgrade = true;
                 cfg.feature_flags
                     .disable_invariant_violation_check_in_swap_loc = true;
-                cfg.feature_flags
-                    .advance_to_highest_supported_protocol_version = true;
                 cfg.feature_flags.ban_entry_init = true;
                 cfg.feature_flags.package_digest_hash_module = true;
                 cfg
@@ -1127,6 +1125,8 @@ impl ProtocolConfig {
                 // Limits the length of a Move identifier
                 cfg.max_move_identifier_len = Some(128);
                 cfg.feature_flags.no_extraneous_module_bytes = true;
+                cfg.feature_flags
+                    .advance_to_highest_supported_protocol_version = true;
                 cfg
             }
             // Use this template when making changes:
