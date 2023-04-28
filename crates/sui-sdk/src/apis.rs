@@ -18,7 +18,6 @@ use sui_json_rpc::api::GovernanceReadApiClient;
 use sui_json_rpc::api::{
     CoinReadApiClient, IndexerApiClient, MoveUtilsClient, ReadApiClient, WriteApiClient,
 };
-use sui_json_rpc_types::SuiLoadedChildObjectsResponse;
 use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, Coin, CoinPage, DelegatedStake,
     DryRunTransactionBlockResponse, DynamicFieldPage, EventFilter, EventPage, ObjectsPage,
@@ -27,6 +26,7 @@ use sui_json_rpc_types::{
     SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
     SuiTransactionBlockResponseQuery, TransactionBlocksPage,
 };
+use sui_json_rpc_types::{CheckpointPage, SuiLoadedChildObjectsResponse};
 use sui_types::balance::Supply;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::error::TRANSACTION_NOT_FOUND_MSG_PREFIX;
@@ -170,6 +170,20 @@ impl ReadApi {
     /// Return a checkpoint
     pub async fn get_checkpoint(&self, id: CheckpointId) -> SuiRpcResult<Checkpoint> {
         Ok(self.api.http.get_checkpoint(id).await?)
+    }
+
+    /// Return paginated list of checkpoints
+    pub async fn get_checkpoints(
+        &self,
+        cursor: Option<BigInt<u64>>,
+        limit: Option<usize>,
+        descending_order: bool,
+    ) -> SuiRpcResult<CheckpointPage> {
+        Ok(self
+            .api
+            .http
+            .get_checkpoints(cursor, limit, descending_order)
+            .await?)
     }
 
     /// Return the sequence number of the latest checkpoint that has been executed
