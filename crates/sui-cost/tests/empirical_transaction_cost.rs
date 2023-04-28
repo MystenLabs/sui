@@ -241,7 +241,7 @@ async fn create_txes(
         gas_price * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
         gas_price,
     );
-    let (effects, _) =
+    let (effects, _, _) =
         submit_single_owner_transaction(transaction.clone(), &configs.net_addresses()).await;
     assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
     let ((counter_id, counter_initial_shared_version, _), _) = effects.created()[0];
