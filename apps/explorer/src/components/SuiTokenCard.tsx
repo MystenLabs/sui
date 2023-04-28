@@ -33,7 +33,7 @@ export function SuiTokenCard() {
                 <StatsWrapper label="Market Cap" size="sm" postfix="USD">
                     4.69 B
                 </StatsWrapper>
-                <StatsWrapper label="Market Cap" size="sm" postfix="SUI">
+                <StatsWrapper label="Total Supply" size="sm" postfix="SUI">
                     10 B
                 </StatsWrapper>
             </div>
