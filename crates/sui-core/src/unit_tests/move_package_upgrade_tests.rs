@@ -8,8 +8,7 @@ use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
     crypto::{get_key_pair, AccountKeyPair},
     messages::{
-        Argument, CommandArgumentError, ExecutionFailureStatus, ObjectArg, PackageUpgradeError,
-        ProgrammableTransaction, TransactionEffects, TransactionEffectsV1,
+        Argument, ObjectArg, ProgrammableTransaction, TransactionEffects, TransactionEffectsV1,
         TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
     },
     move_package::UpgradePolicy,
@@ -20,6 +19,9 @@ use sui_types::{
 };
 
 use std::{collections::BTreeSet, path::PathBuf, str::FromStr, sync::Arc};
+use sui_types::execution_status::{
+    CommandArgumentError, ExecutionFailureStatus, PackageUpgradeError,
+};
 
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::{
