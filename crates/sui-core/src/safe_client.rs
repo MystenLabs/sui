@@ -11,6 +11,7 @@ use prometheus::{
     register_int_counter_vec_with_registry, register_int_counter_with_registry, IntCounter,
     IntCounterVec, Registry,
 };
+use std::collections::HashSet;
 use std::sync::Arc;
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::messages_checkpoint::{
@@ -367,14 +368,37 @@ where
         digest: &TransactionDigest,
         response: HandleCertificateResponseV2,
     ) -> SuiResult<HandleCertificateResponseV2> {
+        let signed_effects =
+            self.check_signed_effects_plain(digest, response.signed_effects, None)?;
+
+        // For now, validators only pass back input shared object.
+        let objects = if !response.objects.is_empty() {
+            let input_shared_objects = signed_effects
+                .shared_objects()
+                .iter()
+                .collect::<HashSet<_>>();
+            for object in &response.objects {
+                let obj_ref = object.compute_object_reference();
+                if !input_shared_objects.contains(&obj_ref) {
+                    error!(tx_digest=?digest, name=?self.address, ?obj_ref, "Object returned from HandleCertificateResponseV2 is not in the input shared objects of the transaction");
+                    return Err(SuiError::ByzantineAuthoritySuspicion {
+                        authority: self.address,
+                        reason: format!(
+                            "Object {:?} returned from HandleCertificateResponseV2 is not in the input shared objects of tx: {:?}",
+                            obj_ref, digest
+                        ),
+                    });
+                }
+            }
+            response.objects.into_iter().collect::<Vec<_>>()
+        } else {
+            vec![]
+        };
+
         Ok(HandleCertificateResponseV2 {
-            signed_effects: self.check_signed_effects_plain(
-                digest,
-                response.signed_effects,
-                None,
-            )?,
+            signed_effects,
             events: response.events,
-            objects: response.objects,
+            objects,
         })
     }
 

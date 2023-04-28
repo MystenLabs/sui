@@ -665,6 +665,7 @@ impl AuthorityState {
         // this function, in order to prevent a byzantine validator from
         // giving us incorrect effects.
         effects: &VerifiedCertifiedTransactionEffects,
+        objects: &Vec<Object>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         assert!(self.is_fullnode(epoch_store));
@@ -680,6 +681,20 @@ impl AuthorityState {
                 err: "effects/tx digest mismatch".to_string()
             }
         );
+
+        if !objects.is_empty() {
+            debug!(
+                "inserting objects to object store before executing a tx: {:?}",
+                objects
+                    .iter()
+                    .map(|o| (o.id(), o.version()))
+                    .collect::<Vec<_>>()
+            );
+            self.database
+                .fullnode_fast_path_insert_objects_to_object_store_maybe(objects)?;
+            self.transaction_manager()
+                .objects_available(objects.iter().map(InputKey::from).collect(), epoch_store);
+        }
 
         if transaction.contains_shared_object() {
             epoch_store
@@ -1672,6 +1687,9 @@ impl AuthorityState {
         &self,
         effects: &TransactionEffects,
     ) -> Result<Vec<Object>, SuiError> {
+        // Note: any future addition to the returned object list needs cautions
+        // to make sure not to mess up object pruning.
+
         let clock_ref = effects
             .shared_objects()
             .iter()
@@ -1682,6 +1700,7 @@ impl AuthorityState {
                 .database
                 .get_object_by_key(id, *version)?
                 .ok_or_else(|| {
+                    error!("Clock object is not found at version: {:?}", clock_ref);
                     SuiError::from(UserInputError::ObjectNotFound {
                         object_id: *id,
                         version: Some(*version),
@@ -2780,7 +2799,6 @@ impl AuthorityState {
     pub async fn insert_genesis_object(&self, object: Object) {
         self.database
             .insert_genesis_object(object)
-            .await
             .expect("Cannot insert genesis object")
     }
 
