@@ -61,7 +61,7 @@ export function EpochsActivityTable({
                         'Transaction Blocks',
                         'Stake Rewards',
                         'Checkpoint Set',
-                        'Storage Revenue',
+                        'Storage Net Info',
                         'Epoch End',
                     ]}
                     colWidths={[
