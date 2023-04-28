@@ -6,6 +6,8 @@ use std::sync::Arc;
 use anyhow::anyhow;
 
 use async_trait::async_trait;
+use cached::proc_macro::cached;
+use cached::SizedCache;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 use move_core_types::language_storage::{StructTag, TypeTag};
@@ -92,49 +94,58 @@ impl CoinReadApi {
         package_id: &ObjectID,
         object_struct_tag: StructTag,
     ) -> Result<Object, Error> {
-        let state = self.state.clone();
-        let package_id = *package_id;
+        let object_id =
+            find_package_object_id(self.state.clone(), *package_id, object_struct_tag).await?;
+        Ok(self.state.get_object_read(&object_id)?.into_object()?)
+    }
+}
 
-        spawn_monitored_task!(async move {
-            let publish_txn_digest = state
-                .get_object_read(&package_id)?
-                .into_object()?
-                .previous_transaction;
+#[cached(
+    type = "SizedCache<String, ObjectID>",
+    create = "{ SizedCache::with_size(10000) }",
+    convert = r#"{ format!("{}{}", package_id, object_struct_tag) }"#,
+    result = true
+)]
+async fn find_package_object_id(
+    state: Arc<AuthorityState>,
+    package_id: ObjectID,
+    object_struct_tag: StructTag,
+) -> Result<ObjectID, Error> {
+    spawn_monitored_task!(async move {
+        let publish_txn_digest = state.find_publish_txn_digest(package_id)?;
 
-            let (_, effect) = state
-                .get_executed_transaction_and_effects(publish_txn_digest)
-                .await?;
+        let (_, effect) = state
+            .get_executed_transaction_and_effects(publish_txn_digest)
+            .await?;
 
-            async fn find_object_with_type(
-                state: &Arc<AuthorityState>,
-                created: &[(ObjectRef, Owner)],
-                object_struct_tag: &StructTag,
-                package_id: &ObjectID,
-            ) -> Result<ObjectID, anyhow::Error> {
-                for ((id, version, _), _) in created {
-                    if let Ok(past_object) = state.get_past_object_read(id, *version) {
-                        if let Ok(object) = past_object.into_object() {
-                            if matches!(object.type_(), Some(type_) if type_.is(object_struct_tag))
-                            {
-                                return Ok(*id);
-                            }
+        async fn find_object_with_type(
+            state: &Arc<AuthorityState>,
+            created: &[(ObjectRef, Owner)],
+            object_struct_tag: &StructTag,
+            package_id: &ObjectID,
+        ) -> Result<ObjectID, anyhow::Error> {
+            for ((id, version, _), _) in created {
+                if let Ok(past_object) = state.get_past_object_read(id, *version) {
+                    if let Ok(object) = past_object.into_object() {
+                        if matches!(object.type_(), Some(type_) if type_.is(object_struct_tag)) {
+                            return Ok(*id);
                         }
                     }
                 }
-                Err(anyhow!(
-                    "Cannot find object [{}] from [{}] package event.",
-                    object_struct_tag,
-                    package_id
-                ))
             }
+            Err(anyhow!(
+                "Cannot find object [{}] from [{}] package event.",
+                object_struct_tag,
+                package_id
+            ))
+        }
 
-            let object_id =
-                find_object_with_type(&state, effect.created(), &object_struct_tag, &package_id)
-                    .await?;
-            Ok(state.get_object_read(&object_id)?.into_object()?)
-        })
-        .await?
-    }
+        let object_id =
+            find_object_with_type(&state, effect.created(), &object_struct_tag, &package_id)
+                .await?;
+        Ok(object_id)
+    })
+    .await?
 }
 
 impl SuiRpcModule for CoinReadApi {

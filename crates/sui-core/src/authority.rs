@@ -26,7 +26,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use sui_config::transaction_deny_config::TransactionDenyConfig;
 use sui_types::metrics::LimitsMetrics;
-use sui_types::TypeTag;
+use sui_types::{is_system_package, TypeTag};
 use tap::{TapFallible, TapOptional};
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::{oneshot, Semaphore};
@@ -2519,6 +2519,31 @@ impl AuthorityState {
                 Base58::encode(digest)
             )),
         }
+    }
+
+    pub fn find_publish_txn_digest(
+        &self,
+        package_id: ObjectID,
+    ) -> Result<TransactionDigest, anyhow::Error> {
+        if is_system_package(package_id) {
+            return self.find_genesis_txn_digest();
+        }
+        Ok(self
+            .get_object_read(&package_id)?
+            .into_object()?
+            .previous_transaction)
+    }
+
+    pub fn find_genesis_txn_digest(&self) -> Result<TransactionDigest, anyhow::Error> {
+        let summary = self
+            .get_verified_checkpoint_by_sequence_number(0)?
+            .into_message();
+        let content = self.get_checkpoint_contents(summary.content_digest)?;
+        let genesis_transaction = content.enumerate_transactions(&summary).next();
+        Ok(genesis_transaction
+            .ok_or(anyhow!("No transactions found in checkpoint content"))?
+            .1
+            .transaction)
     }
 
     pub fn get_verified_checkpoint_by_sequence_number(
