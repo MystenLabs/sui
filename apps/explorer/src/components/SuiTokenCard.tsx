@@ -19,7 +19,7 @@ export function SuiTokenCard() {
                     variant="heading4/semibold"
                     color="steel-darker"
                 >
-                    1 SUI = $0.33
+                    1 SUI = $XXX
                 </Heading>
             </div>
             <div className="mt-8 flex gap-8">
