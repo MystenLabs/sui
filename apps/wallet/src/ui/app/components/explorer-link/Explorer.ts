@@ -10,6 +10,7 @@ const API_ENV_TO_EXPLORER_ENV: Record<API_ENV, string | undefined> = {
     [API_ENV.local]: 'local',
     [API_ENV.devNet]: 'devnet',
     [API_ENV.testNet]: 'testnet',
+    [API_ENV.mainnet]: 'mainnet',
     [API_ENV.customRPC]: '',
 };
 
