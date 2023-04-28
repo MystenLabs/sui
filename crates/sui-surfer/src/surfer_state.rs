@@ -250,10 +250,12 @@ impl SurferState {
     async fn discover_entry_functions(&self, package: Object) {
         let package_id = package.id();
         let move_package = package.data.try_into_package().unwrap();
-        let move_binary_format_version =
-            ProtocolConfig::get_for_max_version().move_binary_format_version();
+        let config = ProtocolConfig::get_for_max_version();
         let entry_functions: Vec<_> = move_package
-            .normalize(move_binary_format_version)
+            .normalize(
+                config.move_binary_format_version(),
+                config.no_extraneous_module_bytes(),
+            )
             .unwrap()
             .into_iter()
             .flat_map(|(module_name, module)| {

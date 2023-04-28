@@ -691,7 +691,7 @@ fn advance_epoch<S: ObjectStore + BackingPackageStore + ParentSync + ChildObject
         let max_format_version = protocol_config.move_binary_format_version();
         let deserialized_modules: Vec<_> = modules
             .iter()
-            .map(|m| CompiledModule::deserialize_with_max_version(m, max_format_version).unwrap())
+            .map(|m| CompiledModule::deserialize_with_config(m, max_format_version, protocol_config.no_extraneous_module_bytes()).unwrap())
             .collect();
 
         if version == OBJECT_START_VERSION {

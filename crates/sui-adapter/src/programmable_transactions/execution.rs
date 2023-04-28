@@ -675,7 +675,7 @@ fn check_compatibility<'a, S: StorageView>(
         ));
     };
 
-    let Ok(current_normalized) = existing_package.normalize(context.protocol_config.move_binary_format_version()) else {
+    let Ok(current_normalized) = existing_package.normalize(context.protocol_config.move_binary_format_version(), context.protocol_config.no_extraneous_module_bytes()) else {
         invariant_violation!("Tried to normalize modules in existing package but failed")
     };
 
@@ -807,9 +807,10 @@ fn deserialize_modules<S: StorageView, Mode: ExecutionMode>(
     let modules = module_bytes
         .iter()
         .map(|b| {
-            CompiledModule::deserialize_with_max_version(
+            CompiledModule::deserialize_with_config(
                 b,
                 context.protocol_config.move_binary_format_version(),
+                context.protocol_config.no_extraneous_module_bytes(),
             )
             .map_err(|e| e.finish(Location::Undefined))
         })

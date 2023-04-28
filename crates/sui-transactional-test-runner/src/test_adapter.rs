@@ -457,7 +457,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             .map(|(_, published_module_bytes)| {
                 (
                     named_addr_opt,
-                    CompiledModule::deserialize(published_module_bytes).unwrap(),
+                    CompiledModule::deserialize_with_defaults(published_module_bytes).unwrap(),
                 )
             })
             .collect();

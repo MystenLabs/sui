@@ -413,7 +413,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
                 }
             })
         }
-        let compiled_module = package.deserialize_module(module, VERSION_MAX)?;
+        let compiled_module = package.deserialize_module(module, VERSION_MAX, true)?;
 
         // TODO set the Mode from outside?
         resolve_and_type_check::<Mode>(

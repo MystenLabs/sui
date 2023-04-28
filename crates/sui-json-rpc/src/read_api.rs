@@ -1016,6 +1016,7 @@ pub async fn get_move_modules_by_package(
                 normalize_modules(
                     p.serialized_module_map().values(),
                     /* max_binary_format_version */ VERSION_MAX,
+                    /* no_extraneous_module_bytes */ false,
                 )
                 .map_err(|e| {
                     error!("Failed to call get_move_modules_by_package for package: {package:?}");

@@ -57,7 +57,7 @@ impl<R: ModuleResolver> GetModule for ModuleCache<R> {
                     .get_module(id)
                     .map_err(|_| anyhow!("Failed to get module {:?}", id))?
                     .ok_or_else(|| anyhow!("Module {:?} doesn't exist", id))?;
-                let module = CompiledModule::deserialize(&module_bytes)
+                let module = CompiledModule::deserialize_with_defaults(&module_bytes)
                     .map_err(|_| anyhow!("Failure deserializing module {:?}", id))?;
                 entry.insert(module.clone());
                 module
@@ -75,7 +75,7 @@ impl<R: ModuleResolver> GetModule for &R {
         Ok(self
             .get_module(id)
             .unwrap()
-            .map(|bytes| CompiledModule::deserialize(&bytes).unwrap()))
+            .map(|bytes| CompiledModule::deserialize_with_defaults(&bytes).unwrap()))
     }
 }
 
@@ -87,7 +87,7 @@ impl<R: ModuleResolver> GetModule for &mut R {
         Ok(self
             .get_module(id)
             .unwrap()
-            .map(|bytes| CompiledModule::deserialize(&bytes).unwrap()))
+            .map(|bytes| CompiledModule::deserialize_with_defaults(&bytes).unwrap()))
     }
 }
 
@@ -138,7 +138,7 @@ impl<R: ModuleResolver> GetModule for SyncModuleCache<R> {
             .map_err(|_| anyhow!("Failed to get module {:?}", id))?
         {
             let module = Arc::new(
-                CompiledModule::deserialize(&module_bytes)
+                CompiledModule::deserialize_with_defaults(&module_bytes)
                     .map_err(|_| anyhow!("Failure deserializing module {:?}", id))?,
             );
 

@@ -3119,6 +3119,7 @@ impl AuthorityState {
     pub async fn get_available_system_packages(
         &self,
         max_binary_format_version: u32,
+        no_extraneous_module_bytes: bool,
     ) -> Vec<ObjectRef> {
         let mut results = vec![];
 
@@ -3143,6 +3144,7 @@ impl AuthorityState {
                 &modules,
                 system_package.dependencies().to_vec(),
                 max_binary_format_version,
+                no_extraneous_module_bytes,
             ).await else {
                 return vec![];
             };
@@ -3169,6 +3171,7 @@ impl AuthorityState {
         &self,
         system_packages: Vec<ObjectRef>,
         move_binary_format_version: u32,
+        no_extraneous_module_bytes: bool,
     ) -> Option<Vec<(SequenceNumber, Vec<Vec<u8>>, Vec<ObjectID>)>> {
         let ids: Vec<_> = system_packages.iter().map(|(id, _, _)| *id).collect();
         let objects = self.get_objects(&ids).await.expect("read cannot fail");
@@ -3206,8 +3209,12 @@ impl AuthorityState {
             let modules: Vec<_> = bytes
                 .iter()
                 .map(|m| {
-                    CompiledModule::deserialize_with_max_version(m, move_binary_format_version)
-                        .unwrap()
+                    CompiledModule::deserialize_with_config(
+                        m,
+                        move_binary_format_version,
+                        no_extraneous_module_bytes,
+                    )
+                    .unwrap()
                 })
                 .collect();
 
@@ -3378,8 +3385,11 @@ impl AuthorityState {
 
         // since system packages are created during the current epoch, they should abide by the
         // rules of the current epoch, including the current epoch's max Move binary format version
+        let config = epoch_store.protocol_config();
         let Some(next_epoch_system_package_bytes) = self.get_system_package_bytes(
-            next_epoch_system_packages.clone(), epoch_store.protocol_config().move_binary_format_version()
+            next_epoch_system_packages.clone(),
+            config.move_binary_format_version(),
+            config.no_extraneous_module_bytes(),
         ).await else {
             error!(
                 "upgraded system packages {:?} are not locally available, cannot create \

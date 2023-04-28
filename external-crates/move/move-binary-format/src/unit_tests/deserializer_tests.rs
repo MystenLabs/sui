@@ -3,10 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    file_format::{CompiledModule, CompiledScript},
+    file_format::{basic_test_module, CompiledModule, CompiledScript},
     file_format_common::*,
 };
-use move_core_types::vm_status::StatusCode;
+use move_core_types::{metadata::Metadata, vm_status::StatusCode};
 
 fn malformed_simple_versioned_test(version: u32) {
     // bad uleb (more than allowed for table count)
@@ -46,7 +46,7 @@ fn malformed_simple_versioned_test(version: u32) {
     let mut binary = BinaryConstants::MOVE_MAGIC.to_vec();
     binary.extend(version.to_le_bytes()); // version
     binary.push(0); // table count
-    let res = CompiledModule::deserialize(&binary);
+    let res = CompiledModule::deserialize_with_defaults(&binary);
     assert_eq!(
         res.expect_err("Expected no table count").major_status(),
         StatusCode::MALFORMED
@@ -56,7 +56,7 @@ fn malformed_simple_versioned_test(version: u32) {
     let mut binary = BinaryConstants::MOVE_MAGIC.to_vec();
     binary.extend(version.to_le_bytes()); // version
     binary.push(10); // table count
-    let res = CompiledModule::deserialize(&binary);
+    let res = CompiledModule::deserialize_with_defaults(&binary);
     assert_eq!(
         res.expect_err("Expected no table header").major_status(),
         StatusCode::MALFORMED
@@ -82,7 +82,7 @@ fn malformed_simple_versioned_test(version: u32) {
     binary.push(1); // table type
     binary.push(100); // bad table offset
     binary.push(10); // table length
-    let res = CompiledModule::deserialize(&binary);
+    let res = CompiledModule::deserialize_with_defaults(&binary);
     assert_eq!(
         res.expect_err("Expected bad table offset").major_status(),
         StatusCode::BAD_HEADER_TABLE
@@ -99,7 +99,7 @@ fn malformed_simple_versioned_test(version: u32) {
     binary.push(100); // bad table offset
     binary.push(10); // table length
     binary.resize(binary.len() + 5000, 0);
-    let res = CompiledModule::deserialize(&binary);
+    let res = CompiledModule::deserialize_with_defaults(&binary);
     assert_eq!(
         res.expect_err("Expected bad table offset").major_status(),
         StatusCode::BAD_HEADER_TABLE
@@ -127,7 +127,7 @@ fn malformed_simple_versioned_test(version: u32) {
     binary.push(0); // table offset
     binary.push(10); // table length
     binary.resize(binary.len() + 10, 0);
-    let res = CompiledModule::deserialize(&binary);
+    let res = CompiledModule::deserialize_with_defaults(&binary);
     assert_eq!(
         res.expect_err("Expected unknown table").major_status(),
         StatusCode::UNKNOWN_TABLE_TYPE
@@ -256,4 +256,115 @@ fn deserialize_invalid_script_no_signature() {
             .major_status(),
         StatusCode::INDEX_OUT_OF_BOUNDS
     );
+}
+
+#[test]
+fn deserialize_trailing_bytes() {
+    let module = basic_test_module();
+    let bytes = {
+        let mut v = vec![];
+        module.serialize(&mut v).unwrap();
+        v
+    };
+    let test = |bytes| {
+        // ok with flag false
+        CompiledModule::deserialize_with_config(
+            bytes,
+            VERSION_MAX,
+            /*check_no_extraneous_bytes*/ false,
+        )
+        .unwrap();
+        // error with flag true
+        let status_code = CompiledModule::deserialize_with_config(
+            bytes,
+            VERSION_MAX,
+            /*check_no_extraneous_bytes*/ true,
+        )
+        .unwrap_err()
+        .major_status();
+        assert_eq!(status_code, StatusCode::TRAILING_BYTES);
+    };
+    // simple trailing byte
+    let test1 = {
+        let mut v = bytes.clone();
+        v.push(0);
+        v
+    };
+    test(&test1);
+
+    // many bytes
+    let test2 = {
+        let mut v = bytes.clone();
+        v.push(3);
+        v.push(1);
+        v.push(0);
+        v.push(10);
+        v
+    };
+    test(&test2);
+
+    // another module
+    let test3 = {
+        let mut v = bytes.clone();
+        v.extend(bytes);
+        v
+    };
+    test(&test3);
+}
+
+#[test]
+fn no_metadata() {
+    let test = |bytes| {
+        // ok with flag false
+        CompiledModule::deserialize_with_config(
+            bytes,
+            VERSION_MAX,
+            /*check_no_extraneous_bytes*/ false,
+        )
+        .unwrap();
+        // error with flag true
+        let status_code = CompiledModule::deserialize_with_config(
+            bytes,
+            VERSION_MAX,
+            /*check_no_extraneous_bytes*/ true,
+        )
+        .unwrap_err()
+        .major_status();
+        assert_eq!(status_code, StatusCode::MALFORMED);
+    };
+    // empty metadata
+    let mut module = basic_test_module();
+    module.metadata.push(Metadata {
+        key: vec![],
+        value: vec![],
+    });
+    let test2 = {
+        let mut v = vec![];
+        module.serialize(&mut v).unwrap();
+        v
+    };
+    test(&test2);
+
+    // lots of metadata
+    let metadata_bytes = {
+        let module = basic_test_module();
+        let mut v = vec![];
+        module.serialize(&mut v).unwrap();
+        v
+    };
+    let mut module = basic_test_module();
+    module.metadata.push(Metadata {
+        key: metadata_bytes.clone(),
+        value: metadata_bytes.clone(),
+    });
+    module.metadata.push(Metadata {
+        key: metadata_bytes.clone(),
+        value: metadata_bytes.clone(),
+    });
+    let test2 = {
+        let mut v = vec![];
+        module.serialize(&mut v).unwrap();
+        v
+    };
+    test(&test2);
 }

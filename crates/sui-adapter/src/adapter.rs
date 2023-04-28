@@ -113,6 +113,8 @@ pub fn new_move_vm(
             },
             enable_invariant_violation_check_in_swap_loc:
                 !protocol_config.disable_invariant_violation_check_in_swap_loc(),
+            check_no_extraneous_bytes_during_deserialization:
+                protocol_config.no_extraneous_module_bytes(),
         },
     )
     .map_err(|_| SuiError::ExecutionInvariantViolation)
@@ -751,8 +753,12 @@ pub fn run_metered_move_bytecode_verifier(
     let modules_stat = module_bytes
         .iter()
         .map(|b| {
-            CompiledModule::deserialize(b)
-                .map_err(|e| e.finish(move_binary_format::errors::Location::Undefined))
+            CompiledModule::deserialize_with_config(
+                b,
+                protocol_config.move_binary_format_version(),
+                protocol_config.no_extraneous_module_bytes(),
+            )
+            .map_err(|e| e.finish(move_binary_format::errors::Location::Undefined))
         })
         .collect::<move_binary_format::errors::VMResult<Vec<CompiledModule>>>();
     let modules = if let Ok(m) = modules_stat {

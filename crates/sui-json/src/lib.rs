@@ -846,7 +846,7 @@ pub fn resolve_move_function_args(
     allow_arbitrary_function_call: bool,
 ) -> Result<Vec<(ResolvedCallArg, SignatureToken)>, anyhow::Error> {
     // Extract the expected function signature
-    let module = package.deserialize_module(&module_ident, VERSION_MAX)?;
+    let module = package.deserialize_module(&module_ident, VERSION_MAX, true)?;
     let function_str = function.as_ident_str();
     let fdef = module
         .function_defs
