@@ -114,18 +114,18 @@ function Home() {
                 </TabGroup>
             </div>
             {/* <div>
-                <TabGroup>
-                    <TabList>
-                        <Tab>Recent Packages</Tab>
-                    </TabList>
-                    <TabPanels>
-                        <TabPanel>
-                            <ErrorBoundary>
-                                <RecentModulesCard />
-                            </ErrorBoundary>
-                        </TabPanel>
-                    </TabPanels>
-                </TabGroup>
+                    <TabGroup>
+                        <TabList>
+                            <Tab>Recent Packages</Tab>
+                        </TabList>
+                        <TabPanels>
+                            <TabPanel>
+                                <ErrorBoundary>
+                                    <RecentModulesCard />
+                                </ErrorBoundary>
+                            </TabPanel>
+                        </TabPanels>
+                    </TabGroup>
             </div> */}
         </div>
     );
