@@ -224,10 +224,10 @@ export function SendTokenForm({
                                         <div className="px-2 mb-2.5">
                                             <Text
                                                 variant="caption"
-                                                color="steel-dark"
+                                                color="steel"
                                                 weight="semibold"
                                             >
-                                                Select SUI Amount to Send
+                                                Select Coin Amount to Send
                                             </Text>
                                         </div>
 
@@ -283,7 +283,7 @@ export function SendTokenForm({
                                         <div className="px-2 tracking-wider">
                                             <Text
                                                 variant="caption"
-                                                color="steel-dark"
+                                                color="steel"
                                                 weight="semibold"
                                             >
                                                 Enter Recipient Address

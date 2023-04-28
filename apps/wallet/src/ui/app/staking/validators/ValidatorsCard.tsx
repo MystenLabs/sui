@@ -90,8 +90,8 @@ export function ValidatorsCard() {
 
     if (isError) {
         return (
-            <div className="p-2 w-full flex justify-center items-center h-full">
-                <Alert className="mb-2">
+            <div className="p-2 w-full flex justify-center items-center h-full mb-2">
+                <Alert>
                     <strong>{error?.message}</strong>
                 </Alert>
             </div>
@@ -104,11 +104,13 @@ export function ValidatorsCard() {
                 <Content>
                     <div className="mb-4">
                         {hasInactiveValidatorDelegation ? (
-                            <Alert className="mb-3">
-                                Unstake SUI from the inactive validators and
-                                stake on an active validator to start earning
-                                rewards again.
-                            </Alert>
+                            <div className="mb-3">
+                                <Alert>
+                                    Unstake SUI from the inactive validators and
+                                    stake on an active validator to start
+                                    earning rewards again.
+                                </Alert>
+                            </div>
                         ) : null}
                         <div className="grid grid-cols-2 gap-2.5 mb-4">
                             {system &&

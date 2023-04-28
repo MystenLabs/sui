@@ -93,7 +93,9 @@ function ReceiptPage() {
                 }
             >
                 {isError ? (
-                    <Alert className="mb-2 h-fit">Something went wrong</Alert>
+                    <div className="mb-2 h-fit">
+                        <Alert>Something went wrong</Alert>
+                    </div>
                 ) : null}
 
                 {data && (

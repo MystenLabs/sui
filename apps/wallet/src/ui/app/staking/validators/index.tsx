@@ -35,9 +35,11 @@ export function Validators() {
             <div className="w-full flex flex-col flex-nowrap">
                 <Loading loading={isLoading}>
                     {isError ? (
-                        <Alert className="mb-2">
-                            <strong>{error?.message}</strong>
-                        </Alert>
+                        <div className="mb-2">
+                            <Alert>
+                                <strong>{error?.message}</strong>
+                            </Alert>
+                        </div>
                     ) : null}
 
                     {stakedValidators?.length ? (
