@@ -26,6 +26,7 @@ function Home() {
     const isHomePageRedesignEnabled = useFeatureIsOn(
         'explorer-home-page-redesign'
     );
+
     return isHomePageRedesignEnabled ? (
         <div
             data-testid="home-page"

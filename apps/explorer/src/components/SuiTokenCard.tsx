@@ -3,6 +3,8 @@
 
 import { Sui } from '@mysten/icons';
 
+import { StatsWrapper } from './HomeMetrics/FormattedStatsAmount';
+
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
 import { Text } from '~/ui/Text';
@@ -21,51 +23,20 @@ export function SuiTokenCard() {
                 >
                     1 SUI = $XXX
                 </Heading>
+                <div className="ml-auto">
+                    <Text variant="pBody/medium" color="steel">
+                        via CoinMarketCap
+                    </Text>
+                </div>
             </div>
             <div className="mt-8 flex gap-8">
-                <MarketData
-                    title="Market Cap"
-                    amount="4.69 B"
-                    amountSymbol="USD"
-                />
-                <MarketData
-                    title="Total Supply"
-                    amount="10 B"
-                    amountSymbol="SUI"
-                />
+                <StatsWrapper label="Market Cap" size="sm" postfix="USD">
+                    4.69 B
+                </StatsWrapper>
+                <StatsWrapper label="Market Cap" size="sm" postfix="SUI">
+                    10 B
+                </StatsWrapper>
             </div>
         </Card>
-    );
-}
-
-type MarketDataProps = {
-    title: string;
-    amount: string;
-    amountSymbol: string;
-};
-
-function MarketData({ title, amount, amountSymbol }: MarketDataProps) {
-    return (
-        <div>
-            <Text variant="caption/semibold" color="steel-dark">
-                {title}
-            </Text>
-            <div className="mt-1.5 flex items-center gap-0.5">
-                <Heading
-                    as="div"
-                    variant="heading3/semibold"
-                    color="steel-darker"
-                >
-                    {amount}
-                </Heading>
-                <Heading
-                    as="div"
-                    variant="heading4/semibold"
-                    color="steel-darker"
-                >
-                    {amountSymbol}
-                </Heading>
-            </div>
-        </div>
     );
 }
