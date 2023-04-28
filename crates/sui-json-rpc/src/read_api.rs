@@ -702,9 +702,16 @@ impl ReadApiServer for ReadApi {
                         input_objects,
                         None,
                     )
-                    .await
-                    .map_err(Error::SuiError)?;
-                    temp_response.balance_changes = Some(balance_changes);
+                    .await;
+
+                    if let Ok(balance_changes) = balance_changes {
+                        temp_response.balance_changes = Some(balance_changes);
+                    } else {
+                        temp_response.errors.push(format!(
+                            "Cannot retrieve balance changes: {}",
+                            balance_changes.unwrap_err()
+                        ));
+                    }
                 }
             }
 
@@ -720,9 +727,16 @@ impl ReadApiServer for ReadApi {
                         effects.all_changed_objects(),
                         effects.all_deleted(),
                     )
-                    .await
-                    .map_err(Error::SuiError)?;
-                    temp_response.object_changes = Some(object_changes);
+                    .await;
+
+                    if let Ok(object_changes) = object_changes {
+                        temp_response.object_changes = Some(object_changes);
+                    } else {
+                        temp_response.errors.push(format!(
+                            "Cannot retrieve object changes: {}",
+                            object_changes.unwrap_err()
+                        ));
+                    }
                 }
             }
             let epoch_store = self.state.load_epoch_store_one_call_per_task();
