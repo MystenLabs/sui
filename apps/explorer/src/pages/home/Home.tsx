@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+import { useFeatureIsOn } from '@growthbook/growthbook-react';
 import { lazy, Suspense } from 'react';
 
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
@@ -22,9 +23,9 @@ const NodeMap = lazy(() => import('../../components/node-map'));
 const TRANSACTIONS_LIMIT = 25;
 
 function Home() {
-    // const isHomePageRedesignEnabled = useFeatureIsOn('explorer-home-page-redesign');
-    const isHomePageRedesignEnabled = true;
-
+    const isHomePageRedesignEnabled = useFeatureIsOn(
+        'explorer-home-page-redesign'
+    );
     return isHomePageRedesignEnabled ? (
         <div
             data-testid="home-page"
@@ -82,7 +83,7 @@ function Home() {
     ) : (
         <div
             data-testid="home-page"
-            className="grid grid-cols-3 gap-x-12 gap-y-10"
+            className="grid grid-cols-1 gap-x-12 gap-y-10 md:grid-cols-2"
         >
             <ErrorBoundary>
                 <HomeMetrics />
