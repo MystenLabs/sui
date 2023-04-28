@@ -14,7 +14,6 @@ module sui::coin {
     use sui::transfer;
     use sui::url::{Self, Url};
     use std::vector;
-    use sui::event;
 
     /// A type passed to create_supply is not a one-time witness.
     const EBadWitness: u64 = 0;
