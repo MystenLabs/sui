@@ -178,11 +178,11 @@ impl LocalAuthorityClient {
                 error: "Mock error after handle_confirmation_transaction".to_owned(),
             });
         }
-        let objects = state.load_fastpath_input_objects(&signed_effects)?;
+        let fastpath_input_objects = state.load_fastpath_input_objects(&signed_effects)?;
         Ok(HandleCertificateResponseV2 {
             signed_effects,
             events,
-            objects,
+            fastpath_input_objects,
         })
     }
 }

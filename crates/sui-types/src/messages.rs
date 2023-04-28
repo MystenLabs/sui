@@ -2180,8 +2180,17 @@ impl From<HandleCertificateResponseV2> for HandleCertificateResponse {
 pub struct HandleCertificateResponseV2 {
     pub signed_effects: SignedTransactionEffects,
     pub events: TransactionEvents,
-    // objects returned along with the response for faster execution on fullnodes.
-    pub objects: Vec<Object>,
+    /// The validator may return some of the input objects that were used by this transaction, in
+    /// order to facilitate lower latency local execution for the full node client that requested
+    /// the transaction execution.
+    ///
+    /// Typically this list contains only the version (if any) of the Clock object that was used by the
+    /// transaction - without returning it here, the client has no choice but to wait for
+    /// checkpoint sync to provide the input clock.
+    ///
+    /// The validator may return other objects via thist list in the future. However, this
+    /// is only intended for small objects.
+    pub fastpath_input_objects: Vec<Object>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
