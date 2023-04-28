@@ -2526,7 +2526,7 @@ impl AuthorityState {
         package_id: ObjectID,
     ) -> Result<TransactionDigest, anyhow::Error> {
         if is_system_package(package_id) {
-            return Ok(self.find_genesis_txn_digest()?);
+            return self.find_genesis_txn_digest();
         }
         Ok(self
             .get_object_read(&package_id)?
