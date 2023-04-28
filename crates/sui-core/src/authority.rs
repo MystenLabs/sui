@@ -29,7 +29,7 @@ use sui_types::metrics::LimitsMetrics;
 use sui_types::{is_system_package, TypeTag};
 use tap::{TapFallible, TapOptional};
 use tokio::sync::mpsc::unbounded_channel;
-use tokio::sync::{oneshot, Semaphore};
+use tokio::sync::oneshot;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tracing::{debug, error, info, instrument, trace, warn, Instrument};
 
@@ -104,7 +104,7 @@ use crate::checkpoints::checkpoint_executor::CheckpointExecutor;
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::event_handler::EventHandler;
-use crate::execution_driver::{execution_process, ExecutionDispatcher};
+use crate::execution_driver::execution_process;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::stake_aggregator::StakeAggregator;
 use crate::state_accumulator::StateAccumulator;
@@ -1713,16 +1713,10 @@ impl AuthorityState {
 
         let metrics = Arc::new(AuthorityMetrics::new(prometheus_registry));
         let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
-        let execution_limit = Arc::new(Semaphore::new(num_cpus::get() * 2));
-        let execution_dispatcher = Arc::new(ExecutionDispatcher::new(
-            tx_ready_certificates,
-            execution_limit.clone(),
-            metrics.clone(),
-        ));
         let transaction_manager = Arc::new(TransactionManager::new(
             store.clone(),
             &epoch_store,
-            execution_dispatcher.clone(),
+            tx_ready_certificates,
             metrics.clone(),
         ));
         let (tx_execution_shutdown, rx_execution_shutdown) = oneshot::channel();
@@ -1759,12 +1753,10 @@ impl AuthorityState {
 
         // Start a task to execute ready certificates.
         let authority_state = Arc::downgrade(&state);
-        execution_dispatcher.set_authority(authority_state.clone());
         spawn_monitored_task!(execution_process(
             authority_state,
             rx_ready_certificates,
-            rx_execution_shutdown,
-            execution_limit
+            rx_execution_shutdown
         ));
 
         // TODO: This doesn't belong to the constructor of AuthorityState.
@@ -3604,9 +3596,6 @@ impl AuthorityState {
             .unwrap()
             .send(())
             .unwrap();
-        self.transaction_manager
-            .execution_dispatcher
-            .shutdown_execution_for_test();
     }
 }
 

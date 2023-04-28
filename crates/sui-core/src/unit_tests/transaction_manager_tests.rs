@@ -3,8 +3,6 @@
 
 use std::{time::Duration, vec};
 
-use crate::execution_driver::ExecutionDispatcher;
-use std::sync::Arc;
 use sui_types::{
     base_types::ObjectID,
     crypto::deterministic_random_account_key,
@@ -14,7 +12,6 @@ use sui_types::{
     SUI_FRAMEWORK_OBJECT_ID,
 };
 use test_utils::messages::move_transaction;
-use tokio::sync::Semaphore;
 use tokio::{
     sync::mpsc::{unbounded_channel, UnboundedReceiver},
     time::sleep,
@@ -40,17 +37,10 @@ fn make_transaction_manager(
     // Create a new transaction manager instead of reusing the authority's, to examine
     // transaction_manager output from rx_ready_certificates.
     let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
-    // no permits so that we don't try to spawn execution tasks in txn manager test
-    let execution_limit = Arc::new(Semaphore::new(0));
-    let execution_dispatcher = Arc::new(ExecutionDispatcher::new(
-        tx_ready_certificates,
-        execution_limit,
-        state.metrics.clone(),
-    ));
     let transaction_manager = TransactionManager::new(
         state.database.clone(),
         &state.epoch_store_for_testing(),
-        execution_dispatcher,
+        tx_ready_certificates,
         state.metrics.clone(),
     );
 
