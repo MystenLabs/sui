@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Ed25519Keypair, RawSigner, Transaction } from "@mysten/sui.js";
+import { Ed25519Keypair, RawSigner, TransactionBlock } from "@mysten/sui.js";
 import { provider } from "./rpc";
 
 // This simulates what a server would do to sponsor a transaction
@@ -16,8 +16,8 @@ export async function sponsorTransaction(
   await signer.requestSuiFromFaucet();
   console.log(`Sponsor address: ${address}`);
 
-  const tx = Transaction.fromKind(transactionKindBytes);
+  const tx = TransactionBlock.fromKind(transactionKindBytes);
   tx.setSender(sender);
   tx.setGasOwner(address);
-  return await signer.signTransaction({ transaction: tx });
+  return await signer.signTransactionBlock({ transactionBlock: tx });
 }
