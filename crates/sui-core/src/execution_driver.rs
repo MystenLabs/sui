@@ -164,23 +164,23 @@ impl ExecutionDispatcher {
         certificate: VerifiedExecutableTransaction,
         expected_effects_digest: Option<TransactionEffectsDigest>,
     ) {
-        let authority = self.authority.read();
-        let authority = authority.as_ref().and_then(|w| w.upgrade());
-        if let Some(authority) = authority {
-            if let Ok(permit) = self.limit.clone().try_acquire_owned() {
-                // Schedule execution immediately when permit is available
-                // This helps to avoid using single dispatcher thread to dispatch all transactions
-                let digest = *certificate.digest();
-                spawn_monitored_task!(execution_task(
-                    permit,
-                    authority,
-                    certificate,
-                    expected_effects_digest
-                )
-                .instrument(error_span!("execution_driver", tx_digest = ?digest)));
-                return;
-            }
-        }
+        // let authority = self.authority.read();
+        // let authority = authority.as_ref().and_then(|w| w.upgrade());
+        // if let Some(authority) = authority {
+        //     if let Ok(permit) = self.limit.clone().try_acquire_owned() {
+        //         // Schedule execution immediately when permit is available
+        //         // This helps to avoid using single dispatcher thread to dispatch all transactions
+        //         let digest = *certificate.digest();
+        //         spawn_monitored_task!(execution_task(
+        //             permit,
+        //             authority,
+        //             certificate,
+        //             expected_effects_digest
+        //         )
+        //         .instrument(error_span!("execution_driver", tx_digest = ?digest)));
+        //         return;
+        //     }
+        // }
         self.metrics.execution_driver_dispatch_queue.inc();
         self.tx_ready_certificates
             .send((certificate, expected_effects_digest))
