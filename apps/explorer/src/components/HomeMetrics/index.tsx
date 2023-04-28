@@ -65,8 +65,8 @@ export function HomeMetrics() {
                             : '--'}
                     </StatsWrapper>
                     <StatsWrapper
-                        label="Gas Price"
-                        tooltip="Current gas price"
+                        label="Reference Gas Price"
+                        tooltip="Transaction sent at RGP will process promptly during regular network operations"
                         postfix="MIST"
                     >
                         {gasData ? gasData.toLocaleString() : null}
