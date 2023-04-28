@@ -25,7 +25,9 @@ function Home() {
             data-testid="home-page"
             className="grid grid-cols-1 gap-x-4 gap-y-4 md:grid-cols-[200px,1fr] lg:grid-cols-[200px,454px,1fr]"
         >
-            <NetworkTPS />
+            <div className="md:col-span-full lg:col-auto">
+                <NetworkTPS />
+            </div>
             <div className="overflow-hidden md:col-span-full lg:col-span-2">
                 <OnTheNetwork />
             </div>
