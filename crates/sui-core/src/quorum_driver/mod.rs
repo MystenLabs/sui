@@ -14,7 +14,7 @@ use std::time::Duration;
 use sui_types::base_types::{AuthorityName, ObjectRef, TransactionDigest};
 use sui_types::committee::{Committee, EpochId, StakeUnit};
 use sui_types::quorum_driver_types::{
-    QuorumDriverEffectsQueueResult, QuorumDriverError, QuorumDriverResult,
+    QuorumDriverEffectsQueueResult, QuorumDriverError, QuorumDriverResponse, QuorumDriverResult,
 };
 use tap::TapFallible;
 use tokio::time::{sleep_until, Instant};
@@ -33,9 +33,7 @@ use mysten_common::sync::notify_read::{NotifyRead, Registration};
 use mysten_metrics::spawn_monitored_task;
 use std::fmt::Write;
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::messages::{
-    PlainTransactionInfoResponse, QuorumDriverResponse, VerifiedCertificate, VerifiedTransaction,
-};
+use sui_types::messages::{PlainTransactionInfoResponse, VerifiedCertificate, VerifiedTransaction};
 
 use self::reconfig_observer::ReconfigObserver;
 
@@ -403,7 +401,7 @@ where
         certificate: VerifiedCertificate,
     ) -> Result<QuorumDriverResponse, Option<QuorumDriverError>> {
         let tx_digest = *certificate.digest();
-        let (effects, events) = self
+        let (effects, events, objects) = self
             .validators
             .load()
             .process_certificate(certificate.clone().into_inner())
@@ -433,6 +431,7 @@ where
         let response = QuorumDriverResponse {
             effects_cert: effects,
             events,
+            objects,
         };
 
         Ok(response)
@@ -694,6 +693,7 @@ where
                     let response = QuorumDriverResponse {
                         effects_cert,
                         events,
+                        objects: vec![],
                     };
                     quorum_driver.notify(&transaction, &Ok(response), old_retry_times + 1);
                     return;
@@ -714,15 +714,9 @@ where
         };
 
         let response = match quorum_driver.process_certificate(tx_cert.clone()).await {
-            Ok(QuorumDriverResponse {
-                effects_cert,
-                events,
-            }) => {
+            Ok(response) => {
                 debug!(?tx_digest, "Certificate processing succeeded");
-                QuorumDriverResponse {
-                    effects_cert,
-                    events,
-                }
+                response
             }
             // Note: non retryable failure when processing a cert
             // should be very rare.
