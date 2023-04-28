@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { useFeatureIsOn } from '@growthbook/growthbook-react';
+import clsx from 'clsx';
 import { lazy, Suspense } from 'react';
 
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
@@ -26,14 +27,21 @@ function Home() {
     const isHomePageRedesignEnabled = useFeatureIsOn(
         'explorer-home-page-redesign'
     );
+    const isSuiTokenCardEnabled = useFeatureIsOn('explorer-sui-token-card');
+
     return isHomePageRedesignEnabled ? (
         <div
             data-testid="home-page"
             className="grid grid-cols-1 gap-x-4 gap-y-4 md:grid-cols-[200px,1fr] lg:grid-cols-[200px,454px,1fr]"
         >
             <NetworkTPS />
-            <SuiTokenCard />
-            <div className="overflow-hidden md:col-span-full lg:col-auto">
+            {isSuiTokenCardEnabled && <SuiTokenCard />}
+            <div
+                className={clsx('overflow-hidden md:col-span-full', {
+                    'lg:col-span-2': !isSuiTokenCardEnabled,
+                    'lg:col-auto': isSuiTokenCardEnabled,
+                })}
+            >
                 <OnTheNetwork />
             </div>
             <CurrentEpoch />
