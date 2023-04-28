@@ -54,7 +54,7 @@ fn compile_module_string_impl(
 
     let mut serialized_module = Vec::<u8>::new();
     compiled_module.serialize(&mut serialized_module)?;
-    let deserialized_module = CompiledModule::deserialize(&serialized_module)
+    let deserialized_module = CompiledModule::deserialize_with_defaults(&serialized_module)
         .map_err(|e| e.finish(Location::Undefined).into_vm_status())?;
     assert_eq!(compiled_module, deserialized_module);
 

@@ -27,7 +27,7 @@ use sui_types::parse_sui_struct_tag;
 
 use crate::api::{cap_page_limit, CoinReadApiServer, JsonRpcMetrics};
 use crate::error::Error;
-use crate::SuiRpcModule;
+use crate::{with_tracing, SuiRpcModule};
 
 pub struct CoinReadApi {
     state: Arc<AuthorityState>,
@@ -158,25 +158,26 @@ impl CoinReadApiServer for CoinReadApi {
         cursor: Option<ObjectID>,
         limit: Option<usize>,
     ) -> RpcResult<CoinPage> {
-        info!("get_coins");
-        let coin_type_tag = TypeTag::Struct(Box::new(match coin_type {
-            Some(c) => parse_sui_struct_tag(&c)?,
-            None => GAS::type_(),
-        }));
+        with_tracing!("get_coins", async move {
+            let coin_type_tag = TypeTag::Struct(Box::new(match coin_type {
+                Some(c) => parse_sui_struct_tag(&c)?,
+                None => GAS::type_(),
+            }));
 
-        let cursor = match cursor {
-            Some(c) => (coin_type_tag.to_string(), c),
-            // If cursor is not specified, we need to start from the beginning of the coin type, which is the minimal possible ObjectID.
-            None => (coin_type_tag.to_string(), ObjectID::ZERO),
-        };
+            let cursor = match cursor {
+                Some(c) => (coin_type_tag.to_string(), c),
+                // If cursor is not specified, we need to start from the beginning of the coin type, which is the minimal possible ObjectID.
+                None => (coin_type_tag.to_string(), ObjectID::ZERO),
+            };
 
-        let coins = self
-            .get_coins_iterator(
-                owner, cursor, limit, true, // only care about one type of coin
-            )
-            .await?;
+            let coins = self
+                .get_coins_iterator(
+                    owner, cursor, limit, true, // only care about one type of coin
+                )
+                .await?;
 
-        Ok(coins)
+            Ok(coins)
+        })
     }
 
     #[instrument(skip(self))]
@@ -187,42 +188,43 @@ impl CoinReadApiServer for CoinReadApi {
         cursor: Option<ObjectID>,
         limit: Option<usize>,
     ) -> RpcResult<CoinPage> {
-        info!("get_all_coins");
-        let cursor = match cursor {
-            Some(object_id) => {
-                let obj = self
-                    .state
-                    .get_object(&object_id)
-                    .await
-                    .map_err(Error::from)?;
-                match obj {
-                    Some(obj) => {
-                        let coin_type = obj.coin_type_maybe();
-                        if coin_type.is_none() {
-                            Err(anyhow!(
-                                "Invalid Cursor {:?}, Object is not a coin",
-                                object_id
-                            ))
-                        } else {
-                            Ok((coin_type.unwrap().to_string(), object_id))
+        with_tracing!("get_all_coins", async move {
+            let cursor = match cursor {
+                Some(object_id) => {
+                    let obj = self
+                        .state
+                        .get_object(&object_id)
+                        .await
+                        .map_err(Error::from)?;
+                    match obj {
+                        Some(obj) => {
+                            let coin_type = obj.coin_type_maybe();
+                            if coin_type.is_none() {
+                                Err(anyhow!(
+                                    "Invalid Cursor {:?}, Object is not a coin",
+                                    object_id
+                                ))
+                            } else {
+                                Ok((coin_type.unwrap().to_string(), object_id))
+                            }
                         }
+                        None => Err(anyhow!("Invalid Cursor {:?}, Object not found", object_id)),
                     }
-                    None => Err(anyhow!("Invalid Cursor {:?}, Object not found", object_id)),
                 }
-            }
-            None => {
-                // If cursor is None, start from the beginning
-                Ok((String::from_utf8([0u8].to_vec()).unwrap(), ObjectID::ZERO))
-            }
-        }?;
+                None => {
+                    // If cursor is None, start from the beginning
+                    Ok((String::from_utf8([0u8].to_vec()).unwrap(), ObjectID::ZERO))
+                }
+            }?;
 
-        let coins = self
-            .get_coins_iterator(
-                owner, cursor, limit, false, // return all types of coins
-            )
-            .await?;
+            let coins = self
+                .get_coins_iterator(
+                    owner, cursor, limit, false, // return all types of coins
+                )
+                .await?;
 
-        Ok(coins)
+            Ok(coins)
+        })
     }
 
     #[instrument(skip(self))]
@@ -231,92 +233,99 @@ impl CoinReadApiServer for CoinReadApi {
         owner: SuiAddress,
         coin_type: Option<String>,
     ) -> RpcResult<Balance> {
-        info!("get_balance");
-        let coin_type = TypeTag::Struct(Box::new(match coin_type {
-            Some(c) => parse_sui_struct_tag(&c)?,
-            None => GAS::type_(),
-        }));
-        let balance = self
-            .state
-            .indexes
-            .as_ref()
-            .ok_or(Error::SuiError(SuiError::IndexStoreNotAvailable))?
-            .get_balance(owner, coin_type.clone())
-            .await
-            .map_err(|e: SuiError| {
-                debug!(?owner, "Failed to get balance with error: {:?}", e);
-                Error::from(e)
-            })?;
-        Ok(Balance {
-            coin_type: coin_type.to_string(),
-            coin_object_count: balance.num_coins as usize,
-            total_balance: balance.balance as u128,
-            // note: LockedCoin is deprecated
-            locked_balance: Default::default(),
+        with_tracing!("get_balance", async move {
+            let coin_type = TypeTag::Struct(Box::new(match coin_type {
+                Some(c) => parse_sui_struct_tag(&c)?,
+                None => GAS::type_(),
+            }));
+            let balance = self
+                .state
+                .indexes
+                .as_ref()
+                .ok_or(Error::SuiError(SuiError::IndexStoreNotAvailable))?
+                .get_balance(owner, coin_type.clone())
+                .await
+                .map_err(|e: SuiError| {
+                    debug!(?owner, "Failed to get balance with error: {:?}", e);
+                    Error::from(e)
+                })?;
+            Ok(Balance {
+                coin_type: coin_type.to_string(),
+                coin_object_count: balance.num_coins as usize,
+                total_balance: balance.balance as u128,
+                // note: LockedCoin is deprecated
+                locked_balance: Default::default(),
+            })
         })
     }
 
     #[instrument(skip(self))]
     async fn get_all_balances(&self, owner: SuiAddress) -> RpcResult<Vec<Balance>> {
-        info!("get_all_balances");
-        let all_balance = self
-            .state
-            .indexes
-            .as_ref()
-            .ok_or(Error::SuiError(SuiError::IndexStoreNotAvailable))?
-            .get_all_balance(owner)
-            .await
-            .map_err(|e: SuiError| {
-                debug!(?owner, "Failed to get all balance with error: {:?}", e);
-                Error::from(e)
-            })?;
-        Ok(all_balance
-            .iter()
-            .map(|(coin_type, balance)| {
-                Balance {
-                    coin_type: coin_type.to_string(),
-                    coin_object_count: balance.num_coins as usize,
-                    total_balance: balance.balance as u128,
-                    // note: LockedCoin is deprecated
-                    locked_balance: Default::default(),
-                }
-            })
-            .collect())
+        with_tracing!("get_all_balances", async move {
+            let all_balance = self
+                .state
+                .indexes
+                .as_ref()
+                .ok_or(Error::SuiError(SuiError::IndexStoreNotAvailable))?
+                .get_all_balance(owner)
+                .await
+                .map_err(|e: SuiError| {
+                    debug!(?owner, "Failed to get all balance with error: {:?}", e);
+                    Error::from(e)
+                })?;
+            Ok(all_balance
+                .iter()
+                .map(|(coin_type, balance)| {
+                    Balance {
+                        coin_type: coin_type.to_string(),
+                        coin_object_count: balance.num_coins as usize,
+                        total_balance: balance.balance as u128,
+                        // note: LockedCoin is deprecated
+                        locked_balance: Default::default(),
+                    }
+                })
+                .collect())
+        })
     }
 
     #[instrument(skip(self))]
     async fn get_coin_metadata(&self, coin_type: String) -> RpcResult<Option<SuiCoinMetadata>> {
-        info!("get_coin_metadata");
-        let coin_struct = parse_sui_struct_tag(&coin_type)?;
+        with_tracing!("get_coin_metadata", async move {
+            let coin_struct = parse_sui_struct_tag(&coin_type)?;
 
-        let metadata_object = self
-            .find_package_object(
-                &coin_struct.address.into(),
-                CoinMetadata::type_(coin_struct),
-            )
-            .await
-            .ok();
+            let metadata_object = self
+                .find_package_object(
+                    &coin_struct.address.into(),
+                    CoinMetadata::type_(coin_struct),
+                )
+                .await
+                .ok();
 
-        Ok(metadata_object.and_then(|v: Object| v.try_into().ok()))
+            Ok(metadata_object.and_then(|v: Object| v.try_into().ok()))
+        })
     }
 
     #[instrument(skip(self))]
     async fn get_total_supply(&self, coin_type: String) -> RpcResult<Supply> {
-        info!("get_total_supply");
-        let coin_struct = parse_sui_struct_tag(&coin_type)?;
+        with_tracing!("get_total_supply", async move {
+            let coin_struct = parse_sui_struct_tag(&coin_type)?;
 
-        Ok(if GAS::is_gas(&coin_struct) {
-            Supply { value: 0 }
-        } else {
-            let treasury_cap_object = self
-                .find_package_object(&coin_struct.address.into(), TreasuryCap::type_(coin_struct))
-                .await?;
+            Ok(if GAS::is_gas(&coin_struct) {
+                Supply { value: 0 }
+            } else {
+                let treasury_cap_object = self
+                    .find_package_object(
+                        &coin_struct.address.into(),
+                        TreasuryCap::type_(coin_struct),
+                    )
+                    .await?;
 
-            let treasury_cap = TreasuryCap::from_bcs_bytes(
-                treasury_cap_object.data.try_as_move().unwrap().contents(),
-            )
-            .map_err(Error::from)?;
-            treasury_cap.total_supply
+                let treasury_cap = TreasuryCap::from_bcs_bytes(
+                    treasury_cap_object.data.try_as_move().unwrap().contents(),
+                )
+                .map_err(Error::from)?;
+                treasury_cap.total_supply
+            })
         })
     }
 }

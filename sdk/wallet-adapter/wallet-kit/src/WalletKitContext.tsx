@@ -84,6 +84,7 @@ type UseWalletKit = WalletKitCoreState &
     WalletKitCore,
     | "connect"
     | "disconnect"
+    | "selectAccount"
     | "signMessage"
     | "signTransactionBlock"
     | "signAndExecuteTransactionBlock"
@@ -111,6 +112,7 @@ export function useWalletKit(): UseWalletKit {
       signMessage: walletKit.signMessage,
       signTransactionBlock: walletKit.signTransactionBlock,
       signAndExecuteTransactionBlock: walletKit.signAndExecuteTransactionBlock,
+      selectAccount: walletKit.selectAccount,
       ...state,
     }),
     [walletKit, state]

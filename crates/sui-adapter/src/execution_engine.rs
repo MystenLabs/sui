@@ -26,6 +26,7 @@ use sui_types::clock::{CLOCK_MODULE_NAME, CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAM
 use sui_types::committee::EpochId;
 use sui_types::epoch_data::EpochData;
 use sui_types::error::{ExecutionError, ExecutionErrorKind};
+use sui_types::execution_status::ExecutionStatus;
 use sui_types::gas::{GasCostSummary, SuiGasStatusAPI};
 use sui_types::messages::{
     Argument, Command, ConsensusCommitPrologue, GenesisTransaction, ObjectArg,
@@ -40,7 +41,7 @@ use sui_types::temporary_store::TemporaryStore;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
     gas::SuiGasStatus,
-    messages::{CallArg, ChangeEpoch, ExecutionStatus, TransactionEffects},
+    messages::{CallArg, ChangeEpoch, TransactionEffects},
     object::Object,
     storage::BackingPackageStore,
     sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
@@ -654,7 +655,7 @@ fn advance_epoch<S: ObjectStore + BackingPackageStore + ParentSync + ChildObject
     );
 
     #[cfg(msim)]
-    let result = maybe_modify_result(result);
+    let result = maybe_modify_result(result, change_epoch.epoch);
 
     if result.is_err() {
         tracing::error!(
@@ -690,7 +691,7 @@ fn advance_epoch<S: ObjectStore + BackingPackageStore + ParentSync + ChildObject
         let max_format_version = protocol_config.move_binary_format_version();
         let deserialized_modules: Vec<_> = modules
             .iter()
-            .map(|m| CompiledModule::deserialize_with_max_version(m, max_format_version).unwrap())
+            .map(|m| CompiledModule::deserialize_with_config(m, max_format_version, protocol_config.no_extraneous_module_bytes()).unwrap())
             .collect();
 
         if version == OBJECT_START_VERSION {

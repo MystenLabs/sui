@@ -39,6 +39,7 @@ tokio = { workspace = true, features = ["full", "tracing", "test-util"] }
 tokio-retry = "0.3"
 tokio-stream = { version = "0.1.8", features = ["sync", "net"] }
 tracing = "0.1.36"
+url = "2.3.1"
 
 fastcrypto.workspace = true
 move-binary-format.workspace = true

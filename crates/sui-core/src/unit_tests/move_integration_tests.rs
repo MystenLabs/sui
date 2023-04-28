@@ -27,11 +27,11 @@ use sui_move_build::{BuildConfig, SuiPackageHooks};
 use sui_types::{
     crypto::{get_key_pair, AccountKeyPair},
     error::SuiError,
-    messages::ExecutionStatus,
 };
 
 use std::{collections::HashSet, path::PathBuf};
 use std::{env, str::FromStr};
+use sui_types::execution_status::{CommandArgumentError, ExecutionFailureStatus, ExecutionStatus};
 
 #[tokio::test]
 #[cfg_attr(msim, ignore)]

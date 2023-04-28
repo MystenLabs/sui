@@ -16,7 +16,6 @@ move-binary-format.workspace = true
 sui-json-rpc-types= { path = "../sui-json-rpc-types" }
 sui-types = { path = "../sui-types" }
 sui-json = { path = "../sui-json" }
-sui-adapter =  { path = "../sui-adapter" }
 sui-protocol-config = { path = "../sui-protocol-config" }
 
 move-core-types.workspace = true

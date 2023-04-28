@@ -458,6 +458,8 @@ pub struct DBCheckpointConfig {
     pub object_store_config: Option<ObjectStoreConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub perform_index_db_checkpoints_at_epoch_end: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prune_and_compact_before_upload: Option<bool>,
 }
 
 /// Publicly known information about a validator

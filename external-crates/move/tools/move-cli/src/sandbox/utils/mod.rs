@@ -577,7 +577,7 @@ pub(crate) fn is_bytecode_file(path: &Path) -> bool {
 pub(crate) fn contains_module(path: &Path) -> bool {
     is_bytecode_file(path)
         && match fs::read(path) {
-            Ok(bytes) => CompiledModule::deserialize(&bytes).is_ok(),
+            Ok(bytes) => CompiledModule::deserialize_with_defaults(&bytes).is_ok(),
             Err(_) => false,
         }
 }

@@ -174,7 +174,8 @@ pub fn get_module_by_id<S: BackingPackageStore>(
     store: S,
     id: &ModuleId,
 ) -> anyhow::Result<Option<CompiledModule>, SuiError> {
-    Ok(get_module(store, id)?.map(|bytes| CompiledModule::deserialize(&bytes).unwrap()))
+    Ok(get_module(store, id)?
+        .map(|bytes| CompiledModule::deserialize_with_defaults(&bytes).unwrap()))
 }
 
 pub trait ParentSync {

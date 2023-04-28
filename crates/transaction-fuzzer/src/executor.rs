@@ -13,9 +13,7 @@ use sui_types::object::Owner;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
     error::SuiError,
-    messages::{
-        ExecutionFailureStatus, ExecutionStatus, TransactionEffectsAPI, VerifiedTransaction,
-    },
+    messages::{TransactionEffectsAPI, VerifiedTransaction},
     object::Object,
 };
 use tokio::runtime::Runtime;
@@ -24,6 +22,7 @@ use crate::account_universe::{AccountCurrent, INITIAL_BALANCE};
 
 use std::path::PathBuf;
 use sui_move_build::BuildConfig;
+use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 
 pub type ExecutionResult = Result<ExecutionStatus, SuiError>;
 
@@ -83,6 +82,23 @@ impl Executor {
         }
     }
 
+    pub fn new_with_rgp(rgp: u64) -> Self {
+        let rt = Runtime::new().unwrap();
+        let state = rt.block_on(
+            TestAuthorityBuilder::new()
+                .with_reference_gas_price(rgp)
+                .build(),
+        );
+        Self {
+            state,
+            rt: Arc::new(rt),
+        }
+    }
+
+    pub fn get_reference_gas_price(&self) -> u64 {
+        self.state.reference_gas_price_for_testing().unwrap()
+    }
+
     pub fn add_object(&mut self, object: Object) {
         self.rt.block_on(self.state.insert_genesis_object(object));
     }
@@ -121,7 +137,6 @@ impl Executor {
             .1
             .into_data();
 
-        println!("PUBLISH STATUS: {:#?}", effects.status());
         assert!(
             matches!(effects.status(), ExecutionStatus::Success { .. }),
             "{:?}",

@@ -21,7 +21,10 @@ import { ObjectId, normalizeSuiObjectId } from '../types/common';
 import { TRANSACTION_TYPE, WellKnownEncoding, create } from './utils';
 
 const option = <T extends Struct<any, any>>(some: T) =>
-  union([object({ None: literal(null) }), object({ Some: some })]);
+  union([
+    object({ None: union([literal(true), literal(null)]) }),
+    object({ Some: some }),
+  ]);
 
 export const TransactionBlockInput = object({
   kind: literal('Input'),

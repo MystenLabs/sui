@@ -10,11 +10,9 @@ use std::sync::Arc;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::crypto::AccountKeyPair;
 use sui_types::error::UserInputError;
+use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::gas_coin::GasCoin;
-use sui_types::messages::{
-    ExecutionFailureStatus, ExecutionStatus, SignedTransactionEffects, TransactionData,
-    TransactionEffectsAPI,
-};
+use sui_types::messages::{SignedTransactionEffects, TransactionData, TransactionEffectsAPI};
 use sui_types::object::Object;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::utils::to_sender_signed_transaction;

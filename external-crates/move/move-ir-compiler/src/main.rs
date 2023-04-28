@@ -116,7 +116,7 @@ fn main() {
             deps_list
                 .into_iter()
                 .map(|module_bytes| {
-                    let module = CompiledModule::deserialize(module_bytes.as_slice())
+                    let module = CompiledModule::deserialize_with_defaults(module_bytes.as_slice())
                         .expect("Downloaded module blob can't be deserialized");
                     verify_module(&module).expect("Downloaded module blob failed verifier");
                     module

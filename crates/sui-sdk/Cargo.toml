@@ -9,8 +9,11 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.64"
 async-trait = "0.1.61"
+clap = { version = "3.2.17", features = ["derive"] }
+colored = "2.0.0"
 jsonrpsee = { version = "0.16.2", features = ["http-client"] }
 serde = { version = "1.0.144", features = ["derive"] }
+serde_with = { version = "2.1.0", features = ["hex"] }
 serde_json = "1.0.88"
 futures-core = "0.3.21"
 futures = "0.3.23"
@@ -18,7 +21,6 @@ tokio = { workspace = true }
 bcs = "0.1.4"
 thiserror = "1.0.37"
 
-sui-adapter = { path = "../sui-adapter" }
 sui-json-rpc = { path = "../sui-json-rpc" }
 sui-transaction-builder = { path = "../sui-transaction-builder" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
@@ -27,6 +29,8 @@ sui-json = { path = "../sui-json" }
 sui-keys = { path = "../sui-keys" }
 sui-config = { path = "../sui-config" }
 shared-crypto = { path = "../shared-crypto" }
+tracing = "0.1.36"
+
 move-core-types.workspace = true
 
 fastcrypto.workspace = true
