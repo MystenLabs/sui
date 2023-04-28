@@ -9981,6 +9981,7 @@ dependencies = [
  "rocksdb",
  "serde 1.0.152",
  "sui-json-rpc-types",
+ "sui-protocol-config",
  "sui-simulator",
  "sui-types",
  "tap",

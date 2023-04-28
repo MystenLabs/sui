@@ -28,7 +28,7 @@ use sui_types::base_types::{
 use sui_types::base_types::{ObjectInfo, ObjectRef};
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{self, DynamicFieldInfo};
-use sui_types::error::{SuiError, SuiResult};
+use sui_types::error::{SuiError, SuiResult, UserInputError};
 use sui_types::messages::TransactionEvents;
 use sui_types::object::Owner;
 use sui_types::parse_sui_struct_tag;
@@ -205,6 +205,7 @@ pub struct IndexStore {
     tables: IndexStoreTables,
     caches: IndexStoreCaches,
     metrics: Arc<IndexStoreMetrics>,
+    max_type_length: u64,
 }
 
 // These functions are used to initialize the DB tables
@@ -256,7 +257,7 @@ fn coin_index_table_default_config() -> DBOptions {
 }
 
 impl IndexStore {
-    pub fn new(path: PathBuf, registry: &Registry) -> Self {
+    pub fn new(path: PathBuf, registry: &Registry, max_type_length: Option<u64>) -> Self {
         let tables =
             IndexStoreTables::open_tables_read_write(path, MetricConf::default(), None, None);
         let metrics = IndexStoreMetrics::new(registry);
@@ -279,6 +280,7 @@ impl IndexStore {
             next_sequence_number,
             caches,
             metrics: Arc::new(metrics),
+            max_type_length: max_type_length.unwrap_or(128),
         }
     }
 
@@ -796,26 +798,41 @@ impl IndexStore {
         limit: Option<usize>,
         reverse: bool,
     ) -> SuiResult<Vec<TransactionDigest>> {
+        // If we are passed a function with no module return a UserInputError
+        if function.is_some() && module.is_none() {
+            return Err(SuiError::UserInputError {
+                error: UserInputError::MoveFunctionInputError(
+                    "Cannot supply function without supplying module".to_string(),
+                ),
+            });
+        }
+
+        // We cannot have a cursor without filling out the other keys.
+        if cursor.is_some() && (module.is_none() || function.is_none()) {
+            return Err(SuiError::UserInputError {
+                error: UserInputError::MoveFunctionInputError(
+                    "Cannot supply cursor without supplying module and function".to_string(),
+                ),
+            });
+        }
+
         let cursor_val = cursor.unwrap_or(if reverse {
             TxSequenceNumber::MAX
         } else {
             TxSequenceNumber::MIN
         });
 
-        const MAX_STRING: &str =
-            "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
-
+        let max_string = "Z".repeat(self.max_type_length.try_into().unwrap());
         let module_val = module.clone().unwrap_or(if reverse {
-            MAX_STRING.to_string()
+            max_string.clone()
         } else {
             "".to_string()
         });
 
-        let function_val = function.clone().unwrap_or(if reverse {
-            MAX_STRING.to_string()
-        } else {
-            "".to_string()
-        });
+        let function_val =
+            function
+                .clone()
+                .unwrap_or(if reverse { max_string } else { "".to_string() });
 
         let key = (package, module_val, function_val, cursor_val);
         let iter = self.tables.transactions_by_move_function.iter();
@@ -1544,7 +1561,7 @@ mod tests {
         // and verified from both db and cache.
         // This tests make sure we are invalidating entries in the cache and always reading latest
         // balance.
-        let index_store = IndexStore::new(temp_dir(), &Registry::default());
+        let index_store = IndexStore::new(temp_dir(), &Registry::default(), Some(128));
         let address: SuiAddress = AccountAddress::random().into();
         let mut written_objects = BTreeMap::new();
         let mut object_map = BTreeMap::new();
