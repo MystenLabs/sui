@@ -15,6 +15,7 @@ use oneshot::channel;
 use prometheus::Registry;
 use std::collections::BTreeMap;
 use std::collections::Bound::{Included, Unbounded};
+use std::fs;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -120,7 +121,7 @@ impl DBCheckpointHandler {
             None,
         ));
         let config = AuthorityStorePruningConfig {
-            num_epochs_to_retain: 0,
+            num_epochs_to_retain: 1,
             ..Default::default()
         };
         let metrics = AuthorityStorePruningMetrics::new(&Registry::default());
@@ -244,12 +245,8 @@ impl DBCheckpointHandler {
                 // upload completed marker
                 Ok(_) => {
                     info!("Deleting db checkpoint dir: {path} for epoch: {epoch}");
-                    delete_recursively(
-                        path,
-                        self.input_object_store.clone(),
-                        NonZeroUsize::new(20).unwrap(),
-                    )
-                    .await?;
+                    let local_fs_path = self.path_to_filesystem(path)?;
+                    fs::remove_dir_all(&local_fs_path)?;
                 }
                 Err(_) => {
                     debug!("Not ready for deletion yet: {path}");
