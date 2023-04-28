@@ -7,7 +7,7 @@ The proof can be verified by anyone using the public key corresponding to the se
 by applications that need verifiable randomness on-chain.
 
 ## VRF construction
-The VRF used in the Move API in Sui is an Elliptic Curve VRF (ECVRF) following the [CFRG VRF draft specifications version 15](https://datatracker.ietf.org/doc/draft-irtf-cfrg-vrf/15/) using the [Ristretto255](https://ristretto.group) elliptic curve group construction with the SHA-512 hash function and doing nonce generation as defined in [RFC6979](https://www.rfc-editor.org/info/rfc6979).
+The VRF used in the Move API in Sui is an Elliptic Curve VRF (ECVRF) following the [CFRG VRF draft specifications version 15](https://datatracker.ietf.org/doc/draft-irtf-cfrg-vrf/15/). It uses [Ristretto255](https://ristretto.group) elliptic curve group construction with the SHA-512 hash function. The nonce is generated according to [RFC6979](https://www.rfc-editor.org/info/rfc6979).
 
 Any implementation following the same specifications with suite string `sui_vrf` (see section 5 in the [VRF specs](https://datatracker.ietf.org/doc/draft-irtf-cfrg-vrf/15/)) can be used to compute VRF output and generate proofs.
 
