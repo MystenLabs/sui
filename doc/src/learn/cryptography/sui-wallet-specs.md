@@ -11,7 +11,7 @@ Sui follows SLIP-0010 for managing wallets that support the Ed25519 (EdDSA) sign
 
 For managing wallets that support the Ed25519 (EdDSA) signing scheme, Sui follows SLIP-0010, which enforces wallets to always derive child private keys from parent private keys using the hardened key path.
 
-Sui follows BIP-32 for managing wallets that support the ECDSA Secp256k1 abd ECDSA Seco256r1 signing scheme.
+Sui follows BIP-32 for managing wallets that support the ECDSA Secp256k1 and ECDSA Secp256r1 signing scheme.
 
 BIP-32 defines the hierarchical deterministic wallet structure to logically associate a set of keys. Grouping keys in this manner reduces the overhead of keeping track of a large number of private keys for a user. This method also lets custodians issue distinct managed addresses for each user account under one source of control. Using BIP-32 decouples the private key derivation from the public key derivation, enabling the watch-only wallet use case, where a chain of public keys and its addresses can be derived, while the private key can be kept offline for signing.
 
