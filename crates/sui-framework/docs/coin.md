@@ -50,7 +50,6 @@ tokens and coins. <code><a href="coin.md#0x2_coin_Coin">Coin</a></code> can be d
 <b>use</b> <a href="">0x1::option</a>;
 <b>use</b> <a href="">0x1::string</a>;
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
-<b>use</b> <a href="event.md#0x2_event">0x2::event</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="transfer.md#0x2_transfer">0x2::transfer</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
@@ -810,11 +809,6 @@ type, ensuring that there's only one <code><a href="coin.md#0x2_coin_TreasuryCap
 ): (<a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, <a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;) {
     // Make sure there's only one instance of the type T
     <b>assert</b>!(sui::types::is_one_time_witness(&witness), <a href="coin.md#0x2_coin_EBadWitness">EBadWitness</a>);
-
-    // Emit Currency metadata <b>as</b> an <a href="event.md#0x2_event">event</a>.
-    <a href="event.md#0x2_event_emit">event::emit</a>(<a href="coin.md#0x2_coin_CurrencyCreated">CurrencyCreated</a>&lt;T&gt; {
-        decimals
-    });
 
     (
         <a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a> {

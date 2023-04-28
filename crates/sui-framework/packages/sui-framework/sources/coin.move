@@ -258,11 +258,6 @@ module sui::coin {
         // Make sure there's only one instance of the type T
         assert!(sui::types::is_one_time_witness(&witness), EBadWitness);
 
-        // Emit Currency metadata as an event.
-        event::emit(CurrencyCreated<T> {
-            decimals
-        });
-
         (
             TreasuryCap {
                 id: object::new(ctx),
