@@ -27,7 +27,12 @@ import {
   TransactionEventDigest,
 } from './common';
 import { SuiEvent } from './events';
-import { ObjectDigest, SuiGasData, SuiObjectRef } from './objects';
+import {
+  ObjectDigest,
+  SuiGasData,
+  SuiMovePackage,
+  SuiObjectRef,
+} from './objects';
 
 export const EpochId = string();
 
@@ -76,9 +81,19 @@ export const SuiTransaction = union([
   object({ TransferObjects: tuple([array(SuiArgument), SuiArgument]) }),
   object({ SplitCoins: tuple([SuiArgument, array(SuiArgument)]) }),
   object({ MergeCoins: tuple([SuiArgument, array(SuiArgument)]) }),
-  object({ Publish: array(ObjectId) }),
   object({
-    Upgrade: tuple([array(ObjectId), ObjectId, SuiArgument]),
+    Publish: union([
+      // TODO: Remove this after 0.34 is released:
+      tuple([SuiMovePackage, array(ObjectId)]),
+      array(ObjectId),
+    ]),
+  }),
+  object({
+    Upgrade: union([
+      // TODO: Remove this after 0.34 is released:
+      tuple([SuiMovePackage, array(ObjectId), ObjectId, SuiArgument]),
+      tuple([array(ObjectId), ObjectId, SuiArgument]),
+    ]),
   }),
   object({ MakeMoveVec: tuple([nullable(string()), array(SuiArgument)]) }),
 ]);
