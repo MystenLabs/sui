@@ -152,7 +152,7 @@ function TransferCoinPage() {
                                     color="steel"
                                     weight="semibold"
                                 >
-                                    Select all Coin
+                                    Select all Coins
                                 </Text>
                             </div>
                             <ActiveCoinsCard activeCoinType={coinType} />
