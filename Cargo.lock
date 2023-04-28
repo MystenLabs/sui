@@ -1452,9 +1452,9 @@ dependencies = [
 
 [[package]]
 name = "cached"
-version = "0.42.0"
+version = "0.43.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e5877db5d1af7fae60d06b5db9430b68056a69b3582a0be8e3691e87654aeb6"
+checksum = "bc2fafddf188d13788e7099295a59b99e99b2148ab2195cae454e754cc099925"
 dependencies = [
  "async-trait",
  "async_once",
@@ -9365,6 +9365,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bcs",
+ "cached",
  "eyre",
  "fastcrypto",
  "futures",
@@ -9398,6 +9399,7 @@ dependencies = [
  "sui-protocol-config",
  "sui-sdk",
  "sui-simulator",
+ "sui-storage",
  "sui-transaction-builder",
  "sui-types",
  "tap",

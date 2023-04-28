@@ -1976,6 +1976,23 @@
       ]
     },
     {
+      "name": "suix_getValidatorsApy",
+      "tags": [
+        {
+          "name": "Governance Read API"
+        }
+      ],
+      "description": "Return the validator APY",
+      "params": [],
+      "result": {
+        "name": "ValidatorApys",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/ValidatorApys"
+        }
+      }
+    },
+    {
       "name": "suix_queryEvents",
       "tags": [
         {
@@ -7980,6 +7997,40 @@
                 "$ref": "#/components/schemas/SequenceNumber"
               }
             ]
+          }
+        }
+      },
+      "ValidatorApy": {
+        "type": "object",
+        "required": [
+          "address",
+          "apy"
+        ],
+        "properties": {
+          "address": {
+            "$ref": "#/components/schemas/SuiAddress"
+          },
+          "apy": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "ValidatorApys": {
+        "type": "object",
+        "required": [
+          "apys",
+          "epoch"
+        ],
+        "properties": {
+          "apys": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ValidatorApy"
+            }
+          },
+          "epoch": {
+            "$ref": "#/components/schemas/BigInt_for_uint64"
           }
         }
       }

@@ -72,3 +72,19 @@ pub struct Stake {
     #[serde(flatten)]
     pub status: StakeStatus,
 }
+
+#[serde_as]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+pub struct ValidatorApys {
+    pub apys: Vec<ValidatorApy>,
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
+    pub epoch: EpochId,
+}
+
+#[serde_as]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+pub struct ValidatorApy {
+    pub address: SuiAddress,
+    pub apy: f64,
+}
