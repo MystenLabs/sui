@@ -44,7 +44,7 @@ export const genTableDataFromEpochsData = (results: EpochPage) => ({
                 />
             </div>
         ),
-        storageNetInfo: (
+        storageNetInflow: (
             <TxTableCol>
                 <SuiAmount amount={epoch.endOfEpochInfo?.storageCharge} />
             </TxTableCol>
@@ -77,8 +77,8 @@ export const genTableDataFromEpochsData = (results: EpochPage) => ({
             accessorKey: 'checkpointSet',
         },
         {
-            header: 'Storage Net Info',
-            accessorKey: 'storageNetInfo',
+            header: 'Storage Net Inflow',
+            accessorKey: 'storageNetInflow',
         },
         {
             header: 'Epoch End',
