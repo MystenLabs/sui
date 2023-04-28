@@ -124,6 +124,10 @@
 					{
 						"label": "Sui Keys and Addresses",
 						"fileName": "learn/cryptography/sui-wallet-specs"
+					},
+					{
+						"label": "Sui Crypto Agility and Signatures",
+						"fileName": "learn/cryptography/sui-signatures"
 					}
 				]
 			},
