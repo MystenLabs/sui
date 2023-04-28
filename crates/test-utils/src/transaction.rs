@@ -717,7 +717,7 @@ pub fn get_unique_effects(
         let effects = reply.signed_effects.into_data();
         all_effects.insert(effects.digest(), effects);
         all_events.insert(reply.events.digest(), reply.events);
-        all_objects.insert(reply.objects);
+        all_objects.insert(reply.fastpath_input_objects);
     }
     assert_eq!(all_effects.len(), 1);
     assert_eq!(all_events.len(), 1);

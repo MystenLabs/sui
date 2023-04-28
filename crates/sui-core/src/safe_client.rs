@@ -372,12 +372,12 @@ where
             self.check_signed_effects_plain(digest, response.signed_effects, None)?;
 
         // For now, validators only pass back input shared object.
-        let objects = if !response.objects.is_empty() {
+        let fastpath_input_objects = if !response.fastpath_input_objects.is_empty() {
             let input_shared_objects = signed_effects
                 .shared_objects()
                 .iter()
                 .collect::<HashSet<_>>();
-            for object in &response.objects {
+            for object in &response.fastpath_input_objects {
                 let obj_ref = object.compute_object_reference();
                 if !input_shared_objects.contains(&obj_ref) {
                     error!(tx_digest=?digest, name=?self.address, ?obj_ref, "Object returned from HandleCertificateResponseV2 is not in the input shared objects of the transaction");
@@ -390,7 +390,10 @@ where
                     });
                 }
             }
-            response.objects.into_iter().collect::<Vec<_>>()
+            response
+                .fastpath_input_objects
+                .into_iter()
+                .collect::<Vec<_>>()
         } else {
             vec![]
         };
@@ -398,7 +401,7 @@ where
         Ok(HandleCertificateResponseV2 {
             signed_effects,
             events: response.events,
-            objects,
+            fastpath_input_objects,
         })
     }
 

@@ -1543,7 +1543,7 @@ where
             Ok(HandleCertificateResponseV2 {
                 signed_effects,
                 events,
-                objects,
+                fastpath_input_objects,
             }) => {
                 debug!(
                     ?tx_digest,
@@ -1580,9 +1580,9 @@ where
                         );
                         ct.verify(&self.committee).map(|ct| {
                             debug!(?tx_digest, "Got quorum for validators handle_certificate.");
-                            let objects =
+                            let fastpath_input_objects =
                                 state.object_map.remove(&effects_digest).unwrap_or_default();
-                            Some((ct, events, objects.into_iter().collect()))
+                            Some((ct, events, fastpath_input_objects.into_iter().collect()))
                         })
                     }
                 };
@@ -1596,7 +1596,7 @@ where
                         .object_map
                         .entry(effects_digest)
                         .or_default()
-                        .extend(objects.into_iter());
+                        .extend(fastpath_input_objects.into_iter());
                 }
                 result
             }

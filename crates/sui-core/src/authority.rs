@@ -1696,24 +1696,16 @@ impl AuthorityState {
             .find(|(id, _, _)| id.is_clock());
 
         if let Some((id, version, digest)) = clock_ref {
-            let clock_obj = self
-                .database
-                .get_object_by_key(id, *version)?
-                .ok_or_else(|| {
-                    error!("Clock object is not found at version: {:?}", clock_ref);
-                    SuiError::from(UserInputError::ObjectNotFound {
-                        object_id: *id,
-                        version: Some(*version),
-                    })
-                })?;
-            let digest_matches = clock_obj.compute_object_reference().2 == *digest;
-            debug_assert!(digest_matches);
-            if !digest_matches {
-                error!("Clock object digest mismatch");
-                Ok(vec![])
-            } else {
-                Ok(vec![clock_obj])
-            }
+            let clock_obj = self.database.get_object_by_key(id, *version)?;
+            debug_assert!(clock_obj.is_some());
+            debug_assert_eq!(
+                clock_obj.as_ref().unwrap().compute_object_reference().2,
+                *digest
+            );
+            Ok(clock_obj
+                .tap_none(|| error!("Clock object not found: {:?}", clock_ref))
+                .into_iter()
+                .collect())
         } else {
             Ok(vec![])
         }

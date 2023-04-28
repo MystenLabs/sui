@@ -143,7 +143,7 @@ impl AuthorityAPI for NetworkAuthorityClient {
             return Ok(HandleCertificateResponseV2 {
                 signed_effects: response.signed_effects,
                 events: response.events,
-                objects: vec![],
+                fastpath_input_objects: vec![],
             });
         }
         response.map_err(Into::into)
