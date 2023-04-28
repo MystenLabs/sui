@@ -73,32 +73,23 @@ export function CurrentEpoch() {
                     </div>
                     <div className="space-y-1.5">
                         <Heading variant="heading6/medium" color="steel-darker">
-                            {label}
+                            {label ?? '--'}
                         </Heading>
                         <ProgressBar progress={progress || 0} />
                     </div>
-                    {formattedDateString ? (
-                        <div>
-                            <Text
-                                variant="pSubtitleSmall/semibold"
-                                uppercase
-                                color="steel-dark"
-                            >
-                                Started
-                            </Text>
-
-                            <Text
-                                variant="pSubtitle/semibold"
-                                color="steel-dark"
-                            >
-                                {formattedDateString}
-                            </Text>
-                        </div>
-                    ) : (
-                        <Text variant="pSubtitle/semibold" color="steel-dark">
-                            Loading...
+                    <div>
+                        <Text
+                            variant="pSubtitleSmall/semibold"
+                            uppercase
+                            color="steel-dark"
+                        >
+                            {formattedDateString ? 'Started' : '--'}
                         </Text>
-                    )}
+
+                        <Text variant="pSubtitle/semibold" color="steel-dark">
+                            {formattedDateString || '--'}
+                        </Text>
+                    </div>
                 </div>
             </Card>
         </LinkWithQuery>
