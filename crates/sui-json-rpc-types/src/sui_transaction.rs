@@ -5,7 +5,7 @@ use std::fmt::{self, Display, Formatter, Write};
 
 use crate::balance_changes::BalanceChange;
 use crate::object_changes::ObjectChange;
-use crate::{Page, SuiEvent, SuiMovePackage, SuiObjectRef};
+use crate::{Page, SuiEvent, SuiObjectRef};
 use enum_dispatch::enum_dispatch;
 use fastcrypto::encoding::Base64;
 use move_binary_format::access::ModuleAccess;
@@ -33,7 +33,6 @@ use sui_types::messages::{
     TransactionKind, VersionedProtocolMessage,
 };
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use sui_types::move_package::disassemble_modules;
 use sui_types::object::Owner;
 use sui_types::parse_sui_type_tag;
 use sui_types::query::TransactionFilter;
@@ -1145,9 +1144,9 @@ pub enum SuiCommand {
     MergeCoins(SuiArgument, Vec<SuiArgument>),
     /// Publishes a Move package. It takes the package bytes and a list of the package's transitive
     /// dependencies to link against on-chain.
-    Publish(SuiMovePackage, Vec<ObjectID>),
+    Publish(Vec<ObjectID>),
     /// Upgrades a Move package
-    Upgrade(SuiMovePackage, Vec<ObjectID>, ObjectID, SuiArgument),
+    Upgrade(Vec<ObjectID>, ObjectID, SuiArgument),
     /// `forall T: Vec<T> -> vector<T>`
     /// Given n-values of the same type, it constructs a vector. For non objects or an empty vector,
     /// the type tag must be specified.
@@ -1186,16 +1185,15 @@ impl Display for SuiCommand {
                 write_sep(f, coins, ",")?;
                 write!(f, ")")
             }
-            Self::Publish(_bytes, deps) => {
-                write!(f, "Publish(_,")?;
+            Self::Publish(deps) => {
+                write!(f, "Publish(<modules>,")?;
                 write_sep(f, deps, ",")?;
                 write!(f, ")")
             }
-            Self::Upgrade(_bytes, deps, current_package_id, ticket) => {
-                write!(f, "Upgrade({ticket},")?;
+            Self::Upgrade(deps, current_package_id, ticket) => {
+                write!(f, "Upgrade(<modules>, {ticket},")?;
                 write_sep(f, deps, ",")?;
                 write!(f, ", {current_package_id}")?;
-                write!(f, ", _)")?;
                 write!(f, ")")
             }
         }
@@ -1218,24 +1216,14 @@ impl From<Command> for SuiCommand {
                 arg.into(),
                 args.into_iter().map(SuiArgument::from).collect(),
             ),
-            Command::Publish(modules, dep_ids) => SuiCommand::Publish(
-                SuiMovePackage {
-                    disassembled: disassemble_modules(modules.iter()).unwrap_or_default(),
-                },
-                dep_ids,
-            ),
+            Command::Publish(_modules, dep_ids) => SuiCommand::Publish(dep_ids),
             Command::MakeMoveVec(tag_opt, args) => SuiCommand::MakeMoveVec(
                 tag_opt.map(|tag| tag.to_string()),
                 args.into_iter().map(SuiArgument::from).collect(),
             ),
-            Command::Upgrade(modules, dep_ids, current_package_id, ticket) => SuiCommand::Upgrade(
-                SuiMovePackage {
-                    disassembled: disassemble_modules(modules.iter()).unwrap_or_default(),
-                },
-                dep_ids,
-                current_package_id,
-                SuiArgument::from(ticket),
-            ),
+            Command::Upgrade(_modules, dep_ids, current_package_id, ticket) => {
+                SuiCommand::Upgrade(dep_ids, current_package_id, SuiArgument::from(ticket))
+            }
         }
     }
 }
