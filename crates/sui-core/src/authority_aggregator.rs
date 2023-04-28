@@ -39,7 +39,7 @@ use prometheus::{
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
     register_int_gauge_with_registry, IntCounter, IntCounterVec, IntGauge, Registry,
 };
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::string::ToString;
 use std::sync::Arc;
 use std::time::Duration;
@@ -322,6 +322,7 @@ struct ProcessCertificateState {
     non_retryable_stake: StakeUnit,
     non_retryable_errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
     retryable_errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
+    object_map: HashMap<TransactionEffectsDigest, HashSet<Object>>,
     // As long as none of the exit criteria are met we consider the state retryable
     // 1) >= 2f+1 signatures
     // 2) >= f+1 non-retryable errors
@@ -1417,11 +1418,16 @@ where
         &self,
         certificate: CertifiedTransaction,
     ) -> Result<
-        (VerifiedCertifiedTransactionEffects, TransactionEvents),
+        (
+            VerifiedCertifiedTransactionEffects,
+            TransactionEvents,
+            Vec<Object>,
+        ),
         AggregatorProcessCertificateError,
     > {
         let state = ProcessCertificateState {
             effects_map: MultiStakeAggregator::new(Arc::new(self.committee.clone())),
+            object_map: HashMap::new(),
             non_retryable_stake: 0,
             non_retryable_errors: vec![],
             retryable_errors: vec![],
@@ -1457,7 +1463,7 @@ where
                 Box::pin(async move {
                     let _guard = GaugeGuard::acquire(&self.metrics.inflight_certificate_requests);
                     client
-                        .handle_certificate(cert_ref.clone())
+                        .handle_certificate_v2(cert_ref.clone())
                         .instrument(
                             tracing::trace_span!("handle_certificate", authority =? name.concise()),
                         )
@@ -1556,22 +1562,30 @@ where
         &self,
         tx_digest: &TransactionDigest,
         state: &mut ProcessCertificateState,
-        response: SuiResult<HandleCertificateResponse>,
+        response: SuiResult<HandleCertificateResponseV2>,
         name: AuthorityName,
-    ) -> SuiResult<Option<(VerifiedCertifiedTransactionEffects, TransactionEvents)>> {
+    ) -> SuiResult<
+        Option<(
+            VerifiedCertifiedTransactionEffects,
+            TransactionEvents,
+            Vec<Object>,
+        )>,
+    > {
         match response {
-            Ok(HandleCertificateResponse {
+            Ok(HandleCertificateResponseV2 {
                 signed_effects,
                 events,
+                objects,
             }) => {
                 debug!(
                     ?tx_digest,
                     name = ?name.concise(),
                     "Validator handled certificate successfully",
                 );
+                let effects_digest = *signed_effects.digest();
                 // Note: here we aggregate votes by the hash of the effects structure
-                match state.effects_map.insert(
-                    (signed_effects.epoch(), *signed_effects.digest()),
+                let result = match state.effects_map.insert(
+                    (signed_effects.epoch(), effects_digest),
                     signed_effects.clone(),
                 ) {
                     InsertResult::NotEnoughVotes {
@@ -1598,10 +1612,25 @@ where
                         );
                         ct.verify(&self.committee).map(|ct| {
                             debug!(?tx_digest, "Got quorum for validators handle_certificate.");
-                            Some((ct, events))
+                            let objects =
+                                state.object_map.remove(&effects_digest).unwrap_or_default();
+                            Some((ct, events, objects.into_iter().collect()))
                         })
                     }
+                };
+                if result.is_ok() {
+                    // We verified the objects' relevance and content's integrity in `safe_client.rs`
+                    // based on the effects. Only responses with legit objects will reach here.
+                    // Therefore, as long as we have quorum on effects, we have quorum on objects.
+                    // One thing to note is objects may be missing in some responses e.g. validators are on
+                    // different code versions, but this is fine as long as their content is correct.
+                    state
+                        .object_map
+                        .entry(effects_digest)
+                        .or_default()
+                        .extend(objects.into_iter());
                 }
+                result
             }
             Err(err) => Err(err),
         }
