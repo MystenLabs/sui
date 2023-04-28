@@ -8,6 +8,7 @@ use prometheus::{
     register_int_counter_with_registry, register_int_gauge_with_registry, IntCounter, IntGauge,
     Registry,
 };
+use rocksdb::ReadOptions;
 use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::{sync::Arc, time::Duration};
@@ -87,10 +88,14 @@ impl AuthorityStorePruner {
             .inc_by(object_keys_to_prune.len() as u64);
         let mut indirect_objects: HashMap<_, i64> = HashMap::new();
 
+        // Avoid inserting cold objects in the db cache
+        let mut readopts = ReadOptions::default();
+        readopts.fill_cache(false);
+
         if indirect_objects_threshold > 0 && indirect_objects_threshold < usize::MAX {
             for object in perpetual_db
                 .objects
-                .multi_get(object_keys_to_prune.iter())?
+                .multi_get_with_opts(object_keys_to_prune.iter(), readopts)?
                 .into_iter()
                 .flatten()
             {
@@ -168,9 +173,12 @@ impl AuthorityStorePruner {
             "Starting object pruning. Current epoch: {}. Latest pruned checkpoint: {}",
             current_epoch, checkpoint_number
         );
+        // Avoid inserting cold checkpoint summaries in the db cache
+        let mut readopts = ReadOptions::default();
+        readopts.fill_cache(false);
         let iter = checkpoint_store
             .certified_checkpoints
-            .iter()
+            .iter_with_opts(read_options)
             .skip_to(&(checkpoint_number + 1))?
             .map(|(k, ckpt)| (k, ckpt.into_inner()));
 
@@ -192,11 +200,15 @@ impl AuthorityStorePruner {
             network_total_transactions = checkpoint.network_total_transactions;
 
             let content = checkpoint_store
-                .get_checkpoint_contents(&checkpoint.content_digest)?
+                .get_checkpoint_contents_no_cache_fill(&checkpoint.content_digest)?
                 .ok_or_else(|| anyhow::anyhow!("checkpoint content data is missing"))?;
+
+            // Avoid inserting cold effects in the db cache
+            let mut readopts = ReadOptions::default();
+            readopts.fill_cache(false);
             let effects = perpetual_db
                 .effects
-                .multi_get(content.iter().map(|tx| tx.effects))?;
+                .multi_get_with_opts(content.iter().map(|tx| tx.effects), readopts)?;
 
             if effects.iter().any(|effect| effect.is_none()) {
                 return Err(anyhow::anyhow!("transaction effects data is missing"));

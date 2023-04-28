@@ -23,6 +23,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_handler::SequencedConsensusTransactionKey;
+use rocksdb::ReadOptions;
 use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
@@ -293,6 +294,15 @@ impl CheckpointStore {
         digest: &CheckpointContentsDigest,
     ) -> Result<Option<CheckpointContents>, TypedStoreError> {
         self.checkpoint_content.get(digest)
+    }
+
+    pub fn get_checkpoint_contents_no_cache_fill(
+        &self,
+        digest: &CheckpointContentsDigest,
+    ) -> Result<Option<CheckpointContents>, TypedStoreError> {
+        let mut readopts = ReadOptions::default();
+        readopts.fill_cache(false);
+        self.checkpoint_content.get_with_opts(digest, readopts)
     }
 
     pub fn get_full_checkpoint_contents_by_sequence_number(

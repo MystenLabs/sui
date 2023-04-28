@@ -24,6 +24,7 @@ use rocksdb::{
     WriteBatch, WriteBatchWithTransaction, WriteOptions,
 };
 use serde::{de::DeserializeOwned, Serialize};
+use std::io::Read;
 use std::{
     borrow::Borrow,
     collections::BTreeMap,
@@ -1497,6 +1498,11 @@ where
 
     #[instrument(level = "trace", skip_all, err)]
     fn get(&self, key: &K) -> Result<Option<V>, TypedStoreError> {
+        self.get_with_opts(key, ReadOptions::default())
+    }
+
+    #[instrument(level = "trace", skip_all, err)]
+    fn get_with_opts(&self, key: &K, readopts: ReadOptions) -> Result<Option<V>, TypedStoreError> {
         let _timer = self
             .db_metrics
             .op_metrics
@@ -1511,7 +1517,7 @@ where
         let key_buf = be_fix_int_ser(key)?;
         let res = self
             .rocksdb
-            .get_pinned_cf(&self.cf(), &key_buf, &self.opts.readopts())?;
+            .get_pinned_cf(&self.cf(), &key_buf, &readopts)?;
         self.db_metrics
             .op_metrics
             .rocksdb_get_bytes
@@ -1633,6 +1639,10 @@ where
     }
 
     fn iter(&'a self) -> Self::Iterator {
+        self.iter_with_opts(ReadOptions::default())
+    }
+
+    fn iter_with_opts(&'a self, readopts: ReadOptions) -> Self::Iterator {
         let _timer = self
             .db_metrics
             .op_metrics
@@ -1654,9 +1664,7 @@ where
         } else {
             None
         };
-        let db_iter = self
-            .rocksdb
-            .raw_iterator_cf(&self.cf(), self.opts.readopts());
+        let db_iter = self.rocksdb.raw_iterator_cf(&self.cf(), readopts);
         Iter::new(
             self.cf.clone(),
             db_iter,
@@ -1774,9 +1782,10 @@ where
 
     /// Returns a vector of raw values corresponding to the keys provided.
     #[instrument(level = "trace", skip_all, err)]
-    fn multi_get_raw_bytes<J>(
+    fn multi_get_raw_bytes_with_opts<J>(
         &self,
         keys: impl IntoIterator<Item = J>,
+        readopts: ReadOptions,
     ) -> Result<Vec<Option<Vec<u8>>>, TypedStoreError>
     where
         J: Borrow<K>,
@@ -1797,9 +1806,7 @@ where
             .into_iter()
             .map(|k| Ok((&cf, be_fix_int_ser(k.borrow())?)))
             .collect();
-        let results = self
-            .rocksdb
-            .multi_get_cf(keys_bytes?, &self.opts.readopts());
+        let results = self.rocksdb.multi_get_cf(keys_bytes?, &readopts);
         let entry_size = |entry: &Result<Option<Vec<u8>>, rocksdb::Error>| -> f64 {
             entry
                 .as_ref()
@@ -1818,6 +1825,17 @@ where
         Ok(results.into_iter().collect::<Result<_, _>>()?)
     }
 
+    #[instrument(level = "trace", skip_all, err)]
+    fn multi_get_raw_bytes<J>(
+        &self,
+        keys: impl IntoIterator<Item = J>,
+    ) -> Result<Vec<Option<Vec<u8>>>, TypedStoreError>
+    where
+        J: Borrow<K>,
+    {
+        self.multi_get_raw_bytes_with_opts(keys, ReadOptions::default())
+    }
+
     /// Returns a vector of values corresponding to the keys provided.
     #[instrument(level = "trace", skip_all, err)]
     fn multi_get<J>(
@@ -1827,7 +1845,18 @@ where
     where
         J: Borrow<K>,
     {
-        let results = self.multi_get_raw_bytes(keys)?;
+        self.multi_get_with_opts(keys, ReadOptions::default())
+    }
+
+    fn multi_get_with_opts<J>(
+        &self,
+        keys: impl IntoIterator<Item = J>,
+        readoptions: ReadOptions,
+    ) -> Result<Vec<Option<V>>, Self::Error>
+    where
+        J: Borrow<K>,
+    {
+        let results = self.multi_get_raw_bytes_with_opts(keys, readoptions)?;
         let values_parsed: Result<Vec<_>, TypedStoreError> = results
             .into_iter()
             .map(|value_byte| match value_byte {
