@@ -29,8 +29,18 @@ export function SuiTokenCard() {
                 </div> */}
             </div>
             <div className="mt-8 flex gap-8">
-                <StatsWrapper label="Market Cap" size="sm" postfix="USD" unavailable />
-                <StatsWrapper label="Total Supply" size="sm" postfix="SUI" unavailable />
+                <StatsWrapper
+                    label="Market Cap"
+                    size="sm"
+                    postfix="USD"
+                    unavailable
+                />
+                <StatsWrapper
+                    label="Total Supply"
+                    size="sm"
+                    postfix="SUI"
+                    unavailable
+                />
             </div>
         </Card>
     );
