@@ -1052,14 +1052,13 @@ async fn sync_checkpoint_contents<S>(
                     Err(checkpoint) => {
                         let _: &VerifiedCheckpoint = &checkpoint;  // type hint
                         debug!("unable to sync contents of checkpoint {}", checkpoint.sequence_number());
-                        // Try again after a delay.
+                        // Retry contents sync on failure.
                         checkpoint_contents_tasks.push_front(sync_one_checkpoint_contents(
                             network.clone(),
                             &store,
                             peer_heights.clone(),
                             timeout,
                             checkpoint,
-                            Some(Duration::from_secs(10)),
                         ));
                     }
                 }
@@ -1093,7 +1092,6 @@ async fn sync_checkpoint_contents<S>(
                 peer_heights.clone(),
                 timeout,
                 next_checkpoint,
-                None,
             ));
         }
 
@@ -1115,17 +1113,11 @@ async fn sync_one_checkpoint_contents<S>(
     peer_heights: Arc<RwLock<PeerHeights>>,
     timeout: Duration,
     checkpoint: VerifiedCheckpoint,
-    delay: Option<Duration>,
 ) -> Result<(VerifiedCheckpoint, u64), VerifiedCheckpoint>
 where
     S: WriteStore + Clone,
     <S as ReadStore>::Error: std::error::Error,
 {
-    if let Some(delay) = delay {
-        // Caller may request delay in case of retry.
-        tokio::time::sleep(delay).await;
-    }
-
     let mut rng = <rand::rngs::StdRng as rand::SeedableRng>::from_entropy();
     // get a list of peers that can help
     let mut peers = peer_heights
@@ -1141,6 +1133,8 @@ where
     rand::seq::SliceRandom::shuffle(peers.as_mut_slice(), &mut rng);
 
     let Some(contents) = get_full_checkpoint_contents(&mut peers, &store, &checkpoint, timeout).await else {
+        // Delay completion in case of error so we don't hammer the network with retries.
+        tokio::time::sleep(Duration::from_secs(10)).await;
         return Err(checkpoint);
     };
 
