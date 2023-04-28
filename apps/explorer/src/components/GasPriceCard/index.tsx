@@ -68,7 +68,8 @@ function useHistoricalGasPrices() {
 }
 
 function useGasPriceAverage(totalEpochs: number) {
-    const { data, isLoading } = useHistoricalGasPrices();
+    const historicalData = useHistoricalGasPrices();
+    const { data } = historicalData;
     const average = useMemo(() => {
         const epochs = data?.slice(-totalEpochs) || [];
         const epochsWithPrices = epochs.filter(
@@ -84,7 +85,7 @@ function useGasPriceAverage(totalEpochs: number) {
         }
         return null;
     }, [data, totalEpochs]);
-    return [average, isLoading] as const;
+    return { ...historicalData, data: average };
 }
 
 function useGasPriceFormat(gasPrice: bigint | null, unit: 'MIST' | 'SUI') {
@@ -103,7 +104,8 @@ export function GasPriceCard() {
     // use this to show current gas price for envs that historical data is not available
     const { data: backupCurrentEpochGasPrice, isLoading: isCurrentLoading } =
         useGetReferenceGasPrice();
-    const [average7Epochs, isAverage7EpochsLoading] = useGasPriceAverage(7);
+    const { data: average7Epochs, isLoading: isAverage7EpochsLoading } =
+        useGasPriceAverage(7);
     const { data: historicalData, isLoading: isHistoricalLoading } =
         useHistoricalGasPrices();
     const isDataLoading = isHistoricalLoading || isCurrentLoading;
@@ -144,7 +146,7 @@ export function GasPriceCard() {
         ? formatDate(hoveredElement?.date, ['month', 'day', 'year'])
         : '-';
     return (
-        <Card bg="default" spacing="lg">
+        <Card spacing="lg">
             <div className="flex flex-col gap-5">
                 <div className="flex gap-2.5">
                     <div className="flex-grow">
