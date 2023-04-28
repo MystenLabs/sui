@@ -9,7 +9,7 @@ import LoadingIndicator from '_components/loading/LoadingIndicator';
 import type { ReactNode } from 'react';
 
 const alertStyles = cva(
-    'rounded-2xl text-pBodySmall font-medium flex flex-row flex-nowrap justify-center items-center py-2 px-2.5 gap-2',
+    'rounded-2xl text-pBodySmall font-medium flex flex-row flex-nowrap justify-start items-center py-2 px-2.5 gap-2',
     {
         variants: {
             mode: {
@@ -27,7 +27,7 @@ const alertStyles = cva(
 );
 
 export interface AlertProps extends VariantProps<typeof alertStyles> {
-    children?: ReactNode;
+    children: ReactNode;
     mode?: 'warning' | 'loading' | 'success';
 }
 
@@ -41,7 +41,7 @@ export default function Alert({ children, mode = 'warning' }: AlertProps) {
     return (
         <div className={alertStyles({ mode })}>
             {modeToIcon[mode]}
-            <div className="break-all flex flex-1">{children}</div>
+            <div className="break-all flex-1">{children}</div>
         </div>
     );
 }
