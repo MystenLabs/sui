@@ -82,7 +82,7 @@ pub fn test_and_configure_authority_configs_with_objects<I: IntoIterator<Item = 
 
 #[cfg(not(msim))]
 pub async fn start_node(config: &NodeConfig, registry_service: RegistryService) -> SuiNodeHandle {
-    SuiNode::start(config, registry_service)
+    SuiNode::start(config, registry_service, None)
         .await
         .unwrap()
         .into()
@@ -118,10 +118,14 @@ pub async fn start_node(config: &NodeConfig, registry_service: RegistryService) 
         })
         .build();
 
-    node.spawn(async move { SuiNode::start(&config, registry_service).await.unwrap() })
-        .await
-        .unwrap()
-        .into()
+    node.spawn(async move {
+        SuiNode::start(&config, registry_service, None)
+            .await
+            .unwrap()
+    })
+    .await
+    .unwrap()
+    .into()
 }
 
 /// Spawn all authorities in the test committee into a separate tokio task.

@@ -14,7 +14,6 @@ use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 use serde_json::Value;
 
 use move_core_types::language_storage::StructTag;
-use sui_adapter::execution_mode::Normal;
 pub use sui_json as json;
 use sui_json_rpc::{
     CLIENT_SDK_TYPE_HEADER, CLIENT_SDK_VERSION_HEADER, CLIENT_TARGET_API_VERSION_HEADER,
@@ -28,11 +27,13 @@ use sui_transaction_builder::{DataReader, TransactionBuilder};
 pub use sui_types as types;
 use sui_types::base_types::{ObjectID, ObjectInfo, SuiAddress};
 
-use crate::apis::{CoinReadApi, EventApi, GovernanceApi, QuorumDriver, ReadApi};
+use crate::apis::{CoinReadApi, EventApi, GovernanceApi, QuorumDriverApi, ReadApi};
 use crate::error::{Error, SuiRpcResult};
 
 pub mod apis;
 pub mod error;
+pub mod sui_client_config;
+pub mod wallet_context;
 pub const SUI_COIN_TYPE: &str = "0x2::sui::SUI";
 const WAIT_FOR_TX_TIMEOUT_SEC: u64 = 60;
 
@@ -108,7 +109,7 @@ impl SuiClientBuilder {
         let rpc = RpcClient { http, ws, info };
         let api = Arc::new(rpc);
         let read_api = Arc::new(ReadApi::new(api.clone()));
-        let quorum_driver = QuorumDriver::new(api.clone());
+        let quorum_driver_api = QuorumDriverApi::new(api.clone());
         let event_api = EventApi::new(api.clone());
         let transaction_builder = TransactionBuilder::new(read_api.clone());
         let coin_read_api = CoinReadApi::new(api.clone());
@@ -120,7 +121,7 @@ impl SuiClientBuilder {
             read_api,
             coin_read_api,
             event_api,
-            quorum_driver,
+            quorum_driver_api,
             governance_api,
         })
     }
@@ -173,11 +174,11 @@ impl SuiClientBuilder {
 #[derive(Clone)]
 pub struct SuiClient {
     api: Arc<RpcClient>,
-    transaction_builder: TransactionBuilder<Normal>,
+    transaction_builder: TransactionBuilder,
     read_api: Arc<ReadApi>,
     coin_read_api: CoinReadApi,
     event_api: EventApi,
-    quorum_driver: QuorumDriver,
+    quorum_driver_api: QuorumDriverApi,
     governance_api: GovernanceApi,
 }
 
@@ -230,7 +231,7 @@ impl SuiClient {
 }
 
 impl SuiClient {
-    pub fn transaction_builder(&self) -> &TransactionBuilder<Normal> {
+    pub fn transaction_builder(&self) -> &TransactionBuilder {
         &self.transaction_builder
     }
     pub fn read_api(&self) -> &ReadApi {
@@ -242,8 +243,8 @@ impl SuiClient {
     pub fn event_api(&self) -> &EventApi {
         &self.event_api
     }
-    pub fn quorum_driver(&self) -> &QuorumDriver {
-        &self.quorum_driver
+    pub fn quorum_driver_api(&self) -> &QuorumDriverApi {
+        &self.quorum_driver_api
     }
     pub fn governance_api(&self) -> &GovernanceApi {
         &self.governance_api

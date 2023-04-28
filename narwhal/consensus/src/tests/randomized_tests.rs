@@ -363,6 +363,7 @@ pub fn make_certificates_with_parameters(
                     current_parents.clone(),
                     ids.as_slice(),
                     &mut rand,
+                    committee,
                 );
 
             // We want to ensure that we always refer to "our" certificate of the previous round -
@@ -403,7 +404,11 @@ pub fn make_certificates_with_parameters(
                 parents_digests.insert(0, my_parent_digest);
             }
 
-            assert!(parents_digests.len() >= committee.quorum_threshold() as usize);
+            assert!(
+                parents_digests.len() >= committee.quorum_threshold() as usize,
+                "Failed on seed {}. At least 2f+1 parents are needed.",
+                seed
+            );
 
             let parents_digests: BTreeSet<CertificateDigest> =
                 parents_digests.into_iter().collect();
@@ -432,7 +437,8 @@ pub fn make_certificates_with_parameters(
         // Ensure total stake of the round provides strong quorum
         assert!(
             committee.reached_quorum(total_round_stake),
-            "Strong quorum is needed per round to ensure DAG advance"
+            "Failed on seed {}. Strong quorum is needed per round to ensure DAG advance.",
+            seed
         );
 
         // Ensure each certificate's parents exist from previous processing
@@ -442,7 +448,8 @@ pub fn make_certificates_with_parameters(
             .for_each(|digest| {
                 assert!(
                     certificate_digests.contains(digest),
-                    "Certificate with digest {} should be found in processed certificates",
+                    "Failed on seed {}. Certificate with digest {} should be found in processed certificates.",
+                    seed,
                     digest
                 );
             });

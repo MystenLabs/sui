@@ -44,7 +44,7 @@ interface DelegationObjectWithValidator extends StakeObject {
 
 const cardStyle = cva(
     [
-        'group flex no-underline flex-col p-3.75 pr-2 py-3 box-border w-full rounded-2xl border border-solid',
+        'group flex no-underline flex-col p-3.75 pr-2 py-3 box-border w-full rounded-2xl border border-solid h-36',
     ],
     {
         variants: {
@@ -143,7 +143,12 @@ export function StakeCard({
 
     const rewards =
         isEarnedRewards && estimatedReward ? BigInt(estimatedReward) : 0n;
-    const [principalStaked, symbol] = useFormatCoin(principal, SUI_TYPE_ARG);
+
+    // For inactive validator, show principal + rewards
+    const [principalStaked, symbol] = useFormatCoin(
+        inactiveValidator ? principal + rewards : principal,
+        SUI_TYPE_ARG
+    );
     const [rewardsStaked] = useFormatCoin(rewards, SUI_TYPE_ARG);
     const isEarning = delegationState === StakeState.EARNING && rewards > 0n;
 
@@ -176,12 +181,13 @@ export function StakeCard({
                 earnColor={isEarning}
                 earningRewardEpoch={Number(epochBeforeRewards)}
             >
-                <div className="flex justify-between items-start mb-1">
+                <div className="flex mb-1">
                     <ValidatorLogo
                         validatorAddress={validatorAddress}
                         size="subtitle"
                         iconSize="md"
                         stacked
+                        activeEpoch={delegationObject.stakeRequestEpoch}
                     />
 
                     <div className="text-steel text-pBody opacity-0 group-hover:opacity-100">
@@ -191,7 +197,7 @@ export function StakeCard({
                         />
                     </div>
                 </div>
-                <div className="flex-1 mb-4">
+                <div className="flex-1">
                     <div className="flex items-baseline gap-1">
                         <Text variant="body" weight="semibold" color="gray-90">
                             {principalStaked}

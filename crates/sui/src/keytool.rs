@@ -3,7 +3,7 @@
 use anyhow::anyhow;
 use bip32::DerivationPath;
 use clap::*;
-use fastcrypto::encoding::{decode_bytes_hex, Base64, Encoding};
+use fastcrypto::encoding::{decode_bytes_hex, Base64, Encoding, Hex};
 use fastcrypto::hash::HashFunction;
 use fastcrypto::traits::KeyPair;
 use shared_crypto::intent::{Intent, IntentMessage};
@@ -73,7 +73,7 @@ pub enum KeyToolCommand {
         #[clap(long)]
         intent: Option<Intent>,
     },
-    /// Add a new key to sui.key based on the input mnemonic phrase, the key scheme flag {ed25519 | secp256k1 | secp256r1}
+    /// Add a new key to sui.keystore based on the input mnemonic phrase, the key scheme flag {ed25519 | secp256k1 | secp256r1}
     /// and an optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1
     /// or m/74'/784'/0'/0/0 for secp256r1. Supports mnemonic phrase of word length 12, 15, 18`, 21, 24.
     Import {
@@ -81,6 +81,12 @@ pub enum KeyToolCommand {
         key_scheme: SignatureScheme,
         derivation_path: Option<DerivationPath>,
     },
+    /// Convert private key from wallet format (hex of 32 byte private key) to sui.keystore format
+    /// (base64 of 33 byte flag || private key) or vice versa.
+    Convert {
+        value: String,
+    },
+
     /// This reads the content at the provided file path. The accepted format can be
     /// [enum SuiKeyPair] (Base64 encoded of 33-byte `flag || privkey`) or `type AuthorityKeyPair`
     /// (Base64 encoded `privkey`). This prints out the account keypair as Base64 encoded `flag || privkey`,
@@ -116,6 +122,36 @@ pub enum KeyToolCommand {
         weights: Vec<WeightUnit>,
         #[clap(long)]
         threshold: ThresholdUnit,
+    },
+
+    /// Converts a Base64 encoded string to its hexademical representation.
+    Base64ToHex {
+        base64: String,
+    },
+
+    /// Converts a hexademical string to its Base64 encoded representation.
+    HexToBase64 {
+        hex: String,
+    },
+
+    /// Converts a hexademical string to its correspinding bytes.
+    HexToBytes {
+        hex: String,
+    },
+
+    /// Converts an array of bytes to its hexademical string representation.
+    BytesToHex {
+        bytes: Vec<u8>,
+    },
+
+    /// Decodes a Base64 encoded string to its corresponding bytes.
+    Base64ToBytes {
+        base64: String,
+    },
+
+    /// Encodes an array of bytes to its Base64 string representation.
+    BytesToBase64 {
+        bytes: Vec<u8>,
     },
 }
 
@@ -228,11 +264,69 @@ impl KeyToolCommand {
                 info!("Key imported for address [{address}]");
             }
 
+            KeyToolCommand::Convert { value } => match Base64::decode(&value) {
+                Ok(decoded) => {
+                    assert_eq!(decoded.len(), 33);
+                    info!(
+                        "Wallet formatted private key: 0x{}",
+                        Hex::encode(&decoded[1..])
+                    );
+                }
+                Err(_) => match Hex::decode(&value) {
+                    Ok(decoded) => {
+                        assert_eq!(decoded.len(), 32);
+                        let mut res = Vec::new();
+                        res.extend_from_slice(&[SignatureScheme::ED25519.flag()]);
+                        res.extend_from_slice(&decoded);
+                        info!("Keystore formatted private key: {:?}", Base64::encode(&res));
+                    }
+                    Err(_) => {
+                        info!("Invalid private key format");
+                    }
+                },
+            },
+
             KeyToolCommand::Base64PubKeyToAddress { base64_key } => {
                 let pk = PublicKey::decode_base64(&base64_key)
                     .map_err(|e| anyhow!("Invalid base64 key: {:?}", e))?;
                 let address = SuiAddress::from(&pk);
                 println!("Address {:?}", address);
+            }
+
+            KeyToolCommand::Base64ToHex { base64 } => {
+                let bytes =
+                    Base64::decode(&base64).map_err(|e| anyhow!("Invalid base64 key: {:?}", e))?;
+                let hex = Hex::from_bytes(&bytes);
+                println!("{:?}", hex);
+            }
+
+            KeyToolCommand::HexToBase64 { hex } => {
+                let bytes =
+                    Hex::decode(&hex).map_err(|e| anyhow!("Invalid base64 key: {:?}", e))?;
+                let base64 = Base64::from_bytes(&bytes);
+                println!("{:?}", base64);
+            }
+
+            KeyToolCommand::HexToBytes { hex } => {
+                let bytes =
+                    Hex::decode(&hex).map_err(|e| anyhow!("Invalid base64 key: {:?}", e))?;
+                println!("Bytes {:?}", bytes);
+            }
+
+            KeyToolCommand::BytesToHex { bytes } => {
+                let hex = Hex::from_bytes(&bytes);
+                println!("{:?}", hex);
+            }
+
+            KeyToolCommand::Base64ToBytes { base64 } => {
+                let bytes =
+                    Base64::decode(&base64).map_err(|e| anyhow!("Invalid base64 key: {:?}", e))?;
+                println!("Bytes {:?}", bytes);
+            }
+
+            KeyToolCommand::BytesToBase64 { bytes } => {
+                let base64 = Base64::from_bytes(&bytes);
+                println!("{:?}", base64);
             }
 
             KeyToolCommand::LoadKeypair { file } => {

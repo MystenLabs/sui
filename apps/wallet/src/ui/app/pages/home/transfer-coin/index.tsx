@@ -116,7 +116,7 @@ function TransferCoinPage() {
                                 amount={formData.amount}
                                 to={formData.to}
                                 approximation={formData.isPayAllSui}
-                                transaction={transaction}
+                                gasBudget={formData.gasBudgetEst}
                             />
                         </Content>
                         <Menu
@@ -135,7 +135,6 @@ function TransferCoinPage() {
                                 type="button"
                                 variant="primary"
                                 onClick={() => executeTransfer.mutateAsync()}
-                                size="tall"
                                 text="Send Now"
                                 disabled={coinType === null}
                                 after={<ArrowRight16 />}

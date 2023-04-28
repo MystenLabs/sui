@@ -10,12 +10,12 @@ use helper::ObjectChecker;
 use jsonrpsee::core::params::ArrayParams;
 use jsonrpsee::{core::client::ClientT, http_client::HttpClientBuilder};
 use std::sync::Arc;
-use sui::client_commands::WalletContext;
 use sui_faucet::CoinInfo;
 use sui_json_rpc_types::{
     SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions, TransactionBlockBytes,
 };
+use sui_sdk::wallet_context::WalletContext;
 use sui_types::base_types::TransactionDigest;
 use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::object::Owner;
@@ -156,7 +156,7 @@ impl TestContext {
         let signature = self.get_context().sign(&txn_data, desc);
         let resp = self
             .get_fullnode_client()
-            .quorum_driver()
+            .quorum_driver_api()
             .execute_transaction_block(
                 Transaction::from_data(txn_data, Intent::sui_transaction(), vec![signature])
                     .verify()

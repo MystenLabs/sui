@@ -8,6 +8,44 @@ The inability to change package objects, however, becomes a problem when conside
 
 This topic examines how to upgrade packages using the Sui Client CLI. Move developers can reference the [package module documentation](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/package.md) for options on working with package upgrades on a code level.  
 
+## Upgrade considerations
+
+There are some details of the process that you should consider before upgrading your packages.
+
+For example, module initializers do not re-run with package upgrades. When you publish your initial package, Sui Move runs the `init` function you define for the package once (and only once) at the time of the publish event. Any `init` functions you might include in subsequent versions of your package are ignored.
+
+As alluded to previously, all packages on the Sui network are immutable. Because of this fact, you cannot delete old packages from the chain. As a result, there is nothing that prevents other packages from accessing the methods and types defined in the old versions of your upgraded packages. By default, users can choose to keep using the old version of a package, as well. As a package developer, you must be aware of and account for this possibility.
+
+For example, you might define an `increment` function in your original package:
+
+```rust
+public entry fun increment(c: &mut Counter) {
+    c.value = c.value + 1;
+}
+```
+
+Then, your package upgrade might add an emit event to the `increment` function:
+
+```rust
+struct Progress has copy, drop {
+    reached: u64
+}
+
+public entry fun increment(c: &mut Counter) {
+    c.value = c.value + 1;
+
+    if (c.value % 100 == 0) {
+        event::emit(Progress { reached: c.value });
+    }
+}
+```
+
+If there is a mix of callers for both the old and upgraded `increment` function, then the process fails because the old function is not aware of the `Progress` event. 
+
+Similar to mismatched function definitions, you might also run into issues maintaining dynamic fields that need to remain in sync with a struct's original fields. To address these issues, you can introduce a new type as part of the upgrade and port users over to it, breaking backwards compatibility. For example, if you're using owned objects to demonstrate proof, like proof of ownership, and you develop a new version of your package to address problematic code, you can introduce a new type in the upgraded package. You can then add a function to your package that trades old objects for new ones. Because your logic only recognizes objects with the new type, you effectively force users to update.
+
+Another example of having users update to the latest package is when you have a bookkeeping shared object in your package that you discover has flawed logic so is not functioning as expected. As in the previous example, you want users to use only the object defined in the upgraded package with the correct logic, so you add a new type and migration function to your package upgrade. This process requires a couple of transactions, one for the upgrade and another that you call from the upgraded package to set up the new shared object that replaces the existing one. To protect the setup function, you would need to create an `AdminCap` object or similar as part of your package to make sure you, as the package owner, are the only authorized initiator of that function. Perhaps even more useful, you might include a flag in the shared object that allows you, as the package owner, to toggle the enabled state of that shared object. You can add a check for the enabled state to prevent access to that object from the on-chain public while you perform the migration. Of course, you would probably create this flag only if you expected to perform this migration at some point in the future, not because you're intentionally developing objects with flawed logic. 
+
 ## Requirements
 
 To upgrade a package, your package must satisfy the following requirements:

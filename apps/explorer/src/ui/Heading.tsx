@@ -34,6 +34,7 @@ const headingStyles = cva([], {
             steel: 'text-steel',
             'steel-dark': 'text-steel-dark',
             'steel-darker': 'text-steel-darker',
+            'success-dark': 'text-success-dark',
         },
         weight: {
             medium: 'font-medium',
@@ -43,6 +44,9 @@ const headingStyles = cva([], {
         mono: {
             true: 'font-mono',
             false: 'font-sans',
+        },
+        truncate: {
+            true: 'truncate',
         },
         /** Fix the header size, and disable responsive sizing of the heading. */
         fixed: { true: '', false: '' },

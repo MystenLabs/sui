@@ -96,65 +96,77 @@ function PkgModuleViewWrapper({ id, modules, splitPanelOrientation }: Props) {
     };
 
     const bytecodeContent = [
-        <div
-            key="bytecode"
-            className="h-full grow overflow-auto border-gray-45 pt-5 md:pl-7"
-        >
-            <TabGroup size="md">
-                <TabList>
-                    <Tab>Bytecode</Tab>
-                </TabList>
-                <TabPanels>
-                    <TabPanel>
-                        <div
-                            className={clsx(
-                                'overflow-auto',
-                                (splitPanelOrientation === 'horizontal' ||
-                                    !isMediumOrAbove) &&
-                                    'h-verticalListLong'
-                            )}
-                        >
-                            <ModuleViewWrapper
-                                id={id}
-                                modules={modules}
-                                selectedModuleName={selectedModule}
-                            />
-                        </div>
-                    </TabPanel>
-                </TabPanels>
-            </TabGroup>
-        </div>,
-        <div
-            key="execute"
-            className="h-full grow overflow-auto border-gray-45 pt-5 md:pl-7"
-        >
-            <TabGroup size="md">
-                <TabList>
-                    <Tab>Execute</Tab>
-                </TabList>
-                <TabPanels>
-                    <TabPanel>
-                        <div
-                            className={clsx(
-                                'overflow-auto',
-                                (splitPanelOrientation === 'horizontal' ||
-                                    !isMediumOrAbove) &&
-                                    'h-verticalListLong'
-                            )}
-                        >
-                            {id && selectedModule ? (
-                                <ModuleFunctionsInteraction
-                                    // force recreating everything when we change modules
-                                    key={`${id}-${selectedModule}`}
-                                    packageId={id}
-                                    moduleName={selectedModule}
-                                />
-                            ) : null}
-                        </div>
-                    </TabPanel>
-                </TabPanels>
-            </TabGroup>
-        </div>,
+        {
+            panel: (
+                <div
+                    key="bytecode"
+                    className="h-full grow overflow-auto border-gray-45 pt-5 md:pl-7"
+                >
+                    <TabGroup size="md">
+                        <TabList>
+                            <Tab>Bytecode</Tab>
+                        </TabList>
+                        <TabPanels>
+                            <TabPanel>
+                                <div
+                                    className={clsx(
+                                        'overflow-auto',
+                                        (splitPanelOrientation ===
+                                            'horizontal' ||
+                                            !isMediumOrAbove) &&
+                                            'h-verticalListLong'
+                                    )}
+                                >
+                                    <ModuleViewWrapper
+                                        id={id}
+                                        modules={modules}
+                                        selectedModuleName={selectedModule}
+                                    />
+                                </div>
+                            </TabPanel>
+                        </TabPanels>
+                    </TabGroup>
+                </div>
+            ),
+            defaultSize: 40,
+        },
+        {
+            panel: (
+                <div
+                    key="execute"
+                    className="h-full grow overflow-auto border-gray-45 pt-5 md:pl-7"
+                >
+                    <TabGroup size="md">
+                        <TabList>
+                            <Tab>Execute</Tab>
+                        </TabList>
+                        <TabPanels>
+                            <TabPanel>
+                                <div
+                                    className={clsx(
+                                        'overflow-auto',
+                                        (splitPanelOrientation ===
+                                            'horizontal' ||
+                                            !isMediumOrAbove) &&
+                                            'h-verticalListLong'
+                                    )}
+                                >
+                                    {id && selectedModule ? (
+                                        <ModuleFunctionsInteraction
+                                            // force recreating everything when we change modules
+                                            key={`${id}-${selectedModule}`}
+                                            packageId={id}
+                                            moduleName={selectedModule}
+                                        />
+                                    ) : null}
+                                </div>
+                            </TabPanel>
+                        </TabPanels>
+                    </TabGroup>
+                </div>
+            ),
+            defaultSize: 60,
+        },
     ];
 
     return (
@@ -234,8 +246,7 @@ function PkgModuleViewWrapper({ id, modules, splitPanelOrientation }: Props) {
                 <div className="w-4/5">
                     <SplitPanes
                         direction={splitPanelOrientation}
-                        defaultSizes={[40, 60]}
-                        panels={bytecodeContent}
+                        splitPanels={bytecodeContent}
                     />
                 </div>
             ) : (

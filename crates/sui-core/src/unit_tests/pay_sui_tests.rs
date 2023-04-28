@@ -10,11 +10,9 @@ use std::sync::Arc;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::crypto::AccountKeyPair;
 use sui_types::error::UserInputError;
+use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::gas_coin::GasCoin;
-use sui_types::messages::{
-    ExecutionFailureStatus, ExecutionStatus, SignedTransactionEffects, TransactionData,
-    TransactionEffectsAPI,
-};
+use sui_types::messages::{SignedTransactionEffects, TransactionData, TransactionEffectsAPI};
 use sui_types::object::Object;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::utils::to_sender_signed_transaction;
@@ -426,6 +424,8 @@ async fn execute_pay_all_sui(
 ) -> PaySuiTransactionBlockExecutionResult {
     let dir = tempfile::TempDir::new().unwrap();
     let network_config = sui_config::builder::ConfigBuilder::new(&dir)
+        // TODO: fix numbers in tests to not depend on rgp being 1
+        .with_reference_gas_price(1)
         .with_objects(
             input_coin_objects
                 .clone()

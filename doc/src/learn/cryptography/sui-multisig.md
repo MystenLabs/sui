@@ -2,7 +2,25 @@
 title: Sui Multi-Signature
 ---
 
-Sui supports `k` out of `n` multi-signature (multisig) transactions where `n <= 10`. A multisig transaction is one that requires more than one private key to authorize it. This topic demonstrate the workflow to create a multisig transaction in Sui, and then submit it using the Sui CLI against a local network. To learn how to set up a local network, see [Sui Local Network](../build/sui-local-network.md).
+Sui supports `k` out of `n` multi-weight multi-scheme multi-signature (multisig) transactions where `n <= 10`. 
+A multisig transaction is one that requires more than one private key to authorize it. This topic demonstrates the 
+workflow to create a multisig transaction in Sui, and then submit it using the Sui CLI against a local network. To learn
+how to set up a local network, see [Sui Local Network](../build/sui-local-network.md).
+
+## Applications of multi-signatures
+
+Multi-signature wallets offer several unique benefits to users, from increased security to escrow transactions and 2FA. 
+Unlike conventional multisig wallets, a Sui multisig account can accept weighted public keys from multiple key schemes.
+Currently, each key can be one of the following schemes: Ed25519, ECDSA secp256k1, and ECDSA secp256r1. 
+
+Interestingly, cryptographic agility allows users to mix and match key schemes in a single multisig account. For 
+example, one can pick a single Ed25519 mnemonic-based key and two ECDSA secp256r1 key to create a multisig account that 
+always requires the Ed25519 key, but also one of the ECDSA secp256r1 keys to sign. A potential application of the above
+structure is using mobile secure enclave stored keys as 2FA; note that currently iPhone and high-end Android devices 
+support ECDSA secp256r1 enclave-stored keys only.
+
+![Sui tokenomics flow](../../../static/cryptography/sui_multisig_structures.png "Multisig Sui supported structures")
+*Examples of Sui supported multisig structures.*
 
 ## Step 1: Add keys to Sui keystore
 

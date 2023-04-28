@@ -5,8 +5,8 @@ use crate::cluster::new_wallet_context_from_cluster;
 
 use super::Cluster;
 use shared_crypto::intent::Intent;
-use sui::client_commands::WalletContext;
 use sui_keys::keystore::AccountKeystore;
+use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{KeypairTraits, Signature};

@@ -24,7 +24,6 @@ use sui_types::{
 };
 use tap::tap::TapOptional;
 
-use crate::client_commands::WalletContext;
 use crate::fire_drill::get_gas_obj_ref;
 use clap::*;
 use colored::Colorize;
@@ -46,6 +45,7 @@ use sui_keys::{
         write_authority_keypair_to_file, write_keypair_to_file,
     },
 };
+use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::SuiClient;
 use sui_types::crypto::{
     generate_proof_of_possession, get_authority_key_pair, AuthorityPublicKeyBytes,
@@ -582,7 +582,7 @@ async fn call_0x5(
     let transaction =
         Transaction::from_data(tx_data, Intent::sui_transaction(), vec![signature]).verify()?;
     sui_client
-        .quorum_driver()
+        .quorum_driver_api()
         .execute_transaction_block(
             transaction,
             SuiTransactionBlockResponseOptions::new()

@@ -18,7 +18,8 @@ use move_binary_format::{
 };
 use std::time::Instant;
 
-pub const MAX_CONSTANT_VECTOR_LEN: u64 = 1024 * 1024;
+pub const DEFAULT_MAX_CONSTANT_VECTOR_LEN: u64 = 1024 * 1024;
+pub const DEFAULT_MAX_IDENTIFIER_LENGTH: u64 = 128;
 
 #[derive(Debug, Clone)]
 pub struct VerifierConfig {
@@ -39,6 +40,7 @@ pub struct VerifierConfig {
     pub max_basic_blocks_in_script: Option<usize>,
     pub max_per_fun_meter_units: Option<u128>,
     pub max_per_mod_meter_units: Option<u128>,
+    pub max_idenfitier_len: Option<u64>,
 }
 
 /// Helper for a "canonical" verification of a module.
@@ -164,7 +166,8 @@ impl Default for VerifierConfig {
             /// with production, so all existing test cases apply it.
             max_per_fun_meter_units: Some(1000 * 8000),
             max_per_mod_meter_units: Some(1000 * 8000),
-            max_constant_vector_len: Some(MAX_CONSTANT_VECTOR_LEN),
+            max_constant_vector_len: Some(DEFAULT_MAX_CONSTANT_VECTOR_LEN),
+            max_idenfitier_len: Some(DEFAULT_MAX_IDENTIFIER_LENGTH),
         }
     }
 }

@@ -128,6 +128,7 @@ impl ValidatorGenesisInfo {
         worker_key_pair: NetworkKeyPair,
         account_key_pair: SuiKeyPair,
         network_key_pair: NetworkKeyPair,
+        gas_price: u64,
     ) -> Self {
         Self {
             key_pair,
@@ -139,7 +140,7 @@ impl ValidatorGenesisInfo {
             p2p_listen_address: None,
             metrics_address: utils::available_local_socket_address(),
             narwhal_metrics_address: utils::new_tcp_network_address(),
-            gas_price: DEFAULT_VALIDATOR_GAS_PRICE,
+            gas_price,
             commission_rate: DEFAULT_COMMISSION_RATE,
             narwhal_primary_address: utils::new_udp_network_address(),
             narwhal_worker_address: utils::new_udp_network_address(),
@@ -157,6 +158,7 @@ impl ValidatorGenesisInfo {
         // Port offset allows running many SuiNodes inside the same simulator node, which is
         // helpful for tests that don't use Swarm.
         port_offset: usize,
+        gas_price: u64,
     ) -> Self {
         assert!(port_offset < 1000);
         let port_offset: u16 = port_offset.try_into().unwrap();
@@ -182,7 +184,7 @@ impl ValidatorGenesisInfo {
             narwhal_metrics_address: make_tcp_zero_addr(
                 Self::DEFAULT_NARWHAL_METRICS_PORT + port_offset,
             ),
-            gas_price: DEFAULT_VALIDATOR_GAS_PRICE,
+            gas_price,
             commission_rate: DEFAULT_COMMISSION_RATE,
             narwhal_primary_address: make_udp_addr(
                 Self::DEFAULT_NARWHAL_PRIMARY_PORT + port_offset,
@@ -297,6 +299,7 @@ impl GenesisConfig {
                         Some(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))), // p2p_listen_address
                         ip.to_string(),
                         Self::BENCHMARKS_PORT_OFFSET,
+                        DEFAULT_VALIDATOR_GAS_PRICE,
                     ),
                 }
             })

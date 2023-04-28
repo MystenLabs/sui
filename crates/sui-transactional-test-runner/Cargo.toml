@@ -16,6 +16,7 @@ once_cell = "1.16"
 rand = "0.8.5"
 prometheus = "0.13.3"
 
+fastcrypto.workspace = true
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 move-command-line-common.workspace = true

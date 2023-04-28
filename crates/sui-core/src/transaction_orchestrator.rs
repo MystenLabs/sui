@@ -13,7 +13,7 @@ use crate::quorum_driver::reconfig_observer::{OnsiteReconfigObserver, ReconfigOb
 use crate::quorum_driver::{QuorumDriverHandler, QuorumDriverHandlerBuilder, QuorumDriverMetrics};
 use crate::safe_client::SafeClientMetricsBase;
 use mysten_common::sync::notify_read::{NotifyRead, Registration};
-use mysten_metrics::histogram::{Histogram, HistogramTimerGuard, HistogramVec};
+use mysten_metrics::histogram::{Histogram, HistogramVec};
 use mysten_metrics::spawn_monitored_task;
 use prometheus::core::{AtomicI64, AtomicU64, GenericCounter, GenericGauge};
 use prometheus::{
@@ -145,26 +145,6 @@ where
         }
     }
 
-    fn get_timer_guards(&self, tx: &VerifiedTransaction) -> Vec<HistogramTimerGuard> {
-        let mut guards = vec![];
-        if tx.contains_shared_object() {
-            guards.push(self.metrics.request_latency_shared_obj.start_timer());
-            guards.push(
-                self.metrics
-                    .wait_for_finality_latency_shared_obj
-                    .start_timer(),
-            );
-        } else {
-            guards.push(self.metrics.request_latency_single_writer.start_timer());
-            guards.push(
-                self.metrics
-                    .wait_for_finality_latency_single_writer
-                    .start_timer(),
-            );
-        }
-        guards
-    }
-
     #[instrument(name = "tx_orchestrator_execute_transaction", level = "debug", skip_all,
     fields(
         tx_digest = ?request.transaction.digest(),
@@ -187,8 +167,21 @@ where
         let tx_digest = *transaction.digest();
         debug!(?tx_digest, "TO Received transaction execution request.");
 
-        let _timer_guards = self.get_timer_guards(&transaction);
-
+        let (_e2e_latency_timer, _txn_finality_timer) = if transaction.contains_shared_object() {
+            (
+                self.metrics.request_latency_shared_obj.start_timer(),
+                self.metrics
+                    .wait_for_finality_latency_shared_obj
+                    .start_timer(),
+            )
+        } else {
+            (
+                self.metrics.request_latency_single_writer.start_timer(),
+                self.metrics
+                    .wait_for_finality_latency_single_writer
+                    .start_timer(),
+            )
+        };
         let ticket = self.submit(transaction.clone()).await.map_err(|e| {
             warn!(?tx_digest, "QuorumDriverInternalError: {e:?}");
             QuorumDriverError::QuorumDriverInternalError(e)
@@ -206,6 +199,7 @@ where
             debug!(?tx_digest, "Timeout waiting for transaction finality.");
             return Err(QuorumDriverError::TimeoutBeforeFinality);
         };
+        drop(_txn_finality_timer);
         match result {
             Err(err) => Err(err),
             Ok(response) => {

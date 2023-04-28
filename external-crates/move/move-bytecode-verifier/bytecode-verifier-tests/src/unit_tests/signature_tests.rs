@@ -211,7 +211,7 @@ fn big_signature_test() {
     // save module and verify that it can ser/de
     let mut mvbytes = vec![];
     module.serialize(&mut mvbytes).unwrap();
-    let module = CompiledModule::deserialize(&mvbytes).unwrap();
+    let module = CompiledModule::deserialize_with_defaults(&mvbytes).unwrap();
 
     let res =
         verify_module_with_config_for_test("big_signature_test", &production_config(), &module)

@@ -9,6 +9,7 @@ const cardStyles = cva(null, {
         bg: {
             default: 'bg-gray-40',
             highlight: 'bg-success-light',
+            lightBlue: 'bg-sui/10',
         },
         rounded: {
             lg: 'rounded-lg',
@@ -18,7 +19,7 @@ const cardStyles = cva(null, {
             none: '',
             sm: 'px-5 py-4',
             md: 'p-5',
-            lg: 'p-8',
+            lg: 'sm:p-8 p-4',
         },
     },
     defaultVariants: {

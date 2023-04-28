@@ -13,7 +13,7 @@ use move_bytecode_verifier::verifier;
 #[allow(unused)]
 fn run_binary_test(name: &str, bytes: &str) -> VMResult<()> {
     let bytes = hex::decode(bytes).expect("invalid hex string");
-    let m = CompiledModule::deserialize(&bytes).expect("invalid module");
+    let m = CompiledModule::deserialize_with_defaults(&bytes).expect("invalid module");
     verifier::verify_module_with_config_for_test(name, &production_config(), &m)
 }
 

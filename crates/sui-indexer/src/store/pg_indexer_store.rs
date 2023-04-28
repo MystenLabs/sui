@@ -221,6 +221,17 @@ impl IndexerStore for PgIndexerStore {
         .context("Failed reading latest checkpoint sequence number from PostgresDB")
     }
 
+    async fn get_latest_object_checkpoint_sequence_number(&self) -> Result<i64, IndexerError> {
+        read_only_blocking!(&self.blocking_cp, |conn| {
+            objects::dsl::objects
+                .select(max(objects::checkpoint))
+                .first::<Option<i64>>(conn)
+                // -1 to differentiate between no checkpoints and the first checkpoint
+                .map(|o| o.unwrap_or(-1))
+        })
+        .context("Failed reading latest object checkpoint sequence number from PostgresDB")
+    }
+
     async fn get_checkpoint(
         &self,
         id: CheckpointId,

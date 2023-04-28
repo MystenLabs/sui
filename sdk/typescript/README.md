@@ -336,9 +336,9 @@ const txns = await provider.multiGetTransactionBlocks({
 
 ### Get Checkpoints
 
-Get latest 100 checkpoints in descending order and print Transaction Digests for each one of them
+Get latest 100 Checkpoints in descending order and print Transaction Digests for each one of them.
 ```typescript
-l
+
 provider.getCheckpoints({descendingOrder: true})
     .then(function (checkpointPage: CheckpointPage) {
         console.log(checkpointPage);
@@ -356,7 +356,7 @@ provider.getCheckpoints({descendingOrder: true})
 ```
 
 
-Get Checkpoint 1994010 and print details
+Get Checkpoint 1994010 and print details.
 ```typescript
 provider.getCheckpoint({id: "1994010"})
     .then(function (checkpoint: Checkpoint) {

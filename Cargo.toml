@@ -102,6 +102,7 @@ members = [
     "crates/sui-simulator",
     "crates/sui-source-validation",
     "crates/sui-storage",
+    "crates/sui-surfer",
     "crates/sui-swarm",
     "crates/sui-telemetry",
     "crates/sui-test-validator",
@@ -137,7 +138,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, and sui crates.
-version = "0.33.0"
+version = "0.34.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -205,10 +206,10 @@ fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "19540b85
 fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "19540b8550685173f4998ae64d0291ddbdc93868", package = "fastcrypto-zkp" }
 
 # anemo dependencies
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "691e43c3f4df5e33b898a91cb1a808f68f76f52e" }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "691e43c3f4df5e33b898a91cb1a808f68f76f52e" }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "691e43c3f4df5e33b898a91cb1a808f68f76f52e"}
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "691e43c3f4df5e33b898a91cb1a808f68f76f52e"}
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "05322deb1795a5d482630740bc938fa7f067c58f" }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "05322deb1795a5d482630740bc938fa7f067c58f" }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "05322deb1795a5d482630740bc938fa7f067c58f"}
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "05322deb1795a5d482630740bc938fa7f067c58f"}
 
 # Use the same workspace-hack across crates.
 workspace-hack = { path = "crates/workspace-hack" }

@@ -1,0 +1,39 @@
+[package]
+name = "sui-surfer"
+version.workspace = true
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+sui-config = { path = "../sui-config" }
+sui-core = { path = "../sui-core" }
+sui-json-rpc-types = { path = "../sui-json-rpc-types" }
+sui-move-build = { path = "../sui-move-build" }
+sui-protocol-config = { path = "../sui-protocol-config" }
+sui-swarm = { path = "../sui-swarm" }
+sui-types = { path = "../sui-types" }
+test-utils = { path = "../test-utils" }
+
+async-trait = "0.1.61"
+bcs = "0.1.4"
+clap = { version = "3.2.17", features = ["derive"] }
+futures = "0.3.23"
+indexmap = "1.9.3"
+rand = "0.8.5"
+tokio = { workspace = true, features = ["full", "tracing", "test-util"] }
+tracing = "0.1.36"
+
+move-binary-format.workspace = true
+move-core-types.workspace = true
+telemetry-subscribers.workspace = true
+
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+prometheus = "0.13.3"
+sui-macros = { path = "../sui-macros" }
+sui-simulator = { path = "../sui-simulator" }
+
+move-package.workspace = true

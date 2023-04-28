@@ -93,6 +93,8 @@ export default {
                 blurXl: '0 0 20px 0 rgba(0, 0, 0, 0.3)',
                 button: '0px 1px 2px rgba(16, 24, 40, 0.05)',
                 xs: '0px 1px 2px rgba(16, 24, 40, 0.05)',
+                DEFAULT:
+                    '0px 5px 30px rgba(86, 104, 115, 0.2), 0px 0px 0px 1px rgba(160, 182, 195, 0.08)',
             },
             fontSize: {
                 // Text sizes:
@@ -107,18 +109,19 @@ export default {
                 iconTextLarge: ['48px', '1'],
 
                 // Heading sizes:
-                heading1: ['28px', '0.8'],
-                heading2: ['24px', '0.8'],
+                heading1: ['28px', '1'],
+                heading2: ['24px', '1'],
                 heading3: ['20px', '1'],
                 heading4: ['18px', '1'],
                 heading5: ['17px', '1'],
                 heading6: ['16px', '1'],
 
                 // Paragraph sizes:
-                pBody: ['14px', '1.3'],
-                pBodySmall: ['13px', '1.3'],
-                pSubtitle: ['12px', '1.3'],
-                pSubtitleSmall: ['11px', '1.3'],
+                pHeading6: ['16px', '1.4'],
+                pBody: ['14px', '1.4'],
+                pBodySmall: ['13px', '1.4'],
+                pSubtitle: ['12px', '1.4'],
+                pSubtitleSmall: ['11px', '1.4'],
             },
             fontFamily: {
                 system: fontFamily.sans,

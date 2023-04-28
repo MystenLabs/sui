@@ -304,7 +304,6 @@ mod sim_only_tests {
     async fn test_framework_compatible_upgrade() {
         // Make a number of compatible changes, and expect the upgrade to go through:
         // - Add a new module, struct, and function
-        // - Add a new ability to an existing struct
         // - Remove an ability from an existing type constraint
         // - Change the implementation of an existing function
         // - Change the signature and implementation of a private function
@@ -325,6 +324,15 @@ mod sim_only_tests {
     async fn test_framework_incompatible_struct_layout() {
         // Upgrade attempts to change an existing struct layout
         let cluster = run_framework_upgrade("base", "change_struct_layout").await;
+        assert_eq!(call_canary(&cluster).await, 42);
+        expect_upgrade_failed(&cluster).await;
+        assert_eq!(call_canary(&cluster).await, 42);
+    }
+
+    #[sim_test]
+    async fn test_framework_add_struct_ability() {
+        // Upgrade attempts to add an ability to a struct
+        let cluster = run_framework_upgrade("base", "add_struct_ability").await;
         assert_eq!(call_canary(&cluster).await, 42);
         expect_upgrade_failed(&cluster).await;
         assert_eq!(call_canary(&cluster).await, 42);

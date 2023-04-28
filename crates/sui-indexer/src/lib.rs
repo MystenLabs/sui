@@ -4,8 +4,7 @@
 
 use std::collections::HashMap;
 use std::env;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::str::FromStr;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::SystemTime;
 
@@ -28,6 +27,7 @@ use prometheus::{Registry, TextEncoder};
 use regex::Regex;
 use rustls::client::{ServerCertVerified, ServerCertVerifier};
 use rustls::{Certificate, Error, ServerName};
+use tokio::runtime::Handle;
 use tracing::{info, warn};
 use url::Url;
 
@@ -186,6 +186,7 @@ impl Indexer {
         registry: &Registry,
         store: S,
         metrics: IndexerMetrics,
+        custom_runtime: Option<Handle>,
     ) -> Result<(), IndexerError> {
         info!(
             "Sui indexer of version {:?} started...",
@@ -195,10 +196,15 @@ impl Indexer {
 
         if config.rpc_server_worker && config.fullnode_sync_worker {
             info!("Starting indexer with both fullnode sync and RPC server");
-            let handle =
-                build_json_rpc_server(registry, store.clone(), event_handler.clone(), config)
-                    .await
-                    .expect("Json rpc server should not run into errors upon start.");
+            let handle = build_json_rpc_server(
+                registry,
+                store.clone(),
+                event_handler.clone(),
+                config,
+                custom_runtime,
+            )
+            .await
+            .expect("Json rpc server should not run into errors upon start.");
             // let JSON RPC server run forever.
             spawn_monitored_task!(handle.stopped());
 
@@ -221,10 +227,15 @@ impl Indexer {
             .await
         } else if config.rpc_server_worker {
             info!("Starting indexer with only RPC server");
-            let handle =
-                build_json_rpc_server(registry, store.clone(), event_handler.clone(), config)
-                    .await
-                    .expect("Json rpc server should not run into errors upon start.");
+            let handle = build_json_rpc_server(
+                registry,
+                store.clone(),
+                event_handler.clone(),
+                config,
+                custom_runtime,
+            )
+            .await
+            .expect("Json rpc server should not run into errors upon start.");
             handle.stopped().await;
             Ok(())
         } else if config.fullnode_sync_worker {
@@ -394,6 +405,7 @@ pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clo
     state: S,
     event_handler: Arc<EventHandler>,
     config: &IndexerConfig,
+    custom_runtime: Option<Handle>,
 ) -> Result<ServerHandle, IndexerError> {
     let mut builder = JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry);
     let http_client = get_http_client(config.rpc_client_url.as_str())?;
@@ -417,10 +429,10 @@ pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clo
     builder.register_module(MoveUtilsApi::new(http_client))?;
     let default_socket_addr = SocketAddr::new(
         // unwrap() here is safe b/c the address is a static config.
-        IpAddr::V4(Ipv4Addr::from_str(config.rpc_server_url.as_str()).unwrap()),
+        config.rpc_server_url.as_str().parse().unwrap(),
         config.rpc_server_port,
     );
-    Ok(builder.start(default_socket_addr).await?)
+    Ok(builder.start(default_socket_addr, custom_runtime).await?)
 }
 
 fn convert_url(url_str: &str) -> Option<String> {

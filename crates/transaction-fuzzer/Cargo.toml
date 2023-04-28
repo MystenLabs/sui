@@ -22,6 +22,7 @@ once_cell = "1.16"
 sui-core = { path = "../sui-core" }
 sui-protocol-config = { path = "../sui-protocol-config" }
 sui-types = { path = "../sui-types", features = ["fuzzing"] }
+sui-move-build = { path = "../sui-move-build" }
 
 
 [dev-dependencies]

@@ -13,9 +13,9 @@ mod compatibility_tests {
         // bytecode snapshots.
         for (network, snapshots) in load_bytecode_snapshot_manifest() {
             for (version, _) in snapshots {
-                let max_binary_format_version =
-                    ProtocolConfig::get_for_version(ProtocolVersion::new(version))
-                        .move_binary_format_version();
+                let config = ProtocolConfig::get_for_version(ProtocolVersion::new(version));
+                let max_binary_format_version = config.move_binary_format_version();
+                let no_extraneous_module_bytes = config.no_extraneous_module_bytes();
                 let framework = load_bytecode_snapshot(&network, version).unwrap();
                 let old_framework_store: BTreeMap<_, _> = framework
                     .into_iter()
@@ -28,6 +28,7 @@ mod compatibility_tests {
                         &cur_package.modules(),
                         cur_package.dependencies().to_vec(),
                         max_binary_format_version,
+                        no_extraneous_module_bytes,
                     )
                     .await
                     .is_none()

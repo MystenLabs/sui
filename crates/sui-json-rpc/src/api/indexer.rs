@@ -18,7 +18,7 @@ use sui_types::event::EventID;
 #[rpc(server, client, namespace = "suix")]
 pub trait IndexerApi {
     /// Return the list of objects owned by an address.
-    /// Note that if the address owns more than `QUERY_MAX_RESULT_LIMIT_OBJECTS` objects,
+    /// Note that if the address owns more than `QUERY_MAX_RESULT_LIMIT` objects,
     /// the pagination is not accurate, because previous page may have been updated when
     /// the next page is fetched.
     /// Please use suix_queryObjects if this is a concern.
@@ -31,7 +31,7 @@ pub trait IndexerApi {
         query: Option<SuiObjectResponseQuery>,
         /// An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.
         cursor: Option<ObjectID>,
-        /// Max number of items returned per page, default to [QUERY_MAX_RESULT_LIMIT_OBJECTS] if not specified.
+        /// Max number of items returned per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.
         limit: Option<usize>,
     ) -> RpcResult<ObjectsPage>;
 

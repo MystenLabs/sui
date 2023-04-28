@@ -12,7 +12,7 @@ use jsonrpsee::server::{AllowHosts, ServerBuilder};
 use jsonrpsee::RpcModule;
 use prometheus::Registry;
 use tap::TapFallible;
-use tokio::runtime::{Handle, Runtime};
+use tokio::runtime::Handle;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tracing::{info, warn};
 
@@ -30,6 +30,7 @@ pub mod coin_api;
 pub mod error;
 pub mod governance_api;
 pub mod indexer_api;
+pub mod logger;
 mod metrics;
 pub mod move_utils;
 mod object_changes;
@@ -88,7 +89,11 @@ impl JsonRpcServerBuilder {
         Ok(self.module.merge(module.rpc())?)
     }
 
-    pub async fn start(mut self, listen_address: SocketAddr) -> Result<ServerHandle, Error> {
+    pub async fn start(
+        mut self,
+        listen_address: SocketAddr,
+        custom_runtime: Option<Handle>,
+    ) -> Result<ServerHandle, Error> {
         let acl = match env::var("ACCESS_CONTROL_ALLOW_ORIGIN") {
             Ok(value) => {
                 let allow_hosts = value
@@ -150,37 +155,23 @@ impl JsonRpcServerBuilder {
             .layer(cors)
             .layer(routing_layer);
 
-        let worker_thread = env::var("RPC_WORKER_THREAD")
-            .ok()
-            .and_then(|o| {
-                usize::from_str(&o)
-                    .tap_err(|e| warn!("Cannot parse RPC_WORKER_THREAD to usize: {e}"))
-                    .ok()
-            })
-            .unwrap_or(num_cpus::get() / 2);
-
-        let rt = tokio::runtime::Builder::new_multi_thread()
-            .thread_name("sui-node-jsonrpc-worker")
-            .worker_threads(worker_thread)
-            .enable_all()
-            .build()
-            .unwrap();
-
-        let server = ServerBuilder::default()
+        let mut builder = ServerBuilder::default()
             .batch_requests_supported(false)
             .max_response_body_size(MAX_REQUEST_SIZE)
             .max_connections(max_connection)
             .set_host_filtering(AllowHosts::Any)
             .set_middleware(middleware)
-            .custom_tokio_runtime(rt.handle().clone())
-            .set_logger(metrics_logger)
-            .build(listen_address)
-            .await?;
+            .set_logger(metrics_logger);
+
+        if let Some(custom_runtime) = custom_runtime {
+            builder = builder.custom_tokio_runtime(custom_runtime);
+        }
+
+        let server = builder.build(listen_address).await?;
 
         let addr = server.local_addr()?;
         let handle = ServerHandle {
-            rt: Some(rt),
-            handle: Some(server.start(self.module)?),
+            handle: server.start(self.module)?,
         };
         info!(local_addr =? addr, "Sui JSON-RPC server listening on {addr}");
         info!("Available JSON-RPC methods : {:?}", methods_names);
@@ -189,24 +180,12 @@ impl JsonRpcServerBuilder {
 }
 
 pub struct ServerHandle {
-    rt: Option<Runtime>,
-    handle: Option<jsonrpsee::server::ServerHandle>,
+    handle: jsonrpsee::server::ServerHandle,
 }
 
 impl ServerHandle {
-    pub async fn stopped(mut self) {
-        if let Some(handle) = self.handle.take() {
-            handle.stopped().await
-        }
-    }
-}
-
-impl Drop for ServerHandle {
-    // This is to prevent the runtime from being dropped in a existing runtime.
-    fn drop(&mut self) {
-        if let (Ok(handle), Some(rt)) = (Handle::try_current(), self.rt.take()) {
-            handle.spawn_blocking(move || drop(rt));
-        }
+    pub async fn stopped(self) {
+        self.handle.stopped().await
     }
 }
 

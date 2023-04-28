@@ -435,6 +435,7 @@ export class BackgroundClient {
         ) {
             action = setKeyringStatus(payload.return);
         } else if (isLoadedFeaturesPayload(payload)) {
+            growthbook.setAttributes(payload.attributes);
             growthbook.setFeatures(payload.features);
         } else if (isSetNetworkPayload(payload)) {
             action = changeActiveNetwork({

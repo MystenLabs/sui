@@ -16,10 +16,9 @@ use tokio::{task::JoinHandle, time::sleep};
 use tracing::info;
 
 use mysten_metrics::RegistryService;
-use sui::config::SuiEnv;
-use sui::{client_commands::WalletContext, config::SuiClientConfig};
+use shared_crypto::intent::Intent;
 use sui_config::builder::{ProtocolVersionsConfig, SupportedProtocolVersionsCallback};
-use sui_config::genesis_config::GenesisConfig;
+use sui_config::genesis_config::{AccountConfig, GenesisConfig};
 use sui_config::node::DBCheckpointConfig;
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{FullnodeConfigBuilder, NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
@@ -29,13 +28,15 @@ use sui_node::SuiNode;
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
 use sui_sdk::error::SuiRpcResult;
+use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
+use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_swarm::memory::{Swarm, SwarmBuilder};
-use sui_types::base_types::{AuthorityName, SuiAddress};
+use sui_types::base_types::{AuthorityName, ObjectID, SuiAddress};
 use sui_types::committee::EpochId;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
-use sui_types::messages::VerifiedTransaction;
+use sui_types::messages::{SenderSignedData, Transaction, TransactionData, VerifiedTransaction};
 use sui_types::object::Object;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemState;
@@ -109,6 +110,27 @@ impl TestCluster {
             .unwrap()
     }
 
+    // Sign a transaction with a key currently managed by the WalletContext
+    pub fn sign_transaction(
+        &self,
+        signer_address: &SuiAddress,
+        data: &TransactionData,
+    ) -> VerifiedTransaction {
+        let sig = self
+            .wallet
+            .config
+            .keystore
+            .sign_secure(signer_address, data, Intent::sui_transaction())
+            .unwrap();
+        VerifiedTransaction::new_unchecked(Transaction::new(
+            SenderSignedData::new_from_sender_signature(
+                data.clone(),
+                Intent::sui_transaction(),
+                sig,
+            ),
+        ))
+    }
+
     pub fn fullnode_config_builder(&self) -> FullnodeConfigBuilder {
         self.swarm.config().fullnode_config_builder()
     }
@@ -154,6 +176,15 @@ impl TestCluster {
             .get_reference_gas_price()
             .await
             .expect("failed to get reference gas price")
+    }
+
+    pub async fn get_object_from_fullnode_store(&self, object_id: &ObjectID) -> Option<Object> {
+        self.fullnode_handle
+            .sui_node
+            .state()
+            .get_object(object_id)
+            .await
+            .unwrap()
     }
 
     /// To detect whether the network has reached such state, we use the fullnode as the
@@ -238,7 +269,7 @@ impl TestCluster {
     ) -> SuiRpcResult<SuiTransactionBlockResponse> {
         self.fullnode_handle
             .sui_client
-            .quorum_driver()
+            .quorum_driver_api()
             .execute_transaction_block(
                 transaction,
                 SuiTransactionBlockResponseOptions::new().with_effects(),
@@ -368,6 +399,7 @@ impl TestClusterBuilder {
             checkpoint_path: None,
             object_store_config: None,
             perform_index_db_checkpoints_at_epoch_end: None,
+            prune_and_compact_before_upload: None,
         };
         self
     }
@@ -378,6 +410,7 @@ impl TestClusterBuilder {
             checkpoint_path: None,
             object_store_config: None,
             perform_index_db_checkpoints_at_epoch_end: None,
+            prune_and_compact_before_upload: None,
         };
         self
     }
@@ -422,6 +455,11 @@ impl TestClusterBuilder {
     ) -> Self {
         self.validator_supported_protocol_versions_config =
             ProtocolVersionsConfig::PerValidator(func);
+        self
+    }
+
+    pub fn with_accounts(mut self, accounts: Vec<AccountConfig>) -> Self {
+        self.get_or_init_genesis_config().accounts = accounts;
         self
     }
 
@@ -543,7 +581,7 @@ pub async fn start_fullnode_from_config(
     config: NodeConfig,
 ) -> Result<FullNodeHandle, anyhow::Error> {
     let registry_service = RegistryService::new(Registry::new());
-    let sui_node = SuiNode::start(&config, registry_service).await?;
+    let sui_node = SuiNode::start(&config, registry_service, None).await?;
 
     let rpc_url = format!("http://{}", config.json_rpc_address);
     let rpc_client = HttpClientBuilder::default().build(&rpc_url)?;

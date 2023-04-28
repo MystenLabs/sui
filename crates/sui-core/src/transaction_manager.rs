@@ -16,7 +16,6 @@ use sui_types::{
     messages::{TransactionDataAPI, VerifiedCertificate, VerifiedExecutableTransaction},
 };
 use sui_types::{base_types::TransactionDigest, error::SuiResult};
-use tokio::sync::mpsc::UnboundedSender;
 use tracing::{error, trace, warn};
 
 use crate::authority::{
@@ -24,6 +23,7 @@ use crate::authority::{
     authority_store::{InputKey, LockMode},
 };
 use crate::authority::{AuthorityMetrics, AuthorityStore};
+use crate::execution_driver::ExecutionDispatcher;
 
 #[cfg(test)]
 #[path = "unit_tests/transaction_manager_tests.rs"]
@@ -41,10 +41,7 @@ const MIN_HASHMAP_CAPACITY: usize = 1000;
 /// storage, committed objects and certificates are notified back to TransactionManager.
 pub struct TransactionManager {
     authority_store: Arc<AuthorityStore>,
-    tx_ready_certificates: UnboundedSender<(
-        VerifiedExecutableTransaction,
-        Option<TransactionEffectsDigest>,
-    )>,
+    pub(crate) execution_dispatcher: Arc<ExecutionDispatcher>,
     metrics: Arc<AuthorityMetrics>,
     inner: RwLock<Inner>,
 }
@@ -210,17 +207,14 @@ impl TransactionManager {
     pub(crate) fn new(
         authority_store: Arc<AuthorityStore>,
         epoch_store: &AuthorityPerEpochStore,
-        tx_ready_certificates: UnboundedSender<(
-            VerifiedExecutableTransaction,
-            Option<TransactionEffectsDigest>,
-        )>,
+        execution_dispatcher: Arc<ExecutionDispatcher>,
         metrics: Arc<AuthorityMetrics>,
     ) -> TransactionManager {
         let transaction_manager = TransactionManager {
             authority_store,
             metrics,
             inner: RwLock::new(Inner::new(epoch_store.epoch())),
-            tx_ready_certificates,
+            execution_dispatcher,
         };
         transaction_manager
             .enqueue(epoch_store.all_pending_execution().unwrap(), epoch_store)
@@ -614,11 +608,9 @@ impl TransactionManager {
             .executing_certificates
             .insert(*cert.digest(), pending_certificate.acquired_locks)
             .is_none());
-        let _ = self
-            .tx_ready_certificates
-            .send((cert, expected_effects_digest));
+        self.execution_dispatcher
+            .dispatch_certificate(cert, expected_effects_digest);
         self.metrics.transaction_manager_num_ready.inc();
-        self.metrics.execution_driver_dispatch_queue.inc();
     }
 
     /// Gets the missing input object keys for the given transaction.

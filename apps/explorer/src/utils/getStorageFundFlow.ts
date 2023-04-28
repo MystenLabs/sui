@@ -15,7 +15,9 @@ export function getEpochStorageFundFlow(endOfEpochInfo: EndOfEpochInfo | null) {
         : null;
 
     const netInflow =
-        fundInflow && fundOutflow ? fundInflow - fundOutflow : null;
+        fundInflow !== null && fundOutflow !== null
+            ? fundInflow - fundOutflow
+            : null;
 
     return { netInflow, fundInflow, fundOutflow };
 }

@@ -10,7 +10,9 @@ edition = "2021"
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 bcs = "0.1.4"
 prometheus = "0.13.3"
-
+async-trait = "0.1.61"
+jsonrpsee = { version = "0.16.2", features = ["http-client"] }
+async-recursion = "1.0.4"
 clap = { version = "4.1.4", features = ["derive"] }
 colored = "2.0.0"
 futures = "0.3.23"
@@ -24,6 +26,8 @@ move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 move-core-types.workspace = true
 move-package.workspace = true
+tokio.workspace = true
+typed-store.workspace = true
 
 sui-adapter = { path = "../sui-adapter" }
 sui-config = { path = "../sui-config" }

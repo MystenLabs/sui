@@ -34,16 +34,27 @@ impl CompiledScript {
 
 impl CompiledModule {
     /// Deserialize a &[u8] slice into a `CompiledModule` instance.
-    pub fn deserialize(binary: &[u8]) -> BinaryLoaderResult<Self> {
-        Self::deserialize_with_max_version(binary, VERSION_MAX)
+    pub fn deserialize_with_defaults(binary: &[u8]) -> BinaryLoaderResult<Self> {
+        Self::deserialize_with_config(
+            binary,
+            VERSION_MAX,
+            /* check_no_extraneous_bytes */ false,
+        )
     }
 
-    /// Deserialize a &[u8] slice into a `CompiledModule` instance, up to the specified version.
-    pub fn deserialize_with_max_version(
+    /// Deserialize a &[u8] slice into a `CompiledModule` instance with settings
+    /// - Can specify up to the specified version.
+    /// - Can specify if the deserializer should error on trailing bytes
+    pub fn deserialize_with_config(
         binary: &[u8],
         max_binary_format_version: u32,
+        check_no_extraneous_bytes: bool,
     ) -> BinaryLoaderResult<Self> {
-        let module = deserialize_compiled_module(binary, max_binary_format_version)?;
+        let module = deserialize_compiled_module(
+            binary,
+            max_binary_format_version,
+            check_no_extraneous_bytes,
+        )?;
         BoundsChecker::verify_module(&module)?;
         Ok(module)
     }
@@ -51,7 +62,7 @@ impl CompiledModule {
     // exposed as a public function to enable testing the deserializer
     #[doc(hidden)]
     pub fn deserialize_no_check_bounds(binary: &[u8]) -> BinaryLoaderResult<Self> {
-        deserialize_compiled_module(binary, VERSION_MAX)
+        deserialize_compiled_module(binary, VERSION_MAX, false)
     }
 }
 
@@ -304,7 +315,7 @@ fn deserialize_compiled_script(
     max_binary_format_version: u32,
 ) -> BinaryLoaderResult<CompiledScript> {
     let binary_len = binary.len();
-    let mut cursor = VersionedCursor::new(binary, max_binary_format_version)?;
+    let mut cursor = VersionedCursor::new(binary, max_binary_format_version, false)?;
     let table_count = load_table_count(&mut cursor)?;
     let mut tables: Vec<Table> = Vec::new();
     read_tables(&mut cursor, table_count, &mut tables)?;
@@ -336,9 +347,11 @@ fn deserialize_compiled_script(
 fn deserialize_compiled_module(
     binary: &[u8],
     max_binary_format_version: u32,
+    check_no_extraneous_bytes: bool,
 ) -> BinaryLoaderResult<CompiledModule> {
     let binary_len = binary.len();
-    let mut cursor = VersionedCursor::new(binary, max_binary_format_version)?;
+    let mut cursor =
+        VersionedCursor::new(binary, max_binary_format_version, check_no_extraneous_bytes)?;
     let table_count = load_table_count(&mut cursor)?;
     let mut tables: Vec<Table> = Vec::new();
     read_tables(&mut cursor, table_count, &mut tables)?;
@@ -359,6 +372,11 @@ fn deserialize_compiled_module(
 
     build_compiled_module(&mut module, &table_contents, &tables)?;
 
+    let end_pos = cursor.position();
+    let had_remaining_bytes = end_pos < (binary.len() as u64);
+    if check_no_extraneous_bytes && had_remaining_bytes {
+        return Err(PartialVMError::new(StatusCode::TRAILING_BYTES));
+    }
     Ok(module)
 }
 
@@ -572,7 +590,7 @@ fn build_common_tables(
                 load_constant_pool(binary, table, common.get_constant_pool())?;
             }
             TableType::METADATA => {
-                if binary.version() < VERSION_5 {
+                if binary.check_no_extraneous_bytes() || binary.version() < VERSION_5 {
                     return Err(
                         PartialVMError::new(StatusCode::MALFORMED).with_message(format!(
                             "metadata declarations not applicable in bytecode version {}",

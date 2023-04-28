@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useRpcClient } from '@mysten/core';
+import { useRpcClient, useGetTotalTransactionBlocks } from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
@@ -28,11 +28,7 @@ export function Transactions({
 
     const rpc = useRpcClient();
 
-    const countQuery = useQuery(
-        ['transactions', 'count'],
-        () => rpc.getTotalTransactionBlocks(),
-        { cacheTime: 24 * 60 * 60 * 1000, staleTime: Infinity, retry: false }
-    );
+    const countQuery = useGetTotalTransactionBlocks();
 
     const pagination = usePaginationStack();
 

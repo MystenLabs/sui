@@ -55,14 +55,15 @@ fn get_modules(args: &Args) -> Vec<CompiledModule> {
     if let Some(stdlib_path) = &args.stdlib_path {
         let stdlib_modules = fs::read_dir(stdlib_path).unwrap().map(|file| {
             let bytes = fs::read(file.unwrap().path()).unwrap();
-            CompiledModule::deserialize(&bytes).expect("Module blob can't be deserialized")
+            CompiledModule::deserialize_with_defaults(&bytes)
+                .expect("Module blob can't be deserialized")
         });
         modules.extend(stdlib_modules);
     }
 
     if let Some(module_binary_path) = &args.module_binary_path {
         let bytecode_bytes = fs::read(module_binary_path).expect("Unable to read bytecode file");
-        let compiled_module = CompiledModule::deserialize(&bytecode_bytes)
+        let compiled_module = CompiledModule::deserialize_with_defaults(&bytecode_bytes)
             .expect("Module blob can't be deserialized");
         modules.push(compiled_module);
     }
