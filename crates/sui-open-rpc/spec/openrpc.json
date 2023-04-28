@@ -1631,14 +1631,10 @@
       "description": "Return the validator APY",
       "params": [],
       "result": {
-        "name": "BTreeMap<SuiAddress,f64>",
+        "name": "ValidatorApys",
         "required": true,
         "schema": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "number",
-            "format": "double"
-          }
+          "$ref": "#/components/schemas/ValidatorApys"
         }
       }
     },
@@ -7654,6 +7650,40 @@
                 "$ref": "#/components/schemas/SequenceNumber"
               }
             ]
+          }
+        }
+      },
+      "ValidatorApy": {
+        "type": "object",
+        "required": [
+          "address",
+          "apy"
+        ],
+        "properties": {
+          "address": {
+            "$ref": "#/components/schemas/SuiAddress"
+          },
+          "apy": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "ValidatorApys": {
+        "type": "object",
+        "required": [
+          "apys",
+          "epoch"
+        ],
+        "properties": {
+          "apys": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ValidatorApy"
+            }
+          },
+          "epoch": {
+            "$ref": "#/components/schemas/BigInt_for_uint64"
           }
         }
       }

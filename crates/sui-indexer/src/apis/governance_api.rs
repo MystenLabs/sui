@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::HttpClient;
@@ -10,8 +8,8 @@ use jsonrpsee::RpcModule;
 
 use sui_json_rpc::api::{GovernanceReadApiClient, GovernanceReadApiServer};
 use sui_json_rpc::SuiRpcModule;
-use sui_json_rpc_types::DelegatedStake;
 use sui_json_rpc_types::SuiCommittee;
+use sui_json_rpc_types::{DelegatedStake, ValidatorApys};
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::sui_serde::BigInt;
@@ -53,7 +51,7 @@ impl GovernanceReadApiServer for GovernanceReadApi {
         self.fullnode.get_reference_gas_price().await
     }
 
-    async fn get_validators_apy(&self) -> RpcResult<BTreeMap<SuiAddress, f64>> {
+    async fn get_validators_apy(&self) -> RpcResult<ValidatorApys> {
         self.fullnode.get_validators_apy().await
     }
 }

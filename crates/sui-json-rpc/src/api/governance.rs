@@ -1,12 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 
-use sui_json_rpc_types::{DelegatedStake, SuiCommittee};
+use sui_json_rpc_types::{DelegatedStake, SuiCommittee, ValidatorApys};
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::sui_serde::BigInt;
@@ -44,5 +42,5 @@ pub trait GovernanceReadApi {
 
     /// Return the validator APY
     #[method(name = "getValidatorsApy")]
-    async fn get_validators_apy(&self) -> RpcResult<BTreeMap<SuiAddress, f64>>;
+    async fn get_validators_apy(&self) -> RpcResult<ValidatorApys>;
 }
