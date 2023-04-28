@@ -14,10 +14,12 @@ You must serialize transaction data following [Binary Canonical Serialization](h
 
 The following example demonstrates how to serialize data for a transfer using the Sui CLI. This returns serialized transaction data in Base64. Submit the raw transaction to execute as `tx_bytes`.
 ```shell
-$SUI_BINARY client serialize-transfer-sui --to $ADDRESS --sui-coin-object-id $OBJECT_ID --gas-budget 1000
+$SUI_BINARY client transfer-sui --to $ADDRESS --sui-coin-object-id $OBJECT_ID --gas-budget 1000 --serialize-output
 
 Raw tx_bytes to execute: $TX_BYTES
 ```
+
+**Note:** All other CLI commands that craft a transaction (e.g., `sui client publish`, `sui client call`) also accept the `--serialize-output` flag and you can use them in the same way.
 
 ## Sign the serialized data
 
@@ -41,7 +43,7 @@ To verify a signature against the cryptography library backing Sui when debuggin
 
 ## Execute the signed transaction
 
-After you obtain the serialized signature, you can submit it using the execution transaction command. This command takes `--tx-bytes` as the raw transaction bytes to execute (see output of `$SUI_BINARY client serialize-transfer-sui`) and the serialized signature (Base64 encoded `flag || sig || pk`, see output of `$SUI_BINARY keytool sign`). This executes the signed transaction and returns the certificate and transaction effects if successful.
+After you obtain the serialized signature, you can submit it using the execution transaction command. This command takes `--tx-bytes` as the raw transaction bytes to execute (see output of the `$SUI_BINARY client transfer` command above) and the serialized signature (Base64 encoded `flag || sig || pk`, see output of `$SUI_BINARY keytool sign`). This executes the signed transaction and returns the certificate and transaction effects if successful.
 
 ```shell
 $SUI_BINARY client execute-signed-tx --tx-bytes $TX_BYTES --signatures $SERIALIZED_SIG
