@@ -442,24 +442,6 @@ impl IndexStore {
         let sequence = self.next_sequence_number.fetch_add(1, Ordering::SeqCst);
         let mut batch = self.tables.transactions_from_addr.batch();
 
-        // Do a check on the size of the write for modules, anf functions
-        for (_obj_id, module, function) in move_functions.clone() {
-            let module_str = module.to_string();
-            let function_str = function.to_string();
-
-            if function_str.len() > self.max_type_length.try_into().unwrap() {
-                return Err(SuiError::UserInputError {
-                    error: UserInputError::MoveFunctionInputError,
-                });
-            }
-
-            if module_str.len() > self.max_type_length.try_into().unwrap() {
-                return Err(SuiError::UserInputError {
-                    error: UserInputError::MoveFunctionInputError,
-                });
-            }
-        }
-
         batch.insert_batch(
             &self.tables.transaction_order,
             std::iter::once((sequence, *digest)),
@@ -819,7 +801,18 @@ impl IndexStore {
         // If we are passed a function with no module return a UserInputError
         if function.is_some() && module.is_none() {
             return Err(SuiError::UserInputError {
-                error: UserInputError::MoveFunctionInputError,
+                error: UserInputError::MoveFunctionInputError(
+                    "Cannot supply function without supplying module".to_string(),
+                ),
+            });
+        }
+
+        // We cannot have a cursor without filling out the other keys.
+        if cursor.is_some() && (module.is_none() || function.is_none()) {
+            return Err(SuiError::UserInputError {
+                error: UserInputError::MoveFunctionInputError(
+                    "Cannot supply cursor without supplying module and function".to_string(),
+                ),
             });
         }
 
