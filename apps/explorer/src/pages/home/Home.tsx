@@ -28,7 +28,7 @@ function Home() {
     return isHomePageRedesignEnabled ? (
         <div
             data-testid="home-page"
-            className="grid grid-cols-1 grid-areas-condensedHomePage md:grid-cols-[200px,1fr] md:grid-areas-homePage lg:grid-cols-[200px,454px,1fr] lg:grid-areas-fullHomePage gap-x-4 gap-y-4"
+            className="grid grid-cols-1 gap-x-4 gap-y-4 grid-areas-condensedHomePage md:grid-cols-[200px,1fr] md:grid-areas-homePage lg:grid-cols-[200px,454px,1fr] lg:grid-areas-fullHomePage"
         >
             <div className="grid-in-tps">
                 <NetworkTPS />
@@ -36,7 +36,7 @@ function Home() {
             <div className="grid-in-sui-token">
                 <SuiTokenCard />
             </div>
-            <div className="grid-in-network overflow-hidden">
+            <div className="overflow-hidden grid-in-network">
                 <OnTheNetwork />
             </div>
             <div className="grid-in-epoch">

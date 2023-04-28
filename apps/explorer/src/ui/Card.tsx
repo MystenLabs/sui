@@ -38,6 +38,8 @@ export interface CardProps extends VariantProps<typeof cardStyles> {
 
 export function Card({ spacing, rounded, bg, height, children }: CardProps) {
     return (
-        <div className={cardStyles({ spacing, rounded, bg, height })}>{children}</div>
+        <div className={cardStyles({ spacing, rounded, bg, height })}>
+            {children}
+        </div>
     );
 }

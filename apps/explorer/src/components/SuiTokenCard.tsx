@@ -22,7 +22,7 @@ export function SuiTokenCard() {
                     1 SUI = $0.33
                 </Heading>
             </div>
-            <div className="flex gap-8 mt-8">
+            <div className="mt-8 flex gap-8">
                 <MarketData
                     title="Market Cap"
                     amount="4.69 B"
