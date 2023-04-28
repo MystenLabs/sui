@@ -23,9 +23,10 @@ const NodeMap = lazy(() => import('../../components/node-map'));
 const TRANSACTIONS_LIMIT = 25;
 
 function Home() {
-    const isHomePageRedesignEnabled = useFeatureIsOn(
-        'explorer-home-page-redesign'
-    );
+    // const isHomePageRedesignEnabled = useFeatureIsOn(
+    //     'explorer-home-page-redesign'
+    // );
+    const isHomePageRedesignEnabled = true;
 
     return isHomePageRedesignEnabled ? (
         <div
