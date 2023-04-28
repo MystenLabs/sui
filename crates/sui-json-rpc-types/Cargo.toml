@@ -27,3 +27,7 @@ move-bytecode-utils.workspace = true
 sui-types = { path = "../sui-types" }
 sui-json = { path = "../sui-json" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+quinn-proto = { version = "0.9.2", features = ["arbitrary"] }
+arbitrary = { version = "1", features = ["derive"] }
+afl = "0.12.16"
