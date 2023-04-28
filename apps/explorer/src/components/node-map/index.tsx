@@ -43,7 +43,7 @@ function NodeStat({ title, children }: { title: string; children: ReactNode }) {
 }
 
 interface Props {
-    minHeight: number;
+    minHeight: string | number;
 }
 
 // NOTE: This component is lazy imported, so it needs to be default exported:
@@ -129,7 +129,7 @@ export default function NodeMap({ minHeight }: Props) {
     );
 
     return (
-        <Card spacing="none">
+        <Card height="full" spacing="none">
             <div
                 data-testid="node-map"
                 className="relative flex flex-col justify-end"

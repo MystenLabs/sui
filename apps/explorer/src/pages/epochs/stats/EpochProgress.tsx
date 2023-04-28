@@ -80,7 +80,7 @@ export function EpochProgress({
                         </div>
                     ) : null}
                 </div>
-                {inProgress ? (
+                {inProgress && progress !== undefined ? (
                     <div className="space-y-1.5">
                         <Heading variant="heading6/medium" color="steel-darker">
                             {label}

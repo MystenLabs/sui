@@ -132,6 +132,38 @@ export default {
                     ...fontFamily.mono,
                 ],
             },
+            gridTemplateAreas: {
+                condensedHomePage: [
+                    'tps',
+                    'sui-token',
+                    'network',
+                    'epoch',
+                    'checkpoint',
+                    'gas-price',
+                    'node-map',
+                    'activity',
+                    'validator',
+                    'packages',
+                ],
+                homePage: [
+                    'tps        sui-token',
+                    'network    network',
+                    'epoch      gas-price',
+                    'checkpoint gas-price',
+                    'node-map   node-map',
+                    'activity   activity',
+                    'validator  validator',
+                    'packages   packages',
+                ],
+                fullHomePage: [
+                    'tps        sui-token network',
+                    'epoch      gas-price node-map',
+                    'epoch      gas-price node-map',
+                    'checkpoint gas-price node-map',
+                    'activity   activity  validator',
+                    'activity   activity  packages',
+                ],
+            },
             keyframes: {
                 shimmer: {
                     '0%': { 'background-position': '-1000px 0' },
@@ -185,6 +217,7 @@ export default {
     plugins: [
         require('@headlessui/tailwindcss'),
         require('@tailwindcss/aspect-ratio'),
+        require('@savvywombat/tailwindcss-grid-areas'),
         require('@tailwindcss/forms')({
             strategy: 'class',
         }),

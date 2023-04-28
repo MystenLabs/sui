@@ -2,15 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { StatsWrapper } from './FormattedStatsAmount';
-import { NetworkStats } from './NetworkStats';
 
 import { useGetNetworkMetrics } from '~/hooks/useGetNetworkMetrics';
+import { Card } from '~/ui/Card';
 
 export function Checkpoint() {
     const { data, isLoading } = useGetNetworkMetrics();
 
     return (
-        <NetworkStats spacing="none">
+        <Card height="full" spacing="lg">
             <div className="flex gap-8">
                 <StatsWrapper
                     label="Checkpoint"
@@ -23,6 +23,6 @@ export function Checkpoint() {
                         : null}
                 </StatsWrapper>
             </div>
-        </NetworkStats>
+        </Card>
     );
 }
