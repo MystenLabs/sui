@@ -10,6 +10,7 @@ import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
 import { ProgressBar } from '~/ui/ProgressBar';
 import { Text } from '~/ui/Text';
+import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
 
 export function CurrentEpoch() {
     const { epoch, progress, label, end, start } = useEpochProgress();
@@ -33,68 +34,73 @@ export function CurrentEpoch() {
     }, [start]);
 
     return (
-        <Card bg="highlight" height="full" spacing="lg">
-            <div className="flex w-full flex-col gap-4">
-                <div className="space-y-4">
-                    <div className="flex flex-col gap-2">
-                        <Heading
-                            color="success-dark"
-                            variant="heading4/semibold"
-                        >
-                            Current Epoch
-                        </Heading>
-                        <Heading
-                            color="success-dark"
-                            variant="heading4/semibold"
-                        >
-                            {formatAmountParts(epoch)}
-                        </Heading>
-                    </div>
+        <LinkWithQuery to={`/epoch/${epoch}`}>
+            <Card bg="highlight" height="full" spacing="lg">
+                <div className="flex w-full flex-col gap-4">
+                    <div className="space-y-4">
+                        <div className="flex flex-col gap-2">
+                            <Heading
+                                color="success-dark"
+                                variant="heading4/semibold"
+                            >
+                                Current Epoch
+                            </Heading>
+                            <Heading
+                                color="success-dark"
+                                variant="heading4/semibold"
+                            >
+                                {formatAmountParts(epoch)}
+                            </Heading>
+                        </div>
 
-                    {!progress && end ? (
+                        {!progress && end ? (
+                            <div>
+                                <Text
+                                    variant="pSubtitleSmall/normal"
+                                    uppercase
+                                    color="steel-darker"
+                                >
+                                    End
+                                </Text>
+                                <Text
+                                    variant="pSubtitle/semibold"
+                                    color="steel-darker"
+                                >
+                                    {formatDate(end)}
+                                </Text>
+                            </div>
+                        ) : null}
+                    </div>
+                    <div className="space-y-1.5">
+                        <Heading variant="heading6/medium" color="steel-darker">
+                            {label}
+                        </Heading>
+                        <ProgressBar progress={progress || 0} />
+                    </div>
+                    {formattedDateString ? (
                         <div>
                             <Text
-                                variant="pSubtitleSmall/normal"
+                                variant="pSubtitleSmall/semibold"
                                 uppercase
-                                color="steel-darker"
+                                color="steel-dark"
                             >
-                                End
+                                Started
                             </Text>
+
                             <Text
                                 variant="pSubtitle/semibold"
-                                color="steel-darker"
+                                color="steel-dark"
                             >
-                                {formatDate(end)}
+                                {formattedDateString}
                             </Text>
                         </div>
-                    ) : null}
-                </div>
-                <div className="space-y-1.5">
-                    <Heading variant="heading6/medium" color="steel-darker">
-                        {label}
-                    </Heading>
-                    <ProgressBar progress={progress || 0} />
-                </div>
-                {formattedDateString ? (
-                    <div>
-                        <Text
-                            variant="pSubtitleSmall/semibold"
-                            uppercase
-                            color="steel-dark"
-                        >
-                            Started
-                        </Text>
-
+                    ) : (
                         <Text variant="pSubtitle/semibold" color="steel-dark">
-                            {formattedDateString}
+                            Loading...
                         </Text>
-                    </div>
-                ) : (
-                    <Text variant="pSubtitle/semibold" color="steel-dark">
-                        Loading...
-                    </Text>
-                )}
-            </div>
-        </Card>
+                    )}
+                </div>
+            </Card>
+        </LinkWithQuery>
     );
 }

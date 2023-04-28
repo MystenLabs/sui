@@ -24,7 +24,7 @@ export function SuiTokenCard() {
                     1 SUI = $XXX
                 </Heading>
                 <div className="ml-auto">
-                    <Text variant="pBody/medium" color="steel">
+                    <Text variant="subtitleSmallExtra/medium" color="steel">
                         via CoinMarketCap
                     </Text>
                 </div>
