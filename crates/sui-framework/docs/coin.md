@@ -194,9 +194,6 @@ coins of type <code>T</code>. Transferable
 
 ## Struct `CurrencyCreated`
 
-Emitted when new currency is created through the <code>create_currency</code> call.
-Contains currency metadata for off-chain discovery. Type parameter <code>T</code>
-matches the one in <code><a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;</code>
 
 
 <pre><code><b>struct</b> <a href="coin.md#0x2_coin_CurrencyCreated">CurrencyCreated</a>&lt;T&gt; <b>has</b> <b>copy</b>, drop
@@ -213,10 +210,7 @@ matches the one in <code><a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;</code
 <code>decimals: u8</code>
 </dt>
 <dd>
- Number of decimal places the coin uses.
- A coin with <code>value </code> N and <code>decimals</code> D should be shown as N / 10^D
- E.g., a coin with <code>value</code> 7002 and decimals 3 should be displayed as 7.002
- This is metadata for display usage only.
+
 </dd>
 </dl>
 

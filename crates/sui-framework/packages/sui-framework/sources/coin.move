@@ -55,19 +55,6 @@ module sui::coin {
         total_supply: Supply<T>
     }
 
-    // === Events ===
-
-    /// Emitted when new currency is created through the `create_currency` call.
-    /// Contains currency metadata for off-chain discovery. Type parameter `T`
-    /// matches the one in `Coin<T>`
-    struct CurrencyCreated<phantom T> has copy, drop {
-        /// Number of decimal places the coin uses.
-        /// A coin with `value ` N and `decimals` D should be shown as N / 10^D
-        /// E.g., a coin with `value` 7002 and decimals 3 should be displayed as 7.002
-        /// This is metadata for display usage only.
-        decimals: u8
-    }
-
     // === Supply <-> TreasuryCap morphing and accessors  ===
 
     /// Return the total number of `T`'s in circulation.
@@ -431,4 +418,8 @@ module sui::coin {
         &treasury.total_supply
     }
 
+    // deprecated as we have CoinMetadata now
+    struct CurrencyCreated<phantom T> has copy, drop {
+        decimals: u8
+    }
 }
