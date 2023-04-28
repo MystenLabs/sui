@@ -58,7 +58,7 @@ function Home() {
                     </Suspense>
                 </ErrorBoundary>
             </div>
-            <div className="grid-in-activity">
+            <div className="mt-5 grid-in-activity">
                 <ErrorBoundary>
                     <Activity
                         initialLimit={TRANSACTIONS_LIMIT}
@@ -66,8 +66,11 @@ function Home() {
                     />
                 </ErrorBoundary>
             </div>
-            <div data-testid="validators-table" className="grid-in-validator">
-                <TabGroup>
+            <div
+                data-testid="validators-table"
+                className="mt-5 grid-in-validator"
+            >
+                <TabGroup size="lg">
                     <TabList>
                         <Tab>Validators</Tab>
                     </TabList>
@@ -80,7 +83,9 @@ function Home() {
                     </TabPanels>
                 </TabGroup>
             </div>
-            <div className="bg-gray-60 grid-in-packages">Popular packages</div>
+            <div className="mt-5 bg-gray-60 grid-in-packages">
+                Popular packages
+            </div>
         </div>
     ) : (
         <div
