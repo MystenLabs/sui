@@ -201,7 +201,7 @@ pub trait IndexerStore {
     ) -> Result<usize, IndexerError>;
     async fn persist_object_changes(
         &self,
-        checkpoint_seq: i64,
+        checkpoint: &Checkpoint,
         tx_object_changes: &[TransactionObjectChanges],
         object_mutation_latency: Histogram,
         object_deletion_latency: Histogram,
