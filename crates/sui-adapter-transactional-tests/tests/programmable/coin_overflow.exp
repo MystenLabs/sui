@@ -4,7 +4,6 @@ init:
 A: object(0,0)
 
 task 1 'publish'. lines 8-23:
-events: Event { package_id: test, transaction_module: Identifier("fake"), sender: A, type_: StructTag { address: sui, module: Identifier("coin"), name: Identifier("CurrencyCreated"), type_params: [Struct(StructTag { address: test, module: Identifier("fake"), name: Identifier("FAKE"), type_params: [] })] }, contents: [2] }
 created: object(1,0), object(1,1), object(1,2)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 10617200,  storage_rebate: 0, non_refundable_storage_fee: 0
