@@ -107,18 +107,19 @@ export default {
                 iconTextLarge: ['48px', '1'],
 
                 // Heading sizes:
-                heading1: ['28px', '0.8'],
-                heading2: ['24px', '0.8'],
+                heading1: ['28px', '1'],
+                heading2: ['24px', '1'],
                 heading3: ['20px', '1'],
                 heading4: ['18px', '1'],
                 heading5: ['17px', '1'],
                 heading6: ['16px', '1'],
 
                 // Paragraph sizes:
-                pBody: ['14px', '1.3'],
-                pBodySmall: ['13px', '1.3'],
-                pSubtitle: ['12px', '1.3'],
-                pSubtitleSmall: ['11px', '1.3'],
+                pHeading6: ['16px', '1.4'],
+                pBody: ['14px', '1.4'],
+                pBodySmall: ['13px', '1.4'],
+                pSubtitle: ['12px', '1.4'],
+                pSubtitleSmall: ['11px', '1.4'],
             },
             fontFamily: {
                 system: fontFamily.sans,
