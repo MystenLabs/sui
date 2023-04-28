@@ -29,7 +29,11 @@ export function EpochProgress({
         !inProgress && start && end ? getElapsedTime(start, end) : undefined;
 
     return (
-        <Card bg={inProgress ? 'highlight' : 'default'} spacing="lg">
+        <Card
+            bg={inProgress ? 'highlight' : 'default'}
+            spacing="lg"
+            rounded="2xl"
+        >
             <div className="flex flex-col space-y-12">
                 <div className={clsx(inProgress ? 'space-y-4' : 'space-y-6')}>
                     <div className="flex flex-col gap-2">

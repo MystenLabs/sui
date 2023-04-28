@@ -15,7 +15,6 @@ import { ValidatorStatus } from './stats/ValidatorStatus';
 import { CheckpointsTable } from '~/components/checkpoints/CheckpointsTable';
 import { useEnhancedRpcClient } from '~/hooks/useEnhancedRpc';
 import { Banner } from '~/ui/Banner';
-import { Card } from '~/ui/Card';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Stats, type StatsProps } from '~/ui/Stats';
 import { TableCard } from '~/ui/TableCard';
@@ -127,11 +126,7 @@ export default function EpochDetail() {
                     <SuiStats label="Fund Outflow" amount={fundOutflow} />
                 </EpochStats>
 
-                {isCurrentEpoch ? (
-                    <Card spacing="lg">
-                        <ValidatorStatus />
-                    </Card>
-                ) : null}
+                {isCurrentEpoch ? <ValidatorStatus /> : null}
             </div>
 
             <TabGroup size="lg">

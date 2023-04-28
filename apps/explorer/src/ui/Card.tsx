@@ -10,6 +10,7 @@ const cardStyles = cva(null, {
             default: 'bg-gray-40',
             highlight: 'bg-success-light',
             lightBlue: 'bg-sui/10',
+            white: 'bg-white border border-steel',
         },
         height: {
             full: 'h-full',
@@ -17,6 +18,7 @@ const cardStyles = cva(null, {
         rounded: {
             lg: 'rounded-lg',
             xl: 'rounded-xl',
+            '2xl': 'rounded-2xl',
         },
         spacing: {
             none: '',
