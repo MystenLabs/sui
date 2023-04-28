@@ -75,9 +75,10 @@ function Home() {
                     </TabPanels>
                 </TabGroup>
             </div>
-            <div className="mt-5 bg-gray-60 md:col-span-full lg:col-auto">
+            {/* TODO: Add the popular packages component here :) */}
+            {/* <div className="mt-5 bg-gray-60 md:col-span-full lg:col-auto">
                 Popular packages
-            </div>
+            </div> */}
         </div>
     ) : (
         <div
