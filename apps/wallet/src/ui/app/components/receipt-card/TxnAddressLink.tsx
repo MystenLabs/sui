@@ -16,7 +16,6 @@ export function TxnAddressLink({ address }: TxnAddressLinkProps) {
             type={ExplorerLinkType.address}
             address={address}
             title="View on Sui Explorer"
-            className="text-sui-dark font-mono text-body font-semibold no-underline tracking-wider"
             showIcon={false}
         >
             {formatAddress(address)}

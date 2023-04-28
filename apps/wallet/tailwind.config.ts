@@ -37,6 +37,8 @@ export default {
                 button: '0px 1px 2px rgba(16, 24, 40, 0.05)',
                 notification: '0px 0px 20px rgba(29, 55, 87, 0.11)',
                 'wallet-modal': '0px 0px 44px 0px rgba(0, 0, 0, 0.15)',
+                'summary-card':
+                    '0px 5px 30px rgba(86, 104, 115, 0.2), 0px 0px 0px 1px rgba(160, 182, 195, 0.08)',
             },
             borderRadius: {
                 20: '1.25rem',
