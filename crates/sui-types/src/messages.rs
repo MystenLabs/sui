@@ -3445,6 +3445,7 @@ pub struct QuorumDriverRequest {
 pub struct QuorumDriverResponse {
     pub effects_cert: VerifiedCertifiedTransactionEffects,
     pub events: TransactionEvents,
+    pub objects: Vec<Object>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
