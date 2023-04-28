@@ -40,6 +40,7 @@ pub mod digests;
 pub mod display;
 pub mod dynamic_field;
 pub mod event;
+pub mod execution_status;
 pub mod gas;
 pub mod gas_coin;
 pub mod gas_model;

@@ -12,11 +12,11 @@ use move_core_types::{
 use move_vm_runtime::{move_vm::MoveVM, session::Session};
 use move_vm_types::loaded_data::runtime_types::Type;
 use serde::Deserialize;
+use sui_types::execution_status::CommandArgumentError;
 use sui_types::{
     base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
     coin::Coin,
     error::{ExecutionError, ExecutionErrorKind, SuiError},
-    messages::CommandArgumentError,
     object::{Data, MoveObject, Object, Owner},
     storage::{BackingPackageStore, ChildObjectResolver, ObjectChange, ParentSync, Storage},
     TypeTag,
@@ -94,7 +94,7 @@ pub struct ObjectValue {
     pub type_: Type,
     pub has_public_transfer: bool,
     // true if it has been used in a public, non-entry Move call
-    // In other words, false if all usages have been with non-Move comamnds or
+    // In other words, false if all usages have been with non-Move commands or
     // entry Move functions
     pub used_in_non_entry_move_call: bool,
     pub contents: ObjectContents,

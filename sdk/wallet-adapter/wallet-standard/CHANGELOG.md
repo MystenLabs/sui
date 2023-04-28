@@ -1,5 +1,20 @@
 # @mysten/wallet-standard
 
+## 0.5.4
+
+### Patch Changes
+
+- b4f0bfc76: Fix type definitions for package exports.
+- Updated dependencies [4ae3cbea3]
+- Updated dependencies [d2755a496]
+- Updated dependencies [f612dac98]
+- Updated dependencies [c219e7470]
+- Updated dependencies [59ae0e7d6]
+- Updated dependencies [c219e7470]
+- Updated dependencies [4e463c691]
+- Updated dependencies [b4f0bfc76]
+  - @mysten/sui.js@0.32.2
+
 ## 0.5.3
 
 ### Patch Changes

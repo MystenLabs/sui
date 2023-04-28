@@ -27,9 +27,9 @@ use serde::Serialize;
 use sui_config::transaction_deny_config::TransactionDenyConfig;
 use sui_types::metrics::LimitsMetrics;
 use sui_types::TypeTag;
-use tap::TapFallible;
+use tap::{TapFallible, TapOptional};
 use tokio::sync::mpsc::unbounded_channel;
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, Semaphore};
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tracing::{debug, error, info, instrument, trace, warn, Instrument};
 
@@ -104,7 +104,7 @@ use crate::checkpoints::checkpoint_executor::CheckpointExecutor;
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::event_handler::EventHandler;
-use crate::execution_driver::execution_process;
+use crate::execution_driver::{execution_process, ExecutionDispatcher};
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::stake_aggregator::StakeAggregator;
 use crate::state_accumulator::StateAccumulator;
@@ -133,7 +133,7 @@ mod batch_verification_tests;
 
 #[cfg(feature = "test-utils")]
 pub mod authority_test_utils;
-
+use once_cell::sync::OnceCell;
 pub mod authority_per_epoch_store;
 pub mod authority_per_epoch_store_pruner;
 
@@ -145,6 +145,8 @@ pub mod test_authority_builder;
 
 pub(crate) mod authority_notify_read;
 pub(crate) mod authority_store;
+
+static CHAIN_IDENTIFIER: OnceCell<CheckpointDigest> = OnceCell::new();
 
 pub type ReconfigConsensusMessage = (
     AuthorityKeyPair,
@@ -1705,15 +1707,22 @@ impl AuthorityState {
         db_checkpoint_config: &DBCheckpointConfig,
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
         transaction_deny_config: TransactionDenyConfig,
+        indirect_objects_threshold: usize,
     ) -> Arc<Self> {
         Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
 
         let metrics = Arc::new(AuthorityMetrics::new(prometheus_registry));
         let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
+        let execution_limit = Arc::new(Semaphore::new(num_cpus::get() * 2));
+        let execution_dispatcher = Arc::new(ExecutionDispatcher::new(
+            tx_ready_certificates,
+            execution_limit.clone(),
+            metrics.clone(),
+        ));
         let transaction_manager = Arc::new(TransactionManager::new(
             store.clone(),
             &epoch_store,
-            tx_ready_certificates,
+            execution_dispatcher.clone(),
             metrics.clone(),
         ));
         let (tx_execution_shutdown, rx_execution_shutdown) = oneshot::channel();
@@ -1727,6 +1736,7 @@ impl AuthorityState {
             pruning_config,
             epoch_store.epoch_start_state().epoch_duration_ms(),
             prometheus_registry,
+            indirect_objects_threshold,
         );
         let state = Arc::new(AuthorityState {
             name,
@@ -1749,10 +1759,12 @@ impl AuthorityState {
 
         // Start a task to execute ready certificates.
         let authority_state = Arc::downgrade(&state);
+        execution_dispatcher.set_authority(authority_state.clone());
         spawn_monitored_task!(execution_process(
             authority_state,
             rx_ready_certificates,
-            rx_execution_shutdown
+            rx_execution_shutdown,
+            execution_limit
         ));
 
         // TODO: This doesn't belong to the constructor of AuthorityState.
@@ -1890,18 +1902,29 @@ impl AuthorityState {
         accumulator: Arc<StateAccumulator>,
         enable_state_consistency_check: bool,
     ) {
+        info!(
+            "Performing sui conservation consistency check for epoch {}",
+            cur_epoch_store.epoch()
+        );
+
         if let Err(err) = self.database.expensive_check_sui_conservation() {
             if cfg!(debug_assertions) {
                 panic!("{}", err);
             } else {
                 // We cannot panic in production yet because it is known that there are some
                 // inconsistencies in testnet. We will enable this once we make it balanced again in testnet.
-                warn!("System consistency check failed: {}", err);
+                warn!("Sui conservation consistency check failed: {}", err);
             }
+        } else {
+            info!("Sui conservation consistency check passed");
         }
 
         // check for root state hash consistency with live object set
         if enable_state_consistency_check {
+            info!(
+                "Performing state consistency check for epoch {}",
+                cur_epoch_store.epoch()
+            );
             self.database.expensive_check_is_consistent_state(
                 checkpoint_executor,
                 accumulator,
@@ -2069,6 +2092,22 @@ impl AuthorityState {
                 }
             }
         }
+    }
+
+    /// Chain Identifier is the digest of the genesis checkpoint.
+    pub fn get_chain_identifier(&self) -> Option<CheckpointDigest> {
+        if let Some(digest) = CHAIN_IDENTIFIER.get() {
+            return Some(*digest);
+        }
+
+        let checkpoint = self
+            .get_checkpoint_by_sequence_number(0)
+            .tap_err(|e| error!("Failed to get genesis checkpoint: {:?}", e))
+            .ok()?
+            .tap_none(|| error!("Genesis checkpoint is missing from DB"))?;
+        // It's ok if the value is already set due to data races.
+        let _ = CHAIN_IDENTIFIER.set(*checkpoint.digest());
+        Some(*checkpoint.digest())
     }
 
     pub fn get_move_object<T>(&self, object_id: &ObjectID) -> SuiResult<T>
@@ -3080,6 +3119,7 @@ impl AuthorityState {
     pub async fn get_available_system_packages(
         &self,
         max_binary_format_version: u32,
+        no_extraneous_module_bytes: bool,
     ) -> Vec<ObjectRef> {
         let mut results = vec![];
 
@@ -3104,6 +3144,7 @@ impl AuthorityState {
                 &modules,
                 system_package.dependencies().to_vec(),
                 max_binary_format_version,
+                no_extraneous_module_bytes,
             ).await else {
                 return vec![];
             };
@@ -3130,6 +3171,7 @@ impl AuthorityState {
         &self,
         system_packages: Vec<ObjectRef>,
         move_binary_format_version: u32,
+        no_extraneous_module_bytes: bool,
     ) -> Option<Vec<(SequenceNumber, Vec<Vec<u8>>, Vec<ObjectID>)>> {
         let ids: Vec<_> = system_packages.iter().map(|(id, _, _)| *id).collect();
         let objects = self.get_objects(&ids).await.expect("read cannot fail");
@@ -3167,8 +3209,12 @@ impl AuthorityState {
             let modules: Vec<_> = bytes
                 .iter()
                 .map(|m| {
-                    CompiledModule::deserialize_with_max_version(m, move_binary_format_version)
-                        .unwrap()
+                    CompiledModule::deserialize_with_config(
+                        m,
+                        move_binary_format_version,
+                        no_extraneous_module_bytes,
+                    )
+                    .unwrap()
                 })
                 .collect();
 
@@ -3339,8 +3385,11 @@ impl AuthorityState {
 
         // since system packages are created during the current epoch, they should abide by the
         // rules of the current epoch, including the current epoch's max Move binary format version
+        let config = epoch_store.protocol_config();
         let Some(next_epoch_system_package_bytes) = self.get_system_package_bytes(
-            next_epoch_system_packages.clone(), epoch_store.protocol_config().move_binary_format_version()
+            next_epoch_system_packages.clone(),
+            config.move_binary_format_version(),
+            config.no_extraneous_module_bytes(),
         ).await else {
             error!(
                 "upgraded system packages {:?} are not locally available, cannot create \
@@ -3513,6 +3562,9 @@ impl AuthorityState {
             .unwrap()
             .send(())
             .unwrap();
+        self.transaction_manager
+            .execution_dispatcher
+            .shutdown_execution_for_test();
     }
 }
 

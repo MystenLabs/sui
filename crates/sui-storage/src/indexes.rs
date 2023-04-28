@@ -802,12 +802,22 @@ impl IndexStore {
             TxSequenceNumber::MIN
         });
 
-        let key = (
-            package,
-            module.clone().unwrap_or_default(),
-            function.clone().unwrap_or_default(),
-            cursor_val,
-        );
+        const MAX_STRING: &str =
+            "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+
+        let module_val = module.clone().unwrap_or(if reverse {
+            MAX_STRING.to_string()
+        } else {
+            "".to_string()
+        });
+
+        let function_val = function.clone().unwrap_or(if reverse {
+            MAX_STRING.to_string()
+        } else {
+            "".to_string()
+        });
+
+        let key = (package, module_val, function_val, cursor_val);
         let iter = self.tables.transactions_by_move_function.iter();
         Ok(if reverse {
             let iter = iter

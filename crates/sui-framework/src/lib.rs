@@ -54,7 +54,7 @@ impl SystemPackage {
     pub fn modules(&self) -> Vec<CompiledModule> {
         self.bytes
             .iter()
-            .map(|b| CompiledModule::deserialize(b).unwrap())
+            .map(|b| CompiledModule::deserialize_with_defaults(b).unwrap())
             .collect()
     }
 
@@ -167,6 +167,7 @@ pub async fn compare_system_package<S: ObjectStore>(
     modules: &[CompiledModule],
     dependencies: Vec<ObjectID>,
     max_binary_format_version: u32,
+    no_extraneous_module_bytes: bool,
 ) -> Option<ObjectRef> {
     let cur_object = match object_store.get_object(id) {
         Ok(Some(cur_object)) => cur_object,
@@ -219,6 +220,7 @@ pub async fn compare_system_package<S: ObjectStore>(
         check_friend_linking: false,
         check_private_entry_linking: true,
         disallowed_new_abilities: AbilitySet::ALL,
+        disallow_change_struct_type_params: true,
     };
 
     let new_pkg = new_object
@@ -226,14 +228,17 @@ pub async fn compare_system_package<S: ObjectStore>(
         .try_as_package_mut()
         .expect("Created as package");
 
-    let cur_normalized = match cur_pkg.normalize(max_binary_format_version) {
-        Ok(v) => v,
-        Err(e) => {
-            error!("Could not normalize existing package: {e:?}");
-            return None;
-        }
-    };
-    let mut new_normalized = new_pkg.normalize(max_binary_format_version).ok()?;
+    let cur_normalized =
+        match cur_pkg.normalize(max_binary_format_version, no_extraneous_module_bytes) {
+            Ok(v) => v,
+            Err(e) => {
+                error!("Could not normalize existing package: {e:?}");
+                return None;
+            }
+        };
+    let mut new_normalized = new_pkg
+        .normalize(max_binary_format_version, no_extraneous_module_bytes)
+        .ok()?;
 
     for (name, cur_module) in cur_normalized {
         let Some(new_module) = new_normalized.remove(&name) else {

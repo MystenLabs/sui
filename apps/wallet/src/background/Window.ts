@@ -51,4 +51,12 @@ export class Window {
             await Browser.windows.remove(this._id);
         }
     }
+
+    /**
+     * The id of the window.
+     * {@link Window.show} has to be called first. Otherwise this will be null
+     * */
+    public get id(): number | null {
+        return this._id;
+    }
 }

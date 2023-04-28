@@ -41,9 +41,9 @@ impl Test {
         let rerooted_path = base::reroot_path(path)?;
         // pre build for Sui-specific verifications
         let with_unpublished_deps = false;
+        let legacy_digest = false;
         let dump_bytecode_as_base64 = false;
         let generate_struct_layouts: bool = false;
-        let dump_package_digest = false;
         build::Build::execute_internal(
             rerooted_path.clone(),
             BuildConfig {
@@ -51,9 +51,9 @@ impl Test {
                 ..build_config.clone()
             },
             with_unpublished_deps,
+            legacy_digest,
             dump_bytecode_as_base64,
             generate_struct_layouts,
-            dump_package_digest,
         )?;
         run_move_unit_tests(
             rerooted_path,

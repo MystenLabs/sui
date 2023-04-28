@@ -95,7 +95,7 @@ fn main() {
             .expect("Script blob can't be deserialized");
         BinaryIndexedView::Script(&script)
     } else {
-        module = CompiledModule::deserialize(&bytecode_bytes)
+        module = CompiledModule::deserialize_with_defaults(&bytecode_bytes)
             .expect("Module blob can't be deserialized");
         BinaryIndexedView::Module(&module)
     };

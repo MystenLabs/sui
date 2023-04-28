@@ -1,11 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { roundFloat, useGetRollingAverageApys } from '@mysten/core';
+import {
+    roundFloat,
+    useGetRollingAverageApys,
+    useGetSystemState,
+} from '@mysten/core';
 import { type SuiAddress } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
-import { useSystemState } from '../../staking/useSystemState';
 import { Text } from '_app/shared/text';
 import { IconTooltip } from '_app/shared/tooltip';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
@@ -17,7 +20,7 @@ type DelegatedAPYProps = {
 };
 
 export function DelegatedAPY({ stakedValidators }: DelegatedAPYProps) {
-    const { data, isLoading } = useSystemState();
+    const { data, isLoading } = useGetSystemState();
     const { data: rollingAverageApys } = useGetRollingAverageApys(
         data?.activeValidators.length || null
     );

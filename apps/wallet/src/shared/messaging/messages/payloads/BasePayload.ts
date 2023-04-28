@@ -30,7 +30,8 @@ export type PayloadType =
     | 'features-response'
     | 'get-network'
     | 'set-network'
-    | 'sign-message-request';
+    | 'sign-message-request'
+    | 'qredo-connect';
 
 export interface BasePayload {
     type: PayloadType;

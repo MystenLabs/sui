@@ -43,13 +43,14 @@ impl<'a, T: MoveResolver + ?Sized> GetModule for Resolver<'a, T> {
             .get_module(module_id)
             .map_err(|e| anyhow!("Error retrieving module {:?}: {:?}", module_id, e))?
             .ok_or_else(|| anyhow!("Module {:?} can't be found", module_id))?;
-        let compiled_module = CompiledModule::deserialize(&blob).map_err(|status| {
-            anyhow!(
-                "Module {:?} deserialize with error code {:?}",
-                module_id,
-                status
-            )
-        })?;
+        let compiled_module =
+            CompiledModule::deserialize_with_defaults(&blob).map_err(|status| {
+                anyhow!(
+                    "Module {:?} deserialize with error code {:?}",
+                    module_id,
+                    status
+                )
+            })?;
         Ok(Some(self.cache.insert(module_id.clone(), compiled_module)))
     }
 }

@@ -8,6 +8,7 @@ import { EpochsActivityTable } from './EpochsActivityTable';
 import { TransactionsActivityTable } from './TransactionsActivityTable';
 
 import { CheckpointsTable } from '~/pages/checkpoints/CheckpointsTable';
+
 // import { PlayPause } from '~/ui/PlayPause';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 

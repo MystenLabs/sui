@@ -102,6 +102,7 @@ members = [
     "crates/sui-simulator",
     "crates/sui-source-validation",
     "crates/sui-storage",
+    "crates/sui-surfer",
     "crates/sui-swarm",
     "crates/sui-telemetry",
     "crates/sui-test-validator",

@@ -1,6 +1,6 @@
 {
   "name": "@mysten/wallet-kit",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "description": "TODO: Write description",
   "license": "Apache-2.0",
   "author": "Mysten Labs <build@mystenlabs.com>",
@@ -9,6 +9,7 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "source": "./src/index.tsx",
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"

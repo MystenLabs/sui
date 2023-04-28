@@ -5,7 +5,7 @@ expression: genesis_config
 validator_config_info: ~
 parameters:
   chain_start_timestamp_ms: 0
-  protocol_version: 7
+  protocol_version: 9
   allow_insertion_of_extra_objects: true
   epoch_duration_ms: 86400000
   stake_subsidy_start_epoch: 0

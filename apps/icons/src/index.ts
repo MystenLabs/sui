@@ -101,6 +101,7 @@ export { default as Plus12 } from "./Plus12";
 export { default as Plus32 } from "./Plus32";
 export { default as Preview12 } from "./Preview12";
 export { default as Publish16 } from "./Publish16";
+export { default as QrCode } from "./QrCode";
 export { default as Receive16 } from "./Receive16";
 export { default as Receive24 } from "./Receive24";
 export { default as Refresh16 } from "./Refresh16";
