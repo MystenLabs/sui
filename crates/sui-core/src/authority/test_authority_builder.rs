@@ -179,6 +179,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             &DBCheckpointConfig::default(),
             ExpensiveSafetyCheckConfig::new_enable_all(),
             transaction_deny_config,
+            usize::MAX,
         )
         .await;
         // For any type of local testing that does not actually spawn a node, the checkpoint executor

@@ -1127,8 +1127,11 @@ async fn safe_mode_reconfig_test() {
     use sui_types::sui_system_state::advance_epoch_result_injection;
     use test_utils::messages::make_staking_transaction_with_wallet_context;
 
+    // Inject failure at epoch change 1 -> 2.
+    advance_epoch_result_injection::set_override(Some((2, 3)));
+
     let mut test_cluster = TestClusterBuilder::new()
-        .with_epoch_duration_ms(5000)
+        .with_epoch_duration_ms(3000)
         .build()
         .await
         .unwrap();
@@ -1150,18 +1153,10 @@ async fn safe_mode_reconfig_test() {
     assert_eq!(system_state.epoch(), 1);
     assert_eq!(system_state.system_state_version(), 2);
 
-    // Wait for all nodes to enter new epoch (otherwise we can call
-    // advance_epoch_result_injection::set_override();
-    // while one node is still in epoch 1, which will cause it to fork).
-    sleep(Duration::from_secs(3)).await;
-
     let prev_epoch_start_timestamp = system_state.epoch_start_timestamp_ms();
 
     // We are going to enter safe mode so set the expectation right.
     test_cluster.set_safe_mode_expected(true);
-
-    // Now inject an error into epoch change txn execution.
-    advance_epoch_result_injection::set_override(true);
 
     // Reconfig again and check that we are in safe mode now.
     let system_state = test_cluster.wait_for_epoch(Some(2)).await;
@@ -1186,7 +1181,6 @@ async fn safe_mode_reconfig_test() {
 
     // Now remove the override and check that in the next epoch we are no longer in safe mode.
     test_cluster.set_safe_mode_expected(false);
-    advance_epoch_result_injection::set_override(false);
 
     let system_state = test_cluster.wait_for_epoch(Some(3)).await;
     assert!(!system_state.safe_mode());

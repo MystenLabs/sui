@@ -60,7 +60,9 @@ pub fn gen_gas_data(sender: SuiAddress) -> impl Strategy<Value = GasData> {
 }
 
 pub fn gen_transaction_kind() -> impl Strategy<Value = TransactionKind> {
-    (vec(gen_type_tag(), 0..10)).prop_map(pt_for_tags)
+    (vec(gen_type_tag(), 0..10))
+        .prop_map(pt_for_tags)
+        .prop_map(TransactionKind::ProgrammableTransaction)
 }
 
 pub fn transaction_data_gen(sender: SuiAddress) -> impl Strategy<Value = TransactionData> {

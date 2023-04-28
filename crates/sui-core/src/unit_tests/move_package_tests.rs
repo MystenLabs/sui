@@ -10,12 +10,12 @@ use sui_types::{
     base_types::ObjectID,
     digests::TransactionDigest,
     error::{ExecutionErrorKind, SuiError},
-    messages::PackageUpgradeError,
     move_package::{MovePackage, TypeOrigin, UpgradeInfo},
     object::{Data, Object, OBJECT_START_VERSION},
 };
 
 use std::{collections::BTreeMap, path::PathBuf};
+use sui_types::execution_status::PackageUpgradeError;
 
 macro_rules! type_origin_table {
     {} => { Vec::new() };
@@ -227,8 +227,9 @@ fn test_upgrade_linkage_digest_to_new_dep() {
 
     // Make sure that we compute the package digest off of the update dependencies and not the old
     // dependencies in the linkage table.
+    let hash_modules = true;
     assert_eq!(
-        b_new.digest(),
+        b_new.digest(hash_modules),
         MovePackage::compute_digest_for_modules_and_deps(
             &build_test_modules("B")
                 .iter()
@@ -238,7 +239,8 @@ fn test_upgrade_linkage_digest_to_new_dep() {
                     bytes
                 })
                 .collect::<Vec<_>>(),
-            [&c_id2]
+            [&c_id2],
+            hash_modules,
         )
     )
 }
@@ -333,12 +335,15 @@ fn package_digest_changes_with_dep_upgrades_and_in_sync_with_move_package_digest
 
     let b_v2 = MovePackage::new_initial(&build_test_modules("Bv2"), u64::MAX, [&c_v2]).unwrap();
 
-    let local_v1 = build_test_package("B").get_package_digest(false);
-    let local_v2 = build_test_package("Bv2").get_package_digest(false);
+    let with_unpublished_deps = false;
+    let hash_modules = true;
+    let local_v1 = build_test_package("B").get_package_digest(with_unpublished_deps, hash_modules);
+    let local_v2 =
+        build_test_package("Bv2").get_package_digest(with_unpublished_deps, hash_modules);
 
-    assert_ne!(b_pkg.digest(), b_v2.digest());
-    assert_eq!(b_pkg.digest(), local_v1);
-    assert_eq!(b_v2.digest(), local_v2);
+    assert_ne!(b_pkg.digest(hash_modules), b_v2.digest(hash_modules));
+    assert_eq!(b_pkg.digest(hash_modules), local_v1);
+    assert_eq!(b_v2.digest(hash_modules), local_v2);
     assert_ne!(local_v1, local_v2);
 }
 
@@ -457,8 +462,11 @@ async fn test_metered_move_bytecode_verifier() {
     );
 
     // Default case should pass
-    let r =
-        run_metered_move_bytecode_verifier_impl(&compiled_modules_bytes, &metered_verifier_config);
+    let r = run_metered_move_bytecode_verifier_impl(
+        &compiled_modules_bytes,
+        &ProtocolConfig::get_for_max_version(),
+        &metered_verifier_config,
+    );
     assert!(r.is_ok());
 
     // Use low limits. Should fail
@@ -467,8 +475,11 @@ async fn test_metered_move_bytecode_verifier() {
     metered_verifier_config.max_per_mod_meter_units = Some(10_000);
     metered_verifier_config.max_per_fun_meter_units = Some(10_000);
 
-    let r =
-        run_metered_move_bytecode_verifier_impl(&compiled_modules_bytes, &metered_verifier_config);
+    let r = run_metered_move_bytecode_verifier_impl(
+        &compiled_modules_bytes,
+        &ProtocolConfig::get_for_max_version(),
+        &metered_verifier_config,
+    );
 
     assert!(
         r.unwrap_err()

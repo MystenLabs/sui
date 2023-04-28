@@ -34,6 +34,7 @@ use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::epoch_data::EpochData;
 use sui_types::error::UserInputError;
+use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::gas::SuiCostTable;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::Data;
@@ -1651,9 +1652,10 @@ async fn test_publish_dependent_module_ok() {
     let gas_payment_object_ref = gas_payment_object.compute_object_reference();
     // create a genesis state that contains the gas object and genesis modules
     let genesis_module = match BuiltInFramework::genesis_objects().next().unwrap().data {
-        Data::Package(m) => {
-            CompiledModule::deserialize(m.serialized_module_map().values().next().unwrap()).unwrap()
-        }
+        Data::Package(m) => CompiledModule::deserialize_with_defaults(
+            m.serialized_module_map().values().next().unwrap(),
+        )
+        .unwrap(),
         _ => unreachable!(),
     };
     // create a module that depends on a genesis module
@@ -1739,9 +1741,10 @@ async fn test_publish_non_existing_dependent_module() {
     let gas_payment_object_ref = gas_payment_object.compute_object_reference();
     // create a genesis state that contains the gas object and genesis modules
     let genesis_module = match BuiltInFramework::genesis_objects().next().unwrap().data {
-        Data::Package(m) => {
-            CompiledModule::deserialize(m.serialized_module_map().values().next().unwrap()).unwrap()
-        }
+        Data::Package(m) => CompiledModule::deserialize_with_defaults(
+            m.serialized_module_map().values().next().unwrap(),
+        )
+        .unwrap(),
         _ => unreachable!(),
     };
     // create a module that depends on a genesis module

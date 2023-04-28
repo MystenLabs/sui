@@ -57,6 +57,7 @@ export interface WalletKitCore {
   getState(): WalletKitCoreState;
   subscribe(handler: SubscribeHandler): Unsubscribe;
   connect(walletName: string): Promise<void>;
+  selectAccount(account: WalletAccount): void;
   disconnect(): Promise<void>;
   signMessage(
     messageInput: OptionalProperties<SuiSignMessageInput, "account">
@@ -190,6 +191,19 @@ export function createWalletKitCore({
       return () => {
         subscriptions.delete(handler);
       };
+    },
+
+    selectAccount(account) {
+      if (
+        account === internalState.currentAccount ||
+        !internalState.accounts.includes(account)
+      ) {
+        return;
+      }
+
+      setState({
+        currentAccount: account,
+      });
     },
 
     async connect(walletName) {

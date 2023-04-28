@@ -1,5 +1,11 @@
 # @mysten/ledgerjs-hw-app-sui
 
+## 0.2.0
+
+### Minor Changes
+
+- 29a29756d: Added "displayOnDevice" option to getPublicKey and cleaned-up some library code
+
 ## 0.1.0
 
 ### Minor Changes

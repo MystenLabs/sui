@@ -12,8 +12,7 @@
 -  [Function `mint_account_cap`](#0xdee9_custodian_mint_account_cap)
 -  [Function `account_balance`](#0xdee9_custodian_account_balance)
 -  [Function `new`](#0xdee9_custodian_new)
--  [Function `withdraw_base_asset`](#0xdee9_custodian_withdraw_base_asset)
--  [Function `withdraw_quote_asset`](#0xdee9_custodian_withdraw_quote_asset)
+-  [Function `withdraw_asset`](#0xdee9_custodian_withdraw_asset)
 -  [Function `increase_user_available_balance`](#0xdee9_custodian_increase_user_available_balance)
 -  [Function `decrease_user_available_balance`](#0xdee9_custodian_decrease_user_available_balance)
 -  [Function `increase_user_locked_balance`](#0xdee9_custodian_increase_user_locked_balance)
@@ -185,7 +184,7 @@ Create an <code><a href="custodian.md#0xdee9_custodian_AccountCap">AccountCap</a
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian.md#0xdee9_custodian_account_balance">account_balance</a>&lt;Asset&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<a href="custodian.md#0xdee9_custodian_Custodian">Custodian</a>&lt;Asset&gt;,
     user: ID
-): (u64, u64){
+): (u64, u64) {
     <b>let</b> account_balances = <a href="../../../.././build/Sui/docs/table.md#0x2_table_borrow">table::borrow</a>(&<a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances, user);
     <b>let</b> avail_balance = <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_value">balance::value</a>(&account_balances.available_balance);
     <b>let</b> locked_balance = <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_value">balance::value</a>(&account_balances.locked_balance);
@@ -224,13 +223,13 @@ Create an <code><a href="custodian.md#0xdee9_custodian_AccountCap">AccountCap</a
 
 </details>
 
-<a name="0xdee9_custodian_withdraw_base_asset"></a>
+<a name="0xdee9_custodian_withdraw_asset"></a>
 
-## Function `withdraw_base_asset`
+## Function `withdraw_asset`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian.md#0xdee9_custodian_withdraw_base_asset">withdraw_base_asset</a>&lt;BaseAsset&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian.md#0xdee9_custodian_Custodian">custodian::Custodian</a>&lt;BaseAsset&gt;, quantity: u64, account_cap: &<a href="custodian.md#0xdee9_custodian_AccountCap">custodian::AccountCap</a>, ctx: &<b>mut</b> <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;BaseAsset&gt;
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian.md#0xdee9_custodian_withdraw_asset">withdraw_asset</a>&lt;Asset&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian.md#0xdee9_custodian_Custodian">custodian::Custodian</a>&lt;Asset&gt;, quantity: u64, account_cap: &<a href="custodian.md#0xdee9_custodian_AccountCap">custodian::AccountCap</a>, ctx: &<b>mut</b> <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;Asset&gt;
 </code></pre>
 
 
@@ -239,42 +238,13 @@ Create an <code><a href="custodian.md#0xdee9_custodian_AccountCap">AccountCap</a
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian.md#0xdee9_custodian_withdraw_base_asset">withdraw_base_asset</a>&lt;BaseAsset&gt;(
-    <a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian.md#0xdee9_custodian_Custodian">Custodian</a>&lt;BaseAsset&gt;,
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian.md#0xdee9_custodian_withdraw_asset">withdraw_asset</a>&lt;Asset&gt;(
+    <a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian.md#0xdee9_custodian_Custodian">Custodian</a>&lt;Asset&gt;,
     quantity: u64,
     account_cap: &<a href="custodian.md#0xdee9_custodian_AccountCap">AccountCap</a>,
     ctx: &<b>mut</b> TxContext
-): Coin&lt;BaseAsset&gt; {
-    <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_from_balance">coin::from_balance</a>(<a href="custodian.md#0xdee9_custodian_decrease_user_available_balance">decrease_user_available_balance</a>&lt;BaseAsset&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>, account_cap, quantity), ctx)
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0xdee9_custodian_withdraw_quote_asset"></a>
-
-## Function `withdraw_quote_asset`
-
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian.md#0xdee9_custodian_withdraw_quote_asset">withdraw_quote_asset</a>&lt;QuoteAsset&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian.md#0xdee9_custodian_Custodian">custodian::Custodian</a>&lt;QuoteAsset&gt;, quantity: u64, account_cap: &<a href="custodian.md#0xdee9_custodian_AccountCap">custodian::AccountCap</a>, ctx: &<b>mut</b> <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian.md#0xdee9_custodian_withdraw_quote_asset">withdraw_quote_asset</a>&lt;QuoteAsset&gt;(
-    <a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian.md#0xdee9_custodian_Custodian">Custodian</a>&lt;QuoteAsset&gt;,
-    quantity: u64,
-    account_cap: &<a href="custodian.md#0xdee9_custodian_AccountCap">AccountCap</a>,
-    ctx: &<b>mut</b> TxContext
-): Coin&lt;QuoteAsset&gt; {
-    <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_from_balance">coin::from_balance</a>(<a href="custodian.md#0xdee9_custodian_decrease_user_available_balance">decrease_user_available_balance</a>&lt;QuoteAsset&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>, account_cap, quantity), ctx)
+): Coin&lt;Asset&gt; {
+    <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_from_balance">coin::from_balance</a>(<a href="custodian.md#0xdee9_custodian_decrease_user_available_balance">decrease_user_available_balance</a>&lt;Asset&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>, account_cap, quantity), ctx)
 }
 </code></pre>
 

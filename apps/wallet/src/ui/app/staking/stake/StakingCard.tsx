@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useCoinDecimals } from '@mysten/core';
+import { useFeatureIsOn } from '@growthbook/growthbook-react';
+import { useCoinDecimals, useGetSystemState } from '@mysten/core';
 import { ArrowLeft16 } from '@mysten/icons';
 import {
     getTransactionDigest,
@@ -20,7 +21,6 @@ import { getSignerOperationErrorMessage } from '../../helpers/errorMessages';
 import { getDelegationDataByStakeId } from '../getDelegationByStakeId';
 import { getStakeSuiBySuiId } from '../getStakeSuiBySuiId';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
-import { useSystemState } from '../useSystemState';
 import StakeForm from './StakeForm';
 import { UnStakeForm } from './UnstakeForm';
 import { ValidatorFormDetail } from './ValidatorFormDetail';
@@ -41,6 +41,7 @@ import Loading from '_components/loading';
 import { parseAmount } from '_helpers';
 import { useSigner, useGetCoinBalance } from '_hooks';
 import { Coin } from '_redux/slices/sui-objects/Coin';
+import { FEATURES } from '_src/shared/experimentation/features';
 import { trackEvent } from '_src/shared/plausible';
 
 import type { FormikHelpers } from 'formik';
@@ -64,8 +65,12 @@ function StakingCard() {
     const { data: allDelegation, isLoading } = useGetDelegatedStake(
         accountAddress || ''
     );
+    const effectsOnlySharedTransactions = useFeatureIsOn(
+        FEATURES.WALLET_EFFECTS_ONLY_SHARED_TRANSACTION as string
+    );
 
-    const { data: system, isLoading: validatorsIsloading } = useSystemState();
+    const { data: system, isLoading: validatorsIsloading } =
+        useGetSystemState();
 
     const totalTokenBalance = useMemo(() => {
         if (!allDelegation) return 0n;
@@ -137,6 +142,9 @@ function StakingCard() {
                 );
                 return await signer.signAndExecuteTransactionBlock({
                     transactionBlock,
+                    requestType: effectsOnlySharedTransactions
+                        ? 'WaitForEffectsCert'
+                        : 'WaitForLocalExecution',
                     options: {
                         showInput: true,
                         showEffects: true,
@@ -164,6 +172,9 @@ function StakingCard() {
                 const transactionBlock = createUnstakeTransaction(stakedSuiId);
                 return await signer.signAndExecuteTransactionBlock({
                     transactionBlock,
+                    requestType: effectsOnlySharedTransactions
+                        ? 'WaitForEffectsCert'
+                        : 'WaitForLocalExecution',
                     options: {
                         showInput: true,
                         showEffects: true,
@@ -226,7 +237,8 @@ function StakingCard() {
                     `/receipt?${new URLSearchParams({
                         txdigest: txDigest,
                         from: 'stake',
-                    }).toString()}`
+                    }).toString()}`,
+                    { state: { response } }
                 );
             } catch (error) {
                 toast.error(

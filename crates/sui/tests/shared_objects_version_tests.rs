@@ -8,9 +8,10 @@ use sui_macros::*;
 use sui_node::SuiNodeHandle;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
 use sui_types::error::SuiResult;
+use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::messages::{
-    CallArg, ExecutionFailureStatus, ExecutionStatus, ObjectArg, TransactionEffects,
-    TransactionEffectsAPI, TransactionEvents, TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    CallArg, ObjectArg, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
+    TEST_ONLY_GAS_UNIT_FOR_GENERIC,
 };
 use sui_types::multiaddr::Multiaddr;
 use sui_types::object::{generate_test_gas_objects, Object, Owner, OBJECT_START_VERSION};

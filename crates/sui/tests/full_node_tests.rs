@@ -12,7 +12,7 @@ use move_core_types::value::MoveStructLayout;
 use mysten_metrics::RegistryService;
 use prometheus::Registry;
 use serde_json::json;
-use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext};
+use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_json_rpc_types::EventFilter;
 use sui_json_rpc_types::{
     type_and_fields_from_move_struct, SuiEvent, SuiExecutionStatus, SuiTransactionBlockEffectsAPI,
@@ -21,6 +21,7 @@ use sui_json_rpc_types::{
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
 use sui_node::SuiNode;
+use sui_sdk::wallet_context::WalletContext;
 use sui_tool::restore_from_db_checkpoint;
 use sui_types::base_types::{ObjectRef, SequenceNumber};
 use sui_types::crypto::{get_key_pair, SuiKeyPair};
@@ -37,9 +38,7 @@ use sui_types::utils::to_sender_signed_transaction_with_multi_signers;
 use sui_types::{base_types::ObjectID, messages::TransactionInfoRequest};
 use test_utils::authority::test_and_configure_authority_configs;
 use test_utils::messages::make_transactions_with_wallet_context;
-use test_utils::messages::{
-    get_gas_object_with_wallet_context, make_transfer_object_transaction_with_wallet_context,
-};
+use test_utils::messages::make_transfer_object_transaction_with_wallet_context;
 use test_utils::network::{start_fullnode_from_config, TestClusterBuilder};
 use test_utils::transaction::{
     create_devnet_nft, delete_devnet_nft, increment_counter,
@@ -794,7 +793,7 @@ async fn test_validator_node_has_no_transaction_orchestrator() {
     let configs = test_and_configure_authority_configs(1);
     let validator_config = &configs.validator_configs()[0];
     let registry_service = RegistryService::new(Registry::new());
-    let node = SuiNode::start(validator_config, registry_service)
+    let node = SuiNode::start(validator_config, registry_service, None)
         .await
         .unwrap();
     assert!(node.transaction_orchestrator().is_none());
@@ -956,9 +955,11 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
     let (object_ref_v1, object_v1, _) = get_obj_read_from_node(&node, object_id).await?;
 
     // Transfer the object from sender to recipient
-    let gas_ref = get_gas_object_with_wallet_context(context, &sender)
+    let gas_ref = context
+        .get_one_gas_object_owned_by_address(sender)
         .await
-        .expect("Expect at least one available gas object");
+        .unwrap()
+        .unwrap();
     let nft_transfer_tx = make_transfer_object_transaction_with_wallet_context(
         object_ref_v1,
         gas_ref,

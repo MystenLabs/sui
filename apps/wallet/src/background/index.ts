@@ -5,11 +5,11 @@ import { lte, coerce } from 'semver';
 import Browser from 'webextension-polyfill';
 
 import { LOCK_ALARM_NAME } from './Alarms';
-import FeatureGating from './FeatureGating';
 import NetworkEnv from './NetworkEnv';
 import Permissions from './Permissions';
 import { Connections } from './connections';
 import Keyring from './keyring';
+import * as Qredo from './qredo';
 import { isSessionStorageSupported } from './storage-utils';
 import { openInNewTab } from '_shared/utils';
 import { MSG_CONNECT } from '_src/content-script/keep-bg-alive';
@@ -107,14 +107,14 @@ if (!isSessionStorageSupported()) {
     });
 }
 NetworkEnv.getActiveNetwork().then(async ({ env, customRpcUrl }) => {
-    setAttributes(await FeatureGating.getGrowthBook(), {
+    setAttributes({
         apiEnv: env,
         customRPC: customRpcUrl,
     });
 });
 
 NetworkEnv.on('changed', async (network) => {
-    setAttributes(await FeatureGating.getGrowthBook(), {
+    setAttributes({
         apiEnv: network.env,
         customRPC: network.customRpcUrl,
     });
@@ -123,4 +123,8 @@ NetworkEnv.on('changed', async (network) => {
         event: 'walletStatusChange',
         change: { network },
     });
+});
+
+Browser.windows.onRemoved.addListener(async (id) => {
+    await Qredo.handleOnWindowClosed(id, connections);
 });

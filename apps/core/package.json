@@ -28,7 +28,6 @@
         "@tanstack/react-query": "^4.29.3",
         "bignumber.js": "^9.1.1",
         "decimal.js": "^10.4.3",
-        "posthog-js": "^1.53.1",
         "react": "^18.2.0",
         "react-dom": "^18.2.0"
     },

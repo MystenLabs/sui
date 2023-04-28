@@ -22,7 +22,7 @@ use move_binary_format::{
 };
 use move_bytecode_verifier::{
     absint::{AbstractDomain, AbstractInterpreter, JoinResult, TransferFunctions},
-    meter::Meter,
+    meter::{Meter, Scope},
 };
 use move_core_types::{
     account_address::AccountAddress, ident_str, identifier::IdentStr, vm_status::StatusCode,
@@ -37,6 +37,9 @@ use sui_types::{
 };
 
 use crate::{verification_failure, TEST_SCENARIO_MODULE_NAME};
+pub(crate) const JOIN_BASE_COST: u128 = 10;
+pub(crate) const JOIN_PER_LOCAL_COST: u128 = 5;
+pub(crate) const STEP_BASE_COST: u128 = 15;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum AbstractValue {
@@ -156,13 +159,16 @@ impl AbstractDomain for AbstractState {
     fn join(
         &mut self,
         state: &AbstractState,
-        _meter: &mut impl Meter,
+        meter: &mut impl Meter,
     ) -> Result<JoinResult, PartialVMError> {
+        meter.add(Scope::Function, JOIN_BASE_COST)?;
+        meter.add_items(Scope::Function, JOIN_PER_LOCAL_COST, state.locals.len())?;
         let mut changed = false;
         for (local, value) in &state.locals {
             let old_value = *self.locals.get(local).unwrap_or(&AbstractValue::Other);
-            changed |= *value != old_value;
-            self.locals.insert(*local, value.join(&old_value));
+            let new_value = value.join(&old_value);
+            changed |= new_value != old_value;
+            self.locals.insert(*local, new_value);
         }
         if changed {
             Ok(JoinResult::Changed)
@@ -225,9 +231,9 @@ impl<'a> TransferFunctions for IDLeakAnalysis<'a> {
         bytecode: &Bytecode,
         index: CodeOffset,
         last_index: CodeOffset,
-        _meter: &mut impl Meter,
+        meter: &mut impl Meter,
     ) -> Result<(), PartialVMError> {
-        execute_inner(self, state, bytecode, index)?;
+        execute_inner(self, state, bytecode, index, meter)?;
         // invariant: the stack should be empty at the end of the block
         // If it is not, something is wrong with the implementation, so throw an invariant
         // violation
@@ -322,7 +328,9 @@ fn execute_inner(
     state: &mut AbstractState,
     bytecode: &Bytecode,
     _: CodeOffset,
+    meter: &mut impl Meter,
 ) -> Result<(), PartialVMError> {
+    meter.add(Scope::Function, STEP_BASE_COST)?;
     // TODO: Better diagnostics with location
     match bytecode {
         Bytecode::Pop => {

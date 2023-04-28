@@ -33,6 +33,10 @@ import {
     ALL_PERMISSION_TYPES,
 } from '_payloads/permissions';
 import { API_ENV } from '_src/shared/api-env';
+import {
+    isQredoConnectPayload,
+    type QredoConnectPayload,
+} from '_src/shared/messaging/messages/payloads/QredoConnect';
 import { type SignMessageRequest } from '_src/shared/messaging/messages/payloads/transactions/SignMessage';
 import { isWalletStatusChangePayload } from '_src/shared/messaging/messages/payloads/wallet-status-change';
 
@@ -63,6 +67,17 @@ type SuiWalletStakeFeature = {
     'suiWallet:stake': {
         version: '0.0.1';
         stake: (input: StakeInput) => Promise<void>;
+    };
+};
+export type QredoConnectInput = {
+    service: string;
+    apiUrl: string;
+    token: string;
+};
+type QredoConnectFeature = {
+    'qredo:connect': {
+        version: '0.0.1';
+        qredoConnect: (input: QredoConnectInput) => Promise<void>;
     };
 };
 type ChainType = Wallet['chains'][number];
@@ -103,7 +118,8 @@ export class SuiWallet implements Wallet {
     get features(): StandardConnectFeature &
         StandardEventsFeature &
         SuiFeatures &
-        SuiWalletStakeFeature {
+        SuiWalletStakeFeature &
+        QredoConnectFeature {
         return {
             'standard:connect': {
                 version: '1.0.0',
@@ -129,6 +145,10 @@ export class SuiWallet implements Wallet {
             'sui:signMessage': {
                 version: '1.0.0',
                 signMessage: this.#signMessage,
+            },
+            'qredo:connect': {
+                version: '0.0.1',
+                qredoConnect: this.#qredoConnect,
             },
         };
     }
@@ -337,6 +357,28 @@ export class SuiWallet implements Wallet {
         this.#activeChain =
             env === API_ENV.customRPC ? 'sui:unknown' : API_ENV_TO_CHAIN[env];
     }
+
+    #qredoConnect = async (input: QredoConnectInput): Promise<void> => {
+        const allowed = await mapToPromise(
+            this.#send<
+                QredoConnectPayload<'connect'>,
+                QredoConnectPayload<'connectResponse'>
+            >({
+                type: 'qredo-connect',
+                method: 'connect',
+                args: { ...input },
+            }),
+            (response) => {
+                if (!isQredoConnectPayload(response, 'connectResponse')) {
+                    throw new Error('Invalid qredo connect response');
+                }
+                return response.args.allowed;
+            }
+        );
+        if (!allowed) {
+            throw new Error('Rejected by user');
+        }
+    };
 
     #send<
         RequestPayload extends Payload,

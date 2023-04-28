@@ -31,6 +31,8 @@ export function useEpochProgress(suffix: string = 'left') {
         epoch: data?.epoch,
         progress,
         label,
+        end,
+        start,
     };
 }
 

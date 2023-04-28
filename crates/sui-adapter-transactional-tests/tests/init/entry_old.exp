@@ -1,0 +1,26 @@
+processed 6 tasks
+
+init:
+A: object(0,0)
+
+task 1 'publish'. lines 8-15:
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5639200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'run'. lines 17-17:
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3 'run'. lines 19-21:
+Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot call 'init'"), command: Some(0) } }
+
+task 4 'run'. lines 22-22:
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5 'upgrade'. lines 24-31:
+created: object(5,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5639200,  storage_rebate: 2595780, non_refundable_storage_fee: 26220

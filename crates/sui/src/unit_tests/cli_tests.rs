@@ -17,8 +17,7 @@ use tokio::time::sleep;
 
 use sui::client_commands::SwitchResponse;
 use sui::{
-    client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext},
-    config::SuiClientConfig,
+    client_commands::{SuiClientCommandResult, SuiClientCommands},
     sui_commands::SuiCommand,
 };
 use sui_config::{
@@ -37,6 +36,8 @@ use sui_json_rpc_types::{
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore};
 use sui_macros::sim_test;
 use sui_move_build::{BuildConfig, SuiPackageHooks};
+use sui_sdk::sui_client_config::SuiClientConfig;
+use sui_sdk::wallet_context::WalletContext;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
     Ed25519SuiSignature, Secp256k1SuiSignature, SignatureScheme, SuiKeyPair, SuiSignatureInner,
@@ -1054,6 +1055,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
+        legacy_digest: false,
         serialize_output: false,
     }
     .execute(context)

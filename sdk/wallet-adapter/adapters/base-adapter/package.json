@@ -1,6 +1,6 @@
 {
   "name": "@mysten/wallet-adapter-base",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "description": "Base wallet adapter for Sui",
   "license": "Apache-2.0",
   "author": "Mysten Labs <build@mystenlabs.com>",
@@ -9,6 +9,7 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "source": "./src/index.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"

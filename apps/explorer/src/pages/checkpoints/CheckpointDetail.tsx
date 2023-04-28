@@ -31,7 +31,6 @@ export default function CheckpointDetail() {
                 There was an issue retrieving data for checkpoint: {id}
             </Banner>
         );
-
     if (isLoading) return <LoadingSpinner />;
 
     return (
@@ -149,8 +148,7 @@ export default function CheckpointDetail() {
                     <TabPanels>
                         <div className="mt-4">
                             <CheckpointTransactionBlocks
-                                digest={data.digest}
-                                transactions={data.transactions || []}
+                                id={data.sequenceNumber}
                             />
                         </div>
                     </TabPanels>

@@ -25,7 +25,10 @@ async fn test_rpc_backward_compatibility() {
 
     let port = get_available_port("0.0.0.0");
     let _handle = builder
-        .start(SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port)))
+        .start(
+            SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port)),
+            None,
+        )
         .await
         .unwrap();
     let url = format!("http://0.0.0.0:{}", port);
@@ -107,7 +110,10 @@ async fn test_disable_routing() {
 
     let port = get_available_port("0.0.0.0");
     let _handle = builder
-        .start(SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port)))
+        .start(
+            SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port)),
+            None,
+        )
         .await
         .unwrap();
     let url = format!("http://0.0.0.0:{}", port);

@@ -6,24 +6,27 @@ The Sui Object Display standard is a template engine that allows for on-chain ma
 
 Use a `Publisher` object that you own to set `sui::display` for a type. For more information about `Publisher` objects, see [Publisher](https://examples.sui.io/basics/publisher.html) topic in *Sui Move by Example*.
 
-In Sui Move, `Display<T>` represents an object that specifies a set of named templates for the type `T`. For example, for a type `0x2::capy::Capy` the display syntax is:  `Display<0x2::capy::Capy>`. 
+In Sui Move, `Display<T>` represents an object that specifies a set of named templates for the type `T`. For example, for a type `0x2::capy::Capy` the display syntax is:  `Display<0x2::capy::Capy>`.
 
 Sui Full nodes process all objects of the type `T` by matching the `Display` definition, and return the processed result when you query an object with the `{ showDisplay: true }` setting in the query.
 
 ## Display properties
 
-The basic set of properties suggested includes: 
-**name** - A name for the object. The name is displayed when users view the object. 
+The basic set of properties suggested includes:
+**name** - A name for the object. The name is displayed when users view the object.
 **description** - A description for the object. The description is displayed when users view the object.
-**link** - A link to the object to use in an application. 
-**image_url** - A URL or a blob with the image for the object. 
-**project_url** - A link to a website associated with the object or creator.  
-**creator** - A string that indicates the object creator. 
+**link** - A link to the object to use in an application.
+**image_url** - A URL or a blob with the image for the object.
+**thumbnail_url** - A URL to a **smaller** image to use in wallets, explorers, and other products as a preview.
+**project_url** - A link to a website associated with the object or creator.
+**creator** - A string that indicates the object creator.
+
+
 ### An example Sui Hero module
-The following code sample demonstrates how the `Display` for an example `Hero` module varies based on the `name`, `id`, and `image_url` properties of the type `Hero`. 
+The following code sample demonstrates how the `Display` for an example `Hero` module varies based on the `name`, `id`, and `image_url` properties of the type `Hero`.
 The following represents the template the `init` function defines:
 
-```rust
+```json
 {
     "name": "{name}",
     "link": "https://sui-heroes.io/hero/{id}",
@@ -32,7 +35,9 @@ The following represents the template the `init` function defines:
     "project_url": "https://sui-heroes.io",
     "creator": "Unknown Sui Fan"
 }
+```
 
+```rust
 /// Example of an unlimited "Sui Hero" collection - anyone can
 /// mint their Hero. Shows how to initialize the `Publisher` and how
 /// to use it to get the `Display<Hero>` object - a way to describe a
@@ -172,9 +177,9 @@ module capy::utility {
 }
 ```
 
-## Typical objects with data duplication 
+## Typical objects with data duplication
 
-A common case with in-game items is to have a large number of similar objects grouped by some criteria. It is important to optimize their size and the cost to mint and update them. Typically, a game uses a single source image or URL per group or item criteria. Storing the source image inside of every object is not optimal. 
+A common case with in-game items is to have a large number of similar objects grouped by some criteria. It is important to optimize their size and the cost to mint and update them. Typically, a game uses a single source image or URL per group or item criteria. Storing the source image inside of every object is not optimal.
 In some cases, users mint in-game items when a game allows them or when they purchase an in-game item. To enable this, some IPFS/Arweave metadata must be created and stored in advance. This requires additional logic that is usually not related to the in-game properties of the item.
 
 The following example demonstrates how to create a Capy:
@@ -194,7 +199,7 @@ module capy::capy_items {
 
 Sui Capys use dynamic image generation. When a Capy is born, its attributes determine the Capy’s appearance, such as color or pattern. When a user puts an item on a Capy, the Capy’s appearance changes. When users put multiple items on a Capy, there’s a chance of a bonus for a combination of items.
 
-To implement this, the Capys game API service refreshes the image in response to a user-initiated change. The URL for a Capy is a template with the `capy.id`. But storing the full URL - as well as other fields in the Capy object due to their diverse population - also leads to users paying for excess storage and increased gas fees. 
+To implement this, the Capys game API service refreshes the image in response to a user-initiated change. The URL for a Capy is a template with the `capy.id`. But storing the full URL - as well as other fields in the Capy object due to their diverse population - also leads to users paying for excess storage and increased gas fees.
 
 The following example demonstrates how to implement dynamic image generation:
 
@@ -210,9 +215,9 @@ module capy::capy {
 }
 ```
 
-## Objects with unique static content 
+## Objects with unique static content
 
-This is the simplest scenario - an object represents everything itself. It is very easy to apply a metadata standard to an object of this kind, especially if the object stays immutable forever. However, if the metadata standard evolves and some ecosystem projects add new features for some properties, this object always stays in its original form and might require backward-compatible changes. 
+This is the simplest scenario - an object represents everything itself. It is very easy to apply a metadata standard to an object of this kind, especially if the object stays immutable forever. However, if the metadata standard evolves and some ecosystem projects add new features for some properties, this object always stays in its original form and might require backward-compatible changes.
 
 ```rust
 module sui::devnet_nft {

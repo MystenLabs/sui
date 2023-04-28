@@ -8,6 +8,7 @@ import { KeepAliveConnection } from './KeepAliveConnection';
 import { UiConnection } from './UiConnection';
 import { createMessage } from '_messages';
 import { KEEP_ALIVE_BG_PORT_NAME } from '_src/content-script/keep-bg-alive';
+import { type QredoConnectPayload } from '_src/shared/messaging/messages/payloads/QredoConnect';
 
 import type { NetworkEnvType } from '../NetworkEnv';
 import type { Connection } from './Connection';
@@ -66,6 +67,12 @@ export class Connections {
                   origin: string;
                   change: WalletStatusChange;
               }
+            | {
+                  event: 'qredoConnectResult';
+                  origin: string;
+                  allowed: boolean;
+              },
+        messageID?: string
     ) {
         for (const aConnection of this.#connections) {
             if (aConnection instanceof ContentScriptConnection) {
@@ -83,6 +90,22 @@ export class Connections {
                                     type: 'wallet-status-changed',
                                     ...notification.change,
                                 })
+                            );
+                        }
+                        break;
+                    case 'qredoConnectResult':
+                        if (notification.origin === aConnection.origin) {
+                            aConnection.send(
+                                createMessage<
+                                    QredoConnectPayload<'connectResponse'>
+                                >(
+                                    {
+                                        type: 'qredo-connect',
+                                        method: 'connectResponse',
+                                        args: { allowed: notification.allowed },
+                                    },
+                                    messageID
+                                )
                             );
                         }
                         break;

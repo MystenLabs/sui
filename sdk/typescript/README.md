@@ -191,7 +191,7 @@ const keypair = new Ed25519Keypair();
 const provider = new JsonRpcProvider();
 const signer = new RawSigner(keypair, provider);
 const tx = new TransactionBlock();
-tx.mergeCoin(
+tx.mergeCoins(
   tx.object(
     '0xe19739da1a701eadc21683c5b127e62b553e833e8a15a4f292f4f48b4afea3f2',
   ),
@@ -313,8 +313,15 @@ const provider = new JsonRpcProvider();
 const txn = await provider.getTransactionBlock({
   digest: '9XFneskU8tW7UxQf7tE5qFRfcN4FadtC2Z3HAZkgeETd=',
   // only fetch the effects field
-  options: { showEffects: true },
+    options: {
+        showEffects: true,
+        showInput: false,
+        showEvents: false,
+        showObjectChanges: false,
+        showBalanceChanges: false
+    }
 });
+
 // You can also fetch multiple transactions in one batch request
 const txns = await provider.multiGetTransactionBlocks({
   digests: [
@@ -324,6 +331,40 @@ const txns = await provider.multiGetTransactionBlocks({
   // fetch both the input transaction data as well as effects
   options: { showInput: true, showEffects: true },
 });
+```
+
+
+### Get Checkpoints
+
+Get latest 100 Checkpoints in descending order and print Transaction Digests for each one of them.
+```typescript
+
+provider.getCheckpoints({descendingOrder: true})
+    .then(function (checkpointPage: CheckpointPage) {
+        console.log(checkpointPage);
+
+        checkpointPage.data.forEach(checkpoint => {
+            console.log("---------------------------------------------------------------")
+            console.log(" -----------   Transactions for Checkpoint:  ", checkpoint.sequenceNumber, " -------- ")
+            console.log("---------------------------------------------------------------")
+            checkpoint.transactions.forEach(tx => {
+                console.log(tx);
+            })
+            console.log("***************************************************************")
+        })
+    });
+```
+
+
+Get Checkpoint 1994010 and print details.
+```typescript
+provider.getCheckpoint({id: "1994010"})
+    .then(function (checkpoint: Checkpoint) {
+        console.log("Checkpoint Sequence Num ", checkpoint.sequenceNumber);
+        console.log("Checkpoint timestampMs ", checkpoint.timestampMs);
+        console.log("Checkpoint # of Transactions ", checkpoint.transactions.length);
+
+    });
 ```
 
 ### Get Coins

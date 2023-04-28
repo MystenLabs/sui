@@ -7,15 +7,9 @@ import {
   TransactionBlock,
 } from "@mysten/sui.js";
 import { ConnectButton, useWalletKit } from "@mysten/wallet-kit";
-import { ComponentProps, ReactNode, useState } from "react";
+import { ComponentProps, ReactNode, useMemo, useState } from "react";
 import { provider } from "./utils/rpc";
 import { sponsorTransaction } from "./utils/sponsorTransaction";
-
-const tx = new TransactionBlock();
-tx.moveCall({
-  target: "0x2::devnet_nft::mint",
-  arguments: [tx.pure("foo"), tx.pure("bar"), tx.pure("baz")],
-});
 
 const Button = (props: ComponentProps<"button">) => (
   <button
@@ -30,7 +24,7 @@ const CodePanel = ({
   action,
 }: {
   title: string;
-  json: object | null;
+  json?: object | null;
   action: ReactNode;
 }) => (
   <div>
@@ -43,7 +37,7 @@ const CodePanel = ({
 );
 
 export function App() {
-  const { currentAccount, signTransaction } = useWalletKit();
+  const { currentAccount, signTransactionBlock } = useWalletKit();
   const [loading, setLoading] = useState(false);
   const [sponsoredTx, setSponsoredTx] = useState<SignedTransaction | null>(
     null
@@ -52,12 +46,20 @@ export function App() {
   const [executedTx, setExecutedTx] =
     useState<SuiTransactionBlockResponse | null>(null);
 
+  const tx = useMemo(() => {
+    if (!currentAccount) return null;
+    const tx = new TransactionBlock();
+    const [coin] = tx.splitCoins(tx.gas, [tx.pure(1)]);
+    tx.transferObjects([coin], tx.pure(currentAccount.address));
+    return tx;
+  }, [currentAccount]);
+
   return (
     <div className="p-8">
       <div className="grid grid-cols-4 gap-8">
         <CodePanel
           title="Transaction details"
-          json={tx.transactionData}
+          json={tx?.blockData}
           action={<ConnectButton className="!bg-indigo-600 !text-white" />}
         />
 
@@ -70,7 +72,7 @@ export function App() {
               onClick={async () => {
                 setLoading(true);
                 try {
-                  const bytes = await tx.build({
+                  const bytes = await tx!.build({
                     provider,
                     onlyTransactionKind: true,
                   });
@@ -98,8 +100,8 @@ export function App() {
               onClick={async () => {
                 setLoading(true);
                 try {
-                  const signed = await signTransaction({
-                    transaction: Transaction.from(
+                  const signed = await signTransactionBlock({
+                    transactionBlock: TransactionBlock.from(
                       sponsoredTx!.transactionBlockBytes
                     ),
                   });

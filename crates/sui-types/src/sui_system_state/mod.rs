@@ -442,27 +442,36 @@ pub struct AdvanceEpochParams {
 
 #[cfg(msim)]
 pub mod advance_epoch_result_injection {
-    use crate::error::{ExecutionError, ExecutionErrorKind};
+    use crate::{
+        committee::EpochId,
+        error::{ExecutionError, ExecutionErrorKind},
+    };
     use std::cell::RefCell;
 
     thread_local! {
-        static OVERRIDE: RefCell<bool>  = RefCell::new(false);
+        /// Override the result of advance_epoch in the range [start, end).
+        static OVERRIDE: RefCell<Option<(EpochId, EpochId)>>  = RefCell::new(None);
     }
 
-    pub fn set_override(value: bool) {
+    /// Override the result of advance_epoch transaction if new epoch is in the provided range [start, end).
+    pub fn set_override(value: Option<(EpochId, EpochId)>) {
         OVERRIDE.with(|o| *o.borrow_mut() = value);
     }
 
     /// This function is used to modify the result of advance_epoch transaction for testing.
     /// If the override is set, the result will be an execution error, otherwise the original result will be returned.
-    pub fn maybe_modify_result(result: Result<(), ExecutionError>) -> Result<(), ExecutionError> {
-        if OVERRIDE.with(|o| *o.borrow()) {
-            Err::<(), ExecutionError>(ExecutionError::new(
-                ExecutionErrorKind::FunctionNotFound,
-                None,
-            ))
-        } else {
-            result
+    pub fn maybe_modify_result(
+        result: Result<(), ExecutionError>,
+        current_epoch: EpochId,
+    ) -> Result<(), ExecutionError> {
+        if let Some((start, end)) = OVERRIDE.with(|o| *o.borrow()) {
+            if current_epoch >= start && current_epoch < end {
+                return Err::<(), ExecutionError>(ExecutionError::new(
+                    ExecutionErrorKind::FunctionNotFound,
+                    None,
+                ));
+            }
         }
+        result
     }
 }

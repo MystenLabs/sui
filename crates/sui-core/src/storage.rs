@@ -93,6 +93,20 @@ impl ReadStore for RocksDbStore {
         &self,
         digest: &CheckpointContentsDigest,
     ) -> Result<Option<FullCheckpointContents>, Self::Error> {
+        // First look to see if we saved the complete contents already.
+        if let Some(seq_num) = self
+            .checkpoint_store
+            .get_sequence_number_by_contents_digest(digest)?
+        {
+            let contents = self
+                .checkpoint_store
+                .get_full_checkpoint_contents_by_sequence_number(seq_num)?;
+            if contents.is_some() {
+                return Ok(contents);
+            }
+        }
+
+        // Otherwise gather it from the individual components.
         self.checkpoint_store
             .get_checkpoint_contents(digest)?
             .map(|contents| FullCheckpointContents::from_checkpoint_contents(&self, contents))

@@ -5,6 +5,7 @@ import {
     formatPercentageDisplay,
     useGetRollingAverageApys,
     calculateStakeShare,
+    useGetSystemState,
 } from '@mysten/core';
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -14,7 +15,6 @@ import { getStakeSuiBySuiId } from '../getStakeSuiBySuiId';
 import { getTokenStakeSuiForValidator } from '../getTokenStakeSuiForValidator';
 import { StakeAmount } from '../home/StakeAmount';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
-import { useSystemState } from '../useSystemState';
 import { ValidatorLogo } from '../validators/ValidatorLogo';
 import { Card } from '_app/shared/card';
 import Alert from '_components/alert';
@@ -39,7 +39,7 @@ export function ValidatorFormDetail({
         data: system,
         isLoading: loadingValidators,
         isError: errorValidators,
-    } = useSystemState();
+    } = useGetSystemState();
 
     const {
         data: stakeData,

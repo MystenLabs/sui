@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 use shared_crypto::intent::Intent;
 use std::{str::FromStr, time::Duration};
-use sui::client_commands::WalletContext;
 use sui_config::{sui_config_dir, SUI_CLIENT_CONFIG};
 use sui_faucet::FaucetError;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_keys::keystore::AccountKeystore;
+use sui_sdk::wallet_context::WalletContext;
 use sui_types::{
     base_types::ObjectID,
     gas_coin::GasCoin,

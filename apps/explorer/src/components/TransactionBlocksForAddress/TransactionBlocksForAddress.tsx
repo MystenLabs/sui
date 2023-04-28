@@ -94,9 +94,10 @@ function TransactionBlocksForAddress({
     } as TransactionFilter);
 
     const currentPage = currentPageState[filterValue];
-    const cardData = data
-        ? genTableDataFromTxData(data.pages[currentPage].data)
-        : undefined;
+    const cardData =
+        data && data.pages[currentPage]
+            ? genTableDataFromTxData(data.pages[currentPage].data)
+            : undefined;
 
     return (
         <div data-testid="tx">

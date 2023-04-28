@@ -1,18 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{anyhow, Result};
 use clap::Parser;
+use mysten_common::sync::async_once_cell::AsyncOnceCell;
 use std::path::PathBuf;
-use std::thread;
+use std::sync::Arc;
 use std::time::Duration;
 use sui_config::{Config, NodeConfig};
+use sui_core::runtime::SuiRuntimes;
 use sui_node::metrics;
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_telemetry::send_telemetry_event;
 use sui_types::multiaddr::Multiaddr;
-use tokio::sync::oneshot;
-use tokio::task;
 use tokio::time::sleep;
 use tracing::{error, info};
 
@@ -45,21 +44,24 @@ struct Args {
     listen_address: Option<Multiaddr>,
 }
 
-#[tokio::main(worker_threads = 4)]
-async fn main() -> Result<()> {
+fn main() {
     // Ensure that a validator never calls get_for_min_version/get_for_max_version.
     // TODO: re-enable after we figure out how to eliminate crashes in prod because of this.
     // ProtocolConfig::poison_get_for_min_version();
 
     let args = Args::parse();
-    let mut config = NodeConfig::load(&args.config_path)?;
+    let mut config = NodeConfig::load(&args.config_path).unwrap();
     assert!(
         config.supported_protocol_versions.is_none(),
         "supported_protocol_versions cannot be read from the config file"
     );
     config.supported_protocol_versions = Some(SupportedProtocolVersions::SYSTEM_DEFAULT);
 
-    let registry_service = metrics::start_prometheus_server(config.metrics_address);
+    let runtimes = SuiRuntimes::new(&config);
+    let registry_service = {
+        let _enter = runtimes.metrics.enter();
+        metrics::start_prometheus_server(config.metrics_address)
+    };
     let prometheus_registry = registry_service.default_registry();
     prometheus_registry
         .register(mysten_metrics::uptime_metric(VERSION))
@@ -85,47 +87,87 @@ async fn main() -> Result<()> {
         config.metrics_address
     );
 
-    metrics::start_metrics_push_task(&config, registry_service.clone());
+    {
+        let _enter = runtimes.metrics.enter();
+        metrics::start_metrics_push_task(&config, registry_service.clone());
+    }
 
     if let Some(listen_address) = args.listen_address {
         config.network_address = listen_address;
     }
 
     let is_validator = config.consensus_config().is_some();
-    task::spawn(async move {
-        loop {
-            sleep(Duration::from_secs(3600)).await;
-            send_telemetry_event(is_validator).await;
-        }
-    });
 
     let admin_interface_port = config.admin_interface_port;
 
     // Run node in a separate runtime so that admin/monitoring functions continue to work
     // if it deadlocks.
-    let (sender, receiver) = oneshot::channel();
-    thread::spawn(move || {
-        tokio::runtime::Builder::new_multi_thread()
-            .thread_name("sui-node-tokio-runtime-worker")
-            .enable_all()
-            .build()
-            .unwrap()
-            .block_on(async {
-                if let Err(e) =
-                    sui_node::SuiNode::start_async(&config, registry_service, sender).await
-                {
-                    error!("Failed to start node: {e:?}");
-                    std::process::exit(1)
-                }
-                // TODO: Do we want to provide a way for the node to gracefully shutdown?
-                loop {
-                    tokio::time::sleep(Duration::from_secs(1000)).await;
-                }
-            })
+    let node_one_cell = Arc::new(AsyncOnceCell::<Arc<sui_node::SuiNode>>::new());
+    let node_one_cell_clone = node_one_cell.clone();
+    let rpc_runtime = runtimes.json_rpc.handle().clone();
+
+    runtimes.sui_node.spawn(async move {
+        if let Err(e) = sui_node::SuiNode::start_async(
+            &config,
+            registry_service,
+            node_one_cell_clone,
+            Some(rpc_runtime),
+        )
+        .await
+        {
+            error!("Failed to start node: {e:?}");
+            std::process::exit(1)
+        }
+        // TODO: Do we want to provide a way for the node to gracefully shutdown?
+        loop {
+            tokio::time::sleep(Duration::from_secs(1000)).await;
+        }
     });
 
-    let node = receiver.await.map_err(|e| anyhow!(format!("{e:?}")))?;
-    sui_node::admin::run_admin_server(node.clone(), admin_interface_port, filter_handle).await;
+    let node_one_cell_clone = node_one_cell.clone();
+    runtimes.metrics.spawn(async move {
+        let node = node_one_cell_clone.get().await;
+        sui_node::admin::run_admin_server(node, admin_interface_port, filter_handle).await
+    });
 
-    Err(anyhow::anyhow!("Admin server shutdown unexpectedly"))
+    runtimes.metrics.spawn(async move {
+        let node = node_one_cell.get().await;
+        let state = node.state();
+        loop {
+            send_telemetry_event(state.clone(), is_validator).await;
+            sleep(Duration::from_secs(3600)).await;
+        }
+    });
+
+    // wait for SIGINT on the main thread
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(wait_termination());
+
+    // Drop and wait all runtimes on main thread
+    drop(runtimes);
+}
+
+#[cfg(not(unix))]
+// On windows we wait for whatever "ctrl_c" means there
+async fn wait_termination() {
+    tokio::signal::ctrl_c().await.unwrap()
+}
+
+#[cfg(unix)]
+// On unix we wait for both SIGINT (when run in terminal) and SIGTERM(when run in docker or other supervisor)
+// Docker stop sends SIGTERM: https://www.baeldung.com/ops/docker-stop-vs-kill#:~:text=The%20docker%20stop%20commands%20issue,rather%20than%20killing%20it%20immediately.
+// Systemd by default sends SIGTERM as well: https://www.freedesktop.org/software/systemd/man/systemd.kill.html
+// Upstart also sends SIGTERM by default: https://upstart.ubuntu.com/cookbook/#kill-signal
+async fn wait_termination() {
+    use futures::future::select;
+    use futures::FutureExt;
+    use tokio::signal::unix::*;
+
+    let sigint = tokio::signal::ctrl_c().map(Result::ok).boxed();
+    let mut sigterm = signal(SignalKind::terminate()).unwrap();
+    let sigterm_recv = sigterm.recv().boxed();
+    select(sigint, sigterm_recv).await;
 }

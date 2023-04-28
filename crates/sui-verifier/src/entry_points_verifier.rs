@@ -8,6 +8,7 @@ use move_binary_format::{
     CompiledModule,
 };
 use move_bytecode_utils::format_signature_token;
+use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::{TxContext, TxContextKind, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME},
     clock::Clock,
@@ -36,6 +37,7 @@ use crate::{verification_failure, INIT_FN_NAME};
 ///   - The transaction context parameter must be the last parameter
 /// - The function cannot have any return values
 pub fn verify_module(
+    config: &ProtocolConfig,
     module: &CompiledModule,
     fn_info_map: &FnInfoMap,
 ) -> Result<(), ExecutionError> {
@@ -52,7 +54,7 @@ pub fn verify_module(
         }
 
         if name == INIT_FN_NAME {
-            verify_init_function(module, func_def).map_err(verification_failure)?;
+            verify_init_function(config, module, func_def).map_err(verification_failure)?;
             continue;
         }
 
@@ -103,12 +105,24 @@ fn verify_init_not_called(
 }
 
 /// Checks if this module has a conformant `init`
-fn verify_init_function(module: &CompiledModule, fdef: &FunctionDefinition) -> Result<(), String> {
+fn verify_init_function(
+    config: &ProtocolConfig,
+    module: &CompiledModule,
+    fdef: &FunctionDefinition,
+) -> Result<(), String> {
     let view = &BinaryIndexedView::Module(module);
 
     if fdef.visibility != Visibility::Private {
         return Err(format!(
             "{}. '{}' function must be private",
+            module.self_id(),
+            INIT_FN_NAME
+        ));
+    }
+
+    if config.ban_entry_init() && fdef.is_entry {
+        return Err(format!(
+            "{}. '{}' cannot be 'entry'",
             module.self_id(),
             INIT_FN_NAME
         ));
