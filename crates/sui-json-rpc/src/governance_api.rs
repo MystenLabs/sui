@@ -259,13 +259,13 @@ impl GovernanceReadApiServer for GovernanceReadApi {
 
         for rates in exchange_rate_table.into_iter().filter(|r| r.active) {
             let apy = if let Some((_, latest_rate)) = rates.rates.first() {
-                let (n, rates_n) = if rates.rates.len() < 30 {
+                let (n, rates_n) = if rates.rates.len() < 29 {
                     (rates.rates.len() as f64, rates.rates.last())
                 } else {
-                    (30.0, rates.rates.get(30))
+                    (29.0, rates.rates.get(29))
                 };
                 if let Some((_, rate_n_days)) = rates_n {
-                    (rate_n_days.rate() / latest_rate.rate()).powf(360.0 / n) - 1.0
+                    (rate_n_days.rate() / latest_rate.rate()).powf(360.0 / (n + 1.0)) - 1.0
                 } else {
                     0.0
                 }
