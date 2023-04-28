@@ -21,21 +21,17 @@ export function SuiTokenCard() {
                     variant="heading4/semibold"
                     color="steel-darker"
                 >
-                    1 SUI = $XXX
+                    1 SUI = --
                 </Heading>
-                <div className="ml-auto">
+                {/* <div className="ml-auto">
                     <Text variant="subtitleSmallExtra/medium" color="steel">
                         via CoinMarketCap
                     </Text>
-                </div>
+                </div> */}
             </div>
             <div className="mt-8 flex gap-8">
-                <StatsWrapper label="Market Cap" size="sm" postfix="USD">
-                    4.69 B
-                </StatsWrapper>
-                <StatsWrapper label="Total Supply" size="sm" postfix="SUI">
-                    10 B
-                </StatsWrapper>
+                <StatsWrapper label="Market Cap" size="sm" postfix="USD" unavailable />
+                <StatsWrapper label="Total Supply" size="sm" postfix="SUI" unavailable />
             </div>
         </Card>
     );
