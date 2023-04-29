@@ -1,4 +1,6 @@
-# title: Sui Dev Cheat Sheet
+---
+title: Sui Developer Cheat Sheet
+---
 
 Quick reference on best practices for Sui Network developers.
 
