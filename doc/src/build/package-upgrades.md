@@ -46,6 +46,98 @@ Similar to mismatched function definitions, you might also run into issues maint
 
 Another example of having users update to the latest package is when you have a bookkeeping shared object in your package that you discover has flawed logic so is not functioning as expected. As in the previous example, you want users to use only the object defined in the upgraded package with the correct logic, so you add a new type and migration function to your package upgrade. This process requires a couple of transactions, one for the upgrade and another that you call from the upgraded package to set up the new shared object that replaces the existing one. To protect the setup function, you would need to create an `AdminCap` object or similar as part of your package to make sure you, as the package owner, are the only authorized initiator of that function. Perhaps even more useful, you might include a flag in the shared object that allows you, as the package owner, to toggle the enabled state of that shared object. You can add a check for the enabled state to prevent access to that object from the on-chain public while you perform the migration. Of course, you would probably create this flag only if you expected to perform this migration at some point in the future, not because you're intentionally developing objects with flawed logic. 
 
+### Versioned shared objects
+
+When you create packages that involve shared objects, you need to think about upgrades and versioning from the start given that **all prior versions of a package still exist on-chain**. A useful pattern is to introduce versioning to the shared object and using a version check to guard access to functions in the package. This enables you to limit access to the shared object to only the latest version of a package.
+
+Considering the earlier `counter` example, which might have started life as follows:
+
+```rust
+module example::counter {
+    use sui::object::{Self, UID};
+    use sui::transfer;
+    use sui::tx_context::TxContext;
+
+    struct Counter has key {
+        id: UID,
+        value: u64,
+    }
+
+    fun init(ctx: &mut TxContext) {
+        transfer::share_object(Counter {
+            id: object::new(ctx),
+            value: 0,
+        })
+    }
+
+    public entry fun increment(c: &mut Counter) {
+        c.value = c.value + 1;
+    }
+}
+```
+
+To ensure that upgrades to this package can limit access of the shared object to the latest version of the package, you need to:
+
+1. Track the current version of the module in a constant, `VERSION`.
+2. Track the current version of the shared object, `Counter`, in a new `version` field.
+3. Introduce an `AdminCap` to protect privileged calls, and associate the `Counter` with its `AdminCap` with a new field (you might already
+   have a similar type for shared object administration, in which case you can re-use that). This cap is used to protect calls to migrate the shared object from version to version.
+4. Guard the entry of all functions that access the shared object with a check that its `version` matches the package `VERSION`.
+  
+An upgrade-aware `counter` module that incorporates all these ideas looks as follows:
+
+```rust
+module example::counter {
+    use sui::object::{Self, ID, UID};
+    use sui::transfer;
+    use sui::tx_context::{Self, TxContext};
+
+    // 1. Track the current version of the module 
+    const VERSION: u64 = 1;
+
+    struct Counter has key {
+        id: UID,
+        // 2. Track the current version of the shared object
+        version: u64,
+        // 3. Associate the `Counter` with its `AdminCap`
+        admin: ID,
+        value: u64,
+    }
+
+    struct AdminCap has key {
+        id: UID,
+    }
+
+    /// Not the right admin for this counter
+    const ENotAdmin: u64 = 0;
+
+    /// Calling functions from the wrong package version
+    const EWrongVersion: u64 = 1;
+
+    fun init(ctx: &mut TxContext) {
+        let admin = AdminCap {
+            id: object::new(ctx),
+        };
+
+        transfer::share_object(Counter {
+            id: object::new(ctx),
+            version: VERSION,
+            admin: object::id(&admin),
+            value: 0,
+        });
+
+        transfer::transfer(admin, tx_context::sender(ctx));
+    }
+
+    public entry fun increment(c: &mut Counter) {
+        // 4. Guard the entry of all functions that access the shared object 
+        //    with a version check.
+        assert!(c.version == VERSION, EWrongVersion);
+        c.value = c.value + 1;
+    }
+}
+```
+
 ## Requirements
 
 To upgrade a package, your package must satisfy the following requirements:
