@@ -276,6 +276,10 @@
 						"fileName": "build/event_api"
 					}
 				]
+			},
+			{
+				"label": "Developer Cheat Sheet",
+				"filename": "build/dev_cheat_sheet.md"
 			}
 		],
 			"reference": [{
