@@ -5,6 +5,7 @@ use crate::VerifierConfig;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::vm_status::StatusCode;
 use std::ops::Mul;
+extern crate static_assertions as sa;
 
 /// Scope of meterinng
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -14,6 +15,16 @@ pub enum Scope {
     // Metering is for function level
     Function,
 }
+
+pub const ANALYZE_FUNCTION_BASE_COST: u128 = 10;
+pub const EXECUTE_BLOCK_BASE_COST: u128 = 10;
+pub const PER_BACKEDGE_COST: u128 = 10;
+pub const PER_SUCCESSOR_COST: u128 = 10;
+
+sa::const_assert!(ANALYZE_FUNCTION_BASE_COST > 0);
+sa::const_assert!(EXECUTE_BLOCK_BASE_COST > 0);
+sa::const_assert!(PER_BACKEDGE_COST > 0);
+sa::const_assert!(PER_SUCCESSOR_COST > 0);
 
 /// Trait for a metering verification.
 pub trait Meter {
@@ -72,18 +83,18 @@ struct Bounds {
 
 impl Meter for BoundMeter {
     fn enter_scope(&mut self, name: &str, scope: Scope) {
-        let bounds = self.get_bounds(scope);
+        let bounds = self.get_bounds_mut(scope);
         bounds.name = name.into();
         bounds.units = 0;
     }
 
     fn transfer(&mut self, from: Scope, to: Scope, factor: f32) -> PartialVMResult<()> {
-        let units = (self.get_bounds(from).units as f32 * factor) as u128;
+        let units = (self.get_bounds_mut(from).units as f32 * factor) as u128;
         self.add(to, units)
     }
 
     fn add(&mut self, scope: Scope, units: u128) -> PartialVMResult<()> {
-        self.get_bounds(scope).add(units)
+        self.get_bounds_mut(scope).add(units)
     }
 }
 
@@ -122,12 +133,28 @@ impl BoundMeter {
         }
     }
 
-    fn get_bounds(&mut self, scope: Scope) -> &mut Bounds {
+    fn get_bounds_mut(&mut self, scope: Scope) -> &mut Bounds {
         if scope == Scope::Module {
             &mut self.mod_bounds
         } else {
             &mut self.fun_bounds
         }
+    }
+
+    fn get_bounds(&self, scope: Scope) -> &Bounds {
+        if scope == Scope::Module {
+            &self.mod_bounds
+        } else {
+            &self.fun_bounds
+        }
+    }
+
+    pub fn get_usage(&self, scope: Scope) -> u128 {
+        self.get_bounds(scope).units
+    }
+
+    pub fn get_limit(&self, scope: Scope) -> Option<u128> {
+        self.get_bounds(scope).max
     }
 }
 

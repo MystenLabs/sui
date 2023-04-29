@@ -651,7 +651,10 @@ impl Loader {
     fn verify_script(&self, script: &CompiledScript) -> VMResult<()> {
         fail::fail_point!("verifier-failpoint-3", |_| { Ok(()) });
 
-        move_bytecode_verifier::verify_script_with_config(&self.vm_config.verifier, script)
+        move_bytecode_verifier::verify_script_with_config_unmetered(
+            &self.vm_config.verifier,
+            script,
+        )
     }
 
     //
@@ -748,7 +751,10 @@ impl Loader {
     ) -> VMResult<()> {
         // Performs all verification steps to load the module without loading it, i.e., the new
         // module will NOT show up in `module_cache`.
-        move_bytecode_verifier::verify_module_with_config(&self.vm_config.verifier, module)?;
+        move_bytecode_verifier::verify_module_with_config_unmetered(
+            &self.vm_config.verifier,
+            module,
+        )?;
         self.check_natives(module)?;
 
         let mut visiting = BTreeSet::new();
@@ -1006,8 +1012,11 @@ impl Loader {
         }
 
         // bytecode verifier checks that can be performed with the module itself
-        move_bytecode_verifier::verify_module_with_config(&self.vm_config.verifier, &module)
-            .map_err(expect_no_verification_errors)?;
+        move_bytecode_verifier::verify_module_with_config_unmetered(
+            &self.vm_config.verifier,
+            &module,
+        )
+        .map_err(expect_no_verification_errors)?;
         self.check_natives(&module)
             .map_err(expect_no_verification_errors)?;
 

@@ -51,10 +51,7 @@ use sui_verifier::{
     INIT_FN_NAME,
 };
 
-use crate::{
-    adapter::{default_verifier_config, substitute_package_id},
-    execution_mode::ExecutionMode,
-};
+use crate::{adapter::substitute_package_id, execution_mode::ExecutionMode};
 
 use super::{context::*, types::*};
 
@@ -854,12 +851,10 @@ fn publish_and_verify_modules<S: StorageView>(
         .map_err(|e| context.convert_vm_error(e))?;
 
     // run the Sui verifier
-    let verifier_config =
-        default_verifier_config(context.protocol_config, false /* disable metering during execution */);
     for module in modules {
         // Run Sui bytecode verifier, which runs some additional checks that assume the Move
         // bytecode verifier has passed.
-        sui_verifier::verifier::verify_module(context.protocol_config, &verifier_config, module, &BTreeMap::new())?;
+        sui_verifier::verifier::sui_verify_module_unmetered(context.protocol_config, module, &BTreeMap::new())?;
     }
 
     Ok(())

@@ -27,7 +27,7 @@ pub fn doctor(state: &OnDiskStateView) -> Result<()> {
     let all_modules = state.get_all_modules()?;
     let code_cache = Modules::new(&all_modules);
     for module in &all_modules {
-        if move_bytecode_verifier::verify_module(module).is_err() {
+        if move_bytecode_verifier::verify_module_unmetered(module).is_err() {
             bail!("Failed to verify module {:?}", module.self_id())
         }
 
