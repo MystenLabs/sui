@@ -18,6 +18,7 @@ use serde_json::json;
 use sui_json::SuiJsonValue;
 use sui_json_rpc::error::Error;
 use sui_json_rpc_types::SuiTypeTag;
+use sui_json_rpc_types::TransactionFilter;
 use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, CheckpointPage, Coin, CoinPage, EventPage, MoveCallParams,
     ObjectChange, OwnedObjectRef, RPCTransactionRequestParams, SuiCommittee, SuiData, SuiEvent,
@@ -49,11 +50,9 @@ use sui_types::messages::{CallArg, ExecuteTransactionRequestType, TransactionDat
 use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::query::TransactionFilter;
 use sui_types::signature::GenericSignature;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{parse_sui_struct_tag, SUI_FRAMEWORK_OBJECT_ID};
-
 struct Examples {
     function_name: String,
     examples: Vec<ExamplePairing>,
