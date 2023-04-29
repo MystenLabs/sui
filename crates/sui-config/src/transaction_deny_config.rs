@@ -51,30 +51,30 @@ pub struct TransactionDenyConfig {
 
     /// In-memory maps for faster lookup of various lists.
     #[serde(skip)]
-    object_deny_map: OnceCell<HashSet<ObjectID>>,
+    object_deny_set: OnceCell<HashSet<ObjectID>>,
 
     #[serde(skip)]
-    package_deny_map: OnceCell<HashSet<ObjectID>>,
+    package_deny_set: OnceCell<HashSet<ObjectID>>,
 
     #[serde(skip)]
-    sender_deny_map: OnceCell<HashSet<SuiAddress>>,
+    address_deny_set: OnceCell<HashSet<SuiAddress>>,
     // TODO: We could consider add a deny list for types that we want to disable public transfer.
     // TODO: We could also consider disable more types of commands, such as transfer, split and etc.
 }
 
 impl TransactionDenyConfig {
-    pub fn get_object_deny_map(&self) -> &HashSet<ObjectID> {
-        self.object_deny_map
+    pub fn get_object_deny_set(&self) -> &HashSet<ObjectID> {
+        self.object_deny_set
             .get_or_init(|| self.object_deny_list.iter().cloned().collect())
     }
 
-    pub fn get_package_deny_map(&self) -> &HashSet<ObjectID> {
-        self.package_deny_map
+    pub fn get_package_deny_set(&self) -> &HashSet<ObjectID> {
+        self.package_deny_set
             .get_or_init(|| self.package_deny_list.iter().cloned().collect())
     }
 
-    pub fn get_address_deny_map(&self) -> &HashSet<SuiAddress> {
-        self.sender_deny_map
+    pub fn get_address_deny_set(&self) -> &HashSet<SuiAddress> {
+        self.address_deny_set
             .get_or_init(|| self.address_deny_list.iter().cloned().collect())
     }
 
