@@ -534,6 +534,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     expensive_safety_check_config: Default::default(),
                     name_service_resolver_object_id: None,
                     transaction_deny_config: Default::default(),
+                    certificate_deny_config: Default::default(),
                 }
             })
             .collect();

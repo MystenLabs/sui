@@ -12,7 +12,7 @@ use move_core_types::ident_str;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::serde_as;
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::convert::TryInto;
 use std::sync::Arc;
 use std::{fs, path::Path};
@@ -1393,6 +1393,7 @@ fn create_genesis_transaction(
                 protocol_config,
                 metrics,
                 false, // enable_expensive_checks
+                &HashSet::new(),
             );
         assert!(inner_temp_store.objects.is_empty());
         assert!(inner_temp_store.mutable_inputs.is_empty());
@@ -1482,7 +1483,6 @@ fn process_package(
     #[cfg(debug_assertions)]
     {
         use move_core_types::account_address::AccountAddress;
-        use std::collections::HashSet;
         let to_be_published_addresses: HashSet<_> = modules
             .iter()
             .map(|module| *module.self_id().address())
@@ -1965,6 +1965,7 @@ mod test {
                 &protocol_config,
                 metrics,
                 false, // enable_expensive_checks
+                &HashSet::new(),
             );
 
         assert_eq!(effects, genesis.effects);

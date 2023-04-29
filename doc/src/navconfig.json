@@ -279,7 +279,7 @@
 			},
 			{
 				"label": "Developer Cheat Sheet",
-				"filename": "build/dev_cheat_sheet"
+				"fileName": "build/dev_cheat_sheet"
 			}
 		],
 			"reference": [{

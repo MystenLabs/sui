@@ -12,7 +12,7 @@ use move_core_types::language_storage::{ModuleId, StructTag};
 use move_core_types::parser::parse_struct_tag;
 use move_core_types::resolver::{ModuleResolver, ResourceResolver};
 use similar::{ChangeTag, TextDiff};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use sui_adapter::adapter;
@@ -505,6 +505,7 @@ impl LocalExec {
             protocol_config,
             metrics,
             true,
+            &HashSet::new(),
         );
 
         let SuiTransactionBlockEffects::V1(new_effects) = res.1.try_into().unwrap();
@@ -606,7 +607,7 @@ impl LocalExec {
         let (mut start_epoch, mut start_protocol_version, mut start_checkpoint) = (0, 1, 0u64);
 
         // Exception for incident: Protocol version 2 started epoch 742
-        // But this was in safe mode so no events emmitted
+        // But this was in safe mode so no events emitted
         // So we need to manually add this range
         let (mut curr_epoch, mut curr_protocol_version) = (742, 2);
         let mut curr_checkpoint = self
@@ -1355,7 +1356,7 @@ impl GetModule for LocalExec {
     }
 }
 
-// <--------------------- Util funcitons ----------------------->
+// <--------------------- Util functions ----------------------->
 
 pub fn get_vm(
     protocol_config: &ProtocolConfig,

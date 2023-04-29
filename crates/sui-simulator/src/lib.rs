@@ -11,6 +11,7 @@ pub use fastcrypto;
 pub use lru;
 pub use move_package;
 pub use narwhal_network;
+pub use sui_adapter;
 pub use sui_framework;
 pub use sui_move_build;
 pub use sui_types;

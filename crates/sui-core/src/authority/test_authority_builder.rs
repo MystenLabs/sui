@@ -13,6 +13,7 @@ use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
 use std::path::PathBuf;
 use std::sync::Arc;
+use sui_config::certificate_deny_config::CertificateDenyConfig;
 use sui_config::genesis::Genesis;
 use sui_config::node::{
     AuthorityStorePruningConfig, DBCheckpointConfig, ExpensiveSafetyCheckConfig,
@@ -32,6 +33,7 @@ pub struct TestAuthorityBuilder<'a> {
     store_base_path: Option<PathBuf>,
     store: Option<Arc<AuthorityStore>>,
     transaction_deny_config: Option<TransactionDenyConfig>,
+    certificate_deny_config: Option<CertificateDenyConfig>,
     protocol_config: Option<ProtocolConfig>,
     reference_gas_price: Option<u64>,
     node_keypair: Option<&'a AuthorityKeyPair>,
@@ -55,6 +57,11 @@ impl<'a> TestAuthorityBuilder<'a> {
 
     pub fn with_transaction_deny_config(mut self, config: TransactionDenyConfig) -> Self {
         assert!(self.transaction_deny_config.replace(config).is_none());
+        self
+    }
+
+    pub fn with_certificate_deny_config(mut self, config: CertificateDenyConfig) -> Self {
+        assert!(self.certificate_deny_config.replace(config).is_none());
         self
     }
 
@@ -170,6 +177,7 @@ impl<'a> TestAuthorityBuilder<'a> {
                 .max_move_identifier_len_as_option(),
         )));
         let transaction_deny_config = self.transaction_deny_config.unwrap_or_default();
+        let certificate_deny_config = self.certificate_deny_config.unwrap_or_default();
         let state = AuthorityState::new(
             name,
             secret,
@@ -185,6 +193,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             &DBCheckpointConfig::default(),
             ExpensiveSafetyCheckConfig::new_enable_all(),
             transaction_deny_config,
+            certificate_deny_config,
             usize::MAX,
         )
         .await;

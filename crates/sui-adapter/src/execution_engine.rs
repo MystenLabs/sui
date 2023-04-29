@@ -1,13 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeSet, sync::Arc};
-
 use crate::execution_mode::{self, ExecutionMode};
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_vm_runtime::move_vm::MoveVM;
+use once_cell::sync::Lazy;
+use std::{
+    collections::{BTreeSet, HashSet},
+    sync::Arc,
+};
 use sui_types::balance::{
     BALANCE_CREATE_REWARDS_FUNCTION_NAME, BALANCE_DESTROY_REBATES_FUNCTION_NAME,
     BALANCE_MODULE_NAME,
@@ -53,6 +56,36 @@ use sui_types::{
     SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 
+/// If a transaction digest shows up in this list, when executing such transaction,
+/// we will always return `ExecutionError::CertificateDenied` without executing it (but still do
+/// gas smashing). Because this list is not gated by protocol version, there are a few important
+/// criteria for adding a digest to this list:
+/// 1. The certificate must be causing all validators to either panic or hang forever deterministically.
+/// 2. If we ever ship a fix to make it no longer panic or hang when executing such transaction,
+/// we must make sure the transaction is already in this list. Otherwise nodes running the newer version
+/// without these transactions in the list will generate forked result.
+/// Below is a scenario of when we need to use this list:
+/// 1. We detect that a specific transaction is causing all validators to either panic or hang forever deterministically.
+/// 2. We push a CertificateDenyConfig to deny such transaction to all validators asap.
+/// 3. To make sure that all fullnodes are able to sync to the latest version, we need to add the transaction digest
+/// to this list as well asap, and ship this binary to all fullnodes, so that they can sync past this transaction.
+/// 4. We then can start fixing the issue, and ship the fix to all nodes.
+/// 5. Unfortunately, we can't remove the transaction digest from this list, because if we do so, any future
+/// node that sync from genesis will fork on this transaction. We may be able to remove it once
+/// we have stable snapshots and the binary has a minimum supported protocol version past the epoch.
+pub fn get_denied_certificates() -> &'static HashSet<TransactionDigest> {
+    static DENIED_CERTIFICATES: Lazy<HashSet<TransactionDigest>> = Lazy::new(|| HashSet::from([]));
+    Lazy::force(&DENIED_CERTIFICATES)
+}
+
+fn is_certificate_denied(
+    transaction_digest: &TransactionDigest,
+    certificate_deny_set: &HashSet<TransactionDigest>,
+) -> bool {
+    certificate_deny_set.contains(transaction_digest)
+        || get_denied_certificates().contains(transaction_digest)
+}
+
 checked_arithmetic! {
 
 #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
@@ -72,7 +105,8 @@ pub fn execute_transaction_to_effects<
     epoch_data: &EpochData,
     protocol_config: &ProtocolConfig,
     metrics: Arc<LimitsMetrics>,
-    enable_expensive_checks: bool
+    enable_expensive_checks: bool,
+    certificate_deny_set: &HashSet<TransactionDigest>,
 ) -> (
     InnerTemporaryStore,
     TransactionEffects,
@@ -93,7 +127,8 @@ pub fn execute_transaction_to_effects<
         epoch_data.epoch_start_timestamp(),
         protocol_config,
         metrics,
-        enable_expensive_checks
+        enable_expensive_checks,
+        certificate_deny_set,
     )
 }
 
@@ -115,7 +150,8 @@ pub fn execute_transaction_to_effects_impl<
     epoch_timestamp_ms: u64,
     protocol_config: &ProtocolConfig,
     metrics: Arc<LimitsMetrics>,
-    enable_expensive_checks: bool
+    enable_expensive_checks: bool,
+    certificate_deny_set: &HashSet<TransactionDigest>,
 ) -> (
     InnerTemporaryStore,
     TransactionEffects,
@@ -125,6 +161,7 @@ pub fn execute_transaction_to_effects_impl<
 
     let is_epoch_change = matches!(transaction_kind, TransactionKind::ChangeEpoch(_));
 
+    let deny_cert = is_certificate_denied(&transaction_digest, certificate_deny_set);
     let (gas_cost_summary, execution_result) = execute_transaction::<Mode, _>(
         &mut temporary_store,
         transaction_kind,
@@ -134,7 +171,8 @@ pub fn execute_transaction_to_effects_impl<
         gas_status,
         protocol_config,
         metrics,
-        enable_expensive_checks
+        enable_expensive_checks,
+        deny_cert,
     );
 
     let status = if let Err(error) = &execution_result {
@@ -242,7 +280,8 @@ fn execute_transaction<
     mut gas_status: SuiGasStatus,
     protocol_config: &ProtocolConfig,
     metrics: Arc<LimitsMetrics>,
-    enable_expensive_checks: bool
+    enable_expensive_checks: bool,
+    deny_cert: bool,
 ) -> (
     GasCostSummary,
     Result<Mode::ExecutionResults, ExecutionError>,
@@ -266,16 +305,20 @@ fn execute_transaction<
     // we must still ensure an effect is committed and all objects versions incremented
     let result = charge_gas_for_object_read(temporary_store, &mut gas_status);
     let mut result = result.and_then(|()| {
-        let mut execution_result = execution_loop::<Mode, _>(
-            temporary_store,
-            transaction_kind,
-            gas_object_ref.0,
-            tx_ctx,
-            move_vm,
-            &mut gas_status,
-            protocol_config,
-            metrics.clone(),
-        );
+        let mut execution_result = if deny_cert {
+            Err(ExecutionError::new(ExecutionErrorKind::CertificateDenied, None))
+        } else {
+            execution_loop::<Mode, _>(
+                temporary_store,
+                transaction_kind,
+                gas_object_ref.0,
+                tx_ctx,
+                move_vm,
+                &mut gas_status,
+                protocol_config,
+                metrics.clone(),
+            )
+        };
 
         let effects_estimated_size = temporary_store.estimate_effects_size_upperbound();
 
