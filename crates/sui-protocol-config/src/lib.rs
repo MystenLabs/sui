@@ -1294,32 +1294,32 @@ mod test {
     fn lookup_by_string_test() {
         let prot: ProtocolConfig = ProtocolConfig::get_for_version(ProtocolVersion::new(1));
         assert!(
-            prot.lookup_value("max_arguments".to_string())
+            prot.lookup_attr("max_arguments".to_string())
                 == Some(format!("{}", prot.max_arguments()))
         );
 
         // We didnt have this in version 1
         assert!(prot
-            .lookup_value("max_move_identifier_len".to_string())
+            .lookup_attr("max_move_identifier_len".to_string())
             .is_none());
 
         // But we did in version 9
         let prot: ProtocolConfig = ProtocolConfig::get_for_version(ProtocolVersion::new(9));
         assert!(
-            prot.lookup_value("max_move_identifier_len".to_string())
+            prot.lookup_attr("max_move_identifier_len".to_string())
                 == Some(format!("{}", prot.max_move_identifier_len()))
         );
 
         let prot: ProtocolConfig = ProtocolConfig::get_for_version(ProtocolVersion::new(1));
         // We didnt have this in version 1
         assert!(prot
-            .value_map()
+            .attr_map()
             .get("max_move_identifier_len")
             .unwrap()
             .is_none());
         // We had this in version 1
         assert!(
-            prot.value_map().get("max_arguments").unwrap()
+            prot.attr_map().get("max_arguments").unwrap()
                 == &Some(format!("{}", prot.max_arguments()))
         );
     }

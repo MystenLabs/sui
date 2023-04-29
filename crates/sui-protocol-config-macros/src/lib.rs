@@ -130,7 +130,7 @@ pub fn getters_macro(input: TokenStream) -> TokenStream {
             #(#getters)*
 
             /// Lookup a config attribute by its string representation
-            pub fn lookup_value(&self, value: String) -> Option<String> {
+            pub fn lookup_attr(&self, value: String) -> Option<String> {
                 match value.as_str() {
                     #(#value_lookup)*
                     _ => None,
@@ -138,9 +138,9 @@ pub fn getters_macro(input: TokenStream) -> TokenStream {
             }
 
             /// Get a map of all config attribute string representations to their string values
-            pub fn value_map(&self) -> std::collections::BTreeMap<String, Option<String>> {
+            pub fn attr_map(&self) -> std::collections::BTreeMap<String, Option<String>> {
                 vec![
-                    #(((#field_names_str).to_owned(), self.lookup_value((#field_names_str).to_owned())),)*
+                    #(((#field_names_str).to_owned(), self.lookup_attr((#field_names_str).to_owned())),)*
                     ].into_iter().collect()
             }
 
