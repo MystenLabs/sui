@@ -134,6 +134,11 @@ mod batch_verification_tests;
 #[cfg(feature = "test-utils")]
 pub mod authority_test_utils;
 use once_cell::sync::OnceCell;
+use sui_types::effects::{
+    SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
+    VerifiedCertifiedTransactionEffects, VerifiedSignedTransactionEffects,
+};
+
 pub mod authority_per_epoch_store;
 pub mod authority_per_epoch_store_pruner;
 

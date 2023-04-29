@@ -12,7 +12,8 @@ use std::time::Duration;
 use sui_types::base_types::SuiAddress;
 use sui_types::base_types::TransactionDigest;
 use sui_types::crypto::{deterministic_random_account_key, get_key_pair, AccountKeyPair};
-use sui_types::messages::{TransactionEffectsAPI, VerifiedTransaction};
+use sui_types::effects::TransactionEffectsAPI;
+use sui_types::messages::VerifiedTransaction;
 use sui_types::object::{generate_test_gas_objects, Object};
 use sui_types::quorum_driver_types::{QuorumDriverError, QuorumDriverResponse, QuorumDriverResult};
 

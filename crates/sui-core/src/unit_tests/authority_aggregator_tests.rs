@@ -35,6 +35,9 @@ use tokio::time::Instant;
 
 #[cfg(msim)]
 use sui_simulator::configs::constant_latency_ms;
+use sui_types::effects::{
+    TransactionEffects, TransactionEffectsAPI, TransactionEffectsV1, TransactionEvents,
+};
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 
 pub fn get_local_client(

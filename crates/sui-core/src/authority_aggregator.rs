@@ -44,6 +44,10 @@ use std::string::ToString;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_types::committee::{CommitteeWithNetworkMetadata, StakeUnit};
+use sui_types::effects::{
+    CertifiedTransactionEffects, SignedTransactionEffects, TransactionEffects, TransactionEvents,
+    VerifiedCertifiedTransactionEffects,
+};
 use tap::TapFallible;
 use tokio::time::{sleep, timeout};
 

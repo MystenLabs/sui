@@ -8,7 +8,7 @@
 use crate::{
     acquires_list_verifier::AcquiresVerifier,
     control_flow, locals_safety,
-    meter::{BoundMeter, Meter, Scope},
+    meter::{Meter, Scope},
     reference_safety,
     stack_usage_verifier::StackUsageVerifier,
     type_safety,
@@ -38,16 +38,17 @@ impl<'a> CodeUnitVerifier<'a> {
     pub fn verify_module(
         verifier_config: &VerifierConfig,
         module: &'a CompiledModule,
+        meter: &mut impl Meter,
     ) -> VMResult<()> {
-        Self::verify_module_impl(verifier_config, module)
+        Self::verify_module_impl(verifier_config, module, meter)
             .map_err(|e| e.finish(Location::Module(module.self_id())))
     }
 
     fn verify_module_impl(
         verifier_config: &VerifierConfig,
         module: &CompiledModule,
+        meter: &mut impl Meter,
     ) -> PartialVMResult<()> {
-        let mut meter = BoundMeter::new(verifier_config);
         let mut name_def_map = HashMap::new();
         for (idx, func_def) in module.function_defs().iter().enumerate() {
             let fh = module.function_handle_at(func_def.function);
@@ -62,7 +63,7 @@ impl<'a> CodeUnitVerifier<'a> {
                 function_definition,
                 module,
                 &name_def_map,
-                &mut meter,
+                meter,
             )
             .map_err(|err| err.at_index(IndexKind::FunctionDefinition, index.0))?;
             total_back_edges += num_back_edges;
@@ -78,15 +79,17 @@ impl<'a> CodeUnitVerifier<'a> {
     pub fn verify_script(
         verifier_config: &VerifierConfig,
         module: &'a CompiledScript,
+        meter: &mut impl Meter,
     ) -> VMResult<()> {
-        Self::verify_script_impl(verifier_config, module).map_err(|e| e.finish(Location::Script))
+        Self::verify_script_impl(verifier_config, module, meter)
+            .map_err(|e| e.finish(Location::Script))
     }
 
     fn verify_script_impl(
         verifier_config: &VerifierConfig,
         script: &'a CompiledScript,
+        meter: &mut impl Meter,
     ) -> PartialVMResult<()> {
-        let mut meter = BoundMeter::new(verifier_config);
         // create `FunctionView` and `BinaryIndexedView`
         let function_view = control_flow::verify_script(verifier_config, script)?;
         let resolver = BinaryIndexedView::Script(script);
@@ -111,7 +114,7 @@ impl<'a> CodeUnitVerifier<'a> {
             function_view,
             name_def_map: &name_def_map,
         };
-        code_unit_verifier.verify_common(verifier_config, &mut meter)
+        code_unit_verifier.verify_common(verifier_config, meter)
     }
 
     fn verify_function(

@@ -7,12 +7,10 @@ use sui_config::NetworkConfig;
 use sui_macros::*;
 use sui_node::SuiNodeHandle;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::error::SuiResult;
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
-use sui_types::messages::{
-    CallArg, ObjectArg, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
-    TEST_ONLY_GAS_UNIT_FOR_GENERIC,
-};
+use sui_types::messages::{CallArg, ObjectArg, TEST_ONLY_GAS_UNIT_FOR_GENERIC};
 use sui_types::multiaddr::Multiaddr;
 use sui_types::object::{generate_test_gas_objects, Object, Owner, OBJECT_START_VERSION};
 use sui_types::SUI_FRAMEWORK_ADDRESS;

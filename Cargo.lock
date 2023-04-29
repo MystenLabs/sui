@@ -9105,6 +9105,7 @@ dependencies = [
  "more-asserts",
  "move-binary-format",
  "move-bytecode-utils",
+ "move-bytecode-verifier",
  "move-core-types",
  "move-package",
  "move-symbol-pool",

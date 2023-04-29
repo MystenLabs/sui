@@ -3,19 +3,26 @@
 
 use move_binary_format::file_format::CompiledModule;
 
-use sui_adapter::adapter::{default_verifier_config, run_metered_move_bytecode_verifier_impl};
+use move_bytecode_verifier::meter::{BoundMeter, Scope};
+use std::{collections::BTreeMap, path::PathBuf};
+use sui_adapter::adapter::{
+    default_verifier_config, run_metered_move_bytecode_verifier,
+    run_metered_move_bytecode_verifier_impl,
+};
+use sui_framework::BuiltInFramework;
 use sui_move_build::{BuildConfig, CompiledPackage, SuiPackageHooks};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    base_types::ObjectID,
+    base_types::{random_object_ref, ObjectID},
+    crypto::{get_key_pair, AccountKeyPair},
     digests::TransactionDigest,
     error::{ExecutionErrorKind, SuiError},
+    execution_status::PackageUpgradeError,
+    messages::{Command, TransactionData, TransactionDataAPI, TransactionKind},
     move_package::{MovePackage, TypeOrigin, UpgradeInfo},
     object::{Data, Object, OBJECT_START_VERSION},
+    programmable_transaction_builder::ProgrammableTransactionBuilder,
 };
-
-use std::{collections::BTreeMap, path::PathBuf};
-use sui_types::execution_status::PackageUpgradeError;
 
 macro_rules! type_origin_table {
     {} => { Vec::new() };
@@ -461,11 +468,13 @@ async fn test_metered_move_bytecode_verifier() {
         true, /* enable metering */
     );
 
+    let mut meter = BoundMeter::new(&metered_verifier_config);
     // Default case should pass
     let r = run_metered_move_bytecode_verifier_impl(
         &compiled_modules_bytes,
         &ProtocolConfig::get_for_max_version(),
         &metered_verifier_config,
+        &mut meter,
     );
     assert!(r.is_ok());
 
@@ -475,10 +484,12 @@ async fn test_metered_move_bytecode_verifier() {
     metered_verifier_config.max_per_mod_meter_units = Some(10_000);
     metered_verifier_config.max_per_fun_meter_units = Some(10_000);
 
+    let mut meter = BoundMeter::new(&metered_verifier_config);
     let r = run_metered_move_bytecode_verifier_impl(
         &compiled_modules_bytes,
         &ProtocolConfig::get_for_max_version(),
         &metered_verifier_config,
+        &mut meter,
     );
 
     assert!(
@@ -487,4 +498,69 @@ async fn test_metered_move_bytecode_verifier() {
                 error: "Verification timedout".to_string()
             }
     );
+
+    // Check shared meter logic works across all publish in PT
+    use sui_move_build::BuildConfig;
+    let (sender, _): (_, AccountKeyPair) = get_key_pair();
+
+    // Module bytes
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("src/unit_tests/data/publish_with_event");
+    let modules = BuildConfig::new_for_testing()
+        .build(path)
+        .unwrap()
+        .get_package_bytes(false);
+
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("src/unit_tests/data/managed_coin");
+    let modules2 = BuildConfig::new_for_testing()
+        .build(path)
+        .unwrap()
+        .get_package_bytes(false);
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder.command(Command::Publish(
+        modules.clone(),
+        BuiltInFramework::all_package_ids(),
+    ));
+    builder.command(Command::Publish(
+        modules,
+        BuiltInFramework::all_package_ids(),
+    ));
+    builder.command(Command::Publish(
+        modules2,
+        BuiltInFramework::all_package_ids(),
+    ));
+    let kind: TransactionKind = TransactionKind::programmable(builder.finish());
+
+    let tx_data = TransactionData::new(kind, sender, random_object_ref(), 100000, 1000);
+    let protocol_config = ProtocolConfig::get_for_max_version();
+
+    let metered_verifier_config =
+        default_verifier_config(&protocol_config, true /* enable metering */);
+    // Check if the same meter is indeed used for all modules
+    let mut meter = BoundMeter::new(&metered_verifier_config);
+    if let TransactionKind::ProgrammableTransaction(pt) = tx_data.kind() {
+        pt.non_system_packages_to_be_published()
+            .try_for_each(|q| {
+                let (prev_meter_val_fun, prev_meter_val_mod) = (
+                    meter.get_usage(Scope::Function),
+                    meter.get_usage(Scope::Module),
+                );
+
+                let err = run_metered_move_bytecode_verifier(
+                    q,
+                    &protocol_config,
+                    &metered_verifier_config,
+                    &mut meter,
+                );
+                // Check that at least one of the meter values has increased
+                assert!(
+                    (meter.get_usage(Scope::Module) > prev_meter_val_mod)
+                        || (meter.get_usage(Scope::Function) > prev_meter_val_fun)
+                );
+
+                err
+            })
+            .expect("Metering should not fail. Meter limits might have changed");
+    }
 }

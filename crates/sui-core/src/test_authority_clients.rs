@@ -12,15 +12,14 @@ use crate::{authority::AuthorityState, authority_client::AuthorityAPI};
 use async_trait::async_trait;
 use mysten_metrics::spawn_monitored_task;
 use sui_config::genesis::Genesis;
-use sui_types::messages::TransactionEvents;
+use sui_types::effects::{TransactionEffectsAPI, TransactionEvents};
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{
     crypto::AuthorityKeyPair,
     error::SuiError,
     messages::{
         CertifiedTransaction, HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse,
-        SystemStateRequest, Transaction, TransactionEffectsAPI, TransactionInfoRequest,
-        TransactionInfoResponse,
+        SystemStateRequest, Transaction, TransactionInfoRequest, TransactionInfoResponse,
     },
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},
 };

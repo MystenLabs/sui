@@ -39,6 +39,7 @@ pub mod crypto;
 pub mod digests;
 pub mod display;
 pub mod dynamic_field;
+pub mod effects;
 pub mod event;
 pub mod execution_status;
 pub mod gas;
