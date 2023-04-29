@@ -308,11 +308,10 @@ module deepbook::clob {
         pool: &mut Pool<BaseAsset, QuoteAsset>,
         quantity: u64,
         base_coin: Coin<BaseAsset>,
-        quote_coin: Coin<QuoteAsset>,
         clock: &Clock,
         ctx: &mut TxContext,
     ): (Coin<BaseAsset>, Coin<QuoteAsset>, u64) {
-        let original_val = coin::value(&quote_coin);
+        let quote_coin = coin::zero<QuoteAsset>(ctx);
         let (ret_base_coin, ret_quote_coin) = place_market_order(
             pool,
             quantity,
@@ -323,7 +322,7 @@ module deepbook::clob {
             ctx
         );
         let ret_val = coin::value(&ret_quote_coin);
-        (ret_base_coin, ret_quote_coin, ret_val - original_val)
+        (ret_base_coin, ret_quote_coin, ret_val)
     }
 
     // for smart routing
