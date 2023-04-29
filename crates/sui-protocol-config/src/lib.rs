@@ -1052,8 +1052,8 @@ impl ProtocolConfig {
                 scoring_decision_mad_divisor: None,
                 scoring_decision_cutoff_value: None,
 
-              // Limits the length of a Move identifier
-              max_move_identifier_len: None,
+                // Limits the length of a Move identifier
+                max_move_identifier_len: None,
 
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
@@ -1289,6 +1289,41 @@ mod test {
             );
         }
     }
+
+    #[test]
+    fn lookup_by_string_test() {
+        let prot: ProtocolConfig = ProtocolConfig::get_for_version(ProtocolVersion::new(1));
+        assert!(
+            prot.lookup_value("max_arguments".to_string())
+                == Some(format!("{}", prot.max_arguments()))
+        );
+
+        // We didnt have this in version 1
+        assert!(prot
+            .lookup_value("max_move_identifier_len".to_string())
+            .is_none());
+
+        // But we did in version 9
+        let prot: ProtocolConfig = ProtocolConfig::get_for_version(ProtocolVersion::new(9));
+        assert!(
+            prot.lookup_value("max_move_identifier_len".to_string())
+                == Some(format!("{}", prot.max_move_identifier_len()))
+        );
+
+        let prot: ProtocolConfig = ProtocolConfig::get_for_version(ProtocolVersion::new(1));
+        // We didnt have this in version 1
+        assert!(prot
+            .value_map()
+            .get("max_move_identifier_len")
+            .unwrap()
+            .is_none());
+        // We had this in version 1
+        assert!(
+            prot.value_map().get("max_arguments").unwrap()
+                == &Some(format!("{}", prot.max_arguments()))
+        );
+    }
+
     #[test]
     fn limit_range_fn_test() {
         let low = 100u32;

@@ -67,11 +67,83 @@ pub fn getters_macro(input: TokenStream) -> TokenStream {
         _ => panic!("Only structs supported."),
     };
 
+    let value_lookup = match data {
+        Data::Struct(data_struct) => match &data_struct.fields {
+            // Operate on each field of the ProtocolConfig struct
+            Fields::Named(fields_named) => fields_named.named.iter().filter_map(|field| {
+                // Extract field name and type
+                let field_name = field.ident.as_ref().expect("Field must be named");
+                let field_type = &field.ty;
+                // Check if field is of type Option<T>
+                match field_type {
+                    Type::Path(type_path)
+                        if type_path
+                            .path
+                            .segments
+                            .last()
+                            .map_or(false, |segment| segment.ident == "Option") =>
+                    {
+                        Some(quote! {
+                            stringify!(#field_name) => self.#field_name.map(|v| format!("{}", v)),
+                        })
+                    }
+                    _ => None,
+                }
+            }),
+            _ => panic!("Only named fields are supported."),
+        },
+        _ => panic!("Only structs supported."),
+    };
+
+    let field_names_str = match data {
+        Data::Struct(data_struct) => match &data_struct.fields {
+            // Operate on each field of the ProtocolConfig struct
+            Fields::Named(fields_named) => fields_named.named.iter().filter_map(|field| {
+                // Extract field name and type
+                let field_name = field.ident.as_ref().expect("Field must be named");
+                let field_type = &field.ty;
+                // Check if field is of type Option<T>
+                match field_type {
+                    Type::Path(type_path)
+                        if type_path
+                            .path
+                            .segments
+                            .last()
+                            .map_or(false, |segment| segment.ident == "Option") =>
+                    {
+                        Some(quote! {
+                            stringify!(#field_name)
+                        })
+                    }
+                    _ => None,
+                }
+            }),
+            _ => panic!("Only named fields are supported."),
+        },
+        _ => panic!("Only structs supported."),
+    };
+
     let output = quote! {
         // For each getter, expand it out into a function in the impl block
         impl #struct_name {
             const CONSTANT_ERR_MSG: &str = "protocol constant not present in current protocol version";
             #(#getters)*
+
+            /// Lookup a config attribute by its string representation
+            pub fn lookup_value(&self, value: String) -> Option<String> {
+                match value.as_str() {
+                    #(#value_lookup)*
+                    _ => None,
+                }
+            }
+
+            /// Get a map of all config attribute string representations to their string values
+            pub fn value_map(&self) -> std::collections::BTreeMap<String, Option<String>> {
+                vec![
+                    #(((#field_names_str).to_owned(), self.lookup_value((#field_names_str).to_owned())),)*
+                    ].into_iter().collect()
+            }
+
         }
     };
 
