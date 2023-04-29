@@ -355,7 +355,7 @@ impl ValidatorService {
         request: tonic::Request<CertifiedTransaction>,
         metrics: Arc<ValidatorServiceMetrics>,
         wait_for_effects: bool,
-    ) -> Result<Option<HandleCertificateResponse>, tonic::Status> {
+    ) -> Result<Option<HandleCertificateResponseV2>, tonic::Status> {
         let epoch_store = state.load_epoch_store_one_call_per_task();
 
         let certificate = request.into_inner();
@@ -385,9 +385,12 @@ impl ValidatorService {
                 TransactionEvents::default()
             };
 
-            return Ok(Some(HandleCertificateResponse {
+            let fastpath_input_objects = state.load_fastpath_input_objects(&signed_effects)?;
+
+            return Ok(Some(HandleCertificateResponseV2 {
                 signed_effects: signed_effects.into_inner(),
                 events,
+                fastpath_input_objects,
             }));
         }
 
@@ -464,14 +467,16 @@ impl ValidatorService {
         let effects = state
             .execute_certificate(&certificate, &epoch_store)
             .await?;
+        let fastpath_input_objects = state.load_fastpath_input_objects(&effects)?;
         let events = if let Some(event_digest) = effects.events_digest() {
             state.get_transaction_events(event_digest)?
         } else {
             TransactionEvents::default()
         };
-        Ok(Some(HandleCertificateResponse {
+        Ok(Some(HandleCertificateResponseV2 {
             signed_effects: effects.into_inner(),
             events,
+            fastpath_input_objects,
         }))
     }
 }
@@ -516,13 +521,17 @@ impl Validator for ValidatorService {
         })
         .await
         .unwrap()
-        .map(|executed| tonic::Response::new(SubmitCertificateResponse { executed }))
+        .map(|executed| {
+            tonic::Response::new(SubmitCertificateResponse {
+                executed: executed.map(|e| e.into()),
+            })
+        })
     }
 
-    async fn handle_certificate(
+    async fn handle_certificate_v2(
         &self,
         request: tonic::Request<CertifiedTransaction>,
-    ) -> Result<tonic::Response<HandleCertificateResponse>, tonic::Status> {
+    ) -> Result<tonic::Response<HandleCertificateResponseV2>, tonic::Status> {
         let state = self.state.clone();
         let consensus_adapter = self.consensus_adapter.clone();
 
@@ -542,6 +551,15 @@ impl Validator for ValidatorService {
                 v.expect("handle_certificate should not return none with wait_for_effects=true"),
             )
         })
+    }
+
+    async fn handle_certificate(
+        &self,
+        request: tonic::Request<CertifiedTransaction>,
+    ) -> Result<tonic::Response<HandleCertificateResponse>, tonic::Status> {
+        self.handle_certificate_v2(request)
+            .await
+            .map(|v| tonic::Response::new(v.into_inner().into()))
     }
 
     async fn object_info(

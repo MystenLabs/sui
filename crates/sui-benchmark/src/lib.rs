@@ -30,7 +30,6 @@ use sui_json_rpc_types::{
 };
 use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::messages::Argument;
 use sui_types::messages::CallArg;
 use sui_types::messages::ObjectArg;
 use sui_types::messages::TransactionEvents;
@@ -45,8 +44,8 @@ use sui_types::{
     },
     message_envelope::Envelope,
     messages::{
-        CertifiedTransaction, CertifiedTransactionEffects, HandleCertificateResponse,
-        QuorumDriverResponse, Transaction, TransactionEffectsAPI, TransactionStatus,
+        CertifiedTransaction, CertifiedTransactionEffects, HandleCertificateResponse, Transaction,
+        TransactionEffectsAPI, TransactionStatus,
     },
     object::Object,
 };
@@ -57,6 +56,7 @@ use sui_types::{
     sui_system_state::SuiSystemStateTrait,
 };
 use sui_types::{error::SuiError, gas::GasCostSummary};
+use sui_types::{messages::Argument, messages::QuorumDriverResponse};
 use tokio::{
     task::JoinSet,
     time::{sleep, timeout},
@@ -370,6 +370,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                     let QuorumDriverResponse {
                         effects_cert,
                         events,
+                        ..
                     } = resp;
                     return Ok(ExecutionEffects::CertifiedTransactionEffects(
                         effects_cert.into(),

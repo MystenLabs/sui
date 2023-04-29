@@ -35,7 +35,7 @@ use sui_types::messages::{
     CallArg, ObjectArg, ObjectInfoRequest, ObjectInfoResponse, Transaction, TransactionData,
     TransactionEffects, TransactionEffectsAPI, TransactionEvents, VerifiedTransaction,
 };
-use sui_types::messages::{ExecuteTransactionRequestType, HandleCertificateResponse};
+use sui_types::messages::{ExecuteTransactionRequestType, HandleCertificateResponseV2};
 use sui_types::move_package::UpgradePolicy;
 use sui_types::multiaddr::Multiaddr;
 use sui_types::object::{Object, Owner};
@@ -71,7 +71,7 @@ pub async fn publish_package(
     net_addresses: &[Multiaddr],
     gas_price: u64,
 ) -> ObjectRef {
-    let (effects, _) =
+    let (effects, _, _) =
         publish_package_for_effects(gas_object, path, net_addresses, gas_price).await;
     parse_package_ref(effects.created()).unwrap()
 }
@@ -81,7 +81,7 @@ pub async fn publish_package_for_effects(
     path: PathBuf,
     net_addresses: &[Multiaddr],
     gas_price: u64,
-) -> (TransactionEffects, TransactionEvents) {
+) -> (TransactionEffects, TransactionEvents, Vec<Object>) {
     submit_single_owner_transaction(
         make_publish_package(gas_object.compute_object_reference(), path, gas_price),
         net_addresses,
@@ -633,7 +633,7 @@ pub async fn delete_devnet_nft(
 pub async fn submit_single_owner_transaction(
     transaction: VerifiedTransaction,
     net_addresses: &[Multiaddr],
-) -> (TransactionEffects, TransactionEvents) {
+) -> (TransactionEffects, TransactionEvents, Vec<Object>) {
     let certificate = make_tx_certs_and_signed_effects(vec![transaction])
         .0
         .pop()
@@ -642,7 +642,7 @@ pub async fn submit_single_owner_transaction(
     for addr in net_addresses {
         let client = get_client(addr);
         let reply = client
-            .handle_certificate(certificate.clone().into())
+            .handle_certificate_v2(certificate.clone().into())
             .await
             .unwrap();
         responses.push(reply);
@@ -656,7 +656,7 @@ pub async fn submit_single_owner_transaction(
 pub async fn submit_shared_object_transaction(
     transaction: VerifiedTransaction,
     net_addresses: &[Multiaddr],
-) -> SuiResult<(TransactionEffects, TransactionEvents)> {
+) -> SuiResult<(TransactionEffects, TransactionEvents, Vec<Object>)> {
     let (committee, key_pairs) = Committee::new_simple_test_committee();
     submit_shared_object_transaction_with_committee(
         transaction,
@@ -675,7 +675,7 @@ pub async fn submit_shared_object_transaction_with_committee(
     net_addresses: &[Multiaddr],
     committee: &Committee,
     key_pairs: &[AuthorityKeyPair],
-) -> SuiResult<(TransactionEffects, TransactionEvents)> {
+) -> SuiResult<(TransactionEffects, TransactionEvents, Vec<Object>)> {
     let certificate =
         make_tx_certs_and_signed_effects_with_committee(vec![transaction], committee, key_pairs)
             .0
@@ -688,7 +688,7 @@ pub async fn submit_shared_object_transaction_with_committee(
             .map(|addr| {
                 let client = get_client(addr);
                 let cert = certificate.clone();
-                async move { client.handle_certificate(cert.into()).await }
+                async move { client.handle_certificate_v2(cert.into()).await }
             })
             .collect();
 
@@ -714,20 +714,24 @@ pub async fn submit_shared_object_transaction_with_committee(
 }
 
 pub fn get_unique_effects(
-    replies: Vec<HandleCertificateResponse>,
-) -> (TransactionEffects, TransactionEvents) {
+    replies: Vec<HandleCertificateResponseV2>,
+) -> (TransactionEffects, TransactionEvents, Vec<Object>) {
     let mut all_effects = HashMap::new();
     let mut all_events = HashMap::new();
+    let mut all_objects = HashSet::new();
     for reply in replies {
         let effects = reply.signed_effects.into_data();
         all_effects.insert(effects.digest(), effects);
         all_events.insert(reply.events.digest(), reply.events);
+        all_objects.insert(reply.fastpath_input_objects);
     }
     assert_eq!(all_effects.len(), 1);
     assert_eq!(all_events.len(), 1);
+    assert_eq!(all_objects.len(), 1);
     (
         all_effects.into_values().next().unwrap(),
         all_events.into_values().next().unwrap(),
+        all_objects.into_iter().next().unwrap(),
     )
 }
 

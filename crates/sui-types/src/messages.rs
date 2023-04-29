@@ -2167,6 +2167,32 @@ pub struct HandleCertificateResponse {
     pub events: TransactionEvents,
 }
 
+impl From<HandleCertificateResponseV2> for HandleCertificateResponse {
+    fn from(v2: HandleCertificateResponseV2) -> Self {
+        Self {
+            signed_effects: v2.signed_effects,
+            events: v2.events,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct HandleCertificateResponseV2 {
+    pub signed_effects: SignedTransactionEffects,
+    pub events: TransactionEvents,
+    /// The validator may return some of the input objects that were used by this transaction, in
+    /// order to facilitate lower latency local execution for the full node client that requested
+    /// the transaction execution.
+    ///
+    /// Typically this list contains only the version (if any) of the Clock object that was used by the
+    /// transaction - without returning it here, the client has no choice but to wait for
+    /// checkpoint sync to provide the input clock.
+    ///
+    /// The validator may return other objects via thist list in the future. However, this
+    /// is only intended for small objects.
+    pub fastpath_input_objects: Vec<Object>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SubmitCertificateResponse {
     /// If transaction is already executed, return same result as handle_certificate
@@ -3109,6 +3135,7 @@ pub struct QuorumDriverRequest {
 pub struct QuorumDriverResponse {
     pub effects_cert: VerifiedCertifiedTransactionEffects,
     pub events: TransactionEvents,
+    pub objects: Vec<Object>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

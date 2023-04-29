@@ -10,11 +10,11 @@ use mysten_common::sync::notify_read::{NotifyRead, Registration};
 use std::sync::Arc;
 use std::time::Duration;
 use sui_types::base_types::SuiAddress;
+use sui_types::base_types::TransactionDigest;
 use sui_types::crypto::{deterministic_random_account_key, get_key_pair, AccountKeyPair};
 use sui_types::messages::{TransactionEffectsAPI, VerifiedTransaction};
 use sui_types::object::{generate_test_gas_objects, Object};
-use sui_types::quorum_driver_types::{QuorumDriverError, QuorumDriverResult};
-use sui_types::{base_types::TransactionDigest, messages::QuorumDriverResponse};
+use sui_types::quorum_driver_types::{QuorumDriverError, QuorumDriverResponse, QuorumDriverResult};
 
 async fn setup() -> (
     AuthorityAggregator<LocalAuthorityClient>,

@@ -108,7 +108,8 @@ async fn call_shared_object_contract() {
         rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
         rgp,
     );
-    let (effects, _) = submit_single_owner_transaction(transaction, &configs.net_addresses()).await;
+    let (effects, _, _) =
+        submit_single_owner_transaction(transaction, &configs.net_addresses()).await;
     assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
     let counter_creation_transaction = *effects.transaction_digest();
     let ((counter_id, counter_initial_shared_version, _), _) = effects.created()[0];
@@ -138,9 +139,10 @@ async fn call_shared_object_contract() {
             rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
             rgp,
         );
-        let (effects, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
-            .await
-            .unwrap();
+        let (effects, _, _) =
+            submit_shared_object_transaction(transaction, &configs.net_addresses())
+                .await
+                .unwrap();
         assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
         // Only genesis, assert_value, and counter creation are dependencies
         // Note that this assert would fail for second transaction
@@ -161,7 +163,7 @@ async fn call_shared_object_contract() {
         rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
         rgp,
     );
-    let (effects, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
+    let (effects, _, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
         .await
         .unwrap();
     let increment_transaction = *effects.transaction_digest();
@@ -194,9 +196,10 @@ async fn call_shared_object_contract() {
             rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
             rgp,
         );
-        let (effects, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
-            .await
-            .unwrap();
+        let (effects, _, _) =
+            submit_shared_object_transaction(transaction, &configs.net_addresses())
+                .await
+                .unwrap();
         assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
         // Genesis, assert_value, and increment transaction are dependencies
         assert_eq!(effects.dependencies().len(), 3);
@@ -216,7 +219,7 @@ async fn call_shared_object_contract() {
         rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
         rgp,
     );
-    let (effects, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
+    let (effects, _, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
         .await
         .unwrap();
     // Transaction fails
@@ -271,9 +274,21 @@ async fn access_clock_object_test() {
     let start = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap();
-    let (effects, events) = submit_shared_object_transaction(transaction, &configs.net_addresses())
-        .await
-        .unwrap();
+    let (effects, events, objects) =
+        submit_shared_object_transaction(transaction, &configs.net_addresses())
+            .await
+            .unwrap();
+
+    assert_eq!(
+        objects.first().unwrap().compute_object_reference(),
+        effects
+            .shared_objects()
+            .iter()
+            .find(|(id, _, _)| *id == SUI_CLOCK_OBJECT_ID)
+            .unwrap()
+            .clone()
+    );
+
     let finish = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap();
@@ -347,7 +362,8 @@ async fn shared_object_flood() {
         rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
         rgp,
     );
-    let (effects, _) = submit_single_owner_transaction(transaction, &configs.net_addresses()).await;
+    let (effects, _, _) =
+        submit_single_owner_transaction(transaction, &configs.net_addresses()).await;
     assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
     let ((counter_id, counter_initial_shared_version, _), _) = effects.created()[0];
     let counter_object_arg = ObjectArg::SharedObject {
@@ -369,7 +385,7 @@ async fn shared_object_flood() {
         rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
         rgp,
     );
-    let (effects, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
+    let (effects, _, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
         .await
         .unwrap();
     assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
@@ -384,7 +400,7 @@ async fn shared_object_flood() {
         rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
         rgp,
     );
-    let (effects, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
+    let (effects, _, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
         .await
         .unwrap();
     assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
@@ -402,7 +418,7 @@ async fn shared_object_flood() {
         rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
         rgp,
     );
-    let (effects, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
+    let (effects, _, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
         .await
         .unwrap();
     assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
@@ -448,7 +464,7 @@ async fn shared_object_sync() {
             ) > 0
         });
 
-    let (effects, _) = submit_single_owner_transaction(
+    let (effects, _, _) = submit_single_owner_transaction(
         create_counter_transaction.clone(),
         &slow_validators
             .iter()
@@ -497,7 +513,7 @@ async fn shared_object_sync() {
     );
 
     // Let's submit the transaction to the original set of validators.
-    let (effects, _) = submit_shared_object_transaction(
+    let (effects, _, _) = submit_shared_object_transaction(
         increment_counter_transaction.clone(),
         &configs.net_addresses()[1..],
     )
@@ -507,7 +523,7 @@ async fn shared_object_sync() {
 
     // Submit transactions to the out-of-date authority.
     // It will succeed because we share owned object certificates through narwhal
-    let (effects, _) = submit_shared_object_transaction(
+    let (effects, _, _) = submit_shared_object_transaction(
         increment_counter_transaction,
         &configs.net_addresses()[0..1],
     )
@@ -546,7 +562,7 @@ async fn replay_shared_object_transaction() {
 
     let mut version = None;
     for _ in 0..2 {
-        let (effects, _) = submit_single_owner_transaction(
+        let (effects, _, _) = submit_single_owner_transaction(
             create_counter_transaction.clone(),
             &configs.net_addresses(),
         )
