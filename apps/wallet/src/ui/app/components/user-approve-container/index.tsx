@@ -54,8 +54,8 @@ export function UserApproveContainer({
     const parsedOrigin = useMemo(() => new URL(origin), [origin]);
 
     return (
-        <div className="px-5">
-            <div>
+        <div className={st.container}>
+            <div className={cl(st.scrollBody, { [st.scrollable]: scrollable })}>
                 <DAppInfoCard
                     name={parsedOrigin.host}
                     url={origin}
@@ -64,9 +64,13 @@ export function UserApproveContainer({
                         !addressHidden && address ? address : undefined
                     }
                 />
-                <div className="flex flex-col gap-8">{children}</div>
+                <div
+                    className={cl(st.children, { [st.scrollable]: scrollable })}
+                >
+                    {children}
+                </div>
             </div>
-            <div>
+            <div className={st.actionsContainer}>
                 <div className={cl(st.actions, isWarning && st.flipActions)}>
                     <Button
                         size="tall"

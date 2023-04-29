@@ -3,9 +3,9 @@
 import {
     type BalanceChangeSummary,
     CoinFormat,
-    formatBalance,
+    useFormatCoin,
 } from '@mysten/core';
-import { Coin, formatAddress } from '@mysten/sui.js';
+import { formatAddress } from '@mysten/sui.js';
 import { useState } from 'react';
 
 import { Card } from '../Card';
@@ -25,6 +25,12 @@ function BalanceChangeEntry({ change }: { change: BalanceChangeSummary }) {
     const { amount, coinType, owner } = change;
     const isPositive = BigInt(amount) > 0n;
 
+    const [formatted, symbol] = useFormatCoin(
+        amount,
+        coinType,
+        CoinFormat.FULL
+    );
+
     return (
         <div className="flex flex-col gap-2 only:pt-0 last:pb-0 only:pb-0 first:pt-0 py-2">
             <div className="flex flex-col gap-2">
@@ -38,8 +44,7 @@ function BalanceChangeEntry({ change }: { change: BalanceChangeSummary }) {
                             color={isPositive ? 'success-dark' : 'issue-dark'}
                         >
                             {isPositive ? '+' : ''}
-                            {formatBalance(amount, 9, CoinFormat.FULL)}{' '}
-                            {Coin.getCoinSymbol(coinType)}
+                            {formatted} {symbol}
                         </Text>
                     </div>
                 </div>
