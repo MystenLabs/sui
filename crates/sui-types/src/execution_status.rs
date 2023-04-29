@@ -169,6 +169,9 @@ pub enum ExecutionFailureStatus {
     Limit is {max_size} bytes"
     )]
     WrittenObjectsTooLarge { current_size: u64, max_size: u64 },
+
+    #[error("Certificate is on the deny list")]
+    CertificateDenied,
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
 }

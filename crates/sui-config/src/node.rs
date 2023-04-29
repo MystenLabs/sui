@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::certificate_deny_config::CertificateDenyConfig;
 use crate::genesis;
 use crate::p2p::P2pConfig;
 use crate::transaction_deny_config::TransactionDenyConfig;
@@ -116,6 +117,9 @@ pub struct NodeConfig {
 
     #[serde(default)]
     pub transaction_deny_config: TransactionDenyConfig,
+
+    #[serde(default)]
+    pub certificate_deny_config: CertificateDenyConfig,
 }
 
 fn default_authority_store_pruning_config() -> AuthorityStorePruningConfig {
