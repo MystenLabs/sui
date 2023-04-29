@@ -3,25 +3,23 @@
 
 import { useCallback } from 'react';
 
-export function useCopyToClipboard(callbackOnSuccess?: () => void) {
+export function useCopyToClipboard(onSuccessCallback?: () => void) {
     return useCallback(
         async (text: string) => {
             if (!navigator?.clipboard) {
-                console.warn('Clipboard not supported');
                 return false;
             }
 
             try {
                 await navigator.clipboard.writeText(text);
-                if (callbackOnSuccess) {
-                    callbackOnSuccess();
+                if (onSuccessCallback) {
+                    onSuccessCallback();
                 }
                 return true;
             } catch (error) {
-                console.warn('Copy failed', error);
                 return false;
             }
         },
-        [callbackOnSuccess]
+        [onSuccessCallback]
     );
 }

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { getGroupByOwner, LocationIdType } from '@mysten/core';
 import { ChevronRight12 } from '@mysten/icons';
 import {
     type SuiObjectChangeCreated,
@@ -10,15 +11,22 @@ import {
 import clsx from 'clsx';
 import { useState } from 'react';
 
+import {
+    ExpandableList,
+    ExpandableListControl,
+    ExpandableListItems,
+} from '~/ui/ExpandableList';
 import { AddressLink, ObjectLink } from '~/ui/InternalLink';
 import { Link } from '~/ui/Link';
 import { Text } from '~/ui/Text';
-import { TransactionCard, TransactionCardSection } from '~/ui/TransactionCard';
+import {
+    TransactionBlockCard,
+    TransactionBlockCardSection,
+} from '~/ui/TransactionBlockCard';
 
 enum Labels {
     created = 'Created',
     mutated = 'Updated',
-    minted = 'Mint',
     transferred = 'Transfer',
 }
 
@@ -28,12 +36,12 @@ enum ItemLabels {
     function = 'Function',
 }
 
-enum LocationIdType {
-    AddressOwner = 'AddressOwner',
-    ObjectOwner = 'ObjectOwner',
-    Shared = 'Shared',
-    Unknown = 'Unknown',
-}
+type ObjectChangeEntryData<T> = Record<
+    string,
+    (T & { locationIdType: LocationIdType })[]
+>;
+
+const DEFAULT_ITEMS_TO_SHOW = 5;
 
 interface ObjectChangeEntryBaseProps {
     type: keyof typeof Labels;
@@ -84,9 +92,8 @@ function ObjectDetail({
     const [expanded, setExpanded] = useState(false);
     const toggleExpand = () => setExpanded((prev) => !prev);
 
-    const regex = /^(.*?)::(.*?)::(.*)$/;
-    const [, packageId, moduleName, functionName] =
-        objectType.match(regex) ?? [];
+    const [packageId, moduleName, functionName] =
+        objectType?.split('<')[0]?.split('::') || [];
 
     const objectDetailLabels = [
         ItemLabels.package,
@@ -95,33 +102,27 @@ function ObjectDetail({
     ];
 
     return (
-        <>
+        <div>
             <div className="flex justify-between">
-                <Link
-                    gap="xs"
-                    variant="text"
-                    onClick={toggleExpand}
-                    after={
+                <Link onClick={toggleExpand}>
+                    <div className="flex items-center gap-0.5">
+                        <Text variant="pBody/medium" color="steel-dark">
+                            Object
+                        </Text>
+
                         <ChevronRight12
-                            height={12}
-                            width={12}
                             className={clsx(
-                                'text-steel-dark',
+                                'h-3 w-3 text-steel-dark',
                                 expanded && 'rotate-90'
                             )}
                         />
-                    }
-                >
-                    <Text variant="pBody/medium" color="steel-dark">
-                        Object
-                    </Text>
+                    </div>
                 </Link>
 
                 <ObjectLink objectId={objectId} />
-                {/* {minted && <NFTDetails objectId={objectId} />} */}
             </div>
             {expanded && (
-                <div className="flex flex-col gap-1">
+                <div className="mt-2 flex flex-col gap-2">
                     {objectDetailLabels.map((label) => (
                         <Item
                             key={label}
@@ -133,22 +134,22 @@ function ObjectDetail({
                     ))}
                 </div>
             )}
-        </>
+        </div>
     );
 }
 
-interface ObjectChangeEntryProps extends ObjectChangeEntryBaseProps {
-    changeEntries: (
-        | (SuiObjectChangeMutated & { minted: boolean })
-        | (SuiObjectChangeCreated & { minted: boolean })
-    )[];
+interface ObjectChangeEntriesProps extends ObjectChangeEntryBaseProps {
+    changeEntries: (SuiObjectChangeMutated | SuiObjectChangeCreated)[];
 }
 
-function ObjectChangeEntry({ changeEntries, type }: ObjectChangeEntryProps) {
+function ObjectChangeEntries({
+    changeEntries,
+    type,
+}: ObjectChangeEntriesProps) {
     const title = Labels[type];
 
     return (
-        <TransactionCardSection
+        <TransactionBlockCardSection
             title={
                 <Text
                     variant="body/semibold"
@@ -162,23 +163,33 @@ function ObjectChangeEntry({ changeEntries, type }: ObjectChangeEntryProps) {
                 </Text>
             }
         >
-            {changeEntries?.map(({ objectType, objectId }) => (
-                <ObjectDetail
-                    key={objectId}
-                    objectType={objectType}
-                    objectId={objectId}
-                />
-            ))}
-        </TransactionCardSection>
+            <ExpandableList
+                items={changeEntries.map(({ objectId, objectType }) => (
+                    <ObjectDetail
+                        key={objectId}
+                        objectId={objectId}
+                        objectType={objectType}
+                    />
+                ))}
+                defaultItemsToShow={DEFAULT_ITEMS_TO_SHOW}
+                itemsLabel="Objects"
+            >
+                <div className="flex max-h-[300px] flex-col gap-3 overflow-y-auto">
+                    <ExpandableListItems />
+                </div>
+
+                <div className="mt-4">
+                    <ExpandableListControl />
+                </div>
+            </ExpandableList>
+        </TransactionBlockCardSection>
     );
 }
 
 interface ObjectChangeEntryUpdatedProps extends ObjectChangeEntryBaseProps {
-    data: Record<
-        string,
-        SuiObjectChangeMutated[] &
-            { minted: boolean; locationIdType: LocationIdType }[]
-    >;
+    data:
+        | ObjectChangeEntryData<SuiObjectChangeMutated>
+        | ObjectChangeEntryData<SuiObjectChangeTransferred>;
 }
 
 export function ObjectChangeEntryUpdated({
@@ -189,13 +200,11 @@ export function ObjectChangeEntryUpdated({
         return null;
     }
 
-    const title = Labels[type];
-
-    const changeObjectEntries = Object.entries(data);
+    console.log('data here', data);
 
     return (
         <>
-            {changeObjectEntries.map(([ownerAddress, changes]) => {
+            {Object.entries(data).map(([ownerAddress, changes]) => {
                 const locationIdType = changes[0].locationIdType;
 
                 const renderFooter =
@@ -204,11 +213,11 @@ export function ObjectChangeEntryUpdated({
                     locationIdType === LocationIdType.Shared;
 
                 return (
-                    <TransactionCard
+                    <TransactionBlockCard
                         key={ownerAddress}
                         title="Changes"
                         size="sm"
-                        shadow="default"
+                        shadow
                         footer={
                             renderFooter && (
                                 <div className="flex items-center justify-between">
@@ -237,73 +246,14 @@ export function ObjectChangeEntryUpdated({
                             )
                         }
                     >
-                        <TransactionCardSection
-                            title={
-                                <Text
-                                    variant="body/semibold"
-                                    color="steel-darker"
-                                >
-                                    {title}
-                                </Text>
-                            }
-                        >
-                            {changes.map(({ objectId, objectType }) => (
-                                <ObjectDetail
-                                    key={objectId}
-                                    objectId={objectId}
-                                    objectType={objectType}
-                                />
-                            ))}
-                        </TransactionCardSection>
-                    </TransactionCard>
+                        <ObjectChangeEntries
+                            changeEntries={changes}
+                            type={type}
+                        />
+                    </TransactionBlockCard>
                 );
             })}
         </>
-    );
-}
-
-function groupByOwner(
-    objectSummaryChanges: (
-        | SuiObjectChangeMutated
-        | SuiObjectChangeCreated
-        | SuiObjectChangeTransferred
-    )[]
-) {
-    if (!objectSummaryChanges) {
-        return {};
-    }
-
-    return objectSummaryChanges?.reduce(
-        (mapByOwner: Record<string, any[]>, change: any) => {
-            const owner = change?.owner;
-
-            let key = '';
-            let locationIdType;
-            if ('AddressOwner' in owner) {
-                key = owner.AddressOwner;
-                locationIdType = LocationIdType.AddressOwner;
-            } else if ('ObjectOwner' in owner) {
-                key = owner.ObjectOwner;
-                locationIdType = LocationIdType.ObjectOwner;
-            } else if ('Shared' in owner) {
-                key = change.objectId;
-                locationIdType = LocationIdType.Shared;
-            } else {
-                const ownerKeys = Object.keys(owner);
-                const firstKey = ownerKeys[0];
-                key = owner[firstKey];
-                locationIdType = LocationIdType.Unknown;
-            }
-
-            mapByOwner[key] = mapByOwner[key] || [];
-            mapByOwner[key].push({
-                ...change,
-                locationIdType,
-            });
-
-            return mapByOwner;
-        },
-        {}
     );
 }
 
@@ -320,38 +270,43 @@ export function ObjectChanges({ objectSummary }: ObjectChangesProps) {
         return null;
     }
 
-    const createdChangesByOwner = groupByOwner(objectSummary?.created);
-    const createdChangesData = Object.values(createdChangesByOwner);
-
-    const updatedChangesByOwner = groupByOwner(objectSummary?.mutated);
-
-    const transferredChangesByOwner = groupByOwner(objectSummary?.transferred);
+    const createdChangesByOwner = getGroupByOwner(objectSummary?.created);
+    const updatedChangesByOwner = getGroupByOwner(objectSummary?.mutated);
+    const transferredChangesByOwner = getGroupByOwner(
+        objectSummary?.transferred
+    );
 
     return (
         <>
             {objectSummary?.created?.length ? (
-                <TransactionCard title="Changes" size="sm" shadow="default">
-                    {createdChangesData.map((data, index) => (
-                        <ObjectChangeEntry
+                <TransactionBlockCard shadow title="Changes" size="sm">
+                    {Object.values(createdChangesByOwner).map((data, index) => (
+                        <ObjectChangeEntries
                             key={index}
                             type="created"
-                            changeEntries={data}
+                            changeEntries={
+                                data as unknown as SuiObjectChangeCreated[]
+                            }
                         />
                     ))}
-                </TransactionCard>
+                </TransactionBlockCard>
             ) : null}
 
             {objectSummary.mutated?.length ? (
                 <ObjectChangeEntryUpdated
                     type="mutated"
-                    data={updatedChangesByOwner}
+                    data={
+                        updatedChangesByOwner as unknown as ObjectChangeEntryData<SuiObjectChangeMutated>
+                    }
                 />
             ) : null}
 
             {objectSummary.transferred?.length ? (
                 <ObjectChangeEntryUpdated
                     type="transferred"
-                    data={transferredChangesByOwner}
+                    data={
+                        transferredChangesByOwner as unknown as ObjectChangeEntryData<SuiObjectChangeTransferred>
+                    }
                 />
             ) : null}
         </>

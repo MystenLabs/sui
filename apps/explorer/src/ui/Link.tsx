@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { cva, type VariantProps } from 'class-variance-authority';
-import clsx from 'clsx';
 import { type ReactNode } from 'react';
 
 import { ButtonOrLink, type ButtonOrLinkProps } from './utils/ButtonOrLink';
@@ -34,7 +33,6 @@ export interface LinkProps
         VariantProps<typeof linkStyles> {
     before?: ReactNode;
     after?: ReactNode;
-    gap?: 'xs' | 'sm' | 'md';
 }
 
 export function Link({
@@ -44,7 +42,6 @@ export function Link({
     before,
     after,
     children,
-    gap = 'md',
     ...props
 }: LinkProps) {
     return (
@@ -52,14 +49,7 @@ export function Link({
             className={linkStyles({ variant, size, uppercase })}
             {...props}
         >
-            <div
-                className={clsx(
-                    'inline-flex flex-nowrap items-center',
-                    gap === 'xs' && 'gap-0.5',
-                    gap === 'sm' && 'gap-1',
-                    gap === 'md' && 'gap-2'
-                )}
-            >
+            <div className="inline-flex flex-nowrap items-center gap-2">
                 {before}
                 {children}
                 {after}

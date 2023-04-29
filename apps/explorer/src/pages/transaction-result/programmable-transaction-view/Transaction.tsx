@@ -11,7 +11,6 @@ import { type ReactNode } from 'react';
 import { flattenSuiArguments } from './utils';
 
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
-import { CopyClipboard } from '~/ui/CopyToClipboard';
 import { ObjectLink } from '~/ui/InternalLink';
 import { Text } from '~/ui/Text';
 
@@ -31,15 +30,11 @@ function TransactionContent({ children }: { children?: ReactNode }) {
 function ArrayArgument({
     data,
 }: TransactionProps<(SuiArgument | SuiArgument[])[] | undefined>) {
-    const renderData = data ? `(${flattenSuiArguments(data)})` : '';
-
     return (
         <TransactionContent>
-            <div className="flex justify-between gap-7">
-                {data && <span className="break-all">{renderData}</span>}
-
-                <CopyClipboard copyText={renderData} />
-            </div>
+            {data && (
+                <span className="break-all">({flattenSuiArguments(data)})</span>
+            )}
         </TransactionContent>
     );
 }
@@ -53,36 +48,23 @@ function MoveCall({ type, data }: TransactionProps<MoveCallSuiTransaction>) {
         type_arguments: typeArgs,
     } = data;
 
-    const stringData = `(package: ${movePackage}, module: ${module}, function: ${func}, arguments: ${args}, type_arguments: ${typeArgs})`;
-
     return (
         <TransactionContent>
-            <div className="flex justify-between gap-7">
-                <div>
-                    (package: <ObjectLink objectId={movePackage} />, module:{' '}
-                    <ObjectLink
-                        objectId={`${movePackage}?module=${module}`}
-                        label={`'${module}'`}
-                    />
-                    , function:{' '}
-                    <span className="break-all text-sui-dark">{func}</span>
-                    {args && (
-                        <span className="break-all">
-                            , arguments: [{flattenSuiArguments(args!)}]
-                        </span>
-                    )}
-                    {typeArgs && (
-                        <span className="break-all">
-                            , type_arguments: {typeArgs}
-                        </span>
-                    )}
-                    )
-                </div>
-
-                <div>
-                    <CopyClipboard copyText={stringData} />
-                </div>
-            </div>
+            (package: <ObjectLink objectId={movePackage} />, module:{' '}
+            <ObjectLink
+                objectId={`${movePackage}?module=${module}`}
+                label={`'${module}'`}
+            />
+            , function: <span className="break-all text-sui-dark">{func}</span>
+            {args && (
+                <span className="break-all">
+                    , arguments: [{flattenSuiArguments(args!)}]
+                </span>
+            )}
+            {typeArgs && (
+                <span className="break-all">, type_arguments: {typeArgs}</span>
+            )}
+            )
         </TransactionContent>
     );
 }

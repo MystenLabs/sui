@@ -31,8 +31,7 @@ const cardStyles = cva(null, {
             steel: 'border border-steel',
         },
         shadow: {
-            none: '',
-            default: 'border-none shadow-default',
+            true: 'shadow',
         },
     },
     defaultVariants: {

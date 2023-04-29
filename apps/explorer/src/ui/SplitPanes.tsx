@@ -75,10 +75,8 @@ function ResizeHandle({
                         ])}
                     >
                         <ChevronButton
-                            height={12}
-                            width={12}
                             className={clsx(
-                                'text-gray-45 group-hover/button:!text-white group-hover/container:text-hero',
+                                'h-4 w-4 text-gray-45 group-hover/button:!text-white group-hover/container:text-hero',
                                 isCollapsed && 'rotate-180'
                             )}
                         />

@@ -14,13 +14,16 @@ import {
 
 import { InputsCard } from '~/pages/transaction-result/programmable-transaction-view/InputsCard';
 import { TransactionsCard } from '~/pages/transaction-result/programmable-transaction-view/TransactionsCard';
-import { CopyClipboard } from '~/ui/CopyToClipboard';
+import { CopyToClipboard } from '~/ui/CopyToClipboard';
 import { DescriptionItem } from '~/ui/DescriptionList';
 import { Divider } from '~/ui/Divider';
 import { Heading } from '~/ui/Heading';
 import { CheckpointSequenceLink, ObjectLink } from '~/ui/InternalLink';
 import { Text } from '~/ui/Text';
-import { TransactionCard, TransactionCardSection } from '~/ui/TransactionCard';
+import {
+    TransactionBlockCard,
+    TransactionBlockCardSection,
+} from '~/ui/TransactionBlockCard';
 
 function GasAmount({
     amount,
@@ -35,19 +38,15 @@ function GasAmount({
         CoinFormat.FULL
     );
 
+    const textColor = isHighlighted ? 'success-dark' : 'steel-darker';
+
     return (
         <div className="flex flex-wrap gap-1">
             <div className="flex flex-wrap items-center gap-1">
-                <Text
-                    variant="pBody/medium"
-                    color={isHighlighted ? 'success-dark' : 'steel-darker'}
-                >
+                <Text variant="pBody/medium" color={textColor}>
                     {formattedAmount}
                 </Text>
-                <Text
-                    variant="subtitleSmall/medium"
-                    color={isHighlighted ? 'success-dark' : 'steel-darker'}
-                >
+                <Text variant="subtitleSmall/medium" color={textColor}>
                     {symbol}
                 </Text>
             </div>
@@ -128,8 +127,8 @@ export function TransactionData({ transaction }: Props) {
 
             <section className="flex w-96 flex-1 flex-col gap-6">
                 {transaction.checkpoint && (
-                    <TransactionCard>
-                        <TransactionCardSection>
+                    <TransactionBlockCard>
+                        <TransactionBlockCardSection>
                             <div className="flex flex-col gap-2">
                                 <Heading
                                     variant="heading4/semibold"
@@ -145,13 +144,13 @@ export function TransactionData({ transaction }: Props) {
                                     sequence={transaction.checkpoint}
                                 />
                             </div>
-                        </TransactionCardSection>
-                    </TransactionCard>
+                        </TransactionBlockCardSection>
+                    </TransactionBlockCard>
                 )}
 
                 {isProgrammableTransaction && (
                     <section data-testid="gas-breakdown">
-                        <TransactionCard
+                        <TransactionBlockCard
                             collapsible
                             title={
                                 <div className="flex flex-col gap-3">
@@ -167,94 +166,107 @@ export function TransactionData({ transaction }: Props) {
                                 </div>
                             }
                         >
-                            <TransactionCardSection>
-                                <Divider />
+                            <TransactionBlockCardSection>
+                                <div className="flex flex-col gap-3">
+                                    <Divider />
 
-                                <DescriptionItem
-                                    title={
-                                        <Text variant="pBody/semibold">
-                                            Gas Payment
-                                        </Text>
-                                    }
-                                >
-                                    <div className="flex items-center gap-1">
-                                        <ObjectLink
-                                            // TODO: support multiple gas coins
-                                            objectId={gasPayment[0].objectId}
-                                        />
-                                        <CopyClipboard
-                                            copyText={gasPayment[0].objectId}
-                                        />
-                                    </div>
-                                </DescriptionItem>
-                                <DescriptionItem
-                                    title={
-                                        <Text variant="pBody/semibold">
-                                            Gas Budget
-                                        </Text>
-                                    }
-                                >
-                                    <GasAmount amount={BigInt(gasBudget)} />
-                                </DescriptionItem>
+                                    <DescriptionItem
+                                        title={
+                                            <Text variant="pBody/semibold">
+                                                Gas Payment
+                                            </Text>
+                                        }
+                                    >
+                                        <div className="flex items-center gap-1">
+                                            <ObjectLink
+                                                // TODO: support multiple gas coins
+                                                objectId={
+                                                    gasPayment[0].objectId
+                                                }
+                                            />
+                                            <CopyToClipboard
+                                                size="sm"
+                                                copyText={
+                                                    gasPayment[0].objectId
+                                                }
+                                            />
+                                        </div>
+                                    </DescriptionItem>
+                                    <DescriptionItem
+                                        title={
+                                            <Text variant="pBody/semibold">
+                                                Gas Budget
+                                            </Text>
+                                        }
+                                    >
+                                        <GasAmount amount={BigInt(gasBudget)} />
+                                    </DescriptionItem>
+                                </div>
 
-                                <Divider />
+                                <div className="mt-4 flex flex-col gap-3">
+                                    <Divider />
 
-                                <DescriptionItem
-                                    title={
-                                        <Text variant="pBody/semibold">
-                                            Gas Price
-                                        </Text>
-                                    }
-                                >
-                                    <GasAmount amount={BigInt(gasPrice)} />
-                                </DescriptionItem>
-                                <DescriptionItem
-                                    title={
-                                        <Text variant="pBody/semibold">
-                                            Computation Fee
-                                        </Text>
-                                    }
-                                >
-                                    <GasAmount
-                                        amount={Number(
-                                            gasUsed?.computationCost
-                                        )}
-                                    />
-                                </DescriptionItem>
-
-                                <DescriptionItem
-                                    title={
-                                        <Text variant="pBody/semibold">
-                                            Storage Fee
-                                        </Text>
-                                    }
-                                >
-                                    <GasAmount
-                                        amount={Number(gasUsed?.storageCost)}
-                                    />
-                                </DescriptionItem>
-
-                                <div className="mt-2 flex flex-col gap-2 rounded-xl border border-success px-4 py-2 md:flex-row md:items-center md:gap-4">
-                                    <div className="w-full md:w-50">
-                                        <Text
-                                            variant="pBody/semibold"
-                                            color="success-dark"
-                                        >
-                                            Storage Rebate
-                                        </Text>
-                                    </div>
-
-                                    <div className="ml-0 min-w-0 flex-1 leading-none">
+                                    <DescriptionItem
+                                        title={
+                                            <Text variant="pBody/semibold">
+                                                Gas Price
+                                            </Text>
+                                        }
+                                    >
+                                        <GasAmount amount={BigInt(gasPrice)} />
+                                    </DescriptionItem>
+                                    <DescriptionItem
+                                        title={
+                                            <Text variant="pBody/semibold">
+                                                Computation Fee
+                                            </Text>
+                                        }
+                                    >
                                         <GasAmount
-                                            isHighlighted
-                                            amount={
-                                                -Number(gasUsed?.storageRebate)
-                                            }
+                                            amount={Number(
+                                                gasUsed?.computationCost
+                                            )}
                                         />
+                                    </DescriptionItem>
+
+                                    <DescriptionItem
+                                        title={
+                                            <Text variant="pBody/semibold">
+                                                Storage Fee
+                                            </Text>
+                                        }
+                                    >
+                                        <GasAmount
+                                            amount={Number(
+                                                gasUsed?.storageCost
+                                            )}
+                                        />
+                                    </DescriptionItem>
+
+                                    <div className="mt-2 flex flex-col gap-2 rounded-xl border border-success px-4 py-2 md:flex-row md:items-center md:gap-4">
+                                        <div className="w-full md:w-40">
+                                            <Text
+                                                variant="pBody/semibold"
+                                                color="success-dark"
+                                            >
+                                                Storage Rebate
+                                            </Text>
+                                        </div>
+
+                                        <div className="ml-0 min-w-0 flex-1 leading-none">
+                                            <GasAmount
+                                                isHighlighted
+                                                amount={
+                                                    -Number(
+                                                        gasUsed?.storageRebate
+                                                    )
+                                                }
+                                            />
+                                        </div>
                                     </div>
                                 </div>
-                            </TransactionCardSection>
-                        </TransactionCard>
+                            </TransactionBlockCardSection>
+                        </TransactionBlockCard>
                     </section>
                 )}
             </section>

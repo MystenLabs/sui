@@ -28,7 +28,7 @@ export function TransactionSummary({ transaction }: TransactionSummaryProps) {
     const objectSummary = summary?.objectSummary;
 
     return (
-        <div className="flex flex-wrap gap-8">
+        <div className="flex flex-wrap gap-4 md:gap-8">
             {balanceChanges &&
                 transactionKindName === 'ProgrammableTransaction' && (
                     <BalanceChanges changes={balanceChanges} />

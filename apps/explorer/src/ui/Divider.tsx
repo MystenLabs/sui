@@ -5,13 +5,15 @@ import clsx from 'clsx';
 
 export interface DividerProps {
     vertical?: boolean;
+    color?: string;
 }
 
-export function Divider({ vertical }: DividerProps) {
+export function Divider({ vertical, color }: DividerProps) {
     return (
         <div
             className={clsx(
-                'border-gray-45',
+                (!color || color === 'gray45') && 'border-gray-45',
+                color === 'gray40' && 'border-gray-40',
                 vertical ? 'border-l' : 'grow border-b'
             )}
         />

@@ -5,16 +5,24 @@ import { type SuiTransaction } from '@mysten/sui.js';
 
 import { Transaction } from './Transaction';
 
-import { ExpandableList } from '~/ui/ExpandableList';
-import { TransactionCard, TransactionCardSection } from '~/ui/TransactionCard';
+import {
+    ExpandableList,
+    ExpandableListControl,
+    ExpandableListItems,
+} from '~/ui/ExpandableList';
+import {
+    TransactionBlockCard,
+    TransactionBlockCardSection,
+} from '~/ui/TransactionBlockCard';
+
+const DEFAULT_ITEMS_TO_SHOW = 5;
 
 interface TransactionsCardProps {
     transactions: SuiTransaction[];
 }
 
 export function TransactionsCard({ transactions }: TransactionsCardProps) {
-    const collapsedThreshold = transactions.length > 5;
-    const defaultItemsToShow = collapsedThreshold ? 5 : transactions?.length;
+    const defaultOpen = transactions.length <= DEFAULT_ITEMS_TO_SHOW;
 
     if (!transactions?.length) {
         return null;
@@ -24,23 +32,33 @@ export function TransactionsCard({ transactions }: TransactionsCardProps) {
         const [[type, data]] = Object.entries(transaction);
 
         return (
-            <TransactionCardSection
+            <TransactionBlockCardSection
                 key={index}
                 title={type}
-                collapsedOnLoad={collapsedThreshold}
+                defaultOpen={defaultOpen}
             >
                 <Transaction key={index} type={type} data={data} />
-            </TransactionCardSection>
+            </TransactionBlockCardSection>
         );
     });
 
     return (
-        <TransactionCard collapsible title="Transactions">
+        <TransactionBlockCard collapsible title="Transactions">
             <ExpandableList
                 items={expandableItems}
-                defaultItemsToShow={defaultItemsToShow}
+                defaultItemsToShow={DEFAULT_ITEMS_TO_SHOW}
                 itemsLabel="Transactions"
-            />
-        </TransactionCard>
+            >
+                <div className="flex max-h-[300px] flex-col gap-6 overflow-y-auto">
+                    <ExpandableListItems />
+                </div>
+
+                {expandableItems.length > DEFAULT_ITEMS_TO_SHOW && (
+                    <div className="mt-6">
+                        <ExpandableListControl />
+                    </div>
+                )}
+            </ExpandableList>
+        </TransactionBlockCard>
     );
 }

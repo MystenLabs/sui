@@ -15,7 +15,7 @@ const headingStyles = cva([], {
          */
         size: {
             heading1: 'text-heading1',
-            heading2: 'md:text-heading2 text-heading3',
+            heading2: 'md:text-heading2 text-heading4',
             heading3: 'text-heading3',
             heading4: 'md:text-heading4 text-heading6',
             heading5: 'text-heading5',
