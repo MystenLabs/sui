@@ -73,14 +73,17 @@ use sui_types::{
 /// 5. Unfortunately, we can't remove the transaction digest from this list, because if we do so, any future
 /// node that sync from genesis will fork on this transaction. We may be able to remove it once
 /// we have stable snapshots and the binary has a minimum supported protocol version past the epoch.
-static DENIED_CERTIFICATES: Lazy<HashSet<TransactionDigest>> = Lazy::new(|| HashSet::from([]));
+pub fn get_denied_certificates() -> &'static HashSet<TransactionDigest> {
+    static DENIED_CERTIFICATES: Lazy<HashSet<TransactionDigest>> = Lazy::new(|| HashSet::from([]));
+    Lazy::force(&DENIED_CERTIFICATES)
+}
 
 fn is_certificate_denied(
     transaction_digest: &TransactionDigest,
     certificate_deny_set: &HashSet<TransactionDigest>,
 ) -> bool {
     certificate_deny_set.contains(transaction_digest)
-        || DENIED_CERTIFICATES.contains(transaction_digest)
+        || get_denied_certificates().contains(transaction_digest)
 }
 
 checked_arithmetic! {

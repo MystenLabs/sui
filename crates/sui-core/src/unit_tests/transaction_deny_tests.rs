@@ -18,9 +18,9 @@ use sui_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use sui_config::transaction_deny_config::{TransactionDenyConfig, TransactionDenyConfigBuilder};
 use sui_config::NetworkConfig;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::{SuiError, SuiResult, UserInputError};
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
-use sui_types::messages::TransactionEffectsAPI;
 use sui_types::messages::{
     CallArg, CertifiedTransaction, HandleTransactionResponse, TransactionData, VerifiedCertificate,
     TEST_ONLY_GAS_UNIT_FOR_TRANSFER,

@@ -9923,6 +9923,7 @@ dependencies = [
  "move-package",
  "msim",
  "narwhal-network",
+ "sui-adapter",
  "sui-framework",
  "sui-move-build",
  "sui-types",
