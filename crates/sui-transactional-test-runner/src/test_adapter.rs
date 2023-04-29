@@ -13,7 +13,6 @@ use move_command_line_common::{
     address::ParsedAddress, files::verify_and_create_named_address_mapping,
 };
 use move_compiler::{
-    compiled_unit::AnnotatedCompiledUnit,
     shared::{NumberFormat, NumericalAddress, PackagePaths},
     Flags, FullyCompiledProgram,
 };
@@ -26,7 +25,7 @@ use move_core_types::{
 };
 use move_symbol_pool::Symbol;
 use move_transactional_test_runner::{
-    framework::{compile_ir_module, compile_source_units, CompiledState, MoveTestAdapter},
+    framework::{compile_any, store_modules, CompiledState, MoveTestAdapter},
     tasks::{InitCommand, SyntaxChoice, TaskInput},
 };
 use move_vm_runtime::{move_vm::MoveVM, session::SerializedReturnValues};
@@ -80,6 +79,7 @@ use sui_types::{
     programmable_transaction_builder::ProgrammableTransactionBuilder, SUI_FRAMEWORK_OBJECT_ID,
 };
 use sui_types::{utils::to_sender_signed_transaction, SUI_SYSTEM_OBJECT_ID};
+use tempfile::NamedTempFile;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum FakeID {
@@ -117,6 +117,14 @@ pub struct SuiTestAdapter<'a> {
     gas_price: u64,
     protocol_config: ProtocolConfig,
     metrics: Arc<LimitsMetrics>,
+    pub(crate) staged_modules: BTreeMap<Symbol, StagedPackage>,
+}
+
+pub(crate) struct StagedPackage {
+    file: NamedTempFile,
+    syntax: SyntaxChoice,
+    modules: Vec<(Option<Symbol>, CompiledModule)>,
+    pub(crate) digest: Vec<u8>,
 }
 
 struct TestAccount {
@@ -334,6 +342,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             gas_price: 1000,
             protocol_config,
             metrics,
+            staged_modules: BTreeMap::new(),
         };
         for well_known in WELL_KNOWN_OBJECTS.iter().copied() {
             test_adapter
@@ -552,11 +561,11 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         self.next_task();
         let TaskInput {
             command,
-            name: _,
+            name,
             number,
             start_line,
             command_lines_stop,
-            stop_line: _,
+            stop_line,
             data,
         } = task;
         macro_rules! get_obj {
@@ -662,10 +671,28 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 })?;
                 let contents = std::fs::read_to_string(file.path())?;
                 let commands = ParsedCommand::parse_vec(&contents)?;
+                let staged = &self.staged_modules;
                 let state = &self.compiled_state;
                 let commands = commands
                     .into_iter()
-                    .map(|c| c.into_command(&|s| Some(state.resolve_named_address(s))))
+                    .map(|c| {
+                        c.into_command(
+                            &|p| {
+                                let modules = staged
+                                    .get(&Symbol::from(p))?
+                                    .modules
+                                    .iter()
+                                    .map(|(_n, m)| {
+                                        let mut buf = vec![];
+                                        m.serialize(&mut buf).unwrap();
+                                        buf
+                                    })
+                                    .collect();
+                                Some(modules)
+                            },
+                            &|s| Some(state.resolve_named_address(s)),
+                        )
+                    })
                     .collect::<anyhow::Result<Vec<Command>>>()?;
                 let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
                 let gas_price = gas_price.unwrap_or(self.gas_price);
@@ -692,64 +719,169 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 policy,
             }) => {
                 let syntax = syntax.unwrap_or_else(|| self.default_syntax());
-                let data = data.ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "Expected a module text block following 'upgrade' starting on lines {}-{}",
-                        start_line,
-                        command_lines_stop
-                    )
-                })?;
-
-                let state = self.compiled_state();
-                let (mut modules, warnings_opt) = match syntax {
-                    SyntaxChoice::Source => {
-                        let (units, warnings_opt) =
-                            compile_source_units(state, data.path(), Some(package.clone()))?;
-                        let modules = units
-                            .into_iter()
-                            .map(|unit| match unit {
-                                AnnotatedCompiledUnit::Module(annot_module) => {
-                                    let (named_addr_opt, _id) = annot_module.module_id();
-                                    let named_addr_opt = named_addr_opt.map(|n| n.value);
-                                    let module = annot_module.named_module.module;
-                                    (named_addr_opt, module)
-                                }
-                                AnnotatedCompiledUnit::Script(_) => panic!(
-                                    "Expected a module text block, not a script, \
-                                    following 'upgrade' starting on lines {}-{}",
-                                    start_line, command_lines_stop
-                                ),
-                            })
-                            .collect();
-                        (modules, warnings_opt)
-                    }
-                    SyntaxChoice::IR => {
-                        let module = compile_ir_module(state, data.path())?;
-                        (vec![(None, module)], None)
-                    }
+                // zero out the package name
+                let zero =
+                    NumericalAddress::new(AccountAddress::ZERO.into_bytes(), NumberFormat::Hex);
+                let Some(before_upgrade) = self
+                    .compiled_state
+                    .named_address_mapping
+                    .insert(package.clone(), zero)
+                else {
+                    panic!("Unbound package '{package}' for upgrade");
                 };
-                let output = self.upgrade_package(
-                    package,
-                    &modules,
-                    upgrade_capability,
-                    dependencies,
-                    sender,
-                    gas_budget,
-                    policy,
-                )?;
-                match syntax {
-                    SyntaxChoice::Source => {
-                        let path = data.path().to_str().unwrap().to_owned();
-                        self.compiled_state()
-                            .add_with_source_file(modules, (path, data))
-                    }
-                    SyntaxChoice::IR => {
-                        let module = modules.pop().unwrap().1;
-                        self.compiled_state()
-                            .add_and_generate_interface_file(module);
-                    }
-                };
+                let result = compile_any(
+                    self,
+                    "upgrade",
+                    syntax,
+                    name,
+                    number,
+                    start_line,
+                    command_lines_stop,
+                    stop_line,
+                    data,
+                    |adapter, modules| {
+                        let output = adapter.upgrade_package(
+                            before_upgrade,
+                            &modules,
+                            upgrade_capability,
+                            dependencies,
+                            sender,
+                            gas_budget,
+                            policy,
+                        )?;
+                        Ok((output, modules))
+                    },
+                );
+                // if the package name was not updated, reset it to the value before the upgrade
+                let package_addr = self
+                    .compiled_state
+                    .named_address_mapping
+                    .get(&package)
+                    .unwrap();
+                if package_addr == &zero {
+                    self.compiled_state
+                        .named_address_mapping
+                        .insert(package, before_upgrade);
+                }
+                let (warnings_opt, output, data, modules) = result?;
+                store_modules(self, syntax, data, modules);
                 Ok(merge_output(warnings_opt, output))
+            }
+            SuiSubcommand::StagePackage(StagePackageCommand {
+                syntax,
+                dependencies,
+            }) => {
+                let syntax = syntax.unwrap_or_else(|| self.default_syntax());
+                let (warnings_opt, output, data, modules) = compile_any(
+                    self,
+                    "upgrade",
+                    syntax,
+                    name,
+                    number,
+                    start_line,
+                    command_lines_stop,
+                    stop_line,
+                    data,
+                    |_adapter, modules| Ok((None, modules)),
+                )?;
+                assert!(!modules.is_empty());
+                let Some(package_name) = modules.first().unwrap().0 else {
+                    bail!("Staged modules must have a named address")
+                };
+                for (named_addr, _) in &modules {
+                    let Some(named_addr) = named_addr else {
+                        bail!("Staged modules must have a named address")
+                    };
+                    if named_addr != &package_name {
+                        bail!(
+                            "Staged modules must have the same named address, \
+                            {package_name} != {named_addr}"
+                        );
+                    }
+                }
+                let dependencies =
+                    self.get_dependency_ids(dependencies, /* include_std */ true)?;
+                let module_bytes = modules
+                    .iter()
+                    .map(|(_, m)| {
+                        let mut buf = vec![];
+                        m.serialize(&mut buf).unwrap();
+                        buf
+                    })
+                    .collect::<Vec<_>>();
+                let digest = MovePackage::compute_digest_for_modules_and_deps(
+                    module_bytes.iter(),
+                    &dependencies,
+                    /* hash_modules */ true,
+                )
+                .to_vec();
+                let staged = StagedPackage {
+                    file: data,
+                    syntax,
+                    modules,
+                    digest,
+                };
+                let prev = self.staged_modules.insert(package_name, staged);
+                if prev.is_some() {
+                    panic!("Package '{package_name}' already staged")
+                }
+                Ok(merge_output(warnings_opt, output))
+            }
+            SuiSubcommand::SetAddress(SetAddressCommand { address, input }) => {
+                let address_sym = &Symbol::from(address.as_str());
+                let state = self.compiled_state();
+                let input = input.into_concrete_value(&|s| Some(state.resolve_named_address(s)))?;
+                let (value, package) = match input {
+                    SuiValue::Object(fake_id) => {
+                        let id = match self.fake_to_real_object_id(fake_id) {
+                            Some(id) => id,
+                            None => bail!("INVALID TEST. Unknown object, object({})", fake_id),
+                        };
+                        let obj = match self.storage.get_object(&id) {
+                            Some(obj) => obj,
+                            None => bail!("INVALID TEST. Could not load object argument {}", id),
+                        };
+                        let package = obj.data.try_as_package().map(|package| {
+                            package
+                                .serialized_module_map()
+                                .iter()
+                                .map(|(_, published_module_bytes)| {
+                                    let module = CompiledModule::deserialize_with_defaults(
+                                        published_module_bytes,
+                                    )
+                                    .unwrap();
+                                    (Some(*address_sym), module)
+                                })
+                                .collect()
+                        });
+                        let value: AccountAddress = id.into();
+                        (value, package)
+                    }
+                    SuiValue::MoveValue(v) => {
+                        let bytes = v.simple_serialize().unwrap();
+                        let value: AccountAddress = bcs::from_bytes(&bytes)?;
+                        (value, None)
+                    }
+                    SuiValue::Digest(_) => bail!("digest is not supported as an input"),
+                    SuiValue::ObjVec(_) => bail!("obj vec is not supported as an input"),
+                };
+                let value = NumericalAddress::new(value.into_bytes(), NumberFormat::Hex);
+                self.compiled_state
+                    .named_address_mapping
+                    .insert(address, value);
+
+                let res = package.and_then(|p| Some((p, self.staged_modules.remove(address_sym)?)));
+                if let Some((package, staged)) = res {
+                    let StagedPackage {
+                        file,
+                        syntax,
+                        modules: _,
+                        digest: _,
+                    } = staged;
+                    store_modules(self, syntax, file, package)
+                }
+
+                Ok(None)
             }
         }
     }
@@ -784,7 +916,7 @@ fn accumulate_in_memory_store(store: &InMemoryStorage) -> Accumulator {
 impl<'a> SuiTestAdapter<'a> {
     fn upgrade_package(
         &mut self,
-        package: String,
+        before_upgrade: NumericalAddress,
         modules: &[(Option<Symbol>, CompiledModule)],
         upgrade_capability: FakeID,
         dependencies: Vec<String>,
@@ -802,19 +934,7 @@ impl<'a> SuiTestAdapter<'a> {
             .collect::<anyhow::Result<Vec<Vec<u8>>>>()?;
         let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
 
-        let mut dependencies: Vec<_> = dependencies
-            .into_iter()
-            .map(|d| {
-                let Some(addr) = self.compiled_state.named_address_mapping.get(&d) else {
-                    bail!("There is no published module address corresponding to name address {d}");
-                };
-                let id: ObjectID = addr.into_inner().into();
-                Ok(id)
-            })
-            .collect::<Result<_, _>>()?;
-        // we are assuming that all packages depend on Move Stdlib and Sui Framework, so these
-        // don't have to be provided explicitly as parameters
-        dependencies.extend([MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID]);
+        let dependencies = self.get_dependency_ids(dependencies, /* include_std */ true)?;
 
         let mut builder = ProgrammableTransactionBuilder::new();
 
@@ -836,10 +956,7 @@ impl<'a> SuiTestAdapter<'a> {
             vec![Argument::Input(0), upgrade_arg, digest_arg],
         );
 
-        let package_id = self
-            .compiled_state
-            .resolve_named_address(package.as_str())
-            .into();
+        let package_id = before_upgrade.into_inner().into();
         let upgrade_receipt =
             builder.upgrade(package_id, upgrade_ticket, dependencies, modules_bytes);
 
@@ -1285,6 +1402,29 @@ impl<'a> SuiTestAdapter<'a> {
 
     fn next_task(&mut self) {
         self.next_fake = (self.next_fake.0 + 1, 0)
+    }
+
+    fn get_dependency_ids(
+        &self,
+        dependencies: Vec<String>,
+        include_std: bool,
+    ) -> anyhow::Result<Vec<ObjectID>> {
+        let mut dependencies: Vec<_> = dependencies
+            .into_iter()
+            .map(|d| {
+                let Some(addr) = self.compiled_state.named_address_mapping.get(&d) else {
+                bail!("There is no published module address corresponding to name address {d}");
+            };
+                let id: ObjectID = addr.into_inner().into();
+                Ok(id)
+            })
+            .collect::<Result<_, _>>()?;
+        // we are assuming that all packages depend on Move Stdlib and Sui Framework, so these
+        // don't have to be provided explicitly as parameters
+        if include_std {
+            dependencies.extend([MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID]);
+        }
+        Ok(dependencies)
     }
 }
 
