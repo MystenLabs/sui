@@ -172,4 +172,25 @@ module kiosk::kiosk_metadata_tests{
         kiosk_metadata::remove_field(&mut kiosk, &kioskOwnerCap, utf8(b"key"));
         return_kiosk(kiosk, kioskOwnerCap, ctx);
     }
+
+    // Failed execution (Tests that remove works). Tries to add a field after removing the metadata df.
+    #[test]
+    #[expected_failure(abort_code = df::EFieldDoesNotExist)]
+    fun remove_metadata(){
+        let ctx = &mut ctx();
+        // create kiosk 
+        let (kiosk, kioskOwnerCap) = get_kiosk(ctx);
+        
+        // enable metadata extension
+        kiosk_metadata::enable(&mut kiosk, &kioskOwnerCap);
+
+        //removes the metadata extension
+        kiosk_metadata::remove(&mut kiosk, &kioskOwnerCap);
+
+        // add metadata after removing the kiosm_metadata. Should error.
+        kiosk_metadata::add_field(&mut kiosk, &kioskOwnerCap, utf8(b"key"), utf8(b"value"));
+
+        return_kiosk(kiosk, kioskOwnerCap, ctx);
+    }
+
 }
