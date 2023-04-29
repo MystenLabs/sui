@@ -148,12 +148,13 @@ pub mod anemo {
         type Item = T;
         type Error = bcs::Error;
 
-        fn encode(&mut self, item: Self::Item) -> Result<bytes::Bytes, Self::Error> {
-            let mut buf = bytes::BytesMut::new();
-            let mut snappy_encoder = snap::write::FrameEncoder::new(buf.as_mut().writer());
-            bcs::serialize_into(&mut snappy_encoder, &item)?;
-            drop(snappy_encoder);
-            Ok(buf.freeze())
+        fn encode(
+            &mut self,
+            item: Self::Item,
+            buf: &mut bytes::BytesMut,
+        ) -> Result<(), Self::Error> {
+            let mut snappy_encoder = snap::write::FrameEncoder::new(buf.writer());
+            bcs::serialize_into(&mut snappy_encoder, &item)
         }
     }
 
@@ -188,6 +189,8 @@ pub mod anemo {
         T: serde::Serialize + Send + 'static,
         U: serde::de::DeserializeOwned + Send + 'static,
     {
+        const FORMAT_NAME: &'static str = "bcs";
+
         type Encode = T;
         type Decode = U;
         type Encoder = BcsSnappyEncoder<T>;
@@ -199,10 +202,6 @@ pub mod anemo {
 
         fn decoder(&mut self) -> Self::Decoder {
             BcsSnappyDecoder(PhantomData)
-        }
-
-        fn format_name(&self) -> &'static str {
-            "bcs"
         }
     }
 }
