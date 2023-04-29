@@ -306,6 +306,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         let metrics = Arc::new(LimitsMetrics::new(&registry));
 
         let enable_move_vm_paranoid_checks = false;
+        let storage = Arc::new(InMemoryStorage::new(objects));
         let mut test_adapter = Self {
             vm: Arc::new(
                 new_move_vm(
@@ -315,7 +316,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 )
                 .unwrap(),
             ),
-            storage: Arc::new(InMemoryStorage::new(objects)),
+            storage,
             compiled_state: CompiledState::new(
                 named_address_mapping,
                 pre_compiled_deps,
@@ -1004,6 +1005,7 @@ impl<'a> SuiTestAdapter<'a> {
             &EpochData::new_test(),
             &self.protocol_config,
             self.metrics.clone(),
+            None,
             false, // enable_expensive_checks
         );
         let mut created_ids: Vec<_> = effects

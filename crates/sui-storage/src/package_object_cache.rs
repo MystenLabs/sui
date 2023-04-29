@@ -15,13 +15,13 @@ use sui_types::storage::{get_module_by_id, BackingPackageStore, ObjectStore};
 
 pub struct PackageObjectCache<S> {
     cache: RwLock<LruCache<ObjectID, Object>>,
-    store: Arc<S>,
+    store: S,
 }
 
 const CACHE_CAP: usize = 1024 * 1024;
 
 impl<S> PackageObjectCache<S> {
-    pub fn new(store: Arc<S>) -> Arc<Self> {
+    pub fn new(store: S) -> Arc<Self> {
         Arc::new(Self {
             cache: RwLock::new(LruCache::new(NonZeroUsize::new(CACHE_CAP).unwrap())),
             store,

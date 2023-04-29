@@ -19,9 +19,10 @@ use sui_types::object::OBJECT_START_VERSION;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use tracing::{info, instrument, trace, warn};
 
-use crate::programmable_transactions;
+use crate::{package_layout_resolver::PackageLayoutResolver, programmable_transactions};
 use sui_macros::checked_arithmetic;
 use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig};
+use sui_storage::package_object_cache::PackageObjectCache;
 use sui_types::clock::{CLOCK_MODULE_NAME, CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME};
 use sui_types::committee::EpochId;
 use sui_types::epoch_data::EpochData;
@@ -70,6 +71,7 @@ pub fn execute_transaction_to_effects<
     epoch_data: &EpochData,
     protocol_config: &ProtocolConfig,
     metrics: Arc<LimitsMetrics>,
+    package_cache: Option<&Arc<PackageObjectCache<S>>>,
     enable_expensive_checks: bool
 ) -> (
     InnerTemporaryStore,
@@ -91,6 +93,7 @@ pub fn execute_transaction_to_effects<
         epoch_data.epoch_start_timestamp(),
         protocol_config,
         metrics,
+        package_cache,
         enable_expensive_checks
     )
 }
@@ -113,6 +116,7 @@ pub fn execute_transaction_to_effects_impl<
     epoch_timestamp_ms: u64,
     protocol_config: &ProtocolConfig,
     metrics: Arc<LimitsMetrics>,
+    package_cache: Option<&Arc<PackageObjectCache<S>>>,
     enable_expensive_checks: bool
 ) -> (
     InnerTemporaryStore,
@@ -132,6 +136,7 @@ pub fn execute_transaction_to_effects_impl<
         gas_status,
         protocol_config,
         metrics,
+        package_cache,
         enable_expensive_checks
     );
 
@@ -240,6 +245,7 @@ fn execute_transaction<
     mut gas_status: SuiGasStatus,
     protocol_config: &ProtocolConfig,
     metrics: Arc<LimitsMetrics>,
+    package_cache: Option<&Arc<PackageObjectCache<S>>>,
     enable_expensive_checks: bool
 ) -> (
     GasCostSummary,
@@ -366,9 +372,10 @@ fn execute_transaction<
         // Put all the storage rebate accumulated in the system transaction
         // to the 0x5 object so that it's not lost.
         temporary_store.conserve_unmetered_storage_rebate(gas_status.unmetered_storage_rebate());
-        if !is_genesis_tx && !Mode::allow_arbitrary_values() {
+        if !is_genesis_tx && !Mode::allow_arbitrary_values() && package_cache.is_some() {
+            let mut layout_resolver = PackageLayoutResolver::new(&temporary_store);
             // ensure that this transaction did not create or destroy SUI, try to recover if the check fails
-            let conservation_result = temporary_store.check_sui_conserved(advance_epoch_gas_summary, enable_expensive_checks);
+            let conservation_result = temporary_store.check_sui_conserved(advance_epoch_gas_summary, &mut layout_resolver, enable_expensive_checks);
             if let Err(conservation_err) = conservation_result {
                 // conservation violated. try to avoid panic by dumping all writes, charging for gas, re-checking
                 // conservation, and surfacing an aborted transaction with an invariant violation if all of that works
@@ -376,7 +383,8 @@ fn execute_transaction<
                 temporary_store.reset(gas, &mut gas_status);
                 temporary_store.charge_gas(gas_object_id, &mut gas_status, &mut result, gas);
                 // check conservation once more more
-                if let Err(recovery_err) = temporary_store.check_sui_conserved(advance_epoch_gas_summary, enable_expensive_checks) {
+                let mut layout_resolver = PackageLayoutResolver::new(&temporary_store);
+                if let Err(recovery_err) = temporary_store.check_sui_conserved(advance_epoch_gas_summary, &mut layout_resolver, enable_expensive_checks) {
                     // if we still fail, it's a problem with gas
                     // charging that happens even in the "aborted" case--no other option but panic.
                     // we will create or destroy SUI otherwise

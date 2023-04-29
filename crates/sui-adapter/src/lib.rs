@@ -3,9 +3,9 @@
 
 macro_rules! invariant_violation {
     ($msg:expr) => {{
-        if cfg!(debug_assertions) {
-            panic!("{}", $msg)
-        }
+        // if cfg!(debug_assertions) {
+        //     panic!("{}", $msg)
+        // }
         return Err(sui_types::error::ExecutionError::invariant_violation($msg).into());
     }};
 }
@@ -22,4 +22,5 @@ pub mod adapter;
 pub mod error;
 pub mod execution_engine;
 pub mod execution_mode;
+pub mod package_layout_resolver;
 pub mod programmable_transactions;

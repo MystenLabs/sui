@@ -7,23 +7,23 @@ use std::{
     str::FromStr,
 };
 
+use super::types::StorageView;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, StructTag},
     resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
 };
+use sui_types::storage::BackingPackageStore;
 use sui_types::{
     base_types::ObjectID,
     error::{ExecutionError, SuiError},
     move_package::{MovePackage, TypeOrigin, UpgradeInfo},
 };
 
-use super::types::StorageView;
-
 /// Exposes module and linkage resolution to the Move runtime.  The first by delegating to
 /// `StorageView` and the second via linkage information that is loaded from a move package.
-pub struct LinkageView<'state, S: StorageView> {
+pub struct LinkageView<'state, S> {
     /// Immutable access to the store for the transaction.
     state_view: &'state S,
     /// Information used to change module and type identities during linkage.
@@ -62,7 +62,7 @@ pub struct PackageLinkage {
 
 pub struct SavedLinkage(PackageLinkage);
 
-impl<'state, S: StorageView> LinkageView<'state, S> {
+impl<'state, S> LinkageView<'state, S> {
     pub fn new(state_view: &'state S, linkage_info: LinkageInfo) -> Self {
         Self {
             state_view,
@@ -244,7 +244,7 @@ impl From<&MovePackage> for PackageLinkage {
     }
 }
 
-impl<'state, S: StorageView> LinkageResolver for LinkageView<'state, S> {
+impl<'state, S: BackingPackageStore> LinkageResolver for LinkageView<'state, S> {
     type Error = SuiError;
 
     fn link_context(&self) -> AccountAddress {
@@ -266,10 +266,15 @@ impl<'state, S: StorageView> LinkageResolver for LinkageView<'state, S> {
                 ))
             }
         };
+        // println!("linkage {:?}", linkage);
+        // println!("module_id {}, runtime_id {}, storage_id {}", module_id.address(), linkage.runtime_id, linkage.storage_id);
 
         // The request is to relocate a module in the package that the link context is from.  This
         // entry will not be stored in the linkage table, so must be handled specially.
-        if module_id.address() == &linkage.runtime_id {
+        if module_id.address() == &linkage.runtime_id
+        /*|| module_id.address() == &linkage.storage_id*/
+        {
+            // println!("relocate self");
             return Ok(ModuleId::new(
                 linkage.storage_id,
                 module_id.name().to_owned(),
@@ -277,17 +282,19 @@ impl<'state, S: StorageView> LinkageResolver for LinkageView<'state, S> {
         }
 
         let runtime_id = ObjectID::from_address(*module_id.address());
+        // println!("relocate runtime_id: {}", runtime_id);
         let Some(upgrade) = linkage.link_table.get(&runtime_id) else {
+            // println!("relocate {} not fond", runtime_id);
+            // println!("relocate link table {:?}", linkage.link_table);
             invariant_violation!(format!(
                 "Missing linkage for {runtime_id} in context {}, runtime_id is {}",
                 linkage.storage_id, linkage.runtime_id
             ));
         };
 
-        Ok(ModuleId::new(
-            upgrade.upgraded_id.into(),
-            module_id.name().to_owned(),
-        ))
+        let relocated_id = upgrade.upgraded_id.into();
+        // println!("relocate {} to {}", runtime_id, relocated_id);
+        Ok(ModuleId::new(relocated_id, module_id.name().to_owned()))
     }
 
     fn defining_module(

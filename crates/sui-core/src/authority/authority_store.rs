@@ -44,8 +44,10 @@ use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfigura
 use super::authority_store_tables::LiveObject;
 use super::{authority_store_tables::AuthorityPerpetualTables, *};
 use mysten_common::sync::notify_read::NotifyRead;
+use sui_adapter::package_layout_resolver::PackageLayoutResolver;
 use sui_storage::package_object_cache::PackageObjectCache;
 use sui_types::gas_coin::TOTAL_SUPPLY_MIST;
+use sui_types::layout_resolver::ForwardLayoutResolver;
 use typed_store::rocks::util::is_ref_count_value;
 
 const NUM_SHARDS: usize = 4096;
@@ -1502,10 +1504,12 @@ impl AuthorityStore {
                                 let mut total_sui = 0;
                                 for object in task_objects {
                                     total_storage_rebate += object.storage_rebate;
+                                    let mut layout_resolver =
+                                        PackageLayoutResolver::new(&package_cache_clone);
                                     // get_total_sui includes storage rebate, however all storage rebate is
                                     // also stored in the storage fund, so we need to subtract it here.
                                     total_sui +=
-                                        object.get_total_sui(&package_cache_clone).unwrap()
+                                        object.get_total_sui(&mut layout_resolver).unwrap()
                                             - object.storage_rebate;
                                 }
                                 if count % 50_000_000 == 0 {
@@ -1523,10 +1527,14 @@ impl AuthorityStore {
                 (init.0 + result.0, init.1 + result.1)
             })
         });
-        for object in pending_objects {
-            total_storage_rebate += object.storage_rebate;
-            total_sui += object.get_total_sui(self).unwrap() - object.storage_rebate;
-        }
+        // for object in pending_objects {
+        //     total_storage_rebate += object.storage_rebate;
+        //     total_sui += object.get_total_sui(&self).unwrap() - object.storage_rebate;
+        // }
+        let (pending_sui, pending_rebate) =
+            self.check_sui_conservation_pending_objects(pending_objects);
+        total_storage_rebate += pending_rebate;
+        total_sui += pending_sui;
         info!(
             "Scanned {} live objects, took {:?}",
             count,
@@ -1606,6 +1614,18 @@ impl AuthorityStore {
         }
 
         Ok(())
+    }
+
+    fn check_sui_conservation_pending_objects(&self, pending_objects: Vec<Object>) -> (u64, u64) {
+        let mut total_sui = 0;
+        let mut total_storage_rebate = 0;
+        let mut layout_resolver = ForwardLayoutResolver::new(self);
+        for object in pending_objects {
+            total_storage_rebate += object.storage_rebate;
+            total_sui +=
+                object.get_total_sui(&mut layout_resolver).unwrap() - object.storage_rebate;
+        }
+        (total_sui, total_storage_rebate)
     }
 
     pub fn expensive_check_is_consistent_state(

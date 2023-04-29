@@ -60,6 +60,7 @@ use sui_adapter::adapter;
 use sui_macros::fail_point;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_storage::mutex_table::{MutexGuard, MutexTable};
+use sui_storage::package_object_cache::PackageObjectCache;
 use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary,
@@ -108,6 +109,7 @@ pub struct ExecutionComponents {
     pub(crate) move_vm: Arc<MoveVM>,
     // TODO: use strategies (e.g. LRU?) to constraint memory usage
     pub(crate) module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>,
+    pub(crate) package_cache: Arc<PackageObjectCache<Arc<AuthorityStore>>>,
     metrics: Arc<ResolverMetrics>,
 }
 
@@ -532,6 +534,10 @@ impl AuthorityPerEpochStore {
 
     pub fn module_cache(&self) -> &Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>> {
         &self.execution_component.module_cache
+    }
+
+    pub fn package_cache(&self) -> &Arc<PackageObjectCache<Arc<AuthorityStore>>> {
+        &self.execution_component.package_cache
     }
 
     pub fn move_vm(&self) -> &Arc<MoveVM> {
@@ -2027,14 +2033,16 @@ impl ExecutionComponents {
             .expect("We defined natives to not fail here"),
         );
         let module_cache = Arc::new(SyncModuleCache::new(ResolverWrapper::new(
-            store,
+            store.clone(),
             metrics.clone(),
         )));
+        let package_cache = PackageObjectCache::new(store);
         Self {
             native_functions,
             move_vm,
             module_cache,
             metrics,
+            package_cache,
         }
     }
 

@@ -504,6 +504,7 @@ impl LocalExec {
             epoch_start_timestamp,
             protocol_config,
             metrics,
+            None,
             true,
         );
 

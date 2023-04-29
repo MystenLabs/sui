@@ -13,6 +13,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
+use sui_adapter::package_layout_resolver::PackageLayoutResolver;
 use sui_core::{
     authority::AuthorityStore,
     authority_aggregator::{AuthAggMetrics, AuthorityAggregator},
@@ -253,8 +254,9 @@ impl StressTestRunner {
                     .unwrap();
                 let Some(object) = object_opt else { continue };
                 let struct_tag = object.struct_tag().unwrap();
+                let mut layout_resolver = PackageLayoutResolver::new(&state.database);
                 let total_sui =
-                    object.get_total_sui(&state.database).unwrap() - object.storage_rebate;
+                    object.get_total_sui(&mut layout_resolver).unwrap() - object.storage_rebate;
                 println!(">> {struct_tag} TOTAL_SUI: {total_sui}");
             }
 
@@ -266,8 +268,9 @@ impl StressTestRunner {
                     .unwrap()
                     .unwrap();
                 let struct_tag = object.struct_tag().unwrap();
+                let mut layout_resolver = PackageLayoutResolver::new(&state.database);
                 let total_sui =
-                    object.get_total_sui(&state.database).unwrap() - object.storage_rebate;
+                    object.get_total_sui(&mut layout_resolver).unwrap() - object.storage_rebate;
                 println!(">> {struct_tag} TOTAL_SUI: {total_sui}");
             }
 
@@ -279,8 +282,9 @@ impl StressTestRunner {
                     .unwrap()
                     .unwrap();
                 let struct_tag = object.struct_tag().unwrap();
+                let mut layout_resolver = PackageLayoutResolver::new(&state.database);
                 let total_sui =
-                    object.get_total_sui(&state.database).unwrap() - object.storage_rebate;
+                    object.get_total_sui(&mut layout_resolver).unwrap() - object.storage_rebate;
                 println!(">> {struct_tag} TOTAL_SUI: {total_sui}");
             }
         })
@@ -410,8 +414,10 @@ mod add_stake {
                 .get_created_object_of_type_name(effects, "StakedSui")
                 .await
                 .unwrap();
+            let store = runner.db().await;
+            let mut layout_resolver = PackageLayoutResolver::new(&store);
             let staked_amount =
-                object.get_total_sui(&runner.db().await).unwrap() - object.storage_rebate;
+                object.get_total_sui(&mut layout_resolver).unwrap() - object.storage_rebate;
             assert_eq!(staked_amount, self.stake_amount);
             assert_eq!(object.owner.get_owner_address().unwrap(), self.sender);
             runner.display_effects(effects);

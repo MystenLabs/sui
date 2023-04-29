@@ -8,6 +8,7 @@ use crate::executor::{ExecutionResult, Executor};
 use once_cell::sync::Lazy;
 use proptest::{prelude::*, strategy::Union};
 use std::{fmt, sync::Arc};
+use sui_adapter::package_layout_resolver::PackageLayoutResolver;
 use sui_types::{messages::VerifiedTransaction, storage::ObjectStore};
 
 mod account;
@@ -134,8 +135,10 @@ pub fn assert_accounts_match(
                 .get_object(&acc_object.id())
                 .unwrap()
                 .unwrap();
+            let store = executor.state.db();
+            let mut layout_resolver = PackageLayoutResolver::new(&store);
             let total_sui_value =
-                object.get_total_sui(&executor.state.db()).unwrap() - object.storage_rebate;
+                object.get_total_sui(&mut layout_resolver).unwrap() - object.storage_rebate;
             let account_balance_i = account.current_balances[balance_idx];
             prop_assert_eq!(
                 account_balance_i,

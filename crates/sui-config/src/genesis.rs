@@ -1356,7 +1356,7 @@ fn create_genesis_transaction(
 
     // execute txn to effects
     let (effects, events, objects) = {
-        let mut store = sui_types::in_memory_storage::InMemoryStorage::new(Vec::new());
+        let mut store = InMemoryStorage::new(Vec::new());
         let temporary_store = TemporaryStore::new(
             &mut store,
             InputObjects::new(vec![]),
@@ -1394,6 +1394,7 @@ fn create_genesis_transaction(
                 epoch_data,
                 protocol_config,
                 metrics,
+                None,
                 false, // enable_expensive_checks
             );
         assert!(inner_temp_store.objects.is_empty());
@@ -1966,6 +1967,7 @@ mod test {
                 &EpochData::new_test(),
                 &protocol_config,
                 metrics,
+                None,
                 false, // enable_expensive_checks
             );
 

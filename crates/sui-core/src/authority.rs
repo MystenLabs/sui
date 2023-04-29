@@ -1037,6 +1037,7 @@ impl AuthorityState {
                 &epoch_store.epoch_start_config().epoch_data(),
                 epoch_store.protocol_config(),
                 self.metrics.limits_metrics.clone(),
+                Some(epoch_store.package_cache()),
                 // TODO: would be nice to pass the whole NodeConfig here, but it creates a
                 // cyclic dependency w/ sui-adapter
                 self.expensive_safety_check_config
@@ -1145,6 +1146,7 @@ impl AuthorityState {
                 &epoch_store.epoch_start_config().epoch_data(),
                 epoch_store.protocol_config(),
                 self.metrics.limits_metrics.clone(),
+                None,
                 false, // enable_expensive_checks
             );
         let tx_digest = *effects.transaction_digest();
@@ -1261,6 +1263,7 @@ impl AuthorityState {
                 &epoch_store.epoch_start_config().epoch_data(),
                 protocol_config,
                 self.metrics.limits_metrics.clone(),
+                None,
                 false, // enable_expensive_checks
             );
 
