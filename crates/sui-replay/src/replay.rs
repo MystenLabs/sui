@@ -59,7 +59,7 @@ pub struct ProtocolVersionSummary {
 }
 
 pub struct Storage {
-    /// These are objects at the frontier of the execution's view
+    /// These are objects at the frontier of the execution's view.
     /// They might not be the latest object currently but they are the latest objects
     /// for the TX at the time it was run
     /// This store cannot be shared between runners
