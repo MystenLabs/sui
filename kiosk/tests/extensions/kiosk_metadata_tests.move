@@ -58,18 +58,18 @@ module kiosk::kiosk_metadata_tests{
         kiosk_metadata::add(&mut kiosk, &kioskOwnerCap, utf8(b"key"), utf8(b"value"));
         kiosk_metadata::add(&mut kiosk, &kioskOwnerCap, utf8(b"hello"), utf8(b"world"));
 
-        let keys_vec = vector::empty<String>();
-        vector::push_back(&mut keys_vec, utf8(b"lorem"));
-        vector::push_back(&mut keys_vec, utf8(b"ipsum"));
+        let fields_vec = vector::empty<String>();
+        vector::push_back(&mut fields_vec, utf8(b"lorem"));
+        vector::push_back(&mut fields_vec, utf8(b"ipsum"));
         let values_vec = vector::empty<String>();
         vector::push_back(&mut values_vec, utf8(b"test"));
         vector::push_back(&mut values_vec, utf8(b"test"));
 
         // add an array of key,vals
-        kiosk_metadata::add_multiple(&mut kiosk, &kioskOwnerCap, keys_vec, values_vec);
+        kiosk_metadata::add_multiple(&mut kiosk, &kioskOwnerCap, fields_vec, values_vec);
 
         //remove an existing field!
-        kiosk_metadata::remove_key(&mut kiosk, &kioskOwnerCap, utf8(b"key"));
+        kiosk_metadata::remove_field(&mut kiosk, &kioskOwnerCap, utf8(b"key"));
 
         return_kiosk(kiosk, kioskOwnerCap, ctx);
     }
@@ -77,7 +77,7 @@ module kiosk::kiosk_metadata_tests{
     // 2. Failed execution: Create 2 kiosks, try to create metadata to a
     // different kiosk using owned OwnerCap
     #[test]
-    #[expected_failure(abort_code = kiosk_metadata::ENotKioskOwner)]
+    #[expected_failure(abort_code = sui::kiosk::ENotOwner)]
     fun invalidOwnerCapExecution(){
         let scenario = ts::begin(Alice);
         {
@@ -162,14 +162,14 @@ module kiosk::kiosk_metadata_tests{
     // // 6. Failed execution. Tries to remove a field that doesn't exist.
     #[test]
     #[expected_failure(abort_code = kiosk_metadata::EKeyNotExists)]
-    fun remove_key_that_does_not_exist(){
+    fun remove_field_that_does_not_exist(){
 
         let ctx = &mut ctx();
         let (kiosk, kioskOwnerCap) = get_kiosk(ctx);
         kiosk_metadata::enable(&mut kiosk, &kioskOwnerCap);
 
         // try to remove a key that doesn't exist!
-        kiosk_metadata::remove_key(&mut kiosk, &kioskOwnerCap, utf8(b"key"));
+        kiosk_metadata::remove_field(&mut kiosk, &kioskOwnerCap, utf8(b"key"));
         return_kiosk(kiosk, kioskOwnerCap, ctx);
     }
 }
