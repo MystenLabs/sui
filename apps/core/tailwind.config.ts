@@ -87,6 +87,8 @@ export default {
                 130: '1.3',
             },
             boxShadow: {
+                default:
+                    '0px 5px 30px rgba(86, 104, 115, 0.2), 0px 0px 0px 1px rgba(160, 182, 195, 0.08)',
                 notification: '0px 0px 20px rgba(29, 55, 87, 0.11)',
                 moduleOption:
                     '0px 0px 29px rgba(0, 0, 0, 0.13), 0px 0px 44px rgba(0, 0, 0, 0.15), 0px 0px 0px rgba(0, 0, 0, 0.2)',

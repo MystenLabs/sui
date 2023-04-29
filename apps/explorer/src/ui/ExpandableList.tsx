@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ChevronDown12 } from '@mysten/icons';
+import { ChevronRight12 } from '@mysten/icons';
 import { type ReactNode, useMemo, useState } from 'react';
 
 import { Link } from './Link';
@@ -10,11 +10,13 @@ import { Text } from './Text';
 interface ExpandableListProps {
     items: ReactNode[];
     defaultItemsToShow: number;
+    itemsLabel?: string;
 }
 
 export function ExpandableList({
     items,
     defaultItemsToShow,
+    itemsLabel,
 }: ExpandableListProps) {
     const [showAll, setShowAll] = useState(false);
 
@@ -25,6 +27,15 @@ export function ExpandableList({
 
     const handleShowAllClick = () =>
         setShowAll((prevShowAll: boolean) => !prevShowAll);
+
+    let showAllText = '';
+    if (showAll) {
+        showAllText = 'Show Less';
+    } else {
+        showAllText = itemsLabel
+            ? `Show All ${items.length} ${itemsLabel}`
+            : 'Show All';
+    }
 
     return (
         <>
@@ -37,16 +48,14 @@ export function ExpandableList({
                         variant="text"
                         onClick={handleShowAllClick}
                         after={
-                            <ChevronDown12
+                            <ChevronRight12
                                 height={12}
                                 width={12}
-                                className={showAll ? 'rotate-180' : ''}
+                                className={showAll ? 'rotate-90' : ''}
                             />
                         }
                     >
-                        <Text variant="bodySmall/medium">
-                            {showAll ? 'Show Less' : 'Show All'}
-                        </Text>
+                        <Text variant="bodySmall/medium">{showAllText}</Text>
                     </Link>
                 </div>
             )}

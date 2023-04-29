@@ -11,43 +11,35 @@ import { type ReactNode } from 'react';
 import { flattenSuiArguments } from './utils';
 
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
+import { CopyClipboard } from '~/ui/CopyToClipboard';
 import { ObjectLink } from '~/ui/InternalLink';
+import { Text } from '~/ui/Text';
 
 export interface TransactionProps<T> {
     type: string;
     data: T;
 }
 
-function TransactionContent({
-    type,
-    children,
-}: {
-    type: string;
-    children?: ReactNode;
-}) {
+function TransactionContent({ children }: { children?: ReactNode }) {
     return (
-        <>
-            <div className="break-all text-heading6 font-semibold text-steel-darker">
-                {type}
-            </div>
-            {children && (
-                <div className="text-bodyMedium pt-2 font-medium text-steel-dark">
-                    {children}
-                </div>
-            )}
-        </>
+        <Text variant="pBody/normal" color="steel-dark">
+            {children}
+        </Text>
     );
 }
 
 function ArrayArgument({
-    type,
     data,
 }: TransactionProps<(SuiArgument | SuiArgument[])[] | undefined>) {
+    const renderData = data ? `(${flattenSuiArguments(data)})` : '';
+
     return (
-        <TransactionContent type={type}>
-            {data && (
-                <span className="break-all">({flattenSuiArguments(data)})</span>
-            )}
+        <TransactionContent>
+            <div className="flex justify-between gap-7">
+                {data && <span className="break-all">{renderData}</span>}
+
+                <CopyClipboard copyText={renderData} />
+            </div>
         </TransactionContent>
     );
 }
@@ -60,23 +52,37 @@ function MoveCall({ type, data }: TransactionProps<MoveCallSuiTransaction>) {
         arguments: args,
         type_arguments: typeArgs,
     } = data;
+
+    const stringData = `(package: ${movePackage}, module: ${module}, function: ${func}, arguments: ${args}, type_arguments: ${typeArgs})`;
+
     return (
-        <TransactionContent type={type}>
-            (package: <ObjectLink objectId={movePackage} />, module:{' '}
-            <ObjectLink
-                objectId={`${movePackage}?module=${module}`}
-                label={`'${module}'`}
-            />
-            , function: <span className="break-all text-sui-dark">{func}</span>
-            {args && (
-                <span className="break-all">
-                    , arguments: [{flattenSuiArguments(args!)}]
-                </span>
-            )}
-            {typeArgs && (
-                <span className="break-all">, type_arguments: {typeArgs}</span>
-            )}
-            )
+        <TransactionContent>
+            <div className="flex justify-between gap-7">
+                <div>
+                    (package: <ObjectLink objectId={movePackage} />, module:{' '}
+                    <ObjectLink
+                        objectId={`${movePackage}?module=${module}`}
+                        label={`'${module}'`}
+                    />
+                    , function:{' '}
+                    <span className="break-all text-sui-dark">{func}</span>
+                    {args && (
+                        <span className="break-all">
+                            , arguments: [{flattenSuiArguments(args!)}]
+                        </span>
+                    )}
+                    {typeArgs && (
+                        <span className="break-all">
+                            , type_arguments: {typeArgs}
+                        </span>
+                    )}
+                    )
+                </div>
+
+                <div>
+                    <CopyClipboard copyText={stringData} />
+                </div>
+            </div>
         </TransactionContent>
     );
 }
