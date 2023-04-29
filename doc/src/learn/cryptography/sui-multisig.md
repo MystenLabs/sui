@@ -17,7 +17,13 @@ always requires the Ed25519 key, but also one of the ECDSA secp256r1 keys to sig
 structure is using mobile secure enclave stored keys as 2FA; note that currently iPhone and high-end Android devices 
 support ECDSA secp256r1 enclave-stored keys only.
 
-Interestingly, cryptographic agility allows users to mix and match key schemes in a single MultiSig account. For example, one can pick a single Ed25519 mnemonic-based key and two ECDSA secp256r1 key to create a MultiSig account that always requires the Ed25519 key, but also one of the ECDSA secp256r1 keys to sign. A potential application of the above structure is using mobile secure enclave stored keys as 2FA; note that currently iPhone and high-end Android devices support ECDSA secp256r1 enclave-stored keys only.
+Compared to threshold signatures, a Multi-Signature account is generally more flexible and easier to implement and use,
+without requiring complex multi-party computation (MPC) account setup ceremonies and related software, and any
+dependency in threshold crypto providers. Additionally, apart from the ability to mix and match key schemes and setting
+different weights for each key (which is complex in threshold cryptography), Multi-Signature accounts are by design
+"accountable" and "transparent" due to the fact that both participating parties and observers can see who signed each
+transaction. On the other hand, threshold signatures provide the benefits of hiding the threshold policy, but also
+resulting in a single signature payload, making it indistinguishable from a single-key account.
 
 ![MultiSig Sui supported structures](../../../static/cryptography/sui_multisig_structures.png "MultiSig Sui supported structures")
 
