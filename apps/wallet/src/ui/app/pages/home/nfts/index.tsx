@@ -18,7 +18,8 @@ function NftsPage() {
         accountAddress,
         { options: { showType: true, showDisplay: true } }
     );
-    const nfts = data?.data
+
+    const nfts = data
         ?.filter((resp) => !!getObjectDisplay(resp).data)
         .map(({ data }) => data as SuiObjectData);
     return (
