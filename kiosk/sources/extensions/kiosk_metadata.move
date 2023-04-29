@@ -53,7 +53,7 @@ module kiosk::kiosk_metadata {
     // === Data Modifiers ===
     // 
     // Sets a custom `name` field with the `value`.
-    public fun add(kiosk: &mut Kiosk, cap: &KioskOwnerCap, name: String, value: String) {
+    public fun add_field(kiosk: &mut Kiosk, cap: &KioskOwnerCap, name: String, value: String) {
         // gets writeable kiosk Id if it exists, otherwise exits with error.
         let kiosk_uid_mut = kiosk::uid_mut_as_owner(kiosk, cap);
         // gets mutable metadata object if it's registered, otherwise exits with error.
@@ -63,7 +63,7 @@ module kiosk::kiosk_metadata {
     }
 
     // Sets multiple `fields` with `values`.
-    public fun add_multiple(kiosk: &mut Kiosk, cap: &KioskOwnerCap, fields: vector<String>, values: vector<String>) {
+    public fun add_multiple_fields(kiosk: &mut Kiosk, cap: &KioskOwnerCap, fields: vector<String>, values: vector<String>) {
         // gets writeable kiosk Id if it exists, otherwise exits with error.
         let kiosk_uid_mut = kiosk::uid_mut_as_owner(kiosk, cap);
 

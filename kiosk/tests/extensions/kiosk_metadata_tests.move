@@ -32,8 +32,8 @@ module kiosk::kiosk_metadata_tests{
     }
 
     // test sets 
-    // 1. Success. Normal execution flow (both add and add_multiple)
-    // Create a kiosk, create metadata for the kiosk, add a (key,val) to it. 
+    // 1. Success. Normal execution flow (both add_field and add_multiple_fields)
+    // Create a kiosk, create metadata for the kiosk, add_field a (key,val) to it. 
     // Also adds an array of (key,val) to it too. (all keys are unique)
     // And removes an existing field successfully.
     #[test]
@@ -55,8 +55,8 @@ module kiosk::kiosk_metadata_tests{
         assert!(vec_map::is_empty(metadata_vecmap), 1);
 
         // add two fields
-        kiosk_metadata::add(&mut kiosk, &kioskOwnerCap, utf8(b"key"), utf8(b"value"));
-        kiosk_metadata::add(&mut kiosk, &kioskOwnerCap, utf8(b"hello"), utf8(b"world"));
+        kiosk_metadata::add_field(&mut kiosk, &kioskOwnerCap, utf8(b"key"), utf8(b"value"));
+        kiosk_metadata::add_field(&mut kiosk, &kioskOwnerCap, utf8(b"hello"), utf8(b"world"));
 
         let fields_vec = vector::empty<String>();
         vector::push_back(&mut fields_vec, utf8(b"lorem"));
@@ -66,7 +66,7 @@ module kiosk::kiosk_metadata_tests{
         vector::push_back(&mut values_vec, utf8(b"test"));
 
         // add an array of key,vals
-        kiosk_metadata::add_multiple(&mut kiosk, &kioskOwnerCap, fields_vec, values_vec);
+        kiosk_metadata::add_multiple_fields(&mut kiosk, &kioskOwnerCap, fields_vec, values_vec);
 
         //remove an existing field!
         kiosk_metadata::remove_field(&mut kiosk, &kioskOwnerCap, utf8(b"key"));
@@ -117,7 +117,7 @@ module kiosk::kiosk_metadata_tests{
         let (kiosk, kioskOwnerCap) = get_kiosk(ctx);
 
         // add metadata without having enabled the Kiosk
-        kiosk_metadata::add(&mut kiosk, &kioskOwnerCap, utf8(b"key"), utf8(b"value"));
+        kiosk_metadata::add_field(&mut kiosk, &kioskOwnerCap, utf8(b"key"), utf8(b"value"));
 
         return_kiosk(kiosk, kioskOwnerCap, ctx);
     }
@@ -154,7 +154,7 @@ module kiosk::kiosk_metadata_tests{
         vector::push_back(&mut values_vec, utf8(b"test"));
 
         // adds asymmetric vector lengths and should error.
-        kiosk_metadata::add_multiple(&mut kiosk, &kioskOwnerCap, keys_vec, values_vec);
+        kiosk_metadata::add_multiple_fields(&mut kiosk, &kioskOwnerCap, keys_vec, values_vec);
 
         return_kiosk(kiosk, kioskOwnerCap, ctx);
     }
