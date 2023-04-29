@@ -2004,13 +2004,16 @@ impl AuthorityState {
         fs::create_dir(&store_checkpoint_path_tmp)
             .map_err(|e| SuiError::FileIOError(e.to_string()))?;
 
+        // NOTE: Do not change the order of invoking these checkpoint calls
+        // We want to snapshot checkpoint db first to not race with state sync
+        self.checkpoint_store
+            .checkpoint_db(&checkpoint_path_tmp.join("checkpoints"))?;
+
         self.database
             .perpetual_tables
             .checkpoint_db(&store_checkpoint_path_tmp.join("perpetual"))?;
         self.committee_store
             .checkpoint_db(&checkpoint_path_tmp.join("epochs"))?;
-        self.checkpoint_store
-            .checkpoint_db(&checkpoint_path_tmp.join("checkpoints"))?;
 
         if checkpoint_indexes {
             if let Some(indexes) = self.indexes.as_ref() {
