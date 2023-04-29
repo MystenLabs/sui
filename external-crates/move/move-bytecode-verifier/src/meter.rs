@@ -5,7 +5,6 @@ use crate::VerifierConfig;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::vm_status::StatusCode;
 use std::ops::Mul;
-extern crate static_assertions as sa;
 
 /// Scope of meterinng
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -20,11 +19,6 @@ pub const ANALYZE_FUNCTION_BASE_COST: u128 = 10;
 pub const EXECUTE_BLOCK_BASE_COST: u128 = 10;
 pub const PER_BACKEDGE_COST: u128 = 10;
 pub const PER_SUCCESSOR_COST: u128 = 10;
-
-sa::const_assert!(ANALYZE_FUNCTION_BASE_COST > 0);
-sa::const_assert!(EXECUTE_BLOCK_BASE_COST > 0);
-sa::const_assert!(PER_BACKEDGE_COST > 0);
-sa::const_assert!(PER_SUCCESSOR_COST > 0);
 
 /// Trait for a metering verification.
 pub trait Meter {

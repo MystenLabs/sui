@@ -4872,7 +4872,6 @@ dependencies = [
  "move-borrow-graph",
  "move-core-types",
  "petgraph 0.5.1",
- "static_assertions",
 ]
 
 [[package]]
