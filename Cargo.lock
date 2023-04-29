@@ -10138,6 +10138,7 @@ dependencies = [
  "colored",
  "comfy-table",
  "eyre",
+ "fastcrypto",
  "futures",
  "hex",
  "itertools",

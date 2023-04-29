@@ -387,7 +387,8 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
         object_id: object_to_send,
         gas: Some(object_id),
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
-        serialize_output: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -437,7 +438,8 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         gas_budget: TEST_ONLY_GAS_UNIT_FOR_PUBLISH * rgp,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
-        serialize_output: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -517,7 +519,8 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         args,
         gas: None,
         gas_budget: TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
-        serialize_output: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -555,7 +558,8 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         args: args.to_vec(),
         gas: Some(gas),
         gas_budget: TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
-        serialize_output: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
     }
     .execute(context)
     .await;
@@ -580,7 +584,8 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         args: args.to_vec(),
         gas: Some(gas),
         gas_budget: TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
-        serialize_output: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
     }
     .execute(context)
     .await;
@@ -607,7 +612,8 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         args: args.to_vec(),
         gas: Some(gas),
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
-        serialize_output: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -653,7 +659,8 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
-        serialize_output: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -721,7 +728,8 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds(
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,
         with_unpublished_dependencies,
-        serialize_output: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -788,7 +796,8 @@ async fn test_package_publish_command_with_unpublished_dependency_fails(
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,
         with_unpublished_dependencies,
-        serialize_output: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
     }
     .execute(context)
     .await;
@@ -833,7 +842,8 @@ async fn test_package_publish_command_non_zero_unpublished_dep_fails() -> Result
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,
         with_unpublished_dependencies,
-        serialize_output: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
     }
     .execute(context)
     .await;
@@ -887,7 +897,8 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,
         with_unpublished_dependencies,
-        serialize_output: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
     }
     .execute(context)
     .await;
@@ -928,7 +939,8 @@ async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Err
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
-        serialize_output: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
     }
     .execute(context)
     .await;
@@ -983,7 +995,8 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
-        serialize_output: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -1055,7 +1068,8 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
         legacy_digest: false,
-        serialize_output: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -1116,7 +1130,8 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
         to: recipient,
         object_id: obj_id,
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
-        serialize_output: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -1125,7 +1140,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     resp.print(true);
 
     // Get the mutated objects
-    let (mut_obj1, mut_obj2) = if let SuiClientCommandResult::Transfer(_, response) = resp {
+    let (mut_obj1, mut_obj2) = if let SuiClientCommandResult::Transfer(response) = resp {
         assert!(
             response.status_ok().unwrap(),
             "Command failed: {:?}",
@@ -1220,7 +1235,8 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
         to: recipient,
         object_id: obj_id,
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
-        serialize_output: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -1229,7 +1245,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     resp.print(true);
 
     // Get the mutated objects
-    let (_mut_obj1, _mut_obj2) = if let SuiClientCommandResult::Transfer(_, response) = resp {
+    let (_mut_obj1, _mut_obj2) = if let SuiClientCommandResult::Transfer(response) = resp {
         (
             response
                 .effects
@@ -1508,7 +1524,8 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
         coin_to_merge,
         gas: Some(gas),
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
-        serialize_output: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -1562,7 +1579,8 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
         coin_to_merge,
         gas: None,
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
-        serialize_output: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -1627,7 +1645,8 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
         coin_id: coin,
         amounts: Some(vec![1000, 10]),
         count: None,
-        serialize_output: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -1694,7 +1713,8 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
         coin_id: coin,
         amounts: None,
         count: Some(3),
-        serialize_output: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -1764,7 +1784,8 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
         coin_id: coin,
         amounts: Some(vec![1000, 10]),
         count: None,
-        serialize_output: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -1867,7 +1888,19 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
         sui_coin_object_id: coin,
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
         amount: Some(1),
-        serialize_output: true,
+        serialize_unsigned_transaction: true,
+        serialize_signed_transaction: false,
+    }
+    .execute(context)
+    .await?;
+
+    SuiClientCommands::TransferSui {
+        to: address1,
+        sui_coin_object_id: coin,
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        amount: Some(1),
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: true,
     }
     .execute(context)
     .await?;

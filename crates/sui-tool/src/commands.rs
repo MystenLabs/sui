@@ -15,7 +15,10 @@ use sui_replay::{execute_replay_command, ReplayToolCommand};
 use sui_types::{base_types::*, object::Owner};
 
 use clap::*;
+use fastcrypto::encoding::Encoding;
 use sui_config::Config;
+use sui_core::authority_aggregator::AuthorityAggregatorBuilder;
+use sui_types::messages::{SenderSignedData, Transaction};
 use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
@@ -156,6 +159,19 @@ pub enum ToolCommand {
         use_authority: bool,
         #[clap(subcommand)]
         cmd: ReplayToolCommand,
+    },
+
+    /// Ask all validators to sign a transaction through AuthorityAggregator.
+    #[clap(name = "sign-transaction")]
+    SignTransaction {
+        #[clap(long = "genesis")]
+        genesis: PathBuf,
+
+        #[clap(
+            long,
+            help = "The Base64-encoding of the bcs bytes of SenderSignedData"
+        )]
+        sender_signed_data: String,
     },
 }
 
@@ -322,6 +338,22 @@ impl ToolCommand {
                 use_authority,
             } => {
                 execute_replay_command(rpc_url, safety_checks, use_authority, cmd).await?;
+            }
+            ToolCommand::SignTransaction {
+                genesis,
+                sender_signed_data,
+            } => {
+                let genesis = Genesis::load(genesis)?;
+                let sender_signed_data = bcs::from_bytes::<SenderSignedData>(
+                    &fastcrypto::encoding::Base64::decode(sender_signed_data.as_str()).unwrap(),
+                )
+                .unwrap();
+                let transaction = Transaction::new(sender_signed_data).verify().unwrap();
+                let (agg, _) = AuthorityAggregatorBuilder::from_genesis(&genesis)
+                    .build()
+                    .unwrap();
+                let result = agg.process_transaction(transaction).await;
+                println!("{:?}", result);
             }
         };
         Ok(())
