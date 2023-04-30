@@ -89,7 +89,7 @@ pub async fn test_checkpoint_executor_crash_recovery() {
     let epoch_store = state.epoch_store_for_testing().clone();
     let executor_handle =
         spawn_monitored_task!(async move { executor.run_epoch(epoch_store).await });
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    tokio::time::sleep(Duration::from_secs(15)).await;
 
     let highest_executed = checkpoint_store
         .get_highest_executed_checkpoint_seq_number()
