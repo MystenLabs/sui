@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use prometheus::Registry;
+use sui_config::transaction_deny_config::TransactionDenyConfig;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_macros::sim_test;
@@ -36,6 +37,7 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
         reconfig_channel,
         temp_dir.path(),
         &Registry::new(),
+        TransactionDenyConfig::default(),
     )
     .await
     .unwrap();
@@ -102,6 +104,7 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
         reconfig_channel,
         temp_dir.path(),
         &Registry::new(),
+        TransactionDenyConfig::default(),
     )
     .await
     .unwrap();

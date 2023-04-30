@@ -378,6 +378,7 @@ impl SuiNode {
                     end_of_epoch_receiver,
                     &config.db_path(),
                     &prometheus_registry,
+                    config.transaction_deny_config.clone(),
                 )
                 .await?,
             ))

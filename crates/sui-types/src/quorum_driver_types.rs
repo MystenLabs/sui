@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use crate::base_types::{AuthorityName, ObjectRef, TransactionDigest};
 use crate::committee::StakeUnit;
 use crate::crypto::ConciseAuthorityPublicKeyBytes;
-use crate::error::SuiError;
+use crate::error::{SuiError, UserInputError};
 pub use crate::messages::QuorumDriverResponse;
 use crate::messages::VerifiedTransaction;
 use serde::{Deserialize, Serialize};
@@ -27,6 +27,10 @@ pub enum QuorumDriverError {
     QuorumDriverInternalError(SuiError),
     #[error("Invalid user signature: {0:?}.")]
     InvalidUserSignature(SuiError),
+    #[error("Transaction is denied by the submitting fullnode: {0:?}.")]
+    TransactionDeniedByFullNode(SuiError),
+    #[error("UserInput Error {0:?}.")]
+    UserInputError(UserInputError),
     #[error(
         "Failed to sign transaction by a quorum of validators because of locked objects: {:?}, retried a conflicting transaction {:?}, success: {:?}",
         conflicting_txes,

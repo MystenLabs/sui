@@ -12,6 +12,7 @@ use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use crate::quorum_driver::reconfig_observer::{OnsiteReconfigObserver, ReconfigObserver};
 use crate::quorum_driver::{QuorumDriverHandler, QuorumDriverHandlerBuilder, QuorumDriverMetrics};
 use crate::safe_client::SafeClientMetricsBase;
+use crate::transaction_signing_filter;
 use mysten_common::sync::notify_read::{NotifyRead, Registration};
 use mysten_metrics::histogram::{Histogram, HistogramVec};
 use mysten_metrics::spawn_monitored_task;
@@ -23,19 +24,21 @@ use prometheus::{
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
+use sui_config::transaction_deny_config::TransactionDenyConfig;
 use sui_storage::write_path_pending_tx_log::WritePathPendingTransactionLog;
 use sui_types::base_types::TransactionDigest;
 use sui_types::effects::{TransactionEffectsAPI, VerifiedCertifiedTransactionEffects};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
-    FinalizedEffects, VerifiedExecutableTransaction,
+    FinalizedEffects, TransactionDataAPI, VerifiedExecutableTransaction,
 };
 use sui_types::object::Object;
 use sui_types::quorum_driver_types::{
     QuorumDriverEffectsQueueResult, QuorumDriverError, QuorumDriverResponse, QuorumDriverResult,
 };
 use sui_types::sui_system_state::SuiSystemState;
+use tap::TapFallible;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Receiver;
 use tokio::task::JoinHandle;
@@ -57,6 +60,7 @@ pub struct TransactiondOrchestrator<A> {
     pending_tx_log: Arc<WritePathPendingTransactionLog>,
     notifier: Arc<NotifyRead<TransactionDigest, QuorumDriverResult>>,
     metrics: Arc<TransactionOrchestratorMetrics>,
+    deny_config: TransactionDenyConfig,
 }
 
 impl TransactiondOrchestrator<NetworkAuthorityClient> {
@@ -65,6 +69,7 @@ impl TransactiondOrchestrator<NetworkAuthorityClient> {
         reconfig_channel: Receiver<SuiSystemState>,
         parent_path: &Path,
         prometheus_registry: &Registry,
+        deny_config: TransactionDenyConfig,
     ) -> anyhow::Result<Self> {
         let safe_client_metrics_base = SafeClientMetricsBase::new(prometheus_registry);
         let auth_agg_metrics = AuthAggMetrics::new(prometheus_registry);
@@ -88,6 +93,7 @@ impl TransactiondOrchestrator<NetworkAuthorityClient> {
             parent_path,
             prometheus_registry,
             observer,
+            deny_config,
         )
         .await)
     }
@@ -104,6 +110,7 @@ where
         parent_path: &Path,
         prometheus_registry: &Registry,
         reconfig_observer: OnsiteReconfigObserver,
+        deny_config: TransactionDenyConfig,
     ) -> Self {
         let notifier = Arc::new(NotifyRead::new());
         let quorum_driver_handler = Arc::new(
@@ -143,6 +150,7 @@ where
             pending_tx_log,
             notifier,
             metrics,
+            deny_config,
         }
     }
 
@@ -168,6 +176,26 @@ where
         let tx_digest = *transaction.digest();
         debug!(?tx_digest, "TO Received transaction execution request.");
 
+        // Check if the transaction is denied by this node
+        let tx_data = transaction.data().transaction_data();
+        let input_data = &tx_data
+            .input_objects()
+            .map_err(QuorumDriverError::UserInputError)?;
+        transaction_signing_filter::check_transaction_for_signing(
+            tx_data,
+            input_data,
+            &self.deny_config,
+            &self.validator_state.db(),
+        )
+        .tap_err(|e| {
+            info!(
+                ?tx_digest,
+                "Tx is denied by transaction orchestrator: {}", e
+            );
+            self.metrics.denied_request.inc();
+        })
+        .map_err(QuorumDriverError::TransactionDeniedByFullNode)?;
+
         let (_e2e_latency_timer, _txn_finality_timer) = if transaction.contains_shared_object() {
             (
                 self.metrics.request_latency_shared_obj.start_timer(),
@@ -183,6 +211,7 @@ where
                     .start_timer(),
             )
         };
+
         let ticket = self.submit(transaction.clone()).await.map_err(|e| {
             warn!(?tx_digest, "QuorumDriverInternalError: {e:?}");
             QuorumDriverError::QuorumDriverInternalError(e)
@@ -481,6 +510,8 @@ pub struct TransactionOrchestratorMetrics {
     wait_for_finality_latency_shared_obj: Histogram,
     local_execution_latency_single_writer: Histogram,
     local_execution_latency_shared_obj: Histogram,
+
+    denied_request: GenericCounter<AtomicU64>,
 }
 
 // Note that labeled-metrics are stored upfront individually
@@ -586,6 +617,12 @@ impl TransactionOrchestratorMetrics {
                 .with_label_values(&[TX_TYPE_SINGLE_WRITER_TX]),
             local_execution_latency_shared_obj: local_execution_latency
                 .with_label_values(&[TX_TYPE_SHARED_OBJ_TX]),
+            denied_request: register_int_counter_with_registry!(
+                "tx_orchestrator_denied_request",
+                "Total number of requests denied by Transaction Orchestrator",
+                registry,
+            )
+            .unwrap(),
         }
     }
 
