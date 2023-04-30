@@ -41,10 +41,10 @@ use sui_types::digests::CheckpointDigest;
 use sui_types::digests::TransactionDigest;
 use sui_types::error::ExecutionError;
 use sui_types::error::{SuiError, SuiResult};
+use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::gas::SuiGasStatus;
 use sui_types::messages::CertifiedTransaction;
 use sui_types::messages::Transaction;
-use sui_types::messages::VerifiedExecutableTransaction;
 use sui_types::messages::VerifiedTransaction;
 use sui_types::messages::{InputObjectKind, InputObjects, TransactionKind};
 use sui_types::messages::{SenderSignedData, TransactionDataAPI};
@@ -644,7 +644,7 @@ impl LocalExec {
     }
 
     /// Must be called after `init_for_execution`
-    /// This excutes from `sui_core::authority::AuthorityState::try_execute_immediately`
+    /// This executes from `sui_core::authority::AuthorityState::try_execute_immediately`
     pub async fn certificate_execute(
         &mut self,
         tx_digest: &TransactionDigest,
@@ -1709,15 +1709,15 @@ async fn create_epoch_store(
     let registry = Registry::new();
     let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
     let signature_verifier_metrics = SignatureVerifierMetrics::new(&registry);
-    let mut committe = authority_state.committee_store().get_latest_committee();
+    let mut committee = authority_state.committee_store().get_latest_committee();
 
     // Overwrite the epoch so it matches this TXs
-    committe.epoch = tx_info.executed_epoch;
+    committee.epoch = tx_info.executed_epoch;
 
-    let name = committe.names().next().unwrap();
+    let name = committee.names().next().unwrap();
     AuthorityPerEpochStore::new(
         *name,
-        Arc::new(committe.clone()),
+        Arc::new(committee.clone()),
         &path,
         None,
         EpochMetrics::new(&registry),

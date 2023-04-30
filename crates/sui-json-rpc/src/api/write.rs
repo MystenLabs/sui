@@ -11,7 +11,7 @@ use sui_json_rpc_types::{
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::SuiAddress;
-use sui_types::messages::ExecuteTransactionRequestType;
+use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::sui_serde::BigInt;
 
 #[open_rpc(namespace = "sui", tag = "Write API")]

@@ -38,6 +38,7 @@ use sui_types::error::UserInputError;
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::gas::SuiCostTable;
 use sui_types::gas_coin::GasCoin;
+use sui_types::messages_consensus::ConsensusCommitPrologue;
 use sui_types::object::Data;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::SuiSystemStateWrapper;

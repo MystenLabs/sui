@@ -50,6 +50,10 @@ use sui_types::effects::{
     CertifiedTransactionEffects, SignedTransactionEffects, TransactionEffects, TransactionEvents,
     VerifiedCertifiedTransactionEffects,
 };
+use sui_types::messages_grpc::{
+    HandleCertificateResponseV2, ObjectInfoRequest, PlainTransactionInfoResponse,
+    TransactionInfoRequest,
+};
 use tap::TapFallible;
 use tokio::time::{sleep, timeout};
 

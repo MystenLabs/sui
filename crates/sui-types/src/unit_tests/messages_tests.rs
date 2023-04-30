@@ -2,16 +2,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::hash_map::DefaultHasher;
-use std::collections::BTreeMap;
-
-use fastcrypto::traits::AggregateAuthenticator;
-use fastcrypto::traits::KeyPair;
-use move_core_types::language_storage::StructTag;
-use roaring::RoaringBitmap;
-
 use super::*;
 use crate::base_types::random_object_ref;
+use crate::committee::Committee;
 use crate::crypto::bcs_signable_test::{get_obligation_input, Foo};
 use crate::crypto::Secp256k1SuiSignature;
 use crate::crypto::SuiKeyPair;
@@ -23,10 +16,17 @@ use crate::crypto::{
     AuthoritySignInfoTrait, SuiAuthoritySignature,
 };
 use crate::digests::TransactionEventsDigest;
-use crate::effects::{TransactionEffects, TransactionEffectsAPI};
+use crate::effects::{SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI};
 use crate::execution_status::ExecutionStatus;
 use crate::gas::GasCostSummary;
 use crate::object::Owner;
+use fastcrypto::traits::AggregateAuthenticator;
+use fastcrypto::traits::KeyPair;
+use move_core_types::language_storage::StructTag;
+use roaring::RoaringBitmap;
+use std::collections::hash_map::DefaultHasher;
+use std::collections::BTreeMap;
+use std::hash::Hasher;
 
 #[test]
 fn test_signed_values() {

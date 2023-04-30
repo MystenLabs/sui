@@ -3,11 +3,12 @@
 
 use std::{time::Duration, vec};
 
+use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::{
     base_types::ObjectID,
     crypto::deterministic_random_account_key,
     digests::TransactionEffectsDigest,
-    messages::{CallArg, ObjectArg, VerifiedExecutableTransaction, TEST_ONLY_GAS_UNIT_FOR_GENERIC},
+    messages::{CallArg, ObjectArg, TEST_ONLY_GAS_UNIT_FOR_GENERIC},
     object::Object,
     SUI_FRAMEWORK_OBJECT_ID,
 };

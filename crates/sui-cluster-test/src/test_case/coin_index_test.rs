@@ -14,8 +14,8 @@ use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_json_rpc_types::{Balance, SuiTransactionBlockResponseOptions};
 use sui_types::base_types::{ObjectID, ObjectRef};
 use sui_types::gas_coin::GAS;
-use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::object::Owner;
+use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use test_utils::messages::make_staking_transaction_with_wallet_context;
 use tracing::info;
 

@@ -13,19 +13,18 @@ use async_trait::async_trait;
 use mysten_metrics::spawn_monitored_task;
 use sui_config::genesis::Genesis;
 use sui_types::effects::{TransactionEffectsAPI, TransactionEvents};
+use sui_types::error::SuiResult;
+use sui_types::messages_grpc::{
+    HandleCertificateResponse, HandleCertificateResponseV2, HandleTransactionResponse,
+    ObjectInfoRequest, ObjectInfoResponse, SystemStateRequest, TransactionInfoRequest,
+    TransactionInfoResponse,
+};
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{
     crypto::AuthorityKeyPair,
     error::SuiError,
-    messages::{
-        CertifiedTransaction, HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse,
-        SystemStateRequest, Transaction, TransactionInfoRequest, TransactionInfoResponse,
-    },
+    messages::{CertifiedTransaction, Transaction},
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},
-};
-use sui_types::{
-    error::SuiResult,
-    messages::{HandleCertificateResponse, HandleCertificateResponseV2},
 };
 
 #[derive(Clone, Copy, Default)]
