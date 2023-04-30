@@ -23,7 +23,7 @@ use tokio::{
     time::{sleep, sleep_until, Instant},
 };
 use tracing::debug;
-use types::{Batch, BatchDigest, RequestBatchesRequest, RequestBatchesResponse};
+use types::{now, Batch, BatchAPI, BatchDigest, RequestBatchesRequest, RequestBatchesResponse};
 
 use crate::metrics::WorkerMetrics;
 
@@ -111,10 +111,17 @@ impl BatchFetcher {
                     result = futures.next() => {
                         if let Some(remote_batches) = result {
                             let new_batches: HashMap<_, _> = remote_batches.iter().filter(|(d, _)| remaining_digests.remove(d)).collect();
-                            fetched_batches.extend(new_batches.iter().map(|(d, b)| (**d, (*b).clone())));
                             // Also persist the batches, so they are available after restarts.
                             let mut write_batch = self.batch_store.batch();
-                            write_batch.insert_batch(&self.batch_store, new_batches).unwrap();
+
+                            let mut updated_new_batches = HashMap::new();
+                            for (digest, batch) in new_batches {
+                                let mut batch = (*batch).clone();
+                                batch.metadata_mut().created_at = now();
+                                updated_new_batches.insert(*digest, batch.clone());
+                            }
+                            fetched_batches.extend(updated_new_batches.iter().map(|(d, b)| (*d, (*b).clone())));
+                            write_batch.insert_batch(&self.batch_store, updated_new_batches).unwrap();
                             write_batch.write().unwrap();
                             if remaining_digests.is_empty() {
                                 return fetched_batches;
@@ -341,14 +348,35 @@ mod tests {
             batch_store: batch_store.clone(),
             metrics: Arc::new(WorkerMetrics::default()),
         };
-        let expected_batches = HashMap::from_iter(vec![
+        let mut expected_batches = HashMap::from_iter(vec![
             (batch1.digest(), batch1.clone()),
             (batch2.digest(), batch2.clone()),
         ]);
-        let fetched_batches = fetcher.fetch(digests, known_workers).await;
+        let mut fetched_batches = fetcher.fetch(digests, known_workers).await;
+        // Reset metadata from the fetched and expected batches
+        for batch in fetched_batches.values_mut() {
+            batch.metadata_mut().created_at = 0;
+        }
+        for batch in expected_batches.values_mut() {
+            batch.metadata_mut().created_at = 0;
+        }
         assert_eq!(fetched_batches, expected_batches);
-        assert_eq!(batch_store.get(&batch1.digest()).unwrap().unwrap(), batch1);
-        assert_eq!(batch_store.get(&batch2.digest()).unwrap().unwrap(), batch2);
+        assert_eq!(
+            batch_store
+                .get(&batch1.digest())
+                .unwrap()
+                .unwrap()
+                .transactions(),
+            batch1.transactions()
+        );
+        assert_eq!(
+            batch_store
+                .get(&batch2.digest())
+                .unwrap()
+                .unwrap()
+                .transactions(),
+            batch2.transactions()
+        );
     }
 
     #[tokio::test]
@@ -376,12 +404,19 @@ mod tests {
             batch_store,
             metrics: Arc::new(WorkerMetrics::default()),
         };
-        let expected_batches = HashMap::from_iter(vec![
+        let mut expected_batches = HashMap::from_iter(vec![
             (batch1.digest(), batch1.clone()),
             (batch2.digest(), batch2.clone()),
             (batch3.digest(), batch3.clone()),
         ]);
-        let fetched_batches = fetcher.fetch(digests, known_workers).await;
+        let mut fetched_batches = fetcher.fetch(digests, known_workers).await;
+        // Reset metadata from the fetched and expected batches
+        for batch in fetched_batches.values_mut() {
+            batch.metadata_mut().created_at = 0;
+        }
+        for batch in expected_batches.values_mut() {
+            batch.metadata_mut().created_at = 0;
+        }
         assert_eq!(fetched_batches, expected_batches);
     }
 
@@ -407,12 +442,19 @@ mod tests {
             batch_store,
             metrics: Arc::new(WorkerMetrics::default()),
         };
-        let expected_batches = HashMap::from_iter(vec![
+        let mut expected_batches = HashMap::from_iter(vec![
             (batch1.digest(), batch1.clone()),
             (batch2.digest(), batch2.clone()),
             (batch3.digest(), batch3.clone()),
         ]);
-        let fetched_batches = fetcher.fetch(digests, known_workers).await;
+        let mut fetched_batches = fetcher.fetch(digests, known_workers).await;
+        // Reset metadata from the fetched and expected batches
+        for batch in fetched_batches.values_mut() {
+            batch.metadata_mut().created_at = 0;
+        }
+        for batch in expected_batches.values_mut() {
+            batch.metadata_mut().created_at = 0;
+        }
         assert_eq!(fetched_batches, expected_batches);
     }
 
@@ -437,12 +479,19 @@ mod tests {
             batch_store,
             metrics: Arc::new(WorkerMetrics::default()),
         };
-        let expected_batches = HashMap::from_iter(vec![
+        let mut expected_batches = HashMap::from_iter(vec![
             (batch1.digest(), batch1.clone()),
             (batch2.digest(), batch2.clone()),
             (batch3.digest(), batch3.clone()),
         ]);
-        let fetched_batches = fetcher.fetch(digests, known_workers).await;
+        let mut fetched_batches = fetcher.fetch(digests, known_workers).await;
+        // Reset metadata from the fetched and expected batches
+        for batch in fetched_batches.values_mut() {
+            batch.metadata_mut().created_at = 0;
+        }
+        for batch in expected_batches.values_mut() {
+            batch.metadata_mut().created_at = 0;
+        }
         assert_eq!(fetched_batches, expected_batches);
     }
 
@@ -466,7 +515,7 @@ mod tests {
             expected_batches.push(batch);
         }
 
-        let expected_batches = HashMap::from_iter(
+        let mut expected_batches = HashMap::from_iter(
             expected_batches
                 .iter()
                 .map(|batch| (batch.digest(), batch.clone())),
@@ -481,7 +530,14 @@ mod tests {
             batch_store,
             metrics: Arc::new(WorkerMetrics::default()),
         };
-        let fetched_batches = fetcher.fetch(digests, known_workers).await;
+        let mut fetched_batches = fetcher.fetch(digests, known_workers).await;
+        // Reset metadata from the fetched and expected batches
+        for batch in fetched_batches.values_mut() {
+            batch.metadata_mut().created_at = 0;
+        }
+        for batch in expected_batches.values_mut() {
+            batch.metadata_mut().created_at = 0;
+        }
         assert_eq!(fetched_batches, expected_batches);
     }
 
