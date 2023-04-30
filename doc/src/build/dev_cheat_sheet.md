@@ -44,4 +44,4 @@ Quick reference on best practices for Sui Network developers.
 
 - **Never** sign two concurrent transactions that are touching the same owned object. Either use independent owned objects, or wait for one transaction to conclude before sending the next one. Violating this rule might lead to client [equivocation](https://docs.sui.io/learn/sui-glossary#equivocation), which locks up the owned objects involved in the two transactions until the end of the current epoch.
 - Any `sui client` command that crafts a transaction (e.g., `sui client publish`, `sui client call`) can accept the `--serialize-output` flag to output a base64 transaction to be signed.
-    - Sui supports several [signature schemes](https://docs.sui.io/devnet/learn/cryptography/sui-offline-signing) for transaction signing, including native [multisig](https://docs.sui.io/devnet/learn/cryptography/sui-multisig).
+- Sui supports several [signature schemes](https://docs.sui.io/devnet/learn/cryptography/sui-offline-signing) for transaction signing, including native [multisig](https://docs.sui.io/devnet/learn/cryptography/sui-multisig).
