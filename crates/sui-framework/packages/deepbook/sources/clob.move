@@ -48,6 +48,7 @@ module deepbook::clob {
     const EInvalidFeeCoin: u64 = 20;
     const EInvalidFee: u64 = 21;
     const EInvalidExpireTimestamp: u64 = 22;
+    const EUnderMinimalTradeVolumn: u64 = 23;
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
 
@@ -803,6 +804,8 @@ module deepbook::clob {
         let user = object::id(account_cap);
         let order_id: u64;
         let open_orders: &mut CritbitTree<TickLevel>;
+        let trade_volumn = clob_math::mul(quantity, price);
+        assert!(trade_volumn > 0, EUnderMinimalTradeVolumn);
         if (is_bid) {
             let quote_quantity = clob_math::mul(quantity, price);
             custodian::lock_balance<QuoteAsset>(&mut pool.quote_custodian, account_cap, quote_quantity);
@@ -1305,7 +1308,7 @@ module deepbook::clob {
             create_pool_<SUI, USD>(
                 taker_fee_rate,
                 maker_rebate_rate,
-                1 * FLOAT_SCALING,
+                1,
                 1,
                 balance::create_for_testing(FEE_AMOUNT_FOR_CREATE_POOL),
                 test_scenario::ctx(scenario)
@@ -2005,6 +2008,59 @@ module deepbook::clob {
                 balance::create_for_testing(FEE_AMOUNT_FOR_CREATE_POOL),
                 test_scenario::ctx(&mut test)
             );
+        };
+        test_scenario::end(test);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = EUnderMinimalTradeVolumn)]
+    fun test_inject_limit_order_under_minimul_volumn() {
+        let owner: address = @0xAAAA;
+        let alice: address = @0xBBBB;
+        let test = test_scenario::begin(owner);
+        test_scenario::next_tx(&mut test, owner);
+        {
+            setup_test(0, 0, &mut test, owner);
+        };
+        // create pool which is already exist fail
+        test_scenario::next_tx(&mut test, owner);
+        {
+            setup_test(0, 0, &mut test, owner);
+            mint_account_cap_transfer(
+                alice,
+                test_scenario::ctx(&mut test)
+            );
+        };
+        test_scenario::next_tx(&mut test, alice);
+        {
+            let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut test);
+            let clock = test_scenario::take_shared<Clock>(&test);
+            let account_cap = test_scenario::take_from_address<AccountCap>(&test, alice);
+            let account_cap_user = object::id(&account_cap);
+            custodian::deposit(
+                &mut pool.base_custodian,
+                mint_for_testing<SUI>(1000, test_scenario::ctx(&mut test)),
+                account_cap_user
+            );
+            custodian::deposit(
+                &mut pool.quote_custodian,
+                mint_for_testing<USD>(10000, test_scenario::ctx(&mut test)),
+                account_cap_user
+            );
+            place_limit_order<SUI, USD>(
+                &mut pool,
+                5,
+                200,
+                true,
+                TIMESTAMP_INF,
+                0,
+                &clock,
+                &account_cap,
+                test_scenario::ctx(&mut test)
+            );
+            test_scenario::return_shared(pool);
+            test_scenario::return_shared(clock);
+            test_scenario::return_to_address<AccountCap>(alice, account_cap);
         };
         test_scenario::end(test);
     }
