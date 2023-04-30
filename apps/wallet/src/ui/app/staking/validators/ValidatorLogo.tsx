@@ -8,8 +8,6 @@ import { useMemo } from 'react';
 import { Heading } from '_app/shared/heading';
 import { ImageIcon } from '_app/shared/image-icon';
 import { Text } from '_app/shared/text';
-import ExplorerLink from '_components/explorer-link';
-import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import { Badge } from '_src/ui/app/shared/Badge';
 
 interface ValidatorLogoProps {
@@ -119,14 +117,9 @@ export function ValidatorLogo({
                     )}
                 </div>
                 {showAddress && (
-                    <ExplorerLink
-                        type={ExplorerLinkType.validator}
-                        validator={validatorAddress}
-                        showIcon={false}
-                        className="text-steel-dark no-underline text-body font-mono"
-                    >
+                    <Text variant="body" color="steel-dark" mono>
                         {formatAddress(validatorAddress)}
-                    </ExplorerLink>
+                    </Text>
                 )}
             </div>
         </div>
