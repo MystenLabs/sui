@@ -111,7 +111,6 @@ impl BatchFetcher {
                     result = futures.next() => {
                         if let Some(remote_batches) = result {
                             let new_batches: HashMap<_, _> = remote_batches.iter().filter(|(d, _)| remaining_digests.remove(d)).collect();
-                            fetched_batches.extend(new_batches.iter().map(|(d, b)| (**d, (*b).clone())));
                             // Also persist the batches, so they are available after restarts.
                             let mut write_batch = self.batch_store.batch();
 
@@ -121,6 +120,7 @@ impl BatchFetcher {
                                 batch.metadata_mut().created_at = now();
                                 updated_new_batches.insert(*digest, batch.clone());
                             }
+                            fetched_batches.extend(updated_new_batches.iter().map(|(d, b)| (*d, (*b).clone())));
                             write_batch.insert_batch(&self.batch_store, updated_new_batches).unwrap();
                             write_batch.write().unwrap();
                             if remaining_digests.is_empty() {

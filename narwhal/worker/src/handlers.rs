@@ -279,7 +279,7 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
             while let Some(result) = handles.next().await {
                 match result {
                     Ok(response) => {
-                        if let Some(batch) = response.into_body().batch {
+                        if let Some(mut batch) = response.into_body().batch {
                             if !message.is_certified {
                                 // This batch is not part of a certificate, so we need to validate it.
                                 if let Err(err) = self.validator.validate_batch(&batch).await {
@@ -292,9 +292,8 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
                             }
                             let digest = batch.digest();
                             if missing.remove(&digest) {
-                                let mut updated_batch = batch.clone();
-                                updated_batch.metadata_mut().created_at = now();
-                                self.store.insert(&digest, &updated_batch).map_err(|e| {
+                                batch.metadata_mut().created_at = now();
+                                self.store.insert(&digest, &batch).map_err(|e| {
                                     anemo::rpc::Status::internal(format!(
                                         "failed to write to batch store: {e:?}"
                                     ))
