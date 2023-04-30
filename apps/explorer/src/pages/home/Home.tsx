@@ -32,33 +32,39 @@ function Home() {
     return isHomePageRedesignEnabled ? (
         <div
             data-testid="home-page"
-            className="grid grid-cols-1 gap-x-4 gap-y-4 md:grid-cols-[200px,1fr] lg:grid-cols-[200px,454px,1fr]"
+            className={clsx('home-page-grid-container', {
+                'home-page-grid-container-with-sui-token':
+                    isSuiTokenCardEnabled,
+            })}
         >
-            <NetworkTPS />
-            {isSuiTokenCardEnabled && <SuiTokenCard />}
-            <div
-                className={clsx('overflow-hidden md:col-span-full', {
-                    'lg:col-span-2': !isSuiTokenCardEnabled,
-                    'lg:col-auto': isSuiTokenCardEnabled,
-                })}
-            >
+            <div className="grid-area-tps">
+                <NetworkTPS />
+            </div>
+            {isSuiTokenCardEnabled && (
+                <div className="grid-area-sui-token">
+                    <SuiTokenCard />
+                </div>
+            )}
+            <div className="grid-area-network overflow-hidden">
                 <OnTheNetwork />
             </div>
-            <CurrentEpoch />
-            <div className="md:row-start-4 lg:row-start-3">
+            <div className="grid-area-epoch">
+                <CurrentEpoch />
+            </div>
+            <div className="grid-area-checkpoint">
                 <Checkpoint />
             </div>
-            <div className="md:row-start-3 md:row-end-5 lg:row-start-2 lg:row-end-4">
+            <div className="grid-area-gas-price">
                 <GasPriceCard />
             </div>
-            <div className="md:col-span-full lg:col-auto lg:row-start-2 lg:row-end-4">
+            <div className="grid-area-node-map h-[360px] xl:h-auto">
                 <ErrorBoundary>
                     <Suspense fallback={<Card height="full" />}>
                         <NodeMap minHeight="100%" />
                     </Suspense>
                 </ErrorBoundary>
             </div>
-            <div className="mt-5 md:col-span-full lg:col-span-2 lg:row-span-2">
+            <div className="grid-area-activity mt-5">
                 <ErrorBoundary>
                     <Activity
                         initialLimit={TRANSACTIONS_LIMIT}
@@ -68,7 +74,7 @@ function Home() {
             </div>
             <div
                 data-testid="validators-table"
-                className="mt-5 md:col-span-full lg:col-auto"
+                className="grid-area-validators mt-5"
             >
                 <TabGroup size="lg">
                     <TabList>
@@ -84,7 +90,7 @@ function Home() {
                 </TabGroup>
             </div>
             {/* TODO: Add the popular packages component here :) */}
-            {/* <div className="mt-5 bg-gray-60 md:col-span-full lg:col-auto">
+            {/* <div className="grid-area-packages mt-5 bg-gray-60">
                 Popular packages
             </div> */}
         </div>

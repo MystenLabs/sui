@@ -146,8 +146,8 @@ export function GasPriceCard() {
         ? formatDate(hoveredElement?.date, ['month', 'day', 'year'])
         : '-';
     return (
-        <Card spacing="lg">
-            <div className="flex flex-col gap-5">
+        <Card spacing="lg" height="full">
+            <div className="flex h-full flex-col gap-5">
                 <div className="flex gap-2.5">
                     <div className="flex-grow">
                         <Heading

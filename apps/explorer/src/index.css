@@ -14,7 +14,132 @@
     --steel-dark: theme('colors.steel.dark');
 }
 
-body {
-    @apply antialiased;
-    @apply font-sans text-offblack;
+@layer base {
+    body {
+        @apply antialiased;
+        @apply font-sans text-offblack;
+    }
+}
+
+@layer components {
+    .home-page-grid-container {
+        @apply grid grid-cols-1 gap-4;
+    }
+
+    @screen sm {
+        .home-page-grid-container {
+            @apply grid-cols-[200px,auto];
+            grid-template-areas:
+                'tps         tps'
+                'network     network'
+                'epoch       gas-price'
+                'checkpoint  gas-price'
+                'node-map    node-map'
+                'activity    activity'
+                'validators  validators'
+                'packages    packages';
+        }
+
+        .home-page-grid-container-with-sui-token {
+            grid-template-areas:
+                'tps         sui-token'
+                'network     network'
+                'epoch       gas-price'
+                'checkpoint  gas-price'
+                'node-map    node-map'
+                'activity    activity'
+                'validators  validators'
+                'packages    packages';
+        }
+
+        .grid-area-tps {
+            grid-area: tps;
+        }
+
+        .grid-area-sui-token {
+            grid-area: sui-token;
+        }
+
+        .grid-area-gas-price {
+            grid-area: gas-price;
+        }
+
+        .grid-area-network {
+            grid-area: network;
+        }
+
+        .grid-area-epoch {
+            grid-area: epoch;
+        }
+
+        .grid-area-gas-price {
+            grid-area: gas-price;
+        }
+
+        .grid-area-checkpoint {
+            grid-area: checkpoint;
+        }
+
+        .grid-area-node-map {
+            grid-area: node-map;
+        }
+
+        .grid-area-activity {
+            grid-area: activity;
+        }
+
+        .grid-area-validators {
+            grid-area: validators;
+        }
+
+        .grid-area-packages {
+            grid-area: packages;
+        }
+    }
+
+    @screen lg {
+        .home-page-grid-container {
+            @apply grid-cols-[200px,390px,auto];
+            grid-template-areas:
+                'tps        network    network'
+                'epoch      gas-price  gas-price'
+                'checkpoint gas-price  gas-price'
+                'node-map   node-map   node-map'
+                'activity   activity   activity'
+                'validators validators validators'
+                'packages   packages   packages';
+        }
+
+        .home-page-grid-container-with-sui-token {
+            grid-template-areas:
+                'tps        sui-token  network'
+                'epoch      gas-price  gas-price'
+                'checkpoint gas-price  gas-price'
+                'node-map   node-map   node-map'
+                'activity   activity   activity'
+                'validators validators validators'
+                'packages   packages   packages';
+        }
+    }
+
+    @screen xl {
+        .home-page-grid-container {
+            @apply grid-cols-[200px,454px,auto];
+            grid-template-areas:
+                'tps        gas-price network'
+                'epoch      gas-price node-map'
+                'checkpoint gas-price node-map'
+                'activity   activity  validators'
+                'activity   activity  packages';
+        }
+
+        .home-page-grid-container-with-sui-token {
+            grid-template-areas:
+                'tps        sui-token network'
+                'epoch      gas-price node-map'
+                'checkpoint gas-price node-map'
+                'activity   activity  validators'
+                'activity   activity  packages';
+        }
+    }
 }
