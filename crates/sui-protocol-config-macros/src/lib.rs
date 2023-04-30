@@ -99,7 +99,7 @@ pub fn getters_macro(input: TokenStream) -> TokenStream {
                             panic!("Expected angle bracketed arguments.");
                         };
                         Some(quote! {
-                            stringify!(#field_name) => (ProtocolConfigValueType::#inner_type, self.#field_name.map(|v| format!("{}", v))),
+                            stringify!(#field_name) => self.#field_name.map(|v| ProtocolConfigValue::#inner_type(v)),
                         })
                     }
                     _ => None,
@@ -194,15 +194,15 @@ pub fn getters_macro(input: TokenStream) -> TokenStream {
             #(#getters)*
 
             /// Lookup a config attribute by its string representation
-            pub fn lookup_attr(&self, value: String) -> (ProtocolConfigValueType, Option<String>) {
+            pub fn lookup_attr(&self, value: String) -> Option<ProtocolConfigValue> {
                 match value.as_str() {
                     #(#value_lookup)*
                     _ => panic!("Invalid config attribute: {}", value),
                 }
             }
 
-            /// Get a map of all config attribute string representations to their string values
-            pub fn attr_map(&self) -> std::collections::BTreeMap<String, (ProtocolConfigValueType, Option<String>)> {
+            /// Get a map of all config attribute from string representations
+            pub fn attr_map(&self) -> std::collections::BTreeMap<String, Option<ProtocolConfigValue>> {
                 vec![
                     #(((#field_names_str).to_owned(), self.lookup_attr((#field_names_str).to_owned())),)*
                     ].into_iter().collect()
@@ -211,20 +211,20 @@ pub fn getters_macro(input: TokenStream) -> TokenStream {
         }
 
         #[allow(non_camel_case_types)]
-        #[derive(Clone, Serialize, Debug, PartialEq, Eq, Hash, Deserialize)]
-        pub enum ProtocolConfigValueType {
-            #(#inner_types,)*
+        #[derive(Clone, Serialize, Debug, PartialEq, Deserialize)]
+        pub enum ProtocolConfigValue {
+            #(#inner_types(#inner_types),)*
         }
 
 
-        impl std::fmt::Display for ProtocolConfigValueType {
+        impl std::fmt::Display for ProtocolConfigValue {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 use std::fmt::Write;
                 let mut writer = String::new();
                 match self {
                     #(
-                        ProtocolConfigValueType::#inner_types2 => {
-                            write!(writer, "{}", stringify!(#inner_types2))?;
+                        ProtocolConfigValue::#inner_types2(x) => {
+                            write!(writer, "{}", x)?;
                         }
                     )*
                 }
