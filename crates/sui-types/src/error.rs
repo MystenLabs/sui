@@ -52,6 +52,32 @@ macro_rules! exit_main {
     };
 }
 
+#[macro_export]
+macro_rules! make_invariant_violation {
+    ($($args:expr),* $(,)?) => {{
+        if cfg!(debug_assertions) {
+            panic!($($args),*)
+        }
+        ExecutionError::invariant_violation(format!($($args),*))
+    }}
+}
+
+#[macro_export]
+macro_rules! invariant_violation {
+    ($($args:expr),* $(,)?) => {
+        return Err(make_invariant_violation!($($args),*).into())
+    };
+}
+
+#[macro_export]
+macro_rules! assert_invariant {
+    ($cond:expr, $($args:expr),*) => {{
+        if !$cond {
+            invariant_violation!($($args),*)
+        }
+    }};
+}
+
 #[derive(
     Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash, AsRefStr, IntoStaticStr,
 )]
@@ -366,6 +392,8 @@ pub enum SuiError {
     TransactionAlreadyExecuted { digest: TransactionDigest },
     #[error("Object ID did not have the expected type")]
     BadObjectType { error: String },
+    #[error("Fail to retrieve Object layout for {st}")]
+    FailObjectLayout { st: String },
 
     #[error("Execution invariant violated")]
     ExecutionInvariantViolation,
