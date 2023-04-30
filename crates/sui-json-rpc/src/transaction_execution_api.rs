@@ -70,7 +70,7 @@ impl TransactionExecutionApi {
             (Some(ExecuteTransactionRequestType::WaitForEffectsCert), true) => {
                 return Err(anyhow!(
                     "`request_type` must set to `None` or `WaitForLocalExecution`\
-                         if effects is required in the response"
+                         if balance changes or object changes are required in the response"
                 )
                 .into());
             }
@@ -129,6 +129,11 @@ impl TransactionExecutionApi {
                 module_cache.as_ref(),
             )?);
         }
+
+        // show_balance_changes or show_object_changes should always force local execution
+        debug_assert!(
+            !(opts.show_balance_changes || opts.show_object_changes) || is_executed_locally
+        );
 
         let object_cache = ObjectProviderCache::new(self.state.clone());
         let balance_changes = if opts.show_balance_changes && is_executed_locally {
