@@ -9,18 +9,20 @@ import Alert from '_components/alert';
 import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
 import { NFTDisplayCard } from '_components/nft-display';
-import { useObjectsOwnedByAddress } from '_hooks';
+import { useObjectsOwnedByAddress, useGetNFTObjects } from '_hooks';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 
 function NftsPage() {
     const accountAddress = useActiveAddress();
-    const { data, isLoading, error, isError } = useObjectsOwnedByAddress(
-        accountAddress,
-        { options: { showType: true, showDisplay: true } }
+    const { data, isLoading, error, isError } = useGetNFTObjects(
+        accountAddress
+        //{ options: { showType: true, showDisplay: true } }
     );
-    const nfts = data?.data
+    console.log('data', data);
+    const nfts = data?.data.map(({ data }) => data as SuiObjectData);
+    /*const nfts2 = data?.data
         ?.filter((resp) => !!getObjectDisplay(resp).data)
-        .map(({ data }) => data as SuiObjectData);
+        .map(({ data }) => data as SuiObjectData);*/
     return (
         <div className="flex flex-1 flex-col flex-nowrap items-center gap-4">
             <PageTitle title="NFTs" />
