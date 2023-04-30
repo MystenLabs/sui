@@ -15,7 +15,7 @@ use store::{rocks::DBMap, Map};
 use tokio::time::sleep;
 use tracing::{debug, trace, warn};
 use types::{
-    Batch, BatchDigest, FetchBatchesRequest, FetchBatchesResponse, PrimaryToWorker,
+    now, Batch, BatchAPI, BatchDigest, FetchBatchesRequest, FetchBatchesResponse, PrimaryToWorker,
     RequestBatchRequest, RequestBatchResponse, RequestBatchesRequest, RequestBatchesResponse,
     WorkerBatchMessage, WorkerDeleteBatchesMessage, WorkerOthersBatchMessage,
     WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerClient,
@@ -53,7 +53,9 @@ impl<V: TransactionValidator> WorkerToWorker for WorkerReceiverHandler<V> {
             ));
         }
         let digest = message.batch.digest();
-        self.store.insert(&digest, &message.batch).map_err(|e| {
+        let mut batch = message.batch.clone();
+        batch.metadata_mut().created_at = now();
+        self.store.insert(&digest, &batch).map_err(|e| {
             anemo::rpc::Status::internal(format!("failed to write to batch store: {e:?}"))
         })?;
         self.client
@@ -290,7 +292,9 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
                             }
                             let digest = batch.digest();
                             if missing.remove(&digest) {
-                                self.store.insert(&digest, &batch).map_err(|e| {
+                                let mut updated_batch = batch.clone();
+                                updated_batch.metadata_mut().created_at = now();
+                                self.store.insert(&digest, &updated_batch).map_err(|e| {
                                     anemo::rpc::Status::internal(format!(
                                         "failed to write to batch store: {e:?}"
                                     ))
