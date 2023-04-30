@@ -376,17 +376,24 @@ impl ConsensusAdapter {
         let (duration, position, mapped_to_low_scoring) = match &transaction.kind {
             ConsensusTransactionKind::UserTransaction(certificate) => {
                 let tx_digest = certificate.digest();
-                let _ = self.submission_position(committee, tx_digest);
+                let (mut position, mapped_to_low_scoring) =
+                    self.submission_position(committee, tx_digest);
 
-                // TODO: hack-ish way to always make the validator submit to consensus. Assuming we
-                // want to go with that, we'll need to extract this to a config.
-                let (position, mapped_to_low_scoring) = (0, false);
-
-                const DEFAULT_LATENCY: Duration = Duration::from_secs(5);
                 const MAX_LATENCY: Duration = Duration::from_secs(5 * 60);
+                const DEFAULT_LATENCY: Duration = Duration::from_secs(5);
                 let latency = self.latency_observer.latency().unwrap_or(DEFAULT_LATENCY);
                 let latency = std::cmp::max(latency, DEFAULT_LATENCY);
-                let latency = std::cmp::min(latency, MAX_LATENCY);
+                let mut latency = std::cmp::min(latency, MAX_LATENCY);
+
+                let always_submit = true;
+                if always_submit && position > 0 {
+                    // set it always to position 1
+                    position = 1;
+
+                    // decrease latency and set it fixed to always be 2 seconds
+                    latency = Duration::from_secs(2);
+                }
+
                 self.metrics
                     .sequencing_estimated_latency
                     .set(latency.as_millis() as i64);
