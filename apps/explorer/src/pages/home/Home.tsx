@@ -90,7 +90,7 @@ function Home() {
                 </TabGroup>
             </div>
             {/* TODO: Add the popular packages component here :) */}
-            {/* <div className="grid-area-packages mt-5 bg-gray-60">
+            {/* <div className="grid-area-packages mt-5">
                 Popular packages
             </div> */}
         </div>
