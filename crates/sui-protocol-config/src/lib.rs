@@ -1295,32 +1295,41 @@ mod test {
         let prot: ProtocolConfig = ProtocolConfig::get_for_version(ProtocolVersion::new(1));
         assert!(
             prot.lookup_attr("max_arguments".to_string())
-                == Some(format!("{}", prot.max_arguments()))
+                == (
+                    ProtocolConfigValueType::u32,
+                    Some(format!("{}", prot.max_arguments()))
+                )
         );
 
         // We didnt have this in version 1
-        assert!(prot
-            .lookup_attr("max_move_identifier_len".to_string())
-            .is_none());
+        assert!(
+            prot.lookup_attr("max_move_identifier_len".to_string())
+                == (ProtocolConfigValueType::u64, None)
+        );
 
         // But we did in version 9
         let prot: ProtocolConfig = ProtocolConfig::get_for_version(ProtocolVersion::new(9));
         assert!(
             prot.lookup_attr("max_move_identifier_len".to_string())
-                == Some(format!("{}", prot.max_move_identifier_len()))
+                == (
+                    ProtocolConfigValueType::u64,
+                    Some(format!("{}", prot.max_move_identifier_len()))
+                )
         );
 
         let prot: ProtocolConfig = ProtocolConfig::get_for_version(ProtocolVersion::new(1));
         // We didnt have this in version 1
-        assert!(prot
-            .attr_map()
-            .get("max_move_identifier_len")
-            .unwrap()
-            .is_none());
+        assert!(
+            prot.attr_map().get("max_move_identifier_len").unwrap()
+                == &(ProtocolConfigValueType::u64, None)
+        );
         // We had this in version 1
         assert!(
             prot.attr_map().get("max_arguments").unwrap()
-                == &Some(format!("{}", prot.max_arguments()))
+                == &(
+                    ProtocolConfigValueType::u32,
+                    Some(format!("{}", prot.max_arguments()))
+                )
         );
     }
 
