@@ -285,6 +285,13 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
             .map_err(|e| e.finish(Location::Undefined))
     }
 
+    pub fn type_to_fully_annotated_layout(&self, ty: &Type) -> VMResult<MoveTypeLayout> {
+        self.runtime
+            .loader()
+            .type_to_fully_annotated_layout(ty)
+            .map_err(|e| e.finish(Location::Undefined))
+    }
+
     pub fn get_type_tag(&self, ty: &Type) -> VMResult<TypeTag> {
         self.runtime
             .loader()
