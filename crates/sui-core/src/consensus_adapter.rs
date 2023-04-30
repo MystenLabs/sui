@@ -376,8 +376,12 @@ impl ConsensusAdapter {
         let (duration, position, mapped_to_low_scoring) = match &transaction.kind {
             ConsensusTransactionKind::UserTransaction(certificate) => {
                 let tx_digest = certificate.digest();
-                let (position, mapped_to_low_scoring) =
-                    self.submission_position(committee, tx_digest);
+                let _ = self.submission_position(committee, tx_digest);
+
+                // TODO: hack-ish way to always make the validator submit to consensus. Assuming we
+                // want to go with that, we'll need to extract this to a config.
+                let (position, mapped_to_low_scoring) = (0, false);
+
                 const DEFAULT_LATENCY: Duration = Duration::from_secs(5);
                 const MAX_LATENCY: Duration = Duration::from_secs(5 * 60);
                 let latency = self.latency_observer.latency().unwrap_or(DEFAULT_LATENCY);
