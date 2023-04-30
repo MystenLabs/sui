@@ -3,7 +3,6 @@
 
 use std::cmp::Ordering;
 use std::ops::Not;
-use std::path::Path;
 use std::sync::Arc;
 use std::{iter, mem, thread};
 
@@ -13,7 +12,6 @@ use futures::stream::FuturesUnordered;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::resolver::ModuleResolver;
 use once_cell::sync::OnceCell;
-use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use sui_types::messages_checkpoint::ECMHLiveObjectSetDigest;
 use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
@@ -140,15 +138,13 @@ impl AuthorityStore {
     /// Open an authority store by directory path.
     /// If the store is empty, initialize it using genesis.
     pub async fn open(
-        path: &Path,
-        db_options: Option<Options>,
+        perpetual_tables: Arc<AuthorityPerpetualTables>,
         genesis: &Genesis,
         committee_store: &Arc<CommitteeStore>,
         indirect_objects_threshold: usize,
         enable_epoch_sui_conservation_check: bool,
         registry: &Registry,
     ) -> SuiResult<Arc<Self>> {
-        let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(path, db_options.clone()));
         let epoch_start_configuration = if perpetual_tables.database_is_empty()? {
             let epoch_start_configuration = EpochStartConfiguration::new(
                 genesis.sui_system_object().into_epoch_start_state(),
@@ -197,8 +193,7 @@ impl AuthorityStore {
     }
 
     pub async fn open_with_committee_for_testing(
-        path: &Path,
-        db_options: Option<Options>,
+        perpetual_tables: Arc<AuthorityPerpetualTables>,
         committee: &Committee,
         genesis: &Genesis,
         indirect_objects_threshold: usize,
@@ -206,7 +201,6 @@ impl AuthorityStore {
         // TODO: Since we always start at genesis, the committee should be technically the same
         // as the genesis committee.
         assert_eq!(committee.epoch, 0);
-        let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(path, db_options.clone()));
         Self::open_inner(
             genesis,
             perpetual_tables,
@@ -276,13 +270,6 @@ impl AuthorityStore {
                 .enumerate()
                 .map(|(i, e)| ((event_digests, i), e));
             store.perpetual_tables.events.multi_insert(events).unwrap();
-            // When we are opening the db table, the only time when it's safe to
-            // check SUI conservation is at genesis. Otherwise we may be in the middle of
-            // an epoch and the SUI conservation check will fail. This also initialize
-            // the expected_network_sui_amount table.
-            store
-                .expensive_check_sui_conservation()
-                .expect("SUI conservation check cannot fail at genesis");
         }
 
         Ok(store)

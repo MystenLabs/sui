@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority::authority_store_tables::AuthorityPerpetualTables;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::authority::{AuthorityState, AuthorityStore};
 use crate::checkpoints::CheckpointStore;
@@ -118,19 +119,31 @@ impl<'a> TestAuthorityBuilder<'a> {
             std::fs::create_dir(&store_base_path).unwrap();
             store_base_path
         });
-        let authority_store = match self.store {
-            Some(store) => store,
+        let (authority_store, empty_database) = match self.store {
+            Some(store) => {
+                let empty_database = store
+                    .database_is_empty()
+                    .expect("Database read should not fail at init.");
+                (store, empty_database)
+            }
             None => {
+                let perpetual_tables =
+                    Arc::new(AuthorityPerpetualTables::open(&path.join("store"), None));
+                let empty_database = perpetual_tables
+                    .database_is_empty()
+                    .expect("Database read should not fail at init.");
                 // unwrap ok - for testing only.
-                AuthorityStore::open_with_committee_for_testing(
-                    &path.join("store"),
-                    None,
-                    &genesis_committee,
-                    genesis,
-                    0,
+                (
+                    AuthorityStore::open_with_committee_for_testing(
+                        perpetual_tables,
+                        &genesis_committee,
+                        genesis,
+                        0,
+                    )
+                    .await
+                    .unwrap(),
+                    empty_database,
                 )
-                .await
-                .unwrap()
             }
         };
         let keypair = self
@@ -161,6 +174,16 @@ impl<'a> TestAuthorityBuilder<'a> {
             signature_verifier_metrics,
             &ExpensiveSafetyCheckConfig::default(),
         );
+
+        if empty_database {
+            // When we are opening the db table, the only time when it's safe to
+            // check SUI conservation is at genesis. Otherwise we may be in the middle of
+            // an epoch and the SUI conservation check will fail. This also initialize
+            // the expected_network_sui_amount table.
+            authority_store
+                .expensive_check_sui_conservation()
+                .expect("SUI conservation check cannot fail at genesis");
+        }
 
         let committee_store = Arc::new(CommitteeStore::new(
             path.join("epochs"),

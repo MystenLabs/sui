@@ -43,6 +43,7 @@ use sui_config::node::DBCheckpointConfig;
 use sui_config::node_config_metrics::NodeConfigMetrics;
 use sui_config::{ConsensusConfig, NodeConfig};
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::authority::epoch_start_configuration::EpochStartConfigTrait;
 use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
 use sui_core::authority_aggregator::AuthorityAggregator;
@@ -212,9 +213,15 @@ impl SuiNode {
         ));
 
         let perpetual_options = default_db_options().optimize_db_for_write_throughput(4);
-        let store = AuthorityStore::open(
+        let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(
             &config.db_path().join("store"),
             Some(perpetual_options.options),
+        ));
+        let empty_database = perpetual_tables
+            .database_is_empty()
+            .expect("Database read should not fail at init.");
+        let store = AuthorityStore::open(
+            perpetual_tables,
             genesis,
             &committee_store,
             config.indirect_objects_threshold,
@@ -247,6 +254,16 @@ impl SuiNode {
             signature_verifier_metrics,
             &config.expensive_safety_check_config,
         );
+
+        if empty_database {
+            // When we are opening the db table, the only time when it's safe to
+            // check SUI conservation is at genesis. Otherwise we may be in the middle of
+            // an epoch and the SUI conservation check will fail. This also initialize
+            // the expected_network_sui_amount table.
+            store
+                .expensive_check_sui_conservation()
+                .expect("SUI conservation check cannot fail at genesis");
+        }
 
         let effective_buffer_stake = epoch_store.get_effective_buffer_stake_bps();
         let default_buffer_stake = epoch_store
