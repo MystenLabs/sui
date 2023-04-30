@@ -348,11 +348,18 @@ mod tests {
             batch_store: batch_store.clone(),
             metrics: Arc::new(WorkerMetrics::default()),
         };
-        let expected_batches = HashMap::from_iter(vec![
+        let mut expected_batches = HashMap::from_iter(vec![
             (batch1.digest(), batch1.clone()),
             (batch2.digest(), batch2.clone()),
         ]);
-        let fetched_batches = fetcher.fetch(digests, known_workers).await;
+        let mut fetched_batches = fetcher.fetch(digests, known_workers).await;
+        // Reset metadata from the fetched and expected batches
+        for batch in fetched_batches.values_mut() {
+            batch.metadata_mut().created_at = 0;
+        }
+        for batch in expected_batches.values_mut() {
+            batch.metadata_mut().created_at = 0;
+        }
         assert_eq!(fetched_batches, expected_batches);
         assert_eq!(
             batch_store
@@ -397,12 +404,19 @@ mod tests {
             batch_store,
             metrics: Arc::new(WorkerMetrics::default()),
         };
-        let expected_batches = HashMap::from_iter(vec![
+        let mut expected_batches = HashMap::from_iter(vec![
             (batch1.digest(), batch1.clone()),
             (batch2.digest(), batch2.clone()),
             (batch3.digest(), batch3.clone()),
         ]);
-        let fetched_batches = fetcher.fetch(digests, known_workers).await;
+        let mut fetched_batches = fetcher.fetch(digests, known_workers).await;
+        // Reset metadata from the fetched and expected batches
+        for batch in fetched_batches.values_mut() {
+            batch.metadata_mut().created_at = 0;
+        }
+        for batch in expected_batches.values_mut() {
+            batch.metadata_mut().created_at = 0;
+        }
         assert_eq!(fetched_batches, expected_batches);
     }
 
@@ -428,12 +442,19 @@ mod tests {
             batch_store,
             metrics: Arc::new(WorkerMetrics::default()),
         };
-        let expected_batches = HashMap::from_iter(vec![
+        let mut expected_batches = HashMap::from_iter(vec![
             (batch1.digest(), batch1.clone()),
             (batch2.digest(), batch2.clone()),
             (batch3.digest(), batch3.clone()),
         ]);
-        let fetched_batches = fetcher.fetch(digests, known_workers).await;
+        let mut fetched_batches = fetcher.fetch(digests, known_workers).await;
+        // Reset metadata from the fetched and expected batches
+        for batch in fetched_batches.values_mut() {
+            batch.metadata_mut().created_at = 0;
+        }
+        for batch in expected_batches.values_mut() {
+            batch.metadata_mut().created_at = 0;
+        }
         assert_eq!(fetched_batches, expected_batches);
     }
 
@@ -458,12 +479,19 @@ mod tests {
             batch_store,
             metrics: Arc::new(WorkerMetrics::default()),
         };
-        let expected_batches = HashMap::from_iter(vec![
+        let mut expected_batches = HashMap::from_iter(vec![
             (batch1.digest(), batch1.clone()),
             (batch2.digest(), batch2.clone()),
             (batch3.digest(), batch3.clone()),
         ]);
-        let fetched_batches = fetcher.fetch(digests, known_workers).await;
+        let mut fetched_batches = fetcher.fetch(digests, known_workers).await;
+        // Reset metadata from the fetched and expected batches
+        for batch in fetched_batches.values_mut() {
+            batch.metadata_mut().created_at = 0;
+        }
+        for batch in expected_batches.values_mut() {
+            batch.metadata_mut().created_at = 0;
+        }
         assert_eq!(fetched_batches, expected_batches);
     }
 
@@ -487,7 +515,7 @@ mod tests {
             expected_batches.push(batch);
         }
 
-        let expected_batches = HashMap::from_iter(
+        let mut expected_batches = HashMap::from_iter(
             expected_batches
                 .iter()
                 .map(|batch| (batch.digest(), batch.clone())),
@@ -502,7 +530,14 @@ mod tests {
             batch_store,
             metrics: Arc::new(WorkerMetrics::default()),
         };
-        let fetched_batches = fetcher.fetch(digests, known_workers).await;
+        let mut fetched_batches = fetcher.fetch(digests, known_workers).await;
+        // Reset metadata from the fetched and expected batches
+        for batch in fetched_batches.values_mut() {
+            batch.metadata_mut().created_at = 0;
+        }
+        for batch in expected_batches.values_mut() {
+            batch.metadata_mut().created_at = 0;
+        }
         assert_eq!(fetched_batches, expected_batches);
     }
 
