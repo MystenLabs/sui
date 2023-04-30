@@ -271,6 +271,12 @@ pub struct ConsensusAdapter {
     max_pending_transactions: usize,
     /// Number of submitted transactions still inflight at this node.
     num_inflight_transactions: AtomicU64,
+    /// Dictates the maximum position  from which will submit to consensus. Even if the is elected to
+    /// submit from a higher position than this, it will "reset" to the max_submit_position.
+    max_submit_position: Option<usize>,
+    /// The maximum submit delay step to consensus. When provided it will override the current back off
+    /// logic.
+    max_submit_delay_step: Option<Duration>,
     /// A structure to check the connection statuses populated by the Connection Monitor Listener
     connection_monitor_status: Box<Arc<dyn CheckConnection>>,
     /// A structure to check the reputation scores populated by Consensus
@@ -308,6 +314,8 @@ impl ConsensusAdapter {
         connection_monitor_status: Box<Arc<dyn CheckConnection>>,
         max_pending_transactions: usize,
         max_pending_local_submissions: usize,
+        max_submit_position: Option<usize>,
+        max_submit_delay_step: Option<Duration>,
         metrics: ConsensusAdapterMetrics,
     ) -> Self {
         let num_inflight_transactions = Default::default();
@@ -317,6 +325,8 @@ impl ConsensusAdapter {
             consensus_client,
             authority,
             max_pending_transactions,
+            max_submit_position,
+            max_submit_delay_step,
             num_inflight_transactions,
             connection_monitor_status,
             low_scoring_authorities,
@@ -383,21 +393,14 @@ impl ConsensusAdapter {
                 const DEFAULT_LATENCY: Duration = Duration::from_secs(5);
                 let latency = self.latency_observer.latency().unwrap_or(DEFAULT_LATENCY);
                 let latency = std::cmp::max(latency, DEFAULT_LATENCY);
-                let mut latency = std::cmp::min(latency, MAX_LATENCY);
+                let latency = std::cmp::min(latency, MAX_LATENCY);
 
-                let always_submit = true;
-                if always_submit && position > 0 {
-                    // set it always to position 1
-                    position = 1;
-
-                    // decrease latency and set it fixed to always be 2 seconds
-                    latency = Duration::from_secs(2);
-                }
+                position = self.max_submit_position.unwrap_or(position);
+                let delay_step = self.max_submit_delay_step.unwrap_or(latency * 3 / 2);
 
                 self.metrics
                     .sequencing_estimated_latency
                     .set(latency.as_millis() as i64);
-                let delay_step = latency * 3 / 2;
                 (
                     delay_step * position as u32,
                     position,

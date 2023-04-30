@@ -14,6 +14,7 @@ use serde_with::serde_as;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 use std::usize;
 use sui_keys::keypair_file::{read_authority_keypair_from_file, read_keypair_from_file};
 use sui_protocol_config::SupportedProtocolVersions;
@@ -240,6 +241,15 @@ pub struct ConsensusConfig {
     // Default to 100_000.
     pub max_pending_transactions: Option<usize>,
 
+    /// Dictates the maximum position  from which will submit to consensus. Even if the is elected to
+    /// submit from a higher position than this, it will "reset" to the max_submit_position.
+    pub max_submit_position: Option<usize>,
+
+    /// The maximum submit delay step to consensus defined in milliseconds. When provided it will
+    /// override the current back off logic otherwise the default backoff logic will be applied based
+    /// on consensus latency estimates.
+    pub max_submit_delay_step_millis: Option<u64>,
+
     pub narwhal_config: ConsensusParameters,
 }
 
@@ -254,6 +264,10 @@ impl ConsensusConfig {
 
     pub fn max_pending_transactions(&self) -> usize {
         self.max_pending_transactions.unwrap_or(100_000)
+    }
+
+    pub fn max_submit_delay_step(&self) -> Option<Duration> {
+        self.max_submit_delay_step_millis.map(Duration::from_millis)
     }
 
     pub fn narwhal_config(&self) -> &ConsensusParameters {
