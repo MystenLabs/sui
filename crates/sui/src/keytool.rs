@@ -29,7 +29,7 @@ use openssl::nid::Nid;
 use openssl::pkey::PKey;
 use fastcrypto::traits::{ToFromBytes};
 use fastcrypto::secp256k1::{Secp256k1PublicKey};
-use fastcrypto::secp256k1::recoverable::secpSig;
+use fastcrypto::secp256k1::recoverable::Secp256k1Sig;
 #[cfg(test)]
 #[path = "unit_tests/keytool_tests.rs"]
 mod keytool_tests;
