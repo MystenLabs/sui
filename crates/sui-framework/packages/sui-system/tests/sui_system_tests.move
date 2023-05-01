@@ -185,6 +185,19 @@ module sui_system::sui_system_tests {
     }
 
     #[test]
+    #[expected_failure(abort_code = validator::EGasPriceHigherThanThreshold)]
+    fun test_set_gas_price_failure() {
+        let scenario_val = test_scenario::begin(@0x0);
+        let scenario = &mut scenario_val;
+        set_up_sui_system_state(vector[@0x1, @0x2]);
+
+        // Fails here since the gas price is too high.
+        set_gas_price_helper(@0x1, 100_001, scenario);
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
     #[expected_failure(abort_code = sui_system_state_inner::ENotValidator)]
     fun test_report_non_validator_failure() {
         let scenario_val = test_scenario::begin(@0x0);
