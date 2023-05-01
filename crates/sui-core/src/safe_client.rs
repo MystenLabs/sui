@@ -151,14 +151,17 @@ impl SafeClientMetrics {
 /// See `SafeClientMetrics::new` for description of each metrics.
 /// The metrics are per validator client.
 #[derive(Clone)]
-pub struct SafeClient<C> {
+pub struct SafeClient<C>
+where
+    C: Clone,
+{
     authority_client: C,
     committee_store: Arc<CommitteeStore>,
     address: AuthorityPublicKeyBytes,
     metrics: SafeClientMetrics,
 }
 
-impl<C> SafeClient<C> {
+impl<C: Clone> SafeClient<C> {
     pub fn new(
         authority_client: C,
         committee_store: Arc<CommitteeStore>,
@@ -174,7 +177,7 @@ impl<C> SafeClient<C> {
     }
 }
 
-impl<C> SafeClient<C> {
+impl<C: Clone> SafeClient<C> {
     pub fn authority_client(&self) -> &C {
         &self.authority_client
     }

@@ -288,10 +288,8 @@ pub async fn init_local_authorities_with_genesis(
         clients.insert(authority_name, client);
     }
     let timeouts = TimeoutConfig {
-        authority_request_timeout: Duration::from_secs(5),
         pre_quorum_timeout: Duration::from_secs(5),
         post_quorum_timeout: Duration::from_secs(5),
-        serial_authority_request_timeout: Duration::from_secs(1),
         serial_authority_request_interval: Duration::from_secs(1),
     };
     let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
