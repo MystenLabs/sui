@@ -483,7 +483,9 @@ async fn test_validator_resign_effects() {
     sleep(Duration::from_secs(10)).await;
     trigger_reconfiguration(&authorities).await;
     // Manually reconfigure the aggregator.
-    net.committee.epoch = 1;
+    let mut committee = net.clone_inner_committee_test_only();
+    committee.epoch = 1;
+    net.committee = Arc::new(committee);
     let (effects1, _, _) = net.process_certificate(cert.into_inner()).await.unwrap();
     // Ensure that we are able to form a new effects cert in the new epoch.
     assert_eq!(effects1.epoch(), 1);
