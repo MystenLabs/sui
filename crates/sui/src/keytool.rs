@@ -213,7 +213,7 @@ impl KeyToolCommand {
                         println!("Public Key: {}", keypair.public().encode_base64());
                         println!("Flag: {}", keypair.public().flag());
                         if let PublicKey::Ed25519(public_key) = keypair.public() {
-                            let peer_id = anemo::PeerId(public_key.0.into());
+                            let peer_id = anemo::PeerId(public_key.0);
                             println!("PeerId: {}", peer_id);
                         }
                     }

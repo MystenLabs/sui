@@ -96,9 +96,7 @@ fn multisig_scenarios() {
     assert!(multi_sig_6.verify_secure_generic(&msg, addr_2).is_ok());
 
     // providing the same sig twice fails.
-    let multi_sig_6 =
-        MultiSig::combine(vec![sig1.clone(), sig1.clone()], multisig_pk_2.clone()).unwrap();
-    assert!(multi_sig_6.verify_secure_generic(&msg, addr_2).is_err());
+    assert!(MultiSig::combine(vec![sig1.clone(), sig1.clone()], multisig_pk_2.clone()).is_err());
 
     // Change position for sig2 and sig1 fails.
     let multi_sig_7 =
@@ -317,9 +315,15 @@ fn test_max_sig() {
         },
     );
     let mut seed = StdRng::from_seed([0; 32]);
-    let mut keys: Vec<SuiKeyPair> = Vec::new();
+    let mut keys = Vec::new();
+    let mut sigs = Vec::new();
+    let mut pks = Vec::new();
+
     for _ in 0..10 {
-        keys.push(SuiKeyPair::Ed25519(get_key_pair_from_rng(&mut seed).1));
+        let k = SuiKeyPair::Ed25519(get_key_pair_from_rng(&mut seed).1);
+        sigs.push(Signature::new_secure(&msg, &k));
+        pks.push(k.public());
+        keys.push(k);
     }
 
     // multisig_pk with larger that max number of pks fails.
@@ -340,16 +344,16 @@ fn test_max_sig() {
 
     // multisig_pk with max weights for each pk and max reachable threshold is ok.
     let high_threshold_pk = MultiSigPublicKey::new(
-        vec![keys[0].public(); MAX_SIGNER_IN_MULTISIG],
+        pks,
         vec![WeightUnit::MAX; MAX_SIGNER_IN_MULTISIG],
         (WeightUnit::MAX as ThresholdUnit) * (MAX_SIGNER_IN_MULTISIG as ThresholdUnit),
     )
     .unwrap();
     let address: SuiAddress = high_threshold_pk.clone().into();
-    let sig = Signature::new_secure(&msg, &keys[0]);
 
     // But max threshold cannot be met, fails to verify.
-    let multisig = MultiSig::combine(vec![sig; MAX_SIGNER_IN_MULTISIG], high_threshold_pk).unwrap();
+    sigs.remove(0);
+    let multisig = MultiSig::combine(sigs, high_threshold_pk).unwrap();
     assert!(multisig.verify_secure_generic(&msg, address).is_err());
 
     // multisig_pk with max weights for each pk with threshold is 1x max weight verifies ok.

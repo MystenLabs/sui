@@ -3344,7 +3344,7 @@ checksum = "4443176a9f2c162692bd3d352d745ef9413eec5782a80d8fd6f8a1ac692a07f7"
 [[package]]
 name = "fastcrypto"
 version = "0.1.5"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=c96c7422cf6a120d5bad921523bc6587c8160988#c96c7422cf6a120d5bad921523bc6587c8160988"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=c27e87fb539c88b6fe1eac7dd82561254bb1e07a#c27e87fb539c88b6fe1eac7dd82561254bb1e07a"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -3398,7 +3398,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.2"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=c96c7422cf6a120d5bad921523bc6587c8160988#c96c7422cf6a120d5bad921523bc6587c8160988"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=c27e87fb539c88b6fe1eac7dd82561254bb1e07a#c27e87fb539c88b6fe1eac7dd82561254bb1e07a"
 dependencies = [
  "convert_case 0.6.0",
  "proc-macro2 1.0.54",
@@ -3409,7 +3409,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.1"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=c96c7422cf6a120d5bad921523bc6587c8160988#c96c7422cf6a120d5bad921523bc6587c8160988"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=c27e87fb539c88b6fe1eac7dd82561254bb1e07a#c27e87fb539c88b6fe1eac7dd82561254bb1e07a"
 dependencies = [
  "ark-bls12-381",
  "ark-bn254",
@@ -13280,9 +13280,9 @@ dependencies = [
 
 [[package]]
 name = "xml-rs"
-version = "0.8.4"
+version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2d7d3948613f75c98fd9328cfdcc45acc4d360655289d0a7d4ec931392200a3"
+checksum = "699d0104bcdd7e7af6d093d6c6e2d0c479b8a129ee0d1023b31d2e0c71bfdda2"
 
 [[package]]
 name = "xmlparser"
