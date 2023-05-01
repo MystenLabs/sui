@@ -49,14 +49,14 @@ interface Props {
 }
 
 // NOTE: This component is lazy imported, so it needs to be default exported:
-export default function NodeMap({ minHeight }: Props) {
+export default function ValidatorMap({ minHeight }: Props) {
     const [dateFilter, setDateFilter] = useDateFilterState('D');
 
     const { data, isLoading, isSuccess } = useQuery(
         ['validator-map', dateFilter],
         async () => {
             const res = await fetch(
-                `http://localhost:3003/validator-map-v2?network=testnet`,
+                `http://localhost:3003/validator-map?network=testnet`,
                 {
                     method: 'GET',
                 }
