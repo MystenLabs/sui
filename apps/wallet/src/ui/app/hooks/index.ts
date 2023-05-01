@@ -17,7 +17,6 @@ export { useQueryTransactionsByAddress } from './useQueryTransactionsByAddress';
 export { useGetTransferAmount } from './useGetTransferAmount';
 export { useGetCoinBalance } from './useGetCoinBalance';
 export { useGetAllBalances } from './useGetAllBalances';
-export { useObjectsOwnedByAddress } from './useObjectsOwnedByAddress';
 export { useOwnedNFT } from './useOwnedNFT';
 export { useGetCoins } from './useGetCoins';
 export * from './useSigner';

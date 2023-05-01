@@ -25,7 +25,7 @@ jobs:
           token: ${{ secrets.AUTOMERGE_TOKEN }}
       - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # pin@v1
       - name: Install cargo-hakari, and cache the binary
-        uses: baptiste0928/cargo-install@bf6758885262d0e6f61089a9d8c8790d3ac3368f # pin@v1
+        uses: baptiste0928/cargo-install@48c92f3d491efa23daace9891498a14c5aaa1afd # pin@v2
         with:
           crate: cargo-hakari
           locked: true

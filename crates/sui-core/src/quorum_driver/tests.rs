@@ -196,7 +196,9 @@ async fn test_quorum_driver_update_validators_and_max_retry_times() {
     });
 
     // Update authority aggregator with a new epoch number, and let quorum driver know.
-    aggregator.committee.epoch = 10;
+    let mut committee = aggregator.clone_inner_committee_test_only();
+    committee.epoch = 10;
+    aggregator.committee = Arc::new(committee);
     quorum_driver_clone
         .update_validators(Arc::new(aggregator))
         .await;
@@ -250,9 +252,9 @@ async fn test_quorum_driver_object_locked() -> Result<(), anyhow::Error> {
     let tx = make_tx(&gas, sender, &keypair, rgp);
     let names: Vec<_> = aggregator.authority_clients.keys().clone().collect();
     assert_eq!(names.len(), 4);
-    let client0 = aggregator.clone_client(names[0]);
-    let client1 = aggregator.clone_client(names[1]);
-    let client2 = aggregator.clone_client(names[2]);
+    let client0 = aggregator.clone_client_test_only(names[0]);
+    let client1 = aggregator.clone_client_test_only(names[1]);
+    let client2 = aggregator.clone_client_test_only(names[2]);
 
     println!("Case 0 - two validators lock the object with the same tx");
     assert!(client0.handle_transaction(tx.clone()).await.is_ok());

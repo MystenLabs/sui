@@ -40,17 +40,25 @@ use sui_types::effects::{
 };
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 
-pub fn get_local_client(
+pub fn set_local_client_config(
     authorities: &mut AuthorityAggregator<LocalAuthorityClient>,
     index: usize,
-) -> &mut LocalAuthorityClient {
-    let mut clients = authorities.authority_clients.values_mut();
+    config: LocalAuthorityClientFaultConfig,
+) {
+    let mut clients = authorities.clone_inner_clients_test_only();
+    let mut clients_values_mut = clients.values_mut();
     let mut i = 0;
     while i < index {
-        clients.next();
+        clients_values_mut.next();
         i += 1;
     }
-    clients.next().unwrap().authority_client_mut()
+    clients_values_mut
+        .next()
+        .unwrap()
+        .authority_client_mut()
+        .fault_config = config;
+    let clients = clients.into_iter().map(|(k, v)| (k, Arc::new(v))).collect();
+    authorities.authority_clients = Arc::new(clients);
 }
 
 pub fn create_object_move_transaction(
@@ -141,7 +149,7 @@ pub fn set_object_move_transaction(
     )
 }
 
-pub async fn do_transaction<A>(authority: &SafeClient<A>, transaction: &VerifiedTransaction)
+pub async fn do_transaction<A>(authority: &Arc<SafeClient<A>>, transaction: &VerifiedTransaction)
 where
     A: AuthorityAPI + Send + Sync + Clone + 'static,
 {
@@ -152,7 +160,7 @@ where
 }
 
 pub async fn extract_cert<A>(
-    authorities: &[&SafeClient<A>],
+    authorities: &[Arc<SafeClient<A>>],
     committee: &Committee,
     transaction_digest: &TransactionDigest,
 ) -> CertifiedTransaction
@@ -214,7 +222,7 @@ where
     }
 }
 
-pub async fn get_latest_ref<A>(authority: &SafeClient<A>, object_id: ObjectID) -> ObjectRef
+pub async fn get_latest_ref<A>(authority: Arc<SafeClient<A>>, object_id: ObjectID) -> ObjectRef
 where
     A: AuthorityAPI + Send + Sync + Clone + 'static,
 {
@@ -244,7 +252,7 @@ async fn execute_transaction_with_fault_configs(
     let gas_object2 = genesis.object(gas_object2.id()).unwrap();
 
     for (index, config) in configs_before_process_transaction {
-        get_local_client(&mut authorities, *index).fault_config = *config;
+        set_local_client_config(&mut authorities, *index, *config);
     }
     let rgp = genesis.reference_gas_price();
     let tx = make_transfer_object_transaction(
@@ -259,11 +267,16 @@ async fn execute_transaction_with_fault_configs(
         return false;
     };
 
-    for client in authorities.authority_clients.values_mut() {
+    let mut clients = authorities.clone_inner_clients_test_only();
+
+    for client in &mut clients.values_mut() {
         client.authority_client_mut().fault_config.reset();
     }
+    let clients = clients.into_iter().map(|(k, v)| (k, Arc::new(v))).collect();
+    authorities.authority_clients = Arc::new(clients);
+
     for (index, config) in configs_before_process_certificate {
-        get_local_client(&mut authorities, *index).fault_config = *config;
+        set_local_client_config(&mut authorities, *index, *config);
     }
 
     authorities
@@ -344,76 +357,84 @@ async fn test_map_reducer() {
     let (authorities, _, _, _) = init_local_authorities(4, vec![]).await;
 
     // Test: mapper errors do not get propagated up, reducer works
-    let res: Result<(), usize> = authorities
-        .quorum_map_then_reduce_with_timeout(
-            0usize,
-            |_name, _client| {
-                Box::pin(async move {
-                    let res: Result<usize, SuiError> = Err(SuiError::TooManyIncorrectAuthorities {
-                        errors: vec![],
-                        action: "".to_string(),
-                    });
-                    res
-                })
-            },
-            |mut accumulated_state, _authority_name, _authority_weight, result| {
-                Box::pin(async move {
-                    assert!(matches!(
-                        result,
-                        Err(SuiError::TooManyIncorrectAuthorities { .. })
-                    ));
-                    accumulated_state += 1;
-                    ReduceOutput::Continue(accumulated_state)
-                })
-            },
-            Duration::from_millis(1000),
-        )
-        .await;
-    assert_eq!(Err(4), res);
+    let res = AuthorityAggregator::quorum_map_then_reduce_with_timeout::<_, _, (), _, _>(
+        authorities.committee.clone(),
+        authorities.authority_clients.clone(),
+        0usize,
+        |_name, _client| {
+            Box::pin(async move {
+                let res: Result<usize, SuiError> = Err(SuiError::TooManyIncorrectAuthorities {
+                    errors: vec![],
+                    action: "".to_string(),
+                });
+                res
+            })
+        },
+        |mut accumulated_state, _authority_name, _authority_weight, result| {
+            Box::pin(async move {
+                assert!(matches!(
+                    result,
+                    Err(SuiError::TooManyIncorrectAuthorities { .. })
+                ));
+                accumulated_state += 1;
+                ReduceOutput::Continue(accumulated_state)
+            })
+        },
+        Duration::from_millis(1000),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(4, res);
 
     // Test: early end
-    let res = authorities
-        .quorum_map_then_reduce_with_timeout(
-            0usize,
-            |_name, _client| Box::pin(async move { Ok(()) }),
-            |mut accumulated_state, _authority_name, _authority_weight, _result| {
-                Box::pin(async move {
-                    if accumulated_state > 2 {
-                        ReduceOutput::Success(accumulated_state)
-                    } else {
-                        accumulated_state += 1;
-                        ReduceOutput::Continue(accumulated_state)
-                    }
-                })
-            },
-            Duration::from_millis(1000),
-        )
-        .await;
-    assert_eq!(Ok(3), res);
+    let res = AuthorityAggregator::quorum_map_then_reduce_with_timeout(
+        authorities.committee.clone(),
+        authorities.authority_clients.clone(),
+        0usize,
+        |_name, _client| Box::pin(async move { Ok(()) }),
+        |mut accumulated_state, _authority_name, _authority_weight, _result| {
+            Box::pin(async move {
+                if accumulated_state > 2 {
+                    ReduceOutput::Success(accumulated_state)
+                } else {
+                    accumulated_state += 1;
+                    ReduceOutput::Continue(accumulated_state)
+                }
+            })
+        },
+        Duration::from_millis(1000),
+    )
+    .await
+    .unwrap();
+    assert_eq!(3, res.0);
 
     // Test: Global timeout works
-    let res: Result<(), _> = authorities
-        .quorum_map_then_reduce_with_timeout(
-            0usize,
-            |_name, _client| {
-                Box::pin(async move {
-                    // 10 mins
-                    tokio::time::sleep(Duration::from_secs(10 * 60)).await;
-                    Ok(())
-                })
-            },
-            |_accumulated_state, _authority_name, _authority_weight, _result| {
-                Box::pin(async move { ReduceOutput::Continue(0) })
-            },
-            Duration::from_millis(10),
-        )
-        .await;
-    assert_eq!(Err(0), res);
+    let res = AuthorityAggregator::quorum_map_then_reduce_with_timeout::<_, _, (), _, _>(
+        authorities.committee.clone(),
+        authorities.authority_clients.clone(),
+        0usize,
+        |_name, _client| {
+            Box::pin(async move {
+                // 10 mins
+                tokio::time::sleep(Duration::from_secs(10 * 60)).await;
+                Ok(())
+            })
+        },
+        |_accumulated_state, _authority_name, _authority_weight, _result| {
+            Box::pin(async move { ReduceOutput::Continue(0) })
+        },
+        Duration::from_millis(10),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(0, res);
 
     // Test: Local timeout works
     let bad_auth = *authorities.committee.sample();
-    let res: Result<(), _> = authorities
-        .quorum_map_then_reduce_with_timeout(
+    let res: Result<_, _> =
+        AuthorityAggregator::quorum_map_then_reduce_with_timeout::<_, _, (), _, _>(
+            authorities.committee.clone(),
+            authorities.authority_clients.clone(),
             HashSet::new(),
             |_name, _client| {
                 Box::pin(async move {
@@ -601,7 +622,7 @@ fn get_authorities(
     (authorities, authorities_vec, clients)
 }
 
-fn get_genesis_agg<A>(
+fn get_genesis_agg<A: Clone>(
     authorities: BTreeMap<AuthorityName, StakeUnit>,
     clients: BTreeMap<AuthorityName, A>,
 ) -> AuthorityAggregator<A> {
@@ -620,7 +641,7 @@ fn get_genesis_agg<A>(
     )
 }
 
-fn get_agg_at_epoch<A>(
+fn get_agg_at_epoch<A: Clone>(
     authorities: BTreeMap<AuthorityName, StakeUnit>,
     clients: BTreeMap<AuthorityName, A>,
     epoch: EpochId,
@@ -633,7 +654,7 @@ where
     agg.committee_store
         .insert_new_committee(&committee)
         .unwrap();
-    agg.committee = committee;
+    agg.committee = Arc::new(committee);
     agg
 }
 
@@ -806,7 +827,7 @@ async fn test_handle_transaction_response() {
     agg.committee_store
         .insert_new_committee(&committee_1)
         .unwrap();
-    agg.committee = committee_1;
+    agg.committee = Arc::new(committee_1);
 
     assert_resp_err(&agg, tx.clone(), |e| matches!(e, AggregatorProcessTransactionError::RetryableTransaction { .. }),
         |e| matches!(e, SuiError::WrongEpoch { expected_epoch, actual_epoch } if *expected_epoch == 1 && *actual_epoch == 0)
@@ -861,7 +882,7 @@ async fn test_handle_transaction_response() {
     agg.committee_store
         .insert_new_committee(&committee_1)
         .unwrap();
-    agg.committee = committee_1.clone();
+    agg.committee = Arc::new(committee_1.clone());
 
     let cert_epoch_1 = agg
         .process_transaction(tx.clone())
@@ -1151,7 +1172,7 @@ async fn test_handle_transaction_response() {
 
     println!("Case 7.2 - Successful Cert Transaction");
     // Update aggregator committee, and transaction will succeed.
-    agg.committee = committee_1;
+    agg.committee = Arc::new(committee_1);
     agg.process_transaction(tx.clone()).await.unwrap();
 
     println!("Case 8 - Retryable Transaction (ObjectNotFound Error)");
@@ -1735,7 +1756,7 @@ async fn test_handle_conflicting_transaction_response() {
 
     println!("Case 5.2 - Successful Cert Transaction");
     // Update aggregator committee to epoch 2, and transaction will succeed.
-    agg.committee = committee_2;
+    agg.committee = Arc::new(committee_2);
     agg.process_transaction(tx1.clone()).await.unwrap();
 }
 

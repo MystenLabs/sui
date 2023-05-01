@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { AxisBottom } from '@visx/axis';
-import { curveLinear } from '@visx/curve';
+import { curveNatural } from '@visx/curve';
 import { localPoint } from '@visx/event';
 import { scaleTime, scaleLinear } from '@visx/scale';
 import { LinePath } from '@visx/shape';
@@ -35,8 +35,8 @@ export type GraphProps = {
 export function Graph({ data, width, height, onHoverElement }: GraphProps) {
     // remove not defined data (graph displays better and helps with hovering/selecting hovered element)
     const adjData = useMemo(() => data.filter(isDefined), [data]);
-    const graphTop = 5;
-    const graphButton = Math.max(height - 35, 0);
+    const graphTop = 15;
+    const graphButton = Math.max(height - 45, 0);
     const xScale = useMemo(
         () =>
             scaleTime<number>({
@@ -112,7 +112,7 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
                 transform={`translate(${tooltipX})`}
             />
             <LinePath<EpochGasInfo>
-                curve={curveLinear}
+                curve={curveNatural}
                 data={adjData}
                 x={(d) => xScale(d.date!.getTime())}
                 y={(d) => yScale(Number(d.referenceGasPrice!))}

@@ -8,8 +8,10 @@ use crate::authority_client::{
 };
 use crate::safe_client::{SafeClient, SafeClientMetrics, SafeClientMetricsBase};
 use fastcrypto::encoding::Encoding;
+use futures::Future;
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
-use mysten_metrics::{monitored_future, GaugeGuard};
+use mysten_metrics::histogram::Histogram;
+use mysten_metrics::{monitored_future, spawn_monitored_task, GaugeGuard};
 use mysten_network::config::Config;
 use std::convert::AsRef;
 use sui_config::genesis::Genesis;
@@ -65,34 +67,20 @@ pub type AsyncResult<'a, T, E> = BoxFuture<'a, Result<T, E>>;
 
 #[derive(Clone)]
 pub struct TimeoutConfig {
-    // Timeout used when making many concurrent requests - ok if it is large because a slow
-    // authority won't block other authorities from being contacted.
-    pub authority_request_timeout: Duration,
     pub pre_quorum_timeout: Duration,
     pub post_quorum_timeout: Duration,
 
-    // Timeout used when making serial requests. Should be smaller, since we wait to hear from each
-    // authority before continuing.
-    pub serial_authority_request_timeout: Duration,
-
     // Timeout used to determine when to start a second "serial" request for
-    // quorum_once_with_timeout. This is a latency optimization that prevents us from having
-    // to wait an entire serial_authority_request_timeout interval before starting a second
-    // request.
-    //
-    // If this is set to zero, then quorum_once_with_timeout becomes completely parallelized - if
-    // it is set to a value greater than serial_authority_request_timeout then it becomes
-    // completely serial.
+    // quorum_once_with_timeout. If this is set to zero, then
+    // quorum_once_with_timeout becomes completely parallelized.
     pub serial_authority_request_interval: Duration,
 }
 
 impl Default for TimeoutConfig {
     fn default() -> Self {
         Self {
-            authority_request_timeout: Duration::from_secs(60),
             pre_quorum_timeout: Duration::from_secs(60),
-            post_quorum_timeout: Duration::from_secs(30),
-            serial_authority_request_timeout: Duration::from_secs(5),
+            post_quorum_timeout: Duration::from_secs(7),
             serial_authority_request_interval: Duration::from_millis(1000),
         }
     }
@@ -111,6 +99,10 @@ pub struct AuthAggMetrics {
     pub inflight_certificates: IntGauge,
     pub inflight_transaction_requests: IntGauge,
     pub inflight_certificate_requests: IntGauge,
+
+    pub cert_broadcasting_post_quorum_timeout: IntCounter,
+    pub remaining_tasks_when_reaching_cert_quorum: Histogram,
+    pub remaining_tasks_when_cert_broadcasting_post_quorum_timeout: Histogram,
 }
 
 impl AuthAggMetrics {
@@ -180,6 +172,22 @@ impl AuthAggMetrics {
                 registry,
             )
             .unwrap(),
+            cert_broadcasting_post_quorum_timeout: register_int_counter_with_registry!(
+                "auth_agg_cert_broadcasting_post_quorum_timeout",
+                "Total number of timeout in cert processing post quorum",
+                registry,
+            )
+            .unwrap(),
+            remaining_tasks_when_reaching_cert_quorum: mysten_metrics::histogram::Histogram::new_in_registry(
+                "auth_agg_remaining_tasks_when_reaching_cert_quorum",
+                "Number of remaining tasks when reaching certificate quorum",
+                registry,
+            ),
+            remaining_tasks_when_cert_broadcasting_post_quorum_timeout: mysten_metrics::histogram::Histogram::new_in_registry(
+                "auth_agg_remaining_tasks_when_cert_broadcasting_post_quorum_timeout",
+                "Number of remaining tasks when post quorum certificate broadcasting times out",
+                registry,
+            )
         }
     }
 
@@ -349,13 +357,13 @@ impl ProcessTransactionResult {
 }
 
 #[derive(Clone)]
-pub struct AuthorityAggregator<A> {
+pub struct AuthorityAggregator<A: Clone> {
     /// Our Sui committee.
-    pub committee: Committee,
+    pub committee: Arc<Committee>,
     /// How to talk to this committee.
-    pub authority_clients: BTreeMap<AuthorityName, SafeClient<A>>,
+    pub authority_clients: Arc<BTreeMap<AuthorityName, Arc<SafeClient<A>>>>,
     /// Metrics
-    pub metrics: AuthAggMetrics,
+    pub metrics: Arc<AuthAggMetrics>,
     /// Metric base for the purpose of creating new safe clients during reconfiguration.
     pub safe_client_metrics_base: SafeClientMetricsBase,
     pub timeouts: TimeoutConfig,
@@ -363,7 +371,7 @@ pub struct AuthorityAggregator<A> {
     pub committee_store: Arc<CommitteeStore>,
 }
 
-impl<A> AuthorityAggregator<A> {
+impl<A: Clone> AuthorityAggregator<A> {
     pub fn new(
         committee: Committee,
         committee_store: Arc<CommitteeStore>,
@@ -388,22 +396,24 @@ impl<A> AuthorityAggregator<A> {
     ) -> Self {
         let safe_client_metrics_base = SafeClientMetricsBase::new(registry);
         Self {
-            committee,
-            authority_clients: authority_clients
-                .into_iter()
-                .map(|(name, api)| {
-                    (
-                        name,
-                        SafeClient::new(
-                            api,
-                            committee_store.clone(),
+            committee: Arc::new(committee),
+            authority_clients: Arc::new(
+                authority_clients
+                    .into_iter()
+                    .map(|(name, api)| {
+                        (
                             name,
-                            SafeClientMetrics::new(&safe_client_metrics_base, name),
-                        ),
-                    )
-                })
-                .collect(),
-            metrics: AuthAggMetrics::new(registry),
+                            Arc::new(SafeClient::new(
+                                api,
+                                committee_store.clone(),
+                                name,
+                                SafeClientMetrics::new(&safe_client_metrics_base, name),
+                            )),
+                        )
+                    })
+                    .collect(),
+            ),
+            metrics: Arc::new(AuthAggMetrics::new(registry)),
             safe_client_metrics_base,
             timeouts,
             committee_store,
@@ -415,24 +425,26 @@ impl<A> AuthorityAggregator<A> {
         committee_store: Arc<CommitteeStore>,
         authority_clients: BTreeMap<AuthorityName, A>,
         safe_client_metrics_base: SafeClientMetricsBase,
-        auth_agg_metrics: AuthAggMetrics,
+        auth_agg_metrics: Arc<AuthAggMetrics>,
     ) -> Self {
         Self {
-            committee,
-            authority_clients: authority_clients
-                .into_iter()
-                .map(|(name, api)| {
-                    (
-                        name,
-                        SafeClient::new(
-                            api,
-                            committee_store.clone(),
+            committee: Arc::new(committee),
+            authority_clients: Arc::new(
+                authority_clients
+                    .into_iter()
+                    .map(|(name, api)| {
+                        (
                             name,
-                            SafeClientMetrics::new(&safe_client_metrics_base, name),
-                        ),
-                    )
-                })
-                .collect(),
+                            Arc::new(SafeClient::new(
+                                api,
+                                committee_store.clone(),
+                                name,
+                                SafeClientMetrics::new(&safe_client_metrics_base, name),
+                            )),
+                        )
+                    })
+                    .collect(),
+            ),
             metrics: auth_agg_metrics,
             safe_client_metrics_base,
             timeouts: Default::default(),
@@ -466,12 +478,12 @@ impl<A> AuthorityAggregator<A> {
             .map(|(name, api)| {
                 (
                     name,
-                    SafeClient::new(
+                    Arc::new(SafeClient::new(
                         api,
                         self.committee_store.clone(),
                         name,
                         SafeClientMetrics::new(&self.safe_client_metrics_base, name),
-                    ),
+                    )),
                 )
             })
             .collect::<BTreeMap<_, _>>();
@@ -497,8 +509,8 @@ impl<A> AuthorityAggregator<A> {
         // store and all of them need to reconfigure.
         let _ = self.committee_store.insert_new_committee(&new_committee);
         Ok(AuthorityAggregator {
-            committee: new_committee,
-            authority_clients: safe_clients,
+            committee: Arc::new(new_committee),
+            authority_clients: Arc::new(safe_clients),
             metrics: self.metrics.clone(),
             timeouts: self.timeouts.clone(),
             safe_client_metrics_base: self.safe_client_metrics_base.clone(),
@@ -506,30 +518,31 @@ impl<A> AuthorityAggregator<A> {
         })
     }
 
-    pub fn get_client(&self, name: &AuthorityName) -> Option<&SafeClient<A>> {
+    pub fn get_client(&self, name: &AuthorityName) -> Option<&Arc<SafeClient<A>>> {
         self.authority_clients.get(name)
     }
 
-    pub fn clone_client(&self, name: &AuthorityName) -> SafeClient<A>
+    pub fn clone_client_test_only(&self, name: &AuthorityName) -> Arc<SafeClient<A>>
     where
         A: Clone,
     {
         self.authority_clients[name].clone()
     }
 
-    pub fn clone_inner_clients(&self) -> BTreeMap<AuthorityName, A>
-    where
-        A: Clone,
-    {
-        let mut clients = BTreeMap::new();
-        for (name, client) in &self.authority_clients {
-            clients.insert(*name, client.authority_client().clone());
-        }
-        clients
-    }
-
     pub fn clone_committee_store(&self) -> Arc<CommitteeStore> {
         self.committee_store.clone()
+    }
+
+    pub fn clone_inner_committee_test_only(&self) -> Committee {
+        (*self.committee).clone()
+    }
+
+    pub fn clone_inner_clients_test_only(&self) -> BTreeMap<AuthorityName, SafeClient<A>> {
+        (*self.authority_clients)
+            .clone()
+            .into_iter()
+            .map(|(k, v)| (k, (*v).clone()))
+            .collect()
     }
 }
 
@@ -549,7 +562,7 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
             sui_system_state.get_current_epoch_committee(),
             committee_store,
             safe_client_metrics_base,
-            auth_agg_metrics,
+            Arc::new(auth_agg_metrics),
         )
     }
 
@@ -557,7 +570,7 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
         committee: CommitteeWithNetworkMetadata,
         committee_store: &Arc<CommitteeStore>,
         safe_client_metrics_base: SafeClientMetricsBase,
-        auth_agg_metrics: AuthAggMetrics,
+        auth_agg_metrics: Arc<AuthAggMetrics>,
     ) -> anyhow::Result<Self> {
         let net_config = default_mysten_network_config();
         let authority_clients =
@@ -598,8 +611,16 @@ where
     /// This function provides a flexible way to communicate with a quorum of authorities, processing and
     /// processing their results into a safe overall result, and also safely allowing operations to continue
     /// past the quorum to ensure all authorities are up to date (up to a timeout).
-    pub(crate) async fn quorum_map_then_reduce_with_timeout<'a, S, V, R, FMap, FReduce>(
-        &'a self,
+    pub(crate) async fn quorum_map_then_reduce_with_timeout<
+        'a,
+        S: 'a,
+        V: 'a,
+        R: 'a,
+        FMap,
+        FReduce,
+    >(
+        committee: Arc<Committee>,
+        authority_clients: Arc<BTreeMap<AuthorityName, Arc<SafeClient<A>>>>,
         // The initial state that will be used to fold in values from authorities.
         initial_state: S,
         // The async function used to apply to each authority. It takes an authority name,
@@ -610,17 +631,27 @@ where
         reduce_result: FReduce,
         // The initial timeout applied to all
         initial_timeout: Duration,
-    ) -> Result<R, S>
+    ) -> Result<
+        (
+            R,
+            FuturesUnordered<impl Future<Output = (AuthorityName, Result<V, SuiError>)> + 'a>,
+        ),
+        S,
+    >
     where
-        FMap: FnOnce(AuthorityName, &'a SafeClient<A>) -> AsyncResult<'a, V, SuiError> + Clone,
+        FMap:
+            FnOnce(AuthorityName, Arc<SafeClient<A>>) -> AsyncResult<'a, V, SuiError> + Clone + 'a,
         FReduce: Fn(
-            S,
-            AuthorityName,
-            StakeUnit,
-            Result<V, SuiError>,
-        ) -> BoxFuture<'a, ReduceOutput<R, S>>,
+                S,
+                AuthorityName,
+                StakeUnit,
+                Result<V, SuiError>,
+            ) -> BoxFuture<'a, ReduceOutput<R, S>>
+            + 'a,
     {
-        self.quorum_map_then_reduce_with_timeout_and_prefs(
+        AuthorityAggregator::quorum_map_then_reduce_with_timeout_and_prefs(
+            committee,
+            authority_clients,
             None,
             initial_state,
             map_each_authority,
@@ -631,15 +662,22 @@ where
     }
 
     pub(crate) async fn quorum_map_then_reduce_with_timeout_and_prefs<'a, S, V, R, FMap, FReduce>(
-        &'a self,
+        committee: Arc<Committee>,
+        authority_clients: Arc<BTreeMap<AuthorityName, Arc<SafeClient<A>>>>,
         authority_preferences: Option<&BTreeSet<AuthorityName>>,
         initial_state: S,
         map_each_authority: FMap,
         reduce_result: FReduce,
         initial_timeout: Duration,
-    ) -> Result<R, S>
+    ) -> Result<
+        (
+            R,
+            FuturesUnordered<impl Future<Output = (AuthorityName, Result<V, SuiError>)>>,
+        ),
+        S,
+    >
     where
-        FMap: FnOnce(AuthorityName, &'a SafeClient<A>) -> AsyncResult<'a, V, SuiError> + Clone,
+        FMap: FnOnce(AuthorityName, Arc<SafeClient<A>>) -> AsyncResult<'a, V, SuiError> + Clone,
         FReduce: Fn(
             S,
             AuthorityName,
@@ -647,18 +685,18 @@ where
             Result<V, SuiError>,
         ) -> BoxFuture<'a, ReduceOutput<R, S>>,
     {
-        let authorities_shuffled = self.committee.shuffle_by_stake(authority_preferences, None);
+        let authorities_shuffled = committee.shuffle_by_stake(authority_preferences, None);
 
         // First, execute in parallel for each authority FMap.
         let mut responses: futures::stream::FuturesUnordered<_> = authorities_shuffled
-            .iter()
+            .into_iter()
             .map(|name| {
-                let client = &self.authority_clients[name];
+                let client = authority_clients[&name].clone();
                 let execute = map_each_authority.clone();
                 monitored_future!(async move {
                     (
-                        *name,
-                        execute(*name, client)
+                        name,
+                        execute(name, client)
                             .instrument(tracing::trace_span!("quorum_map_auth", authority =? name.concise()))
                             .await,
                     )
@@ -672,7 +710,7 @@ where
         while let Ok(Some((authority_name, result))) =
             timeout(current_timeout, responses.next()).await
         {
-            let authority_weight = self.committee.weight(&authority_name);
+            let authority_weight = committee.weight(&authority_name);
             accumulated_state =
                 match reduce_result(accumulated_state, authority_name, authority_weight, result)
                     .await
@@ -689,7 +727,7 @@ where
                     }
                     ReduceOutput::Success(result) => {
                         // The reducer tells us that we have the result needed. Just return it.
-                        return Ok(result);
+                        return Ok((result, responses));
                     }
                 }
         }
@@ -714,7 +752,10 @@ where
         authority_errors: &mut HashMap<AuthorityName, SuiError>,
     ) -> Result<S, SuiError>
     where
-        FMap: Fn(AuthorityName, SafeClient<A>) -> AsyncResult<'a, S, SuiError> + Send + Clone + 'a,
+        FMap: Fn(AuthorityName, Arc<SafeClient<A>>) -> AsyncResult<'a, S, SuiError>
+            + Send
+            + Clone
+            + 'a,
         S: Send,
     {
         let start = tokio::time::Instant::now();
@@ -732,7 +773,7 @@ where
 
             let mut futures = FuturesUnordered::<BoxFuture<'a, Event<S>>>::new();
 
-            let start_req = |name: AuthorityName, client: SafeClient<A>| {
+            let start_req = |name: AuthorityName, client: Arc<SafeClient<A>>| {
                 let map_each_authority = map_each_authority.clone();
                 Box::pin(monitored_future!(async move {
                     trace!(name=?name.concise(), now = ?tokio::time::Instant::now() - start, "new request");
@@ -847,7 +888,10 @@ where
         description: String,
     ) -> Result<S, SuiError>
     where
-        FMap: Fn(AuthorityName, SafeClient<A>) -> AsyncResult<'a, S, SuiError> + Send + Clone + 'a,
+        FMap: Fn(AuthorityName, Arc<SafeClient<A>>) -> AsyncResult<'a, S, SuiError>
+            + Send
+            + Clone
+            + 'a,
         S: Send,
     {
         let mut authority_errors = HashMap::new();
@@ -894,8 +938,9 @@ where
             total_weight: StakeUnit,
         }
         let initial_state = State::default();
-        self
-            .quorum_map_then_reduce_with_timeout(
+        let result = AuthorityAggregator::quorum_map_then_reduce_with_timeout(
+                self.committee.clone(),
+                self.authority_clients.clone(),
                 initial_state,
                 |_name, client| {
                     Box::pin(async move {
@@ -933,10 +978,11 @@ where
                 // A long timeout before we hear back from a quorum
                 self.timeouts.pre_quorum_timeout,
             )
-            .await.map_err(|_state| UserInputError::ObjectNotFound {
+            .await.map_err(|_state| SuiError::from(UserInputError::ObjectNotFound {
                 object_id,
                 version: None,
-            }.into())
+            }))?;
+        Ok(result.0)
     }
 
     /// Get the latest system state object from the authorities.
@@ -951,7 +997,9 @@ where
             total_weight: StakeUnit,
         }
         let initial_state = State::default();
-        self.quorum_map_then_reduce_with_timeout(
+        let result = AuthorityAggregator::quorum_map_then_reduce_with_timeout(
+            self.committee.clone(),
+            self.authority_clients.clone(),
             initial_state,
             |_name, client| Box::pin(async move { client.handle_system_state_object().await }),
             |mut state, name, weight, result| {
@@ -994,7 +1042,8 @@ where
             self.timeouts.pre_quorum_timeout,
         )
         .await
-        .map_err(|_| anyhow::anyhow!("Failed to get latest system state from the authorities"))
+        .map_err(|_| anyhow::anyhow!("Failed to get latest system state from the authorities"))?;
+        Ok(result.0)
     }
 
     /// Submits the transaction to a quorum of validators to make a certificate.
@@ -1012,8 +1061,7 @@ where
             "Transaction data: {:?}",
             transaction.data().intent_message().value
         );
-
-        let committee = Arc::new(self.committee.clone());
+        let committee = self.committee.clone();
         let state = ProcessTransactionState {
             tx_signatures: StakeAggregator::new(committee.clone()),
             effects_map: MultiStakeAggregator::new(committee.clone()),
@@ -1028,8 +1076,9 @@ where
         let transaction_ref = &transaction;
         let validity_threshold = committee.validity_threshold();
         let quorum_threshold = committee.quorum_threshold();
-        let result = self
-            .quorum_map_then_reduce_with_timeout(
+        let result = AuthorityAggregator::quorum_map_then_reduce_with_timeout(
+                committee.clone(),
+                self.authority_clients.clone(),
                 state,
                 |_name, client| {
                     Box::pin(
@@ -1066,7 +1115,7 @@ where
                                     .process_tx_errors
                                     .with_label_values(&[&concise_name.to_string(), err.as_ref()])
                                     .inc();
-                                self.record_rpc_error_maybe(concise_name, &err);
+                                Self::record_rpc_error_maybe(self.metrics.clone(), concise_name, &err);
                                 let (retryable, categorized) = err.is_retryable();
                                 if !categorized {
                                     // TODO: Should minimize possible uncategorized errors here
@@ -1112,7 +1161,7 @@ where
             .await;
 
         match result {
-            Ok(result) => Ok(result),
+            Ok((result, _)) => Ok(result),
             Err(state) => {
                 self.record_process_transaction_metrics(tx_digest, &state);
                 let state = self.record_non_quorum_effects_maybe(tx_digest, state);
@@ -1121,9 +1170,13 @@ where
         }
     }
 
-    fn record_rpc_error_maybe(&self, name: ConciseAuthorityPublicKeyBytesRef, error: &SuiError) {
+    fn record_rpc_error_maybe(
+        metrics: Arc<AuthAggMetrics>,
+        name: ConciseAuthorityPublicKeyBytesRef,
+        error: &SuiError,
+    ) {
         if let SuiError::RpcError(_message, code) = error {
-            self.metrics
+            metrics
                 .total_rpc_err
                 .with_label_values(&[&name.to_string(), code.as_str()])
                 .inc();
@@ -1430,7 +1483,7 @@ where
         AggregatorProcessCertificateError,
     > {
         let state = ProcessCertificateState {
-            effects_map: MultiStakeAggregator::new(Arc::new(self.committee.clone())),
+            effects_map: MultiStakeAggregator::new(self.committee.clone()),
             object_map: HashMap::new(),
             non_retryable_stake: 0,
             non_retryable_errors: vec![],
@@ -1441,7 +1494,7 @@ where
         let tx_digest = *certificate.digest();
         let timeout_after_quorum = self.timeouts.post_quorum_timeout;
 
-        let cert_ref = &certificate;
+        let cert_ref = certificate;
         let threshold = self.committee.quorum_threshold();
         let validity = self.committee.validity_threshold();
 
@@ -1454,18 +1507,23 @@ where
             "Broadcasting certificate to authorities"
         );
         // TODO: We show the below messages for debugging purposes re. incident #267. When this is fixed, we should remove them again.
-        let cert_bytes = fastcrypto::encoding::Base64::encode(bcs::to_bytes(cert_ref).unwrap());
+        let cert_bytes = fastcrypto::encoding::Base64::encode(bcs::to_bytes(&cert_ref).unwrap());
         info!(
             ?tx_digest,
             ?cert_bytes,
             "Broadcasting certificate (serialized) to authorities"
         );
-
-        self.quorum_map_then_reduce_with_timeout(
+        let committee: Arc<Committee> = self.committee.clone();
+        let authority_clients = self.authority_clients.clone();
+        let metrics = self.metrics.clone();
+        let metrics_clone = metrics.clone();
+        let (result, mut remaining_tasks) = AuthorityAggregator::quorum_map_then_reduce_with_timeout(
+            committee.clone(),
+            authority_clients.clone(),
             state,
-            |name, client| {
+            move |name, client| {
                 Box::pin(async move {
-                    let _guard = GaugeGuard::acquire(&self.metrics.inflight_certificate_requests);
+                    let _guard = GaugeGuard::acquire(&metrics_clone.inflight_certificate_requests);
                     client
                         .handle_certificate_v2(cert_ref.clone())
                         .instrument(
@@ -1474,12 +1532,15 @@ where
                         .await
                 })
             },
-            |mut state, name, weight, response| {
+            move |mut state, name, weight, response| {
+                let committee_clone = committee.clone();
+                let metrics = metrics.clone();
                 Box::pin(async move {
                     // We aggregate the effects response, until we have more than 2f
                     // and return.
-                    match self
-                        .handle_process_certificate_response(&tx_digest, &mut state, response, name)
+                    match AuthorityAggregator::<A>::handle_process_certificate_response(
+                        committee_clone,
+                        &tx_digest, &mut state, response, name)
                     {
                         Ok(Some(effects)) => ReduceOutput::Success(effects),
                         Ok(None) => {
@@ -1496,11 +1557,11 @@ where
                         Err(err) => {
                             let concise_name = name.concise();
                             debug!(?tx_digest, name=?concise_name, "Error processing certificate from validator: {:?}", err);
-                            self.metrics
+                            metrics
                                 .process_cert_errors
                                 .with_label_values(&[&concise_name.to_string(), err.as_ref()])
                                 .inc();
-                            self.record_rpc_error_maybe(concise_name, &err);
+                            Self::record_rpc_error_maybe(metrics, concise_name, &err);
                             let (retryable, categorized) = err.is_retryable();
                             if !categorized {
                                 // TODO: Should minimize possible uncategorized errors here
@@ -1559,11 +1620,38 @@ where
                     non_retryable_errors: group_errors(state.non_retryable_errors),
                 }
             }
-        })
+        })?;
+
+        let metrics = self.metrics.clone();
+        metrics
+            .remaining_tasks_when_reaching_cert_quorum
+            .report(remaining_tasks.len() as u64);
+        if !remaining_tasks.is_empty() {
+            // Use best efforts to send the cert to remaining validators.
+            spawn_monitored_task!(async move {
+                let mut timeout = Box::pin(sleep(timeout_after_quorum));
+                loop {
+                    tokio::select! {
+                        _ = &mut timeout => {
+                            debug!(?tx_digest, "Timed out in post quorum cert broadcasting: {:?}. Remaining tasks: {:?}", timeout_after_quorum, remaining_tasks.len());
+                            metrics.cert_broadcasting_post_quorum_timeout.inc();
+                            metrics.remaining_tasks_when_cert_broadcasting_post_quorum_timeout.report(remaining_tasks.len() as u64);
+                            break;
+                        }
+                        res = remaining_tasks.next() => {
+                            if res.is_none() {
+                                break;
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        Ok(result)
     }
 
     fn handle_process_certificate_response(
-        &self,
+        committee: Arc<Committee>,
         tx_digest: &TransactionDigest,
         state: &mut ProcessCertificateState,
         response: SuiResult<HandleCertificateResponseV2>,
@@ -1614,7 +1702,7 @@ where
                             signed_effects.into_data(),
                             cert_sig,
                         );
-                        ct.verify(&self.committee).map(|ct| {
+                        ct.verify(&committee).map(|ct| {
                             debug!(?tx_digest, "Got quorum for validators handle_certificate.");
                             let fastpath_input_objects =
                                 state.object_map.remove(&effects_digest).unwrap_or_default();
