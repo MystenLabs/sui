@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-
 interface ValidatorIpInfo {
     ip: string;
     hostname: string;
@@ -35,8 +34,8 @@ interface ValidatorIpInfo {
 }
 
 export interface ValidatorMapData {
-    ipInfo: ValidatorIpInfo
-    suiAddress: string
-    name: string
-    votingPower: string
+    ipInfo: ValidatorIpInfo;
+    suiAddress: string;
+    name: string;
+    votingPower: string;
 }
