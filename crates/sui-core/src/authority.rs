@@ -108,6 +108,7 @@ use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::checkpoints::checkpoint_executor::CheckpointExecutor;
 use crate::checkpoints::CheckpointStore;
+use crate::db_checkpoint_handler::DBCheckpointWaiter;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::event_handler::SubscriptionHandler;
 use crate::execution_driver::execution_process;
@@ -1912,6 +1913,11 @@ impl AuthorityState {
                 .db_checkpoint_config
                 .perform_db_checkpoints_at_epoch_end
             {
+                DBCheckpointWaiter::wait_until_num_pending_is_less_than_threshold(
+                    &self.db_checkpoint_config,
+                )
+                .await
+                .map_err(|e| SuiError::DBCheckpointError(e.to_string()))?;
                 let checkpoint_indexes = self
                     .db_checkpoint_config
                     .perform_index_db_checkpoints_at_epoch_end

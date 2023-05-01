@@ -479,6 +479,8 @@ pub struct DBCheckpointConfig {
     pub perform_index_db_checkpoints_at_epoch_end: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prune_and_compact_before_upload: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_pending_checkpoints: Option<u64>,
 }
 
 /// Publicly known information about a validator

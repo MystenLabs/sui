@@ -295,6 +295,10 @@ pub enum SuiError {
     },
     #[error("Signatures in a certificate must form a quorum")]
     CertificateRequiresQuorum,
+
+    #[error("Error while taking db checkpoint at epoch end: {0}")]
+    DBCheckpointError(String),
+
     #[error("Transaction certificate processing failed: {err}")]
     ErrorWhileProcessingCertificate { err: String },
     #[error(

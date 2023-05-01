@@ -20,7 +20,7 @@ use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_config::node::AuthorityStorePruningConfig;
+use sui_config::node::{AuthorityStorePruningConfig, DBCheckpointConfig};
 use sui_storage::mutex_table::RwLockTable;
 use sui_storage::object_store::util::{copy_recursively, delete_recursively, put};
 use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
@@ -33,6 +33,51 @@ use url::Url;
 pub const SUCCESS_MARKER: &str = "_SUCCESS";
 pub const TEST_MARKER: &str = "_TEST";
 pub const UPLOAD_COMPLETED_MARKER: &str = "_UPLOAD_COMPLETED";
+
+pub struct DBCheckpointWaiter;
+
+impl DBCheckpointWaiter {
+    async fn num_pending(input_object_store: &Arc<DynObjectStore>) -> Result<u64> {
+        let pending = DBCheckpointHandler::read_checkpoint_dir(input_object_store.clone()).await?;
+        Ok(pending.len() as u64)
+    }
+    /// A snapshot FN syncing from genesis is very fast in executing checkpoints and triggering epoch
+    /// transitions which creates one db checkpoint per epoch. However, pruning and compaction is much
+    /// slower and causes a build up of checkpoints on disk which eventually causes the node to run out
+    /// of disk and fail. We want to wait until there are fewer than `threshold` number of checkpoints
+    /// in db checkpoint directory. Note that db checkpoint directories are garbage collected as soon
+    /// as they are done uploading to remote object store.
+    pub async fn wait_until_num_pending_is_less_than_threshold(
+        config: &DBCheckpointConfig,
+    ) -> Result<()> {
+        if let Some(threshold) = &config.max_pending_checkpoints {
+            let db_checkpoint_dir = config
+                .checkpoint_path
+                .as_ref()
+                .ok_or(anyhow!("No checkpoint path in config"))?;
+            let input_object_store = ObjectStoreConfig {
+                object_store: Some(ObjectStoreType::File),
+                directory: Some(db_checkpoint_dir.clone()),
+                ..Default::default()
+            }
+            .make()?;
+            let mut interval = tokio::time::interval(Duration::from_secs(10));
+            loop {
+                tokio::select! {
+                    _now = interval.tick() => {
+                        let num_pending = DBCheckpointWaiter::num_pending(&input_object_store).await?;
+                        if num_pending <= *threshold {
+                            break;
+                        } else {
+                            debug!("Pending db checkpoints: {num_pending}, threshold: {threshold}");
+                        }
+                    },
+                }
+            }
+        }
+        Ok(())
+    }
+}
 
 pub struct DBCheckpointHandler {
     /// Directory on local disk where db checkpoints are stored
@@ -147,12 +192,10 @@ impl DBCheckpointHandler {
         Ok(())
     }
     async fn upload_db_checkpoint_to_object_store(&self) -> Result<()> {
-        let local_checkpoints_by_epoch = self
-            .read_checkpoint_dir(self.input_object_store.clone())
-            .await?;
-        let remote_checkpoints_by_epoch = self
-            .read_checkpoint_dir(self.output_object_store.clone())
-            .await?;
+        let local_checkpoints_by_epoch =
+            DBCheckpointHandler::read_checkpoint_dir(self.input_object_store.clone()).await?;
+        let remote_checkpoints_by_epoch =
+            DBCheckpointHandler::read_checkpoint_dir(self.output_object_store.clone()).await?;
 
         let next_epoch = if let Some((last_epoch, path)) =
             remote_checkpoints_by_epoch.iter().next_back()
@@ -225,9 +268,8 @@ impl DBCheckpointHandler {
         Ok(())
     }
     async fn garbage_collect_old_db_checkpoints(&self) -> Result<()> {
-        let local_checkpoints_by_epoch = self
-            .read_checkpoint_dir(self.input_object_store.clone())
-            .await?;
+        let local_checkpoints_by_epoch =
+            DBCheckpointHandler::read_checkpoint_dir(self.input_object_store.clone()).await?;
         for (epoch, path) in local_checkpoints_by_epoch.iter() {
             let marker_paths: Vec<Path> = self
                 .gc_markers
@@ -255,7 +297,7 @@ impl DBCheckpointHandler {
         }
         Ok(())
     }
-    async fn read_checkpoint_dir(&self, store: Arc<DynObjectStore>) -> Result<BTreeMap<u32, Path>> {
+    pub async fn read_checkpoint_dir(store: Arc<DynObjectStore>) -> Result<BTreeMap<u32, Path>> {
         let mut checkpoints_by_epoch = BTreeMap::new();
         let entries = store.list_with_delimiter(None).await?;
         for entry in entries.common_prefixes {
@@ -291,7 +333,8 @@ impl DBCheckpointHandler {
 #[cfg(test)]
 mod tests {
     use crate::db_checkpoint_handler::{
-        DBCheckpointHandler, SUCCESS_MARKER, TEST_MARKER, UPLOAD_COMPLETED_MARKER,
+        DBCheckpointHandler, DBCheckpointWaiter, SUCCESS_MARKER, TEST_MARKER,
+        UPLOAD_COMPLETED_MARKER,
     };
     use std::fs;
     use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
@@ -332,9 +375,10 @@ mod tests {
             10,
             false,
         )?;
-        let local_checkpoints_by_epoch = db_checkpoint_handler
-            .read_checkpoint_dir(db_checkpoint_handler.input_object_store.clone())
-            .await?;
+        let local_checkpoints_by_epoch = DBCheckpointHandler::read_checkpoint_dir(
+            db_checkpoint_handler.input_object_store.clone(),
+        )
+        .await?;
         assert!(!local_checkpoints_by_epoch.is_empty());
         assert_eq!(*local_checkpoints_by_epoch.first_key_value().unwrap().0, 0);
         assert_eq!(
@@ -366,6 +410,33 @@ mod tests {
         assert!(!local_epoch0_checkpoint.join("file1").exists());
         assert!(!local_epoch0_checkpoint.join("file2").exists());
         assert!(!local_epoch0_checkpoint.join("data").join("file3").exists());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_num_pending() -> anyhow::Result<()> {
+        let checkpoint_dir = TempDir::new()?;
+        let checkpoint_dir_path = checkpoint_dir.path();
+
+        let local_epoch0_checkpoint = checkpoint_dir_path.join("epoch_0");
+        fs::create_dir(&local_epoch0_checkpoint)?;
+
+        let input_object_store = ObjectStoreConfig {
+            object_store: Some(ObjectStoreType::File),
+            directory: Some(checkpoint_dir_path.to_path_buf()),
+            ..Default::default()
+        }
+        .make()?;
+
+        let num_pending = DBCheckpointWaiter::num_pending(&input_object_store).await?;
+        assert_eq!(num_pending, 1);
+
+        let local_epoch1_checkpoint = checkpoint_dir_path.join("epoch_1");
+        fs::create_dir(&local_epoch1_checkpoint)?;
+
+        let num_pending = DBCheckpointWaiter::num_pending(&input_object_store).await?;
+        assert_eq!(num_pending, 2);
 
         Ok(())
     }
