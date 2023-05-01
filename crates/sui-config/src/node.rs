@@ -231,14 +231,14 @@ pub struct ConsensusConfig {
     pub address: Multiaddr,
     pub db_path: PathBuf,
 
-    // Optional alternative address preferentially used by a primary to talk to its own worker.
-    // For example, this could be used to connect to co-located workers over a private LAN address.
+    /// Optional alternative address preferentially used by a primary to talk to its own worker.
+    /// For example, this could be used to connect to co-located workers over a private LAN address.
     pub internal_worker_address: Option<Multiaddr>,
 
-    // Maximum number of pending transactions to submit to consensus, including those
-    // in submission wait.
-    // Assuming 10_000 txn tps * 10 sec consensus latency = 100_000 inflight consensus txns,
-    // Default to 100_000.
+    /// Maximum number of pending transactions to submit to consensus, including those
+    /// in submission wait.
+    /// Assuming 10_000 txn tps * 10 sec consensus latency = 100_000 inflight consensus txns,
+    /// Default to 100_000.
     pub max_pending_transactions: Option<usize>,
 
     /// Dictates the maximum position  from which will submit to consensus. Even if the is elected to
