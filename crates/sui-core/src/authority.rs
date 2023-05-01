@@ -2770,6 +2770,13 @@ impl AuthorityState {
                     limit,
                     descending,
                 )?,
+            EventFilter::Package(package_id) => index_store.events_by_event_package(
+                &package_id,
+                tx_num,
+                event_num,
+                limit,
+                descending,
+            )?,
             EventFilter::Sender(sender) => {
                 index_store.events_by_sender(&sender, tx_num, event_num, limit, descending)?
             }

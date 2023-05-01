@@ -197,6 +197,8 @@ pub struct IndexStoreTables {
     event_by_sender: DBMap<(SuiAddress, EventId), EventIndex>,
     #[default_options_override_fn = "index_table_default_config"]
     event_by_time: DBMap<(u64, EventId), EventIndex>,
+    #[default_options_override_fn = "index_table_default_config"]
+    event_by_package: DBMap<(ObjectID, EventId), EventIndex>,
 }
 
 pub struct IndexStore {
@@ -566,6 +568,16 @@ impl IndexStore {
             events.data.iter().enumerate().map(|(i, _)| {
                 (
                     (timestamp_ms, (sequence, i)),
+                    (event_digest, *digest, timestamp_ms),
+                )
+            }),
+        )?;
+
+        batch.insert_batch(
+            &self.tables.event_by_package,
+            events.data.iter().enumerate().map(|(i, e)| {
+                (
+                    (e.package_id, (sequence, i)),
                     (event_digest, *digest, timestamp_ms),
                 )
             }),
@@ -1023,6 +1035,24 @@ impl IndexStore {
         Self::get_event_from_index(
             &self.tables.event_by_move_event,
             struct_name,
+            tx_seq,
+            event_seq,
+            limit,
+            descending,
+        )
+    }
+
+    pub fn events_by_event_package(
+        &self,
+        package_id: &ObjectID,
+        tx_seq: TxSequenceNumber,
+        event_seq: usize,
+        limit: usize,
+        descending: bool,
+    ) -> SuiResult<Vec<(TransactionEventsDigest, TransactionDigest, usize, u64)>> {
+        Self::get_event_from_index(
+            &self.tables.event_by_package,
+            package_id,
             tx_seq,
             event_seq,
             limit,
