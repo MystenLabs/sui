@@ -590,16 +590,13 @@ impl LocalExec {
         let metrics = self.metrics.clone();
 
         // Extract the epoch start timestamp
-        let epoch_start_timestamp = self
-            .get_epoch_start_timestamp(tx_info.executed_epoch)
+        let (epoch_start_timestamp, _) = self
+            .get_epoch_start_timestamp_and_rgp(tx_info.executed_epoch)
             .await?;
 
         // Create the gas status
-        let gas_status = SuiGasStatus::new_with_budget(
-            tx_info.gas_budget,
-            tx_info.gas_price * 100,
-            protocol_config,
-        );
+        let gas_status =
+            SuiGasStatus::new_with_budget(tx_info.gas_budget, tx_info.gas_price, protocol_config);
 
         // Temp store for data
         let temporary_store =
@@ -654,7 +651,6 @@ impl LocalExec {
         let (authority_state, epoch_store) = prep_network(
             &pre_run_sandbox.transaction_info,
             &pre_run_sandbox.required_objects,
-            1,
         )
         .await;
 
@@ -1132,10 +1128,13 @@ impl LocalExec {
 
     /// Very testnet specific
     /// This function is testnet specific and will be extended for mainnet later
-    pub async fn get_epoch_start_timestamp(&self, epoch_id: u64) -> Result<u64, LocalExecError> {
+    pub async fn get_epoch_start_timestamp_and_rgp(
+        &self,
+        epoch_id: u64,
+    ) -> Result<(u64, u64), LocalExecError> {
         // Hack for testnet: for epoch in range [3, 742), we have no data, but no user TX was executed, so return dummy
         if (self.is_testnet) && (2 < epoch_id) && (epoch_id < 742) {
-            return Ok(0);
+            return Ok((0, 1));
         }
 
         let event = self
@@ -1147,6 +1146,12 @@ impl LocalExec {
             })
             .ok_or(LocalExecError::EventNotFound { epoch: epoch_id })?;
 
+        let reference_gas_price = if let serde_json::Value::Object(w) = event.parsed_json {
+            u64::from_str(&w["reference_gas_price"].to_string().replace('\"', "")).unwrap()
+        } else {
+            return Err(LocalExecError::UnexpectedEventFormat { event });
+        };
+
         let epoch_change_tx = event.id.tx_digest;
 
         // Fetch full transaction content
@@ -1156,7 +1161,7 @@ impl LocalExec {
         let tx_kind_orig = orig_tx.transaction_data().kind();
 
         if let TransactionKind::ChangeEpoch(change) = tx_kind_orig {
-            return Ok(change.epoch_start_timestamp_ms);
+            return Ok((change.epoch_start_timestamp_ms, reference_gas_price));
         }
         Err(LocalExecError::InvalidEpochChangeTx { epoch: epoch_id })
     }
@@ -1196,7 +1201,8 @@ impl LocalExec {
         let epoch_id = effects.executed_epoch;
 
         // Extract the epoch start timestamp
-        let epoch_start_timestamp = self.get_epoch_start_timestamp(epoch_id).await?;
+        let (epoch_start_timestamp, reference_gas_price) =
+            self.get_epoch_start_timestamp_and_rgp(epoch_id).await?;
 
         Ok(OnChainTransactionInfo {
             kind: tx_kind_orig.clone(),
@@ -1216,6 +1222,7 @@ impl LocalExec {
             tx_digest: *tx_digest,
             epoch_start_timestamp,
             sender_signed_data: orig_tx.clone(),
+            reference_gas_price,
         })
     }
 
@@ -1647,10 +1654,10 @@ fn extract_epoch_and_version(ev: SuiEvent) -> Result<(u64, u64), LocalExecError>
 async fn prep_network(
     tx_info: &OnChainTransactionInfo,
     objects: &[Object],
-    reference_gas_price: u64,
 ) -> (Arc<AuthorityState>, Arc<AuthorityPerEpochStore>) {
-    let authority_state = authority_state(tx_info, objects, reference_gas_price).await;
-    let epoch_store = create_epoch_store(tx_info, &authority_state, reference_gas_price).await;
+    let authority_state = authority_state(tx_info, objects, tx_info.reference_gas_price).await;
+    let epoch_store =
+        create_epoch_store(tx_info, &authority_state, tx_info.reference_gas_price).await;
 
     (authority_state, epoch_store)
 }
@@ -1680,8 +1687,8 @@ async fn create_epoch_store(
         reference_gas_price,
         false,
         tx_info.epoch_start_timestamp,
-        24 * 60 * 60 * 1000, // 1 day
-        vec![],              // TODO: add validators
+        ONE_DAY_MS,
+        vec![], // TODO: add validators
     );
 
     let path = {

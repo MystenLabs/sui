@@ -32,6 +32,8 @@ pub(crate) const MAX_CONCURRENT_REQUESTS: usize = 1_000;
 pub(crate) const EPOCH_CHANGE_STRUCT_TAG: &str =
     "0x3::sui_system_state_inner::SystemEpochInfoEvent";
 
+pub(crate) const ONE_DAY_MS: u64 = 24 * 60 * 60 * 1000;
+
 #[derive(Clone, Debug)]
 pub struct OnChainTransactionInfo {
     pub tx_digest: TransactionDigest,
@@ -49,6 +51,7 @@ pub struct OnChainTransactionInfo {
     pub effects: SuiTransactionBlockEffects,
     pub protocol_config: ProtocolConfig,
     pub epoch_start_timestamp: u64,
+    pub reference_gas_price: u64,
 }
 
 #[allow(clippy::large_enum_variant)]
