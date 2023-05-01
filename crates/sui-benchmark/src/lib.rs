@@ -227,7 +227,7 @@ pub trait ValidatorProxy {
     /// signature. It should only be used for benchmarks.
     async fn execute_bench_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects>;
 
-    fn clone_committee(&self) -> Committee;
+    fn clone_committee(&self) -> Arc<Committee>;
 
     fn get_current_epoch(&self) -> EpochId;
 
@@ -590,7 +590,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         Ok(effects)
     }
 
-    fn clone_committee(&self) -> Committee {
+    fn clone_committee(&self) -> Arc<Committee> {
         self.qd.clone_committee()
     }
 
@@ -622,7 +622,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
 
 pub struct FullNodeProxy {
     sui_client: SuiClient,
-    committee: Committee,
+    committee: Arc<Committee>,
 }
 
 impl FullNodeProxy {
@@ -643,7 +643,7 @@ impl FullNodeProxy {
 
         Ok(Self {
             sui_client,
-            committee,
+            committee: Arc::new(committee),
         })
     }
 }
@@ -756,7 +756,7 @@ impl ValidatorProxy for FullNodeProxy {
         self.execute_transaction_block(tx).await
     }
 
-    fn clone_committee(&self) -> Committee {
+    fn clone_committee(&self) -> Arc<Committee> {
         self.committee.clone()
     }
 
