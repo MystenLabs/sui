@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-mod casual_order;
+mod causal_order;
 pub mod checkpoint_executor;
 mod checkpoint_output;
 mod metrics;
 
 use crate::authority::{AuthorityState, EffectsNotifyRead};
-use crate::checkpoints::casual_order::CasualOrder;
+use crate::checkpoints::causal_order::CausalOrder;
 use crate::checkpoints::checkpoint_output::{CertifiedCheckpointOutput, CheckpointOutput};
 pub use crate::checkpoints::checkpoint_output::{
     LogCheckpointOutput, SendCheckpointToStateSync, SubmitCheckpointToConsensus,
@@ -590,8 +590,8 @@ impl CheckpointBuilder {
         let _scope = monitored_scope("CheckpointBuilder");
         let unsorted = self.complete_checkpoint_effects(roots)?;
         let sorted = {
-            let _scope = monitored_scope("CheckpointBuilder::casual_sort");
-            CasualOrder::casual_sort(unsorted)
+            let _scope = monitored_scope("CheckpointBuilder::causal_sort");
+            CausalOrder::causal_sort(unsorted)
         };
         let new_checkpoint = self.create_checkpoints(sorted, pending.details).await?;
         self.write_checkpoints(height, new_checkpoint).await?;
