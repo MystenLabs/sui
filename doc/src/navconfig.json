@@ -126,11 +126,15 @@
 						"fileName": "learn/cryptography/sui-wallet-specs"
 					},
 					{
+						"label": "Verifying Groth16 zk-SNARKs",
+						"fileName": "learn/cryptography/groth16"
+          },
+          {
 						"label": "Sui Crypto Agility and Signatures",
 						"fileName": "learn/cryptography/sui-signatures"
 					},
 					{
-						"label": "Verifiable random function (VRF)",
+						"label": "Verifiable Random Function (VRF)",
 						"fileName": "learn/cryptography/ecvrf"
 					}
 				]
