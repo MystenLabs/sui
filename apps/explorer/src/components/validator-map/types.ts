@@ -3,7 +3,7 @@
 
 import { type SuiValidatorSummary } from '@mysten/sui.js';
 
-export interface ValidatorWithLocation extends SuiValidatorSummary {
+interface ValidatorIpInfo {
     ip: string;
     hostname: string;
     city: string;
@@ -33,4 +33,9 @@ export interface ValidatorWithLocation extends SuiValidatorSummary {
         name: string;
     };
     isEU: boolean;
+}
+
+export interface ValidatorMapData {
+    ipInfo: ValidatorIpInfo
+    validator: SuiValidatorSummary
 }

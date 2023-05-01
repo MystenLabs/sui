@@ -7,7 +7,7 @@ import { TooltipWithBounds, useTooltip } from '@visx/tooltip';
 import React, { type ReactNode, useCallback, useMemo } from 'react';
 
 import { WorldMap } from './WorldMap';
-import { type ValidatorWithLocation } from './types';
+import { type ValidatorMapData } from './types';
 
 import { useNetwork } from '~/context';
 import { Card } from '~/ui/Card';
@@ -17,7 +17,7 @@ import { Text } from '~/ui/Text';
 
 const HOST = 'https://apps-backend.sui.io';
 
-type ValidatorsMap = Record<string, ValidatorWithLocation>;
+type ValidatorsMap = Record<string, ValidatorMapData>;
 
 const numberFormatter = new Intl.NumberFormat('en');
 
@@ -46,7 +46,7 @@ export default function ValidatorMap({ minHeight }: Props) {
         ['validator-map'],
         async () => {
             const res = await fetch(
-                `${HOST}/validator-map/?network=${network}`,
+                `http://localhost:3003/validator-map-v4?network=testnet`,
                 {
                     method: 'GET',
                 }
@@ -55,7 +55,7 @@ export default function ValidatorMap({ minHeight }: Props) {
             if (!res.ok) {
                 throw new Error('Failed to fetch validator map data');
             }
-            return res.json() as Promise<(ValidatorWithLocation | null)[]>;
+            return res.json() as Promise<(ValidatorMapData | null)[]>;
         }
     );
 
@@ -74,14 +74,14 @@ export default function ValidatorMap({ minHeight }: Props) {
         data.forEach((validator) => {
             if (validator) {
                 totalCount++;
-                validatorMap[validator.suiAddress] ??= {
+                validatorMap[validator.validator.suiAddress] ??= {
                     ...validator,
                 };
 
-                if (countryMap[validator.country]) {
-                    countryMap[validator.country]++;
+                if (countryMap[validator.ipInfo.country]) {
+                    countryMap[validator.ipInfo.country]++;
                 } else {
-                    countryMap[validator.country] = 1;
+                    countryMap[validator.ipInfo.country] = 1;
                 }
             }
         });
@@ -132,7 +132,7 @@ export default function ValidatorMap({ minHeight }: Props) {
             >
                 <div className="pointer-events-none relative z-10 flex flex-1 flex-col justify-between gap-8 p-6">
                     <Heading variant="heading4/semibold" color="steel-darker">
-                        countries
+                        Countries
                         {isLoading && (
                             <Placeholder width="60px" height="0.8em" />
                         )}
@@ -181,13 +181,13 @@ export default function ValidatorMap({ minHeight }: Props) {
                         style={{}}
                     >
                         <div className="flex flex-col justify-start font-semibold">
-                            <div>{validatorMap[tooltipData].name}</div>
+                            <div>{validatorMap[tooltipData].validator.name}</div>
                             <Text
                                 variant="pSubtitleSmall/normal"
                                 color="gray-60"
                             >
-                                {validatorMap[tooltipData].city},{' '}
-                                {validatorMap[tooltipData].country}
+                                {validatorMap[tooltipData].ipInfo.city},{' '}
+                                {validatorMap[tooltipData].ipInfo.country}
                             </Text>
                         </div>
                         <div className="my-1 h-px bg-gray-90" />
@@ -198,7 +198,7 @@ export default function ValidatorMap({ minHeight }: Props) {
                                 </Text>
                                 <Text variant="subtitle/medium">
                                     {Number(
-                                        validatorMap[tooltipData].votingPower
+                                        validatorMap[tooltipData].validator.votingPower
                                     ) / 100}
                                     %
                                 </Text>
