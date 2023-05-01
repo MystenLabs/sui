@@ -438,9 +438,9 @@ impl KeyToolCommand {
                 // Sign the message, normalize the signature and then compacts it
                 let response = kms.sign(request).await?;
                 let sig_bytes_der = response.signature.map(|b| b.to_vec()).unwrap_or_default();     
-                let mut sig = secpSig::from_der(&sig_bytes_der)?;
+                let mut sig = Secp256k1Sig::from_der(&sig_bytes_der)?;
                 sig.normalize_s();
-                let sig_bytes = secpSig::serialize_compact(&sig);
+                let sig_bytes = Secp256k1Sig::serialize_compact(&sig);
 
                 //println!("Sig Bytes {:?}", sig_bytes);
                 //println!("Public Key Compact bytes {:?}", pkey_compact);
