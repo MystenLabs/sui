@@ -965,11 +965,13 @@ Emitted when a maker order is injected into the order book.
     creation_fee: Balance&lt;SUI&gt;,
     ctx: &<b>mut</b> TxContext,
 ) {
-    <b>assert</b>!(clob_math::mul(lot_size, tick_size) &gt; 0, <a href="clob.md#0xdee9_clob_EInvalidTickSizeLotSize">EInvalidTickSizeLotSize</a>);
     <b>let</b> base_type_name = <a href="_get">type_name::get</a>&lt;BaseAsset&gt;();
     <b>let</b> quote_type_name = <a href="_get">type_name::get</a>&lt;QuoteAsset&gt;();
+
+    <b>assert</b>!(clob_math::mul(lot_size, tick_size) &gt; 0, <a href="clob.md#0xdee9_clob_EInvalidTickSizeLotSize">EInvalidTickSizeLotSize</a>);
     <b>assert</b>!(base_type_name != quote_type_name, <a href="clob.md#0xdee9_clob_EInvalidPair">EInvalidPair</a>);
     <b>assert</b>!(taker_fee_rate &gt;= maker_rebate_rate, <a href="clob.md#0xdee9_clob_EInvalidFeeRateRebateRate">EInvalidFeeRateRebateRate</a>);
+
     <b>let</b> pool_uid = <a href="../../../.././build/Sui/docs/object.md#0x2_object_new">object::new</a>(ctx);
     <b>let</b> pool_id = *<a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_as_inner">object::uid_as_inner</a>(&pool_uid);
     <a href="../../../.././build/Sui/docs/transfer.md#0x2_transfer_share_object">transfer::share_object</a>(
@@ -1193,6 +1195,7 @@ Emitted when a maker order is injected into the order book.
     <a href="../../../.././build/Sui/docs/clock.md#0x2_clock">clock</a>: &Clock,
     ctx: &<b>mut</b> TxContext,
 ): (Coin&lt;BaseAsset&gt;, Coin&lt;QuoteAsset&gt;, u64) {
+    <b>assert</b>!(quantity &gt; 0, <a href="clob.md#0xdee9_clob_EInvalidQuantity">EInvalidQuantity</a>);
     <b>assert</b>!(<a href="../../../.././build/Sui/docs/coin.md#0x2_coin_value">coin::value</a>(&base_coin) &gt;= quantity, <a href="clob.md#0xdee9_clob_EInsufficientBaseCoin">EInsufficientBaseCoin</a>);
     <b>let</b> original_val = <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_value">coin::value</a>(&quote_coin);
     <b>let</b> (ret_base_coin, ret_quote_coin) = <a href="clob.md#0xdee9_clob_place_market_order">place_market_order</a>(
@@ -1235,6 +1238,7 @@ Emitted when a maker order is injected into the order book.
     quote_coin: Coin&lt;QuoteAsset&gt;,
     ctx: &<b>mut</b> TxContext,
 ): (Coin&lt;BaseAsset&gt;, Coin&lt;QuoteAsset&gt;, u64) {
+    <b>assert</b>!(quantity &gt; 0, <a href="clob.md#0xdee9_clob_EInvalidQuantity">EInvalidQuantity</a>);
     <b>assert</b>!(<a href="../../../.././build/Sui/docs/coin.md#0x2_coin_value">coin::value</a>(&quote_coin) &gt;= quantity, <a href="clob.md#0xdee9_clob_EInsufficientQuoteCoin">EInsufficientQuoteCoin</a>);
     <b>let</b> (base_asset_balance, quote_asset_balance) = <a href="clob.md#0xdee9_clob_match_bid_with_quote_quantity">match_bid_with_quote_quantity</a>(
         pool,
