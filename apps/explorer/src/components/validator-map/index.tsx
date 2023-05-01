@@ -9,13 +9,13 @@ import React, { type ReactNode, useCallback, useMemo } from 'react';
 import { WorldMap } from './WorldMap';
 import { type ValidatorMapData } from './types';
 
-import { useNetwork } from '~/context';
+// import { useNetwork } from '~/context';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
 import { Placeholder } from '~/ui/Placeholder';
 import { Text } from '~/ui/Text';
 
-const HOST = 'https://apps-backend.sui.io';
+// const HOST = 'https://apps-backend.sui.io';
 
 type ValidatorsMap = Record<string, ValidatorMapData>;
 
@@ -40,13 +40,12 @@ interface Props {
 
 // NOTE: This component is lazy imported, so it needs to be default exported:
 export default function ValidatorMap({ minHeight }: Props) {
-    const [network] = useNetwork();
-
+    // TODO BEFORE MERGING: update query URI
     const { data, isLoading, isSuccess } = useQuery(
         ['validator-map'],
         async () => {
             const res = await fetch(
-                `http://localhost:3003/validator-map-v5?network=testnet`,
+                `http://localhost:3003/validator-map?network=testnet`,
                 {
                     method: 'GET',
                 }
