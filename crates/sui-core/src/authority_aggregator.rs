@@ -10,6 +10,7 @@ use crate::safe_client::{SafeClient, SafeClientMetrics, SafeClientMetricsBase};
 use fastcrypto::encoding::Encoding;
 use futures::Future;
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
+use mysten_metrics::histogram::Histogram;
 use mysten_metrics::{monitored_future, spawn_monitored_task, GaugeGuard};
 use mysten_network::config::Config;
 use std::convert::AsRef;
@@ -100,6 +101,8 @@ pub struct AuthAggMetrics {
     pub inflight_certificate_requests: IntGauge,
 
     pub cert_broadcasting_post_quorum_timeout: IntCounter,
+    pub remaining_tasks_when_reaching_cert_quorum: Histogram,
+    pub remaining_tasks_when_cert_broadcasting_post_quorum_timeout: Histogram,
 }
 
 impl AuthAggMetrics {
@@ -175,6 +178,16 @@ impl AuthAggMetrics {
                 registry,
             )
             .unwrap(),
+            remaining_tasks_when_reaching_cert_quorum: mysten_metrics::histogram::Histogram::new_in_registry(
+                "auth_agg_remaining_tasks_when_reaching_cert_quorum",
+                "Number of remaining tasks when reaching certificate quorum",
+                registry,
+            ),
+            remaining_tasks_when_cert_broadcasting_post_quorum_timeout: mysten_metrics::histogram::Histogram::new_in_registry(
+                "auth_agg_remaining_tasks_when_cert_broadcasting_post_quorum_timeout",
+                "Number of remaining tasks when post quorum certificate broadcasting times out",
+                registry,
+            )
         }
     }
 
@@ -1609,25 +1622,31 @@ where
             }
         })?;
 
-        // Use best efforts to send the cert to remaining validators.
         let metrics = self.metrics.clone();
-        spawn_monitored_task!(async move {
-            let mut timeout = Box::pin(sleep(timeout_after_quorum));
-            loop {
-                tokio::select! {
-                    _ = &mut timeout => {
-                        debug!(?tx_digest, "Timed out in post quorum cert broadcasting: {:?}", timeout_after_quorum);
-                        metrics.cert_broadcasting_post_quorum_timeout.inc();
-                        break;
-                    }
-                    res = remaining_tasks.next() => {
-                        if res.is_none() {
+        metrics
+            .remaining_tasks_when_reaching_cert_quorum
+            .report(remaining_tasks.len() as u64);
+        if !remaining_tasks.is_empty() {
+            // Use best efforts to send the cert to remaining validators.
+            spawn_monitored_task!(async move {
+                let mut timeout = Box::pin(sleep(timeout_after_quorum));
+                loop {
+                    tokio::select! {
+                        _ = &mut timeout => {
+                            debug!(?tx_digest, "Timed out in post quorum cert broadcasting: {:?}. Remaining tasks: {:?}", timeout_after_quorum, remaining_tasks.len());
+                            metrics.cert_broadcasting_post_quorum_timeout.inc();
+                            metrics.remaining_tasks_when_cert_broadcasting_post_quorum_timeout.report(remaining_tasks.len() as u64);
                             break;
+                        }
+                        res = remaining_tasks.next() => {
+                            if res.is_none() {
+                                break;
+                            }
                         }
                     }
                 }
-            }
-        });
+            });
+        }
         Ok(result)
     }
 
