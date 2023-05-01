@@ -22,10 +22,6 @@
 }
 
 @layer components {
-    .home-page-grid-container {
-        @apply grid grid-cols-1 gap-4;
-    }
-
     @screen sm {
         .home-page-grid-container {
             @apply grid-cols-[200px,auto];
