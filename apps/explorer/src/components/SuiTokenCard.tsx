@@ -1,31 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { formatAmount } from '@mysten/core';
 import { Sui } from '@mysten/icons';
 
 import { StatsWrapper } from './HomeMetrics/FormattedStatsAmount';
 
-import { useSuiCoinData } from '~/hooks/useSuiCoinData';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
-import { Text } from '~/ui/Text';
 
 export function SuiTokenCard() {
-    const { data, isLoading } = useSuiCoinData();
-    const formattedPrice = data
-        ? data.currentPrice.toLocaleString('en', {
-              style: 'currency',
-              currency: 'USD',
-          })
-        : '--';
-
-    const priceChangeSign =
-        data && data.priceChangePercentageOver24H > 0 ? '+' : '';
-    const priceChangePercentage = (
-        data?.priceChangePercentageOver24H ?? 0
-    ).toFixed(1);
-
     return (
         <Card bg="lightBlue" spacing="lg">
             <div className="flex items-center gap-2">
@@ -37,34 +20,27 @@ export function SuiTokenCard() {
                     variant="heading4/semibold"
                     color="steel-darker"
                 >
-                    1 SUI = {formattedPrice}
+                    1 SUI = --
                 </Heading>
-                <Heading as="div" variant="heading6/medium" color="success">
-                    {priceChangeSign}{priceChangePercentage}%
-                </Heading>
-                <div className="ml-auto">
+                {/* <div className="ml-auto">
                     <Text variant="subtitleSmallExtra/medium" color="steel">
-                        via CoinGecko
+                        via CoinMarketCap
                     </Text>
-                </div>
+                </div> */}
             </div>
             <div className="mt-8 flex gap-8">
                 <StatsWrapper
                     label="Market Cap"
                     size="sm"
                     postfix="USD"
-                    unavailable={isLoading}
-                >
-                    {formatAmount(data?.fullyDilutedMarketCap)}
-                </StatsWrapper>
+                    unavailable
+                />
                 <StatsWrapper
                     label="Total Supply"
                     size="sm"
                     postfix="SUI"
-                    unavailable={isLoading}
-                >
-                    10 B
-                </StatsWrapper>
+                    unavailable
+                />
             </div>
         </Card>
     );

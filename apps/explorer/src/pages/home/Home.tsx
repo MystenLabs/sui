@@ -57,7 +57,10 @@ function Home() {
             <div style={{ gridArea: 'gas-price' }}>
                 <GasPriceCard />
             </div>
-            <div style={{ gridArea: 'node-map' }} className="h-[360px] xl:h-auto">
+            <div
+                style={{ gridArea: 'node-map' }}
+                className="h-[360px] xl:h-auto"
+            >
                 <ErrorBoundary>
                     <Suspense fallback={<Card height="full" />}>
                         <NodeMap minHeight="100%" />
