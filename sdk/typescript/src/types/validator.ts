@@ -30,7 +30,7 @@ export const Apy = object({
 });
 
 export const ValidatorsApy = object({
-  epoch: EpochId,
+  epoch: string(),
   apys: array(Apy),
 });
 
