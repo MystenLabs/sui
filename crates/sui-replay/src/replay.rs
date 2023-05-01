@@ -338,8 +338,7 @@ impl LocalExec {
             .get_checkpoint_txs(0)
             .await?
             .iter()
-            .find(|tx| tx == &&TransactionDigest::from_str(TESTNET_GENESIX_TX_DIGEST).unwrap())
-            .is_some();
+            .any(|tx| tx == &TransactionDigest::from_str(TESTNET_GENESIX_TX_DIGEST).unwrap());
 
         Ok(Self {
             client,
@@ -625,8 +624,7 @@ impl LocalExec {
         );
 
         let all_required_objects = self.storage.all_objects();
-        let effects =
-            SuiTransactionBlockEffects::try_from(res.1).map_err(|e| LocalExecError::from(e))?;
+        let effects = SuiTransactionBlockEffects::try_from(res.1).map_err(LocalExecError::from)?;
 
         Ok(ExecutionSandboxState {
             transaction_info: tx_info,
@@ -724,8 +722,7 @@ impl LocalExec {
             Some(q) => Err(q),
             None => Ok(()),
         };
-        let effects =
-            SuiTransactionBlockEffects::try_from(res.0).map_err(|e| LocalExecError::from(e))?;
+        let effects = SuiTransactionBlockEffects::try_from(res.0).map_err(LocalExecError::from)?;
 
         Ok(ExecutionSandboxState {
             transaction_info: pre_run_sandbox.transaction_info,
