@@ -10266,6 +10266,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-verifier-fuzzer"
+version = "0.0.0"
+dependencies = [
+ "afl",
+ "arbitrary",
+ "move-binary-format",
+ "move-bytecode-verifier",
+ "quinn-proto",
+ "sui-verifier",
+]
+
+[[package]]
 name = "sui-verifier-transactional-tests"
 version = "0.1.0"
 dependencies = [
