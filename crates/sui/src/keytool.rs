@@ -9,9 +9,6 @@ use fastcrypto::secp256k1::recoverable::Secp256k1Sig;
 use fastcrypto::secp256k1::Secp256k1PublicKey;
 use fastcrypto::traits::KeyPair;
 use fastcrypto::traits::ToFromBytes;
-use openssl::ec::{EcGroup, PointConversionForm};
-use openssl::nid::Nid;
-use openssl::pkey::PKey;
 use rusoto_core::Region;
 use rusoto_kms::{GetPublicKeyRequest, Kms, KmsClient, SignRequest};
 use shared_crypto::intent::{Intent, IntentMessage};
@@ -415,17 +412,9 @@ impl KeyToolCommand {
 
                 // Parse the PEM-encoded public key and extract the raw bytes
                 // Compresses into 33 bytes
-                let group = EcGroup::from_curve_name(Nid::SECP256K1)?;
-                let pkey = PKey::public_key_from_der(public_key)?;
-                let pkey_compact_result = pkey.ec_key().unwrap().public_key().to_bytes(
-                    &group,
-                    PointConversionForm::COMPRESSED,
-                    &mut openssl::bn::BigNumContext::new().unwrap(),
-                );
-                let pkey_compact = pkey_compact_result?;
-
+                let secp_pk = Secp256k1PublicKey::from_uncompressed(public_key);
+                let pkey_compact = secp_pk.as_bytes();
                 // Generates Corresponding Sui Address from public key
-                let secp_pk = Secp256k1PublicKey::from_bytes(&pkey_compact)?;
                 println!(
                     "Address For Corresponding KMS Key: {}",
                     Into::<SuiAddress>::into(&secp_pk),
