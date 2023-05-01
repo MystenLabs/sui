@@ -14,8 +14,6 @@ import LoadingSpinner from '_components/loading/LoadingIndicator';
 import { NFTDisplayCard } from '_components/nft-display';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 
-// Set the default limit to 10
-const DEFAULT_NFT_LIMIT = 10;
 const MAX_FETCH_LIMIT = 50;
 
 function NftsPage() {
@@ -47,12 +45,7 @@ function NftsPage() {
             .map(({ data }) => data as SuiObjectData) || [];
 
     useEffect(() => {
-        if (
-            (isIntersecting && hasNextPage && !isFetchingNextPage) ||
-            (nfts.length < DEFAULT_NFT_LIMIT &&
-                hasNextPage &&
-                !isFetchingNextPage)
-        ) {
+        if (isIntersecting && hasNextPage && !isFetchingNextPage) {
             fetchNextPage();
         }
     }, [
