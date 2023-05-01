@@ -40,7 +40,7 @@ function BaseWorldMap({
 }: Props) {
     const centerX = width / 2;
     const centerY = height / 2;
-    
+
     return (
         <svg width={width} height={height}>
             <Mercator
@@ -52,10 +52,7 @@ function BaseWorldMap({
                     <g>
                         <g>
                             {features.map(({ path }, index) => (
-                                <MapFeature
-                                    key={index}
-                                    path={path}
-                                />
+                                <MapFeature key={index} path={path} />
                             ))}
                         </g>
 

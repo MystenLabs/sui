@@ -17,16 +17,21 @@ const VALIDATOR_MULTIPLIER = 20;
 const MIN_VALIDATOR_SIZE = 0.5;
 const MAX_VALIDATOR_SIZE = 7;
 
-export function ValidatorLocation({ validator, projection, onMouseOut, onMouseOver }: Props) {
+export function ValidatorLocation({
+    validator,
+    projection,
+    onMouseOut,
+    onMouseOver,
+}: Props) {
     const handleMouseOver = useCallback(
         (e: React.MouseEvent) => {
             validator && onMouseOver(e, validator.suiAddress);
         },
-        [validator?.suiAddress, onMouseOver]
+        [validator, onMouseOver]
     );
 
-    if(!validator){ 
-        return null
+    if (!validator) {
+        return null;
     }
 
     const position = projection(
@@ -37,7 +42,10 @@ export function ValidatorLocation({ validator, projection, onMouseOut, onMouseOv
     );
 
     const r = Math.max(
-        Math.min(Math.floor(parseInt(validator.votingPower) / VALIDATOR_MULTIPLIER), MAX_VALIDATOR_SIZE),
+        Math.min(
+            Math.floor(parseInt(validator.votingPower) / VALIDATOR_MULTIPLIER),
+            MAX_VALIDATOR_SIZE
+        ),
         MIN_VALIDATOR_SIZE
     );
 

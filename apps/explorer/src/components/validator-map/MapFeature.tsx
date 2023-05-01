@@ -5,7 +5,7 @@ interface Props {
     path: string | null;
 }
 
-export function MapFeature({ path}: Props) {
+export function MapFeature({ path }: Props) {
     if (!path) {
         return null;
     }

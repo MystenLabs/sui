@@ -9,12 +9,13 @@ import React, { type ReactNode, useCallback, useMemo } from 'react';
 import { WorldMap } from './WorldMap';
 import { type ValidatorWithLocation } from './types';
 
+import { useNetwork } from '~/context';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
 import { Placeholder } from '~/ui/Placeholder';
 import { Text } from '~/ui/Text';
 
-const HOST = 'https://imgmod.sui.io';
+const HOST = 'https://apps-backend.sui.io';
 
 type ValidatorsMap = Record<string, ValidatorWithLocation>;
 
@@ -39,12 +40,13 @@ interface Props {
 
 // NOTE: This component is lazy imported, so it needs to be default exported:
 export default function ValidatorMap({ minHeight }: Props) {
+    const [network] = useNetwork();
 
     const { data, isLoading, isSuccess } = useQuery(
         ['validator-map'],
         async () => {
             const res = await fetch(
-                `http://localhost:3003/validator-map-v2?network=testnet`,
+                `${HOST}/validator-map/?network=${network}`,
                 {
                     method: 'GET',
                 }
@@ -68,12 +70,12 @@ export default function ValidatorMap({ minHeight }: Props) {
 
         let totalCount = 0;
         const validatorMap: ValidatorsMap = {};
-        const countryMap: Record<string, number> = {}
+        const countryMap: Record<string, number> = {};
         data.forEach((validator) => {
             if (validator) {
                 totalCount++;
                 validatorMap[validator.suiAddress] ??= {
-                    ...validator
+                    ...validator,
                 };
 
                 if (countryMap[validator.country]) {
@@ -147,8 +149,8 @@ export default function ValidatorMap({ minHeight }: Props) {
                             {
                                 // Fetch received response with no errors and the value was not null
                                 isSuccess &&
-                                totalCount &&
-                                numberFormatter.format(totalCount)
+                                    totalCount &&
+                                    numberFormatter.format(totalCount)
                             }
                         </NodeStat>
                     </div>
@@ -180,13 +182,27 @@ export default function ValidatorMap({ minHeight }: Props) {
                     >
                         <div className="flex flex-col justify-start font-semibold">
                             <div>{validatorMap[tooltipData].name}</div>
-                            <Text variant="pSubtitleSmall/normal" color="gray-60">{validatorMap[tooltipData].city}, {validatorMap[tooltipData].country}</Text>
+                            <Text
+                                variant="pSubtitleSmall/normal"
+                                color="gray-60"
+                            >
+                                {validatorMap[tooltipData].city},{' '}
+                                {validatorMap[tooltipData].country}
+                            </Text>
                         </div>
                         <div className="my-1 h-px bg-gray-90" />
                         <div className="min-w-[120px]">
-                            <div className="flex justify-between"><Text variant="subtitle/medium">Voting Power</Text>
-                            <Text variant="subtitle/medium">
-                            {Number(validatorMap[tooltipData].votingPower) / 100}%</Text></div>
+                            <div className="flex justify-between">
+                                <Text variant="subtitle/medium">
+                                    Voting Power
+                                </Text>
+                                <Text variant="subtitle/medium">
+                                    {Number(
+                                        validatorMap[tooltipData].votingPower
+                                    ) / 100}
+                                    %
+                                </Text>
+                            </div>
                         </div>
                     </TooltipWithBounds>
                 )}
