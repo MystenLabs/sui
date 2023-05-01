@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useGetTotalTransactionBlocks } from '@mysten/core';
-import { Svg3D32, Nft232, Wallet32, Staking32 } from '@mysten/icons';
+import { Svg3D32, Nft232, Staking32 } from '@mysten/icons';
 
 import { FormattedStatsAmount } from './FormattedStatsAmount';
 
