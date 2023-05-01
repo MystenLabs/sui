@@ -37,7 +37,7 @@ use tokio::test;
 
 const TEST_MNEMONIC: &str = "result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss";
 
-#[tokio::test]
+#[test]
 async fn test_addresses_command() -> Result<(), anyhow::Error> {
     // Add 3 Ed25519 KeyPairs as default
     let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(3));
@@ -208,8 +208,8 @@ async fn test_mnemonics_ed25519() -> Result<(), anyhow::Error> {
             key_scheme: SignatureScheme::ED25519,
             derivation_path: None,
         }
-        .execute(&mut keystore)?
-        .await;
+        .execute(&mut keystore)
+        .await?;
         let kp = SuiKeyPair::decode_base64(t[1]).unwrap();
         let addr = SuiAddress::from_str(t[2]).unwrap();
         assert_eq!(SuiAddress::from(&kp.public()), addr);
@@ -232,8 +232,8 @@ async fn test_mnemonics_secp256k1() -> Result<(), anyhow::Error> {
             key_scheme: SignatureScheme::Secp256k1,
             derivation_path: None,
         }
-        .execute(&mut keystore)?
-        .await;
+        .execute(&mut keystore)
+        .await?;
         let kp = SuiKeyPair::decode_base64(t[1]).unwrap();
         let addr = SuiAddress::from_str(t[2]).unwrap();
         assert_eq!(SuiAddress::from(&kp.public()), addr);
@@ -243,7 +243,7 @@ async fn test_mnemonics_secp256k1() -> Result<(), anyhow::Error> {
 }
 
 #[test]
-fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
+async fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
     let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
     assert!(KeyToolCommand::Import {
         mnemonic_phrase: TEST_MNEMONIC.to_string(),
@@ -260,6 +260,7 @@ fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
         derivation_path: Some("m/0'/784'/0'/0/0".parse().unwrap()),
     }
     .execute(&mut keystore)
+    .await
     .is_err());
 
     assert!(KeyToolCommand::Import {
@@ -268,6 +269,7 @@ fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
         derivation_path: Some("m/54'/784'/0'/0/0".parse().unwrap()),
     }
     .execute(&mut keystore)
+    .await
     .is_err());
 
     assert!(KeyToolCommand::Import {
@@ -276,6 +278,7 @@ fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
         derivation_path: Some("m/54'/784'/0'/0'/0'".parse().unwrap()),
     }
     .execute(&mut keystore)
+    .await
     .is_err());
 
     assert!(KeyToolCommand::Import {
@@ -284,6 +287,7 @@ fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
         derivation_path: Some("m/44'/784'/0'/0/0".parse().unwrap()),
     }
     .execute(&mut keystore)
+    .await
     .is_err());
 
     Ok(())
@@ -298,6 +302,7 @@ async fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
         derivation_path: Some("m/44'/784'/0'/0'/0'".parse().unwrap()),
     }
     .execute(&mut keystore)
+    .await
     .is_ok());
 
     assert!(KeyToolCommand::Import {
@@ -306,6 +311,7 @@ async fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
         derivation_path: Some("m/44'/784'/0'/0'/1'".parse().unwrap()),
     }
     .execute(&mut keystore)
+    .await
     .is_ok());
 
     assert!(KeyToolCommand::Import {
@@ -314,6 +320,7 @@ async fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
         derivation_path: Some("m/44'/784'/1'/0'/1'".parse().unwrap()),
     }
     .execute(&mut keystore)
+    .await
     .is_ok());
 
     assert!(KeyToolCommand::Import {
@@ -330,7 +337,8 @@ async fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
         key_scheme: SignatureScheme::Secp256k1,
         derivation_path: Some("m/54'/784'/1'/0/1".parse().unwrap()),
     }
-    .execute(&mut keystore)?
+    .execute(&mut keystore)
+    .await
     .is_ok());
     Ok(())
 }
@@ -343,7 +351,8 @@ async fn test_keytool_bls12381() -> Result<(), anyhow::Error> {
         derivation_path: None,
         word_length: None,
     }
-    .execute(&mut keystore)?;
+    .execute(&mut keystore)
+    .await?;
     Ok(())
 }
 
@@ -378,7 +387,8 @@ async fn test_sign_command() -> Result<(), anyhow::Error> {
         data: Base64::encode(bcs::to_bytes(&tx_data)?),
         intent: Some(Intent::sui_app(IntentScope::PersonalMessage)),
     }
-    .execute(&mut keystore)?;
+    .execute(&mut keystore)
+    .await?;
 
     // Sign an intent message for the transaction data without intent passed in, so default is used.
     KeyToolCommand::Sign {
@@ -386,6 +396,7 @@ async fn test_sign_command() -> Result<(), anyhow::Error> {
         data: Base64::encode(bcs::to_bytes(&tx_data)?),
         intent: None,
     }
-    .execute(&mut keystore)?;
+    .execute(&mut keystore)
+    .await?;
     Ok(())
 }
