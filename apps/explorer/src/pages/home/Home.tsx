@@ -93,7 +93,7 @@ function Home() {
                     </TabPanels>
                 </TabGroup>
             </div>
-            {/* TODO: Add the popular packages component here :) */}
+            {/* TODO: Aadd the popular packages component here :) */}
             {/* <div style={{ gridArea: 'packages' }} className="mt-5 bg-gray-60">
                 Popular packages
             </div> */}
