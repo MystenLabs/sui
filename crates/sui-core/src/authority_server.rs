@@ -91,6 +91,8 @@ impl AuthorityServer {
             Box::new(Arc::new(ConnectionMonitorStatusForTests {})),
             100_000,
             100_000,
+            None,
+            None,
             ConsensusAdapterMetrics::new_test(),
         ));
 

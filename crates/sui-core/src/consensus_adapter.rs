@@ -271,6 +271,12 @@ pub struct ConsensusAdapter {
     max_pending_transactions: usize,
     /// Number of submitted transactions still inflight at this node.
     num_inflight_transactions: AtomicU64,
+    /// Dictates the maximum position  from which will submit to consensus. Even if the is elected to
+    /// submit from a higher position than this, it will "reset" to the max_submit_position.
+    max_submit_position: Option<usize>,
+    /// When provided it will override the current back off logic and will use this value instead
+    /// as delay step.
+    submit_delay_step_override: Option<Duration>,
     /// A structure to check the connection statuses populated by the Connection Monitor Listener
     connection_monitor_status: Box<Arc<dyn CheckConnection>>,
     /// A structure to check the reputation scores populated by Consensus
@@ -308,6 +314,8 @@ impl ConsensusAdapter {
         connection_monitor_status: Box<Arc<dyn CheckConnection>>,
         max_pending_transactions: usize,
         max_pending_local_submissions: usize,
+        max_submit_position: Option<usize>,
+        submit_delay_step_override: Option<Duration>,
         metrics: ConsensusAdapterMetrics,
     ) -> Self {
         let num_inflight_transactions = Default::default();
@@ -317,6 +325,8 @@ impl ConsensusAdapter {
             consensus_client,
             authority,
             max_pending_transactions,
+            max_submit_position,
+            submit_delay_step_override,
             num_inflight_transactions,
             connection_monitor_status,
             low_scoring_authorities,
@@ -375,28 +385,41 @@ impl ConsensusAdapter {
     ) -> (impl Future<Output = ()>, usize, bool) {
         let (duration, position, mapped_to_low_scoring) = match &transaction.kind {
             ConsensusTransactionKind::UserTransaction(certificate) => {
-                let tx_digest = certificate.digest();
-                let (position, mapped_to_low_scoring) =
-                    self.submission_position(committee, tx_digest);
-                const DEFAULT_LATENCY: Duration = Duration::from_secs(5);
-                const MAX_LATENCY: Duration = Duration::from_secs(5 * 60);
-                let latency = self.latency_observer.latency().unwrap_or(DEFAULT_LATENCY);
-                let latency = std::cmp::max(latency, DEFAULT_LATENCY);
-                let latency = std::cmp::min(latency, MAX_LATENCY);
-                self.metrics
-                    .sequencing_estimated_latency
-                    .set(latency.as_millis() as i64);
-                let delay_step = latency * 3 / 2;
-                (
-                    delay_step * position as u32,
-                    position,
-                    mapped_to_low_scoring,
-                )
+                self.await_submit_delay_user_transaction(committee, certificate.digest())
             }
             _ => (Duration::ZERO, 0, false),
         };
         (
             tokio::time::sleep(duration),
+            position,
+            mapped_to_low_scoring,
+        )
+    }
+
+    fn await_submit_delay_user_transaction(
+        &self,
+        committee: &Committee,
+        tx_digest: &TransactionDigest,
+    ) -> (Duration, usize, bool) {
+        let (mut position, mapped_to_low_scoring) = self.submission_position(committee, tx_digest);
+
+        const MAX_LATENCY: Duration = Duration::from_secs(5 * 60);
+        const DEFAULT_LATENCY: Duration = Duration::from_secs(5);
+        let latency = self.latency_observer.latency().unwrap_or(DEFAULT_LATENCY);
+        let latency = std::cmp::max(latency, DEFAULT_LATENCY);
+        let latency = std::cmp::min(latency, MAX_LATENCY);
+
+        if let Some(max_submit_position) = self.max_submit_position {
+            position = std::cmp::min(position, max_submit_position);
+        }
+
+        let delay_step = self.submit_delay_step_override.unwrap_or(latency * 3 / 2);
+
+        self.metrics
+            .sequencing_estimated_latency
+            .set(latency.as_millis() as i64);
+        (
+            delay_step * position as u32,
             position,
             mapped_to_low_scoring,
         )
@@ -942,35 +965,104 @@ pub fn position_submit_certificate(
 #[cfg(test)]
 mod adapter_tests {
     use super::position_submit_certificate;
+    use crate::consensus_adapter::{
+        ConnectionMonitorStatusForTests, ConsensusAdapter, ConsensusAdapterMetrics,
+        LazyNarwhalClient,
+    };
     use fastcrypto::traits::KeyPair;
-    use rand::{rngs::StdRng, Rng, SeedableRng};
+    use rand::Rng;
+    use rand::{rngs::StdRng, SeedableRng};
+    use std::sync::Arc;
+    use std::time::Duration;
     use sui_types::{
         base_types::TransactionDigest,
         committee::Committee,
         crypto::{get_key_pair_from_rng, AuthorityKeyPair, AuthorityPublicKeyBytes},
     };
 
-    #[test]
-    fn test_position_submit_certificate() {
-        // grab a random committee and a random stake distribution
-        let mut rng = StdRng::from_seed([0; 32]);
-        const COMMITTEE_SIZE: usize = 10; // 3 * 3 + 1;
-        let authorities = (0..COMMITTEE_SIZE)
+    fn test_committee(rng: &mut StdRng, size: usize) -> Committee {
+        let authorities = (0..size)
             .map(|_k| {
                 (
                     AuthorityPublicKeyBytes::from(
-                        get_key_pair_from_rng::<AuthorityKeyPair, _>(&mut rng)
-                            .1
-                            .public(),
+                        get_key_pair_from_rng::<AuthorityKeyPair, _>(rng).1.public(),
                     ),
                     rng.gen_range(0u64..10u64),
                 )
             })
             .collect::<Vec<_>>();
-        let committee = Committee::new_for_testing_with_normalized_voting_power(
+        Committee::new_for_testing_with_normalized_voting_power(
             0,
             authorities.iter().cloned().collect(),
+        )
+    }
+
+    #[test]
+    fn test_await_submit_delay_user_transaction() {
+        // grab a random committee and a random stake distribution
+        let mut rng = StdRng::from_seed([0; 32]);
+        let committee = test_committee(&mut rng, 10);
+
+        // When we define max submit position and delay step
+        let consensus_adapter = ConsensusAdapter::new(
+            Box::new(LazyNarwhalClient::new(
+                "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
+            )),
+            *committee.authority_by_index(0).unwrap(),
+            Box::new(Arc::new(ConnectionMonitorStatusForTests {})),
+            100_000,
+            100_000,
+            Some(1),
+            Some(Duration::from_secs(2)),
+            ConsensusAdapterMetrics::new_test(),
         );
+
+        // transaction to submit
+        let tx_digest = TransactionDigest::generate(&mut rng);
+
+        // Ensure that the original position is higher
+        let (position, low_scoring_authority) =
+            consensus_adapter.submission_position(&committee, &tx_digest);
+        assert_eq!(position, 7);
+        assert!(!low_scoring_authority);
+
+        // Make sure that position is set to max value 0
+        let (delay_step, position, low_scoring_authority) =
+            consensus_adapter.await_submit_delay_user_transaction(&committee, &tx_digest);
+
+        assert_eq!(position, 1);
+        assert_eq!(delay_step, Duration::from_secs(2));
+        assert!(!low_scoring_authority);
+
+        // Without submit position and delay step
+        let consensus_adapter = ConsensusAdapter::new(
+            Box::new(LazyNarwhalClient::new(
+                "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
+            )),
+            *committee.authority_by_index(0).unwrap(),
+            Box::new(Arc::new(ConnectionMonitorStatusForTests {})),
+            100_000,
+            100_000,
+            None,
+            None,
+            ConsensusAdapterMetrics::new_test(),
+        );
+
+        let (delay_step, position, low_scoring_authority) =
+            consensus_adapter.await_submit_delay_user_transaction(&committee, &tx_digest);
+
+        assert_eq!(position, 7);
+
+        // delay_step * position * 3/2 = 5 * 7 * 3/2 = 52.5
+        assert_eq!(delay_step, Duration::from_millis(52500));
+        assert!(!low_scoring_authority);
+    }
+
+    #[test]
+    fn test_position_submit_certificate() {
+        // grab a random committee and a random stake distribution
+        let mut rng = StdRng::from_seed([0; 32]);
+        let committee = test_committee(&mut rng, 10);
 
         // generate random transaction digests, and account for validator selection
         const NUM_TEST_TRANSACTIONS: usize = 1000;
@@ -979,7 +1071,7 @@ mod adapter_tests {
             let tx_digest = TransactionDigest::generate(&mut rng);
 
             let mut zero_found = false;
-            for (name, _) in authorities.iter() {
+            for (name, _) in committee.members() {
                 let f = position_submit_certificate(&committee, name, &tx_digest);
                 assert!(f < committee.num_members());
                 if f == 0 {
