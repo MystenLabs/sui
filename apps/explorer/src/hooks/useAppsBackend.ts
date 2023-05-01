@@ -16,7 +16,7 @@ export function useAppsBackend() {
         ): Promise<T> => {
             const query = new URLSearchParams(queryString);
             const res = await fetch(
-                network === Network.LOCAL
+                network === Network.TESTNET
                     ? `http://localhost:3003/${path}?${query}`
                     : `https://apps-backend.sui.io/${path}?${query}`
             );
