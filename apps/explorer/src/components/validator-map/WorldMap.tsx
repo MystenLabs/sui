@@ -7,7 +7,7 @@ import * as topojson from 'topojson-client';
 
 import { MapFeature } from './MapFeature';
 import { NodesLocation } from './NodesLocation';
-import world from './topology.json';
+import world from '../node-map/topology.json';
 import { ValidatorWithLocation, type Feature, type NodeLocation } from './types';
 
 // @ts-expect-error: The types of `world` here aren't aligned but they are correct
