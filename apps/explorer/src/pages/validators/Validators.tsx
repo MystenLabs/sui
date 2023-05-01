@@ -3,7 +3,7 @@
 
 import {
     roundFloat,
-    useGetRollingAverageApys,
+    useGetValidatorsApy,
     type ApyByValidator,
     useGetValidatorsEvents,
     formatPercentageDisplay,
@@ -238,8 +238,7 @@ function ValidatorPageResult() {
         order: 'descending',
     });
 
-    const { data: rollingAverageApys } =
-        useGetRollingAverageApys(numberOfValidators);
+    const { data: validatorsApy } = useGetValidatorsApy();
 
     const totalStaked = useMemo(() => {
         if (!data) return 0;
@@ -252,18 +251,15 @@ function ValidatorPageResult() {
     }, [data]);
 
     const averageAPY = useMemo(() => {
-        if (
-            !rollingAverageApys ||
-            Object.keys(rollingAverageApys)?.length === 0
-        )
+        if (!validatorsApy || Object.keys(validatorsApy)?.length === 0)
             return null;
 
         // exclude validators with no apy
-        const apys = Object.values(rollingAverageApys)?.filter((a) => a > 0);
+        const apys = Object.values(validatorsApy)?.filter((a) => a > 0);
         const averageAPY = apys?.reduce((acc, cur) => acc + cur, 0);
         // in case of no apy, return 0
         return apys.length > 0 ? roundFloat(averageAPY / apys.length) : 0;
-    }, [rollingAverageApys]);
+    }, [validatorsApy]);
 
     const lastEpochRewardOnAllValidators = useMemo(() => {
         if (!validatorEvents) return null;
@@ -282,9 +278,9 @@ function ValidatorPageResult() {
             data.activeValidators,
             data.atRiskValidators,
             validatorEvents,
-            rollingAverageApys
+            validatorsApy || null
         );
-    }, [data, validatorEvents, rollingAverageApys]);
+    }, [data, validatorEvents, validatorsApy]);
 
     if (isError || validatorEventError) {
         return (
