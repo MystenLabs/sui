@@ -39,6 +39,11 @@ module sui::tx_context {
         self.sender
     }
 
+    /// Return the transaction digest (hash of transaction inputs).
+    public fun digest(self: &TxContext): &vector<u8> {
+        &self.tx_hash
+    }
+
     /// Return the current epoch
     public fun epoch(self: &TxContext): u64 {
         self.epoch
