@@ -207,11 +207,13 @@ module deepbook::clob {
         creation_fee: Balance<SUI>,
         ctx: &mut TxContext,
     ) {
-        assert!(clob_math::mul(lot_size, tick_size) > 0, EInvalidTickSizeLotSize);
         let base_type_name = type_name::get<BaseAsset>();
         let quote_type_name = type_name::get<QuoteAsset>();
+
+        assert!(clob_math::mul(lot_size, tick_size) > 0, EInvalidTickSizeLotSize);
         assert!(base_type_name != quote_type_name, EInvalidPair);
         assert!(taker_fee_rate >= maker_rebate_rate, EInvalidFeeRateRebateRate);
+
         let pool_uid = object::new(ctx);
         let pool_id = *object::uid_as_inner(&pool_uid);
         transfer::share_object(
@@ -316,6 +318,7 @@ module deepbook::clob {
         clock: &Clock,
         ctx: &mut TxContext,
     ): (Coin<BaseAsset>, Coin<QuoteAsset>, u64) {
+        assert!(quantity > 0, EInvalidQuantity);
         assert!(coin::value(&base_coin) >= quantity, EInsufficientBaseCoin);
         let original_val = coin::value(&quote_coin);
         let (ret_base_coin, ret_quote_coin) = place_market_order(
@@ -339,6 +342,7 @@ module deepbook::clob {
         quote_coin: Coin<QuoteAsset>,
         ctx: &mut TxContext,
     ): (Coin<BaseAsset>, Coin<QuoteAsset>, u64) {
+        assert!(quantity > 0, EInvalidQuantity);
         assert!(coin::value(&quote_coin) >= quantity, EInsufficientQuoteCoin);
         let (base_asset_balance, quote_asset_balance) = match_bid_with_quote_quantity(
             pool,
