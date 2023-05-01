@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use mysten_metrics::histogram::Histogram;
 use prometheus::{
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry, IntCounter,
@@ -20,6 +21,7 @@ pub struct CheckpointMetrics {
     pub last_received_checkpoint_signatures: IntGaugeVec,
     pub last_sent_checkpoint_signature: IntGauge,
     pub highest_accumulated_epoch: IntGauge,
+    pub checkpoint_creation_latency_ms: Histogram,
 }
 
 impl CheckpointMetrics {
@@ -93,6 +95,11 @@ impl CheckpointMetrics {
                 registry
             )
             .unwrap(),
+            checkpoint_creation_latency_ms: Histogram::new_in_registry(
+                "checkpoint_creation_latency_ms",
+                "Latency from consensus commit timstamp to local checkpoint creation in milliseconds",
+                registry,
+            ),
         };
         Arc::new(this)
     }

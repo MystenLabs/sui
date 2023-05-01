@@ -949,6 +949,7 @@ impl CheckpointBuilder {
             let mut pending = HashSet::new();
             for effect in roots {
                 let digest = effect.transaction_digest();
+                seen.insert(*digest);
                 if self
                     .epoch_store
                     .builder_included_transaction_in_checkpoint(digest)?
