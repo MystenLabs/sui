@@ -25,7 +25,9 @@ use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_storage::IndexStore;
 use sui_types::base_types::{AuthorityName, ObjectID};
 use sui_types::crypto::AuthorityKeyPair;
+use sui_types::error::SuiResult;
 use sui_types::messages::{VerifiedExecutableTransaction, VerifiedTransaction};
+use sui_types::object::Object;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 
 #[derive(Default)]
@@ -38,6 +40,7 @@ pub struct TestAuthorityBuilder<'a> {
     reference_gas_price: Option<u64>,
     node_keypair: Option<&'a AuthorityKeyPair>,
     genesis: Option<&'a Genesis>,
+    starting_objects: Option<&'a [Object]>,
 }
 
 impl<'a> TestAuthorityBuilder<'a> {
@@ -47,6 +50,11 @@ impl<'a> TestAuthorityBuilder<'a> {
 
     pub fn with_store_base_path(mut self, path: PathBuf) -> Self {
         assert!(self.store_base_path.replace(path).is_none());
+        self
+    }
+
+    pub fn with_starting_objects(mut self, objects: &'a [Object]) -> Self {
+        assert!(self.starting_objects.replace(objects).is_none());
         self
     }
 
@@ -102,6 +110,16 @@ impl<'a> TestAuthorityBuilder<'a> {
             &config.genesis,
             config.validator_configs()[0].protocol_key_pair(),
         )
+    }
+
+    pub async fn side_load_objects(
+        authority_state: Arc<AuthorityState>,
+        objects: &'a [Object],
+    ) -> SuiResult {
+        authority_state
+            .database
+            .insert_raw_object_unchecked_for_testing(objects)
+            .await
     }
 
     pub async fn build(self) -> Arc<AuthorityState> {
@@ -213,6 +231,14 @@ impl<'a> TestAuthorityBuilder<'a> {
             )
             .await
             .unwrap();
+
+        if let Some(starting_objects) = self.starting_objects {
+            state
+                .database
+                .insert_raw_object_unchecked_for_testing(starting_objects)
+                .await
+                .unwrap();
+        };
         state
     }
 }
