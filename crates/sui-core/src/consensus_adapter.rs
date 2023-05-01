@@ -64,6 +64,7 @@ pub struct ConsensusAdapterMetrics {
     pub sequencing_in_flight_semaphore_wait: IntGauge,
     pub sequencing_in_flight_submissions: IntGauge,
     pub sequencing_estimated_latency: IntGauge,
+    pub sequencing_resubmission_interval_ms: IntGauge,
 }
 
 impl ConsensusAdapterMetrics {
@@ -124,7 +125,13 @@ impl ConsensusAdapterMetrics {
                 .unwrap(),
             sequencing_estimated_latency: register_int_gauge_with_registry!(
                 "sequencing_estimated_latency",
-                "Consensus latency estimated by consensus adapter",
+                "Consensus latency estimated by consensus adapter in milliseconds",
+                registry,
+            )
+                .unwrap(),
+            sequencing_resubmission_interval_ms: register_int_gauge_with_registry!(
+                "sequencing_resubmission_interval_ms",
+                "Resubmission interval used by consensus adapter in milliseconds",
                 registry,
             )
                 .unwrap(),
@@ -390,6 +397,10 @@ impl ConsensusAdapter {
         const MAX_LATENCY: Duration = Duration::from_secs(5 * 60);
         const DEFAULT_LATENCY: Duration = Duration::from_secs(3); // > p50 consensus latency with global deployment
         let latency = self.latency_observer.latency().unwrap_or(DEFAULT_LATENCY);
+        self.metrics
+            .sequencing_estimated_latency
+            .set(latency.as_millis() as i64);
+
         let latency = std::cmp::max(latency, DEFAULT_LATENCY);
         let latency = std::cmp::min(latency, MAX_LATENCY);
 
@@ -398,10 +409,10 @@ impl ConsensusAdapter {
         }
 
         let delay_step = self.submit_delay_step_override.unwrap_or(latency * 2);
-
         self.metrics
-            .sequencing_estimated_latency
-            .set(latency.as_millis() as i64);
+            .sequencing_resubmission_interval_ms
+            .set(delay_step.as_millis() as i64);
+
         (
             delay_step * position as u32,
             position,
