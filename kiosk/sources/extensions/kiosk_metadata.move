@@ -10,9 +10,8 @@ module kiosk::kiosk_metadata {
     use sui::object::{UID};
     use sui::kiosk::{Self, Kiosk, KioskOwnerCap};
     use std::string::{String};
-    use sui::vec_map::{Self, VecMap};
+    use sui::vec_map::{VecMap};
     use sui::dynamic_field as df;
-    use std::vector::{Self};
 
     struct Metadata has store, copy, drop {
         metadata: VecMap<String, String>
@@ -27,7 +26,7 @@ module kiosk::kiosk_metadata {
 
     // Create a new Metadata object for the user's Kiosk.
     // Creates a dynamic field object with the Metadata.
-    public fun enable(kiosk: &mut Kiosk, cap: &KioskOwnerCap){
+    public fun enable(kiosk: &mut Kiosk, cap: &KioskOwnerCap, metadata: VecMap<String, String>){
 
        // verifies that we have kiosk ownership and returns the kiosk's ID.
         // exits if the user doesn't have write access.
@@ -35,7 +34,7 @@ module kiosk::kiosk_metadata {
 
         // Create the metadata dynamic field for the owned kiosk.
         df::add(kiosk_uid_mut, KioskMetadataExt{ },  Metadata{ 
-            metadata: vec_map::empty(),
+            metadata
         });
     }
 
@@ -47,53 +46,19 @@ module kiosk::kiosk_metadata {
 
         // remove the Metadata from the kiosk.
         let meta : Metadata = df::remove(kiosk_uid_mut, KioskMetadataExt{}); 
+        // return the old metadata VecMap
         meta.metadata
     }
 
-    // === Data Modifiers ===
-    // 
-    // Sets a custom `name` field with the `value`.
-    public fun add_field(kiosk: &mut Kiosk, cap: &KioskOwnerCap, name: String, value: String) {
-        // gets writeable kiosk Id if it exists, otherwise exits with error.
+    public fun replace(kiosk: &mut Kiosk, cap: &KioskOwnerCap, metadata: VecMap<String, String>){
+        // verifies that we have kiosk ownership and returns the kiosk's ID.
+        // exits if the user doesn't have write access.
         let kiosk_uid_mut = kiosk::uid_mut_as_owner(kiosk, cap);
-        // gets mutable metadata object if it's registered, otherwise exits with error.
-        let metadata = get_mut_metadata(kiosk_uid_mut); 
-
-        add_internal(metadata, name, value)
-    }
-
-    // Sets multiple `fields` with `values`.
-    public fun add_multiple_fields(kiosk: &mut Kiosk, cap: &KioskOwnerCap, fields: vector<String>, values: vector<String>) {
-        // gets writeable kiosk Id if it exists, otherwise exits with error.
-        let kiosk_uid_mut = kiosk::uid_mut_as_owner(kiosk, cap);
-
-        // gets mutable metadata object if it's registered, otherwise exits with error.
-        let metadata = get_mut_metadata(kiosk_uid_mut); 
-
-        let len = vector::length(&fields);
-        assert!(len == vector::length(&values), EVecLengthMismatch);
-
-        let i = 0;
-        while (i < len) {
-            add_internal(metadata, *vector::borrow(&fields, i), *vector::borrow(&values, i));
-            i = i + 1;
-        };
-    }
-
-     // Remove a key from the metadata vec map.
-    public fun remove_field(kiosk: &mut Kiosk, cap: &KioskOwnerCap, name: String) {
-
-        // gets writeable kiosk Id if it exists, otherwise exits with error.
-        let kiosk_uid_mut = kiosk::uid_mut_as_owner(kiosk, cap);
-
-        // gets mutable metadata object if it's registered, otherwise exits with error.
-        let metadata = get_mut_metadata(kiosk_uid_mut); 
-
-        // verify that the key we're trying to remove exists on the metadata.
-        assert!(vec_map::contains(&metadata.metadata, &name), EKeyNotExists);
-
-        // remove key from map
-        vec_map::remove(&mut metadata.metadata, &name);
+        
+        // borrow the metadata obj and replace its contents with the new metadata.
+        let meta : &mut Metadata = df::borrow_mut(kiosk_uid_mut, KioskMetadataExt{}); 
+        
+        meta.metadata = metadata;
     }
 
     // === Access data ==== 
@@ -105,17 +70,5 @@ module kiosk::kiosk_metadata {
     // Access to the metadata VecMap
     public fun get_metadata_vecmap(metadata: &Metadata): &VecMap<String, String>{
         &metadata.metadata
-    }
-
-    // === internal helpers ====
-
-    // Private method for inserting fields without security checks.
-    fun add_internal(metadata: &mut Metadata, name: String, value: String) {
-        vec_map::insert(&mut metadata.metadata, name, value)
-    }
-
-    // get mutable metadata
-    fun get_mut_metadata(kiosk_uid: &mut UID): &mut Metadata {
-        df::borrow_mut(kiosk_uid, KioskMetadataExt{ })
     }
 }
