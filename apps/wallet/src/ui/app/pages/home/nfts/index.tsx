@@ -48,19 +48,20 @@ function NftsPage() {
 
     useEffect(() => {
         if (
-            nfts.length < DEFAULT_NFT_LIMIT &&
-            hasNextPage &&
-            !isFetchingNextPage
+            (isIntersecting && hasNextPage && !isFetchingNextPage) ||
+            (nfts.length < DEFAULT_NFT_LIMIT &&
+                hasNextPage &&
+                !isFetchingNextPage)
         ) {
             fetchNextPage();
         }
-    }, [nfts.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
-
-    useEffect(() => {
-        if (isIntersecting && hasNextPage && !isFetchingNextPage) {
-            fetchNextPage();
-        }
-    }, [isIntersecting, fetchNextPage, hasNextPage, isFetchingNextPage]);
+    }, [
+        nfts.length,
+        isIntersecting,
+        fetchNextPage,
+        hasNextPage,
+        isFetchingNextPage,
+    ]);
 
     if (isInitialLoading) {
         return (
