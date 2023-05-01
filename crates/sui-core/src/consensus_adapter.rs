@@ -388,7 +388,7 @@ impl ConsensusAdapter {
             self.submission_position(committee, tx_digest);
 
         const MAX_LATENCY: Duration = Duration::from_secs(5 * 60);
-        const DEFAULT_LATENCY: Duration = Duration::from_secs(5);
+        const DEFAULT_LATENCY: Duration = Duration::from_secs(3); // > p50 consensus latency with global deployment
         let latency = self.latency_observer.latency().unwrap_or(DEFAULT_LATENCY);
         let latency = std::cmp::max(latency, DEFAULT_LATENCY);
         let latency = std::cmp::min(latency, MAX_LATENCY);
@@ -397,7 +397,7 @@ impl ConsensusAdapter {
             position = std::cmp::min(position, max_submit_position);
         }
 
-        let delay_step = self.submit_delay_step_override.unwrap_or(latency * 3 / 2);
+        let delay_step = self.submit_delay_step_override.unwrap_or(latency * 2);
 
         self.metrics
             .sequencing_estimated_latency
@@ -1054,8 +1054,8 @@ mod adapter_tests {
 
         assert_eq!(position, 7);
 
-        // delay_step * position * 3/2 = 5 * 7 * 3/2 = 52.5
-        assert_eq!(delay_step, Duration::from_millis(52500));
+        // delay_step * position = 3 * 2 * 7 = 42
+        assert_eq!(delay_step, Duration::from_secs(42));
         assert!(!low_scoring_authority);
     }
 
