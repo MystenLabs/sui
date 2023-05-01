@@ -255,6 +255,7 @@ impl SuiNode {
             &config.expensive_safety_check_config,
         );
 
+        // the database is empty at genesis time
         if empty_database {
             // When we are opening the db table, the only time when it's safe to
             // check SUI conservation is at genesis. Otherwise we may be in the middle of

@@ -852,7 +852,7 @@ impl<'vm, 'state, 'a, S: StorageView> ExecutionContext<'vm, 'state, 'a, S> {
     }
 }
 
-fn new_session<'state, 'vm, S: StorageView>(
+pub(crate) fn new_session<'state, 'vm, S: StorageView>(
     vm: &'vm MoveVM,
     linkage: LinkageView<'state, S>,
     input_objects: BTreeMap<ObjectID, Owner>,

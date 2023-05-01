@@ -70,6 +70,10 @@ impl ObjectFormatOptions {
             include_types: true,
         }
     }
+
+    pub fn include_types(&self) -> bool {
+        self.include_types
+    }
 }
 
 impl MoveObject {
