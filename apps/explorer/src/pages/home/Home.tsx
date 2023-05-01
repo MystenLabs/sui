@@ -32,7 +32,7 @@ function Home() {
     return isHomePageRedesignEnabled ? (
         <div
             data-testid="home-page"
-            className={clsx('home-page-grid-container grid grid-cols-1 gap-4', {
+            className={clsx('home-page-grid-container', {
                 'home-page-grid-container-with-sui-token':
                     isSuiTokenCardEnabled,
             })}
