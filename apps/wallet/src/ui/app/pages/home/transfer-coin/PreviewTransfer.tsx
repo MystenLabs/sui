@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useCoinDecimals } from '@mysten/core';
+import { useCoinMetadata } from '@mysten/core';
 
 import { Text } from '_app/shared/text';
 import { TxnAddress } from '_components/receipt-card/TxnAddress';
@@ -26,8 +26,8 @@ export function PreviewTransfer({
     gasBudget,
 }: PreviewTransferProps) {
     const accountAddress = useActiveAddress();
-    const [decimals] = useCoinDecimals(coinType);
-    const amountWithoutDecimals = parseAmount(amount, decimals);
+    const { data: metadata } = useCoinMetadata(coinType);
+    const amountWithoutDecimals = parseAmount(amount, metadata?.decimals ?? 0);
 
     return (
         <div className="divide-y divide-solid divide-steel/20 divide-x-0 flex flex-col px-2.5 w-full">
