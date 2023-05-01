@@ -37,5 +37,7 @@ interface ValidatorIpInfo {
 
 export interface ValidatorMapData {
     ipInfo: ValidatorIpInfo
-    validator: SuiValidatorSummary
+    suiAddress: string
+    name: string
+    votingPower: string
 }

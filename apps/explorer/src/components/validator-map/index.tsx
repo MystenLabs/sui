@@ -46,7 +46,7 @@ export default function ValidatorMap({ minHeight }: Props) {
         ['validator-map'],
         async () => {
             const res = await fetch(
-                `http://localhost:3003/validator-map-v4?network=testnet`,
+                `http://localhost:3003/validator-map-v5?network=testnet`,
                 {
                     method: 'GET',
                 }
@@ -74,7 +74,7 @@ export default function ValidatorMap({ minHeight }: Props) {
         data.forEach((validator) => {
             if (validator) {
                 totalCount++;
-                validatorMap[validator.validator.suiAddress] ??= {
+                validatorMap[validator.suiAddress] ??= {
                     ...validator,
                 };
 
@@ -181,7 +181,7 @@ export default function ValidatorMap({ minHeight }: Props) {
                         style={{}}
                     >
                         <div className="flex flex-col justify-start font-semibold">
-                            <div>{validatorMap[tooltipData].validator.name}</div>
+                            <div>{validatorMap[tooltipData].name}</div>
                             <Text
                                 variant="pSubtitleSmall/normal"
                                 color="gray-60"
@@ -198,7 +198,7 @@ export default function ValidatorMap({ minHeight }: Props) {
                                 </Text>
                                 <Text variant="subtitle/medium">
                                     {Number(
-                                        validatorMap[tooltipData].validator.votingPower
+                                        validatorMap[tooltipData].votingPower
                                     ) / 100}
                                     %
                                 </Text>

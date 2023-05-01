@@ -25,7 +25,7 @@ export function ValidatorLocation({
 }: Props) {
     const handleMouseOver = useCallback(
         (e: React.MouseEvent) => {
-            validator && onMouseOver(e, validator.validator.suiAddress);
+            validator && onMouseOver(e, validator.suiAddress);
         },
         [validator, onMouseOver]
     );
@@ -43,7 +43,7 @@ export function ValidatorLocation({
 
     const r = Math.max(
         Math.min(
-            Math.floor(parseInt(validator.validator.votingPower) / VALIDATOR_MULTIPLIER),
+            Math.floor(parseInt(validator.votingPower) / VALIDATOR_MULTIPLIER),
             MAX_VALIDATOR_SIZE
         ),
         MIN_VALIDATOR_SIZE
