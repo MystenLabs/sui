@@ -18,6 +18,7 @@ export function useSuiCoinData() {
         ['sui-coin-data'],
         () => makeAppsBackendRequest<CoinData>('coins/aptos', {}),
         {
+            // Cache this forever because we have limited API bandwidth at the moment
             cacheTime: Infinity,
         }
     );

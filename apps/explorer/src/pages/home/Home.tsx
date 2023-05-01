@@ -28,7 +28,7 @@ function Home() {
     //     'explorer-home-page-redesign'
     // );
     const isHomePageRedesignEnabled = true;
-    const isSuiTokenCardEnabled = useFeatureIsOn('explorer-sui-token-card');
+    const isSuiTokenCardEnabled = true //useFeatureIsOn('explorer-sui-token-card');
 
     return isHomePageRedesignEnabled ? (
         <div

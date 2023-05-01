@@ -22,6 +22,7 @@ const headingStyles = cva([], {
             heading6: 'text-heading6',
         },
         color: {
+            issue: 'text-issue',
             'gray-100': 'text-gray-100',
             'gray-90': 'text-gray-90',
             'gray-75': 'text-gray-75',

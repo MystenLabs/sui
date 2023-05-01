@@ -20,29 +20,32 @@ export function SuiTokenCard() {
           })
         : '--';
 
-    const priceChangeSign =
-        data && data.priceChangePercentageOver24H > 0 ? '+' : '';
-    const priceChangePercentage = (
-        data?.priceChangePercentageOver24H ?? 0
-    ).toFixed(1);
-
     return (
         <Card bg="lightBlue" spacing="lg">
-            <div className="flex items-center gap-2">
-                <div className="h-4.5 w-4.5 items-center justify-center rounded-full bg-sui p-1">
-                    <Sui className="h-full w-full text-white" />
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <div className="flex items-center gap-2">
+                    <div className="h-4.5 w-4.5 items-center justify-center rounded-full bg-sui p-1">
+                        <Sui className="h-full w-full text-white" />
+                    </div>
+                    <Heading
+                        as="div"
+                        variant="heading4/semibold"
+                        color="steel-darker"
+                    >
+                        1 SUI = {formattedPrice}
+                    </Heading>
+                    {data?.priceChangePercentageOver24H && (
+                        <Heading
+                            as="div"
+                            variant="heading6/medium"
+                            color="issue"
+                        >
+                            {data.priceChangePercentageOver24H > 0 ? '+' : null}
+                            {data.priceChangePercentageOver24H.toFixed(2)}%
+                        </Heading>
+                    )}
                 </div>
-                <Heading
-                    as="div"
-                    variant="heading4/semibold"
-                    color="steel-darker"
-                >
-                    1 SUI = {formattedPrice}
-                </Heading>
-                <Heading as="div" variant="heading6/medium" color="success">
-                    {priceChangeSign}{priceChangePercentage}%
-                </Heading>
-                <div className="ml-auto">
+                <div className="sm:ml-auto">
                     <Text variant="subtitleSmallExtra/medium" color="steel">
                         via CoinGecko
                     </Text>
