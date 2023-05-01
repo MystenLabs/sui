@@ -19,7 +19,7 @@ export function OnTheNetwork() {
                 On the Network
             </Heading>
             <div className="-mb-3 -mr-8 mt-8 flex gap-8 overflow-x-auto pb-3">
-                <div className="flex gap-8">
+                <div className="flex gap-8 lg:max-xl:gap-12">
                     <div className="flex flex-shrink-0 gap-1">
                         <Svg3D32 className="h-8 w-8 font-normal text-steel-dark" />
                         <FormattedStatsAmount
