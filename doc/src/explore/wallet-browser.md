@@ -169,7 +169,9 @@ You can't withdraw a stake request that hasn't started earning rewards yet. You 
 
 1. Click the **Coins** tab, then click **Currently Staked**.
 1. Click the validator to withdraw your stake from.
-1. Click 
+1. Click **Unstake SUI**.
+1. Click **Unstake Now**.
+1. Click the check mark to close the **Transaction** page, then click X to close the **Staking** page and return to the **Coins** tab.
 
 ## View recent transaction details
 
