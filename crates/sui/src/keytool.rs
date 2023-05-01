@@ -411,8 +411,7 @@ impl KeyToolCommand {
                     .get_public_key(req)
                     .await
                     .map_err(|e| anyhow!("No Public key Found: {:?}", e))?;
-                let public_key_bytes = pubkey_resp.public_key.unwrap_or_default();
-                let public_key: &[u8] = &public_key_bytes.to_vec(); // Vec of bytes
+                let public_key: &[u8] = &pubkey_resp.public_key.unwrap_or_default();
 
                 // Parse the PEM-encoded public key and extract the raw bytes
                 // Compresses into 33 bytes

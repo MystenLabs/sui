@@ -33,11 +33,12 @@ use sui_types::crypto::SuiSignatureInner;
 use sui_types::messages::TransactionData;
 use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_TRANSFER;
 use tempfile::TempDir;
+use tokio::test;
 
 const TEST_MNEMONIC: &str = "result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss";
 
-#[test]
-fn test_addresses_command() -> Result<(), anyhow::Error> {
+#[tokio::test]
+async fn test_addresses_command() -> Result<(), anyhow::Error> {
     // Add 3 Ed25519 KeyPairs as default
     let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(3));
 
@@ -47,12 +48,12 @@ fn test_addresses_command() -> Result<(), anyhow::Error> {
     }
 
     // List all addresses with flag
-    KeyToolCommand::List.execute(&mut keystore).unwrap();
+    KeyToolCommand::List.execute(&mut keystore).await.unwrap();
     Ok(())
 }
 
 #[test]
-fn test_flag_in_signature_and_keypair() -> Result<(), anyhow::Error> {
+async fn test_flag_in_signature_and_keypair() -> Result<(), anyhow::Error> {
     let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
 
     keystore.add_key(SuiKeyPair::Secp256k1(get_key_pair().1))?;
@@ -91,7 +92,7 @@ fn test_flag_in_signature_and_keypair() -> Result<(), anyhow::Error> {
 }
 
 #[test]
-fn test_read_write_keystore_with_flag() {
+async fn test_read_write_keystore_with_flag() {
     let dir = tempfile::TempDir::new().unwrap();
 
     // create Secp256k1 keypair
@@ -144,7 +145,7 @@ fn test_read_write_keystore_with_flag() {
 }
 
 #[test]
-fn test_sui_operations_config() {
+async fn test_sui_operations_config() {
     let temp_dir = TempDir::new().unwrap();
     let path = temp_dir.path().join("sui.keystore");
     let path1 = path.clone();
@@ -178,7 +179,7 @@ fn test_sui_operations_config() {
 }
 
 #[test]
-fn test_load_keystore_err() {
+async fn test_load_keystore_err() {
     let temp_dir = TempDir::new().unwrap();
     let path = temp_dir.path().join("sui.keystore");
     let path2 = path.clone();
@@ -194,7 +195,7 @@ fn test_load_keystore_err() {
 }
 
 #[test]
-fn test_mnemonics_ed25519() -> Result<(), anyhow::Error> {
+async fn test_mnemonics_ed25519() -> Result<(), anyhow::Error> {
     // Test case matches with /mysten/sui/sdk/typescript/test/unit/cryptography/ed25519-keypair.test.ts
     const TEST_CASES: [[&str; 3]; 3] = [["film crazy soon outside stand loop subway crumble thrive popular green nuclear struggle pistol arm wife phrase warfare march wheat nephew ask sunny firm", "AN0JMHpDum3BhrVwnkylH0/HGRHBQ/fO/8+MYOawO8j6", "a2d14fad60c56049ecf75246a481934691214ce413e6a8ae2fe6834c173a6133"],
     ["require decline left thought grid priority false tiny gasp angle royal system attack beef setup reward aunt skill wasp tray vital bounce inflict level", "AJrA997C1eVz6wYIp7bO8dpITSRBXpvg1m70/P3gusu2", "1ada6e6f3f3e4055096f606c746690f1108fcc2ca479055cc434a3e1d3f758aa"],
@@ -207,7 +208,8 @@ fn test_mnemonics_ed25519() -> Result<(), anyhow::Error> {
             key_scheme: SignatureScheme::ED25519,
             derivation_path: None,
         }
-        .execute(&mut keystore)?;
+        .execute(&mut keystore)?
+        .await;
         let kp = SuiKeyPair::decode_base64(t[1]).unwrap();
         let addr = SuiAddress::from_str(t[2]).unwrap();
         assert_eq!(SuiAddress::from(&kp.public()), addr);
@@ -217,7 +219,7 @@ fn test_mnemonics_ed25519() -> Result<(), anyhow::Error> {
 }
 
 #[test]
-fn test_mnemonics_secp256k1() -> Result<(), anyhow::Error> {
+async fn test_mnemonics_secp256k1() -> Result<(), anyhow::Error> {
     // Test case matches with /mysten/sui/sdk/typescript/test/unit/cryptography/secp256k1-keypair.test.ts
     const TEST_CASES: [[&str; 3]; 3] = [["film crazy soon outside stand loop subway crumble thrive popular green nuclear struggle pistol arm wife phrase warfare march wheat nephew ask sunny firm", "AQA9EYZoLXirIahsXHQMDfdi5DPQ72wLA79zke4EY6CP", "9e8f732575cc5386f8df3c784cd3ed1b53ce538da79926b2ad54dcc1197d2532"],
     ["require decline left thought grid priority false tiny gasp angle royal system attack beef setup reward aunt skill wasp tray vital bounce inflict level", "Ae+TTptXI6WaJfzplSrphnrbTD5qgftfMX5kTyca7unQ", "9fd5a804ed6b46d36949ff7434247f0fd594673973ece24aede6b86a7b5dae01"],
@@ -230,7 +232,8 @@ fn test_mnemonics_secp256k1() -> Result<(), anyhow::Error> {
             key_scheme: SignatureScheme::Secp256k1,
             derivation_path: None,
         }
-        .execute(&mut keystore)?;
+        .execute(&mut keystore)?
+        .await;
         let kp = SuiKeyPair::decode_base64(t[1]).unwrap();
         let addr = SuiAddress::from_str(t[2]).unwrap();
         assert_eq!(SuiAddress::from(&kp.public()), addr);
@@ -248,6 +251,7 @@ fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
         derivation_path: Some("m/44'/1'/0'/0/0".parse().unwrap()),
     }
     .execute(&mut keystore)
+    .await
     .is_err());
 
     assert!(KeyToolCommand::Import {
@@ -286,7 +290,7 @@ fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
 }
 
 #[test]
-fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
+async fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
     let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
     assert!(KeyToolCommand::Import {
         mnemonic_phrase: TEST_MNEMONIC.to_string(),
@@ -318,6 +322,7 @@ fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
         derivation_path: Some("m/54'/784'/0'/0/1".parse().unwrap()),
     }
     .execute(&mut keystore)
+    .await
     .is_ok());
 
     assert!(KeyToolCommand::Import {
@@ -325,13 +330,13 @@ fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
         key_scheme: SignatureScheme::Secp256k1,
         derivation_path: Some("m/54'/784'/1'/0/1".parse().unwrap()),
     }
-    .execute(&mut keystore)
+    .execute(&mut keystore)?
     .is_ok());
     Ok(())
 }
 
 #[test]
-fn test_keytool_bls12381() -> Result<(), anyhow::Error> {
+async fn test_keytool_bls12381() -> Result<(), anyhow::Error> {
     let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
     KeyToolCommand::Generate {
         key_scheme: SignatureScheme::BLS12381,
@@ -343,7 +348,7 @@ fn test_keytool_bls12381() -> Result<(), anyhow::Error> {
 }
 
 #[test]
-fn test_sign_command() -> Result<(), anyhow::Error> {
+async fn test_sign_command() -> Result<(), anyhow::Error> {
     // Add a keypair
     let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(1));
     let binding = keystore.addresses();
