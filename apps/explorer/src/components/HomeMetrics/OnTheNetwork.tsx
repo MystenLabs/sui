@@ -38,7 +38,8 @@ export function OnTheNetwork() {
                             size="sm"
                         />
                     </div>
-                    <div className="flex flex-shrink-0 gap-1">
+                    {/* TODO: Comment this out once addresses are available post-mainnet */}
+                    {/* <div className="flex flex-shrink-0 gap-1">
                         <Wallet32 className="h-8 w-8 text-steel-dark" />
                         <FormattedStatsAmount
                             label="Addresses"
@@ -46,7 +47,7 @@ export function OnTheNetwork() {
                             amount={networkMetrics?.totalAddresses}
                             size="sm"
                         />
-                    </div>
+                    </div> */}
                     <div className="flex flex-shrink-0 gap-1 pr-2">
                         <Staking32 className="h-8 w-8 text-steel-dark" />
                         <FormattedStatsAmount
