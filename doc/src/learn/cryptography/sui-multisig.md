@@ -128,5 +128,5 @@ MultiSig serialized: $SERIALIZED_MULTISIG
 
 This sample demonstrates how to execute a transaction using MultiSig:
 ```shell
-$SUI_BINARY client execute-signed-tx --tx-bytes $TX_BYTES --signature $SERIALIZED_MULTISIG
+$SUI_BINARY client execute-signed-tx --tx-bytes $TX_BYTES --signatures $SERIALIZED_MULTISIG
 ```
