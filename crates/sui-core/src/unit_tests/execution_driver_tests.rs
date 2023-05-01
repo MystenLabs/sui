@@ -12,6 +12,7 @@ use crate::test_authority_clients::LocalAuthorityClient;
 use crate::test_utils::{init_local_authorities, make_transfer_object_move_transaction};
 
 use std::collections::BTreeSet;
+use std::sync::Arc;
 use std::time::Duration;
 
 use itertools::Itertools;
@@ -222,20 +223,20 @@ async fn pending_exec_full() {
  */
 
 async fn execute_owned_on_first_three_authorities(
-    authority_clients: &[&SafeClient<LocalAuthorityClient>],
+    authority_clients: &[Arc<SafeClient<LocalAuthorityClient>>],
     committee: &Committee,
     txn: &VerifiedTransaction,
 ) -> (VerifiedCertificate, TransactionEffects) {
-    do_transaction(authority_clients[0], txn).await;
-    do_transaction(authority_clients[1], txn).await;
-    do_transaction(authority_clients[2], txn).await;
+    do_transaction(&authority_clients[0], txn).await;
+    do_transaction(&authority_clients[1], txn).await;
+    do_transaction(&authority_clients[2], txn).await;
     let cert = extract_cert(authority_clients, committee, txn.digest())
         .await
         .verify(committee)
         .unwrap();
-    do_cert(authority_clients[0], &cert).await;
-    do_cert(authority_clients[1], &cert).await;
-    let effects = do_cert(authority_clients[2], &cert).await;
+    do_cert(&authority_clients[0], &cert).await;
+    do_cert(&authority_clients[1], &cert).await;
+    let effects = do_cert(&authority_clients[2], &cert).await;
     (cert, effects)
 }
 
@@ -254,13 +255,13 @@ pub async fn do_cert_with_shared_objects(
 }
 
 async fn execute_shared_on_first_three_authorities(
-    authority_clients: &[&SafeClient<LocalAuthorityClient>],
+    authority_clients: &[Arc<SafeClient<LocalAuthorityClient>>],
     committee: &Committee,
     txn: &VerifiedTransaction,
 ) -> (VerifiedCertificate, TransactionEffects) {
-    do_transaction(authority_clients[0], txn).await;
-    do_transaction(authority_clients[1], txn).await;
-    do_transaction(authority_clients[2], txn).await;
+    do_transaction(&authority_clients[0], txn).await;
+    do_transaction(&authority_clients[1], txn).await;
+    do_transaction(&authority_clients[2], txn).await;
     let cert = extract_cert(authority_clients, committee, txn.digest())
         .await
         .verify(committee)
@@ -296,7 +297,7 @@ async fn test_execution_with_dependencies() {
         init_local_authorities(4, all_gas_objects.clone()).await;
     let authority_clients: Vec<_> = authorities
         .iter()
-        .map(|a| &aggregator.authority_clients[&a.name])
+        .map(|a| aggregator.authority_clients[&a.name].clone())
         .collect();
     let rgp = authorities
         .get(0)
@@ -311,7 +312,7 @@ async fn test_execution_with_dependencies() {
 
     // Initialize an object owned by 1st account.
     let (addr1, key1): &(_, AccountKeyPair) = &accounts[0];
-    let gas_ref = get_latest_ref(authority_clients[0], gas_objects[0][0].id()).await;
+    let gas_ref = get_latest_ref(authority_clients[0].clone(), gas_objects[0][0].id()).await;
     let tx1 = create_object_move_transaction(*addr1, key1, *addr1, 100, package, gas_ref, rgp);
     let (cert, effects1) =
         execute_owned_on_first_three_authorities(&authority_clients, &aggregator.committee, &tx1)
@@ -320,7 +321,7 @@ async fn test_execution_with_dependencies() {
     let mut owned_object_ref = effects1.created()[0].0;
 
     // Initialize a shared counter, re-using gas_ref_0 so it has to execute after tx1.
-    let gas_ref = get_latest_ref(authority_clients[0], gas_objects[0][0].id()).await;
+    let gas_ref = get_latest_ref(authority_clients[0].clone(), gas_objects[0][0].id()).await;
     let tx2 = make_counter_create_transaction(gas_ref, package, *addr1, key1, rgp);
     let (cert, effects2) =
         execute_owned_on_first_three_authorities(&authority_clients, &aggregator.committee, &tx2)
@@ -348,7 +349,7 @@ async fn test_execution_with_dependencies() {
         let (source_addr, source_key) = &accounts[source_index];
 
         let gas_ref = get_latest_ref(
-            authority_clients[source_index],
+            authority_clients[source_index].clone(),
             gas_objects[source_index][i * 3 % NUM_GAS_OBJECTS_PER_ACCOUNT].id(),
         )
         .await;
@@ -372,7 +373,7 @@ async fn test_execution_with_dependencies() {
         owned_object_ref = effects.mutated_excluding_gas().first().unwrap().0;
 
         let gas_ref = get_latest_ref(
-            authority_clients[source_index],
+            authority_clients[source_index].clone(),
             gas_objects[source_index][i * 7 % NUM_GAS_OBJECTS_PER_ACCOUNT].id(),
         )
         .await;
@@ -434,7 +435,7 @@ async fn test_execution_with_dependencies() {
 }
 
 async fn try_sign_on_first_three_authorities(
-    authority_clients: &[&SafeClient<LocalAuthorityClient>],
+    authority_clients: &[Arc<SafeClient<LocalAuthorityClient>>],
     committee: &Committee,
     txn: &VerifiedTransaction,
 ) -> SuiResult<VerifiedCertificate> {
@@ -465,11 +466,11 @@ async fn test_per_object_overload() {
         .unwrap();
     let authority_clients: Vec<_> = authorities
         .iter()
-        .map(|a| &aggregator.authority_clients[&a.name])
+        .map(|a| aggregator.authority_clients[&a.name].clone())
         .collect();
 
     // Create a shared counter.
-    let gas_ref = get_latest_ref(authority_clients[0], gas_objects[0].id()).await;
+    let gas_ref = get_latest_ref(authority_clients[0].clone(), gas_objects[0].id()).await;
     let create_counter_txn = make_counter_create_transaction(gas_ref, package, addr, &key, rgp);
     let create_counter_cert = try_sign_on_first_three_authorities(
         &authority_clients,
@@ -521,7 +522,7 @@ async fn test_per_object_overload() {
     // txn is needed.
     let num_txns = MAX_PER_OBJECT_QUEUE_LENGTH + 1;
     for gas_object in gas_objects.iter().take(num_txns) {
-        let gas_ref = get_latest_ref(authority_clients[0], gas_object.id()).await;
+        let gas_ref = get_latest_ref(authority_clients[0].clone(), gas_object.id()).await;
         let shared_txn = make_counter_increment_transaction(
             gas_ref,
             package,
@@ -545,7 +546,7 @@ async fn test_per_object_overload() {
     }
 
     // Trying to sign a new transaction would now fail.
-    let gas_ref = get_latest_ref(authority_clients[0], gas_objects[num_txns].id()).await;
+    let gas_ref = get_latest_ref(authority_clients[0].clone(), gas_objects[num_txns].id()).await;
     let shared_txn = make_counter_increment_transaction(
         gas_ref,
         package,

@@ -50,7 +50,7 @@ const LOCAL_EXECUTION_TIMEOUT: Duration = Duration::from_secs(10);
 
 const WAIT_FOR_FINALITY_TIMEOUT: Duration = Duration::from_secs(30);
 
-pub struct TransactiondOrchestrator<A> {
+pub struct TransactiondOrchestrator<A: Clone> {
     quorum_driver_handler: Arc<QuorumDriverHandler<A>>,
     validator_state: Arc<AuthorityState>,
     _local_executor_handle: JoinHandle<()>,
