@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module deepbook::clob {
-    use std::option::{Self};
+    use std::option;
     use std::type_name::{Self, TypeName};
     use std::vector;
 
@@ -40,19 +40,18 @@ module deepbook::clob {
     const EInvalidTickPrice: u64 = 11;
     const EInvalidUser: u64 = 12;
     const ENotEqual: u64 = 13;
-    const EInvalidRestriction: u64 = 15;
-    const ELevelNotEmpty: u64 = 16;
-    const EInvalidPair: u64 = 17;
-    const EInvalidBaseBalance: u64 = 18;
-    const EInvalidBaseCoin: u64 = 19;
-    const EInvalidFeeCoin: u64 = 20;
-    const EInvalidFee: u64 = 21;
-    const EInvalidExpireTimestamp: u64 = 22;
+    const EInvalidRestriction: u64 = 14;
+    const ELevelNotEmpty: u64 = 15;
+    const EInvalidPair: u64 = 16;
+    const EInvalidBaseBalance: u64 = 17;
+    const EInvalidFee: u64 = 18;
+    const EInvalidExpireTimestamp: u64 = 19;
+    const EInvalidTickSizeLotSize: u64 = 20;
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Constants <<<<<<<<<<<<<<<<<<<<<<<<
-    const FLOAT_SCALING: u64 = 1000000000;
+    const FLOAT_SCALING: u64 = 1_000_000_000;
     // Restrictions on limit orders.
     const N_RESTRICTIONS: u8 = 4;
     const NO_RESTRICTION: u8 = 0;
@@ -208,6 +207,7 @@ module deepbook::clob {
         creation_fee: Balance<SUI>,
         ctx: &mut TxContext,
     ) {
+        assert!(clob_math::mul(lot_size, tick_size) > 0, EInvalidTickSizeLotSize);
         let base_type_name = type_name::get<BaseAsset>();
         let quote_type_name = type_name::get<QuoteAsset>();
         assert!(base_type_name != quote_type_name, EInvalidPair);
@@ -266,6 +266,7 @@ module deepbook::clob {
         coin: Coin<BaseAsset>,
         account_cap: &AccountCap
     ) {
+        assert!(coin::value(&coin) != 0, EInsufficientBaseCoin);
         custodian::increase_user_available_balance(
             &mut pool.base_custodian,
             object::id(account_cap),
@@ -278,6 +279,7 @@ module deepbook::clob {
         coin: Coin<QuoteAsset>,
         account_cap: &AccountCap
     ) {
+        assert!(coin::value(&coin) != 0, EInsufficientQuoteCoin);
         custodian::increase_user_available_balance(
             &mut pool.quote_custodian,
             object::id(account_cap),
@@ -291,6 +293,7 @@ module deepbook::clob {
         account_cap: &AccountCap,
         ctx: &mut TxContext
     ): Coin<BaseAsset> {
+        assert!(quantity > 0, EInvalidQuantity);
         custodian::withdraw_asset(&mut pool.base_custodian, quantity, account_cap, ctx)
     }
 
@@ -300,6 +303,7 @@ module deepbook::clob {
         account_cap: &AccountCap,
         ctx: &mut TxContext
     ): Coin<QuoteAsset> {
+        assert!(quantity > 0, EInvalidQuantity);
         custodian::withdraw_asset(&mut pool.quote_custodian, quantity, account_cap, ctx)
     }
 
@@ -312,6 +316,7 @@ module deepbook::clob {
         clock: &Clock,
         ctx: &mut TxContext,
     ): (Coin<BaseAsset>, Coin<QuoteAsset>, u64) {
+        assert!(coin::value(&base_coin) >= quantity, EInsufficientBaseCoin);
         let original_val = coin::value(&quote_coin);
         let (ret_base_coin, ret_quote_coin) = place_market_order(
             pool,
@@ -334,6 +339,7 @@ module deepbook::clob {
         quote_coin: Coin<QuoteAsset>,
         ctx: &mut TxContext,
     ): (Coin<BaseAsset>, Coin<QuoteAsset>, u64) {
+        assert!(coin::value(&quote_coin) >= quantity, EInsufficientQuoteCoin);
         let (base_asset_balance, quote_asset_balance) = match_bid_with_quote_quantity(
             pool,
             quantity,
@@ -363,6 +369,7 @@ module deepbook::clob {
             return (base_balance_filled, quote_balance_left)
         };
         let (tick_price, tick_index) = min_leaf(all_open_orders);
+        let terminate_loop = false;
 
         while (!is_empty<TickLevel>(all_open_orders) && tick_price <= price_limit) {
             let tick_level = borrow_mut_leaf_by_index(all_open_orders, tick_index);
@@ -402,21 +409,38 @@ module deepbook::clob {
                         );
                         filled_base_quantity = maker_base_quantity;
                     } else {
-                        filled_quote_quantity = taker_quote_quantity_remaining;
+                        terminate_loop = true;
                         (_, filled_quote_quantity_without_commission) = clob_math::div_round(
-                            filled_quote_quantity,
+                            taker_quote_quantity_remaining,
                             FLOAT_SCALING + pool.taker_fee_rate
                         );
                         (_, filled_base_quantity) = clob_math::div_round(
                             filled_quote_quantity_without_commission,
                             maker_order.price
                         );
+                        let filled_base_lot = filled_base_quantity / pool.lot_size;
+                        filled_base_quantity = filled_base_lot * pool.lot_size;
+                        filled_quote_quantity_without_commission = clob_math::mul(
+                            filled_base_quantity,
+                            maker_order.price
+                        );
+                        let (round_down, taker_commission) = clob_math::mul_round(
+                            filled_quote_quantity_without_commission,
+                            pool.taker_fee_rate
+                        );
+                        if (round_down) {
+                            taker_commission = taker_commission + 1;
+                        };
+                        filled_quote_quantity = filled_quote_quantity_without_commission + taker_commission;
                     };
                     let maker_rebate = clob_math::mul(filled_quote_quantity_without_commission, pool.maker_rebate_rate);
                     maker_base_quantity = maker_base_quantity - filled_base_quantity;
 
                     // maker in ask side, decrease maker's locked base asset, increase maker's available quote asset
                     taker_quote_quantity_remaining = taker_quote_quantity_remaining - filled_quote_quantity;
+                    if (taker_quote_quantity_remaining == 0) {
+                        terminate_loop = true;
+                    };
                     let locked_base_balance = custodian::decrease_user_locked_balance<BaseAsset>(
                         &mut pool.base_custodian,
                         maker_order.owner,
@@ -470,7 +494,7 @@ module deepbook::clob {
                         order_id);
                     maker_order_mut.quantity = maker_base_quantity;
                 };
-                if (taker_quote_quantity_remaining == 0) {
+                if (terminate_loop) {
                     break
                 };
             };
@@ -479,7 +503,7 @@ module deepbook::clob {
                 destroy_empty_level(remove_leaf_by_index(all_open_orders, tick_index));
                 (_, tick_index) = find_leaf(all_open_orders, tick_price);
             };
-            if (taker_quote_quantity_remaining == 0) {
+            if (terminate_loop) {
                 break
             };
         };
@@ -741,7 +765,7 @@ module deepbook::clob {
         clock: &Clock,
         ctx: &mut TxContext,
     ): (Coin<BaseAsset>, Coin<QuoteAsset>) {
-        // If market bid order, match against the open ask orders. Otherwise, match against the open ask orders.
+        // If market bid order, match against the open ask orders. Otherwise, match against the open bid orders.
         // Take market bid order for example.
         // We first retrieve the PriceLevel with the lowest price by calling min_leaf on the asks Critbit Tree.
         // We then match the market order by iterating through open orders on that price level in ascending order of the order id.
@@ -773,7 +797,7 @@ module deepbook::clob {
             );
             quote_coin = coin::from_balance(quote_balance_left, ctx);
         } else {
-            assert!(quantity <= coin::value(&base_coin), EInvalidBaseCoin);
+            assert!(quantity <= coin::value(&base_coin), EInsufficientBaseCoin);
             let (base_balance_left, quote_balance_filled) = match_ask(
                 pool,
                 MIN_PRICE,
@@ -877,6 +901,7 @@ module deepbook::clob {
         // If the bid order is not completely filled, inject the remaining quantity to the bids Critbit Tree according to the input price and order id.
         // If limit ask order, vice versa.
         assert!(quantity > 0, EInvalidQuantity);
+        assert!(price > 0, EInvalidPrice);
         assert!(price % pool.tick_size == 0, EInvalidPrice);
         assert!(quantity % pool.lot_size == 0, EInvalidQuantity);
         assert!(expire_timestamp > clock::timestamp_ms(clock), EInvalidExpireTimestamp);
@@ -956,7 +981,7 @@ module deepbook::clob {
             return (base_quantity_filled, quote_quantity_filled, true, order_id)
         } else {
             assert!(restriction == NO_RESTRICTION, EInvalidRestriction);
-            if(quantity > base_quantity_filled){
+            if (quantity > base_quantity_filled) {
                 order_id = inject_limit_order(
                     pool,
                     price,
@@ -1285,12 +1310,16 @@ module deepbook::clob {
     // Note that open orders and quotes can be directly accessed by loading in the entire Pool.
 
     #[test_only] const E_NULL: u64 = 0;
+
     #[test_only] struct USD {}
 
     #[test_only]
-    public fun setup_test(
+    public fun setup_test_with_tick_lot(
         taker_fee_rate: u64,
         maker_rebate_rate: u64,
+        // tick size with scaling
+        tick_size: u64,
+        lot_size: u64,
         scenario: &mut Scenario,
         sender: address,
     ) {
@@ -1304,12 +1333,29 @@ module deepbook::clob {
             create_pool_<SUI, USD>(
                 taker_fee_rate,
                 maker_rebate_rate,
-                1 * FLOAT_SCALING,
-                1,
+                tick_size,
+                lot_size,
                 balance::create_for_testing(FEE_AMOUNT_FOR_CREATE_POOL),
                 test_scenario::ctx(scenario)
             );
         };
+    }
+
+    #[test_only]
+    public fun setup_test(
+        taker_fee_rate: u64,
+        maker_rebate_rate: u64,
+        scenario: &mut Scenario,
+        sender: address,
+    ) {
+        setup_test_with_tick_lot(
+            taker_fee_rate,
+            maker_rebate_rate,
+            1 * FLOAT_SCALING,
+            1,
+            scenario,
+            sender,
+        );
     }
 
     #[test_only]
@@ -1999,10 +2045,34 @@ module deepbook::clob {
             create_pool_<SUI, SUI>(
                 REFERENCE_TAKER_FEE_RATE,
                 REFERENCE_MAKER_REBATE_RATE,
-                1,
+                1 * FLOAT_SCALING,
                 1,
                 balance::create_for_testing(FEE_AMOUNT_FOR_CREATE_POOL),
                 test_scenario::ctx(&mut test)
+            );
+        };
+        test_scenario::end(test);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = EInvalidTickSizeLotSize)]
+    fun test_create_pool_invalid_tick_size_lot_size() {
+        let owner: address = @0xAAAA;
+        let test = test_scenario::begin(owner);
+        test_scenario::next_tx(&mut test, owner);
+        {
+            setup_test(0, 0, &mut test, owner);
+        };
+        // create pool which is already exist fail
+        test_scenario::next_tx(&mut test, owner);
+        {
+            create_pool_<SUI, SUI>(
+                REFERENCE_TAKER_FEE_RATE,
+                REFERENCE_MAKER_REBATE_RATE,
+                100_000,
+                5,
+                balance::create_for_testing(FEE_AMOUNT_FOR_CREATE_POOL),
+            test_scenario::ctx(&mut test)
             );
         };
         test_scenario::end(test);
