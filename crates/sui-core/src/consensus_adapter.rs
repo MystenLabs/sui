@@ -65,9 +65,14 @@ pub struct ConsensusAdapterMetrics {
     pub sequencing_certificate_success: IntCounter,
     pub sequencing_certificate_failures: IntCounter,
     pub sequencing_certificate_inflight: IntGauge,
+    // TODO: remove sequencing_acknowledge_latency, sequencing_certificate_latency and sequencing_certificate_authority_position
+    // once we have the new metrics in place.
     pub sequencing_acknowledge_latency: HistogramVec,
+    pub sequencing_acknowledge_latency_adapter: mysten_metrics::histogram::HistogramVec,
     pub sequencing_certificate_latency: HistogramVec,
+    pub sequencing_certificate_latency_adapter: mysten_metrics::histogram::HistogramVec,
     pub sequencing_certificate_authority_position: Histogram,
+    pub sequencing_certificate_authority_position_adapter: mysten_metrics::histogram::Histogram,
     pub sequencing_in_flight_semaphore_wait: IntGauge,
     pub sequencing_in_flight_submissions: IntGauge,
     pub sequencing_estimated_latency: IntGauge,
@@ -114,6 +119,12 @@ impl ConsensusAdapterMetrics {
                 registry,
             )
                 .unwrap(),
+            sequencing_acknowledge_latency_adapter: mysten_metrics::histogram::HistogramVec::new_in_registry(
+                "sequencing_acknowledge_latency_adapter",
+                "The latency for acknowledgement from sequencing engine. The overall sequencing latency is measured by the sequencing_certificate_latency metric",
+                &["retry"],
+                registry,
+            ),
             sequencing_certificate_latency: register_histogram_vec_with_registry!(
                 "sequencing_certificate_latency",
                 "The latency for sequencing a certificate.",
@@ -122,12 +133,23 @@ impl ConsensusAdapterMetrics {
                 registry,
             )
                 .unwrap(),
+            sequencing_certificate_latency_adapter: mysten_metrics::histogram::HistogramVec::new_in_registry(
+                "sequencing_certificate_latency",
+                "The latency for sequencing a certificate.",
+                &["position", "mapped_to_low_scoring"],
+                registry,
+            ),
             sequencing_certificate_authority_position: register_histogram_with_registry!(
                 "sequencing_certificate_authority_position",
                 "The position of the authority when submitted a certificate to consensus.",
                 authority_position_buckets.to_vec(),
                 registry,
             ).unwrap(),
+            sequencing_certificate_authority_position_adapter: mysten_metrics::histogram::Histogram::new_in_registry(
+                "sequencing_certificate_authority_position",
+                "The position of the authority when submitted a certificate to consensus.",
+                registry,
+            ),
             sequencing_in_flight_semaphore_wait: register_int_gauge_with_registry!(
                 "sequencing_in_flight_semaphore_wait",
                 "How many requests are blocked on submit_permit.",
