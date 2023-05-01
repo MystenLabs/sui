@@ -141,7 +141,7 @@ module kiosk::kiosk_metadata_tests{
         return_kiosk(kiosk, kioskOwnerCap, ctx);
     }
 
-    // Failed execution: Try to create kiosk_metadata while it already exists (EAlreadyEnabled)
+    // Failed execution: Try to replace metadata after removing it.
     #[test]
     #[expected_failure(abort_code = df::EFieldDoesNotExist)]
     fun try_to_replace_on_removed_metadata(){
@@ -154,7 +154,6 @@ module kiosk::kiosk_metadata_tests{
         kiosk_metadata::remove(&mut kiosk, &kioskOwnerCap);
 
         // try to replace non existing metadata;
-
         kiosk_metadata::replace(&mut kiosk, &kioskOwnerCap, get_metadata_vec_map(true));
         return_kiosk(kiosk, kioskOwnerCap, ctx);
     }
