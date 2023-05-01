@@ -33,6 +33,10 @@ use tracing::info;
 // View current all capabilities from all authorities that have been received by this node:
 //
 //   $ curl 'http://127.0.0.1:1337/capabilities'
+//
+// View the node config (private keys will be masked):
+//
+//   $ curl 'http://127.0.0.1:1337/node-config'
 
 const LOGGING_ROUTE: &str = "/logging";
 const SET_BUFFER_STAKE_ROUTE: &str = "/set-override-buffer-stake";
@@ -118,6 +122,7 @@ async fn capabilities(State(state): State<Arc<AppState>>) -> (StatusCode, String
 async fn node_config(State(state): State<Arc<AppState>>) -> (StatusCode, String) {
     let node_config = &state.node.config;
 
+    // Note private keys will be masked
     (StatusCode::OK, format!("{:#?}\n", node_config))
 }
 
