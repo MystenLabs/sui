@@ -9,7 +9,7 @@ import world from '../node-map/topology.json';
 import { type Feature } from '../node-map/types';
 import { MapFeature } from './MapFeature';
 import { ValidatorLocation } from './ValidatorLocation';
-import { type ValidatorWithLocation } from './types';
+import { type ValidatorMapData } from './types';
 
 // @ts-expect-error: The types of `world` here aren't aligned but they are correct
 const land = topojson.feature(world, world.objects.countries) as unknown as {
@@ -26,7 +26,7 @@ const filteredLand = land.features.filter(
 interface Props {
     width: number;
     height: number;
-    validators?: (ValidatorWithLocation | null)[];
+    validators?: (ValidatorMapData | null)[];
     onMouseOver(event: React.MouseEvent, countryCode?: string): void;
     onMouseOut(): void;
 }
