@@ -10,7 +10,6 @@ use fastcrypto::traits::ToFromBytes;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 
-use crate::api::JsonRpcMetrics;
 use mysten_metrics::spawn_monitored_task;
 use shared_crypto::intent::Intent;
 use sui_core::authority::AuthorityState;
@@ -22,15 +21,16 @@ use sui_json_rpc_types::{
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::SuiAddress;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::messages::{
-    ExecuteTransactionRequest, ExecuteTransactionRequestType, TransactionEffectsAPI,
-    TransactionKind,
+    ExecuteTransactionRequest, ExecuteTransactionRequestType, TransactionKind,
 };
 use sui_types::messages::{ExecuteTransactionResponse, Transaction};
 use sui_types::messages::{TransactionData, TransactionDataAPI};
 use sui_types::signature::GenericSignature;
 use sui_types::sui_serde::BigInt;
 
+use crate::api::JsonRpcMetrics;
 use crate::api::WriteApiServer;
 use crate::error::Error;
 use crate::read_api::get_transaction_data_and_digest;
@@ -43,6 +43,7 @@ pub struct TransactionExecutionApi {
     transaction_orchestrator: Arc<TransactiondOrchestrator<NetworkAuthorityClient>>,
     metrics: Arc<JsonRpcMetrics>,
 }
+
 impl TransactionExecutionApi {
     pub fn new(
         state: Arc<AuthorityState>,
@@ -130,7 +131,7 @@ impl TransactionExecutionApi {
         }
 
         let object_cache = ObjectProviderCache::new(self.state.clone());
-        let balance_changes = if opts.show_balance_changes {
+        let balance_changes = if opts.show_balance_changes && is_executed_locally {
             Some(
                 get_balance_changes_from_effect(&object_cache, &effects.effects, input_objs, None)
                     .await?,
@@ -138,7 +139,7 @@ impl TransactionExecutionApi {
         } else {
             None
         };
-        let object_changes = if opts.show_object_changes {
+        let object_changes = if opts.show_object_changes && is_executed_locally {
             Some(
                 get_object_changes(
                     &object_cache,

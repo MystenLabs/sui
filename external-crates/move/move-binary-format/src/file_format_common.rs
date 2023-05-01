@@ -419,15 +419,21 @@ pub(crate) mod versioned_data {
     pub struct VersionedBinary<'a> {
         version: u32,
         binary: &'a [u8],
+        check_no_extraneous_bytes: bool,
     }
 
     pub struct VersionedCursor<'a> {
         version: u32,
         cursor: Cursor<&'a [u8]>,
+        check_no_extraneous_bytes: bool,
     }
 
     impl<'a> VersionedBinary<'a> {
-        fn new(binary: &'a [u8], max_version: u32) -> BinaryLoaderResult<(Self, Cursor<&'a [u8]>)> {
+        fn new(
+            binary: &'a [u8],
+            max_version: u32,
+            check_no_extraneous_bytes: bool,
+        ) -> BinaryLoaderResult<(Self, Cursor<&'a [u8]>)> {
             let mut cursor = Cursor::<&'a [u8]>::new(binary);
             let mut magic = [0u8; BinaryConstants::MOVE_MAGIC_SIZE];
             if let Ok(count) = cursor.read(&mut magic) {
@@ -449,7 +455,14 @@ pub(crate) mod versioned_data {
             if version == 0 || version > u32::min(max_version, VERSION_MAX) {
                 return Err(PartialVMError::new(StatusCode::UNKNOWN_VERSION));
             }
-            Ok((Self { version, binary }, cursor))
+            Ok((
+                Self {
+                    version,
+                    binary,
+                    check_no_extraneous_bytes,
+                },
+                cursor,
+            ))
         }
 
         #[allow(dead_code)]
@@ -461,22 +474,33 @@ pub(crate) mod versioned_data {
             VersionedCursor {
                 version: self.version,
                 cursor: Cursor::new(&self.binary[start..end]),
+                check_no_extraneous_bytes: self.check_no_extraneous_bytes,
             }
         }
 
         pub fn slice(&self, start: usize, end: usize) -> &'a [u8] {
             &self.binary[start..end]
         }
+
+        pub(crate) fn check_no_extraneous_bytes(&self) -> bool {
+            self.check_no_extraneous_bytes
+        }
     }
 
     impl<'a> VersionedCursor<'a> {
         /// Verifies the correctness of the "static" part of the binary's header.
         /// If valid, returns a cursor to the binary
-        pub fn new(binary: &'a [u8], max_version: u32) -> BinaryLoaderResult<Self> {
-            let (binary, cursor) = VersionedBinary::new(binary, max_version)?;
+        pub fn new(
+            binary: &'a [u8],
+            max_version: u32,
+            check_no_extraneous_bytes: bool,
+        ) -> BinaryLoaderResult<Self> {
+            let (binary, cursor) =
+                VersionedBinary::new(binary, max_version, check_no_extraneous_bytes)?;
             Ok(VersionedCursor {
                 version: binary.version,
                 cursor,
+                check_no_extraneous_bytes,
             })
         }
 
@@ -494,6 +518,7 @@ pub(crate) mod versioned_data {
             VersionedBinary {
                 version: self.version,
                 binary: self.cursor.get_ref(),
+                check_no_extraneous_bytes: self.check_no_extraneous_bytes,
             }
         }
 
@@ -524,6 +549,7 @@ pub(crate) mod versioned_data {
                     Ok(VersionedBinary {
                         version: self.version,
                         binary: buffer,
+                        check_no_extraneous_bytes: self.check_no_extraneous_bytes,
                     })
                 }
             }
@@ -531,7 +557,11 @@ pub(crate) mod versioned_data {
 
         #[cfg(test)]
         pub fn new_for_test(version: u32, cursor: Cursor<&'a [u8]>) -> Self {
-            Self { version, cursor }
+            Self {
+                version,
+                cursor,
+                check_no_extraneous_bytes: true,
+            }
         }
     }
 

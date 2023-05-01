@@ -25,8 +25,9 @@ use std::sync::Arc;
 use strum::{EnumCount, IntoEnumIterator};
 use strum_macros::{EnumCount as EnumCountMacro, EnumIter};
 use sui_protocol_config::ProtocolConfig;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::messages::Command;
-use sui_types::messages::{CallArg, ObjectArg, TransactionEffectsAPI};
+use sui_types::messages::{CallArg, ObjectArg};
 use sui_types::{base_types::ObjectID, object::Owner};
 use sui_types::{base_types::SuiAddress, crypto::get_key_pair, messages::VerifiedTransaction};
 use sui_types::{
@@ -100,7 +101,7 @@ impl FromStr for AdversarialPayloadType {
 
 impl Distribution<AdversarialPayloadType> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> AdversarialPayloadType {
-        // Excluse the "Random" variant
+        // Exclude the "Random" variant
         let n = rng.gen_range(1..AdversarialPayloadType::COUNT);
         AdversarialPayloadType::iter().nth(n).unwrap()
     }

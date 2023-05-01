@@ -651,7 +651,10 @@ impl Loader {
     fn verify_script(&self, script: &CompiledScript) -> VMResult<()> {
         fail::fail_point!("verifier-failpoint-3", |_| { Ok(()) });
 
-        move_bytecode_verifier::verify_script_with_config(&self.vm_config.verifier, script)
+        move_bytecode_verifier::verify_script_with_config_unmetered(
+            &self.vm_config.verifier,
+            script,
+        )
     }
 
     //
@@ -748,7 +751,10 @@ impl Loader {
     ) -> VMResult<()> {
         // Performs all verification steps to load the module without loading it, i.e., the new
         // module will NOT show up in `module_cache`.
-        move_bytecode_verifier::verify_module_with_config(&self.vm_config.verifier, module)?;
+        move_bytecode_verifier::verify_module_with_config_unmetered(
+            &self.vm_config.verifier,
+            module,
+        )?;
         self.check_natives(module)?;
 
         let mut visiting = BTreeSet::new();
@@ -981,9 +987,11 @@ impl Loader {
 
         // for bytes obtained from the data store, they should always deserialize and verify.
         // It is an invariant violation if they don't.
-        let module = CompiledModule::deserialize_with_max_version(
+        let module = CompiledModule::deserialize_with_config(
             &bytes,
             self.vm_config.max_binary_format_version,
+            self.vm_config()
+                .check_no_extraneous_bytes_during_deserialization,
         )
         .map_err(|err| {
             let msg = format!("Deserialization error: {:?}", err);
@@ -1004,8 +1012,11 @@ impl Loader {
         }
 
         // bytecode verifier checks that can be performed with the module itself
-        move_bytecode_verifier::verify_module_with_config(&self.vm_config.verifier, &module)
-            .map_err(expect_no_verification_errors)?;
+        move_bytecode_verifier::verify_module_with_config_unmetered(
+            &self.vm_config.verifier,
+            &module,
+        )
+        .map_err(expect_no_verification_errors)?;
         self.check_natives(&module)
             .map_err(expect_no_verification_errors)?;
 
@@ -2520,61 +2531,28 @@ impl Loader {
         if depth > VALUE_DEPTH_MAX {
             return Err(PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED));
         }
+        *count += 1;
         Ok(match ty {
-            Type::Bool => {
-                *count += 1;
-                MoveTypeLayout::Bool
-            }
-            Type::U8 => {
-                *count += 1;
-                MoveTypeLayout::U8
-            }
-            Type::U16 => {
-                *count += 1;
-                MoveTypeLayout::U16
-            }
-            Type::U32 => {
-                *count += 1;
-                MoveTypeLayout::U32
-            }
-            Type::U64 => {
-                *count += 1;
-                MoveTypeLayout::U64
-            }
-            Type::U128 => {
-                *count += 1;
-                MoveTypeLayout::U128
-            }
-            Type::U256 => {
-                *count += 1;
-                MoveTypeLayout::U256
-            }
-            Type::Address => {
-                *count += 1;
-                MoveTypeLayout::Address
-            }
-            Type::Signer => {
-                *count += 1;
-                MoveTypeLayout::Signer
-            }
-            Type::Vector(ty) => {
-                *count += 1;
-                MoveTypeLayout::Vector(Box::new(self.type_to_type_layout_impl(
-                    ty,
-                    count,
-                    depth + 1,
-                )?))
-            }
+            Type::Bool => MoveTypeLayout::Bool,
+            Type::U8 => MoveTypeLayout::U8,
+            Type::U16 => MoveTypeLayout::U16,
+            Type::U32 => MoveTypeLayout::U32,
+            Type::U64 => MoveTypeLayout::U64,
+            Type::U128 => MoveTypeLayout::U128,
+            Type::U256 => MoveTypeLayout::U256,
+            Type::Address => MoveTypeLayout::Address,
+            Type::Signer => MoveTypeLayout::Signer,
+            Type::Vector(ty) => MoveTypeLayout::Vector(Box::new(self.type_to_type_layout_impl(
+                ty,
+                count,
+                depth + 1,
+            )?)),
             Type::Struct(gidx) => {
-                *count += 1;
                 MoveTypeLayout::Struct(self.struct_gidx_to_type_layout(*gidx, &[], count, depth)?)
             }
-            Type::StructInstantiation(gidx, ty_args) => {
-                *count += 1;
-                MoveTypeLayout::Struct(
-                    self.struct_gidx_to_type_layout(*gidx, ty_args, count, depth)?,
-                )
-            }
+            Type::StructInstantiation(gidx, ty_args) => MoveTypeLayout::Struct(
+                self.struct_gidx_to_type_layout(*gidx, ty_args, count, depth)?,
+            ),
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -2651,6 +2629,7 @@ impl Loader {
         if depth > VALUE_DEPTH_MAX {
             return Err(PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED));
         }
+        *count += 1;
         Ok(match ty {
             Type::Bool => MoveTypeLayout::Bool,
             Type::U8 => MoveTypeLayout::U8,

@@ -517,8 +517,14 @@ pub fn make_certificates_with_slow_nodes(
     for round in range {
         next_parents.clear();
         for name in names {
-            let this_cert_parents =
-                this_cert_parents_with_slow_nodes(name, parents.clone(), slow_nodes, &mut rand);
+            let this_cert_parents = this_cert_parents_with_slow_nodes(
+                name,
+                parents.clone(),
+                slow_nodes,
+                &mut rand,
+                committee,
+            );
+
             let (_, certificate) = mock_certificate(committee, *name, round, this_cert_parents);
             certificates.push_back(certificate.clone());
             next_parents.push(certificate);
@@ -539,9 +545,15 @@ pub fn this_cert_parents_with_slow_nodes(
     ancestors: Vec<Certificate>,
     slow_nodes: &[(AuthorityIdentifier, f64)],
     rand: &mut StdRng,
+    committee: &Committee,
 ) -> BTreeSet<CertificateDigest> {
     let mut parents = BTreeSet::new();
+    let mut not_included = Vec::new();
+    let mut total_stake = 0;
+
     for parent in ancestors {
+        let authority = committee.authority(&parent.origin()).unwrap();
+
         // Identify if the parent is within the slow nodes - and is not the same author as the
         // one we want to create the certificate for.
         if let Some((_, inclusion_probability)) = slow_nodes
@@ -553,13 +565,34 @@ pub fn this_cert_parents_with_slow_nodes(
 
             if should_include {
                 parents.insert(parent.digest());
+                total_stake += authority.stake();
+            } else {
+                not_included.push(parent);
             }
         } else {
             // just add it directly as it is not within the slow nodes or we are the
             // same author.
             parents.insert(parent.digest());
+            total_stake += authority.stake();
         }
     }
+
+    // ensure we'll have enough parents (2f + 1)
+    while total_stake < committee.quorum_threshold() {
+        let parent = not_included.pop().unwrap();
+        let authority = committee.authority(&parent.origin()).unwrap();
+
+        total_stake += authority.stake();
+
+        parents.insert(parent.digest());
+    }
+
+    assert!(
+        committee.reached_quorum(total_stake),
+        "Not enough parents by stake provided. Expected at least {} but instead got {}",
+        committee.quorum_threshold(),
+        total_stake
+    );
 
     parents
 }

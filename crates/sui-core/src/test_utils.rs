@@ -27,13 +27,14 @@ use sui_types::crypto::{
     NetworkKeyPair, SuiKeyPair,
 };
 use sui_types::crypto::{AuthorityKeyPair, Signer};
+use sui_types::effects::{SignedTransactionEffects, TransactionEffects};
 use sui_types::error::SuiError;
+use sui_types::messages::ObjectArg;
 use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS;
 use sui_types::messages::{
     CallArg, SignedTransaction, TransactionData, VerifiedTransaction,
     TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
-use sui_types::messages::{ObjectArg, SignedTransactionEffects};
 use sui_types::utils::create_fake_transaction;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
@@ -41,7 +42,7 @@ use sui_types::{
     committee::Committee,
     crypto::{AuthoritySignInfo, AuthoritySignature},
     message_envelope::Message,
-    messages::{CertifiedTransaction, Transaction, TransactionEffects},
+    messages::{CertifiedTransaction, Transaction},
     object::Object,
 };
 use tokio::time::timeout;
@@ -287,10 +288,8 @@ pub async fn init_local_authorities_with_genesis(
         clients.insert(authority_name, client);
     }
     let timeouts = TimeoutConfig {
-        authority_request_timeout: Duration::from_secs(5),
         pre_quorum_timeout: Duration::from_secs(5),
         post_quorum_timeout: Duration::from_secs(5),
-        serial_authority_request_timeout: Duration::from_secs(1),
         serial_authority_request_interval: Duration::from_secs(1),
     };
     let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));

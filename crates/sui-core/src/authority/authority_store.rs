@@ -45,6 +45,7 @@ use super::authority_store_tables::LiveObject;
 use super::{authority_store_tables::AuthorityPerpetualTables, *};
 use mysten_common::sync::notify_read::NotifyRead;
 use sui_storage::package_object_cache::PackageObjectCache;
+use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::gas_coin::TOTAL_SUPPLY_MIST;
 use typed_store::rocks::util::is_ref_count_value;
 
@@ -149,6 +150,7 @@ impl AuthorityStore {
     ) -> SuiResult<Arc<Self>> {
         let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(path, db_options.clone()));
         let epoch_start_configuration = if perpetual_tables.database_is_empty()? {
+            info!("Creating new epoch start config from genesis");
             let epoch_start_configuration = EpochStartConfiguration::new(
                 genesis.sui_system_object().into_epoch_start_state(),
                 *genesis.checkpoint().digest(),
@@ -158,15 +160,18 @@ impl AuthorityStore {
                 .await?;
             epoch_start_configuration
         } else {
+            info!("Loading epoch start config from DB");
             perpetual_tables
                 .epoch_start_configuration
                 .get(&())?
                 .expect("Epoch start configuration must be set in non-empty DB")
         };
         let cur_epoch = perpetual_tables.get_recovery_epoch_at_restart()?;
+        info!("Epoch start config: {:?}", epoch_start_configuration);
+        info!("Cur epoch: {:?}", cur_epoch);
         let committee = committee_store
             .get_committee(&cur_epoch)?
-            .expect("Committee of the current epoch must exist");
+            .unwrap_or_else(|| panic!("Committee of the current epoch ({}) must exist", cur_epoch));
         let this = Self::open_inner(
             genesis,
             perpetual_tables,
@@ -698,17 +703,17 @@ impl AuthorityStore {
 
     /// Insert a genesis object.
     /// TODO: delete this method entirely (still used by authority_tests.rs)
-    pub(crate) async fn insert_genesis_object(&self, object: Object) -> SuiResult {
+    pub(crate) fn insert_genesis_object(&self, object: Object) -> SuiResult {
         // We only side load objects with a genesis parent transaction.
         debug_assert!(object.previous_transaction == TransactionDigest::genesis());
         let object_ref = object.compute_object_reference();
-        self.insert_object_direct(object_ref, &object).await
+        self.insert_object_direct(object_ref, &object)
     }
 
     /// Insert an object directly into the store, and also update relevant tables
     /// NOTE: does not handle transaction lock.
     /// This is used to insert genesis objects
-    async fn insert_object_direct(&self, object_ref: ObjectRef, object: &Object) -> SuiResult {
+    fn insert_object_direct(&self, object_ref: ObjectRef, object: &Object) -> SuiResult {
         let mut write_batch = self.perpetual_tables.objects.batch();
 
         // Insert object
@@ -735,6 +740,40 @@ impl AuthorityStore {
 
         write_batch.write()?;
 
+        Ok(())
+    }
+
+    /// Insert objects directly into the object table, but do not touch other tables.
+    /// This is used in fullnode to insert objects from validators certificate handling response
+    /// in fast path execution.
+    /// This is best-efforts. If the object needs to be stored as an indirect object then we
+    /// do not insert this object at all.
+    ///
+    /// Caveat: if an Object is regularly inserted as an indirect object in the stiore, but the threshold
+    /// changes in the fullnode which causes it to be considered as non-indirect, and only inserted
+    /// to the object store, this would cause the reference counting to be incorrect.
+    ///
+    /// TODO: handle this in a more resilient way.
+    pub(crate) fn fullnode_fast_path_insert_objects_to_object_store_maybe(
+        &self,
+        objects: &Vec<Object>,
+    ) -> SuiResult {
+        let mut write_batch = self.perpetual_tables.objects.batch();
+
+        for obj in objects {
+            let StoreObjectPair(store_object, indirect_object) =
+                get_store_object_pair(obj.clone(), self.indirect_objects_threshold);
+            // Do not insert to store if the object needs to stored as indirect object too.
+            if indirect_object.is_some() {
+                continue;
+            }
+            write_batch.insert_batch(
+                &self.perpetual_tables.objects,
+                std::iter::once((ObjectKey(obj.id(), obj.version()), store_object)),
+            )?;
+        }
+
+        write_batch.write()?;
         Ok(())
     }
 
@@ -889,6 +928,7 @@ impl AuthorityStore {
             events,
             max_binary_format_version: _,
             loaded_child_objects: _,
+            no_extraneous_module_bytes: _,
         } = inner_temporary_store;
         trace!(written =? written.values().map(|((obj_id, ver, _), _, _)| (obj_id, ver)).collect::<Vec<_>>(),
                "batch_update_objects: temp store written");
@@ -1634,6 +1674,8 @@ impl AuthorityStore {
                     root_state_hash, live_object_set_hash
                 );
             }
+        } else {
+            info!("State consistency check passed");
         }
 
         if !panic {
@@ -1820,6 +1862,16 @@ impl From<LockDetails> for LockDetailsWrapper {
 /// A potential input to a transaction.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct InputKey(pub ObjectID, pub Option<SequenceNumber>);
+
+impl From<&Object> for InputKey {
+    fn from(obj: &Object) -> Self {
+        if obj.is_package() {
+            InputKey(obj.id(), None)
+        } else {
+            InputKey(obj.id(), Some(obj.version()))
+        }
+    }
+}
 
 /// How a transaction should lock a given input object.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]

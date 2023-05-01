@@ -73,7 +73,7 @@ flowchart TB
 
 ## Dependencies
 
-Narwhal is implemented using [Tokio](https://github.com/tokio-rs/tokio), [RocksDB](https://github.com/facebook/rocksdb/) and generic cryptography. The cryptography contains implementations of node signing using BLS12-377, BLS12-381, and Ed25519.
+Narwhal is implemented using [Tokio](https://github.com/tokio-rs/tokio), [RocksDB](https://github.com/facebook/rocksdb/) and generic cryptography implemented in [fastcrypto](https://github.com/MystenLabs/fastcrypto).
 
 ## Configuration
 

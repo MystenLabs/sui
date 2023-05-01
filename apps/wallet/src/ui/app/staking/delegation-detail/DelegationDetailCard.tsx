@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
-import { useGetRollingAverageApys } from '@mysten/core';
+import { useGetRollingAverageApys, useGetSystemState } from '@mysten/core';
 import { ArrowLeft16, StakeAdd16, StakeRemove16 } from '@mysten/icons';
 import { useMemo } from 'react';
 
@@ -11,7 +11,6 @@ import { Heading } from '../../shared/heading';
 import { getDelegationDataByStakeId } from '../getDelegationByStakeId';
 import { StakeAmount } from '../home/StakeAmount';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
-import { useSystemState } from '../useSystemState';
 import { Button } from '_app/shared/ButtonUI';
 import BottomMenuLayout, { Content } from '_app/shared/bottom-menu-layout';
 import { Card } from '_app/shared/card';
@@ -35,7 +34,7 @@ export function DelegationDetailCard({
         data: system,
         isLoading: loadingValidators,
         isError: errorValidators,
-    } = useSystemState();
+    } = useGetSystemState();
 
     const accountAddress = useActiveAddress();
 
@@ -76,6 +75,11 @@ export function DelegationDetailCard({
         staked: stakedId,
     }).toString()}`;
 
+    // check if the validator is in the active validator list, if not, is inactive validator
+    const hasInactiveValidatorDelegation = !system?.activeValidators?.find(
+        ({ stakingPoolId }) => stakingPoolId === validatorData?.stakingPoolId
+    );
+
     const commission = validatorData
         ? Number(validatorData.commissionRate) / 100
         : 0;
@@ -106,6 +110,15 @@ export function DelegationDetailCard({
             <BottomMenuLayout>
                 <Content>
                     <div className="justify-center w-full flex flex-col items-center">
+                        {hasInactiveValidatorDelegation ? (
+                            <div className="mb-3">
+                                <Alert>
+                                    Unstake SUI from this inactive validator and
+                                    stake on an active validator to start
+                                    earning rewards again.
+                                </Alert>
+                            </div>
+                        ) : null}
                         <div className="w-full flex">
                             <Card
                                 header={
@@ -198,14 +211,16 @@ export function DelegationDetailCard({
                             </Card>
                         </div>
                         <div className="flex gap-2.5 w-full my-3.75">
-                            <Button
-                                size="tall"
-                                variant="outline"
-                                to={stakeByValidatorAddress}
-                                before={<StakeAdd16 />}
-                                text="Stake SUI"
-                                disabled={!stakingEnabled}
-                            />
+                            {!hasInactiveValidatorDelegation ? (
+                                <Button
+                                    size="tall"
+                                    variant="outline"
+                                    to={stakeByValidatorAddress}
+                                    before={<StakeAdd16 />}
+                                    text="Stake SUI"
+                                    disabled={!stakingEnabled}
+                                />
+                            ) : null}
 
                             {Boolean(totalStake) && delegationId && (
                                 <Button

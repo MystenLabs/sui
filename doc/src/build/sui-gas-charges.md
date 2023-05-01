@@ -22,7 +22,7 @@ pub struct GasData {
 - `payment` is a vector of gas coin. It accepts only SUI coins, and the coins must be unique. On execution, Sui merges the coins together into a single coin object, specifically the first one. After execution, Sui deletes all of the coins except the first coin that holds the balance of the coins combined minus the gas cost for the transaction.
 - `owner` is the single owner of all coins used, either the sender, or the sponsor for [sponsored transactions](../learn/sponsored-transactions.md).
 - `price` defines how much users will pay for a single unit of execution. A unit of execution is an abstract concept internal to the implementation. A higher price uses more gas than a lower price. At a later point, `price` helps define the priority of executing the transaction. The value for `price` must be greater than or equal to the [Reference Gas Price](../learn/tokenomics/gas-pricing.md), which is the minimum amount the system accepts for a transaction.
-- `budget` is the maximum amount a user pays for a transaction. The value for `budget` is expressed in MIST, a fractional unit of SUI. Each MIST equals 10^-9 SUI - 1 SUI equals 1 Billion MISTS. The sum of all coins in `payment` must be greater than or equal to the amount specified for `budget`.
+- `budget` is the maximum amount a user pays for a transaction. The value for `budget` is expressed in MIST, a fractional unit of SUI. Each MIST equals 10^-9 SUI - 1 SUI equals 1 Billion MIST. The sum of all coins in `payment` must be greater than or equal to the amount specified for `budget`.
 
 Note that the current release handles `payment` and `budget` dofferently than previous releases (prior to release .28).
 
@@ -38,8 +38,8 @@ Gas usage is proportional to the resources used. Specifically, it is proportiona
 
 There are 2 main values defined in the system that contribute to gas consumption:
 
-- **RGP** (Reference Gas Price): set up at the beginning of each epoch by the validator committee. RGP is a multiplier applied to each unit of computation. Initial **RGP** at genesis is 1,000 MISTS.
-- **Storage Price**: set up in the system and intended to be more stable than RGP, it is a multiplier for the number of bytes written to storage. Initial **Storage Price** at genesis is **76** MISTS.
+- **RGP** (Reference Gas Price): set up at the beginning of each epoch by the validator committee. RGP is a multiplier applied to each unit of computation. Initial **RGP** at genesis is 1,000 MIST.
+- **Storage Price**: set up in the system and intended to be more stable than RGP, it is a multiplier for the number of bytes written to storage. Initial **Storage Price** at genesis is **76** MIST.
 
 ## Transaction Output: GasCostSummary
 

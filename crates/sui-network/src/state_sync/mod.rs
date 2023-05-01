@@ -48,8 +48,7 @@
 //! of the newly synchronized checkpoint so that it can help other peers synchronize.
 
 use anemo::{types::PeerEvent, PeerId, Request, Response, Result};
-use anyhow::anyhow;
-use futures::{FutureExt, StreamExt};
+use futures::{stream::FuturesOrdered, FutureExt, StreamExt};
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
@@ -67,7 +66,7 @@ use sui_types::{
 };
 use tap::{Pipe, TapFallible, TapOptional};
 use tokio::{
-    sync::{broadcast, mpsc},
+    sync::{broadcast, mpsc, watch},
     task::{AbortHandle, JoinSet},
 };
 use tracing::{debug, info, trace, warn};
@@ -289,6 +288,10 @@ where
             }
             subscriber
         };
+        let (
+            target_checkpoint_contents_sequence_sender,
+            target_checkpoint_contents_sequence_receiver,
+        ) = watch::channel(0);
 
         // Initialize checkpoint watermark metrics
         self.metrics.set_highest_verified_checkpoint(
@@ -306,6 +309,23 @@ where
                 .sequence_number(),
         );
 
+        // Start checkpoint contents sync loop.
+        let task = sync_checkpoint_contents(
+            self.network.clone(),
+            self.store.clone(),
+            self.peer_heights.clone(),
+            self.weak_sender.clone(),
+            self.checkpoint_event_sender.clone(),
+            self.metrics.clone(),
+            self.config.checkpoint_content_download_concurrency(),
+            self.config.checkpoint_content_download_tx_concurrency(),
+            self.config.checkpoint_content_timeout(),
+            target_checkpoint_contents_sequence_receiver,
+        );
+        let task_handle = self.tasks.spawn(task);
+        self.sync_checkpoint_contents_task = Some(task_handle);
+
+        // Start main loop.
         loop {
             tokio::select! {
                 now = interval.tick() => {
@@ -339,7 +359,7 @@ where
                     };
 
                     if matches!(&self.sync_checkpoint_contents_task, Some(t) if t.is_finished()) {
-                        self.sync_checkpoint_contents_task = None;
+                        panic!("sync_checkpoint_contents task unexpectedly terminated")
                     }
 
                     if matches!(&self.sync_checkpoint_summaries_task, Some(t) if t.is_finished()) {
@@ -349,7 +369,9 @@ where
             }
 
             self.maybe_start_checkpoint_summary_sync_task();
-            self.maybe_start_checkpoint_contents_sync_task();
+            self.maybe_trigger_checkpoint_contents_sync_task(
+                &target_checkpoint_contents_sequence_sender,
+            );
         }
 
         info!("State-Synchronizer ended");
@@ -553,12 +575,10 @@ where
         }
     }
 
-    fn maybe_start_checkpoint_contents_sync_task(&mut self) {
-        // Only run one sync task at a time
-        if self.sync_checkpoint_contents_task.is_some() {
-            return;
-        }
-
+    fn maybe_trigger_checkpoint_contents_sync_task(
+        &mut self,
+        target_sequence_channel: &watch::Sender<CheckpointSequenceNumber>,
+    ) {
         let highest_verified_checkpoint = self
             .store
             .get_highest_verified_checkpoint()
@@ -578,20 +598,14 @@ where
                 .highest_known_checkpoint_sequence_number()
                 > Some(*highest_synced_checkpoint.sequence_number())
         {
-            let task = sync_checkpoint_contents(
-                self.network.clone(),
-                self.store.clone(),
-                self.peer_heights.clone(),
-                self.weak_sender.clone(),
-                self.checkpoint_event_sender.clone(),
-                self.metrics.clone(),
-                self.config.checkpoint_content_download_concurrency(),
-                self.config.checkpoint_content_timeout(),
-                highest_verified_checkpoint,
-            );
-
-            let task_handle = self.tasks.spawn(task);
-            self.sync_checkpoint_contents_task = Some(task_handle);
+            let _ = target_sequence_channel.send_if_modified(|num| {
+                let new_num = *highest_verified_checkpoint.sequence_number();
+                if *num == new_num {
+                    return false;
+                }
+                *num = new_num;
+                true
+            });
         }
     }
 
@@ -983,8 +997,9 @@ async fn sync_checkpoint_contents<S>(
     checkpoint_event_sender: broadcast::Sender<VerifiedCheckpoint>,
     metrics: Metrics,
     checkpoint_content_download_concurrency: usize,
+    checkpoint_content_download_tx_concurrency: u64,
     timeout: Duration,
-    target_checkpoint: VerifiedCheckpoint,
+    mut target_sequence_channel: watch::Receiver<CheckpointSequenceNumber>,
 ) where
     S: WriteStore + Clone,
     <S as ReadStore>::Error: std::error::Error,
@@ -993,65 +1008,102 @@ async fn sync_checkpoint_contents<S>(
         .get_highest_synced_checkpoint()
         .expect("store operation should not fail");
 
-    let start = highest_synced.sequence_number().saturating_add(1);
+    let mut current_sequence = highest_synced.sequence_number().saturating_add(1);
+    let mut target_sequence_cursor = 0;
+    let mut highest_started_network_total_transactions = highest_synced.network_total_transactions;
+    let mut checkpoint_contents_tasks = FuturesOrdered::new();
 
-    let mut checkpoint_contents_stream = (start..=*target_checkpoint.sequence_number())
-        .map(|next| {
-            store
-                .get_checkpoint_by_sequence_number(next)
+    let mut tx_concurrency_remaining = checkpoint_content_download_tx_concurrency;
+
+    loop {
+        tokio::select! {
+            result = target_sequence_channel.changed() => {
+                match result {
+                    Ok(()) => {
+                        target_sequence_cursor = (*target_sequence_channel.borrow_and_update()).saturating_add(1);
+                    }
+                    Err(_) => {
+                        // Watch channel is closed, exit loop.
+                        return
+                    }
+                }
+            },
+            Some(maybe_checkpoint) = checkpoint_contents_tasks.next() => {
+                match maybe_checkpoint {
+                    Ok((checkpoint, num_txns)) => {
+                        let _: &VerifiedCheckpoint = &checkpoint;  // type hint
+                        // if this fails, there is a bug in checkpoint construction (or the chain is
+                        // corrupted)
+                        assert_eq!(
+                            highest_synced.network_total_transactions + num_txns,
+                            checkpoint.network_total_transactions
+                        );
+                        tx_concurrency_remaining += num_txns;
+
+                        store
+                            .update_highest_synced_checkpoint(&checkpoint)
+                            .expect("store operation should not fail");
+                        metrics.set_highest_synced_checkpoint(*checkpoint.sequence_number());
+                        // We don't care if no one is listening as this is a broadcast channel
+                        let _ = checkpoint_event_sender.send(checkpoint.clone());
+                        highest_synced = checkpoint;
+
+                    }
+                    Err(checkpoint) => {
+                        let _: &VerifiedCheckpoint = &checkpoint;  // type hint
+                        debug!("unable to sync contents of checkpoint {}", checkpoint.sequence_number());
+                        // Retry contents sync on failure.
+                        checkpoint_contents_tasks.push_front(sync_one_checkpoint_contents(
+                            network.clone(),
+                            &store,
+                            peer_heights.clone(),
+                            timeout,
+                            checkpoint,
+                        ));
+                    }
+                }
+            },
+        }
+
+        // Start new tasks up to configured concurrency limits.
+        while current_sequence < target_sequence_cursor
+            && checkpoint_contents_tasks.len() < checkpoint_content_download_concurrency
+        {
+            let next_checkpoint = store
+                .get_checkpoint_by_sequence_number(current_sequence)
                 .expect("store operation should not fail")
                 .expect(
                     "BUG: store should have all checkpoints older than highest_verified_checkpoint",
-                )
-        })
-        .map(|checkpoint| {
-            sync_one_checkpoint_contents(
+                );
+
+            // Enforce transaction count concurrency limit.
+            let tx_count = next_checkpoint.network_total_transactions
+                - highest_started_network_total_transactions;
+            if tx_count > tx_concurrency_remaining {
+                break;
+            }
+            tx_concurrency_remaining -= tx_count;
+
+            highest_started_network_total_transactions = next_checkpoint.network_total_transactions;
+            current_sequence += 1;
+            checkpoint_contents_tasks.push_back(sync_one_checkpoint_contents(
                 network.clone(),
                 &store,
                 peer_heights.clone(),
                 timeout,
-                checkpoint,
-            )
-        })
-        .pipe(futures::stream::iter)
-        .buffered(checkpoint_content_download_concurrency);
+                next_checkpoint,
+            ));
+        }
 
-    let mut checkpoint_contents_sync_error = false;
-    while let Some(maybe_checkpoint) = checkpoint_contents_stream.next().await {
-        match maybe_checkpoint {
-            Ok((checkpoint, num_txns)) => {
-                // if this fails, there is a bug in checkpoint construction (or the chain is
-                // corrupted)
-                assert_eq!(
-                    highest_synced.network_total_transactions + num_txns,
-                    checkpoint.network_total_transactions
-                );
-
-                store
-                    .update_highest_synced_checkpoint(&checkpoint)
-                    .expect("store operation should not fail");
-                metrics.set_highest_synced_checkpoint(*checkpoint.sequence_number());
-                // We don't care if no one is listening as this is a broadcast channel
-                let _ = checkpoint_event_sender.send(checkpoint.clone());
-                highest_synced = checkpoint;
-            }
-            Err(err) => {
-                checkpoint_contents_sync_error = true;
-                debug!("unable to sync contents of checkpoint: {err}");
-                break;
+        if highest_synced.sequence_number() % checkpoint_content_download_concurrency as u64 == 0
+            || checkpoint_contents_tasks.is_empty()
+        {
+            // Periodically notify event loop to notify our peers that we've synced to a new checkpoint height
+            if let Some(sender) = sender.upgrade() {
+                let message = StateSyncMessage::SyncedCheckpoint(Box::new(highest_synced.clone()));
+                let _ = sender.send(message).await;
             }
         }
-    }
-
-    // Notify event loop to notify our peers that we've synced to a new checkpoint height
-    if let Some(sender) = sender.upgrade() {
-        let message = StateSyncMessage::SyncedCheckpoint(Box::new(highest_synced));
-        let _ = sender.send(message).await;
-    }
-
-    // Add a delay if any checkpoint contents failed to sync, to prevent fast retry loops.
-    if checkpoint_contents_sync_error {
-        tokio::time::sleep(Duration::from_secs(10)).await;
     }
 }
 
@@ -1061,7 +1113,7 @@ async fn sync_one_checkpoint_contents<S>(
     peer_heights: Arc<RwLock<PeerHeights>>,
     timeout: Duration,
     checkpoint: VerifiedCheckpoint,
-) -> Result<(VerifiedCheckpoint, u64)>
+) -> Result<(VerifiedCheckpoint, u64), VerifiedCheckpoint>
 where
     S: WriteStore + Clone,
     <S as ReadStore>::Error: std::error::Error,
@@ -1081,7 +1133,9 @@ where
     rand::seq::SliceRandom::shuffle(peers.as_mut_slice(), &mut rng);
 
     let Some(contents) = get_full_checkpoint_contents(&mut peers, &store, &checkpoint, timeout).await else {
-        return Err(anyhow!("unable to sync checkpoint contents for checkpoint {}", checkpoint.sequence_number()));
+        // Delay completion in case of error so we don't hammer the network with retries.
+        tokio::time::sleep(Duration::from_secs(10)).await;
+        return Err(checkpoint);
     };
 
     let num_txns = contents.size() as u64;

@@ -1,12 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useGetDynamicFields } from '@mysten/core';
+import { useGetDynamicFields, useOnScreen } from '@mysten/core';
 import { useRef, useEffect } from 'react';
 
 import { UnderlyingObjectCard } from './UnderlyingObjectCard';
 
-import { useOnScreen } from '~/hooks/useOnScreen';
 import { DisclosureBox } from '~/ui/DisclosureBox';
 import { ObjectLink } from '~/ui/InternalLink';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';

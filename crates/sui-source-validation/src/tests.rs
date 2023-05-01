@@ -6,8 +6,8 @@ use move_core_types::account_address::AccountAddress;
 use std::collections::HashMap;
 use std::{fs, io, path::Path};
 use std::{path::PathBuf, str};
-use sui::client_commands::WalletContext;
 use sui_move_build::{BuildConfig, CompiledPackage, SuiPackageHooks};
+use sui_sdk::wallet_context::WalletContext;
 use sui_types::base_types::ObjectID;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},

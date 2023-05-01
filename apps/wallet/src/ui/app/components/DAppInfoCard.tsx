@@ -47,7 +47,7 @@ export function DAppInfoCard({
                                 />
                             ) : null}
                         </div>
-                        <div className="flex flex-col flex-nowrap gap-2">
+                        <div className="flex flex-col flex-nowrap gap-1">
                             <Heading
                                 variant="heading4"
                                 weight="semibold"

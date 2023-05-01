@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 7;
+const MAX_PROTOCOL_VERSION: u64 = 9;
 
 // Record history of protocol version allocations here:
 //
@@ -26,9 +26,13 @@ const MAX_PROTOCOL_VERSION: u64 = 7;
 // Version 6: Change to how bytes are charged in the gas meter, increase buffer stake to 0.5f
 // Version 7: Disallow adding new abilities to types during package upgrades,
 //            disable_invariant_violation_check_in_swap_loc,
-//            advance_to_highest_supported_protocol_version,
 //            disable init functions becoming entry,
 //            hash module bytes individually before computing package digest.
+// Version 8: Disallow changing abilities and type constraints for type parameters in structs
+//            during upgrades.
+// Version 9: Limit the length of Move idenfitiers to 128.
+//            Disallow extraneous module bytes,
+//            advance_to_highest_supported_protocol_version,
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -165,6 +169,12 @@ struct FeatureFlags {
     // If true, hash module bytes individually when calculating package digests for upgrades
     #[serde(skip_serializing_if = "is_false")]
     package_digest_hash_module: bool,
+    // If true, disallow changing struct type parameters during package upgrades
+    #[serde(skip_serializing_if = "is_false")]
+    disallow_change_struct_type_params_on_upgrade: bool,
+    // If true, checks no extra bytes in a compiled module
+    #[serde(skip_serializing_if = "is_false")]
+    no_extraneous_module_bytes: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -325,6 +335,9 @@ pub struct ProtocolConfig {
 
     /// Maximum length of a vector in Move. Enforced by the VM during execution, and for constants, by the verifier.
     max_move_vector_len: Option<u64>,
+
+    /// Maximum length of an `Identifier` in Move. Enforced by the bytecode verifier at signing.
+    max_move_identifier_len: Option<u64>,
 
     /// Maximum number of back edges in Move function. Enforced by the bytecode verifier at signing.
     max_back_edges_per_function: Option<u64>,
@@ -676,6 +689,15 @@ impl ProtocolConfig {
     pub fn package_digest_hash_module(&self) -> bool {
         self.feature_flags.package_digest_hash_module
     }
+
+    pub fn disallow_change_struct_type_params_on_upgrade(&self) -> bool {
+        self.feature_flags
+            .disallow_change_struct_type_params_on_upgrade
+    }
+
+    pub fn no_extraneous_module_bytes(&self) -> bool {
+        self.feature_flags.no_extraneous_module_bytes
+    }
 }
 
 // Special getters
@@ -690,6 +712,12 @@ impl ProtocolConfig {
     /// Instead we want to be able to selectively fetch this value
     pub fn max_size_written_objects_system_tx_as_option(&self) -> Option<u64> {
         self.max_size_written_objects_system_tx
+    }
+
+    /// We don't want to use the default getter which unwraps and could panic.
+    /// Instead we want to be able to selectively fetch this value
+    pub fn max_move_identifier_len_as_option(&self) -> Option<u64> {
+        self.max_move_identifier_len
     }
 }
 
@@ -1024,6 +1052,9 @@ impl ProtocolConfig {
                 scoring_decision_mad_divisor: None,
                 scoring_decision_cutoff_value: None,
 
+              // Limits the length of a Move identifier
+              max_move_identifier_len: None,
+
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
             },
@@ -1079,10 +1110,23 @@ impl ProtocolConfig {
                 cfg.feature_flags.disallow_adding_abilities_on_upgrade = true;
                 cfg.feature_flags
                     .disable_invariant_violation_check_in_swap_loc = true;
-                cfg.feature_flags
-                    .advance_to_highest_supported_protocol_version = true;
                 cfg.feature_flags.ban_entry_init = true;
                 cfg.feature_flags.package_digest_hash_module = true;
+                cfg
+            }
+            8 => {
+                let mut cfg = Self::get_for_version_impl(version - 1);
+                cfg.feature_flags
+                    .disallow_change_struct_type_params_on_upgrade = true;
+                cfg
+            }
+            9 => {
+                let mut cfg = Self::get_for_version_impl(version - 1);
+                // Limits the length of a Move identifier
+                cfg.max_move_identifier_len = Some(128);
+                cfg.feature_flags.no_extraneous_module_bytes = true;
+                cfg.feature_flags
+                    .advance_to_highest_supported_protocol_version = true;
                 cfg
             }
             // Use this template when making changes:

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::file_format_common::VERSION_MAX;
-use move_bytecode_verifier::{verifier::MAX_CONSTANT_VECTOR_LEN, VerifierConfig};
+use move_bytecode_verifier::{verifier::DEFAULT_MAX_CONSTANT_VECTOR_LEN, VerifierConfig};
 
 /// Dynamic config options for the Move VM.
 pub struct VMConfig {
@@ -14,6 +14,9 @@ pub struct VMConfig {
     pub runtime_limits_config: VMRuntimeLimitsConfig,
     // When this flag is set to true, MoveVM will check invariant violation in swap_loc
     pub enable_invariant_violation_check_in_swap_loc: bool,
+    // When this flag is set to true, MoveVM will check that there are no trailing bytes after
+    // deserializing and check for no metadata bytes
+    pub check_no_extraneous_bytes_during_deserialization: bool,
 }
 
 impl Default for VMConfig {
@@ -24,6 +27,7 @@ impl Default for VMConfig {
             paranoid_type_checks: false,
             runtime_limits_config: VMRuntimeLimitsConfig::default(),
             enable_invariant_violation_check_in_swap_loc: true,
+            check_no_extraneous_bytes_during_deserialization: false,
         }
     }
 }
@@ -36,7 +40,7 @@ pub struct VMRuntimeLimitsConfig {
 impl Default for VMRuntimeLimitsConfig {
     fn default() -> Self {
         Self {
-            vector_len_max: MAX_CONSTANT_VECTOR_LEN,
+            vector_len_max: DEFAULT_MAX_CONSTANT_VECTOR_LEN,
         }
     }
 }

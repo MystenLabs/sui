@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::execution_status::PackageUpgradeError;
 use crate::{
     base_types::{ObjectID, SequenceNumber},
     crypto::DefaultHash,
     error::{ExecutionError, ExecutionErrorKind, SuiError, SuiResult},
     id::{ID, UID},
-    messages::PackageUpgradeError,
     object::OBJECT_START_VERSION,
     SUI_FRAMEWORK_ADDRESS,
 };
@@ -147,6 +147,8 @@ impl UpgradePolicy {
             check_friend_linking: false,
             check_private_entry_linking: false,
             disallowed_new_abilities,
+            disallow_change_struct_type_params: protocol_config
+                .disallow_change_struct_type_params_on_upgrade(),
         }
     }
 
@@ -490,7 +492,7 @@ impl MovePackage {
     /// `MovePackage::id()` in the case of package upgrades).
     pub fn original_package_id(&self) -> ObjectID {
         let bytes = self.module_map.values().next().expect("Empty module map");
-        let module = CompiledModule::deserialize(bytes)
+        let module = CompiledModule::deserialize_with_defaults(bytes)
             .expect("A Move package contains a module that cannot be deserialized");
         (*module.address()).into()
     }
@@ -499,6 +501,7 @@ impl MovePackage {
         &self,
         module: &Identifier,
         max_binary_format_version: u32,
+        check_no_bytes_remaining: bool,
     ) -> SuiResult<CompiledModule> {
         // TODO use the session's cache
         let bytes = self
@@ -507,11 +510,14 @@ impl MovePackage {
             .ok_or_else(|| SuiError::ModuleNotFound {
                 module_name: module.to_string(),
             })?;
-        CompiledModule::deserialize_with_max_version(bytes, max_binary_format_version).map_err(
-            |error| SuiError::ModuleDeserializationFailure {
-                error: error.to_string(),
-            },
+        CompiledModule::deserialize_with_config(
+            bytes,
+            max_binary_format_version,
+            check_no_bytes_remaining,
         )
+        .map_err(|error| SuiError::ModuleDeserializationFailure {
+            error: error.to_string(),
+        })
     }
 
     pub fn disassemble(&self) -> SuiResult<BTreeMap<String, Value>> {
@@ -521,8 +527,13 @@ impl MovePackage {
     pub fn normalize(
         &self,
         max_binary_format_version: u32,
+        check_no_bytes_remaining: bool,
     ) -> SuiResult<BTreeMap<String, normalized::Module>> {
-        normalize_modules(self.module_map.values(), max_binary_format_version)
+        normalize_modules(
+            self.module_map.values(),
+            max_binary_format_version,
+            check_no_bytes_remaining,
+        )
     }
 }
 
@@ -599,7 +610,7 @@ where
     for bytecode in modules {
         // this function is only from JSON RPC - it is OK to deserialize with max Move binary
         // version
-        let module = CompiledModule::deserialize(bytecode).map_err(|error| {
+        let module = CompiledModule::deserialize_with_defaults(bytecode).map_err(|error| {
             SuiError::ModuleDeserializationFailure {
                 error: error.to_string(),
             }
@@ -623,17 +634,21 @@ where
 pub fn normalize_modules<'a, I>(
     modules: I,
     max_binary_format_version: u32,
+    check_no_bytes_remaining: bool,
 ) -> SuiResult<BTreeMap<String, normalized::Module>>
 where
     I: Iterator<Item = &'a Vec<u8>>,
 {
     let mut normalized_modules = BTreeMap::new();
     for bytecode in modules {
-        let module =
-            CompiledModule::deserialize_with_max_version(bytecode, max_binary_format_version)
-                .map_err(|error| SuiError::ModuleDeserializationFailure {
-                    error: error.to_string(),
-                })?;
+        let module = CompiledModule::deserialize_with_config(
+            bytecode,
+            max_binary_format_version,
+            check_no_bytes_remaining,
+        )
+        .map_err(|error| SuiError::ModuleDeserializationFailure {
+            error: error.to_string(),
+        })?;
         let normalized_module = normalized::Module::new(&module);
         normalized_modules.insert(normalized_module.name.to_string(), normalized_module);
     }

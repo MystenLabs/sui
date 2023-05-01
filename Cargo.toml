@@ -102,6 +102,7 @@ members = [
     "crates/sui-simulator",
     "crates/sui-source-validation",
     "crates/sui-storage",
+    "crates/sui-surfer",
     "crates/sui-swarm",
     "crates/sui-telemetry",
     "crates/sui-test-validator",
@@ -137,7 +138,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, and sui crates.
-version = "0.34.0"
+version = "1.0.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -202,7 +203,7 @@ move-stackless-bytecode = { path = "external-crates/move/move-prover/bytecode" }
 move-symbol-pool = { path = "external-crates/move/move-symbol-pool" }
 
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "97a928d77c9a93260da3d128eaa78f76c831b793" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "97a928d77c9a93260da3d128eaa78f76c831b793", package = "fastcrypto-zkp" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "27ee552d5c1feb02b6b64b4f77be3c84e82a0469", package = "fastcrypto-zkp" }
 
 # anemo dependencies
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "05322deb1795a5d482630740bc938fa7f067c58f" }

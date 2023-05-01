@@ -35,7 +35,7 @@ pub fn write_file_to_string(
     compiled_module_file_input_path: &str,
 ) -> Result<(ModuleId, String)> {
     let file_contents = fs::read(compiled_module_file_input_path)?;
-    let module = CompiledModule::deserialize(&file_contents).map_err(|e| {
+    let module = CompiledModule::deserialize_with_defaults(&file_contents).map_err(|e| {
         anyhow!(
             "Unable to deserialize module at '{}': {}",
             compiled_module_file_input_path,

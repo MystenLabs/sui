@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeatureIsOn } from '@growthbook/growthbook-react';
-import { useCoinDecimals } from '@mysten/core';
+import { useCoinMetadata, useGetSystemState } from '@mysten/core';
 import { ArrowLeft16 } from '@mysten/icons';
 import {
     getTransactionDigest,
@@ -21,7 +21,6 @@ import { getSignerOperationErrorMessage } from '../../helpers/errorMessages';
 import { getDelegationDataByStakeId } from '../getDelegationByStakeId';
 import { getStakeSuiBySuiId } from '../getStakeSuiBySuiId';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
-import { useSystemState } from '../useSystemState';
 import StakeForm from './StakeForm';
 import { UnStakeForm } from './UnstakeForm';
 import { ValidatorFormDetail } from './ValidatorFormDetail';
@@ -70,7 +69,8 @@ function StakingCard() {
         FEATURES.WALLET_EFFECTS_ONLY_SHARED_TRANSACTION as string
     );
 
-    const { data: system, isLoading: validatorsIsloading } = useSystemState();
+    const { data: system, isLoading: validatorsIsloading } =
+        useGetSystemState();
 
     const totalTokenBalance = useMemo(() => {
         if (!allDelegation) return 0n;
@@ -91,7 +91,8 @@ function StakingCard() {
 
     const suiEarned = stakeData?.estimatedReward || '0';
 
-    const [coinDecimals] = useCoinDecimals(coinType);
+    const { data: metadata } = useCoinMetadata(coinType);
+    const coinDecimals = metadata?.decimals ?? 0;
     // set minimum stake amount to 1 SUI
     const minimumStake = parseAmount('1', coinDecimals);
 
@@ -315,10 +316,7 @@ function StakingCard() {
                                 {(unstake || touched.amount) &&
                                 errors.amount ? (
                                     <div className="mt-2 flex flex-col flex-nowrap">
-                                        <Alert
-                                            mode="warning"
-                                            className="text-body"
-                                        >
+                                        <Alert mode="warning">
                                             {errors.amount}
                                         </Alert>
                                     </div>

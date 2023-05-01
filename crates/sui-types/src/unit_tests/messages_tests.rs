@@ -22,6 +22,10 @@ use crate::crypto::{
     get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes,
     AuthoritySignInfoTrait, SuiAuthoritySignature,
 };
+use crate::digests::TransactionEventsDigest;
+use crate::effects::{TransactionEffects, TransactionEffectsAPI};
+use crate::execution_status::ExecutionStatus;
+use crate::gas::GasCostSummary;
 use crate::object::Owner;
 
 #[test]
@@ -1335,6 +1339,11 @@ fn test_certificate_digest() {
 // If this test fails, the value of the constant must be increased
 #[test]
 fn check_approx_effects_components_size() {
+    use crate::effects::{
+        APPROX_SIZE_OF_EPOCH_ID, APPROX_SIZE_OF_EXECUTION_STATUS, APPROX_SIZE_OF_GAS_COST_SUMMARY,
+        APPROX_SIZE_OF_OBJECT_REF, APPROX_SIZE_OF_OPT_TX_EVENTS_DIGEST, APPROX_SIZE_OF_OWNER,
+        APPROX_SIZE_OF_TX_DIGEST,
+    };
     use std::mem::size_of;
 
     assert!(

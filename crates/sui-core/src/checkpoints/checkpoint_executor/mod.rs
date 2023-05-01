@@ -30,11 +30,12 @@ use mysten_metrics::{spawn_monitored_task, MonitoredFutureExt};
 use prometheus::Registry;
 use sui_config::node::CheckpointExecutorConfig;
 use sui_macros::{fail_point, fail_point_async};
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::message_envelope::Message;
 use sui_types::messages::VerifiedExecutableTransaction;
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest, TransactionEffectsDigest},
-    messages::{TransactionEffects, TransactionEffectsAPI, VerifiedTransaction},
+    messages::VerifiedTransaction,
     messages_checkpoint::{CheckpointSequenceNumber, VerifiedCheckpoint},
 };
 use sui_types::{error::SuiResult, messages::TransactionDataAPI};
@@ -421,17 +422,22 @@ impl CheckpointExecutor {
                 effects_digests
                     .get(tx.digest())
                     .expect("Transaction digest not found in effects_digests")
-            });
+            })
+            .collect::<Vec<_>>();
 
         let digest_to_effects: HashMap<TransactionDigest, TransactionEffects> = self
             .authority_store
             .perpetual_tables
             .effects
-            .multi_get(shared_effects_digests)?
+            .multi_get(shared_effects_digests.clone())?
             .into_iter()
-            .map(|fx| {
+            .zip(shared_effects_digests)
+            .map(|(fx, fx_digest)| {
                 if fx.is_none() {
-                    panic!("Transaction effects do not exist in effects table");
+                    panic!(
+                        "Transaction effects for effects digest {:?} do not exist in effects table",
+                        fx_digest
+                    );
                 }
                 let fx = fx.unwrap();
                 (*fx.transaction_digest(), fx)

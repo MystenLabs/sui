@@ -6,13 +6,11 @@ use crate::authority::{
     move_integration_tests::{build_and_publish_test_package, build_test_package},
 };
 
+use move_binary_format::CompiledModule;
 use sui_types::{
     base_types::ObjectID,
     error::UserInputError,
-    messages::{
-        ExecutionFailureStatus, TransactionData, TransactionEffectsAPI,
-        TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-    },
+    messages::{TransactionData, TEST_ONLY_GAS_UNIT_FOR_PUBLISH},
     object::{Data, ObjectRead, Owner},
     utils::to_sender_signed_transaction,
 };
@@ -22,7 +20,6 @@ use sui_move_build::{check_unpublished_dependencies, gather_published_ids, Build
 use sui_types::{
     crypto::{get_key_pair, AccountKeyPair},
     error::SuiError,
-    messages::ExecutionStatus,
 };
 
 use expect_test::expect;
@@ -31,6 +28,8 @@ use std::fs::File;
 use std::io::Read;
 use std::{collections::HashSet, path::PathBuf};
 use sui_framework::BuiltInFramework;
+use sui_types::effects::TransactionEffectsAPI;
+use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 
 #[tokio::test]
 #[cfg_attr(msim, ignore)]
@@ -299,4 +298,126 @@ async fn test_custom_property_check_unpublished_dependencies() {
         Package dependency "CustomPropertiesInManifestDependencyMissingPublishedAt" does not specify a published address (the Move.toml manifest for "CustomPropertiesInManifestDependencyMissingPublishedAt" does not contain a published-at field).
         If this is intentional, you may use the --with-unpublished-dependencies flag to continue publishing these dependencies as part of your package (they won't be linked against existing packages on-chain)."#]];
     expected.assert_eq(&error)
+}
+
+#[tokio::test]
+#[cfg_attr(msim, ignore)]
+async fn test_publish_extraneous_bytes_modules() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas = ObjectID::random();
+    let authority = init_state_with_ids(vec![(sender, gas)]).await;
+    let gas_object = authority.get_object(&gas).await.unwrap();
+    let gas_object_ref = gas_object.unwrap().compute_object_reference();
+    let rgp = authority.reference_gas_price_for_testing().unwrap();
+
+    // test valid module bytes
+    let correct_modules =
+        build_test_package("object_owner", /* with_unpublished_deps */ false);
+    assert_eq!(correct_modules.len(), 1);
+    let data = TransactionData::new_module(
+        sender,
+        gas_object_ref,
+        correct_modules.clone(),
+        BuiltInFramework::all_package_ids(),
+        rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        rgp,
+    );
+    let transaction = to_sender_signed_transaction(data, &sender_key);
+    let result = send_and_confirm_transaction(&authority, transaction)
+        .await
+        .unwrap()
+        .1;
+    assert_eq!(result.status(), &ExecutionStatus::Success);
+
+    // make the bytes invalid
+    let gas_object = authority.get_object(&gas).await.unwrap();
+    let gas_object_ref = gas_object.unwrap().compute_object_reference();
+    let mut modules = correct_modules.clone();
+    modules[0].push(0);
+    assert_eq!(modules.len(), 1);
+    let data = TransactionData::new_module(
+        sender,
+        gas_object_ref,
+        modules,
+        BuiltInFramework::all_package_ids(),
+        rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        rgp,
+    );
+    let transaction = to_sender_signed_transaction(data, &sender_key);
+    let result = send_and_confirm_transaction(&authority, transaction)
+        .await
+        .unwrap()
+        .1;
+    assert_eq!(
+        result.status(),
+        &ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::VMVerificationOrDeserializationError,
+            command: Some(0)
+        }
+    );
+
+    // make the bytes invalid, in a different way
+    let gas_object = authority.get_object(&gas).await.unwrap();
+    let gas_object_ref = gas_object.unwrap().compute_object_reference();
+    let mut modules = correct_modules.clone();
+    let first_module = modules[0].clone();
+    modules[0].extend(first_module);
+    assert_eq!(modules.len(), 1);
+    let data = TransactionData::new_module(
+        sender,
+        gas_object_ref,
+        modules,
+        BuiltInFramework::all_package_ids(),
+        rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        rgp,
+    );
+    let transaction = to_sender_signed_transaction(data, &sender_key);
+    let result = send_and_confirm_transaction(&authority, transaction)
+        .await
+        .unwrap()
+        .1;
+    assert_eq!(
+        result.status(),
+        &ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::VMVerificationOrDeserializationError,
+            command: Some(0)
+        }
+    );
+
+    // make the bytes invalid by adding metadata
+    let gas_object = authority.get_object(&gas).await.unwrap();
+    let gas_object_ref = gas_object.unwrap().compute_object_reference();
+    let mut modules = correct_modules.clone();
+    let new_bytes = {
+        let mut m = CompiledModule::deserialize_with_defaults(&modules[0]).unwrap();
+        m.metadata.push(move_core_types::metadata::Metadata {
+            key: vec![0],
+            value: vec![1],
+        });
+        let mut buf = vec![];
+        m.serialize(&mut buf).unwrap();
+        buf
+    };
+    modules[0] = new_bytes;
+    assert_eq!(modules.len(), 1);
+    let data = TransactionData::new_module(
+        sender,
+        gas_object_ref,
+        modules,
+        BuiltInFramework::all_package_ids(),
+        rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        rgp,
+    );
+    let transaction = to_sender_signed_transaction(data, &sender_key);
+    let result = send_and_confirm_transaction(&authority, transaction)
+        .await
+        .unwrap()
+        .1;
+    assert_eq!(
+        result.status(),
+        &ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::VMVerificationOrDeserializationError,
+            command: Some(0)
+        }
+    )
 }

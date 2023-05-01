@@ -11,13 +11,13 @@ use sui_types::coin::PAY_JOIN_FUNC_NAME;
 use sui_types::coin::PAY_MODULE_NAME;
 use sui_types::coin::PAY_SPLIT_VEC_FUNC_NAME;
 use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
+use sui_types::messages::VerifiedTransaction;
 use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_GENERIC;
-use sui_types::messages::{TransactionEffectsAPI, VerifiedTransaction};
 use sui_types::object::{generate_test_gas_objects, Object};
 use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 use sui_types::{
     gas::GasCostSummary,
-    messages::{CallArg, ExecutionStatus, ObjectArg},
+    messages::{CallArg, ObjectArg},
 };
 use test_utils::authority::spawn_test_authorities;
 use test_utils::messages::move_transaction_with_type_tags;
@@ -35,6 +35,8 @@ use test_utils::{
 use serde::{Deserialize, Serialize};
 use strum_macros::Display;
 use strum_macros::EnumString;
+use sui_types::effects::TransactionEffectsAPI;
+use sui_types::execution_status::ExecutionStatus;
 
 #[derive(
     Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Ord, PartialOrd, Clone, Display, EnumString,
@@ -240,7 +242,7 @@ async fn create_txes(
         gas_price * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
         gas_price,
     );
-    let (effects, _) =
+    let (effects, _, _) =
         submit_single_owner_transaction(transaction.clone(), &configs.net_addresses()).await;
     assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
     let ((counter_id, counter_initial_shared_version, _), _) = effects.created()[0];

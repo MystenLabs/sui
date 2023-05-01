@@ -5,11 +5,22 @@ import { useGetSystemState, useTimeAgo } from '@mysten/core';
 
 export function useEpochProgress(suffix: string = 'left') {
     const { data } = useGetSystemState();
-
-    const start = Number(data?.epochStartTimestampMs ?? 0);
-    const duration = Number(data?.epochDurationMs ?? 0);
-    const end = start + duration;
+    const start = data?.epochStartTimestampMs
+        ? Number(data.epochStartTimestampMs)
+        : undefined;
+    const duration = data?.epochDurationMs
+        ? Number(data.epochDurationMs)
+        : undefined;
+    const end =
+        start !== undefined && duration !== undefined
+            ? start + duration
+            : undefined;
     const time = useTimeAgo(end, true, true);
+
+    if (!start || !end) {
+        return {};
+    }
+
     const progress =
         start && duration
             ? Math.min(((Date.now() - start) / (end - start)) * 100, 100)
@@ -31,6 +42,8 @@ export function useEpochProgress(suffix: string = 'left') {
         epoch: data?.epoch,
         progress,
         label,
+        end,
+        start,
     };
 }
 

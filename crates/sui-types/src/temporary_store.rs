@@ -15,7 +15,8 @@ use sui_protocol_config::ProtocolConfig;
 use tracing::trace;
 
 use crate::committee::EpochId;
-use crate::messages::TransactionEvents;
+use crate::effects::{TransactionEffects, TransactionEvents};
+use crate::execution_status::ExecutionStatus;
 use crate::storage::ObjectStore;
 use crate::sui_system_state::{
     get_sui_system_state, get_sui_system_state_wrapper, AdvanceEpochParams, SuiSystemState,
@@ -28,7 +29,7 @@ use crate::{
     event::Event,
     fp_bail, gas,
     gas::{GasCostSummary, SuiGasStatus, SuiGasStatusAPI},
-    messages::{ExecutionStatus, InputObjects, TransactionEffects},
+    messages::InputObjects,
     object::Owner,
     object::{Data, Object},
     storage::{
@@ -53,6 +54,7 @@ pub struct InnerTemporaryStore {
     pub loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
     pub events: TransactionEvents,
     pub max_binary_format_version: u32,
+    pub no_extraneous_module_bytes: bool,
 }
 
 impl InnerTemporaryStore {
@@ -124,6 +126,7 @@ where
                 return Ok(Some(Arc::new(p.deserialize_module(
                     &id.name().into(),
                     self.temp_store.max_binary_format_version,
+                    self.temp_store.no_extraneous_module_bytes,
                 )?)));
             }
         }
@@ -286,6 +289,7 @@ impl<S> TemporaryStore<S> {
             events: TransactionEvents { data: self.events },
             max_binary_format_version: self.protocol_config.move_binary_format_version(),
             loaded_child_objects: self.loaded_child_objects,
+            no_extraneous_module_bytes: self.protocol_config.no_extraneous_module_bytes(),
         }
     }
 
@@ -1586,6 +1590,7 @@ impl<S: GetModule<Error = SuiError, Item = CompiledModule>> GetModule for Tempor
                     .deserialize_module(
                         &module_id.name().to_owned(),
                         self.protocol_config.move_binary_format_version(),
+                        self.protocol_config.no_extraneous_module_bytes(),
                     )?,
             ))
         } else {

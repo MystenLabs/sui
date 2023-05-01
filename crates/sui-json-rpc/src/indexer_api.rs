@@ -13,8 +13,9 @@ use jsonrpsee::{RpcModule, SubscriptionSink};
 use move_bytecode_utils::layout::TypeLayoutBuilder;
 use serde::Serialize;
 use sui_json::SuiJsonValue;
+use sui_types::error::SuiObjectResponseError;
 use sui_types::MOVE_STDLIB_ADDRESS;
-use tracing::{info, instrument, warn};
+use tracing::{instrument, warn};
 
 use move_core_types::language_storage::{StructTag, TypeTag};
 use mysten_metrics::spawn_monitored_task;
@@ -23,6 +24,7 @@ use sui_json_rpc_types::{
     DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page, SuiMoveValue,
     SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiParsedMoveObject,
     SuiTransactionBlockResponse, SuiTransactionBlockResponseQuery, TransactionBlocksPage,
+    TransactionFilter,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SuiAddress, STD_UTF8_MODULE_NAME, STD_UTF8_STRUCT_NAME};
@@ -34,6 +36,7 @@ use crate::api::{
     cap_page_limit, validate_limit, IndexerApiServer, JsonRpcMetrics, ReadApiServer,
     QUERY_MAX_RESULT_LIMIT,
 };
+use crate::with_tracing;
 use crate::SuiRpcModule;
 
 const NAME_SERVICE_LOOKUP_KEY: &str = "records";
@@ -60,7 +63,6 @@ where
         };
     });
 }
-
 pub struct IndexerApi<R> {
     state: Arc<AuthorityState>,
     read_api: R,
@@ -94,47 +96,48 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         cursor: Option<ObjectID>,
         limit: Option<usize>,
     ) -> RpcResult<ObjectsPage> {
-        info!("indexer_get_owned_objects");
-        let limit = validate_limit(limit, *QUERY_MAX_RESULT_LIMIT)?;
-        self.metrics.get_owned_objects_limit.report(limit as u64);
-        let SuiObjectResponseQuery { filter, options } = query.unwrap_or_default();
-        let options = options.unwrap_or_default();
-        let mut objects = self
-            .state
-            .get_owner_objects(address, cursor, limit + 1, filter)
-            .map_err(|e| anyhow!("{e}"))?;
+        with_tracing!("get_owned_objects", async move {
+            let limit = validate_limit(limit, *QUERY_MAX_RESULT_LIMIT)?;
+            self.metrics.get_owned_objects_limit.report(limit as u64);
+            let SuiObjectResponseQuery { filter, options } = query.unwrap_or_default();
+            let options = options.unwrap_or_default();
+            let mut objects = self
+                .state
+                .get_owner_objects(address, cursor, limit + 1, filter)
+                .map_err(|e| anyhow!("{e}"))?;
 
-        // objects here are of size (limit + 1), where the last one is the cursor for the next page
-        let has_next_page = objects.len() > limit;
-        objects.truncate(limit);
-        let next_cursor = objects
-            .last()
-            .cloned()
-            .map_or(cursor, |o_info| Some(o_info.object_id));
+            // objects here are of size (limit + 1), where the last one is the cursor for the next page
+            let has_next_page = objects.len() > limit;
+            objects.truncate(limit);
+            let next_cursor = objects
+                .last()
+                .cloned()
+                .map_or(cursor, |o_info| Some(o_info.object_id));
 
-        let data = match options.is_not_in_object_info() {
-            true => {
-                let object_ids = objects.iter().map(|obj| obj.object_id).collect();
-                self.read_api
-                    .multi_get_objects(object_ids, Some(options))
-                    .await?
-            }
-            false => objects
-                .into_iter()
-                .map(|o_info| SuiObjectResponse::try_from((o_info, options.clone())))
-                .collect::<Result<Vec<SuiObjectResponse>, _>>()?,
-        };
+            let data = match options.is_not_in_object_info() {
+                true => {
+                    let object_ids = objects.iter().map(|obj| obj.object_id).collect();
+                    self.read_api
+                        .multi_get_objects(object_ids, Some(options))
+                        .await?
+                }
+                false => objects
+                    .into_iter()
+                    .map(|o_info| SuiObjectResponse::try_from((o_info, options.clone())))
+                    .collect::<Result<Vec<SuiObjectResponse>, _>>()?,
+            };
 
-        self.metrics
-            .get_owned_objects_result_size
-            .report(data.len() as u64);
-        self.metrics
-            .get_owned_objects_result_size_total
-            .inc_by(data.len() as u64);
-        Ok(Page {
-            data,
-            next_cursor,
-            has_next_page,
+            self.metrics
+                .get_owned_objects_result_size
+                .report(data.len() as u64);
+            self.metrics
+                .get_owned_objects_result_size_total
+                .inc_by(data.len() as u64);
+            Ok(Page {
+                data,
+                next_cursor,
+                has_next_page,
+            })
         })
     }
 
@@ -147,43 +150,44 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         limit: Option<usize>,
         descending_order: Option<bool>,
     ) -> RpcResult<TransactionBlocksPage> {
-        info!("indexer_query_transaction_blocks");
-        let limit = cap_page_limit(limit);
-        self.metrics.query_tx_blocks_limit.report(limit as u64);
-        let descending = descending_order.unwrap_or_default();
-        let opts = query.options.unwrap_or_default();
+        with_tracing!("query_transaction_blocks", async move {
+            let limit = cap_page_limit(limit);
+            self.metrics.query_tx_blocks_limit.report(limit as u64);
+            let descending = descending_order.unwrap_or_default();
+            let opts = query.options.unwrap_or_default();
 
-        // Retrieve 1 extra item for next cursor
-        let mut digests =
-            self.state
-                .get_transactions(query.filter, cursor, Some(limit + 1), descending)?;
+            // Retrieve 1 extra item for next cursor
+            let mut digests =
+                self.state
+                    .get_transactions(query.filter, cursor, Some(limit + 1), descending)?;
 
-        // extract next cursor
-        let has_next_page = digests.len() > limit;
-        digests.truncate(limit);
-        let next_cursor = digests.last().cloned().map_or(cursor, Some);
+            // extract next cursor
+            let has_next_page = digests.len() > limit;
+            digests.truncate(limit);
+            let next_cursor = digests.last().cloned().map_or(cursor, Some);
 
-        let data: Vec<SuiTransactionBlockResponse> = if opts.only_digest() {
-            digests
-                .into_iter()
-                .map(SuiTransactionBlockResponse::new)
-                .collect()
-        } else {
-            self.read_api
-                .multi_get_transaction_blocks(digests, Some(opts))
-                .await?
-        };
+            let data: Vec<SuiTransactionBlockResponse> = if opts.only_digest() {
+                digests
+                    .into_iter()
+                    .map(SuiTransactionBlockResponse::new)
+                    .collect()
+            } else {
+                self.read_api
+                    .multi_get_transaction_blocks(digests, Some(opts))
+                    .await?
+            };
 
-        self.metrics
-            .query_tx_blocks_result_size
-            .report(data.len() as u64);
-        self.metrics
-            .query_tx_blocks_result_size_total
-            .inc_by(data.len() as u64);
-        Ok(Page {
-            data,
-            next_cursor,
-            has_next_page,
+            self.metrics
+                .query_tx_blocks_result_size
+                .report(data.len() as u64);
+            self.metrics
+                .query_tx_blocks_result_size_total
+                .inc_by(data.len() as u64);
+            Ok(Page {
+                data,
+                next_cursor,
+                has_next_page,
+            })
         })
     }
     #[instrument(skip(self))]
@@ -195,34 +199,54 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         limit: Option<usize>,
         descending_order: Option<bool>,
     ) -> RpcResult<EventPage> {
-        info!("indexer_query_events");
-        let descending = descending_order.unwrap_or_default();
-        let limit = cap_page_limit(limit);
-        self.metrics.query_events_limit.report(limit as u64);
-        // Retrieve 1 extra item for next cursor
-        let mut data = self
-            .state
-            .query_events(query, cursor.clone(), limit + 1, descending)?;
-        let has_next_page = data.len() > limit;
-        data.truncate(limit);
-        let next_cursor = data.last().map_or(cursor, |e| Some(e.id.clone()));
-        self.metrics
-            .query_events_result_size
-            .report(data.len() as u64);
-        self.metrics
-            .query_events_result_size_total
-            .inc_by(data.len() as u64);
-        Ok(EventPage {
-            data,
-            next_cursor,
-            has_next_page,
+        with_tracing!("query_events", async move {
+            let descending = descending_order.unwrap_or_default();
+            let limit = cap_page_limit(limit);
+            self.metrics.query_events_limit.report(limit as u64);
+            // Retrieve 1 extra item for next cursor
+            let mut data = self
+                .state
+                .query_events(query, cursor.clone(), limit + 1, descending)?;
+            let has_next_page = data.len() > limit;
+            data.truncate(limit);
+            let next_cursor = data.last().map_or(cursor, |e| Some(e.id.clone()));
+            self.metrics
+                .query_events_result_size
+                .report(data.len() as u64);
+            self.metrics
+                .query_events_result_size_total
+                .inc_by(data.len() as u64);
+            Ok(EventPage {
+                data,
+                next_cursor,
+                has_next_page,
+            })
         })
     }
 
+    #[instrument(skip(self))]
     fn subscribe_event(&self, sink: SubscriptionSink, filter: EventFilter) -> SubscriptionResult {
-        spawn_subscription(sink, self.state.event_handler.subscribe(filter));
+        spawn_subscription(
+            sink,
+            self.state.subscription_handler.subscribe_events(filter),
+        );
         Ok(())
     }
+
+    fn subscribe_transaction(
+        &self,
+        sink: SubscriptionSink,
+        filter: TransactionFilter,
+    ) -> SubscriptionResult {
+        spawn_subscription(
+            sink,
+            self.state
+                .subscription_handler
+                .subscribe_transactions(filter),
+        );
+        Ok(())
+    }
+
     #[instrument(skip(self))]
     async fn get_dynamic_fields(
         &self,
@@ -231,26 +255,27 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         cursor: Option<ObjectID>,
         limit: Option<usize>,
     ) -> RpcResult<DynamicFieldPage> {
-        info!("indexer_get_dynamic_fields");
-        let limit = cap_page_limit(limit);
-        self.metrics.get_dynamic_fields_limit.report(limit as u64);
-        let mut data = self
-            .state
-            .get_dynamic_fields(parent_object_id, cursor, limit + 1)
-            .map_err(|e| anyhow!("{e}"))?;
-        let has_next_page = data.len() > limit;
-        data.truncate(limit);
-        let next_cursor = data.last().cloned().map_or(cursor, |c| Some(c.object_id));
-        self.metrics
-            .get_dynamic_fields_result_size
-            .report(data.len() as u64);
-        self.metrics
-            .get_dynamic_fields_result_size_total
-            .inc_by(data.len() as u64);
-        Ok(DynamicFieldPage {
-            data,
-            next_cursor,
-            has_next_page,
+        with_tracing!("get_dynamic_fields", async move {
+            let limit = cap_page_limit(limit);
+            self.metrics.get_dynamic_fields_limit.report(limit as u64);
+            let mut data = self
+                .state
+                .get_dynamic_fields(parent_object_id, cursor, limit + 1)
+                .map_err(|e| anyhow!("{e}"))?;
+            let has_next_page = data.len() > limit;
+            data.truncate(limit);
+            let next_cursor = data.last().cloned().map_or(cursor, |c| Some(c.object_id));
+            self.metrics
+                .get_dynamic_fields_result_size
+                .report(data.len() as u64);
+            self.metrics
+                .get_dynamic_fields_result_size_total
+                .inc_by(data.len() as u64);
+            Ok(DynamicFieldPage {
+                data,
+                next_cursor,
+                has_next_page,
+            })
         })
     }
 
@@ -260,94 +285,98 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         parent_object_id: ObjectID,
         name: DynamicFieldName,
     ) -> RpcResult<SuiObjectResponse> {
-        info!("indexer_get_dynamic_field_object");
-        let DynamicFieldName {
-            type_: name_type,
-            value,
-        } = name.clone();
-        let layout = TypeLayoutBuilder::build_with_types(&name_type, &self.state.database)?;
-        let sui_json_value = SuiJsonValue::new(value)?;
-        let name_bcs_value = sui_json_value.to_bcs_bytes(&layout)?;
-        let id = self
-            .state
-            .get_dynamic_field_object_id(parent_object_id, name_type, &name_bcs_value)
-            .map_err(|e| anyhow!("{e}"))?
-            .ok_or_else(|| {
-                anyhow!("Cannot find dynamic field [{name:?}] for object [{parent_object_id}].")
-            })?;
-        // TODO(chris): add options to `get_dynamic_field_object` API as well
-        self.read_api
-            .get_object(id, Some(SuiObjectDataOptions::full_content()))
-            .await
+        with_tracing!("get_dynamic_field_object", async move {
+            let DynamicFieldName {
+                type_: name_type,
+                value,
+            } = name.clone();
+            let layout = TypeLayoutBuilder::build_with_types(&name_type, &self.state.database)?;
+            let sui_json_value = SuiJsonValue::new(value)?;
+            let name_bcs_value = sui_json_value.to_bcs_bytes(&layout)?;
+            let id = self
+                .state
+                .get_dynamic_field_object_id(parent_object_id, name_type, &name_bcs_value)
+                .map_err(|e| anyhow!("{e}"))?;
+            // TODO(chris): add options to `get_dynamic_field_object` API as well
+            if let Some(id) = id {
+                self.read_api
+                    .get_object(id, Some(SuiObjectDataOptions::full_content()))
+                    .await
+            } else {
+                Ok(SuiObjectResponse::new_with_error(
+                    SuiObjectResponseError::DynamicFieldNotFound { parent_object_id },
+                ))
+            }
+        })
     }
 
     #[instrument(skip(self))]
     async fn resolve_name_service_address(&self, name: String) -> RpcResult<Option<SuiAddress>> {
-        info!("indexer_resolve_name_service_address");
-        let dynamic_field_table_object_id = self
-            .get_name_service_dynamic_field_table_object_id(/* reverse_lookup */ false)
-            .await?;
-        // NOTE: 0x1::string::String is the type tag of fields in dynamic_field_table
-        let name_type_tag = TypeTag::Struct(Box::new(StructTag {
-            address: MOVE_STDLIB_ADDRESS,
-            module: STD_UTF8_MODULE_NAME.to_owned(),
-            name: STD_UTF8_STRUCT_NAME.to_owned(),
-            type_params: vec![],
-        }));
-        let name_bcs_value = bcs::to_bytes(&name).context("Unable to serialize name")?;
-        // record of the input `name`
-        let record_object_id_option = self
-            .state
-            .get_dynamic_field_object_id(
-                dynamic_field_table_object_id,
-                name_type_tag,
-                &name_bcs_value,
-            )
-            .map_err(|e| {
-                anyhow!(
-                    "Read name service dynamic field table failed with error: {:?}",
-                    e
+        with_tracing!("resolve_name_service_address", async move {
+            let dynamic_field_table_object_id = self
+                .get_name_service_dynamic_field_table_object_id(/* reverse_lookup */ false)
+                .await?;
+            // NOTE: 0x1::string::String is the type tag of fields in dynamic_field_table
+            let name_type_tag = TypeTag::Struct(Box::new(StructTag {
+                address: MOVE_STDLIB_ADDRESS,
+                module: STD_UTF8_MODULE_NAME.to_owned(),
+                name: STD_UTF8_STRUCT_NAME.to_owned(),
+                type_params: vec![],
+            }));
+            let name_bcs_value = bcs::to_bytes(&name).context("Unable to serialize name")?;
+            // record of the input `name`
+            let record_object_id_option = self
+                .state
+                .get_dynamic_field_object_id(
+                    dynamic_field_table_object_id,
+                    name_type_tag,
+                    &name_bcs_value,
                 )
-            })?;
-        if let Some(record_object_id) = record_object_id_option {
-            let record_object_read =
-                self.state.get_object_read(&record_object_id).map_err(|e| {
-                    warn!(
-                        "Failed to get object read of name: {:?} with error: {:?}",
-                        record_object_id, e
-                    );
-                    anyhow!("{e}")
-                })?;
-            let record_parsed_move_object =
-                SuiParsedMoveObject::try_from_object_read(record_object_read)?;
-            // NOTE: "value" is the field name to get the address info
-            let address_info_move_value = record_parsed_move_object
-                .read_dynamic_field_value(NAME_SERVICE_VALUE)
-                .ok_or_else(|| anyhow!("Cannot find value field in record Move struct"))?;
-            let address_info_move_struct = match address_info_move_value {
-                SuiMoveValue::Struct(a) => Ok(a),
-                _ => Err(anyhow!("value field is not found.")),
-            }?;
-            // NOTE: "marker" is the field name to get the address
-            let address_str_move_value = address_info_move_struct
-                .read_dynamic_field_value(NAME_SERVICE_MARKER)
-                .ok_or_else(|| {
+                .map_err(|e| {
                     anyhow!(
-                        "Cannot find marker field in address info Move struct: {:?}",
-                        address_info_move_struct
+                        "Read name service dynamic field table failed with error: {:?}",
+                        e
                     )
                 })?;
-            let addr = match address_str_move_value {
-                SuiMoveValue::Address(addr) => Ok(addr),
-                _ => Err(anyhow!(
-                    "No SuiAddress found in: {:?}",
-                    address_str_move_value
-                )),
-            }?;
-            return Ok(Some(addr));
-        } else {
-            return Ok(None);
-        }
+            if let Some(record_object_id) = record_object_id_option {
+                let record_object_read =
+                    self.state.get_object_read(&record_object_id).map_err(|e| {
+                        warn!(
+                            "Failed to get object read of name: {:?} with error: {:?}",
+                            record_object_id, e
+                        );
+                        anyhow!("{e}")
+                    })?;
+                let record_parsed_move_object =
+                    SuiParsedMoveObject::try_from_object_read(record_object_read)?;
+                // NOTE: "value" is the field name to get the address info
+                let address_info_move_value = record_parsed_move_object
+                    .read_dynamic_field_value(NAME_SERVICE_VALUE)
+                    .ok_or_else(|| anyhow!("Cannot find value field in record Move struct"))?;
+                let address_info_move_struct = match address_info_move_value {
+                    SuiMoveValue::Struct(a) => Ok(a),
+                    _ => Err(anyhow!("value field is not found.")),
+                }?;
+                // NOTE: "marker" is the field name to get the address
+                let address_str_move_value = address_info_move_struct
+                    .read_dynamic_field_value(NAME_SERVICE_MARKER)
+                    .ok_or_else(|| {
+                        anyhow!(
+                            "Cannot find marker field in address info Move struct: {:?}",
+                            address_info_move_struct
+                        )
+                    })?;
+                let addr = match address_str_move_value {
+                    SuiMoveValue::Address(addr) => Ok(addr),
+                    _ => Err(anyhow!(
+                        "No SuiAddress found in: {:?}",
+                        address_str_move_value
+                    )),
+                }?;
+                return Ok(Some(addr));
+            }
+            Ok(None)
+        })
     }
 
     #[instrument(skip(self))]
@@ -357,49 +386,50 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         _cursor: Option<ObjectID>,
         _limit: Option<usize>,
     ) -> RpcResult<Page<String, ObjectID>> {
-        info!("indexer_resolve_name_service_names");
-        let dynamic_field_table_object_id = self
-            .get_name_service_dynamic_field_table_object_id(/* reverse_lookup */ true)
-            .await?;
-        let name_type_tag = TypeTag::Address;
-        let name_bcs_value = bcs::to_bytes(&address).context("Unable to serialize address")?;
-        let addr_object_id = self
-            .state
-            .get_dynamic_field_object_id(
-                dynamic_field_table_object_id,
-                name_type_tag,
-                &name_bcs_value,
-            )
-            .map_err(|e| {
-                anyhow!(
-                    "Read name service reverse dynamic field table failed with error: {:?}",
-                    e
+        with_tracing!("resolve_name_service_names", async move {
+            let dynamic_field_table_object_id = self
+                .get_name_service_dynamic_field_table_object_id(/* reverse_lookup */ true)
+                .await?;
+            let name_type_tag = TypeTag::Address;
+            let name_bcs_value = bcs::to_bytes(&address).context("Unable to serialize address")?;
+            let addr_object_id = self
+                .state
+                .get_dynamic_field_object_id(
+                    dynamic_field_table_object_id,
+                    name_type_tag,
+                    &name_bcs_value,
                 )
-            })?
-            .ok_or_else(|| anyhow!("Record not found for address: {:?}", address))?;
-        let addr_object_read = self.state.get_object_read(&addr_object_id).map_err(|e| {
-            warn!(
-                "Failed to get object read of address {:?} with error: {:?}",
-                addr_object_id, e
-            );
-            anyhow!("{e}")
-        })?;
-        let addr_parsed_move_object = SuiParsedMoveObject::try_from_object_read(addr_object_read)?;
-        let address_info_move_value = addr_parsed_move_object
-            .read_dynamic_field_value(NAME_SERVICE_VALUE)
-            .ok_or_else(|| anyhow!("Cannot find value field in record Move struct"))?;
-
-        let primary_name = match address_info_move_value {
-            SuiMoveValue::String(s) => Ok(s),
-            _ => Err(anyhow!(
-                "No string field for primary name is found in {:?}",
-                address_info_move_value
-            )),
-        }?;
-        Ok(Page {
-            data: vec![primary_name],
-            next_cursor: Some(addr_object_id),
-            has_next_page: false,
+                .map_err(|e| {
+                    anyhow!(
+                        "Read name service reverse dynamic field table failed with error: {:?}",
+                        e
+                    )
+                })?
+                .ok_or_else(|| anyhow!("Record not found for address: {:?}", address))?;
+            let addr_object_read = self.state.get_object_read(&addr_object_id).map_err(|e| {
+                warn!(
+                    "Failed to get object read of address {:?} with error: {:?}",
+                    addr_object_id, e
+                );
+                anyhow!("{e}")
+            })?;
+            let addr_parsed_move_object =
+                SuiParsedMoveObject::try_from_object_read(addr_object_read)?;
+            let address_info_move_value = addr_parsed_move_object
+                .read_dynamic_field_value(NAME_SERVICE_VALUE)
+                .ok_or_else(|| anyhow!("Cannot find value field in record Move struct"))?;
+            let primary_name = match address_info_move_value {
+                SuiMoveValue::String(s) => Ok(s),
+                _ => Err(anyhow!(
+                    "No string field for primary name is found in {:?}",
+                    address_info_move_value
+                )),
+            }?;
+            Ok(Page {
+                data: vec![primary_name],
+                next_cursor: Some(addr_object_id),
+                has_next_page: false,
+            })
         })
     }
 }

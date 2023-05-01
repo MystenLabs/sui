@@ -195,13 +195,13 @@ pub fn build_from_resolution_graph(
     let compiled_modules = package.root_modules_map();
     if run_bytecode_verifier {
         for m in compiled_modules.iter_modules() {
-            move_bytecode_verifier::verify_module(m).map_err(|err| {
+            move_bytecode_verifier::verify_module_unmetered(m).map_err(|err| {
                 SuiError::ModuleVerificationFailure {
                     error: err.to_string(),
                 }
             })?;
             // TODO make this configurable
-            sui_bytecode_verifier::verify_module(
+            sui_bytecode_verifier::sui_verify_module_unmetered(
                 &ProtocolConfig::get_for_version(ProtocolVersion::MAX),
                 m,
                 &fn_info,

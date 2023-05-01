@@ -139,6 +139,8 @@ async fn submit_transaction_to_consensus_adapter() {
         Box::new(Arc::new(ConnectionMonitorStatusForTests {})),
         100_000,
         100_000,
+        None,
+        None,
         metrics,
     ));
 

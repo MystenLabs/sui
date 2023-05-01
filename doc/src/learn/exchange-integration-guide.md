@@ -9,7 +9,7 @@ This topic describes how to integrate SUI, the token native to the Sui network, 
 The requirements to configure a SUI integration include:
  * A Sui Full node. You can operate your own Sui Full node or use a Full node from a node operator.
  * Suggested hardware requirements to run a Sui Full node:
-    * CPU: 10 physical cores / 20 vCPUs
+    * CPU: 8 physical cores / 16 vCPUs
     * RAM: 128 GB
     * Storage (SSD): 2 TB NVMe drive
 
@@ -90,7 +90,7 @@ Currently, Sui address supports these signature schemes: pure Ed25519, Secp256k1
 The following code sample demonstrates how to derive a Sui address in Rust:
 
 ```rust
-let flag = 0x00; // 0x00 = ED25519, 0x01 = Secp256k1, 0x02 = Secp256r1, 0x03 = Multisig
+let flag = 0x00; // 0x00 = ED25519, 0x01 = Secp256k1, 0x02 = Secp256r1, 0x03 = MultiSig
 // Hash the [flag, public key] bytearray using Blake2b
 let mut hasher = DefaultHash::default();
 hasher.update([flag]);
@@ -231,9 +231,7 @@ Sui supports the following API operations related to transferring SUI between ad
 
 ## Signing Transactions
 
-Please refer to [offline signing](https://github.com/MystenLabs/sui/blob/d0aceaea613b33fc969f7ca2cdd84b8a35e87de3/crates/sui/offline_signing.md) for more details on signature validity requirements.
-
-A native weighted multi-sig multi-scheme signature is also supported. Please see [multisig](https://github.com/MystenLabs/sui/blob/d0aceaea613b33fc969f7ca2cdd84b8a35e87de3/crates/sui/multisig.md) for details. 
+Please refer to [Sui Signatures](../learn/cryptography/sui-signatures.md) for more details on signature validity requirements.
 
 ## SUI Staking
 

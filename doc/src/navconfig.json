@@ -124,6 +124,14 @@
 					{
 						"label": "Sui Keys and Addresses",
 						"fileName": "learn/cryptography/sui-wallet-specs"
+					},
+					{
+						"label": "Sui Crypto Agility and Signatures",
+						"fileName": "learn/cryptography/sui-signatures"
+					},
+					{
+						"label": "Verifiable random function (VRF)",
+						"fileName": "learn/cryptography/ecvrf"
 					}
 				]
 			},
@@ -272,6 +280,10 @@
 						"fileName": "build/event_api"
 					}
 				]
+			},
+			{
+				"label": "Developer Cheat Sheet",
+				"fileName": "build/dev_cheat_sheet"
 			}
 		],
 			"reference": [{

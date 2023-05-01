@@ -10,7 +10,7 @@ use move_binary_format::{
     errors::VMError,
     file_format::{CompiledModule, CompiledScript},
 };
-use move_bytecode_verifier::{dependencies, verify_module, verify_script};
+use move_bytecode_verifier::{dependencies, verify_module_unmetered, verify_script_unmetered};
 use move_command_line_common::files::{
     MOVE_COMPILED_EXTENSION, MOVE_IR_EXTENSION, SOURCE_MAP_EXTENSION,
 };
@@ -52,14 +52,14 @@ fn print_error_and_exit(verification_error: &VMError) -> ! {
 }
 
 fn do_verify_module(module: &CompiledModule, dependencies: &[CompiledModule]) {
-    verify_module(module).unwrap_or_else(|err| print_error_and_exit(&err));
+    verify_module_unmetered(module).unwrap_or_else(|err| print_error_and_exit(&err));
     if let Err(err) = dependencies::verify_module(module, dependencies) {
         print_error_and_exit(&err);
     }
 }
 
 fn do_verify_script(script: &CompiledScript, dependencies: &[CompiledModule]) {
-    verify_script(script).unwrap_or_else(|err| print_error_and_exit(&err));
+    verify_script_unmetered(script).unwrap_or_else(|err| print_error_and_exit(&err));
     if let Err(err) = dependencies::verify_script(script, dependencies) {
         print_error_and_exit(&err);
     }
@@ -116,9 +116,10 @@ fn main() {
             deps_list
                 .into_iter()
                 .map(|module_bytes| {
-                    let module = CompiledModule::deserialize(module_bytes.as_slice())
+                    let module = CompiledModule::deserialize_with_defaults(module_bytes.as_slice())
                         .expect("Downloaded module blob can't be deserialized");
-                    verify_module(&module).expect("Downloaded module blob failed verifier");
+                    verify_module_unmetered(&module)
+                        .expect("Downloaded module blob failed verifier");
                     module
                 })
                 .collect()

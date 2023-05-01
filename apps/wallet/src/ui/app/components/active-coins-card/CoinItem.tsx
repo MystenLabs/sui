@@ -21,7 +21,7 @@ export function CoinItem({ coinType, balance, isActive, usd }: CoinItemProps) {
             <CoinIcon coinType={coinType} size={isActive ? 'sm' : 'md'} />
             <div className="flex flex-1 gap-1.5 justify-between">
                 <div className="flex flex-col gap-1.5">
-                    <Text variant="body" color="gray-90" weight="semibold">
+                    <Text variant="body" color="steel-darker" weight="semibold">
                         {symbol} {isActive ? 'available' : ''}
                     </Text>
                     {!isActive ? (

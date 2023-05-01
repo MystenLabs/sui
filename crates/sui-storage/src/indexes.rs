@@ -21,18 +21,17 @@ use tokio::sync::OwnedMutexGuard;
 
 use crate::mutex_table::MutexTable;
 use crate::sharded_lru::ShardedLruCache;
-use sui_json_rpc_types::SuiObjectDataFilter;
+use sui_json_rpc_types::{SuiObjectDataFilter, TransactionFilter};
 use sui_types::base_types::{
     ObjectDigest, ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxSequenceNumber,
 };
 use sui_types::base_types::{ObjectInfo, ObjectRef};
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{self, DynamicFieldInfo};
-use sui_types::error::{SuiError, SuiResult};
-use sui_types::messages::TransactionEvents;
+use sui_types::effects::TransactionEvents;
+use sui_types::error::{SuiError, SuiResult, UserInputError};
 use sui_types::object::Owner;
 use sui_types::parse_sui_struct_tag;
-use sui_types::query::TransactionFilter;
 use sui_types::temporary_store::TxCoins;
 use tokio::task::spawn_blocking;
 use tracing::{debug, trace};
@@ -205,6 +204,7 @@ pub struct IndexStore {
     tables: IndexStoreTables,
     caches: IndexStoreCaches,
     metrics: Arc<IndexStoreMetrics>,
+    max_type_length: u64,
 }
 
 // These functions are used to initialize the DB tables
@@ -256,7 +256,7 @@ fn coin_index_table_default_config() -> DBOptions {
 }
 
 impl IndexStore {
-    pub fn new(path: PathBuf, registry: &Registry) -> Self {
+    pub fn new(path: PathBuf, registry: &Registry, max_type_length: Option<u64>) -> Self {
         let tables =
             IndexStoreTables::open_tables_read_write(path, MetricConf::default(), None, None);
         let metrics = IndexStoreMetrics::new(registry);
@@ -279,6 +279,7 @@ impl IndexStore {
             next_sequence_number,
             caches,
             metrics: Arc::new(metrics),
+            max_type_length: max_type_length.unwrap_or(128),
         }
     }
 
@@ -316,7 +317,7 @@ impl IndexStore {
         let (input_coins, written_coins) = tx_coins.unwrap();
         // 1. Delete old owner if the object is deleted or transferred to a new owner,
         // by looking at `object_index_changes.deleted_owners`.
-        // Objects in `deleted_owners` must be owned by `Owner::Address` befoer the tx,
+        // Objects in `deleted_owners` must be owned by `Owner::Address` before the tx,
         // hence must appear in the tx inputs.
         // They also mut be coin type (see `AuthorityState::commit_certificate`).
         let coin_delete_keys = object_index_changes
@@ -353,7 +354,7 @@ impl IndexStore {
         // For a object to appear in `new_owners`, it must be owned by `Owner::Address` after the tx.
         // It also must not be deleted, hence appear in written_coins (see `AuthorityState::commit_certificate`)
         // It also must be a coin type (see `AuthorityState::commit_certificate`).
-        // Here the coin could be transfered to a new address, to simply have the metadata changed (digest, balance etc)
+        // Here the coin could be transferred to a new address, to simply have the metadata changed (digest, balance etc)
         // due to a successful or failed transaction.
         let coin_add_keys = object_index_changes
         .new_owners
@@ -796,26 +797,41 @@ impl IndexStore {
         limit: Option<usize>,
         reverse: bool,
     ) -> SuiResult<Vec<TransactionDigest>> {
+        // If we are passed a function with no module return a UserInputError
+        if function.is_some() && module.is_none() {
+            return Err(SuiError::UserInputError {
+                error: UserInputError::MoveFunctionInputError(
+                    "Cannot supply function without supplying module".to_string(),
+                ),
+            });
+        }
+
+        // We cannot have a cursor without filling out the other keys.
+        if cursor.is_some() && (module.is_none() || function.is_none()) {
+            return Err(SuiError::UserInputError {
+                error: UserInputError::MoveFunctionInputError(
+                    "Cannot supply cursor without supplying module and function".to_string(),
+                ),
+            });
+        }
+
         let cursor_val = cursor.unwrap_or(if reverse {
             TxSequenceNumber::MAX
         } else {
             TxSequenceNumber::MIN
         });
 
-        const MAX_STRING: &str =
-            "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
-
+        let max_string = "Z".repeat(self.max_type_length.try_into().unwrap());
         let module_val = module.clone().unwrap_or(if reverse {
-            MAX_STRING.to_string()
+            max_string.clone()
         } else {
             "".to_string()
         });
 
-        let function_val = function.clone().unwrap_or(if reverse {
-            MAX_STRING.to_string()
-        } else {
-            "".to_string()
-        });
+        let function_val =
+            function
+                .clone()
+                .unwrap_or(if reverse { max_string } else { "".to_string() });
 
         let key = (package, module_val, function_val, cursor_val);
         let iter = self.tables.transactions_by_move_function.iter();
@@ -1529,8 +1545,8 @@ mod tests {
     use std::env::temp_dir;
     use sui_types::base_types::{ObjectInfo, ObjectType, SuiAddress};
     use sui_types::digests::TransactionDigest;
+    use sui_types::effects::TransactionEvents;
     use sui_types::gas_coin::GAS;
-    use sui_types::messages::TransactionEvents;
     use sui_types::object;
     use sui_types::object::Owner;
     use sui_types::storage::WriteKind;
@@ -1544,7 +1560,7 @@ mod tests {
         // and verified from both db and cache.
         // This tests make sure we are invalidating entries in the cache and always reading latest
         // balance.
-        let index_store = IndexStore::new(temp_dir(), &Registry::default());
+        let index_store = IndexStore::new(temp_dir(), &Registry::default(), Some(128));
         let address: SuiAddress = AccountAddress::random().into();
         let mut written_objects = BTreeMap::new();
         let mut object_map = BTreeMap::new();

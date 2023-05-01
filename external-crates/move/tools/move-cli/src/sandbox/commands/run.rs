@@ -99,7 +99,7 @@ move run` must be applied to a module inside `storage/`",
     let res = match script_name_opt {
         Some(script_name) => {
             // script fun. parse module, extract script ID to pass to VM
-            let module = CompiledModule::deserialize(&bytecode)
+            let module = CompiledModule::deserialize_with_defaults(&bytecode)
                 .map_err(|e| anyhow!("Error deserializing module: {:?}", e))?;
             session.execute_entry_function(
                 &module.self_id(),

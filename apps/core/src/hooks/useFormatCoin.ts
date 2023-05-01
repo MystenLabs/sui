@@ -11,7 +11,7 @@ import { formatAmount } from '../utils/formatAmount';
 type FormattedCoin = [
     formattedBalance: string,
     coinSymbol: string,
-    queryResult: UseQueryResult
+    queryResult: UseQueryResult<CoinMetadata | null>
 ];
 
 export enum CoinFormat {
@@ -38,14 +38,14 @@ export function formatBalance(
     return formatAmount(bn);
 }
 
-export function useCoinDecimals(coinType?: string | null) {
+export function useCoinMetadata(coinType?: string | null) {
     const rpc = useRpcClient();
-    const queryResult = useQuery(
-        ['denomination', coinType],
+    return useQuery(
+        ['coin-metadata', coinType],
         async () => {
             if (!coinType) {
                 throw new Error(
-                    'Fetching coin denomination should be disabled when coin type is disabled.'
+                    'Fetching coin metadata should be disabled when coin type is disabled.'
                 );
             }
 
@@ -76,8 +76,6 @@ export function useCoinDecimals(coinType?: string | null) {
             cacheTime: 24 * 60 * 60 * 1000,
         }
     );
-
-    return [queryResult.data?.decimals || 0, queryResult] as const;
 }
 
 // TODO #1: This handles undefined values to make it easier to integrate with
@@ -87,21 +85,25 @@ export function useFormatCoin(
     coinType?: string | null,
     format: CoinFormat = CoinFormat.ROUNDED
 ): FormattedCoin {
-    const symbol = useMemo(
+    const fallbackSymbol = useMemo(
         () => (coinType ? Coin.getCoinSymbol(coinType) : ''),
         [coinType]
     );
 
-    const [decimals, queryResult] = useCoinDecimals(coinType);
-    const { isFetched } = queryResult;
+    const queryResult = useCoinMetadata(coinType);
+    const { isFetched, data } = queryResult;
 
     const formatted = useMemo(() => {
         if (typeof balance === 'undefined' || balance === null) return '';
 
         if (!isFetched) return '...';
 
-        return formatBalance(balance, decimals, format);
-    }, [decimals, isFetched, balance, format]);
+        return formatBalance(balance, data?.decimals ?? 0, format);
+    }, [data?.decimals, isFetched, balance, format]);
 
-    return [formatted, symbol, queryResult];
+    return [
+        formatted,
+        isFetched ? data?.symbol || fallbackSymbol : '',
+        queryResult,
+    ];
 }

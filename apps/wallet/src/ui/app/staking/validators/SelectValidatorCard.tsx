@@ -5,12 +5,12 @@ import {
     useGetRollingAverageApys,
     formatPercentageDisplay,
     calculateStakeShare,
+    useGetSystemState,
 } from '@mysten/core';
 import { ArrowRight16 } from '@mysten/icons';
 import cl from 'classnames';
 import { useState, useMemo } from 'react';
 
-import { useSystemState } from '../useSystemState';
 import { ValidatorListItem } from './ValidatorListItem';
 import { Button } from '_app/shared/ButtonUI';
 import { Content, Menu } from '_app/shared/bottom-menu-layout';
@@ -31,7 +31,7 @@ export function SelectValidatorCard() {
     );
     const [sortKey, setSortKey] = useState<SortKeys | null>(null);
     const [sortAscending, setSortAscending] = useState(true);
-    const { data, isLoading, isError } = useSystemState();
+    const { data, isLoading, isError } = useGetSystemState();
 
     const { data: rollingAverageApys } = useGetRollingAverageApys(
         data?.activeValidators.length || null

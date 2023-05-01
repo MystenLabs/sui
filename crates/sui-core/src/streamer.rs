@@ -20,14 +20,15 @@ type Subscribers<T, F> = Arc<RwLock<BTreeMap<String, (Sender<T>, F)>>>;
 
 /// The Streamer splits a mpsc channel into multiple mpsc channels using the subscriber's `Filter<T>` object.
 /// Data will be sent to the subscribers in parallel and the subscription will be dropped if it received a send error.
-pub struct Streamer<T, F: Filter<T>> {
+pub struct Streamer<T, S, F: Filter<T>> {
     streamer_queue: Sender<T>,
-    subscribers: Subscribers<T, F>,
+    subscribers: Subscribers<S, F>,
 }
 
-impl<T, F> Streamer<T, F>
+impl<T, S, F> Streamer<T, S, F>
 where
-    T: Clone + Debug + Send + Sync + 'static,
+    S: From<T> + Clone + Debug + Send + Sync + 'static,
+    T: Clone + Send + Sync + 'static,
     F: Filter<T> + Clone + Send + Sync + 'static + Clone,
 {
     pub fn spawn(buffer: usize) -> Self {
@@ -46,7 +47,7 @@ where
         streamer
     }
 
-    async fn send_to_all_subscribers(subscribers: Subscribers<T, F>, data: T) {
+    async fn send_to_all_subscribers(subscribers: Subscribers<S, F>, data: T) {
         for (id, (subscriber, filter)) in subscribers.read().clone() {
             if !(filter.matches(&data)) {
                 continue;
@@ -54,7 +55,7 @@ where
             let data = data.clone();
             let subscribers = subscribers.clone();
             spawn_monitored_task!(async move {
-                match subscriber.send(data).await {
+                match subscriber.send(data.into()).await {
                     Ok(_) => {
                         debug!("Sending Move event to subscriber [{id}].")
                     }
@@ -68,8 +69,8 @@ where
     }
 
     /// Subscribe to the data stream filtered by the filter object.
-    pub fn subscribe(&self, filter: F) -> impl Stream<Item = T> {
-        let (tx, rx) = mpsc::channel::<T>(EVENT_DISPATCH_BUFFER_SIZE);
+    pub fn subscribe(&self, filter: F) -> impl Stream<Item = S> {
+        let (tx, rx) = mpsc::channel::<S>(EVENT_DISPATCH_BUFFER_SIZE);
         self.subscribers
             .write()
             .insert(ObjectID::random().to_string(), (tx, filter));

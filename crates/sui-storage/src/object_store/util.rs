@@ -8,6 +8,7 @@ use object_store::path::Path;
 use object_store::DynObjectStore;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
+use tracing::warn;
 
 pub async fn put(
     location: &Path,
@@ -16,9 +17,14 @@ pub async fn put(
 ) -> Result<(), object_store::Error> {
     let backoff = backoff::ExponentialBackoff::default();
     retry(backoff, || async {
-        to.put(location, bytes.clone())
-            .await
-            .map_err(backoff::Error::transient)
+        if !bytes.is_empty() {
+            to.put(location, bytes.clone())
+                .await
+                .map_err(backoff::Error::transient)
+        } else {
+            warn!("Not copying empty file: {:?}", location);
+            Ok(())
+        }
     })
     .await?;
     Ok(())
@@ -31,7 +37,12 @@ pub async fn copy_file(
     to: Arc<DynObjectStore>,
 ) -> Result<(), object_store::Error> {
     let bytes = from.get(&path_in).await?.bytes().await?;
-    to.put(&path_out, bytes).await
+    if !bytes.is_empty() {
+        to.put(&path_out, bytes).await
+    } else {
+        warn!("Not copying empty file: {:?}", path_in);
+        Ok(())
+    }
 }
 
 pub async fn copy_files(

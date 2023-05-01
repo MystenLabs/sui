@@ -35,8 +35,8 @@ once_cell = "1.16"
 
 tap = "1.0"
 
-sui-adapter = { path = "../sui-adapter" }
 sui-core = { path = "../sui-core" }
+sui-storage = {path = "../sui-storage" }
 sui-types = { path = "../sui-types" }
 sui-json = { path = "../sui-json" }
 sui-open-rpc = { path = "../sui-open-rpc" }
@@ -48,6 +48,7 @@ mysten-metrics = { path = "../mysten-metrics" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 shared-crypto = { path = "../shared-crypto" }
 typed-store.workspace = true
+cached = "0.43.0"
 
 [dev-dependencies]
 sui-config = { path = "../sui-config" }

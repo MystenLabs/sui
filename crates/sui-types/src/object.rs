@@ -731,6 +731,14 @@ impl Object {
         }
     }
 
+    pub fn is_gas_coin(&self) -> bool {
+        if let Some(move_object) = self.data.try_as_move() {
+            move_object.type_().is_gas_coin()
+        } else {
+            false
+        }
+    }
+
     // TODO: use `MoveObj::get_balance_unsafe` instead.
     // context: https://github.com/MystenLabs/sui/pull/10679#discussion_r1165877816
     pub fn as_coin_maybe(&self) -> Option<Coin> {

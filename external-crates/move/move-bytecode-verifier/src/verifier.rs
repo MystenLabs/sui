@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! This module contains the public APIs supported by the bytecode verifier.
+use crate::meter::{DummyMeter, Meter};
 use crate::{
     ability_field_requirements, check_duplication::DuplicationChecker,
     code_unit_verifier::CodeUnitVerifier, constants, friends,
@@ -18,7 +19,8 @@ use move_binary_format::{
 };
 use std::time::Instant;
 
-pub const MAX_CONSTANT_VECTOR_LEN: u64 = 1024 * 1024;
+pub const DEFAULT_MAX_CONSTANT_VECTOR_LEN: u64 = 1024 * 1024;
+pub const DEFAULT_MAX_IDENTIFIER_LENGTH: u64 = 128;
 
 #[derive(Debug, Clone)]
 pub struct VerifierConfig {
@@ -39,6 +41,7 @@ pub struct VerifierConfig {
     pub max_basic_blocks_in_script: Option<usize>,
     pub max_per_fun_meter_units: Option<u128>,
     pub max_per_mod_meter_units: Option<u128>,
+    pub max_idenfitier_len: Option<u64>,
 }
 
 /// Helper for a "canonical" verification of a module.
@@ -51,20 +54,21 @@ pub struct VerifierConfig {
 /// call this umbrella function instead of each individual checkers to
 /// minimize the code locations that need to be updated should a new checker
 /// is introduced.
-pub fn verify_module(module: &CompiledModule) -> VMResult<()> {
-    verify_module_with_config(&VerifierConfig::default(), module)
+pub fn verify_module_unmetered(module: &CompiledModule) -> VMResult<()> {
+    verify_module_with_config_unmetered(&VerifierConfig::default(), module)
 }
 
 pub fn verify_module_with_config_for_test(
     name: &str,
     config: &VerifierConfig,
     module: &CompiledModule,
+    meter: &mut impl Meter,
 ) -> VMResult<()> {
     const MAX_MODULE_SIZE: usize = 65355;
     let mut bytes = vec![];
     module.serialize(&mut bytes).unwrap();
     let now = Instant::now();
-    let result = verify_module_with_config(config, module);
+    let result = verify_module_with_config_metered(config, module, meter);
     eprintln!(
         "--> {}: verification time: {:.3}ms, result: {}, size: {}kb",
         name,
@@ -86,7 +90,11 @@ pub fn verify_module_with_config_for_test(
     result
 }
 
-pub fn verify_module_with_config(config: &VerifierConfig, module: &CompiledModule) -> VMResult<()> {
+pub fn verify_module_with_config_metered(
+    config: &VerifierConfig,
+    module: &CompiledModule,
+    meter: &mut impl Meter,
+) -> VMResult<()> {
     BoundsChecker::verify_module(module).map_err(|e| {
         // We can't point the error at the module, because if bounds-checking
         // failed, we cannot safely index into module's handle to itself.
@@ -101,9 +109,16 @@ pub fn verify_module_with_config(config: &VerifierConfig, module: &CompiledModul
     ability_field_requirements::verify_module(module)?;
     RecursiveStructDefChecker::verify_module(module)?;
     InstantiationLoopChecker::verify_module(module)?;
-    CodeUnitVerifier::verify_module(config, module)?;
+    CodeUnitVerifier::verify_module(config, module, meter)?;
 
     script_signature::verify_module(module, no_additional_script_signature_checks)
+}
+
+pub fn verify_module_with_config_unmetered(
+    config: &VerifierConfig,
+    module: &CompiledModule,
+) -> VMResult<()> {
+    verify_module_with_config_metered(config, module, &mut DummyMeter)
 }
 
 /// Helper for a "canonical" verification of a script.
@@ -116,19 +131,30 @@ pub fn verify_module_with_config(config: &VerifierConfig, module: &CompiledModul
 /// call this umbrella function instead of each individual checkers to
 /// minimize the code locations that need to be updated should a new checker
 /// is introduced.
-pub fn verify_script(script: &CompiledScript) -> VMResult<()> {
-    verify_script_with_config(&VerifierConfig::default(), script)
+pub fn verify_script_unmetered(script: &CompiledScript) -> VMResult<()> {
+    verify_script_with_config_unmetered(&VerifierConfig::default(), script)
 }
 
-pub fn verify_script_with_config(config: &VerifierConfig, script: &CompiledScript) -> VMResult<()> {
+pub fn verify_script_with_config_metered(
+    config: &VerifierConfig,
+    script: &CompiledScript,
+    meter: &mut impl Meter,
+) -> VMResult<()> {
     BoundsChecker::verify_script(script).map_err(|e| e.finish(Location::Script))?;
     LimitsVerifier::verify_script(config, script)?;
     DuplicationChecker::verify_script(script)?;
     SignatureChecker::verify_script(script)?;
     InstructionConsistency::verify_script(script)?;
     constants::verify_script(script)?;
-    CodeUnitVerifier::verify_script(config, script)?;
+    CodeUnitVerifier::verify_script(config, script, meter)?;
     script_signature::verify_script(script, no_additional_script_signature_checks)
+}
+
+pub fn verify_script_with_config_unmetered(
+    config: &VerifierConfig,
+    script: &CompiledScript,
+) -> VMResult<()> {
+    verify_script_with_config_metered(config, script, &mut DummyMeter)
 }
 
 impl Default for VerifierConfig {
@@ -164,7 +190,8 @@ impl Default for VerifierConfig {
             /// with production, so all existing test cases apply it.
             max_per_fun_meter_units: Some(1000 * 8000),
             max_per_mod_meter_units: Some(1000 * 8000),
-            max_constant_vector_len: Some(MAX_CONSTANT_VECTOR_LEN),
+            max_constant_vector_len: Some(DEFAULT_MAX_CONSTANT_VECTOR_LEN),
+            max_idenfitier_len: Some(DEFAULT_MAX_IDENTIFIER_LENGTH),
         }
     }
 }

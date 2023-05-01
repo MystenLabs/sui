@@ -27,9 +27,11 @@ export const API_ENV_TO_INFO: Record<API_ENV, EnvInfo> = {
     [API_ENV.devNet]: { name: 'Sui Devnet', env: API_ENV.devNet },
     [API_ENV.customRPC]: { name: 'Custom RPC URL', env: API_ENV.customRPC },
     [API_ENV.testNet]: { name: 'Sui Testnet', env: API_ENV.testNet },
+    [API_ENV.mainnet]: { name: 'Sui Mainnet', env: API_ENV.mainnet },
 };
 
 export const ENV_TO_API: Record<API_ENV, Connection | null> = {
+    [API_ENV.customRPC]: null,
     [API_ENV.local]: new Connection({
         fullnode: process.env.API_ENDPOINT_LOCAL_FULLNODE || '',
         faucet: process.env.API_ENDPOINT_LOCAL_FAUCET || '',
@@ -38,10 +40,12 @@ export const ENV_TO_API: Record<API_ENV, Connection | null> = {
         fullnode: process.env.API_ENDPOINT_DEV_NET_FULLNODE || '',
         faucet: process.env.API_ENDPOINT_DEV_NET_FAUCET || '',
     }),
-    [API_ENV.customRPC]: null,
     [API_ENV.testNet]: new Connection({
         fullnode: process.env.API_ENDPOINT_TEST_NET_FULLNODE || '',
         faucet: process.env.API_ENDPOINT_TEST_NET_FAUCET || '',
+    }),
+    [API_ENV.mainnet]: new Connection({
+        fullnode: process.env.API_ENDPOINT_MAINNET_FULLNODE || '',
     }),
 };
 
@@ -75,6 +79,10 @@ export const generateActiveNetworkList = (): NetworkTypes[] => {
 
     if (!growthbook.isOn(FEATURES.USE_TEST_NET_ENDPOINT)) {
         excludedNetworks.push(API_ENV.testNet);
+    }
+
+    if (!growthbook.isOn(FEATURES.USE_MAINNET_ENDPOINT)) {
+        excludedNetworks.push(API_ENV.mainnet);
     }
 
     return Object.values(API_ENV).filter(

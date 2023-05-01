@@ -13,7 +13,7 @@ interface EpochStatsProps {
 
 export function EpochStats({ label, children }: EpochStatsProps) {
     return (
-        <Card spacing="lg">
+        <Card spacing="lg" rounded="2xl">
             <div className="flex flex-col gap-8">
                 {label && (
                     <Heading color="steel-darker" variant="heading4/semibold">

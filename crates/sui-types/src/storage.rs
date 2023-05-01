@@ -6,12 +6,10 @@ use crate::committee::{Committee, EpochId};
 use crate::digests::{
     CheckpointContentsDigest, CheckpointDigest, TransactionEffectsDigest, TransactionEventsDigest,
 };
+use crate::effects::{TransactionEffects, TransactionEvents};
 use crate::error::SuiError;
 use crate::message_envelope::Message;
-use crate::messages::{
-    SenderSignedData, TransactionDataAPI, TransactionEffects, TransactionEvents,
-    VerifiedTransaction,
-};
+use crate::messages::{SenderSignedData, TransactionDataAPI, VerifiedTransaction};
 use crate::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, FullCheckpointContents, VerifiedCheckpoint,
     VerifiedCheckpointContents,
@@ -174,7 +172,8 @@ pub fn get_module_by_id<S: BackingPackageStore>(
     store: S,
     id: &ModuleId,
 ) -> anyhow::Result<Option<CompiledModule>, SuiError> {
-    Ok(get_module(store, id)?.map(|bytes| CompiledModule::deserialize(&bytes).unwrap()))
+    Ok(get_module(store, id)?
+        .map(|bytes| CompiledModule::deserialize_with_defaults(&bytes).unwrap()))
 }
 
 pub trait ParentSync {
@@ -618,7 +617,7 @@ impl ReadStore for SharedInMemoryStore {
             return Ok(contents);
         }
 
-        // Otherwise gather it from the indivdual components.
+        // Otherwise gather it from the individual components.
         inner
             .get_checkpoint_contents(digest)
             .map(|contents| {

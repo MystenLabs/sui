@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useGetOwnedObjects } from '@mysten/core';
+
 import OwnedObject from './OwnedObject';
 
-import { useGetOwnedObjects } from '~/hooks/useGetOwnedObjects';
 import { Heading } from '~/ui/Heading';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Pagination, useCursorPagination } from '~/ui/Pagination';
@@ -34,7 +35,7 @@ export function OwnedObjects({ id }: { id: string }) {
                 <LoadingSpinner />
             ) : (
                 <div className="flex max-h-80 flex-col overflow-auto">
-                    <div className="flex flex-wrap">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                         {data?.data.map((obj) => (
                             <OwnedObject obj={obj} key={obj?.data?.objectId} />
                         ))}

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFormatCoin, CoinFormat } from '@mysten/core';
-import { ArrowRight12 } from '@mysten/icons';
 import {
     normalizeSuiAddress,
     type SuiObjectResponse,
@@ -14,10 +13,8 @@ import {
     getSuiObjectData,
     SUI_TYPE_ARG,
 } from '@mysten/sui.js';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 
-import DisplayBox from '../../../components/displaybox/DisplayBox';
-import { parseImageURL, extractName } from '../../../utils/objectUtils';
 import { trimStdLibPrefix, genFileTypeMsg } from '../../../utils/stringUtils';
 import { LinkOrTextDescriptionItem } from '../LinkOrTextDescriptionItem';
 
@@ -25,12 +22,16 @@ import { DynamicFieldsCard } from '~/components/Object/DynamicFieldsCard';
 import { ObjectFieldsCard } from '~/components/Object/ObjectFieldsCard';
 import TransactionBlocksForAddress from '~/components/TransactionBlocksForAddress/TransactionBlocksForAddress';
 import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
-import { Heading } from '~/ui/Heading';
 import { AddressLink, ObjectLink, TransactionLink } from '~/ui/InternalLink';
 import { Link } from '~/ui/Link';
+import { ObjectDetails } from '~/ui/ObjectDetails';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { Text } from '~/ui/Text';
-import { parseObjectType } from '~/utils/objectUtils';
+import {
+    extractName,
+    parseImageURL,
+    parseObjectType,
+} from '~/utils/objectUtils';
 
 export function TokenView({ data }: { data: SuiObjectResponse }) {
     const display = getObjectDisplay(data)?.data;
@@ -45,6 +46,7 @@ export function TokenView({ data }: { data: SuiObjectResponse }) {
         SUI_TYPE_ARG,
         CoinFormat.FULL
     );
+
     const [fileType, setFileType] = useState<undefined | string>(undefined);
 
     useEffect(() => {
@@ -57,12 +59,6 @@ export function TokenView({ data }: { data: SuiObjectResponse }) {
             controller.abort();
         };
     }, [imgUrl]);
-
-    const [isImageFullScreen, setImageFullScreen] = useState<boolean>(false);
-
-    const handlePreviewClick = useCallback(() => {
-        setImageFullScreen(true);
-    }, []);
 
     const genhref = (objType: string) => {
         const metadataarr = objType.split('::');
@@ -195,52 +191,18 @@ export function TokenView({ data }: { data: SuiObjectResponse }) {
                                 )}
                             </div>
                             {imgUrl !== '' && (
-                                <div className="border-0 border-t border-solid border-gray-45 pt-6 md:basis-1/3 md:border-t-0 md:pl-10">
+                                <div className="min-w-0 border-0 border-t border-solid border-gray-45 pt-6 md:basis-1/3 md:border-t-0 md:pl-10">
                                     <div className="flex flex-row flex-nowrap gap-5">
-                                        <div className="flex w-40 justify-center md:w-50">
-                                            <DisplayBox
-                                                display={imgUrl}
-                                                caption={
-                                                    name ||
-                                                    trimStdLibPrefix(objectType)
-                                                }
-                                                fileInfo={fileType}
-                                                modalImage={[
-                                                    isImageFullScreen,
-                                                    setImageFullScreen,
-                                                ]}
-                                            />
-                                        </div>
-                                        <div className="flex flex-col justify-center gap-2.5">
-                                            {name && (
-                                                <Heading
-                                                    variant="heading4/semibold"
-                                                    color="gray-90"
-                                                >
-                                                    {name}
-                                                </Heading>
-                                            )}
-                                            {fileType && (
-                                                <Text
-                                                    variant="bodySmall/medium"
-                                                    color="steel-darker"
-                                                >
-                                                    {fileType}
-                                                </Text>
-                                            )}
-                                            <div>
-                                                <Link
-                                                    size="captionSmall"
-                                                    uppercase
-                                                    onClick={handlePreviewClick}
-                                                    after={
-                                                        <ArrowRight12 className="-rotate-45" />
-                                                    }
-                                                >
-                                                    Preview
-                                                </Link>
-                                            </div>
-                                        </div>
+                                        <ObjectDetails
+                                            image={imgUrl}
+                                            name={
+                                                name ||
+                                                display?.description ||
+                                                trimStdLibPrefix(objectType)
+                                            }
+                                            type={fileType ?? ''}
+                                            variant="large"
+                                        />
                                     </div>
                                 </div>
                             )}

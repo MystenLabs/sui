@@ -27,6 +27,7 @@ use move_vm_types::loaded_data::runtime_types::{StructType, Type};
 use serde::{de::DeserializeSeed, Deserialize};
 use sui_move_natives::object_runtime::ObjectRuntime;
 use sui_protocol_config::ProtocolConfig;
+use sui_types::execution_status::{CommandArgumentError, PackageUpgradeError};
 use sui_types::{
     base_types::{
         MoveObjectType, ObjectID, SuiAddress, TxContext, TxContextKind, RESOLVED_ASCII_STR,
@@ -37,10 +38,7 @@ use sui_types::{
     event::Event,
     gas::{SuiGasStatus, SuiGasStatusAPI},
     id::{RESOLVED_SUI_ID, UID},
-    messages::{
-        Argument, Command, CommandArgumentError, PackageUpgradeError, ProgrammableMoveCall,
-        ProgrammableTransaction,
-    },
+    messages::{Argument, Command, ProgrammableMoveCall, ProgrammableTransaction},
     metrics::LimitsMetrics,
     move_package::{
         normalize_deserialized_modules, MovePackage, TypeOrigin, UpgradeCap, UpgradePolicy,
@@ -677,7 +675,7 @@ fn check_compatibility<'a, S: StorageView>(
         ));
     };
 
-    let Ok(current_normalized) = existing_package.normalize(context.protocol_config.move_binary_format_version()) else {
+    let Ok(current_normalized) = existing_package.normalize(context.protocol_config.move_binary_format_version(), context.protocol_config.no_extraneous_module_bytes()) else {
         invariant_violation!("Tried to normalize modules in existing package but failed")
     };
 
@@ -809,9 +807,10 @@ fn deserialize_modules<S: StorageView, Mode: ExecutionMode>(
     let modules = module_bytes
         .iter()
         .map(|b| {
-            CompiledModule::deserialize_with_max_version(
+            CompiledModule::deserialize_with_config(
                 b,
                 context.protocol_config.move_binary_format_version(),
+                context.protocol_config.no_extraneous_module_bytes(),
             )
             .map_err(|e| e.finish(Location::Undefined))
         })
@@ -855,7 +854,7 @@ fn publish_and_verify_modules<S: StorageView>(
     for module in modules {
         // Run Sui bytecode verifier, which runs some additional checks that assume the Move
         // bytecode verifier has passed.
-        sui_verifier::verifier::verify_module(context.protocol_config, module, &BTreeMap::new())?;
+        sui_verifier::verifier::sui_verify_module_unmetered(context.protocol_config, module, &BTreeMap::new())?;
     }
 
     Ok(())
@@ -926,7 +925,7 @@ struct LoadedFunctionInfo {
     signature: LoadedFunctionInstantiation,
     /// Object or type information for the return values
     return_value_kinds: Vec<ValueKind>,
-    /// Definitio index of the function
+    /// Definition index of the function
     index: FunctionDefinitionIndex,
     /// The length of the function used for setting error information, or 0 if native
     last_instr: CodeOffset,

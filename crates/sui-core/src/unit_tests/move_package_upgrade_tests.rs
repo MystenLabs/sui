@@ -7,11 +7,7 @@ use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
     crypto::{get_key_pair, AccountKeyPair},
-    messages::{
-        Argument, CommandArgumentError, ExecutionFailureStatus, ObjectArg, PackageUpgradeError,
-        ProgrammableTransaction, TransactionEffects, TransactionEffectsV1,
-        TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-    },
+    messages::{Argument, ObjectArg, ProgrammableTransaction, TEST_ONLY_GAS_UNIT_FOR_PUBLISH},
     move_package::UpgradePolicy,
     object::{Object, Owner},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
@@ -20,6 +16,10 @@ use sui_types::{
 };
 
 use std::{collections::BTreeSet, path::PathBuf, str::FromStr, sync::Arc};
+use sui_types::effects::{TransactionEffects, TransactionEffectsV1};
+use sui_types::execution_status::{
+    CommandArgumentError, ExecutionFailureStatus, PackageUpgradeError,
+};
 
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::{
@@ -269,8 +269,12 @@ async fn test_upgrade_package_happy_path() {
         .get_package(&runner.package.0)
         .unwrap()
         .unwrap();
+    let config = ProtocolConfig::get_for_max_version();
     let normalized_modules = package
-        .normalize(ProtocolConfig::get_for_max_version().move_binary_format_version())
+        .normalize(
+            config.move_binary_format_version(),
+            config.no_extraneous_module_bytes(),
+        )
         .unwrap();
     assert!(normalized_modules.contains_key("new_module"));
     assert!(normalized_modules["new_module"]

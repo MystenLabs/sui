@@ -3,14 +3,12 @@
 
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
-use move_core_types::language_storage::{StructTag, TypeTag};
+use move_core_types::language_storage::TypeTag;
 use std::path::PathBuf;
-use sui::client_commands::WalletContext;
-use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_core::test_utils::dummy_transaction_effects;
-use sui_json_rpc_types::SuiObjectResponse;
 use sui_keys::keystore::AccountKeystore;
 use sui_move_build::BuildConfig;
+use sui_sdk::wallet_context::WalletContext;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
 use sui_types::base_types::{ObjectID, SequenceNumber};
@@ -19,9 +17,8 @@ use sui_types::crypto::{
     deterministic_random_account_key, get_key_pair, AccountKeyPair, AuthorityKeyPair,
     AuthorityPublicKeyBytes, AuthoritySignInfo, KeypairTraits, Signature, Signer,
 };
-use sui_types::gas_coin::GasCoin;
+use sui_types::effects::SignedTransactionEffects;
 use sui_types::messages::CallArg;
-use sui_types::messages::SignedTransactionEffects;
 use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_GENERIC;
 use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_TRANSFER;
 use sui_types::messages::{
@@ -29,105 +26,12 @@ use sui_types::messages::{
     VerifiedSignedTransaction, VerifiedTransaction,
 };
 use sui_types::object::{generate_test_gas_objects, Object};
-use sui_types::parse_sui_struct_tag;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
     SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
     SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
-
-/// A helper function to get all accounts and their owned GasCoin
-/// with a WalletContext
-pub async fn get_account_and_gas_coins(
-    context: &mut WalletContext,
-) -> Result<Vec<(SuiAddress, Vec<GasCoin>)>, anyhow::Error> {
-    let mut res = Vec::with_capacity(context.config.keystore.addresses().len());
-    let accounts = context.config.keystore.addresses();
-    for address in accounts {
-        let result = SuiClientCommands::Gas {
-            address: Some(address),
-        }
-        .execute(context)
-        .await?;
-        if let SuiClientCommandResult::Gas(coins) = result {
-            res.push((address, coins))
-        } else {
-            panic!(
-                "Failed to get owned objects result for address {address}: {:?}",
-                result
-            )
-        }
-    }
-    Ok(res)
-}
-
-/// get one available gas ObjectRef
-pub async fn get_gas_object_with_wallet_context(
-    context: &WalletContext,
-    address: &SuiAddress,
-) -> Option<ObjectRef> {
-    let mut res = get_gas_objects_with_wallet_context(context, address).await;
-    if res.is_empty() {
-        None
-    } else {
-        Some(res.swap_remove(0).into_object().unwrap().object_ref())
-    }
-}
-
-/// get one available gas ObjectRef
-pub async fn get_sui_gas_object_with_wallet_context(
-    context: &WalletContext,
-    address: &SuiAddress,
-) -> Vec<(StructTag, ObjectRef)> {
-    let res = get_gas_objects_with_wallet_context(context, address).await;
-    res.iter()
-        .map(|obj| {
-            let obj_data = obj.clone().into_object().unwrap();
-            (
-                parse_sui_struct_tag(&obj_data.type_.clone().unwrap().to_string()).unwrap(),
-                obj_data.object_ref(),
-            )
-        })
-        .collect()
-}
-
-pub async fn get_gas_objects_with_wallet_context(
-    context: &WalletContext,
-    address: &SuiAddress,
-) -> Vec<SuiObjectResponse> {
-    context
-        .gas_objects(*address)
-        .await
-        .unwrap()
-        .into_iter()
-        .map(|(_val, object_data)| SuiObjectResponse::new_with_data(object_data))
-        .collect()
-}
-
-/// A helper function to get all accounts and their owned gas objects
-/// with a WalletContext.
-pub async fn get_account_and_gas_objects(
-    context: &WalletContext,
-) -> Vec<(SuiAddress, Vec<SuiObjectResponse>)> {
-    let owned_gas_objects = futures::future::join_all(
-        context
-            .config
-            .keystore
-            .addresses()
-            .iter()
-            .map(|account| get_gas_objects_with_wallet_context(context, account)),
-    )
-    .await;
-    context
-        .config
-        .keystore
-        .addresses()
-        .iter()
-        .zip(owned_gas_objects.into_iter())
-        .map(|(address, objects)| (*address, objects))
-        .collect::<Vec<_>>()
-}
 
 /// A helper function to make Transactions with controlled accounts in WalletContext.
 /// Particularly, the wallet needs to own gas objects for transactions.
@@ -143,29 +47,26 @@ pub async fn make_transactions_with_wallet_context(
     max_txn_num: usize,
 ) -> Vec<VerifiedTransaction> {
     let recipient = get_key_pair::<AuthorityKeyPair>().0;
-    let accounts_and_objs = get_account_and_gas_objects(context).await;
+    let accounts_and_objs = context.get_all_accounts_and_gas_objects().await.unwrap();
     let mut res = Vec::with_capacity(max_txn_num);
 
     let gas_price = context.get_reference_gas_price().await.unwrap();
-    for (address, objs) in &accounts_and_objs {
+    for (address, objs) in accounts_and_objs {
         for obj in objs {
             if res.len() >= max_txn_num {
                 return res;
             }
             let data = TransactionData::new_transfer_sui(
                 recipient,
-                *address,
+                address,
                 Some(2),
-                obj.clone()
-                    .into_object()
-                    .expect("Gas coin could not be converted to object ref.")
-                    .object_ref(),
+                obj,
                 gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
                 gas_price,
             );
             let tx = to_sender_signed_transaction(
                 data,
-                context.config.keystore.get_key(address).unwrap(),
+                context.config.keystore.get_key(&address).unwrap(),
             );
             res.push(tx);
         }
@@ -177,24 +78,11 @@ pub async fn make_staking_transaction_with_wallet_context(
     context: &mut WalletContext,
     validator_address: SuiAddress,
 ) -> VerifiedTransaction {
-    let accounts_and_objs = get_account_and_gas_objects(context).await;
+    let accounts_and_objs = context.get_all_accounts_and_gas_objects().await.unwrap();
     let sender = accounts_and_objs[0].0;
-    let gas_object = accounts_and_objs[0].1[0]
-        .clone()
-        .into_object()
-        .expect("Gas coin could not be converted to object ref.")
-        .object_ref();
-    let stake_object = accounts_and_objs[0].1[1]
-        .clone()
-        .into_object()
-        .expect("Stake coin could not be converted to object ref.")
-        .object_ref();
-    let client = context.get_client().await.unwrap();
-    let gas_price = client
-        .governance_api()
-        .get_reference_gas_price()
-        .await
-        .unwrap();
+    let gas_object = accounts_and_objs[0].1[0];
+    let stake_object = accounts_and_objs[0].1[1];
+    let gas_price = context.get_reference_gas_price().await.unwrap();
 
     make_staking_transaction(
         gas_object,
@@ -215,8 +103,10 @@ pub async fn make_counter_increment_transaction_with_wallet_context(
 ) -> VerifiedTransaction {
     let gas_object_ref = match gas_object_ref {
         Some(obj_ref) => obj_ref,
-        None => get_gas_object_with_wallet_context(context, &sender)
+        None => context
+            .get_one_gas_object_owned_by_address(sender)
             .await
+            .unwrap()
             .unwrap(),
     };
     let rgp = context.get_reference_gas_price().await.unwrap();

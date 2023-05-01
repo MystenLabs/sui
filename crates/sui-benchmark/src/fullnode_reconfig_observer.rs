@@ -23,7 +23,7 @@ pub struct FullNodeReconfigObserver {
     pub fullnode_client: SuiClient,
     committee_store: Arc<CommitteeStore>,
     safe_client_metrics_base: SafeClientMetricsBase,
-    auth_agg_metrics: AuthAggMetrics,
+    auth_agg_metrics: Arc<AuthAggMetrics>,
 }
 
 impl FullNodeReconfigObserver {
@@ -31,7 +31,7 @@ impl FullNodeReconfigObserver {
         fullnode_rpc_url: &str,
         committee_store: Arc<CommitteeStore>,
         safe_client_metrics_base: SafeClientMetricsBase,
-        auth_agg_metrics: AuthAggMetrics,
+        auth_agg_metrics: Arc<AuthAggMetrics>,
     ) -> Self {
         Self {
             fullnode_client: SuiClientBuilder::default()

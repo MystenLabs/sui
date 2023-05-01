@@ -2,7 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{base_types::*, committee::Committee, error::*, event::Event};
+use super::{base_types::*, committee::Committee, error::*};
 use crate::certificate_proof::CertificateProof;
 use crate::committee::{EpochId, ProtocolVersion};
 use crate::crypto::{
@@ -10,8 +10,11 @@ use crate::crypto::{
     DefaultHash, Ed25519SuiSignature, EmptySignInfo, Signature, Signer, SuiSignatureInner,
     ToFromBytes,
 };
-use crate::digests::{CertificateDigest, SenderSignedDataDigest, TransactionEventsDigest};
-use crate::gas::GasCostSummary;
+use crate::digests::{CertificateDigest, SenderSignedDataDigest};
+use crate::effects::{
+    CertifiedTransactionEffects, SignedTransactionEffects, TransactionEffects, TransactionEvents,
+    VerifiedCertifiedTransactionEffects, VerifiedSignedTransactionEffects,
+};
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::messages_checkpoint::{
     CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointTimestamp,
@@ -19,7 +22,6 @@ use crate::messages_checkpoint::{
 use crate::object::{MoveObject, Object, ObjectFormatOptions, Owner};
 use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use crate::signature::{AuthenticatorTrait, GenericSignature};
-use crate::storage::{DeleteKind, WriteKind};
 use crate::{
     SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_OBJECT_ID,
     SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
@@ -28,10 +30,8 @@ use byteorder::{BigEndian, ReadBytesExt};
 use enum_dispatch::enum_dispatch;
 use fastcrypto::{encoding::Base64, hash::HashFunction};
 use itertools::Either;
-use move_binary_format::file_format::{CodeOffset, TypeParameterIndex};
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
-use move_core_types::language_storage::ModuleId;
 use move_core_types::{identifier::Identifier, language_storage::TypeTag, value::MoveStructLayout};
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
@@ -47,7 +47,6 @@ use std::{
 use strum::IntoStaticStr;
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use tap::Pipe;
-use thiserror::Error;
 use tracing::trace;
 
 pub const TEST_ONLY_GAS_UNIT_FOR_TRANSFER: u64 = 2_000_000;
@@ -61,23 +60,6 @@ pub const TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN: u64 = 1_000_000;
 pub const GAS_PRICE_FOR_SYSTEM_TX: u64 = 1;
 
 const BLOCKED_MOVE_FUNCTIONS: [(ObjectID, &str, &str); 0] = [];
-
-// Since `std::mem::size_of` may not be stable across platforms, we use rough constants
-// We need these for estimating effects sizes
-// Approximate size of `ObjectRef` type in bytes
-pub const APPROX_SIZE_OF_OBJECT_REF: usize = 80;
-// Approximate size of `ExecutionStatus` type in bytes
-pub const APPROX_SIZE_OF_EXECUTION_STATUS: usize = 120;
-// Approximate size of `EpochId` type in bytes
-pub const APPROX_SIZE_OF_EPOCH_ID: usize = 10;
-// Approximate size of `GasCostSummary` type in bytes
-pub const APPROX_SIZE_OF_GAS_COST_SUMMARY: usize = 40;
-// Approximate size of `Option<TransactionEventsDigest>` type in bytes
-pub const APPROX_SIZE_OF_OPT_TX_EVENTS_DIGEST: usize = 40;
-// Approximate size of `TransactionDigest` type in bytes
-pub const APPROX_SIZE_OF_TX_DIGEST: usize = 40;
-// Approximate size of `Owner` type in bytes
-pub const APPROX_SIZE_OF_OWNER: usize = 48;
 
 #[cfg(test)]
 #[path = "unit_tests/messages_tests.rs"]
@@ -2169,6 +2151,32 @@ pub struct HandleCertificateResponse {
     pub events: TransactionEvents,
 }
 
+impl From<HandleCertificateResponseV2> for HandleCertificateResponse {
+    fn from(v2: HandleCertificateResponseV2) -> Self {
+        Self {
+            signed_effects: v2.signed_effects,
+            events: v2.events,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct HandleCertificateResponseV2 {
+    pub signed_effects: SignedTransactionEffects,
+    pub events: TransactionEvents,
+    /// The validator may return some of the input objects that were used by this transaction, in
+    /// order to facilitate lower latency local execution for the full node client that requested
+    /// the transaction execution.
+    ///
+    /// Typically this list contains only the version (if any) of the Clock object that was used by the
+    /// transaction - without returning it here, the client has no choice but to wait for
+    /// checkpoint sync to provide the input clock.
+    ///
+    /// The validator may return other objects via thist list in the future. However, this
+    /// is only intended for small objects.
+    pub fastpath_input_objects: Vec<Object>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SubmitCertificateResponse {
     /// If transaction is already executed, return same result as handle_certificate
@@ -2181,324 +2189,7 @@ pub struct VerifiedHandleCertificateResponse {
     pub events: TransactionEvents,
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
-pub enum ExecutionStatus {
-    Success,
-    /// Gas used in the failed case, and the error.
-    Failure {
-        /// The error
-        error: ExecutionFailureStatus,
-        /// Which command the error occurred
-        command: Option<CommandIndex>,
-    },
-}
-
 pub type CommandIndex = usize;
-
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error)]
-pub enum ExecutionFailureStatus {
-    //
-    // General transaction errors
-    //
-    #[error("Insufficient Gas.")]
-    InsufficientGas,
-    #[error("Invalid Gas Object. Possibly not address-owned or possibly not a SUI coin.")]
-    InvalidGasObject,
-    #[error("INVARIANT VIOLATION.")]
-    InvariantViolation,
-    #[error("Attempted to used feature that is not supported yet")]
-    FeatureNotYetSupported,
-    #[error(
-        "Move object with size {object_size} is larger \
-        than the maximum object size {max_object_size}"
-    )]
-    MoveObjectTooBig {
-        object_size: u64,
-        max_object_size: u64,
-    },
-    #[error(
-        "Move package with size {object_size} is larger than the \
-        maximum object size {max_object_size}"
-    )]
-    MovePackageTooBig {
-        object_size: u64,
-        max_object_size: u64,
-    },
-    #[error("Circular Object Ownership, including object {object}.")]
-    CircularObjectOwnership { object: ObjectID },
-
-    //
-    // Coin errors
-    //
-    #[error("Insufficient coin balance for operation.")]
-    InsufficientCoinBalance,
-    #[error("The coin balance overflows u64")]
-    CoinBalanceOverflow,
-
-    //
-    // Publish/Upgrade errors
-    //
-    #[error(
-        "Publish Error, Non-zero Address. \
-        The modules in the package must have their self-addresses set to zero."
-    )]
-    PublishErrorNonZeroAddress,
-
-    #[error(
-        "Sui Move Bytecode Verification Error. \
-        Please run the Sui Move Verifier for more information."
-    )]
-    SuiMoveVerificationError,
-
-    //
-    // Errors from the Move VM
-    //
-    // Indicates an error from a non-abort instruction
-    #[error(
-        "Move Primitive Runtime Error. Location: {0}. \
-        Arithmetic error, stack overflow, max value depth, etc."
-    )]
-    MovePrimitiveRuntimeError(MoveLocationOpt),
-    #[error("Move Runtime Abort. Location: {0}, Abort Code: {1}")]
-    MoveAbort(MoveLocation, u64),
-    #[error(
-        "Move Bytecode Verification Error. \
-        Please run the Bytecode Verifier for more information."
-    )]
-    VMVerificationOrDeserializationError,
-    #[error("MOVE VM INVARIANT VIOLATION.")]
-    VMInvariantViolation,
-
-    //
-    // Programmable Transaction Errors
-    //
-    #[error("Function Not Found.")]
-    FunctionNotFound,
-    #[error(
-        "Arity mismatch for Move function. \
-        The number of arguments does not match the number of parameters"
-    )]
-    ArityMismatch,
-    #[error(
-        "Type arity mismatch for Move function. \
-        Mismatch between the number of actual versus expected type arguments."
-    )]
-    TypeArityMismatch,
-    #[error("Non Entry Function Invoked. Move Call must start with an entry function")]
-    NonEntryFunctionInvoked,
-    #[error("Invalid command argument at {arg_idx}. {kind}")]
-    CommandArgumentError {
-        arg_idx: u16,
-        kind: CommandArgumentError,
-    },
-    #[error("Error for type argument at index {argument_idx}: {kind}")]
-    TypeArgumentError {
-        argument_idx: TypeParameterIndex,
-        kind: TypeArgumentError,
-    },
-    #[error(
-        "Unused result without the drop ability. \
-        Command result {result_idx}, return value {secondary_idx}"
-    )]
-    UnusedValueWithoutDrop { result_idx: u16, secondary_idx: u16 },
-    #[error(
-        "Invalid public Move function signature. \
-        Unsupported return type for return value {idx}"
-    )]
-    InvalidPublicFunctionReturnType { idx: u16 },
-    #[error("Invalid Transfer Object, object does not have public transfer.")]
-    InvalidTransferObject,
-
-    //
-    // Post-execution errors
-    //
-    // Indicates the effects from the transaction are too large
-    #[error(
-        "Effects of size {current_size} bytes too large. \
-    Limit is {max_size} bytes"
-    )]
-    EffectsTooLarge { current_size: u64, max_size: u64 },
-
-    #[error(
-        "Publish/Upgrade Error, Missing dependency. \
-         A dependency of a published or upgraded package has not been assigned an on-chain \
-         address."
-    )]
-    PublishUpgradeMissingDependency,
-
-    #[error(
-        "Publish/Upgrade Error, Dependency downgrade. \
-         Indirect (transitive) dependency of published or upgraded package has been assigned an \
-         on-chain version that is less than the version required by one of the package's \
-         transitive dependencies."
-    )]
-    PublishUpgradeDependencyDowngrade,
-
-    #[error("Invalid package upgrade. {upgrade_error}")]
-    PackageUpgradeError { upgrade_error: PackageUpgradeError },
-
-    // Indicates the transaction tried to write objects too large to storage
-    #[error(
-        "Written objects of {current_size} bytes too large. \
-    Limit is {max_size} bytes"
-    )]
-    WrittenObjectsTooLarge { current_size: u64, max_size: u64 },
-    // NOTE: if you want to add a new enum,
-    // please add it at the end for Rust SDK backward compatibility.
-}
-
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash)]
-pub struct MoveLocation {
-    pub module: ModuleId,
-    pub function: u16,
-    pub instruction: CodeOffset,
-    pub function_name: Option<String>,
-}
-
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash)]
-pub struct MoveLocationOpt(pub Option<MoveLocation>);
-
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash, Error)]
-pub enum CommandArgumentError {
-    #[error("The type of the value does not match the expected type")]
-    TypeMismatch,
-    #[error("The argument cannot be deserialized into a value of the specified type")]
-    InvalidBCSBytes,
-    #[error("The argument cannot be instantiated from raw bytes")]
-    InvalidUsageOfPureArg,
-    #[error(
-        "Invalid argument to private entry function. \
-        These functions cannot take arguments from other Move functions"
-    )]
-    InvalidArgumentToPrivateEntryFunction,
-    #[error("Out of bounds access to input or result vector {idx}")]
-    IndexOutOfBounds { idx: u16 },
-    #[error(
-        "Out of bounds secondary access to result vector \
-        {result_idx} at secondary index {secondary_idx}"
-    )]
-    SecondaryIndexOutOfBounds { result_idx: u16, secondary_idx: u16 },
-    #[error(
-        "Invalid usage of result {result_idx}, \
-        expected a single result but found either no return values or multiple."
-    )]
-    InvalidResultArity { result_idx: u16 },
-    #[error(
-        "Invalid taking of the Gas coin. \
-        It can only be used by-value with TransferObjects"
-    )]
-    InvalidGasCoinUsage,
-    #[error(
-        "Invalid usage of value. \
-        Mutably borrowed values require unique usage. \
-        Immutably borrowed values cannot be taken or borrowed mutably. \
-        Taken values cannot be used again."
-    )]
-    InvalidValueUsage,
-    #[error("Immutable and shared objects cannot be passed by-value.")]
-    InvalidObjectByValue,
-    #[error("Immutable objects cannot be passed by mutable reference, &mut.")]
-    InvalidObjectByMutRef,
-}
-
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash, Error)]
-pub enum PackageUpgradeError {
-    #[error("Unable to fetch package at {package_id}")]
-    UnableToFetchPackage { package_id: ObjectID },
-    #[error("Object {object_id} is not a package")]
-    NotAPackage { object_id: ObjectID },
-    #[error("New package is incompatible with previous version")]
-    IncompatibleUpgrade,
-    #[error("Digest in upgrade ticket and computed digest disagree")]
-    DigestDoesNotMatch { digest: Vec<u8> },
-    #[error("Upgrade policy {policy} is not a valid upgrade policy")]
-    UnknownUpgradePolicy { policy: u8 },
-    #[error("Package ID {package_id} does not match package ID in upgrade ticket {ticket_id}")]
-    PackageIDDoesNotMatch {
-        package_id: ObjectID,
-        ticket_id: ObjectID,
-    },
-}
-
-#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash, Error)]
-pub enum TypeArgumentError {
-    #[error("A type was not found in the module specified.")]
-    TypeNotFound,
-    #[error("A type provided did not match the specified constraints.")]
-    ConstraintNotSatisfied,
-}
-
-impl ExecutionFailureStatus {
-    pub fn command_argument_error(kind: CommandArgumentError, arg_idx: u16) -> Self {
-        Self::CommandArgumentError { arg_idx, kind }
-    }
-}
-
-impl Display for MoveLocationOpt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match &self.0 {
-            None => write!(f, "UNKNOWN"),
-            Some(l) => write!(f, "{l}"),
-        }
-    }
-}
-
-impl Display for MoveLocation {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let Self {
-            module,
-            function,
-            instruction,
-            function_name,
-        } = self;
-        if let Some(fname) = function_name {
-            write!(
-                f,
-                "{module}::{fname} (function index {function}) at offset {instruction}"
-            )
-        } else {
-            write!(
-                f,
-                "{module} in function definition {function} at offset {instruction}"
-            )
-        }
-    }
-}
-
-impl ExecutionStatus {
-    pub fn new_failure(
-        error: ExecutionFailureStatus,
-        command: Option<CommandIndex>,
-    ) -> ExecutionStatus {
-        ExecutionStatus::Failure { error, command }
-    }
-
-    pub fn is_ok(&self) -> bool {
-        matches!(self, ExecutionStatus::Success { .. })
-    }
-
-    pub fn is_err(&self) -> bool {
-        matches!(self, ExecutionStatus::Failure { .. })
-    }
-
-    pub fn unwrap(&self) {
-        match self {
-            ExecutionStatus::Success => {}
-            ExecutionStatus::Failure { .. } => {
-                panic!("Unable to unwrap() on {:?}", self);
-            }
-        }
-    }
-
-    pub fn unwrap_err(self) -> (ExecutionFailureStatus, Option<CommandIndex>) {
-        match self {
-            ExecutionStatus::Success { .. } => {
-                panic!("Unable to unwrap() on {:?}", self);
-            }
-            ExecutionStatus::Failure { error, command } => (error, command),
-        }
-    }
-}
 
 pub trait VersionedProtocolMessage {
     /// Return version of message. Some messages depend on their enclosing messages to know the
@@ -2510,473 +2201,6 @@ pub trait VersionedProtocolMessage {
     /// Check that the version of the message is the correct one to use at this protocol version.
     fn check_version_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult;
 }
-
-/// The response from processing a transaction or a certified transaction
-#[enum_dispatch(TransactionEffectsAPI)]
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
-pub enum TransactionEffects {
-    V1(TransactionEffectsV1),
-}
-
-impl VersionedProtocolMessage for TransactionEffects {
-    fn message_version(&self) -> Option<u64> {
-        Some(match self {
-            Self::V1(_) => 1,
-        })
-    }
-
-    fn check_version_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
-        let (message_version, supported) = match self {
-            Self::V1(_) => (1, SupportedProtocolVersions::new_for_message(1, u64::MAX)),
-            // Suppose we add V2 at protocol version 7, then we must change this to:
-            // Self::V1 => (1, SupportedProtocolVersions::new_for_message(1, u64::MAX)),
-            // Self::V2 => (2, SupportedProtocolVersions::new_for_message(7, u64::MAX)),
-        };
-
-        if supported.is_version_supported(protocol_config.version) {
-            Ok(())
-        } else {
-            Err(SuiError::WrongMessageVersion {
-                error: format!(
-                    "TransactionEffectsV{} is not supported at {:?}. (Supported range is {:?}",
-                    message_version, protocol_config.version, supported
-                ),
-            })
-        }
-    }
-}
-
-/// The response from processing a transaction or a certified transaction
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
-pub struct TransactionEffectsV1 {
-    /// The status of the execution
-    pub status: ExecutionStatus,
-    /// The epoch when this transaction was executed.
-    pub executed_epoch: EpochId,
-    pub gas_used: GasCostSummary,
-    /// The version that every modified (mutated or deleted) object had before it was modified by
-    /// this transaction.
-    pub modified_at_versions: Vec<(ObjectID, SequenceNumber)>,
-    /// The object references of the shared objects used in this transaction. Empty if no shared objects were used.
-    pub shared_objects: Vec<ObjectRef>,
-    /// The transaction digest
-    pub transaction_digest: TransactionDigest,
-
-    // TODO: All the SequenceNumbers in the ObjectRefs below equal the same value (the lamport
-    // timestamp of the transaction).  Consider factoring this out into one place in the effects.
-    /// ObjectRef and owner of new objects created.
-    pub created: Vec<(ObjectRef, Owner)>,
-    /// ObjectRef and owner of mutated objects, including gas object.
-    pub mutated: Vec<(ObjectRef, Owner)>,
-    /// ObjectRef and owner of objects that are unwrapped in this transaction.
-    /// Unwrapped objects are objects that were wrapped into other objects in the past,
-    /// and just got extracted out.
-    pub unwrapped: Vec<(ObjectRef, Owner)>,
-    /// Object Refs of objects now deleted (the old refs).
-    pub deleted: Vec<ObjectRef>,
-    /// Object refs of objects previously wrapped in other objects but now deleted.
-    pub unwrapped_then_deleted: Vec<ObjectRef>,
-    /// Object refs of objects now wrapped in other objects.
-    pub wrapped: Vec<ObjectRef>,
-    /// The updated gas object reference. Have a dedicated field for convenient access.
-    /// It's also included in mutated.
-    pub gas_object: (ObjectRef, Owner),
-    /// The digest of the events emitted during execution,
-    /// can be None if the transaction does not emit any event.
-    pub events_digest: Option<TransactionEventsDigest>,
-    /// The set of transaction digests this transaction depends on.
-    pub dependencies: Vec<TransactionDigest>,
-}
-
-impl TransactionEffects {
-    /// Creates a TransactionEffects message from the results of execution, choosing the correct
-    /// format for the current protocol version.
-    pub fn new_from_execution(
-        _protocol_version: ProtocolVersion,
-        status: ExecutionStatus,
-        executed_epoch: EpochId,
-        gas_used: GasCostSummary,
-        modified_at_versions: Vec<(ObjectID, SequenceNumber)>,
-        shared_objects: Vec<ObjectRef>,
-        transaction_digest: TransactionDigest,
-        created: Vec<(ObjectRef, Owner)>,
-        mutated: Vec<(ObjectRef, Owner)>,
-        unwrapped: Vec<(ObjectRef, Owner)>,
-        deleted: Vec<ObjectRef>,
-        unwrapped_then_deleted: Vec<ObjectRef>,
-        wrapped: Vec<ObjectRef>,
-        gas_object: (ObjectRef, Owner),
-        events_digest: Option<TransactionEventsDigest>,
-        dependencies: Vec<TransactionDigest>,
-    ) -> Self {
-        // TODO: when there are multiple versions, use protocol_version to construct the
-        // appropriate one.
-
-        Self::V1(TransactionEffectsV1 {
-            status,
-            executed_epoch,
-            gas_used,
-            modified_at_versions,
-            shared_objects,
-            transaction_digest,
-            created,
-            mutated,
-            unwrapped,
-            deleted,
-            unwrapped_then_deleted,
-            wrapped,
-            gas_object,
-            events_digest,
-            dependencies,
-        })
-    }
-
-    pub fn execution_digests(&self) -> ExecutionDigests {
-        ExecutionDigests {
-            transaction: *self.transaction_digest(),
-            effects: self.digest(),
-        }
-    }
-
-    pub fn estimate_effects_size_upperbound(
-        num_writes: usize,
-        num_mutables: usize,
-        num_deletes: usize,
-        num_deps: usize,
-    ) -> usize {
-        let fixed_sizes = APPROX_SIZE_OF_EXECUTION_STATUS
-            + APPROX_SIZE_OF_EPOCH_ID
-            + APPROX_SIZE_OF_GAS_COST_SUMMARY
-            + APPROX_SIZE_OF_OPT_TX_EVENTS_DIGEST;
-
-        // Each write or delete contributes at roughly this amount because:
-        // Each write can be a mutation which can show up in `mutated` and `modified_at_versions`
-        // `num_delete` is added for padding
-        let approx_change_entry_size = 1_000
-            + (APPROX_SIZE_OF_OWNER + APPROX_SIZE_OF_OBJECT_REF) * num_writes
-            + (APPROX_SIZE_OF_OBJECT_REF * num_mutables)
-            + (APPROX_SIZE_OF_OBJECT_REF * num_deletes);
-
-        let deps_size = 1_000 + APPROX_SIZE_OF_TX_DIGEST * num_deps;
-
-        fixed_sizes + approx_change_entry_size + deps_size
-    }
-}
-
-// testing helpers.
-impl TransactionEffects {
-    pub fn new_with_tx(tx: &Transaction) -> TransactionEffects {
-        Self::new_with_tx_and_gas(
-            tx,
-            (
-                random_object_ref(),
-                Owner::AddressOwner(tx.data().intent_message().value.sender()),
-            ),
-        )
-    }
-
-    pub fn new_with_tx_and_gas(tx: &Transaction, gas_object: (ObjectRef, Owner)) -> Self {
-        TransactionEffects::V1(TransactionEffectsV1 {
-            transaction_digest: *tx.digest(),
-            gas_object,
-            ..Default::default()
-        })
-    }
-}
-
-#[enum_dispatch]
-pub trait TransactionEffectsAPI {
-    fn status(&self) -> &ExecutionStatus;
-    fn into_status(self) -> ExecutionStatus;
-    fn executed_epoch(&self) -> EpochId;
-    fn modified_at_versions(&self) -> &[(ObjectID, SequenceNumber)];
-    fn shared_objects(&self) -> &[ObjectRef];
-    fn created(&self) -> &[(ObjectRef, Owner)];
-    fn mutated(&self) -> &[(ObjectRef, Owner)];
-    fn unwrapped(&self) -> &[(ObjectRef, Owner)];
-    fn deleted(&self) -> &[ObjectRef];
-    fn unwrapped_then_deleted(&self) -> &[ObjectRef];
-    fn wrapped(&self) -> &[ObjectRef];
-    fn gas_object(&self) -> &(ObjectRef, Owner);
-    fn events_digest(&self) -> Option<&TransactionEventsDigest>;
-    fn dependencies(&self) -> &[TransactionDigest];
-    // All changed objects include created, mutated and unwrapped objects,
-    // they do NOT include wrapped and deleted.
-    fn all_changed_objects(&self) -> Vec<(&ObjectRef, &Owner, WriteKind)>;
-
-    fn all_deleted(&self) -> Vec<(&ObjectRef, DeleteKind)>;
-
-    fn transaction_digest(&self) -> &TransactionDigest;
-
-    fn mutated_excluding_gas(&self) -> Vec<&(ObjectRef, Owner)>;
-
-    fn gas_cost_summary(&self) -> &GasCostSummary;
-
-    fn summary_for_debug(&self) -> TransactionEffectsDebugSummary;
-
-    // All of these should be #[cfg(test)], but they are used by tests in other crates, and
-    // dependencies don't get built with cfg(test) set as far as I can tell.
-    fn status_mut_for_testing(&mut self) -> &mut ExecutionStatus;
-    fn gas_cost_summary_mut_for_testing(&mut self) -> &mut GasCostSummary;
-    fn transaction_digest_mut_for_testing(&mut self) -> &mut TransactionDigest;
-    fn dependencies_mut_for_testing(&mut self) -> &mut Vec<TransactionDigest>;
-    fn shared_objects_mut_for_testing(&mut self) -> &mut Vec<ObjectRef>;
-    fn modified_at_versions_mut_for_testing(&mut self) -> &mut Vec<(ObjectID, SequenceNumber)>;
-}
-
-impl TransactionEffectsAPI for TransactionEffectsV1 {
-    fn status(&self) -> &ExecutionStatus {
-        &self.status
-    }
-    fn into_status(self) -> ExecutionStatus {
-        self.status
-    }
-    fn modified_at_versions(&self) -> &[(ObjectID, SequenceNumber)] {
-        &self.modified_at_versions
-    }
-    fn shared_objects(&self) -> &[ObjectRef] {
-        &self.shared_objects
-    }
-    fn created(&self) -> &[(ObjectRef, Owner)] {
-        &self.created
-    }
-    fn mutated(&self) -> &[(ObjectRef, Owner)] {
-        &self.mutated
-    }
-    fn unwrapped(&self) -> &[(ObjectRef, Owner)] {
-        &self.unwrapped
-    }
-    fn deleted(&self) -> &[ObjectRef] {
-        &self.deleted
-    }
-    fn unwrapped_then_deleted(&self) -> &[ObjectRef] {
-        &self.unwrapped_then_deleted
-    }
-    fn wrapped(&self) -> &[ObjectRef] {
-        &self.wrapped
-    }
-    fn gas_object(&self) -> &(ObjectRef, Owner) {
-        &self.gas_object
-    }
-    fn events_digest(&self) -> Option<&TransactionEventsDigest> {
-        self.events_digest.as_ref()
-    }
-    fn dependencies(&self) -> &[TransactionDigest] {
-        &self.dependencies
-    }
-
-    fn executed_epoch(&self) -> EpochId {
-        self.executed_epoch
-    }
-
-    /// Return an iterator that iterates through all changed objects, including mutated,
-    /// created and unwrapped objects. In other words, all objects that still exist
-    /// in the object state after this transaction.
-    /// It doesn't include deleted/wrapped objects.
-    fn all_changed_objects(&self) -> Vec<(&ObjectRef, &Owner, WriteKind)> {
-        self.mutated
-            .iter()
-            .map(|(r, o)| (r, o, WriteKind::Mutate))
-            .chain(self.created.iter().map(|(r, o)| (r, o, WriteKind::Create)))
-            .chain(
-                self.unwrapped
-                    .iter()
-                    .map(|(r, o)| (r, o, WriteKind::Unwrap)),
-            )
-            .collect()
-    }
-
-    /// Return an iterator that iterates through all deleted objects, including deleted,
-    /// unwrapped_then_deleted, and wrapped objects. In other words, all objects that
-    /// do not exist in the object state after this transaction.
-    fn all_deleted(&self) -> Vec<(&ObjectRef, DeleteKind)> {
-        self.deleted
-            .iter()
-            .map(|r| (r, DeleteKind::Normal))
-            .chain(
-                self.unwrapped_then_deleted
-                    .iter()
-                    .map(|r| (r, DeleteKind::UnwrapThenDelete)),
-            )
-            .chain(self.wrapped.iter().map(|r| (r, DeleteKind::Wrap)))
-            .collect()
-    }
-
-    /// Return an iterator of mutated objects, but excluding the gas object.
-    fn mutated_excluding_gas(&self) -> Vec<&(ObjectRef, Owner)> {
-        self.mutated
-            .iter()
-            .filter(|o| *o != &self.gas_object)
-            .collect()
-    }
-
-    fn transaction_digest(&self) -> &TransactionDigest {
-        &self.transaction_digest
-    }
-
-    fn gas_cost_summary(&self) -> &GasCostSummary {
-        &self.gas_used
-    }
-
-    fn summary_for_debug(&self) -> TransactionEffectsDebugSummary {
-        TransactionEffectsDebugSummary {
-            bcs_size: bcs::serialized_size(self).unwrap(),
-            status: self.status.clone(),
-            gas_used: self.gas_used.clone(),
-            transaction_digest: self.transaction_digest,
-            created_object_count: self.created.len(),
-            mutated_object_count: self.mutated.len(),
-            unwrapped_object_count: self.unwrapped.len(),
-            deleted_object_count: self.deleted.len(),
-            wrapped_object_count: self.wrapped.len(),
-            dependency_count: self.dependencies.len(),
-        }
-    }
-
-    fn status_mut_for_testing(&mut self) -> &mut ExecutionStatus {
-        &mut self.status
-    }
-    fn gas_cost_summary_mut_for_testing(&mut self) -> &mut GasCostSummary {
-        &mut self.gas_used
-    }
-    fn transaction_digest_mut_for_testing(&mut self) -> &mut TransactionDigest {
-        &mut self.transaction_digest
-    }
-    fn dependencies_mut_for_testing(&mut self) -> &mut Vec<TransactionDigest> {
-        &mut self.dependencies
-    }
-    fn shared_objects_mut_for_testing(&mut self) -> &mut Vec<ObjectRef> {
-        &mut self.shared_objects
-    }
-    fn modified_at_versions_mut_for_testing(&mut self) -> &mut Vec<(ObjectID, SequenceNumber)> {
-        &mut self.modified_at_versions
-    }
-}
-
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Default)]
-pub struct TransactionEvents {
-    pub data: Vec<Event>,
-}
-
-impl TransactionEvents {
-    pub fn digest(&self) -> TransactionEventsDigest {
-        TransactionEventsDigest::new(default_hash(self))
-    }
-}
-
-impl Message for TransactionEffects {
-    type DigestType = TransactionEffectsDigest;
-    const SCOPE: IntentScope = IntentScope::TransactionEffects;
-
-    fn digest(&self) -> Self::DigestType {
-        TransactionEffectsDigest::new(default_hash(self))
-    }
-
-    fn verify(&self, _sig_epoch: Option<EpochId>) -> SuiResult {
-        Ok(())
-    }
-}
-
-impl Display for TransactionEffectsV1 {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let mut writer = String::new();
-        writeln!(writer, "Status : {:?}", self.status)?;
-        if !self.created.is_empty() {
-            writeln!(writer, "Created Objects:")?;
-            for ((id, _, _), owner) in &self.created {
-                writeln!(writer, "  - ID: {} , Owner: {}", id, owner)?;
-            }
-        }
-        if !self.mutated.is_empty() {
-            writeln!(writer, "Mutated Objects:")?;
-            for ((id, _, _), owner) in &self.mutated {
-                writeln!(writer, "  - ID: {} , Owner: {}", id, owner)?;
-            }
-        }
-        if !self.deleted.is_empty() {
-            writeln!(writer, "Deleted Objects:")?;
-            for (id, _, _) in &self.deleted {
-                writeln!(writer, "  - ID: {}", id)?;
-            }
-        }
-        if !self.wrapped.is_empty() {
-            writeln!(writer, "Wrapped Objects:")?;
-            for (id, _, _) in &self.wrapped {
-                writeln!(writer, "  - ID: {}", id)?;
-            }
-        }
-        if !self.unwrapped.is_empty() {
-            writeln!(writer, "Unwrapped Objects:")?;
-            for ((id, _, _), owner) in &self.unwrapped {
-                writeln!(writer, "  - ID: {} , Owner: {}", id, owner)?;
-            }
-        }
-        write!(f, "{}", writer)
-    }
-}
-
-impl Default for TransactionEffects {
-    fn default() -> Self {
-        TransactionEffects::V1(Default::default())
-    }
-}
-
-impl Default for TransactionEffectsV1 {
-    fn default() -> Self {
-        TransactionEffectsV1 {
-            status: ExecutionStatus::Success,
-            executed_epoch: 0,
-            gas_used: GasCostSummary {
-                computation_cost: 0,
-                storage_cost: 0,
-                storage_rebate: 0,
-                non_refundable_storage_fee: 0,
-            },
-            modified_at_versions: Vec::new(),
-            shared_objects: Vec::new(),
-            transaction_digest: TransactionDigest::random(),
-            created: Vec::new(),
-            mutated: Vec::new(),
-            unwrapped: Vec::new(),
-            deleted: Vec::new(),
-            unwrapped_then_deleted: Vec::new(),
-            wrapped: Vec::new(),
-            gas_object: (
-                random_object_ref(),
-                Owner::AddressOwner(SuiAddress::default()),
-            ),
-            events_digest: None,
-            dependencies: Vec::new(),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct TransactionEffectsDebugSummary {
-    /// Size of bcs serialized byets of the effects.
-    pub bcs_size: usize,
-    pub status: ExecutionStatus,
-    pub gas_used: GasCostSummary,
-    pub transaction_digest: TransactionDigest,
-    pub created_object_count: usize,
-    pub mutated_object_count: usize,
-    pub unwrapped_object_count: usize,
-    pub deleted_object_count: usize,
-    pub wrapped_object_count: usize,
-    pub dependency_count: usize,
-    // TODO: Add deleted_and_unwrapped_object_count and event digest.
-}
-
-pub type TransactionEffectsEnvelope<S> = Envelope<TransactionEffects, S>;
-pub type UnsignedTransactionEffects = TransactionEffectsEnvelope<EmptySignInfo>;
-pub type SignedTransactionEffects = TransactionEffectsEnvelope<AuthoritySignInfo>;
-pub type CertifiedTransactionEffects = TransactionEffectsEnvelope<AuthorityStrongQuorumSignInfo>;
-
-pub type TrustedSignedTransactionEffects = TrustedEnvelope<TransactionEffects, AuthoritySignInfo>;
-pub type VerifiedTransactionEffectsEnvelope<S> = VerifiedEnvelope<TransactionEffects, S>;
-pub type VerifiedSignedTransactionEffects = VerifiedTransactionEffectsEnvelope<AuthoritySignInfo>;
-pub type VerifiedCertifiedTransactionEffects =
-    VerifiedTransactionEffectsEnvelope<AuthorityStrongQuorumSignInfo>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, PartialOrd, Ord)]
 pub enum InputObjectKind {
@@ -3428,6 +2652,7 @@ pub struct QuorumDriverRequest {
 pub struct QuorumDriverResponse {
     pub effects_cert: VerifiedCertifiedTransactionEffects,
     pub events: TransactionEvents,
+    pub objects: Vec<Object>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
