@@ -1,28 +1,75 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useOnScreen, useGetOwnedObjects } from '@mysten/core';
 import { getObjectDisplay, type SuiObjectData } from '@mysten/sui.js';
+import { useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import Alert from '_components/alert';
 import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
+import LoadingSpinner from '_components/loading/LoadingIndicator';
 import { NFTDisplayCard } from '_components/nft-display';
-import { useObjectsOwnedByAddress, useGetNFTObjects } from '_hooks';
 import PageTitle from '_src/ui/app/shared/PageTitle';
+
+// Set the default limit to 10
+const DEFAULT_NFT_LIMIT = 10;
+const MAX_FETCH_LIMIT = 50;
 
 function NftsPage() {
     const accountAddress = useActiveAddress();
-    const { data, isLoading, error, isError } = useGetNFTObjects(
-        accountAddress
-        //{ options: { showType: true, showDisplay: true } }
+    const {
+        data,
+        isLoading,
+        error,
+        isError,
+        isFetchingNextPage,
+        hasNextPage,
+        fetchNextPage,
+        isInitialLoading,
+    } = useGetOwnedObjects(
+        accountAddress,
+        {
+            MatchNone: [{ StructType: '0x2::coin::Coin' }],
+        },
+        MAX_FETCH_LIMIT
     );
-    console.log('data', data);
-    const nfts = data?.data.map(({ data }) => data as SuiObjectData);
-    /*const nfts2 = data?.data
-        ?.filter((resp) => !!getObjectDisplay(resp).data)
-        .map(({ data }) => data as SuiObjectData);*/
+    const observerElem = useRef<HTMLDivElement | null>(null);
+    const { isIntersecting } = useOnScreen(observerElem);
+    const isSpinnerVisible = isFetchingNextPage && hasNextPage;
+
+    const nfts =
+        data?.pages
+            .flatMap((page) => page.data)
+            .filter((resp) => !!getObjectDisplay(resp).data)
+            .map(({ data }) => data as SuiObjectData) || [];
+
+    useEffect(() => {
+        if (
+            nfts.length < DEFAULT_NFT_LIMIT &&
+            hasNextPage &&
+            !isFetchingNextPage
+        ) {
+            fetchNextPage();
+        }
+    }, [nfts.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+    useEffect(() => {
+        if (isIntersecting && hasNextPage && !isFetchingNextPage) {
+            fetchNextPage();
+        }
+    }, [isIntersecting, fetchNextPage, hasNextPage, isFetchingNextPage]);
+
+    if (isInitialLoading) {
+        return (
+            <div className="mt-1 flex w-full justify-center">
+                <LoadingSpinner />
+            </div>
+        );
+    }
+
     return (
         <div className="flex flex-1 flex-col flex-nowrap items-center gap-4">
             <PageTitle title="NFTs" />
@@ -56,6 +103,13 @@ function NftsPage() {
                                 </ErrorBoundary>
                             </Link>
                         ))}
+                        <div ref={observerElem}>
+                            {isSpinnerVisible ? (
+                                <div className="mt-1 flex w-full justify-center">
+                                    <LoadingSpinner />
+                                </div>
+                            ) : null}
+                        </div>
                     </div>
                 ) : (
                     <div className="flex flex-1 items-center self-center text-caption font-semibold text-steel-darker">

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {useOnScreen} from "@mysten/core";
+import { useOnScreen } from '@mysten/core';
 import { useEffect, useRef } from 'react';
 
 import CoinItem from './CoinItem';

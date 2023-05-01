@@ -20,7 +20,6 @@ export { useGetAllBalances } from './useGetAllBalances';
 export { useObjectsOwnedByAddress } from './useObjectsOwnedByAddress';
 export { useOwnedNFT } from './useOwnedNFT';
 export { useGetCoins } from './useGetCoins';
-export { useGetNFTObjects } from './useGetNFTObjects';
 export * from './useSigner';
 export * from './useTransactionData';
 export * from './useActiveAddress';
