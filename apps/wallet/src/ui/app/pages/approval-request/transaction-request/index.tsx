@@ -81,7 +81,7 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
                 address={addressForTransaction}
                 approveLoading={isLoading || isConfirmationVisible}
             >
-                <PageMainLayoutTitle title="Improve Transaction" />
+                <PageMainLayoutTitle title="Approve Transaction" />
                 <div>
                     <TransactionSummary
                         isLoading={isDryRunLoading}
