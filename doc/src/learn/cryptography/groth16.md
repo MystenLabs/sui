@@ -100,7 +100,7 @@ proof.a.serialize_compressed(&mut proof_points_bytes).unwrap();
 proof.b.serialize_compressed(&mut proof_points_bytes).unwrap();
 proof.c.serialize_compressed(&mut proof_points_bytes).unwrap();
 ```
-Below is an example smart contract which prepares a verification key and verify the corresponding proof. Note that this example uses the BN254 elliptic curve construction which is given as the first parameter to the `prepare_verifying_key` and `verify_groth16_proof` functions.
+Below is an example smart contract which prepares a verification key and verify the corresponding proof. Note that this example uses the BN254 elliptic curve construction which is given as the first parameter to the `prepare_verifying_key` and `verify_groth16_proof` functions, so if the BLS12-381 construction should be used instead, the `bls12381` function should be called instead.
 ```move
 module test::groth16_test {
     use sui::groth16;
