@@ -5,11 +5,10 @@ import {
     CoinFormat,
     formatBalance,
     formatDate,
-    useCoinDecimals,
     useGetReferenceGasPrice,
     useRpcClient,
 } from '@mysten/core';
-import { SUI_TYPE_ARG } from '@mysten/sui.js';
+import { SUI_DECIMALS } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 import { ParentSize } from '@visx/responsive';
 import clsx from 'clsx';
@@ -89,11 +88,10 @@ function useGasPriceAverage(totalEpochs: number) {
 }
 
 function useGasPriceFormat(gasPrice: bigint | null, unit: 'MIST' | 'SUI') {
-    const [suiDecimals] = useCoinDecimals(SUI_TYPE_ARG);
     return gasPrice !== null
         ? formatBalance(
               gasPrice,
-              unit === 'MIST' ? 0 : suiDecimals,
+              unit === 'MIST' ? 0 : SUI_DECIMALS,
               CoinFormat.FULL
           )
         : null;

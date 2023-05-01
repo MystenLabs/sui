@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-    useCoinDecimals,
+    useCoinMetadata,
     useFormatCoin,
     useGetTimeBeforeEpochNumber,
 } from '@mysten/core';
@@ -36,7 +36,8 @@ function StakeForm({
 }: StakeFromProps) {
     const { values, setFieldValue } = useFormikContext<FormValues>();
 
-    const [decimals] = useCoinDecimals(coinType);
+    const { data: metadata } = useCoinMetadata(coinType);
+    const decimals = metadata?.decimals ?? 0;
     const [maxToken, symbol, queryResult] = useFormatCoin(
         coinBalance,
         coinType
