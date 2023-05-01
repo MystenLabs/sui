@@ -27,7 +27,7 @@ function Home() {
     const isHomePageRedesignEnabled = useFeatureIsOn(
         'explorer-home-page-redesign'
     );
-    const isSuiTokenCardEnabled = true //useFeatureIsOn('explorer-sui-token-card');
+    const isSuiTokenCardEnabled = useFeatureIsOn('explorer-sui-token-card');
 
     return isHomePageRedesignEnabled ? (
         <div
