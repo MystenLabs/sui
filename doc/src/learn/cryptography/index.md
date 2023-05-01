@@ -10,3 +10,4 @@ Learn about cryptography in Sui:
 * [Sui Signatures and Crypto Agility](../cryptography/sui-signatures.md)
 * [Verifiable Random Function](../cryptography/ecvrf.md)
 
+* [Sui On-Chain Signatures Verification in Move](../cryptography/sui-move-signatures.md)
