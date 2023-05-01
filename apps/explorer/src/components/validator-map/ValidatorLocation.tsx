@@ -2,44 +2,46 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useCallback } from 'react';
-import { ValidatorWithLocation, type NodeLocation } from './types';
+
+import { type ValidatorWithLocation } from './types';
 
 interface Props {
-    node: ValidatorWithLocation | null;
+    validator: ValidatorWithLocation | null;
     projection: (loc: [number, number]) => [number, number] | null;
     onMouseOver(event: React.MouseEvent, countryCode?: string): void;
     onMouseOut(): void;
 }
 
 // NOTE: This should be tweaked based on the average number of nodes in a location:
-const NODE_MULTIPLIER = 20;
-const MIN_NODE_SIZE = 0.5;
-const MAX_NODE_SIZE = 7;
+const VALIDATOR_MULTIPLIER = 20;
+const MIN_VALIDATOR_SIZE = 0.5;
+const MAX_VALIDATOR_SIZE = 7;
 
-export function NodesLocation({ node, projection, onMouseOut, onMouseOver }: Props) {
-    if(!node){ 
+export function ValidatorLocation({ validator, projection, onMouseOut, onMouseOver }: Props) {
+    const handleMouseOver = useCallback(
+        (e: React.MouseEvent) => {
+            validator && onMouseOver(e, validator.suiAddress);
+        },
+        [validator?.suiAddress, onMouseOver]
+    );
+
+    if(!validator){ 
         return null
     }
+
     const position = projection(
-        node.loc
+        validator.loc
             .split(',')
             .reverse()
             .map((geo) => parseFloat(geo)) as [number, number]
     );
 
     const r = Math.max(
-        Math.min(Math.floor(parseInt(node.votingPower) / NODE_MULTIPLIER), MAX_NODE_SIZE),
-        MIN_NODE_SIZE
+        Math.min(Math.floor(parseInt(validator.votingPower) / VALIDATOR_MULTIPLIER), MAX_VALIDATOR_SIZE),
+        MIN_VALIDATOR_SIZE
     );
 
     if (!position) return null;
-
-    const handleMouseOver = useCallback(
-        (e: React.MouseEvent) => {
-            onMouseOver(e, node.suiAddress);
-        },
-        [node.votingPower, onMouseOver]
-    );
 
     return (
         <g>

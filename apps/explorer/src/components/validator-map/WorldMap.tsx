@@ -5,10 +5,11 @@ import { Mercator } from '@visx/geo';
 import React, { memo } from 'react';
 import * as topojson from 'topojson-client';
 
-import { MapFeature } from './MapFeature';
-import { NodesLocation } from './NodesLocation';
 import world from '../node-map/topology.json';
-import { ValidatorWithLocation, type Feature, type NodeLocation } from './types';
+import { type Feature } from '../node-map/types';
+import { MapFeature } from './MapFeature';
+import { ValidatorLocation } from './ValidatorLocation';
+import { type ValidatorWithLocation } from './types';
 
 // @ts-expect-error: The types of `world` here aren't aligned but they are correct
 const land = topojson.feature(world, world.objects.countries) as unknown as {
@@ -16,7 +17,7 @@ const land = topojson.feature(world, world.objects.countries) as unknown as {
     features: Feature[];
 };
 
-// We hide Antarctica because there will not be nodes there:
+// We hide Antarctica because there will not be validators there:
 const HIDDEN_REGIONS = ['Antarctica'];
 const filteredLand = land.features.filter(
     (feature) => !HIDDEN_REGIONS.includes(feature.properties.name)
@@ -25,7 +26,7 @@ const filteredLand = land.features.filter(
 interface Props {
     width: number;
     height: number;
-    nodes?: (ValidatorWithLocation | null)[];
+    validators?: (ValidatorWithLocation | null)[];
     onMouseOver(event: React.MouseEvent, countryCode?: string): void;
     onMouseOut(): void;
 }
@@ -35,7 +36,7 @@ function BaseWorldMap({
     onMouseOut,
     width,
     height,
-    nodes,
+    validators,
 }: Props) {
     const centerX = width / 2;
     const centerY = height / 2;
@@ -50,23 +51,20 @@ function BaseWorldMap({
                 {({ features, projection }) => (
                     <g>
                         <g>
-                            {features.map(({ feature, path }, index) => (
+                            {features.map(({ path }, index) => (
                                 <MapFeature
                                     key={index}
-                                    onMouseOut={onMouseOut}
-                                    onMouseOver={onMouseOver}
-                                    feature={feature}
                                     path={path}
                                 />
                             ))}
                         </g>
 
-                        {nodes?.map((node, index) => (
-                            <NodesLocation
+                        {validators?.map((validator, index) => (
+                            <ValidatorLocation
                                 onMouseOut={onMouseOut}
                                 onMouseOver={onMouseOver}
                                 key={index}
-                                node={node}
+                                validator={validator}
                                 projection={projection}
                             />
                         ))}

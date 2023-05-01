@@ -7,29 +7,18 @@ import { TooltipWithBounds, useTooltip } from '@visx/tooltip';
 import React, { type ReactNode, useCallback, useMemo } from 'react';
 
 import { WorldMap } from './WorldMap';
-import { ValidatorWithLocation, type NodeLocation } from './types';
+import { type ValidatorWithLocation } from './types';
 
 import { Card } from '~/ui/Card';
-import { DateFilter, useDateFilterState } from '~/ui/DateFilter';
 import { Heading } from '~/ui/Heading';
 import { Placeholder } from '~/ui/Placeholder';
 import { Text } from '~/ui/Text';
-import { useGetSystemState } from '@mysten/core';
-import { SuiValidatorSummary, Validators } from '@mysten/sui.js';
 
 const HOST = 'https://imgmod.sui.io';
 
-type Validators = Record<string, ValidatorWithLocation>;
+type ValidatorsMap = Record<string, ValidatorWithLocation>;
 
-const regionNamesInEnglish = new Intl.DisplayNames('en', { type: 'region' });
 const numberFormatter = new Intl.NumberFormat('en');
-
-const DATE_FILTER_TO_WINDOW = {
-    D: '1d',
-    W: '1w',
-    M: '1m',
-    ALL: 'all',
-};
 
 function NodeStat({ title, children }: { title: string; children: ReactNode }) {
     return (
@@ -50,13 +39,12 @@ interface Props {
 
 // NOTE: This component is lazy imported, so it needs to be default exported:
 export default function ValidatorMap({ minHeight }: Props) {
-    const [dateFilter, setDateFilter] = useDateFilterState('D');
 
     const { data, isLoading, isSuccess } = useQuery(
-        ['validator-map', dateFilter],
+        ['validator-map'],
         async () => {
             const res = await fetch(
-                `http://localhost:3003/validator-map?network=testnet`,
+                `http://localhost:3003/validator-map-v2?network=testnet`,
                 {
                     method: 'GET',
                 }
@@ -72,14 +60,14 @@ export default function ValidatorMap({ minHeight }: Props) {
     const { totalCount, countryCount, validatorMap } = useMemo<{
         totalCount: number | null;
         countryCount: number | null;
-        validatorMap: Validators;
+        validatorMap: ValidatorsMap;
     }>(() => {
         if (!data) {
             return { totalCount: null, countryCount: null, validatorMap: {} };
         }
 
         let totalCount = 0;
-        const validatorMap: Validators = {};
+        const validatorMap: ValidatorsMap = {};
         const countryMap: Record<string, number> = {}
         data.forEach((validator) => {
             if (validator) {
@@ -130,7 +118,7 @@ export default function ValidatorMap({ minHeight }: Props) {
                 hideTooltip();
             }
         },
-        [showTooltip, validatorMap, hideTooltip]
+        [showTooltip, hideTooltip]
     );
 
     return (
@@ -171,7 +159,7 @@ export default function ValidatorMap({ minHeight }: Props) {
                         <ParentSize>
                             {(parent) => (
                                 <WorldMap
-                                    nodes={data}
+                                    validators={data}
                                     width={parent.width}
                                     height={parent.height}
                                     onMouseOver={handleMouseOver}
