@@ -36,7 +36,7 @@ const CreatePage = () => {
                         await dispatch(
                             createVault({ password: values.password })
                         ).unwrap();
-                        navigate('../backup');
+                        navigate('../backup', { state: { onboarding: true } });
                     } catch (e) {
                         // Do nothing
                     }

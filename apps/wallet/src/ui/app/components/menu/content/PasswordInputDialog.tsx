@@ -60,9 +60,15 @@ export function PasswordInputDialog({
         >
             {({ isSubmitting, isValid }) => (
                 <Form className="bg-white px-5 pt-10 flex flex-col flex-nowrap items-center flex-1 gap-7.5">
-                    <Heading variant="heading1" color="gray-90" weight="bold">
-                        {title}
-                    </Heading>
+                    <div className="text-center">
+                        <Heading
+                            variant="heading1"
+                            color="gray-90"
+                            weight="bold"
+                        >
+                            {title}
+                        </Heading>
+                    </div>
                     <div className="self-stretch flex-1">
                         <FieldLabel txt="Enter Wallet Password to Continue">
                             <PasswordInputField name="password" />
@@ -82,7 +88,7 @@ export function PasswordInputDialog({
                             </Text>
                         </div>
                     </div>
-                    <div className="flex flex-col flex-nowrap gap-3.75 self-stretch">
+                    <div className="flex flex-col flex-nowrap gap-3.75 self-stretch pb-2">
                         <Button
                             type="submit"
                             variant="primary"
