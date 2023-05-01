@@ -27,7 +27,7 @@ function Home() {
     const isHomePageRedesignEnabled = useFeatureIsOn(
         'explorer-home-page-redesign'
     );
-    const isSuiTokenCardEnabled = true //useFeatureIsOn('explorer-sui-token-card');
+    const isSuiTokenCardEnabled = useFeatureIsOn('explorer-sui-token-card');
 
     return isHomePageRedesignEnabled ? (
         <div
@@ -37,34 +37,34 @@ function Home() {
                     isSuiTokenCardEnabled,
             })}
         >
-            <div className="grid-area-tps">
+            <div style={{ gridArea: 'tps' }}>
                 <NetworkTPS />
             </div>
             {isSuiTokenCardEnabled && (
-                <div className="grid-area-sui-token">
+                <div style={{ gridArea: 'sui-token' }}>
                     <SuiTokenCard />
                 </div>
             )}
-            <div className="grid-area-network overflow-hidden">
+            <div style={{ gridArea: 'network' }} className="overflow-hidden">
                 <OnTheNetwork />
             </div>
-            <div className="grid-area-epoch">
+            <div style={{ gridArea: 'epoch' }}>
                 <CurrentEpoch />
             </div>
-            <div className="grid-area-checkpoint">
+            <div style={{ gridArea: 'checkpoint' }}>
                 <Checkpoint />
             </div>
-            <div className="grid-area-gas-price">
+            <div style={{ gridArea: 'gas-price' }}>
                 <GasPriceCard />
             </div>
-            <div className="grid-area-node-map h-[360px] xl:h-auto">
+            <div style={{ gridArea: 'node-map' }} className="h-[360px] xl:h-auto">
                 <ErrorBoundary>
                     <Suspense fallback={<Card height="full" />}>
                         <NodeMap minHeight="100%" />
                     </Suspense>
                 </ErrorBoundary>
             </div>
-            <div className="grid-area-activity mt-5">
+            <div style={{ gridArea: 'activity' }} className="mt-5">
                 <ErrorBoundary>
                     <Activity
                         initialLimit={TRANSACTIONS_LIMIT}
@@ -74,7 +74,8 @@ function Home() {
             </div>
             <div
                 data-testid="validators-table"
-                className="grid-area-validators mt-5"
+                style={{ gridArea: 'validators' }}
+                className="mt-5"
             >
                 <TabGroup size="lg">
                     <TabList>
@@ -90,7 +91,7 @@ function Home() {
                 </TabGroup>
             </div>
             {/* TODO: Add the popular packages component here :) */}
-            {/* <div className="grid-area-packages mt-5 bg-gray-60">
+            {/* <div style={{ gridArea: 'packages' }} className="mt-5 bg-gray-60">
                 Popular packages
             </div> */}
         </div>

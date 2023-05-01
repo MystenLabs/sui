@@ -24,6 +24,30 @@
 @layer components {
     .home-page-grid-container {
         @apply grid grid-cols-1 gap-4;
+        grid-template-areas:
+            'tps'
+            'network'
+            'epoch'
+            'checkpoint'
+            'gas-price'
+            'node-map'
+            'activity'
+            'validators'
+            'packages';
+    }
+
+    .home-page-grid-container-with-sui-token {
+        grid-template-areas:
+            'tps'
+            'sui-token'
+            'network'
+            'epoch'
+            'checkpoint'
+            'gas-price'
+            'node-map'
+            'activity'
+            'validators'
+            'packages';
     }
 
     @screen sm {
@@ -50,50 +74,6 @@
                 'activity    activity'
                 'validators  validators'
                 'packages    packages';
-        }
-
-        .grid-area-tps {
-            grid-area: tps;
-        }
-
-        .grid-area-sui-token {
-            grid-area: sui-token;
-        }
-
-        .grid-area-gas-price {
-            grid-area: gas-price;
-        }
-
-        .grid-area-network {
-            grid-area: network;
-        }
-
-        .grid-area-epoch {
-            grid-area: epoch;
-        }
-
-        .grid-area-gas-price {
-            grid-area: gas-price;
-        }
-
-        .grid-area-checkpoint {
-            grid-area: checkpoint;
-        }
-
-        .grid-area-node-map {
-            grid-area: node-map;
-        }
-
-        .grid-area-activity {
-            grid-area: activity;
-        }
-
-        .grid-area-validators {
-            grid-area: validators;
-        }
-
-        .grid-area-packages {
-            grid-area: packages;
         }
     }
 
