@@ -71,7 +71,7 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
             const xDate = xScale.invert(x);
             const epochIndex = bisectDate(adjData, xDate, 0);
             const selectedEpoch = adjData[epochIndex];
-            setTooltipX(x);
+            setTooltipX(selectedEpoch.date ? xScale(selectedEpoch.date) : x);
             setHoveredElement(selectedEpoch);
             setIsTooltipVisible(true);
         },
@@ -105,7 +105,7 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
                 x2={0}
                 y2={graphButton + 10}
                 className={clsx(
-                    'stroke-gray-60 transition-opacity duration-75',
+                    'stroke-gray-60 transition-all ease-ease-out-cubic',
                     isTooltipVisible ? 'opacity-100' : 'opacity-0'
                 )}
                 strokeWidth="1"
