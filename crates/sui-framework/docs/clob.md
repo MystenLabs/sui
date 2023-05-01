@@ -623,16 +623,7 @@ Emitted when a maker order is injected into the order book.
 
 
 
-<pre><code><b>const</b> <a href="clob.md#0xdee9_clob_EInvalidBaseBalance">EInvalidBaseBalance</a>: u64 = 18;
-</code></pre>
-
-
-
-<a name="0xdee9_clob_EInvalidBaseCoin"></a>
-
-
-
-<pre><code><b>const</b> <a href="clob.md#0xdee9_clob_EInvalidBaseCoin">EInvalidBaseCoin</a>: u64 = 19;
+<pre><code><b>const</b> <a href="clob.md#0xdee9_clob_EInvalidBaseBalance">EInvalidBaseBalance</a>: u64 = 17;
 </code></pre>
 
 
@@ -641,7 +632,7 @@ Emitted when a maker order is injected into the order book.
 
 
 
-<pre><code><b>const</b> <a href="clob.md#0xdee9_clob_EInvalidExpireTimestamp">EInvalidExpireTimestamp</a>: u64 = 22;
+<pre><code><b>const</b> <a href="clob.md#0xdee9_clob_EInvalidExpireTimestamp">EInvalidExpireTimestamp</a>: u64 = 19;
 </code></pre>
 
 
@@ -650,16 +641,7 @@ Emitted when a maker order is injected into the order book.
 
 
 
-<pre><code><b>const</b> <a href="clob.md#0xdee9_clob_EInvalidFee">EInvalidFee</a>: u64 = 21;
-</code></pre>
-
-
-
-<a name="0xdee9_clob_EInvalidFeeCoin"></a>
-
-
-
-<pre><code><b>const</b> <a href="clob.md#0xdee9_clob_EInvalidFeeCoin">EInvalidFeeCoin</a>: u64 = 20;
+<pre><code><b>const</b> <a href="clob.md#0xdee9_clob_EInvalidFee">EInvalidFee</a>: u64 = 18;
 </code></pre>
 
 
@@ -686,7 +668,7 @@ Emitted when a maker order is injected into the order book.
 
 
 
-<pre><code><b>const</b> <a href="clob.md#0xdee9_clob_EInvalidPair">EInvalidPair</a>: u64 = 17;
+<pre><code><b>const</b> <a href="clob.md#0xdee9_clob_EInvalidPair">EInvalidPair</a>: u64 = 16;
 </code></pre>
 
 
@@ -713,7 +695,7 @@ Emitted when a maker order is injected into the order book.
 
 
 
-<pre><code><b>const</b> <a href="clob.md#0xdee9_clob_EInvalidRestriction">EInvalidRestriction</a>: u64 = 15;
+<pre><code><b>const</b> <a href="clob.md#0xdee9_clob_EInvalidRestriction">EInvalidRestriction</a>: u64 = 14;
 </code></pre>
 
 
@@ -723,6 +705,15 @@ Emitted when a maker order is injected into the order book.
 
 
 <pre><code><b>const</b> <a href="clob.md#0xdee9_clob_EInvalidTickPrice">EInvalidTickPrice</a>: u64 = 11;
+</code></pre>
+
+
+
+<a name="0xdee9_clob_EInvalidTickSizeLotSize"></a>
+
+
+
+<pre><code><b>const</b> <a href="clob.md#0xdee9_clob_EInvalidTickSizeLotSize">EInvalidTickSizeLotSize</a>: u64 = 20;
 </code></pre>
 
 
@@ -740,7 +731,7 @@ Emitted when a maker order is injected into the order book.
 
 
 
-<pre><code><b>const</b> <a href="clob.md#0xdee9_clob_ELevelNotEmpty">ELevelNotEmpty</a>: u64 = 16;
+<pre><code><b>const</b> <a href="clob.md#0xdee9_clob_ELevelNotEmpty">ELevelNotEmpty</a>: u64 = 15;
 </code></pre>
 
 
@@ -974,6 +965,7 @@ Emitted when a maker order is injected into the order book.
     creation_fee: Balance&lt;SUI&gt;,
     ctx: &<b>mut</b> TxContext,
 ) {
+    <b>assert</b>!(clob_math::mul(lot_size, tick_size) &gt; 0, <a href="clob.md#0xdee9_clob_EInvalidTickSizeLotSize">EInvalidTickSizeLotSize</a>);
     <b>let</b> base_type_name = <a href="_get">type_name::get</a>&lt;BaseAsset&gt;();
     <b>let</b> quote_type_name = <a href="_get">type_name::get</a>&lt;QuoteAsset&gt;();
     <b>assert</b>!(base_type_name != quote_type_name, <a href="clob.md#0xdee9_clob_EInvalidPair">EInvalidPair</a>);
@@ -1072,6 +1064,7 @@ Emitted when a maker order is injected into the order book.
     <a href="../../../.././build/Sui/docs/coin.md#0x2_coin">coin</a>: Coin&lt;BaseAsset&gt;,
     account_cap: &AccountCap
 ) {
+    <b>assert</b>!(<a href="../../../.././build/Sui/docs/coin.md#0x2_coin_value">coin::value</a>(&<a href="../../../.././build/Sui/docs/coin.md#0x2_coin">coin</a>) != 0, <a href="clob.md#0xdee9_clob_EInsufficientBaseCoin">EInsufficientBaseCoin</a>);
     <a href="custodian.md#0xdee9_custodian_increase_user_available_balance">custodian::increase_user_available_balance</a>(
         &<b>mut</b> pool.base_custodian,
         <a href="../../../.././build/Sui/docs/object.md#0x2_object_id">object::id</a>(account_cap),
@@ -1104,6 +1097,7 @@ Emitted when a maker order is injected into the order book.
     <a href="../../../.././build/Sui/docs/coin.md#0x2_coin">coin</a>: Coin&lt;QuoteAsset&gt;,
     account_cap: &AccountCap
 ) {
+    <b>assert</b>!(<a href="../../../.././build/Sui/docs/coin.md#0x2_coin_value">coin::value</a>(&<a href="../../../.././build/Sui/docs/coin.md#0x2_coin">coin</a>) != 0, <a href="clob.md#0xdee9_clob_EInsufficientQuoteCoin">EInsufficientQuoteCoin</a>);
     <a href="custodian.md#0xdee9_custodian_increase_user_available_balance">custodian::increase_user_available_balance</a>(
         &<b>mut</b> pool.quote_custodian,
         <a href="../../../.././build/Sui/docs/object.md#0x2_object_id">object::id</a>(account_cap),
@@ -1137,6 +1131,7 @@ Emitted when a maker order is injected into the order book.
     account_cap: &AccountCap,
     ctx: &<b>mut</b> TxContext
 ): Coin&lt;BaseAsset&gt; {
+    <b>assert</b>!(quantity &gt; 0, <a href="clob.md#0xdee9_clob_EInvalidQuantity">EInvalidQuantity</a>);
     <a href="custodian.md#0xdee9_custodian_withdraw_asset">custodian::withdraw_asset</a>(&<b>mut</b> pool.base_custodian, quantity, account_cap, ctx)
 }
 </code></pre>
@@ -1166,6 +1161,7 @@ Emitted when a maker order is injected into the order book.
     account_cap: &AccountCap,
     ctx: &<b>mut</b> TxContext
 ): Coin&lt;QuoteAsset&gt; {
+    <b>assert</b>!(quantity &gt; 0, <a href="clob.md#0xdee9_clob_EInvalidQuantity">EInvalidQuantity</a>);
     <a href="custodian.md#0xdee9_custodian_withdraw_asset">custodian::withdraw_asset</a>(&<b>mut</b> pool.quote_custodian, quantity, account_cap, ctx)
 }
 </code></pre>
@@ -1197,6 +1193,7 @@ Emitted when a maker order is injected into the order book.
     <a href="../../../.././build/Sui/docs/clock.md#0x2_clock">clock</a>: &Clock,
     ctx: &<b>mut</b> TxContext,
 ): (Coin&lt;BaseAsset&gt;, Coin&lt;QuoteAsset&gt;, u64) {
+    <b>assert</b>!(<a href="../../../.././build/Sui/docs/coin.md#0x2_coin_value">coin::value</a>(&base_coin) &gt;= quantity, <a href="clob.md#0xdee9_clob_EInsufficientBaseCoin">EInsufficientBaseCoin</a>);
     <b>let</b> original_val = <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_value">coin::value</a>(&quote_coin);
     <b>let</b> (ret_base_coin, ret_quote_coin) = <a href="clob.md#0xdee9_clob_place_market_order">place_market_order</a>(
         pool,
@@ -1238,6 +1235,7 @@ Emitted when a maker order is injected into the order book.
     quote_coin: Coin&lt;QuoteAsset&gt;,
     ctx: &<b>mut</b> TxContext,
 ): (Coin&lt;BaseAsset&gt;, Coin&lt;QuoteAsset&gt;, u64) {
+    <b>assert</b>!(<a href="../../../.././build/Sui/docs/coin.md#0x2_coin_value">coin::value</a>(&quote_coin) &gt;= quantity, <a href="clob.md#0xdee9_clob_EInsufficientQuoteCoin">EInsufficientQuoteCoin</a>);
     <b>let</b> (base_asset_balance, quote_asset_balance) = <a href="clob.md#0xdee9_clob_match_bid_with_quote_quantity">match_bid_with_quote_quantity</a>(
         pool,
         quantity,
@@ -1287,6 +1285,7 @@ Emitted when a maker order is injected into the order book.
         <b>return</b> (base_balance_filled, quote_balance_left)
     };
     <b>let</b> (tick_price, tick_index) = min_leaf(all_open_orders);
+    <b>let</b> terminate_loop = <b>false</b>;
 
     <b>while</b> (!is_empty&lt;<a href="clob.md#0xdee9_clob_TickLevel">TickLevel</a>&gt;(all_open_orders) && tick_price &lt;= price_limit) {
         <b>let</b> tick_level = borrow_mut_leaf_by_index(all_open_orders, tick_index);
@@ -1326,21 +1325,38 @@ Emitted when a maker order is injected into the order book.
                     );
                     filled_base_quantity = maker_base_quantity;
                 } <b>else</b> {
-                    filled_quote_quantity = taker_quote_quantity_remaining;
+                    terminate_loop = <b>true</b>;
                     (_, filled_quote_quantity_without_commission) = clob_math::div_round(
-                        filled_quote_quantity,
+                        taker_quote_quantity_remaining,
                         <a href="clob.md#0xdee9_clob_FLOAT_SCALING">FLOAT_SCALING</a> + pool.taker_fee_rate
                     );
                     (_, filled_base_quantity) = clob_math::div_round(
                         filled_quote_quantity_without_commission,
                         maker_order.price
                     );
+                    <b>let</b> filled_base_lot = filled_base_quantity / pool.lot_size;
+                    filled_base_quantity = filled_base_lot * pool.lot_size;
+                    filled_quote_quantity_without_commission = clob_math::mul(
+                        filled_base_quantity,
+                        maker_order.price
+                    );
+                    <b>let</b> (round_down, taker_commission) = clob_math::mul_round(
+                        filled_quote_quantity_without_commission,
+                        pool.taker_fee_rate
+                    );
+                    <b>if</b> (round_down) {
+                        taker_commission = taker_commission + 1;
+                    };
+                    filled_quote_quantity = filled_quote_quantity_without_commission + taker_commission;
                 };
                 <b>let</b> maker_rebate = clob_math::mul(filled_quote_quantity_without_commission, pool.maker_rebate_rate);
                 maker_base_quantity = maker_base_quantity - filled_base_quantity;
 
                 // maker in ask side, decrease maker's locked base asset, increase maker's available quote asset
                 taker_quote_quantity_remaining = taker_quote_quantity_remaining - filled_quote_quantity;
+                <b>if</b> (taker_quote_quantity_remaining == 0) {
+                    terminate_loop = <b>true</b>;
+                };
                 <b>let</b> locked_base_balance = <a href="custodian.md#0xdee9_custodian_decrease_user_locked_balance">custodian::decrease_user_locked_balance</a>&lt;BaseAsset&gt;(
                     &<b>mut</b> pool.base_custodian,
                     maker_order.owner,
@@ -1394,7 +1410,7 @@ Emitted when a maker order is injected into the order book.
                     order_id);
                 maker_order_mut.quantity = maker_base_quantity;
             };
-            <b>if</b> (taker_quote_quantity_remaining == 0) {
+            <b>if</b> (terminate_loop) {
                 <b>break</b>
             };
         };
@@ -1403,7 +1419,7 @@ Emitted when a maker order is injected into the order book.
             <a href="clob.md#0xdee9_clob_destroy_empty_level">destroy_empty_level</a>(remove_leaf_by_index(all_open_orders, tick_index));
             (_, tick_index) = find_leaf(all_open_orders, tick_price);
         };
-        <b>if</b> (taker_quote_quantity_remaining == 0) {
+        <b>if</b> (terminate_loop) {
             <b>break</b>
         };
     };
@@ -1725,7 +1741,7 @@ Place a market order to the order book.
     <a href="../../../.././build/Sui/docs/clock.md#0x2_clock">clock</a>: &Clock,
     ctx: &<b>mut</b> TxContext,
 ): (Coin&lt;BaseAsset&gt;, Coin&lt;QuoteAsset&gt;) {
-    // If market bid order, match against the open ask orders. Otherwise, match against the open ask orders.
+    // If market bid order, match against the open ask orders. Otherwise, match against the open bid orders.
     // Take market bid order for example.
     // We first retrieve the PriceLevel <b>with</b> the lowest price by calling min_leaf on the asks Critbit Tree.
     // We then match the market order by iterating through open orders on that price level in ascending order of the order id.
@@ -1757,7 +1773,7 @@ Place a market order to the order book.
         );
         quote_coin = <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_from_balance">coin::from_balance</a>(quote_balance_left, ctx);
     } <b>else</b> {
-        <b>assert</b>!(quantity &lt;= <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_value">coin::value</a>(&base_coin), <a href="clob.md#0xdee9_clob_EInvalidBaseCoin">EInvalidBaseCoin</a>);
+        <b>assert</b>!(quantity &lt;= <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_value">coin::value</a>(&base_coin), <a href="clob.md#0xdee9_clob_EInsufficientBaseCoin">EInsufficientBaseCoin</a>);
         <b>let</b> (base_balance_left, quote_balance_filled) = <a href="clob.md#0xdee9_clob_match_ask">match_ask</a>(
             pool,
             <a href="clob.md#0xdee9_clob_MIN_PRICE">MIN_PRICE</a>,
@@ -1901,6 +1917,7 @@ So please check that boolean value first before using the order id.
     // If the bid order is not completely filled, inject the remaining quantity <b>to</b> the bids Critbit Tree according <b>to</b> the input price and order id.
     // If limit ask order, vice versa.
     <b>assert</b>!(quantity &gt; 0, <a href="clob.md#0xdee9_clob_EInvalidQuantity">EInvalidQuantity</a>);
+    <b>assert</b>!(price &gt; 0, <a href="clob.md#0xdee9_clob_EInvalidPrice">EInvalidPrice</a>);
     <b>assert</b>!(price % pool.tick_size == 0, <a href="clob.md#0xdee9_clob_EInvalidPrice">EInvalidPrice</a>);
     <b>assert</b>!(quantity % pool.lot_size == 0, <a href="clob.md#0xdee9_clob_EInvalidQuantity">EInvalidQuantity</a>);
     <b>assert</b>!(expire_timestamp &gt; <a href="../../../.././build/Sui/docs/clock.md#0x2_clock_timestamp_ms">clock::timestamp_ms</a>(<a href="../../../.././build/Sui/docs/clock.md#0x2_clock">clock</a>), <a href="clob.md#0xdee9_clob_EInvalidExpireTimestamp">EInvalidExpireTimestamp</a>);
@@ -1980,7 +1997,7 @@ So please check that boolean value first before using the order id.
         <b>return</b> (base_quantity_filled, quote_quantity_filled, <b>true</b>, order_id)
     } <b>else</b> {
         <b>assert</b>!(restriction == <a href="clob.md#0xdee9_clob_NO_RESTRICTION">NO_RESTRICTION</a>, <a href="clob.md#0xdee9_clob_EInvalidRestriction">EInvalidRestriction</a>);
-        <b>if</b>(quantity &gt; base_quantity_filled){
+        <b>if</b> (quantity &gt; base_quantity_filled) {
             order_id = <a href="clob.md#0xdee9_clob_inject_limit_order">inject_limit_order</a>(
                 pool,
                 price,

@@ -43,6 +43,7 @@ ark-groth16 = { version = "0.4" }
 ark-poly = { version = "0.4", default-features = false, features = ["parallel"] }
 ark-r1cs-std = { version = "0.4", default-features = false }
 ark-relations = { version = "0.4", features = ["std"] }
+ark-secp256r1 = { version = "0.4" }
 ark-serialize = { version = "0.4", features = ["derive", "std"] }
 ark-snark = { version = "0.4", default-features = false }
 ark-std = { version = "0.4", default-features = false, features = ["parallel"] }
@@ -101,7 +102,7 @@ bytemuck = { version = "1", default-features = false }
 byteorder = { version = "1", features = ["i128"] }
 bytes = { version = "1", features = ["serde"] }
 bzip2-sys = { version = "0.1", default-features = false, features = ["static"] }
-cached = { version = "0.42" }
+cached = { version = "0.43" }
 cached_proc_macro_types = { version = "0.1", default-features = false }
 camino = { version = "1", default-features = false, features = ["serde1"] }
 cargo-platform = { version = "0.1", default-features = false }
@@ -165,7 +166,7 @@ deadpool = { version = "0.9" }
 deadpool-runtime = { version = "0.1", default-features = false }
 debug-ignore = { version = "1", default-features = false }
 der-3b31131e45eafb45 = { package = "der", version = "0.6", default-features = false, features = ["oid", "pem", "std"] }
-der-ca01ad9e24f5d932 = { package = "der", version = "0.7", default-features = false, features = ["oid", "std", "zeroize"] }
+der-ca01ad9e24f5d932 = { package = "der", version = "0.7", default-features = false, features = ["oid", "pem", "std"] }
 der-parser = { version = "8", features = ["bigint"] }
 derive_builder = { version = "0.12" }
 determinator = { version = "0.10", default-features = false }
@@ -191,12 +192,12 @@ downcast = { version = "0.11" }
 duration-str = { version = "0.5" }
 dyn-clone = { version = "1", default-features = false }
 ecdsa-582f2526e08bb6a0 = { package = "ecdsa", version = "0.14", default-features = false, features = ["der", "sign", "verify"] }
-ecdsa-986da7b5efc2b80e = { package = "ecdsa", version = "0.16", features = ["pkcs8", "signing", "std", "verifying"] }
+ecdsa-986da7b5efc2b80e = { package = "ecdsa", version = "0.16", features = ["pem", "signing", "std", "verifying"] }
 ed25519 = { version = "1", features = ["alloc", "serde", "zeroize"] }
 ed25519-consensus = { version = "2" }
 ed25519-dalek-fiat = { version = "0.1", default-features = false, features = ["fiat_u64_backend", "serde", "std"] }
 either = { version = "1" }
-elliptic-curve-594e8ee84c453af0 = { package = "elliptic-curve", version = "0.13", features = ["hash2curve", "hazmat", "pkcs8", "std"] }
+elliptic-curve-594e8ee84c453af0 = { package = "elliptic-curve", version = "0.13", features = ["hash2curve", "hazmat", "pem", "std"] }
 elliptic-curve-5ef9efb8ec2df382 = { package = "elliptic-curve", version = "0.12", default-features = false, features = ["arithmetic", "digest", "hazmat", "sec1"] }
 encode_unicode-dff4ba8e3ae991db = { package = "encode_unicode", version = "1" }
 endian-type = { version = "0.1", default-features = false }
@@ -206,8 +207,8 @@ expect-test = { version = "1", default-features = false }
 eyre = { version = "0.6" }
 fail = { version = "0.4", default-features = false }
 fallible-iterator = { version = "0.2" }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "19540b8550685173f4998ae64d0291ddbdc93868", features = ["copy_key"] }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "19540b8550685173f4998ae64d0291ddbdc93868", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "27ee552d5c1feb02b6b64b4f77be3c84e82a0469", features = ["copy_key"] }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "27ee552d5c1feb02b6b64b4f77be3c84e82a0469", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -418,7 +419,8 @@ parking_lot_core-c38e5c1d305a1b54 = { package = "parking_lot_core", version = "0
 pathdiff = { version = "0.2", default-features = false, features = ["camino"] }
 pbkdf2 = { version = "0.11", default-features = false }
 pem = { version = "1", default-features = false }
-pem-rfc7468 = { version = "0.6", default-features = false, features = ["alloc"] }
+pem-rfc7468-3b31131e45eafb45 = { package = "pem-rfc7468", version = "0.6", default-features = false, features = ["alloc"] }
+pem-rfc7468-ca01ad9e24f5d932 = { package = "pem-rfc7468", version = "0.7", default-features = false, features = ["alloc"] }
 percent-encoding = { version = "2" }
 pest = { version = "2" }
 petgraph-3b31131e45eafb45 = { package = "petgraph", version = "0.6" }
@@ -430,7 +432,7 @@ pin-project-lite = { version = "0.2", default-features = false }
 pin-utils = { version = "0.1", default-features = false }
 pkcs1 = { version = "0.4", default-features = false, features = ["pem", "std"] }
 pkcs8-274715c4dabd11b0 = { package = "pkcs8", version = "0.9", default-features = false, features = ["pem", "std"] }
-pkcs8-93f6ce9d446188ac = { package = "pkcs8", version = "0.10", default-features = false, features = ["std"] }
+pkcs8-93f6ce9d446188ac = { package = "pkcs8", version = "0.10", default-features = false, features = ["pem", "std"] }
 plotters = { version = "0.3", default-features = false, features = ["area_series", "line_series", "svg_backend"] }
 plotters-backend = { version = "0.3", default-features = false }
 plotters-svg = { version = "0.3", default-features = false }
@@ -511,7 +513,7 @@ scoped-futures = { version = "0.1" }
 scopeguard = { version = "1" }
 sct = { version = "0.7", default-features = false }
 sec1-468e82937335b1c9 = { package = "sec1", version = "0.3", features = ["subtle", "zeroize"] }
-sec1-ca01ad9e24f5d932 = { package = "sec1", version = "0.7", features = ["std", "subtle"] }
+sec1-ca01ad9e24f5d932 = { package = "sec1", version = "0.7", features = ["pem", "std", "subtle"] }
 secp256k1 = { version = "0.27", features = ["bitcoin_hashes", "global-context", "rand-std", "recovery"] }
 secp256k1-sys = { version = "0.8", default-features = false, features = ["recovery", "std"] }
 semver-dff4ba8e3ae991db = { package = "semver", version = "1", features = ["serde"] }
@@ -554,7 +556,7 @@ socket2 = { version = "0.4", default-features = false, features = ["all"] }
 soketto = { version = "0.7", features = ["http"] }
 spin = { version = "0.5", default-features = false }
 spki-3b31131e45eafb45 = { package = "spki", version = "0.6", default-features = false, features = ["pem", "std"] }
-spki-ca01ad9e24f5d932 = { package = "spki", version = "0.7", default-features = false, features = ["std"] }
+spki-ca01ad9e24f5d932 = { package = "spki", version = "0.7", default-features = false, features = ["pem", "std"] }
 stable_deref_trait = { version = "1" }
 static_assertions = { version = "1", default-features = false }
 stringprep = { version = "0.1", default-features = false }
@@ -701,6 +703,7 @@ ark-groth16 = { version = "0.4" }
 ark-poly = { version = "0.4", default-features = false, features = ["parallel"] }
 ark-r1cs-std = { version = "0.4", default-features = false }
 ark-relations = { version = "0.4", features = ["std"] }
+ark-secp256r1 = { version = "0.4" }
 ark-serialize = { version = "0.4", features = ["derive", "std"] }
 ark-serialize-derive = { version = "0.4", default-features = false }
 ark-snark = { version = "0.4", default-features = false }
@@ -769,7 +772,7 @@ bytemuck = { version = "1", default-features = false }
 byteorder = { version = "1", features = ["i128"] }
 bytes = { version = "1", features = ["serde"] }
 bzip2-sys = { version = "0.1", default-features = false, features = ["static"] }
-cached = { version = "0.42" }
+cached = { version = "0.43" }
 cached_proc_macro = { version = "0.16", default-features = false }
 cached_proc_macro_types = { version = "0.1", default-features = false }
 camino = { version = "1", default-features = false, features = ["serde1"] }
@@ -846,7 +849,7 @@ deadpool = { version = "0.9" }
 deadpool-runtime = { version = "0.1", default-features = false }
 debug-ignore = { version = "1", default-features = false }
 der-3b31131e45eafb45 = { package = "der", version = "0.6", default-features = false, features = ["oid", "pem", "std"] }
-der-ca01ad9e24f5d932 = { package = "der", version = "0.7", default-features = false, features = ["oid", "std", "zeroize"] }
+der-ca01ad9e24f5d932 = { package = "der", version = "0.7", default-features = false, features = ["oid", "pem", "std"] }
 der-parser = { version = "8", features = ["bigint"] }
 derivative = { version = "2", default-features = false, features = ["use_core"] }
 derive-syn-parse = { version = "0.1", default-features = false }
@@ -881,12 +884,12 @@ downcast = { version = "0.11" }
 duration-str = { version = "0.5" }
 dyn-clone = { version = "1", default-features = false }
 ecdsa-582f2526e08bb6a0 = { package = "ecdsa", version = "0.14", default-features = false, features = ["der", "sign", "verify"] }
-ecdsa-986da7b5efc2b80e = { package = "ecdsa", version = "0.16", features = ["pkcs8", "signing", "std", "verifying"] }
+ecdsa-986da7b5efc2b80e = { package = "ecdsa", version = "0.16", features = ["pem", "signing", "std", "verifying"] }
 ed25519 = { version = "1", features = ["alloc", "serde", "zeroize"] }
 ed25519-consensus = { version = "2" }
 ed25519-dalek-fiat = { version = "0.1", default-features = false, features = ["fiat_u64_backend", "serde", "std"] }
 either = { version = "1" }
-elliptic-curve-594e8ee84c453af0 = { package = "elliptic-curve", version = "0.13", features = ["hash2curve", "hazmat", "pkcs8", "std"] }
+elliptic-curve-594e8ee84c453af0 = { package = "elliptic-curve", version = "0.13", features = ["hash2curve", "hazmat", "pem", "std"] }
 elliptic-curve-5ef9efb8ec2df382 = { package = "elliptic-curve", version = "0.12", default-features = false, features = ["arithmetic", "digest", "hazmat", "sec1"] }
 encode_unicode-dff4ba8e3ae991db = { package = "encode_unicode", version = "1" }
 endian-type = { version = "0.1", default-features = false }
@@ -897,9 +900,9 @@ expect-test = { version = "1", default-features = false }
 eyre = { version = "0.6" }
 fail = { version = "0.4", default-features = false }
 fallible-iterator = { version = "0.2" }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "19540b8550685173f4998ae64d0291ddbdc93868", features = ["copy_key"] }
-fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "19540b8550685173f4998ae64d0291ddbdc93868", default-features = false }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "19540b8550685173f4998ae64d0291ddbdc93868", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "27ee552d5c1feb02b6b64b4f77be3c84e82a0469", features = ["copy_key"] }
+fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "27ee552d5c1feb02b6b64b4f77be3c84e82a0469", default-features = false }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "27ee552d5c1feb02b6b64b4f77be3c84e82a0469", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -1135,7 +1138,8 @@ pathdiff = { version = "0.2", default-features = false, features = ["camino"] }
 pbkdf2 = { version = "0.11", default-features = false }
 peeking_take_while = { version = "0.1", default-features = false }
 pem = { version = "1", default-features = false }
-pem-rfc7468 = { version = "0.6", default-features = false, features = ["alloc"] }
+pem-rfc7468-3b31131e45eafb45 = { package = "pem-rfc7468", version = "0.6", default-features = false, features = ["alloc"] }
+pem-rfc7468-ca01ad9e24f5d932 = { package = "pem-rfc7468", version = "0.7", default-features = false, features = ["alloc"] }
 percent-encoding = { version = "2" }
 pest = { version = "2" }
 pest_derive = { version = "2" }
@@ -1153,7 +1157,7 @@ pin-project-lite = { version = "0.2", default-features = false }
 pin-utils = { version = "0.1", default-features = false }
 pkcs1 = { version = "0.4", default-features = false, features = ["pem", "std"] }
 pkcs8-274715c4dabd11b0 = { package = "pkcs8", version = "0.9", default-features = false, features = ["pem", "std"] }
-pkcs8-93f6ce9d446188ac = { package = "pkcs8", version = "0.10", default-features = false, features = ["std"] }
+pkcs8-93f6ce9d446188ac = { package = "pkcs8", version = "0.10", default-features = false, features = ["pem", "std"] }
 pkg-config = { version = "0.3", default-features = false }
 plotters = { version = "0.3", default-features = false, features = ["area_series", "line_series", "svg_backend"] }
 plotters-backend = { version = "0.3", default-features = false }
@@ -1252,7 +1256,7 @@ scoped-futures = { version = "0.1" }
 scopeguard = { version = "1" }
 sct = { version = "0.7", default-features = false }
 sec1-468e82937335b1c9 = { package = "sec1", version = "0.3", features = ["subtle", "zeroize"] }
-sec1-ca01ad9e24f5d932 = { package = "sec1", version = "0.7", features = ["std", "subtle"] }
+sec1-ca01ad9e24f5d932 = { package = "sec1", version = "0.7", features = ["pem", "std", "subtle"] }
 secp256k1 = { version = "0.27", features = ["bitcoin_hashes", "global-context", "rand-std", "recovery"] }
 secp256k1-sys = { version = "0.8", default-features = false, features = ["recovery", "std"] }
 semver-a6292c17cd707f01 = { package = "semver", version = "0.11" }
@@ -1302,7 +1306,7 @@ socket2 = { version = "0.4", default-features = false, features = ["all"] }
 soketto = { version = "0.7", features = ["http"] }
 spin = { version = "0.5", default-features = false }
 spki-3b31131e45eafb45 = { package = "spki", version = "0.6", default-features = false, features = ["pem", "std"] }
-spki-ca01ad9e24f5d932 = { package = "spki", version = "0.7", default-features = false, features = ["std"] }
+spki-ca01ad9e24f5d932 = { package = "spki", version = "0.7", default-features = false, features = ["pem", "std"] }
 stable_deref_trait = { version = "1" }
 static_assertions = { version = "1", default-features = false }
 stringprep = { version = "0.1", default-features = false }

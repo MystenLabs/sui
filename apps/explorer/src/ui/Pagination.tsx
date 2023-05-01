@@ -22,40 +22,6 @@ export interface PaginationResponse<Cursor = string> {
     hasNextPage: boolean;
 }
 
-// todo: temporary solution to allow pagination for queries
-// with an upper and lower bound
-export function useBoundedPaginationStack<Cursor = string>(
-    initialCursor?: Cursor,
-    maxCursor?: Cursor
-) {
-    const [stack, setStack] = useState<Cursor[]>(
-        initialCursor ? [initialCursor] : []
-    );
-    return {
-        cursor: stack.at(-1),
-        props({
-            hasNextPage = false,
-            nextCursor = null,
-        }: Partial<PaginationResponse<Cursor>> = {}): PaginationProps {
-            return {
-                hasPrev: initialCursor ? stack.length > 1 : stack.length > 0,
-                hasNext: hasNextPage && Number(nextCursor) > Number(maxCursor),
-                onFirst() {
-                    setStack(initialCursor ? [initialCursor] : []);
-                },
-                onNext() {
-                    if (nextCursor && hasNextPage) {
-                        setStack((stack) => [...stack, nextCursor]);
-                    }
-                },
-                onPrev() {
-                    setStack((stack) => stack.slice(0, -1));
-                },
-            };
-        },
-    };
-}
-
 export function useCursorPagination<T>(query: UseInfiniteQueryResult<T>) {
     const [currentPage, setCurrentPage] = useState(0);
 

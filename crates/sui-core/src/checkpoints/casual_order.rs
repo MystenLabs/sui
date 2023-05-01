@@ -3,7 +3,8 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use sui_types::base_types::TransactionDigest;
-use sui_types::messages::{TransactionEffects, TransactionEffectsAPI};
+use sui_types::effects::TransactionEffects;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::storage::ObjectKey;
 use tracing::trace;
 
@@ -196,6 +197,7 @@ mod tests {
     use super::*;
     use sui_types::base_types::ObjectDigest;
     use sui_types::base_types::{ObjectID, SequenceNumber};
+    use sui_types::effects::TransactionEffects;
 
     #[test]
     pub fn test_casual_order() {

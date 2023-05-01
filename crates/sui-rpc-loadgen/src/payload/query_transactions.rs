@@ -11,11 +11,10 @@ use async_trait::async_trait;
 use futures::future::join_all;
 use sui_json_rpc_types::{
     Page, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
-    SuiTransactionBlockResponseQuery, TransactionBlocksPage,
+    SuiTransactionBlockResponseQuery, TransactionBlocksPage, TransactionFilter,
 };
 use sui_sdk::SuiClient;
 use sui_types::base_types::TransactionDigest;
-use sui_types::query::TransactionFilter;
 use tracing::log::warn;
 
 #[async_trait]

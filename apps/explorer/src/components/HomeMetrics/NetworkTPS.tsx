@@ -2,16 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { StatsWrapper } from './FormattedStatsAmount';
-import { NetworkStats } from './NetworkStats';
 
 import { useGetNetworkMetrics } from '~/hooks/useGetNetworkMetrics';
+import { Card } from '~/ui/Card';
+import { Heading } from '~/ui/Heading';
 
 export function NetworkTPS() {
     const { data: networkMetrics } = useGetNetworkMetrics();
 
     return (
-        <NetworkStats label="Network TPS" bg="lightBlue" spacing="none">
-            <div className="flex gap-8">
+        <Card bg="lightBlue" spacing="lg">
+            <Heading color="steel-darker" variant="heading4/semibold">
+                Network TPS
+            </Heading>
+            <div className="mt-8 flex gap-8">
                 <StatsWrapper
                     size="sm"
                     label="TPS Now / Peak 30D"
@@ -29,6 +33,6 @@ export function NetworkTPS() {
                         : '--'}
                 </StatsWrapper>
             </div>
-        </NetworkStats>
+        </Card>
     );
 }

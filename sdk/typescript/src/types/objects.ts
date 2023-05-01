@@ -107,6 +107,8 @@ export const SuiRawData = union([
 ]);
 export type SuiRawData = Infer<typeof SuiRawData>;
 
+export const SUI_DECIMALS = 9;
+
 export const MIST_PER_SUI = BigInt(1000000000);
 
 export const ObjectDigest = string();

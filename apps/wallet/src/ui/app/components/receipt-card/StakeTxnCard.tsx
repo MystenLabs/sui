@@ -9,6 +9,7 @@ import {
 } from '@mysten/core';
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
 
+import { Card } from '../../shared/transaction-summary/Card';
 import { ValidatorLogo } from '_app/staking/validators/ValidatorLogo';
 import { TxnAmount } from '_components/receipt-card/TxnAmount';
 import { NUM_OF_EPOCH_BEFORE_EARNING } from '_src/shared/constants';
@@ -44,73 +45,79 @@ export function StakeTxnCard({ event }: StakeTxnCardProps) {
     );
 
     return (
-        <>
-            {validatorAddress && (
-                <div className="mb-3.5 w-full">
-                    <ValidatorLogo
-                        validatorAddress={validatorAddress}
-                        showAddress
-                        iconSize="md"
-                        size="body"
-                        activeEpoch={event.parsedJson?.epoch}
-                    />
-                </div>
-            )}
-            {stakedAmount && (
-                <TxnAmount
-                    amount={stakedAmount}
-                    coinType={SUI_TYPE_ARG}
-                    label="Stake"
-                />
-            )}
-            <div className="flex flex-col">
-                <div className="flex justify-between w-full pt-3.5">
-                    <div className="flex gap-1 items-baseline text-steel">
-                        <Text
-                            variant="body"
-                            weight="medium"
-                            color="steel-darker"
-                        >
-                            APY
-                        </Text>
-                        <IconTooltip tip="This is the Annualized Percentage Yield of the a specific validator’s past operations. Note there is no guarantee this APY will be true in the future." />
-                    </div>
-                    <Text variant="body" weight="medium" color="steel-darker">
-                        {formatPercentageDisplay(apy)}
-                    </Text>
-                </div>
-                <div className="flex justify-between w-full py-3.5">
-                    <div className="flex gap-1 items-baseline text-steel">
-                        <Text
-                            variant="body"
-                            weight="medium"
-                            color="steel-darker"
-                        >
-                            {timeToEarnStakeRewards > 0
-                                ? 'Staking Rewards Start'
-                                : 'Staking Rewards Started'}
-                        </Text>
-                    </div>
-                    {timeToEarnStakeRewards > 0 ? (
-                        <CountDownTimer
-                            timestamp={timeToEarnStakeRewards}
-                            variant="body"
-                            color="steel-darker"
-                            weight="medium"
-                            label="in"
-                            endLabel="--"
+        <Card>
+            <div className="flex flex-col divide-y divide-solid divide-gray-40 divide-x-0">
+                {validatorAddress && (
+                    <div className="mb-3.5 w-full divide-y divide-gray-40 divide-solid">
+                        <ValidatorLogo
+                            validatorAddress={validatorAddress}
+                            showAddress
+                            iconSize="md"
+                            size="body"
+                            activeEpoch={event.parsedJson?.epoch}
                         />
-                    ) : (
+                    </div>
+                )}
+                {stakedAmount && (
+                    <TxnAmount
+                        amount={stakedAmount}
+                        coinType={SUI_TYPE_ARG}
+                        label="Stake"
+                    />
+                )}
+                <div className="flex flex-col">
+                    <div className="flex justify-between w-full pt-3.5">
+                        <div className="flex gap-1 items-baseline text-steel">
+                            <Text
+                                variant="body"
+                                weight="medium"
+                                color="steel-darker"
+                            >
+                                APY
+                            </Text>
+                            <IconTooltip tip="This is the Annualized Percentage Yield of the a specific validator’s past operations. Note there is no guarantee this APY will be true in the future." />
+                        </div>
                         <Text
                             variant="body"
                             weight="medium"
                             color="steel-darker"
                         >
-                            Epoch #{startEarningRewardsEpoch}
+                            {formatPercentageDisplay(apy)}
                         </Text>
-                    )}
+                    </div>
+                    <div className="flex justify-between w-full py-3.5">
+                        <div className="flex gap-1 items-baseline text-steel">
+                            <Text
+                                variant="body"
+                                weight="medium"
+                                color="steel-darker"
+                            >
+                                {timeToEarnStakeRewards > 0
+                                    ? 'Staking Rewards Start'
+                                    : 'Staking Rewards Started'}
+                            </Text>
+                        </div>
+                        {timeToEarnStakeRewards > 0 ? (
+                            <CountDownTimer
+                                timestamp={timeToEarnStakeRewards}
+                                variant="body"
+                                color="steel-darker"
+                                weight="medium"
+                                label="in"
+                                endLabel="--"
+                            />
+                        ) : (
+                            <Text
+                                variant="body"
+                                weight="medium"
+                                color="steel-darker"
+                            >
+                                Epoch #{startEarningRewardsEpoch}
+                            </Text>
+                        )}
+                    </div>
                 </div>
             </div>
-        </>
+        </Card>
     );
 }

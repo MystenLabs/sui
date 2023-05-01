@@ -5,11 +5,11 @@ import {
     CoinFormat,
     formatBalance,
     formatDate,
-    useCoinDecimals,
     useGetReferenceGasPrice,
     useRpcClient,
 } from '@mysten/core';
-import { SUI_TYPE_ARG } from '@mysten/sui.js';
+import { Info12 } from '@mysten/icons';
+import { SUI_DECIMALS } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 import { ParentSize } from '@visx/responsive';
 import clsx from 'clsx';
@@ -26,6 +26,7 @@ import { ListboxSelect } from '~/ui/ListboxSelect';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Stats } from '~/ui/Stats';
 import { Text } from '~/ui/Text';
+import { Tooltip } from '~/ui/Tooltip';
 
 const UNITS = ['MIST', 'SUI'] as const;
 type UnitsType = (typeof UNITS)[number];
@@ -89,11 +90,10 @@ function useGasPriceAverage(totalEpochs: number) {
 }
 
 function useGasPriceFormat(gasPrice: bigint | null, unit: 'MIST' | 'SUI') {
-    const [suiDecimals] = useCoinDecimals(SUI_TYPE_ARG);
     return gasPrice !== null
         ? formatBalance(
               gasPrice,
-              unit === 'MIST' ? 0 : suiDecimals,
+              unit === 'MIST' ? 0 : SUI_DECIMALS,
               CoinFormat.FULL
           )
         : null;
@@ -146,16 +146,19 @@ export function GasPriceCard() {
         ? formatDate(hoveredElement?.date, ['month', 'day', 'year'])
         : '-';
     return (
-        <Card spacing="lg">
-            <div className="flex flex-col gap-5">
+        <Card spacing="lg" height="full">
+            <div className="flex h-full flex-col gap-5">
                 <div className="flex gap-2.5">
-                    <div className="flex-grow">
+                    <div className="flex flex-grow flex-nowrap items-center gap-1 text-steel">
                         <Heading
                             variant="heading4/semibold"
                             color="steel-darker"
                         >
-                            Gas Price
+                            Reference Gas Price
                         </Heading>
+                        <Tooltip tip="Transaction sent at RGP will process promptly during regular network operations">
+                            <Info12 className="h-3.5 w-3.5" />
+                        </Tooltip>
                     </div>
                     <FilterList<UnitsType>
                         lessSpacing

@@ -40,6 +40,7 @@ use mysten_network::server::ServerBuilder;
 use narwhal_network::metrics::MetricsMakeCallbackHandler;
 use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use sui_config::node::DBCheckpointConfig;
+use sui_config::node_config_metrics::NodeConfigMetrics;
 use sui_config::{ConsensusConfig, NodeConfig};
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::epoch_start_configuration::EpochStartConfigTrait;
@@ -177,6 +178,8 @@ impl SuiNode {
         node_once_cell: Arc<AsyncOnceCell<Arc<SuiNode>>>,
         custom_rpc_runtime: Option<Handle>,
     ) -> Result<()> {
+        NodeConfigMetrics::new(&registry_service.default_registry()).record_metrics(config);
+
         let mut config = config.clone();
         if config.supported_protocol_versions.is_none() {
             info!(
@@ -273,6 +276,9 @@ impl SuiNode {
             Some(Arc::new(IndexStore::new(
                 config.db_path().join("indexes"),
                 &prometheus_registry,
+                epoch_store
+                    .protocol_config()
+                    .max_move_identifier_len_as_option(),
             )))
         } else {
             None
@@ -341,6 +347,7 @@ impl SuiNode {
             &db_checkpoint_config,
             config.expensive_safety_check_config.clone(),
             config.transaction_deny_config.clone(),
+            config.certificate_deny_config.clone(),
             config.indirect_objects_threshold,
         )
         .await;
@@ -832,6 +839,8 @@ impl SuiNode {
             Box::new(connection_monitor_status),
             consensus_config.max_pending_transactions(),
             consensus_config.max_pending_transactions() * 2 / committee.num_members(),
+            consensus_config.max_submit_position,
+            consensus_config.submit_delay_step_override(),
             ca_metrics,
         )
     }

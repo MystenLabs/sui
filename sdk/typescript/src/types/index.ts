@@ -12,4 +12,5 @@ export * from './normalized';
 export * from './validator';
 export * from './coin';
 export * from './epochs';
+export * from './transactions';
 export { GasCostSummary, CheckpointDigest, Checkpoint } from './checkpoints';

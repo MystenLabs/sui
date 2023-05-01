@@ -5,17 +5,21 @@ import { formatDate, formatAmountParts } from '@mysten/core';
 import { format, isToday, isYesterday } from 'date-fns';
 import { useMemo } from 'react';
 
-import { NetworkStats } from './NetworkStats';
-
 import { useEpochProgress } from '~/pages/epochs/utils';
+import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
 import { ProgressBar } from '~/ui/ProgressBar';
 import { Text } from '~/ui/Text';
+import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
 
 export function CurrentEpoch() {
     const { epoch, progress, label, end, start } = useEpochProgress();
 
     const formattedDateString = useMemo(() => {
+        if (!start) {
+            return null;
+        }
+
         let formattedDate = '';
         const epochStartDate = new Date(start);
         if (isToday(epochStartDate)) {
@@ -30,64 +34,64 @@ export function CurrentEpoch() {
     }, [start]);
 
     return (
-        <NetworkStats bg="highlight" spacing="none">
-            <div className="flex flex-col gap-4">
-                <div className="space-y-4">
-                    <div className="flex flex-col gap-2">
-                        <Heading
-                            color="success-dark"
-                            variant="heading4/semibold"
-                        >
-                            Current Epoch
-                        </Heading>
-                        <Heading
-                            color="success-dark"
-                            variant="heading4/semibold"
-                        >
-                            {formatAmountParts(epoch)}
-                        </Heading>
-                    </div>
-
-                    {!progress && end ? (
-                        <div>
-                            <Text
-                                variant="pSubtitleSmall/normal"
-                                uppercase
-                                color="steel-darker"
+        <LinkWithQuery to={`/epoch/${epoch}`}>
+            <Card bg="highlight" height="full" spacing="lg">
+                <div className="flex w-full flex-col gap-4">
+                    <div className="space-y-4">
+                        <div className="flex flex-col gap-2">
+                            <Heading
+                                color="success-dark"
+                                variant="heading4/semibold"
                             >
-                                End
-                            </Text>
-                            <Text
-                                variant="pSubtitle/semibold"
-                                color="steel-darker"
+                                Current Epoch
+                            </Heading>
+                            <Heading
+                                color="success-dark"
+                                variant="heading4/semibold"
                             >
-                                {formatDate(end)}
-                            </Text>
+                                {formatAmountParts(epoch)}
+                            </Heading>
                         </div>
-                    ) : null}
-                </div>
-                {progress ? (
+
+                        {!progress && end ? (
+                            <div>
+                                <Text
+                                    variant="pSubtitleSmall/normal"
+                                    uppercase
+                                    color="steel-darker"
+                                >
+                                    End
+                                </Text>
+                                <Text
+                                    variant="pSubtitle/semibold"
+                                    color="steel-darker"
+                                >
+                                    {formatDate(end)}
+                                </Text>
+                            </div>
+                        ) : null}
+                    </div>
                     <div className="space-y-1.5">
                         <Heading variant="heading6/medium" color="steel-darker">
-                            {label}
+                            {label ?? '--'}
                         </Heading>
-                        <ProgressBar progress={progress} />
+                        <ProgressBar progress={progress || 0} />
                     </div>
-                ) : null}
-                <div>
-                    <Text
-                        variant="pSubtitleSmall/semibold"
-                        uppercase
-                        color="steel"
-                    >
-                        Started
-                    </Text>
+                    <div>
+                        <Text
+                            variant="pSubtitleSmall/semibold"
+                            uppercase
+                            color="steel-dark"
+                        >
+                            {formattedDateString ? 'Started' : '--'}
+                        </Text>
 
-                    <Text variant="pSubtitle/semibold" color="steel">
-                        {formattedDateString}
-                    </Text>
+                        <Text variant="pSubtitle/semibold" color="steel-dark">
+                            {formattedDateString || '--'}
+                        </Text>
+                    </div>
                 </div>
-            </div>
-        </NetworkStats>
+            </Card>
+        </LinkWithQuery>
     );
 }

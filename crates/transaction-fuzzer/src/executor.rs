@@ -11,17 +11,14 @@ use sui_types::base_types::ObjectRef;
 use sui_types::messages::TransactionData;
 use sui_types::object::Owner;
 use sui_types::utils::to_sender_signed_transaction;
-use sui_types::{
-    error::SuiError,
-    messages::{TransactionEffectsAPI, VerifiedTransaction},
-    object::Object,
-};
+use sui_types::{error::SuiError, messages::VerifiedTransaction, object::Object};
 use tokio::runtime::Runtime;
 
 use crate::account_universe::{AccountCurrent, INITIAL_BALANCE};
 
 use std::path::PathBuf;
 use sui_move_build::BuildConfig;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 
 pub type ExecutionResult = Result<ExecutionStatus, SuiError>;

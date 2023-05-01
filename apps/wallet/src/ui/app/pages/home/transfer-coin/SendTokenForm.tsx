@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useCoinDecimals, useFormatCoin, CoinFormat } from '@mysten/core';
+import { useCoinMetadata, useFormatCoin, CoinFormat } from '@mysten/core';
 import { ArrowRight16 } from '@mysten/icons';
 import { SUI_TYPE_ARG, Coin as CoinAPI, type CoinStruct } from '@mysten/sui.js';
 import { Field, Form, useFormikContext, Formik } from 'formik';
@@ -123,7 +123,8 @@ export function SendTokenForm({
     const suiBalance = CoinAPI.totalBalance(suiCoinsData || []);
 
     const coinSymbol = (coinType && CoinAPI.getCoinSymbol(coinType)) || '';
-    const [coinDecimals, coinDecimalsQueryResult] = useCoinDecimals(coinType);
+    const coinMetadata = useCoinMetadata(coinType);
+    const coinDecimals = coinMetadata.data?.decimals ?? 0;
 
     const validationSchemaStepOne = useMemo(
         () =>
@@ -149,7 +150,7 @@ export function SendTokenForm({
         <Loading
             loading={
                 queryResult.isLoading ||
-                coinDecimalsQueryResult.isLoading ||
+                coinMetadata.isLoading ||
                 suiCoinsIsLoading ||
                 coinsIsLoading
             }
@@ -224,10 +225,10 @@ export function SendTokenForm({
                                         <div className="px-2 mb-2.5">
                                             <Text
                                                 variant="caption"
-                                                color="steel-dark"
+                                                color="steel"
                                                 weight="semibold"
                                             >
-                                                Select SUI Amount to Send
+                                                Select Coin Amount to Send
                                             </Text>
                                         </div>
 
@@ -283,7 +284,7 @@ export function SendTokenForm({
                                         <div className="px-2 tracking-wider">
                                             <Text
                                                 variant="caption"
-                                                color="steel-dark"
+                                                color="steel"
                                                 weight="semibold"
                                             >
                                                 Enter Recipient Address

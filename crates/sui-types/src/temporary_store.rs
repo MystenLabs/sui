@@ -15,8 +15,8 @@ use sui_protocol_config::ProtocolConfig;
 use tracing::trace;
 
 use crate::committee::EpochId;
+use crate::effects::{TransactionEffects, TransactionEvents};
 use crate::execution_status::ExecutionStatus;
-use crate::messages::TransactionEvents;
 use crate::storage::ObjectStore;
 use crate::sui_system_state::{
     get_sui_system_state, get_sui_system_state_wrapper, AdvanceEpochParams, SuiSystemState,
@@ -29,7 +29,7 @@ use crate::{
     event::Event,
     fp_bail, gas,
     gas::{GasCostSummary, SuiGasStatus, SuiGasStatusAPI},
-    messages::{InputObjects, TransactionEffects},
+    messages::InputObjects,
     object::Owner,
     object::{Data, Object},
     storage::{

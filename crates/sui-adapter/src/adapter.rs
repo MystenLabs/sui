@@ -5,7 +5,8 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use anyhow::Result;
 use move_binary_format::{access::ModuleAccess, file_format::CompiledModule};
-use move_bytecode_verifier::{verify_module_with_config, VerifierConfig};
+use move_bytecode_verifier::meter::Meter;
+use move_bytecode_verifier::{verify_module_with_config_metered, VerifierConfig};
 use move_core_types::{account_address::AccountAddress, vm_status::StatusCode};
 pub use move_vm_runtime::move_vm::MoveVM;
 use move_vm_runtime::{
@@ -25,7 +26,7 @@ use sui_types::{
     object::Owner,
     storage::ChildObjectResolver,
 };
-use sui_verifier::verifier::verify_module;
+use sui_verifier::verifier::sui_verify_module_metered;
 
 sui_macros::checked_arithmetic! {
 
@@ -166,6 +167,8 @@ pub fn missing_unwrapped_msg(id: &ObjectID) -> String {
 pub fn run_metered_move_bytecode_verifier(
     module_bytes: &[Vec<u8>],
     protocol_config: &ProtocolConfig,
+    metered_verifier_config: &VerifierConfig,
+    meter: &mut impl Meter
 ) -> Result<(), SuiError> {
     let modules_stat = module_bytes
         .iter()
@@ -185,21 +188,18 @@ pub fn run_metered_move_bytecode_verifier(
         return Ok(());
     };
 
-    // We use a custom config with metering enabled
-    let metered_verifier_config =
-        default_verifier_config(protocol_config, true /* enable metering */);
-
-    run_metered_move_bytecode_verifier_impl(&modules, protocol_config, &metered_verifier_config)
+    run_metered_move_bytecode_verifier_impl(&modules, protocol_config, metered_verifier_config, meter)
 }
 
 pub fn run_metered_move_bytecode_verifier_impl(
     modules: &[CompiledModule],
     protocol_config: &ProtocolConfig,
-    verifier_config: &VerifierConfig
+    verifier_config: &VerifierConfig,
+    meter: &mut impl Meter
 ) -> Result<(), SuiError> {
     // run the Move verifier
     for module in modules.iter() {
-        if let Err(e) = verify_module_with_config(verifier_config, module) {
+        if let Err(e) = verify_module_with_config_metered(verifier_config, module, meter) {
             // Check that the status indicates mtering timeout
             // TODO: currently the Move verifier emits `CONSTRAINT_NOT_SATISFIED` for various failures including metering timeout
             // We need to change the VM error code to be more specific when timedout for metering
@@ -213,7 +213,7 @@ pub fn run_metered_move_bytecode_verifier_impl(
                     error: "Verification timedout".to_string(),
                 });
             };
-            verify_module(protocol_config, verifier_config, module, &BTreeMap::new())?
+            sui_verify_module_metered(protocol_config, module, &BTreeMap::new(), meter)?
         }
     }
     Ok(())

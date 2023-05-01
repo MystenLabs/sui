@@ -32,7 +32,6 @@ The Sui Client CLI supports the following commands:
 | `pay_all_sui` | Pay all residual SUI coins to the recipient with input coins, after deducting the gas cost. The input coins also include the coin for gas payment, so no extra gas coin is required. |
 | `pay_sui` | Pay SUI coins to recipients following specified amounts, with input coins. Length of recipients must be the same as that of amounts. The input coins also include the coin for gas payment, so no extra gas coin is required. |
 | `publish` | Publish Move modules. |
-| `serialize-transfer-sui` | Serialize a transfer that can be signed. This is useful when user prefers to take the data to sign elsewhere. |
 | `split-coin` | Split a coin object into multiple coins. |
 | `switch` | Switch active address and network (e.g., devnet, local RPC server). |
 | `transfer` | Transfer object. |
@@ -135,8 +134,8 @@ All commands use the active address if you don't specify an `address`.
 
 All Sui transactions require a gas object for gas fees. If you don't specify a gas object, Sui uses a gas object with sufficient SUI to cover the gas fee.
 
-You can't use the same gas object as part of a transaction and to pay for the same transaction. 
-To see how much gas is in an account, use the `gas` command. 
+You can't use the same gas object as part of a transaction and to pay for the same transaction.
+To see how much gas is in an account, use the `gas` command.
 
 ```shell
 sui client gas
@@ -184,13 +183,13 @@ sui client objects
 The response resembles the following:
 
 ```
-                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type               
+                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
- 0x1aa482ad8c6240cda3097a4aa13ad5bfb27bf6052133c01f79c8b4ea0aaa0601 |     1      | OpU8HmueEaLzK6hkNSQkcahG8qo73ag4vJPG+g8EQBs= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
- 0x3fd0e889ee56152cdbd5fa5b5dab78ddc66d127930f5173ae7b5a9ac3e17dd6d |     1      | lRamSZkLHnfN9mcrkoVzmXwHxE7GnFHNnqe8dzWEUA8= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
- 0x51ec7820e82035a5de7b4f3ba2a3813ea099dca1867876f4177a1fa1d1efe022 |     1      | 1NO7XtdmojnOch4gcCsUHDdV1n2bPYv5je83yXd5Suw= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
- 0x727b37454ab13d5c1dbb22e8741bff72b145d1e660f71b275c01f24e7860e5e5 |     1      | 9C1lxL45JIxwX35rL69OtAFUf3kz39Dq6jiguVvpCeM= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
- 0xe638c76768804cebc0ab43e103999886641b0269a46783f2b454e2f8880b5255 |     1      | idJrGmd6ZkzJVQeKtu8XlUt2dA397GURgCUXJOLQhxI= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0x1aa482ad8c6240cda3097a4aa13ad5bfb27bf6052133c01f79c8b4ea0aaa0601 |     1      | OpU8HmueEaLzK6hkNSQkcahG8qo73ag4vJPG+g8EQBs= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
+ 0x3fd0e889ee56152cdbd5fa5b5dab78ddc66d127930f5173ae7b5a9ac3e17dd6d |     1      | lRamSZkLHnfN9mcrkoVzmXwHxE7GnFHNnqe8dzWEUA8= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
+ 0x51ec7820e82035a5de7b4f3ba2a3813ea099dca1867876f4177a1fa1d1efe022 |     1      | 1NO7XtdmojnOch4gcCsUHDdV1n2bPYv5je83yXd5Suw= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
+ 0x727b37454ab13d5c1dbb22e8741bff72b145d1e660f71b275c01f24e7860e5e5 |     1      | 9C1lxL45JIxwX35rL69OtAFUf3kz39Dq6jiguVvpCeM= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
+ 0xe638c76768804cebc0ab43e103999886641b0269a46783f2b454e2f8880b5255 |     1      | idJrGmd6ZkzJVQeKtu8XlUt2dA397GURgCUXJOLQhxI= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
 Showing 5 results.
 ```
 
@@ -260,7 +259,7 @@ You can transfer mutable objects you own to another address using the command be
 sui client transfer [OPTIONS] --to <TO> --object-id <OBJECT_ID> --gas-budget <GAS_BUDGET>
 
 OPTIONS:
-        --object-id <OBJECT_ID> 
+        --object-id <OBJECT_ID>
             Object to transfer, in 32 bytes Hex string
 
         --gas <GAS>
@@ -441,7 +440,7 @@ To include multiple object IDs, enclose the IDs in double quotes. For example,
 
 ## Publish packages
 
-You must publish packages to the Sui [distributed ledger](../learn/how-sui-works.md#architecture) for the code you developed to be available in Sui. To publish packages with the Sui client, use the `publish` command. 
+You must publish packages to the Sui [distributed ledger](../learn/how-sui-works.md#architecture) for the code you developed to be available in Sui. To publish packages with the Sui client, use the `publish` command.
 
 Refer to the [Move developer documentation](move/index.md) for a
 description on how to [write a simple Move code package](move/write-package.md),
@@ -464,7 +463,7 @@ sui client publish $PATH_TO_PACKAGE/my_move_package --gas 0x33e3e1d64f76b71a80ec
 The publish command accepts the path to your package as an optional positional parameter (`$PATH_TO_PACKAGE/my_move_package` in the previous call). If you do not supply the path, the command uses the current working directory as the default path value. The call also provides the following data:
 
  * `--gas` - The Coin object used to pay for gas.
- * `--gas-budget` - Gas budget for running module initializers. 
+ * `--gas-budget` - Gas budget for running module initializers.
 
 When you publish a package, the CLI verifies that the bytecode for dependencies found at their respective published addresses matches the bytecode you get when compiling that dependency from source code. If the bytecode for a dependency does not match, your package does not publish and you receive an error message indicating which package and module the mismatch was found in:
 
@@ -526,7 +525,7 @@ publishing was updated as well.
 
 ## Verify source
 
-Supply a package path to `verify-source` (or run from package root) to have the CLI compile the package and check that all its modules match their on-chain counterparts. 
+Supply a package path to `verify-source` (or run from package root) to have the CLI compile the package and check that all its modules match their on-chain counterparts.
 
 `sui client verify-source ./code/MyPackage`
 
@@ -534,7 +533,7 @@ The default behavior is for the command to verify only the direct source of the 
 
 Running `sui client verify-source --skip-source --verify-deps` does not publish the package, but performs the same dependency verification as `sui client publish`. You could use this command to check dependency verification before attempting to publish, as described in the [previous section](#publish-packages).
 
-The `sui client verify-source` command expects package on-chain addresses to be set in the package manifest. There should not be any unspecified or `0x0` addresses in the package. If you want to verify a seemingly unpublished package against an on-chain address, use the `--address-override` flag to supply the on-chain address to verify against. This flag only supports packages that are truly unpublished, with all modules at address `0x0`. You receive an error if you attempt to use this flag on a published (or somehow partially published) package. 
+The `sui client verify-source` command expects package on-chain addresses to be set in the package manifest. There should not be any unspecified or `0x0` addresses in the package. If you want to verify a seemingly unpublished package against an on-chain address, use the `--address-override` flag to supply the on-chain address to verify against. This flag only supports packages that are truly unpublished, with all modules at address `0x0`. You receive an error if you attempt to use this flag on a published (or somehow partially published) package.
 
 If successful, the command returns a `0` exit code and prints `Source verification succeeded!` to the console. If it fails, it returns a non-zero exit code and prints an error message to the console.
 

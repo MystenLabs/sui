@@ -4,9 +4,11 @@
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 
+use sui_json_rpc_types::SuiTransactionBlockEffects;
 use sui_json_rpc_types::{
     DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page, SuiEvent, SuiObjectResponse,
     SuiObjectResponseQuery, SuiTransactionBlockResponseQuery, TransactionBlocksPage,
+    TransactionFilter,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SuiAddress};
@@ -70,6 +72,10 @@ pub trait IndexerApi {
         /// the filter criteria of the event stream, see the [Sui docs](https://docs.sui.io/build/pubsub#event-filters) for detailed examples.
         filter: EventFilter,
     );
+
+    /// Subscribe to a stream of Sui transaction effects
+    #[subscription(name = "subscribeTransaction", item = SuiTransactionBlockEffects)]
+    fn subscribe_transaction(&self, filter: TransactionFilter);
 
     /// Return the list of dynamic field objects owned by an object.
     #[method(name = "getDynamicFields")]

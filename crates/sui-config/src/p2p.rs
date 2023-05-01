@@ -102,6 +102,14 @@ pub struct StateSyncConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub checkpoint_content_download_concurrency: Option<usize>,
 
+    /// Set the upper bound on the number of individual transactions contained in checkpoint
+    /// contents to be downloaded concurrently. If both this value and
+    /// `checkpoint_content_download_concurrency` are set, the lower of the two will apply.
+    ///
+    /// If unspecified, this will default to `50,000`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checkpoint_content_download_tx_concurrency: Option<u64>,
+
     /// Set the timeout that should be used when sending most state-sync RPC requests.
     ///
     /// If unspecified, this will default to `10,000` milliseconds.
@@ -178,6 +186,13 @@ impl StateSyncConfig {
 
         self.checkpoint_content_download_concurrency
             .unwrap_or(CHECKPOINT_CONTENT_DOWNLOAD_CONCURRENCY)
+    }
+
+    pub fn checkpoint_content_download_tx_concurrency(&self) -> u64 {
+        const CHECKPOINT_CONTENT_DOWNLOAD_TX_CONCURRENCY: u64 = 50_000;
+
+        self.checkpoint_content_download_tx_concurrency
+            .unwrap_or(CHECKPOINT_CONTENT_DOWNLOAD_TX_CONCURRENCY)
     }
 
     pub fn timeout(&self) -> Duration {

@@ -16,7 +16,7 @@ import {
 import Alert from '_components/alert';
 import Loading from '_components/loading';
 import Overlay from '_components/overlay';
-import ReceiptCard from '_components/receipt-card';
+import { ReceiptCard } from '_src/ui/app/components/receipt-card';
 import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
 
 function ReceiptPage() {
@@ -36,6 +36,7 @@ function ReceiptPage() {
             return rpc.getTransactionBlock({
                 digest: transactionId!,
                 options: {
+                    showBalanceChanges: true,
                     showObjectChanges: true,
                     showInput: true,
                     showEffects: true,
@@ -93,7 +94,9 @@ function ReceiptPage() {
                 }
             >
                 {isError ? (
-                    <Alert className="mb-2 h-fit">Something went wrong</Alert>
+                    <div className="mb-2 h-fit">
+                        <Alert>Something went wrong</Alert>
+                    </div>
                 ) : null}
 
                 {data && (

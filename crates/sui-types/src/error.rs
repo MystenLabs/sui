@@ -183,6 +183,9 @@ pub enum UserInputError {
 
     #[error("Feature is not yet supported: {0}")]
     Unsupported(String),
+
+    #[error("Query transactions with move function input error: {0}")]
+    MoveFunctionInputError(String),
 }
 
 #[derive(

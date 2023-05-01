@@ -23,7 +23,7 @@ jobs:
           sourceRunId: ${{ github.event.workflow_run.id }}
 
       - name: "Download artifact"
-        uses: actions/github-script@98814c53be79b1d30f795b907e553d8679345975 # pin@v6
+        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410 # pin@v6
         id: get-artifact
         if: steps.source-run-info.outputs.pullRequestNumber
         with:
@@ -58,7 +58,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Remove outdated comments
-        uses: actions/github-script@98814c53be79b1d30f795b907e553d8679345975 # pin@v6
+        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410 # pin@v6
         if: steps.get-artifact.outputs.result == 'false' && steps.source-run-info.outputs.pullRequestNumber
         env:
           ISSUE_NUMBER: ${{ steps.source-run-info.outputs.pullRequestNumber }}

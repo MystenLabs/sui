@@ -1250,17 +1250,6 @@ impl IndexerStore for PgIndexerStore {
                     .context("Failed writing recipients to PostgresDB")?;
             }
 
-            // update epoch transaction count
-            let sql = "UPDATE epochs e1
-SET epoch_total_transactions = e2.epoch_total_transactions + $1
-FROM epochs e2
-WHERE e1.epoch = e2.epoch
-  AND e1.epoch = $2;";
-            diesel::sql_query(sql)
-                .bind::<BigInt, _>(checkpoint.transactions.len() as i64)
-                .bind::<BigInt, _>(checkpoint.epoch)
-                .as_query()
-                .execute(conn)?;
             // Commit indexed checkpoint last, so that if the checkpoint is committed,
             // all related data have been committed as well.
             diesel::insert_into(checkpoints::table)
@@ -1302,18 +1291,6 @@ WHERE e1.epoch = e2.epoch
                     .context("Failed writing transactions to PostgresDB")?;
             }
 
-            // update epoch transaction count
-            let sql = "UPDATE epochs e1
-SET epoch_total_transactions = e2.epoch_total_transactions + $1
-FROM epochs e2
-WHERE e1.epoch = e2.epoch
-  AND e1.epoch = $2;";
-            diesel::sql_query(sql)
-                .bind::<BigInt, _>(checkpoint.transactions.len() as i64)
-                .bind::<BigInt, _>(checkpoint.epoch)
-                .as_query()
-                .execute(conn)?;
-
             // Commit indexed checkpoint last, so that if the checkpoint is committed,
             // all related data have been committed as well.
             diesel::insert_into(checkpoints::table)
@@ -1327,12 +1304,24 @@ WHERE e1.epoch = e2.epoch
 
     async fn persist_object_changes(
         &self,
-        checkpoint_seq: i64,
+        checkpoint: &Checkpoint,
         tx_object_changes: &[TransactionObjectChanges],
         object_mutation_latency: Histogram,
         object_deletion_latency: Histogram,
     ) -> Result<(), IndexerError> {
         transactional_blocking!(&self.blocking_cp, |conn| {
+            // update epoch transaction count
+            let sql = "UPDATE epochs e1
+SET epoch_total_transactions = e2.epoch_total_transactions + $1
+FROM epochs e2
+WHERE e1.epoch = e2.epoch
+  AND e1.epoch = $2;";
+            diesel::sql_query(sql)
+                .bind::<BigInt, _>(checkpoint.transactions.len() as i64)
+                .bind::<BigInt, _>(checkpoint.epoch)
+                .as_query()
+                .execute(conn)?;
+
             {
                 let mutated_objects: Vec<Object> = tx_object_changes
                     .iter()
@@ -1373,7 +1362,7 @@ WHERE e1.epoch = e2.epoch
                 )?;
                 info!(
                 "Object checkpoint {} committed with {} transaction, {} mutated objects and {} deleted objects.",
-                checkpoint_seq,
+                checkpoint.sequence_number,
                 tx_object_changes.len(),
                 mutation_count,
                 deletion_count

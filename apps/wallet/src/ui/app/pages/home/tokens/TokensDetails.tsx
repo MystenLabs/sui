@@ -50,7 +50,7 @@ function MyTokens() {
                     <Text variant="caption" color="steel" weight="semibold">
                         My Coins
                     </Text>
-                    <div className="flex flex-col w-full justify-center divide-y divide-solid divide-steel/20 divide-x-0 px-1.5 mb-20">
+                    <div className="flex flex-col w-full justify-center divide-y divide-solid divide-steel/20 divide-x-0 px-1 mb-20">
                         {balance.map(({ coinType, totalBalance }) => (
                             <CoinBalance
                                 type={coinType}

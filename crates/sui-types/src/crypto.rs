@@ -1444,8 +1444,8 @@ mod bcs_signable {
     impl BcsSignable for crate::messages_checkpoint::CheckpointSummary {}
     impl BcsSignable for crate::messages_checkpoint::CheckpointContents {}
 
-    impl BcsSignable for crate::messages::TransactionEffects {}
-    impl BcsSignable for crate::messages::TransactionEvents {}
+    impl BcsSignable for crate::effects::TransactionEffects {}
+    impl BcsSignable for crate::effects::TransactionEvents {}
     impl BcsSignable for crate::messages::TransactionData {}
     impl BcsSignable for crate::messages::SenderSignedData {}
     impl BcsSignable for crate::object::Object {}

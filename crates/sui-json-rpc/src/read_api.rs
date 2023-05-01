@@ -35,12 +35,10 @@ use sui_types::collection_types::VecMap;
 use sui_types::crypto::default_hash;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::display::DisplayVersionUpdatedEvent;
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::error::{SuiObjectResponseError, UserInputError};
 use sui_types::messages::TransactionDataAPI;
-use sui_types::messages::{
-    TransactionData, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
-    VerifiedTransaction,
-};
+use sui_types::messages::{TransactionData, VerifiedTransaction};
 use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointTimestamp};
 use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, Object, ObjectRead, PastObjectRead};
@@ -702,9 +700,16 @@ impl ReadApiServer for ReadApi {
                         input_objects,
                         None,
                     )
-                    .await
-                    .map_err(Error::SuiError)?;
-                    temp_response.balance_changes = Some(balance_changes);
+                    .await;
+
+                    if let Ok(balance_changes) = balance_changes {
+                        temp_response.balance_changes = Some(balance_changes);
+                    } else {
+                        temp_response.errors.push(format!(
+                            "Cannot retrieve balance changes: {}",
+                            balance_changes.unwrap_err()
+                        ));
+                    }
                 }
             }
 
@@ -720,9 +725,16 @@ impl ReadApiServer for ReadApi {
                         effects.all_changed_objects(),
                         effects.all_deleted(),
                     )
-                    .await
-                    .map_err(Error::SuiError)?;
-                    temp_response.object_changes = Some(object_changes);
+                    .await;
+
+                    if let Ok(object_changes) = object_changes {
+                        temp_response.object_changes = Some(object_changes);
+                    } else {
+                        temp_response.errors.push(format!(
+                            "Cannot retrieve object changes: {}",
+                            object_changes.unwrap_err()
+                        ));
+                    }
                 }
             }
             let epoch_store = self.state.load_epoch_store_one_call_per_task();

@@ -128,6 +128,14 @@
 					{
 						"label": "Verifying Groth16 zk-SNARKs",
 						"fileName": "learn/cryptography/groth16"
+          },
+          {
+						"label": "Sui Crypto Agility and Signatures",
+						"fileName": "learn/cryptography/sui-signatures"
+					},
+					{
+						"label": "Verifiable Random Function (VRF)",
+						"fileName": "learn/cryptography/ecvrf"
 					}
 				]
 			},
@@ -276,6 +284,10 @@
 						"fileName": "build/event_api"
 					}
 				]
+			},
+			{
+				"label": "Developer Cheat Sheet",
+				"fileName": "build/dev_cheat_sheet"
 			}
 		],
 			"reference": [{

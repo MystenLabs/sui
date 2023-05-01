@@ -3,10 +3,7 @@
 Note: this README file currently covers cryptography-related structs and methods.
 
 Currently, three files are equipped with signature and hashing functionality (`crypto.rs`, `signature_seed` and
-`messages.rs`). As of today: account signatures utilize the ed25519 scheme. Regarding validators, they still utilize the
-ed25519 scheme, but we’re exploring transitioning to BLS12-381 due to native aggregation functionality.
-
-Sui uses fastcrypto with an extension trait by adding an additional 1-byte flag to identify signatures `flag || signature` with its associated signing scheme. See [fastcrypto](https://github.com/MystenLabs/fastcrypto) for concrete implementation of various cryptography libraries.
+`messages.rs`). See [Sui Signatures](../../../doc/src/learn/cryptography/sui-signatures.md) for supported signature schemes and its requirments for user and authority signatures. See [fastcrypto](https://github.com/MystenLabs/fastcrypto) for concrete implementation of various cryptography libraries.
 
 ## Quick links
 

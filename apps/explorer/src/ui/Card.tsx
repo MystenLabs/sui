@@ -10,22 +10,27 @@ const cardStyles = cva(null, {
             default: 'bg-gray-40',
             highlight: 'bg-success-light',
             lightBlue: 'bg-sui/10',
+            white: 'bg-white border border-steel',
+        },
+        height: {
+            full: 'h-full',
         },
         rounded: {
             lg: 'rounded-lg',
             xl: 'rounded-xl',
+            '2xl': 'rounded-2xl',
         },
         spacing: {
             none: '',
             sm: 'px-5 py-4',
             md: 'p-5',
-            lg: 'sm:p-8 p-4',
+            lg: 'p-8',
         },
     },
     defaultVariants: {
         bg: 'default',
         spacing: 'md',
-        rounded: 'lg',
+        rounded: 'xl',
     },
 });
 
@@ -33,8 +38,10 @@ export interface CardProps extends VariantProps<typeof cardStyles> {
     children?: ReactNode;
 }
 
-export function Card({ spacing, rounded, bg, children }: CardProps) {
+export function Card({ spacing, rounded, bg, height, children }: CardProps) {
     return (
-        <div className={cardStyles({ spacing, rounded, bg })}>{children}</div>
+        <div className={cardStyles({ spacing, rounded, bg, height })}>
+            {children}
+        </div>
     );
 }

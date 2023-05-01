@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "0.34.0"
+    "version": "1.0.0"
   },
   "methods": [
     {
@@ -1976,6 +1976,23 @@
       ]
     },
     {
+      "name": "suix_getValidatorsApy",
+      "tags": [
+        {
+          "name": "Governance Read API"
+        }
+      ],
+      "description": "Return the validator APY",
+      "params": [],
+      "result": {
+        "name": "ValidatorApys",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/ValidatorApys"
+        }
+      }
+    },
+    {
       "name": "suix_queryEvents",
       "tags": [
         {
@@ -2216,6 +2233,37 @@
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/Event"
+        }
+      }
+    },
+    {
+      "name": "suix_subscribeTransaction",
+      "tags": [
+        {
+          "name": "Extended API"
+        },
+        {
+          "name": "Websocket"
+        },
+        {
+          "name": "PubSub"
+        }
+      ],
+      "description": "Subscribe to a stream of Sui transaction effects",
+      "params": [
+        {
+          "name": "filter",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/TransactionFilter"
+          }
+        }
+      ],
+      "result": {
+        "name": "SuiTransactionBlockEffects",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionBlockEffects"
         }
       }
     },
@@ -7980,6 +8028,40 @@
                 "$ref": "#/components/schemas/SequenceNumber"
               }
             ]
+          }
+        }
+      },
+      "ValidatorApy": {
+        "type": "object",
+        "required": [
+          "address",
+          "apy"
+        ],
+        "properties": {
+          "address": {
+            "$ref": "#/components/schemas/SuiAddress"
+          },
+          "apy": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "ValidatorApys": {
+        "type": "object",
+        "required": [
+          "apys",
+          "epoch"
+        ],
+        "properties": {
+          "apys": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ValidatorApy"
+            }
+          },
+          "epoch": {
+            "$ref": "#/components/schemas/BigInt_for_uint64"
           }
         }
       }

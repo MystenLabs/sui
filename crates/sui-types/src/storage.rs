@@ -6,12 +6,10 @@ use crate::committee::{Committee, EpochId};
 use crate::digests::{
     CheckpointContentsDigest, CheckpointDigest, TransactionEffectsDigest, TransactionEventsDigest,
 };
+use crate::effects::{TransactionEffects, TransactionEvents};
 use crate::error::SuiError;
 use crate::message_envelope::Message;
-use crate::messages::{
-    SenderSignedData, TransactionDataAPI, TransactionEffects, TransactionEvents,
-    VerifiedTransaction,
-};
+use crate::messages::{SenderSignedData, TransactionDataAPI, VerifiedTransaction};
 use crate::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, FullCheckpointContents, VerifiedCheckpoint,
     VerifiedCheckpointContents,
@@ -619,7 +617,7 @@ impl ReadStore for SharedInMemoryStore {
             return Ok(contents);
         }
 
-        // Otherwise gather it from the indivdual components.
+        // Otherwise gather it from the individual components.
         inner
             .get_checkpoint_contents(digest)
             .map(|contents| {
