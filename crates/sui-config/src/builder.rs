@@ -454,7 +454,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     internal_worker_address,
                     max_pending_transactions: None,
                     max_submit_position: None,
-                    max_submit_delay_step_millis: None,
+                    submit_delay_step_millis: None,
                     narwhal_config: ConsensusParameters {
                         network_admin_server: match self.validator_ip_sel {
                             ValidatorIpSelection::Simulator => NetworkAdminServerParameters {

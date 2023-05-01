@@ -22,7 +22,7 @@ validator_configs:
       internal-worker-address: ""
       max-pending-transactions: ~
       max-submit-position: ~
-      max-submit-delay-step-millis: ~
+      submit-delay-step-millis: ~
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
@@ -108,7 +108,7 @@ validator_configs:
       internal-worker-address: ""
       max-pending-transactions: ~
       max-submit-position: ~
-      max-submit-delay-step-millis: ~
+      submit-delay-step-millis: ~
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
@@ -194,7 +194,7 @@ validator_configs:
       internal-worker-address: ""
       max-pending-transactions: ~
       max-submit-position: ~
-      max-submit-delay-step-millis: ~
+      submit-delay-step-millis: ~
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
@@ -280,7 +280,7 @@ validator_configs:
       internal-worker-address: ""
       max-pending-transactions: ~
       max-submit-position: ~
-      max-submit-delay-step-millis: ~
+      submit-delay-step-millis: ~
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
@@ -366,7 +366,7 @@ validator_configs:
       internal-worker-address: ""
       max-pending-transactions: ~
       max-submit-position: ~
-      max-submit-delay-step-millis: ~
+      submit-delay-step-millis: ~
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
@@ -452,7 +452,7 @@ validator_configs:
       internal-worker-address: ""
       max-pending-transactions: ~
       max-submit-position: ~
-      max-submit-delay-step-millis: ~
+      submit-delay-step-millis: ~
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
@@ -538,7 +538,7 @@ validator_configs:
       internal-worker-address: ""
       max-pending-transactions: ~
       max-submit-position: ~
-      max-submit-delay-step-millis: ~
+      submit-delay-step-millis: ~
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000

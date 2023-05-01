@@ -274,9 +274,9 @@ pub struct ConsensusAdapter {
     /// Dictates the maximum position  from which will submit to consensus. Even if the is elected to
     /// submit from a higher position than this, it will "reset" to the max_submit_position.
     max_submit_position: Option<usize>,
-    /// The maximum submit delay step to consensus. When provided it will override the current back off
-    /// logic.
-    max_submit_delay_step: Option<Duration>,
+    /// The submit delay step to consensus as constant. When provided it will override the current back off
+    /// logic and be used instead.
+    submit_delay_step: Option<Duration>,
     /// A structure to check the connection statuses populated by the Connection Monitor Listener
     connection_monitor_status: Box<Arc<dyn CheckConnection>>,
     /// A structure to check the reputation scores populated by Consensus
@@ -315,7 +315,7 @@ impl ConsensusAdapter {
         max_pending_transactions: usize,
         max_pending_local_submissions: usize,
         max_submit_position: Option<usize>,
-        max_submit_delay_step: Option<Duration>,
+        submit_delay_step: Option<Duration>,
         metrics: ConsensusAdapterMetrics,
     ) -> Self {
         let num_inflight_transactions = Default::default();
@@ -326,7 +326,7 @@ impl ConsensusAdapter {
             authority,
             max_pending_transactions,
             max_submit_position,
-            max_submit_delay_step,
+            submit_delay_step,
             num_inflight_transactions,
             connection_monitor_status,
             low_scoring_authorities,
@@ -413,7 +413,7 @@ impl ConsensusAdapter {
             position = std::cmp::min(position, max_submit_position);
         }
 
-        let delay_step = self.max_submit_delay_step.unwrap_or(latency * 3 / 2);
+        let delay_step = self.submit_delay_step.unwrap_or(latency * 3 / 2);
 
         self.metrics
             .sequencing_estimated_latency
