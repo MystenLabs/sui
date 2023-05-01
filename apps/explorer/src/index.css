@@ -26,8 +26,8 @@
         @apply grid grid-cols-1 gap-4;
         grid-template-areas:
             'tps'
-            'network'
             'epoch'
+            'network'
             'checkpoint'
             'gas-price'
             'node-map'
@@ -40,8 +40,8 @@
         grid-template-areas:
             'tps'
             'sui-token'
-            'network'
             'epoch'
+            'network'
             'checkpoint'
             'gas-price'
             'node-map'
