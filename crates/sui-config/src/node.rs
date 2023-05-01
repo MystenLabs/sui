@@ -241,14 +241,14 @@ pub struct ConsensusConfig {
     /// Default to 100_000.
     pub max_pending_transactions: Option<usize>,
 
-    /// Dictates the maximum position  from which will submit to consensus. Even if the is elected to
-    /// submit from a higher position than this, it will "reset" to the max_submit_position.
+    /// When defined caps the calculated submission position to the max_submit_position. Even if the
+    /// is elected to submit from a higher position than this, it will "reset" to the max_submit_position.
     pub max_submit_position: Option<usize>,
 
     /// The submit delay step to consensus defined in milliseconds. When provided it will
     /// override the current back off logic otherwise the default backoff logic will be applied based
     /// on consensus latency estimates.
-    pub submit_delay_step_millis: Option<u64>,
+    pub submit_delay_step_override_millis: Option<u64>,
 
     pub narwhal_config: ConsensusParameters,
 }
@@ -266,8 +266,9 @@ impl ConsensusConfig {
         self.max_pending_transactions.unwrap_or(100_000)
     }
 
-    pub fn submit_delay_step(&self) -> Option<Duration> {
-        self.submit_delay_step_millis.map(Duration::from_millis)
+    pub fn submit_delay_step_override(&self) -> Option<Duration> {
+        self.submit_delay_step_override_millis
+            .map(Duration::from_millis)
     }
 
     pub fn narwhal_config(&self) -> &ConsensusParameters {
