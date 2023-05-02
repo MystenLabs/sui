@@ -19,9 +19,9 @@ These fields in the manifest file, however, at this point are only used for user
 
 Sui comes with a set of built-in package compatibility policies, listed here from most to least strict:
 
-- immutable - this policy is a bit of a misnomer as having it applied means that the package cannot be upgraded at all
+- immutable - calling this one a compatibility policy is a bit of a misnomer as making a package immutable means that it cannot be upgraded at all
 - dependency-only - the only thing that can be modified in an upgraded version of this package are its dependencies
-- additive - new functionality can be added to the package (e.g., new public functions or structs) but none of the existing functionality can be changed (e.g., the code in existing public functions cannot change)
+- additive - new functionality can be added to the package (e.g., new public functions or structs) but none of the existing functionality can be changed (e.g., no existing function code can change)
 - compatible - the most relaxed policy where in addition to everything allowed by more restrictive policies, in an upgraded version of the package:
   - all function implementations can change.
   - ability constraints on generic type parameters in function signatures can be removed
