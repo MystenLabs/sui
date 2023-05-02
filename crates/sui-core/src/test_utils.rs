@@ -12,7 +12,7 @@ use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use prometheus::Registry;
 use shared_crypto::intent::{Intent, IntentScope};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -299,6 +299,7 @@ pub async fn init_local_authorities_with_genesis(
             committee_store,
             clients,
             &Registry::new(),
+            Arc::new(HashMap::new()),
             timeouts,
         ),
         states,

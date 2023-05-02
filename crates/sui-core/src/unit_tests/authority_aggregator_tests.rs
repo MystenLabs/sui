@@ -637,6 +637,7 @@ fn get_genesis_agg<A: Clone>(
         committee_store,
         clients,
         &Registry::new(),
+        Arc::new(HashMap::new()),
         TimeoutConfig {
             serial_authority_request_interval: Duration::from_millis(50),
             ..Default::default()
