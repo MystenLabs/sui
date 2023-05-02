@@ -1,20 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{anyhow, Result};
+// use anyhow::{anyhow, Result};
+use anyhow::Result;
 use clap::Parser;
 use std::path::PathBuf;
-use std::thread;
+// use std::thread;
 use std::time::Duration;
 use sui_config::{Config, NodeConfig};
 use sui_node::metrics;
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_telemetry::send_telemetry_event;
 use sui_types::multiaddr::Multiaddr;
-use tokio::sync::oneshot;
+// use tokio::sync::oneshot;
 use tokio::task;
 use tokio::time::sleep;
-use tracing::{error, info};
+// use tracing::{error, info};
+use tracing::info;
 
 const GIT_REVISION: &str = {
     if let Some(revision) = option_env!("GIT_REVISION") {
@@ -66,7 +68,7 @@ async fn main() -> Result<()> {
         .unwrap();
 
     // Initialize logging
-    let (_guard, filter_handle) = telemetry_subscribers::TelemetryConfig::new()
+    let (_guard, _filter_handle) = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .with_prom_registry(&prometheus_registry)
         .init();
@@ -96,33 +98,38 @@ async fn main() -> Result<()> {
         }
     });
 
-    let admin_interface_port = config.admin_interface_port;
+    let _admin_interface_port = config.admin_interface_port;
 
     // Run node in a separate runtime so that admin/monitoring functions continue to work
     // if it deadlocks.
-    let (sender, receiver) = oneshot::channel();
-    thread::spawn(move || {
-        tokio::runtime::Builder::new_multi_thread()
-            .thread_name("sui-node-tokio-runtime-worker")
-            .enable_all()
-            .build()
-            .unwrap()
-            .block_on(async {
-                if let Err(e) =
-                    sui_node::SuiNode::start_async(&config, registry_service, sender).await
-                {
-                    error!("Failed to start node: {e:?}");
-                    std::process::exit(1)
-                }
-                // TODO: Do we want to provide a way for the node to gracefully shutdown?
-                loop {
-                    tokio::time::sleep(Duration::from_secs(1000)).await;
-                }
-            })
-    });
+    // let (sender, receiver) = oneshot::channel();
+    // thread::spawn(move || {
+    //     tokio::runtime::Builder::new_multi_thread()
+    //         .thread_name("sui-node-tokio-runtime-worker")
+    //         .enable_all()
+    //         .build()
+    //         .unwrap()
+    //         .block_on(async {
+    //             if let Err(e) =
+    //                 sui_node::SuiNode::start_async(&config, registry_service, sender).await
+    //             {
+    //                 error!("Failed to start node: {e:?}");
+    //                 std::process::exit(1)
+    //             }
+    //             // TODO: Do we want to provide a way for the node to gracefully shutdown?
+    //             loop {
+    //                 tokio::time::sleep(Duration::from_secs(1000)).await;
+    //             }
+    //         })
+    // });
 
-    let node = receiver.await.map_err(|e| anyhow!(format!("{e:?}")))?;
-    sui_node::admin::run_admin_server(node.clone(), admin_interface_port, filter_handle).await;
+    // let node = receiver.await.map_err(|e| anyhow!(format!("{e:?}")))?;
+    // sui_node::admin::run_admin_server(node.clone(), admin_interface_port, filter_handle).await;
+    // Err(anyhow::anyhow!("Admin server shutdown unexpectedly"))
+    
+    let _node = sui_node::SuiNode::start_synco(&config, registry_service).await?;
+    loop {
+        tokio::time::sleep(Duration::from_secs(1000)).await;
+    }
 
-    Err(anyhow::anyhow!("Admin server shutdown unexpectedly"))
 }

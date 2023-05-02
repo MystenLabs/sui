@@ -8,6 +8,9 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::Instant;
+
+use crate::syncoexec::MemoryBackedStore;
 
 use anemo::Network;
 use anemo_tower::callback::CallbackLayer;
@@ -19,11 +22,24 @@ use anyhow::Result;
 use arc_swap::ArcSwap;
 use futures::TryFutureExt;
 use prometheus::Registry;
+
+use sui_adapter::execution_engine;
+use sui_adapter::{adapter, execution_mode};
+use sui_core::authority::TemporaryStore;
+use sui_core::transaction_input_checker::get_gas_status;
+// use sui_types::MOVE_STDLIB_ADDRESS;
+// use sui_types::SUI_FRAMEWORK_ADDRESS;
+use sui_types::message_envelope::Message;
+use sui_types::messages::InputObjectKind;
+use sui_types::messages::InputObjects;
+use sui_types::messages::TransactionDataAPI;
+
 use sui_core::consensus_adapter::LazyNarwhalClient;
 use sui_json_rpc::api::JsonRpcMetrics;
 use sui_types::sui_system_state::SuiSystemState;
+use sui_types::epoch_data::EpochData;
 use tap::tap::TapFallible;
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast};
 use tokio::sync::oneshot;
 use tokio::sync::{watch, Mutex};
 use tokio::task::JoinHandle;
@@ -101,6 +117,7 @@ use crate::metrics::GrpcMetrics;
 pub mod admin;
 mod handle;
 pub mod metrics;
+pub mod syncoexec;
 
 pub struct ValidatorComponents {
     validator_server_handle: JoinHandle<Result<()>>,
@@ -449,6 +466,215 @@ impl SuiNode {
         node_sender
             .send(node)
             .map_err(|_e| anyhow!("Failed to send node"))?;
+        Ok(())
+    }
+
+    pub async fn start_synco(
+        config: &NodeConfig,
+        registry_service: RegistryService,
+    ) -> Result<()> {
+        // TODO: maybe have a config enum that takes care of this for us.
+        let prometheus_registry = registry_service.default_registry();
+
+        info!(node =? config.protocol_public_key(),
+            "Initializing sui-node listening on {}", config.network_address
+        );
+
+        // Initialize metrics to track db usage before creating any stores
+        DBMetrics::init(&prometheus_registry);
+        mysten_metrics::init_metrics(&prometheus_registry);
+
+        let genesis = config.genesis()?;
+
+        let genesis_committee = genesis.committee()?;
+        let committee_store = Arc::new(CommitteeStore::new(
+            config.db_path().join("epochs"),
+            &genesis_committee,
+            None,
+        ));
+        let perpetual_options = default_db_options().optimize_db_for_write_throughput(4);
+        let store = AuthorityStore::open(
+            &config.db_path().join("store"),
+            Some(perpetual_options.options.clone()),
+            genesis,
+            &committee_store,
+            config.indirect_objects_threshold,
+            config
+            .expensive_safety_check_config
+            .enable_epoch_sui_conservation_check(),
+            &prometheus_registry,
+        )
+        .await?;
+    
+    let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
+    
+    // hideous hack, not sure if this is correct:
+    let epoch_start_configuration = store
+    .get_epoch_start_configuration()?
+    .expect("EpochStartConfiguration of the current epoch must exist");
+    let protocol_version = epoch_start_configuration
+    .epoch_start_state()
+    .protocol_version();
+    let protocol_config = ProtocolConfig::get_for_version(protocol_version);
+    // end of hideous hack
+
+    let native_functions =
+    sui_framework::natives::all_natives(false);
+    let move_vm = Arc::new(
+        adapter::new_move_vm(native_functions.clone(),&protocol_config,false)
+        .expect("We defined natives to not fail here"),
+    );
+
+    // adding the epoch store here, needed for `get_gas_status`
+    let cur_epoch = store.get_recovery_epoch_at_restart()?;
+    let committee = committee_store
+    .get_committee(&cur_epoch)?
+    .expect("Committee of the current epoch must exist");
+    let cache_metrics = Arc::new(ResolverMetrics::new(&prometheus_registry));
+    let signature_verifier_metrics = SignatureVerifierMetrics::new(&prometheus_registry);
+    let epoch_store = AuthorityPerEpochStore::new(
+        config.protocol_public_key(),
+        committee.clone(),
+        &config.db_path().join("store"),
+        Some(perpetual_options.options),
+        EpochMetrics::new(&registry_service.default_registry()),
+        epoch_start_configuration,
+        store.clone(),
+        cache_metrics,
+        signature_verifier_metrics,
+        &config.expensive_safety_check_config,
+    );
+
+    let mut memory_store = MemoryBackedStore::new();
+    for obj in genesis.objects() {
+        memory_store.objects.insert(obj.id(), (obj.compute_object_reference(), obj.clone()));
+        
+    }
+
+    // let (_checkpoint_sender, checkpoint_receiver) = mpsc::channel(100);
+
+    let mut checkpoint_seq = genesis.checkpoint().into_summary_and_sequence().0;
+    let mut epoch = 0;
+    let mut num_tx : usize = 0;
+    let mut num_tx_prev = num_tx;
+    let mut now = Instant::now();
+    loop {
+        if let Some(checkpoint_summary) = checkpoint_store.get_checkpoint_by_sequence_number(checkpoint_seq)? {
+            
+            checkpoint_seq += 1;
+            let (seq, _summary) = checkpoint_summary.into_summary_and_sequence();
+            let contents = checkpoint_store.get_checkpoint_contents(&_summary.content_digest)?.expect("Contents must exist");
+            
+            if contents.size() > 0 {
+                num_tx += contents.size();
+                // println!("Checkpoint: {:?} Txs: {}", seq, contents.size() );
+            }
+            for tx_digest in contents.iter() {
+                // println!("Digest: {:?}", tx_digest);
+                let tx = store.get_transaction_block(&tx_digest.transaction)?.expect("Transaction exists");
+                let input_object_kinds = tx.data().intent_message().value.input_objects()?;
+                let tx_data = &tx.data().intent_message().value;
+                
+                let mut input_object_data = Vec::new();
+                for kind in &input_object_kinds {
+                    
+                    let obj = match kind {
+                        InputObjectKind::MovePackage(id) | InputObjectKind::SharedMoveObject { id, .. } | InputObjectKind::ImmOrOwnedMoveObject( (id, _, _) ) => {
+                            memory_store.objects.get(&id).expect("Object missing?")
+                        }
+                    };
+                    input_object_data.push(obj.1.clone());
+                    
+                }
+                let gas_status = get_gas_status(&input_object_data, tx_data.gas(), &epoch_store, &tx_data).await?;
+                
+                let input_objects = InputObjects::new(input_object_kinds.into_iter().zip(input_object_data.into_iter()).collect());
+                let shared_object_refs = input_objects.filter_shared_objects();
+                let transaction_dependencies = input_objects.transaction_dependencies();
+
+                let temporary_store =
+                    TemporaryStore::new(&memory_store, input_objects, tx_digest.transaction, &protocol_config);
+
+                let transaction_data = tx.data().intent_message().value.clone();
+                let signer = transaction_data.sender();
+                let gas = transaction_data.gas();
+                let (inner_temp_store, effects, _execution_error) =
+                    execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
+                        shared_object_refs,
+                        temporary_store,
+                        transaction_data.kind().clone(),
+                        signer,
+                        gas,
+                        tx_digest.transaction,
+                        transaction_dependencies,
+                        &move_vm,
+                        gas_status,
+                        &EpochData::new_from_epoch_checkpoint(epoch, &_summary),
+                        &protocol_config,
+                        false
+                    );
+
+                    // Critical check: are the effects the same?
+                    if effects.digest() != tx_digest.effects {
+                        let old_effects = store.get_executed_effects(&tx_digest.transaction).expect("Effects must exist");
+                        println!("Past effects: {:?}", old_effects);
+                        println!("New effects: {:?}", effects);
+                    }
+                    assert!(effects.digest() == tx_digest.effects, "Effects digest mismatch");
+
+
+
+                    // And now we mutate the store.
+                    // First delete:
+                    for obj_del in &inner_temp_store.deleted {
+                        memory_store.objects.remove(obj_del.0);
+                    }
+                    for (obj_add_id, (oref, obj, _))  in inner_temp_store.written {
+                        memory_store.objects.insert(obj_add_id, (oref, obj));
+                    }
+
+                }
+
+                if _summary.end_of_epoch_data.is_some() {
+                    println!("END OF EPOCH");
+                    epoch += 1;
+
+                }
+
+                // A bit of printing.
+                if num_tx - num_tx_prev > 10_000 {
+                    let elapsed = now.elapsed();
+                    let num = num_tx - num_tx_prev;
+                    println!("Load checkpoint: {} TPS: {}", seq, 1000.0 * num as f64 / elapsed.as_millis() as f64);
+                    num_tx_prev = num_tx;
+                    now = Instant::now();
+                }
+            }
+            else {
+                break;
+            }
+
+        }
+
+        // ensure genesis txn was executed
+        //if epoch_store.epoch() == 0 {
+        //    let txn = &genesis.transaction();
+        //    let span = error_span!("genesis_txn", tx_digest = ?txn.digest());
+        //    state
+        //        .execute_certificate(
+        //            &genesis
+        //                .transaction()
+        //                .clone()
+        //                .verify(epoch_store.committee())
+        //                .unwrap(),
+        //            &epoch_store,
+        //        )
+        //        .instrument(span)
+        //        .await
+        //        .unwrap();
+        // }
+
+        info!("SuiNode started!");
         Ok(())
     }
 

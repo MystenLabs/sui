@@ -29,7 +29,7 @@ checked_arithmetic! {
 // Called on both signing and execution.
 // On success the gas part of the transaction (gas data and gas coins)
 // is verified and good to go
-async fn get_gas_status(
+pub async fn get_gas_status(
     objects: &[Object],
     gas: &[ObjectRef],
     epoch_store: &AuthorityPerEpochStore,

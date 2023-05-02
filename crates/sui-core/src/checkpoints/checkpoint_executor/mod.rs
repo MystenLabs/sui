@@ -141,6 +141,7 @@ impl CheckpointExecutor {
                 assert_eq!(epoch_store.epoch(), 0);
                 0
             });
+
         let mut pending: CheckpointExecutionBuffer = FuturesOrdered::new();
 
         let mut now_time = Instant::now();
@@ -192,7 +193,6 @@ impl CheckpointExecutor {
                         now_time = Instant::now();
                         now_transaction_num = current_transaction_num;
                     }
-
                 }
                 // Check for newly synced checkpoints from StateSync.
                 received = self.mailbox.recv() => match received {
