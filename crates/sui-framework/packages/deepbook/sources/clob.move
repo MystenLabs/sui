@@ -210,7 +210,7 @@ module deepbook::clob {
         let base_type_name = type_name::get<BaseAsset>();
         let quote_type_name = type_name::get<QuoteAsset>();
 
-        assert!(clob_math::mul(lot_size, tick_size) > 0, EInvalidTickSizeLotSize);
+        assert!(clob_math::unsafe_mul(lot_size, tick_size) > 0, EInvalidTickSizeLotSize);
         assert!(base_type_name != quote_type_name, EInvalidPair);
         assert!(taker_fee_rate >= maker_rebate_rate, EInvalidFeeRateRebateRate);
 
@@ -390,7 +390,10 @@ module deepbook::clob {
                     emit_order_canceled<BaseAsset, QuoteAsset>(pool_id, maker_order);
                 } else {
                     // Calculate how much quote asset (maker_quote_quantity) is required, including the commission, to fill the maker order.
-                    let (flag, maker_quote_quantity) = clob_math::mul_round(maker_base_quantity, maker_order.price);
+                    let (flag, maker_quote_quantity) = clob_math::mul_round(
+                        maker_base_quantity,
+                        maker_order.price
+                    );
                     if (flag) maker_quote_quantity = maker_quote_quantity + 1;
                     (flag, maker_quote_quantity) = clob_math::mul_round(
                         maker_quote_quantity,
@@ -414,21 +417,25 @@ module deepbook::clob {
                         filled_base_quantity = maker_base_quantity;
                     } else {
                         terminate_loop = true;
-                        (_, filled_quote_quantity_without_commission) = clob_math::div_round(
+                        // if not enough quote quantity to pay for taker commission, then no quantity will be filled
+                        (_, filled_quote_quantity_without_commission) = clob_math::unsafe_div_round(
                             taker_quote_quantity_remaining,
                             FLOAT_SCALING + pool.taker_fee_rate
                         );
-                        (_, filled_base_quantity) = clob_math::div_round(
+                        // filled_base_quantity = 0 is permitted since filled_quote_quantity_without_commission can be 0
+                        (_, filled_base_quantity) = clob_math::unsafe_div_round(
                             filled_quote_quantity_without_commission,
                             maker_order.price
                         );
                         let filled_base_lot = filled_base_quantity / pool.lot_size;
                         filled_base_quantity = filled_base_lot * pool.lot_size;
-                        filled_quote_quantity_without_commission = clob_math::mul(
+                        // filled_quote_quantity_without_commission = 0 is permitted here since filled_base_quantity could be 0
+                        filled_quote_quantity_without_commission = clob_math::unsafe_mul(
                             filled_base_quantity,
                             maker_order.price
                         );
-                        let (round_down, taker_commission) = clob_math::mul_round(
+                        // if taker_commission = 0 due to underflow, round it up to 1
+                        let (round_down, taker_commission) = clob_math::unsafe_mul_round(
                             filled_quote_quantity_without_commission,
                             pool.taker_fee_rate
                         );
@@ -437,7 +444,11 @@ module deepbook::clob {
                         };
                         filled_quote_quantity = filled_quote_quantity_without_commission + taker_commission;
                     };
-                    let maker_rebate = clob_math::mul(filled_quote_quantity_without_commission, pool.maker_rebate_rate);
+                    // if maker_rebate = 0 due to underflow, maker will not receive a rebate
+                    let maker_rebate = clob_math::unsafe_mul(
+                        filled_quote_quantity_without_commission,
+                        pool.maker_rebate_rate
+                    );
                     maker_base_quantity = maker_base_quantity - filled_base_quantity;
 
                     // maker in ask side, decrease maker's locked base asset, increase maker's available quote asset
@@ -548,14 +559,16 @@ module deepbook::clob {
                     emit_order_canceled<BaseAsset, QuoteAsset>(pool_id, maker_order);
                 } else {
                     let filled_base_quantity =
-                        if (taker_base_quantity_remaining >= maker_base_quantity) { maker_base_quantity }
+                        if (taker_base_quantity_remaining > maker_base_quantity) { maker_base_quantity }
                         else { taker_base_quantity_remaining };
                     // filled_quote_quantity to maker,  no need to round up
                     let filled_quote_quantity = clob_math::mul(filled_base_quantity, maker_order.price);
 
                     // rebate_fee to maker, no need to round up
-                    let maker_rebate = clob_math::mul(filled_quote_quantity, pool.maker_rebate_rate);
-                    let (is_round_down, taker_commission) = clob_math::mul_round(
+                    // if maker_rebate = 0 due to underflow, maker will not receive a rebate
+                    let maker_rebate = clob_math::unsafe_mul(filled_quote_quantity, pool.maker_rebate_rate);
+                    // if taker_commission = 0 due to underflow, round it up to 1
+                    let (is_round_down, taker_commission) = clob_math::unsafe_mul_round(
                         filled_quote_quantity,
                         pool.taker_fee_rate
                     );
@@ -676,8 +689,10 @@ module deepbook::clob {
                     let filled_quote_quantity = clob_math::mul(filled_base_quantity, maker_order.price);
 
                     // rebate_fee to maker, no need to round up
-                    let maker_rebate = clob_math::mul(filled_quote_quantity, pool.maker_rebate_rate);
-                    let (is_round_down, taker_commission) = clob_math::mul_round(
+                    // if maker_rebate = 0 due to underflow, maker will not receive a rebate
+                    let maker_rebate = clob_math::unsafe_mul(filled_quote_quantity, pool.maker_rebate_rate);
+                    // if taker_commission = 0 due to underflow, round it up to 1
+                    let (is_round_down, taker_commission) = clob_math::unsafe_mul_round(
                         filled_quote_quantity,
                         pool.taker_fee_rate
                     );
@@ -1637,6 +1652,58 @@ module deepbook::clob {
     }
 
     #[test]
+    #[expected_failure(abort_code = EInvalidRestriction)]
+    fun test_place_limit_order_with_invalid_restrictions_() {
+        let owner: address = @0xAAAA;
+        let alice: address = @0xBBBB;
+        let test = test_scenario::begin(owner);
+        test_scenario::next_tx(&mut test, owner);
+        {
+            setup_test(0, 0, &mut test, owner);
+        };
+        test_scenario::next_tx(&mut test, owner);
+        {
+            mint_account_cap_transfer(
+                alice,
+                test_scenario::ctx(&mut test)
+            );
+        };
+        test_scenario::next_tx(&mut test, alice);
+        {
+            let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut test);
+            let clock = test_scenario::take_shared<Clock>(&test);
+            let account_cap = test_scenario::take_from_address<AccountCap>(&test, alice);
+            let account_cap_user = object::id(&account_cap);
+            custodian::deposit(
+                &mut pool.base_custodian,
+                mint_for_testing<SUI>(1000 * 100000000, test_scenario::ctx(&mut test)),
+                account_cap_user
+            );
+            custodian::deposit(
+                &mut pool.quote_custodian,
+                mint_for_testing<USD>(10000 * 100000000, test_scenario::ctx(&mut test)),
+                account_cap_user
+            );
+            place_limit_order<SUI, USD>(
+                &mut pool,
+                5 * FLOAT_SCALING,
+                200 * 100000000,
+                true,
+                TIMESTAMP_INF,
+                5,
+                &clock,
+                &account_cap,
+                test_scenario::ctx(&mut test)
+            );
+            test_scenario::return_shared(pool);
+            test_scenario::return_shared(clock);
+            test_scenario::return_to_address<AccountCap>(alice, account_cap);
+        };
+
+        test_scenario::end(test);
+    }
+
+    #[test]
     #[expected_failure(abort_code = EOrderCannotBeFullyFilled)]
     fun test_place_limit_order_with_restrictions_FILL_OR_KILL_() {
         let owner: address = @0xAAAA;
@@ -2082,8 +2149,8 @@ module deepbook::clob {
         test_scenario::end(test);
     }
 
-    // <<<<<<<<<<<<<<<<<<<<<<<< deprecated codes <<<<<<<<<<<<<<<<<<<<<<<<
-    /// Emitted when a maker order is injected into the order book.
+    // === Deprecated ===
+    /// Deprecated since v1.0.0, use `OrderPlacedV2` instead.
     struct OrderPlaced<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
         /// object ID of the pool the order was placed on
         pool_id: ID,
@@ -2096,5 +2163,4 @@ module deepbook::clob {
         price: u64,
     }
 
-    // <<<<<<<<<<<<<<<<<<<<<<<< deprecated codes <<<<<<<<<<<<<<<<<<<<<<<<
 }
