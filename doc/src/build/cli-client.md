@@ -6,7 +6,7 @@ Learn how to set up, configure, and use the Sui Client Command Line Interface (C
 
 ## Set up
 
-The SUI Client CLI installs when you install Sui. See the [Install Sui](install.md) topic for prerequisites and installation instructions.
+The Sui Client CLI installs when you install Sui. See the [Install Sui](install.md) topic for prerequisites and installation instructions.
 
 ## Using the Sui client
 
