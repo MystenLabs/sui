@@ -795,10 +795,11 @@ impl LocalExec {
                 return Ok(Some(obj.clone()));
             };
             // Check if its a system package because we must've downloaded all
-            assert!(
-                !self.system_package_ids().contains(obj_id),
-                "All system packages should be downloaded already"
-            );
+            // TODO: Will return this check once we can download completely for other networks
+            // assert!(
+            //     !self.system_package_ids().contains(obj_id),
+            //     "All system packages should be downloaded already"
+            // );
         } else if let Some(obj) = self.storage.live_objects_store.get(obj_id) {
             return Ok(Some(obj.clone()));
         }
