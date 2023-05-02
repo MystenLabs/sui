@@ -6,7 +6,7 @@ import React, { memo } from 'react';
 import * as topojson from 'topojson-client';
 
 import world from '../node-map/topology.json';
-import { type Feature } from '../node-map/types';
+import { type Feature } from './types';
 import { MapFeature } from './MapFeature';
 import { ValidatorLocation } from './ValidatorLocation';
 import { type ValidatorMapData } from './types';
