@@ -27,8 +27,8 @@ const-str = "0.5.3"
 rand = "0.8.5"
 tap = "1.0"
 inquire = "0.6.0"
-rusoto_core = { version = "0.48.0" }
-rusoto_kms = { version = "0.48.0" }
+rusoto_core = { version = "0.48.0", default_features=false, features=["rustls"] }
+rusoto_kms = { version = "0.48.0", default_features=false, features=["rustls"] }
 aws-config = "0.55.1"
 
 sui-core = { path = "../sui-core" }
