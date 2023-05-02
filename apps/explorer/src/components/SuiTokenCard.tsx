@@ -3,18 +3,19 @@
 
 import { formatAmount } from '@mysten/core';
 import { Sui, Refresh16 } from '@mysten/icons';
+import { useState } from 'react';
 
 import { StatsWrapper } from './HomeMetrics/FormattedStatsAmount';
 
 import { useSuiCoinData } from '~/hooks/useSuiCoinData';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
-import { IconButton } from '~/ui/IconButton';
 import { Text } from '~/ui/Text';
-import { useState } from 'react';
+import { ButtonOrLink } from '~/ui/utils/ButtonOrLink';
+import clsx from 'clsx';
 
 export function SuiTokenCard() {
-    const { data, isLoading, refetch } = useSuiCoinData();
+    const { data, isLoading, isFetching, refetch } = useSuiCoinData();
     const [isRefreshButtonHovered, setRefreshButtonHovered] = useState(false);
     const formattedPrice = data
         ? data.currentPrice.toLocaleString('en', {
@@ -56,30 +57,42 @@ export function SuiTokenCard() {
                     </Text>
                 </div>
             </div>
-            <div className="mt-8 flex w-full gap-8 sm:justify-between md:max-lg:max-w-[336px]">
-                <StatsWrapper
-                    label="Market Cap"
-                    size="sm"
-                    postfix="USD"
-                    unavailable={isLoading}
-                >
-                    {formatAmount(data?.fullyDilutedMarketCap)}
-                </StatsWrapper>
-                <StatsWrapper
-                    label="Total Supply"
-                    size="sm"
-                    postfix="SUI"
-                    unavailable={isLoading}
-                >
-                    {formatAmount(data?.totalSupply)}
-                </StatsWrapper>
-                <IconButton
-                    icon={Refresh16}
-                    aria-label="Refresh SUI coin data"
-                    onClick={() => refetch()}
-                    onMouseEnter={() => setRefreshButtonHovered(true)}
-                    onMouseLeave={() => setRefreshButtonHovered(false)}
-                />
+            <div className="mt-8 w-full md:max-lg:max-w-[336px]">
+                <div className="flex items-end gap-8">
+                    <StatsWrapper
+                        label="Market Cap"
+                        size="sm"
+                        postfix="USD"
+                        unavailable={isLoading}
+                    >
+                        {formatAmount(data?.fullyDilutedMarketCap)}
+                    </StatsWrapper>
+                    <StatsWrapper
+                        label="Total Supply"
+                        size="sm"
+                        postfix="SUI"
+                        unavailable={isLoading}
+                    >
+                        {formatAmount(data?.totalSupply)}
+                    </StatsWrapper>
+                </div>
+                <div className="-mb-2 -mr-2">
+                    <ButtonOrLink
+                        onClick={() => refetch()}
+                        onMouseEnter={() => setRefreshButtonHovered(true)}
+                        onMouseLeave={() => setRefreshButtonHovered(false)}
+                        className={clsx('p-2 text-steel hover:text-hero')}
+                    >
+                        <div className="flex items-center gap-1">
+                            {isRefreshButtonHovered && (
+                                <Text variant="subtitleSmallExtra/medium">
+                                    refresh
+                                </Text>
+                            )}
+                            <Refresh16 />
+                        </div>
+                    </ButtonOrLink>
+                </div>
             </div>
         </Card>
     );
