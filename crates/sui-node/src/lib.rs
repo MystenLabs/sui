@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashMap;
-use std::fmt;
 use std::path::PathBuf;
 #[cfg(msim)]
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
+use std::{fmt, fs};
 
 use anemo::Network;
 use anemo_tower::callback::CallbackLayer;
@@ -42,6 +42,7 @@ use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use sui_config::node::DBCheckpointConfig;
 use sui_config::{ConsensusConfig, NodeConfig};
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::authority::epoch_start_configuration::EpochStartConfigTrait;
 use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
 use sui_core::authority_aggregator::AuthorityAggregator;
@@ -85,6 +86,7 @@ use sui_network::discovery;
 use sui_network::discovery::TrustedPeerChangeEvent;
 use sui_network::state_sync;
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
+use sui_storage::object_store::util::hard_link_dir_all;
 use sui_storage::IndexStore;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
 use sui_types::committee::Committee;
@@ -96,7 +98,7 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemS
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use typed_store::rocks::default_db_options;
-use typed_store::DBMetrics;
+use typed_store::{DBMetrics, Map};
 
 use crate::metrics::GrpcMetrics;
 
@@ -193,6 +195,65 @@ impl SuiNode {
         info!(node =? config.protocol_public_key(),
             "Initializing sui-node listening on {}", config.network_address
         );
+
+        let db_checkpoint_config = if config.db_checkpoint_config.checkpoint_path.is_none() {
+            DBCheckpointConfig {
+                checkpoint_path: Some(config.db_checkpoint_path()),
+                ..config.db_checkpoint_config.clone()
+            }
+        } else {
+            config.db_checkpoint_config.clone()
+        };
+
+        let db_checkpoint_handle = match db_checkpoint_config
+            .checkpoint_path
+            .as_ref()
+            .zip(db_checkpoint_config.object_store_config.as_ref())
+        {
+            Some((path, object_store_config)) => {
+                let handler = DBCheckpointHandler::new(
+                    path,
+                    object_store_config,
+                    60,
+                    db_checkpoint_config
+                        .prune_and_compact_before_upload
+                        .unwrap_or(true),
+                    config.indirect_objects_threshold,
+                )?;
+                let local_db_checkpoints = handler.local_checkpoints().await?;
+                let latest_db_checkpoint = local_db_checkpoints
+                    .iter()
+                    .max_by_key(|&(epoch, db_path)| *epoch);
+                if let Some((epoch, checkpoint_db_path)) = latest_db_checkpoint {
+                    if is_full_node
+                        && db_checkpoint_config
+                            .pedantic_snapshot_restore
+                            .unwrap_or(false)
+                    {
+                        let store = AuthorityPerpetualTables::open_readonly(
+                            &config.db_path().join("store"),
+                        );
+                        let curr_epoch = store
+                            .epoch_start_configuration
+                            .get(&())?
+                            .expect("Must have current epoch.")
+                            .epoch_start_state()
+                            .epoch();
+                        let epoch = *epoch as u64;
+                        if epoch == curr_epoch {
+                            fs::remove_dir_all(config.db_path())?;
+                            hard_link_dir_all(
+                                handler.path_to_filesystem(checkpoint_db_path)?,
+                                config.db_path(),
+                            )?;
+                            info!("Restored from local db checkpoint at epoch: {}", epoch);
+                        }
+                    }
+                }
+                Some(handler.start())
+            }
+            None => None,
+        };
 
         // Initialize metrics to track db usage before creating any stores
         DBMetrics::init(&prometheus_registry);
@@ -299,35 +360,6 @@ impl SuiNode {
             epoch_store.epoch_start_state(),
         )
         .expect("Initial trusted peers must be set");
-
-        let db_checkpoint_config = if config.db_checkpoint_config.checkpoint_path.is_none() {
-            DBCheckpointConfig {
-                checkpoint_path: Some(config.db_checkpoint_path()),
-                ..config.db_checkpoint_config.clone()
-            }
-        } else {
-            config.db_checkpoint_config.clone()
-        };
-
-        let db_checkpoint_handle = match db_checkpoint_config
-            .checkpoint_path
-            .as_ref()
-            .zip(db_checkpoint_config.object_store_config.as_ref())
-        {
-            Some((path, object_store_config)) => {
-                let handler = DBCheckpointHandler::new(
-                    path,
-                    object_store_config,
-                    60,
-                    db_checkpoint_config
-                        .prune_and_compact_before_upload
-                        .unwrap_or(true),
-                    config.indirect_objects_threshold,
-                )?;
-                Some(handler.start())
-            }
-            None => None,
-        };
 
         let state = AuthorityState::new(
             config.protocol_public_key(),

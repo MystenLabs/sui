@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use std::{collections::HashMap, fs, pin::Pin, sync::Arc};
+use std::{collections::HashMap, fs, pin::Pin, process, sync::Arc};
 
 use anyhow::anyhow;
 use arc_swap::{ArcSwap, Guard};
@@ -1916,6 +1916,16 @@ impl AuthorityState {
                     cur_epoch_store,
                     checkpoint_indexes,
                 )?;
+
+                if self.is_fullnode(&self.epoch_store.load())
+                    && self
+                        .db_checkpoint_config
+                        .pedantic_snapshot_restore
+                        .unwrap_or(false)
+                {
+                    info!("Exiting the process to trigger snapshot restore in pedantic mode");
+                    process::exit(0);
+                }
             }
         }
         let new_epoch = new_committee.epoch;
