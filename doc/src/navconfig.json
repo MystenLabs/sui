@@ -210,6 +210,10 @@
 						"fileName": "build/custom-upgrade-policy"
 					},
 					{
+						"label": "Dependency Overrides",
+						"fileName": "build/dependency-overrides"
+					},
+					{
 						"label": "Sui Move Library",
 						"fileName": "build/move/sui-move-library"
 					}
