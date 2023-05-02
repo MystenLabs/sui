@@ -30,6 +30,25 @@ module kiosk::royalty_rule_tests {
     }
 
     #[test]
+    #[expected_failure(abort_code = kiosk::royalty_rule::EInsufficientAmount)]
+    fun test_default_flow_0_invalid_amount_fail() {
+        let ctx = &mut ctx();
+        let (policy, cap) = test::prepare(ctx);
+
+        // 0% royalty; min 0 MIST
+        royalty_rule::add(&mut policy, &cap, 0, 0);
+
+        let request = policy::new_request(test::fresh_id(ctx), 100_000, test::fresh_id(ctx));
+        let payment = coin::mint_for_testing<SUI>(10, ctx);
+
+        royalty_rule::pay(&mut policy, &mut request, payment);
+        policy::confirm_request(&mut policy, request);
+
+        let profits = test::wrapup(policy, cap, ctx);
+        assert!(profits == 0, 1);
+    }
+
+    #[test]
     fun test_default_flow_1() {
         let ctx = &mut ctx();
         let (policy, cap) = test::prepare(ctx);
