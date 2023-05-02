@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
+import fetch from 'node-fetch';
 import RpcClient from 'jayson/lib/client/browser/index.js';
 import {
   any,
