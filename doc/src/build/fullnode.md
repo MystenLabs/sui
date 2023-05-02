@@ -131,6 +131,19 @@ Open a Terminal or Console to the `sui` directory you downloaded in the previous
       ```shell
       curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/testnet/genesis.blob
       ```
+1.  Testnet Full nodes only: Edit the `fullnode.yaml` file to include peer nodes for state synchronization. Append the following to the end of the current configuration:
+      ```shell
+      p2p-config:
+        seed-peers:
+          - address: /dns/ewr-tnt-ssfn-00.testnet.sui.io/udp/8084
+            peer-id: df8a8d128051c249e224f95fcc463f518a0ebed8986bbdcc11ed751181fecd38
+          - address: /dns/lax-tnt-ssfn-00.testnet.sui.io/udp/8084
+            peer-id: f9a72a0a6c17eed09c27898eab389add704777c03e135846da2428f516a0c11d
+          - address: /dns/lhr-tnt-ssfn-00.testnet.sui.io/udp/8084
+            peer-id: 9393d6056bb9c9d8475a3cf3525c747257f17c6a698a7062cbbd1875bc6ef71e
+          - address: /dns/mel-tnt-ssfn-00.testnet.sui.io/udp/8084
+            peer-id: c88742f46e66a11cb8c84aca488065661401ef66f726cb9afeb8a5786d83456e
+      ```
 1.  Optional: Skip this step to accept the default paths to resources. Edit the `fullnode.yaml` file to use custom paths.
 
 - Update the `db-path` field with the path to the Full node database.
