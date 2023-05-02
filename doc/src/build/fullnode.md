@@ -131,8 +131,7 @@ Open a Terminal or Console to the `sui` directory you downloaded in the previous
       ```shell
       curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/testnet/genesis.blob
       ```
-1.  For Testnet Full nodes only: Edit the `fullnode.yaml` file to include peer nodes for state synchronization.
-    * Testnet: 
+1.  Testnet Full nodes only: Edit the `fullnode.yaml` file to include peer nodes for state synchronization. Append the following to the end of the current configuration:
       ```shell
       p2p-config:
         seed-peers:
