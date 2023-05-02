@@ -5,7 +5,7 @@ import { Mercator } from '@visx/geo';
 import React, { memo } from 'react';
 import * as topojson from 'topojson-client';
 
-import world from '../node-map/topology.json';
+import world from './topology.json';
 import { MapFeature } from './MapFeature';
 import { ValidatorLocation } from './ValidatorLocation';
 import { type Feature, type ValidatorMapData } from './types';
