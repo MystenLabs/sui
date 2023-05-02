@@ -1,46 +1,87 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { formatAmount } from '@mysten/core';
 import { Sui } from '@mysten/icons';
 
 import { StatsWrapper } from './HomeMetrics/FormattedStatsAmount';
 
+import { useSuiCoinData } from '~/hooks/useSuiCoinData';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
+import { Text } from '~/ui/Text';
 
 export function SuiTokenCard() {
+    const { data, isLoading } = useSuiCoinData();
+    const {
+        priceChangePercentageOver24H,
+        currentPrice,
+        totalSupply,
+        fullyDilutedMarketCap,
+    } = data || {};
+
+    const isPriceChangePositive = Number(priceChangePercentageOver24H) > 0;
+    const formattedPrice = currentPrice
+        ? currentPrice.toLocaleString('en', {
+              style: 'currency',
+              currency: 'USD',
+          })
+        : '--';
+
     return (
         <Card bg="lightBlue" spacing="lg">
-            <div className="flex items-center gap-2">
-                <div className="h-4.5 w-4.5 items-center justify-center rounded-full bg-sui p-1">
-                    <Sui className="h-full w-full text-white" />
+            <div className="md:max-lg:max-w-[336px]">
+                <div className="flex items-center gap-2">
+                    <div className="h-4.5 w-4.5 rounded-full bg-sui p-1">
+                        <Sui className="h-full w-full text-white" />
+                    </div>
+                    <div className="flex w-full flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-center gap-2">
+                            <Heading
+                                as="div"
+                                variant="heading4/semibold"
+                                color="steel-darker"
+                            >
+                                1 SUI = {formattedPrice}
+                            </Heading>
+                            {priceChangePercentageOver24H && (
+                                <Heading
+                                    as="div"
+                                    variant="heading6/medium"
+                                    color={
+                                        isPriceChangePositive
+                                            ? 'success'
+                                            : 'issue'
+                                    }
+                                >
+                                    {isPriceChangePositive ? '+' : null}
+                                    {priceChangePercentageOver24H.toFixed(2)}%
+                                </Heading>
+                            )}
+                        </div>
+                        <Text variant="subtitleSmallExtra/medium" color="steel">
+                            via CoinGecko
+                        </Text>
+                    </div>
                 </div>
-                <Heading
-                    as="div"
-                    variant="heading4/semibold"
-                    color="steel-darker"
-                >
-                    1 SUI = --
-                </Heading>
-                {/* <div className="ml-auto">
-                    <Text variant="subtitleSmallExtra/medium" color="steel">
-                        via CoinMarketCap
-                    </Text>
-                </div> */}
-            </div>
-            <div className="mt-8 flex gap-8">
-                <StatsWrapper
-                    label="Market Cap"
-                    size="sm"
-                    postfix="USD"
-                    unavailable
-                />
-                <StatsWrapper
-                    label="Total Supply"
-                    size="sm"
-                    postfix="SUI"
-                    unavailable
-                />
+                <div className="mt-8 flex w-full gap-8">
+                    <StatsWrapper
+                        label="Market Cap"
+                        size="sm"
+                        postfix="USD"
+                        unavailable={isLoading}
+                    >
+                        {formatAmount(fullyDilutedMarketCap)}
+                    </StatsWrapper>
+                    <StatsWrapper
+                        label="Total Supply"
+                        size="sm"
+                        postfix="SUI"
+                        unavailable={isLoading}
+                    >
+                        {formatAmount(totalSupply)}
+                    </StatsWrapper>
+                </div>
             </div>
         </Card>
     );

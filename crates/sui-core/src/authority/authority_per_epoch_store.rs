@@ -306,25 +306,25 @@ pub struct AuthorityEpochTables {
 fn signed_transactions_table_default_config() -> DBOptions {
     default_db_options()
         .optimize_for_write_throughput()
-        .optimize_for_large_values_no_scan()
+        .optimize_for_large_values_no_scan(1 << 10)
 }
 
 fn pending_execution_table_default_config() -> DBOptions {
     default_db_options()
         .optimize_for_write_throughput()
-        .optimize_for_large_values_no_scan()
+        .optimize_for_large_values_no_scan(1 << 10)
 }
 
 fn pending_consensus_transactions_table_default_config() -> DBOptions {
     default_db_options()
         .optimize_for_write_throughput()
-        .optimize_for_large_values_no_scan()
+        .optimize_for_large_values_no_scan(1 << 10)
 }
 
 fn pending_checkpoints_table_default_config() -> DBOptions {
     default_db_options()
         .optimize_for_write_throughput()
-        .optimize_for_large_values_no_scan()
+        .optimize_for_large_values_no_scan(1 << 10)
 }
 
 impl AuthorityEpochTables {

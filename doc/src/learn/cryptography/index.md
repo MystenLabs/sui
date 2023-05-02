@@ -11,3 +11,4 @@ Learn about cryptography in Sui:
 * [Hashing in Sui](../cryptography/hashing.md)
 * [Groth16 verifier](../cryptography/groth16.md)
 * [Verifiable Random Function](../cryptography/ecvrf.md)
+* [Sui On-Chain Signatures Verification in Move](../cryptography/sui-move-signatures.md)

@@ -179,6 +179,10 @@ impl Histogram {
         HistogramVec::new_in_registry(name, desc, &[], registry).with_label_values(&[])
     }
 
+    pub fn observe(&self, v: Point) {
+        self.report(v)
+    }
+
     pub fn report(&self, v: Point) {
         match self.channel.try_send((self.labels.clone(), v)) {
             Ok(()) => {}

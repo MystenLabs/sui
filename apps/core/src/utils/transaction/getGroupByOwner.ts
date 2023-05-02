@@ -32,17 +32,21 @@ export function getGroupByOwner(objectSummaryChanges: ObjectSummaryChange[]) {
             >,
             change
         ) => {
-            const owner = 'owner' in change ? change.owner : {};
+            const owner = 'owner' in change ? change.owner : null;
+
+            if (!owner) {
+                return mapByOwner;
+            }
 
             let key;
             let locationIdType;
-            if ('AddressOwner' in owner) {
+            if (owner !== 'Immutable' && 'AddressOwner' in owner) {
                 key = owner.AddressOwner;
                 locationIdType = LocationIdType.AddressOwner;
-            } else if ('ObjectOwner' in owner) {
+            } else if (owner !== 'Immutable' && 'ObjectOwner' in owner) {
                 key = owner.ObjectOwner;
                 locationIdType = LocationIdType.ObjectOwner;
-            } else if ('Shared' in owner) {
+            } else if (owner !== 'Immutable' && 'Shared' in owner) {
                 key = change.objectId;
                 locationIdType = LocationIdType.Shared;
             } else {

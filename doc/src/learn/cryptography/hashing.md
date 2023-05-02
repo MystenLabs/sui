@@ -61,7 +61,7 @@ module test::hashing_sui {
     public entry fun hash_data(data: vector<u8>, recipient: address, ctx: &mut TxContext) {
         let hashed = Output {
             id: object::new(ctx),
-            value: hash::keccak256(data),
+            value: hash::keccak256(&data),
         };
         // Transfer an output data object holding the hashed data to the recipient.
         transfer::public_transfer(hashed, recipient)

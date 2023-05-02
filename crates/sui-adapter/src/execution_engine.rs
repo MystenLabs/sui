@@ -157,7 +157,12 @@ pub fn execute_transaction_to_effects_impl<
     TransactionEffects,
     Result<Mode::ExecutionResults, ExecutionError>,
 ) {
-    let mut tx_ctx = TxContext::new_from_components(&transaction_signer, &transaction_digest, epoch_id, epoch_timestamp_ms);
+    let mut tx_ctx = TxContext::new_from_components(
+        &transaction_signer,
+        &transaction_digest,
+        epoch_id,
+        epoch_timestamp_ms,
+    );
 
     let is_epoch_change = matches!(transaction_kind, TransactionKind::ChangeEpoch(_));
 
@@ -179,8 +184,7 @@ pub fn execute_transaction_to_effects_impl<
         // Elaborate errors in logs if they are unexpected or their status is terse.
         use ExecutionErrorKind as K;
         match error.kind() {
-            K::InvariantViolation |
-            K::VMInvariantViolation => {
+            K::InvariantViolation | K::VMInvariantViolation => {
                 #[skip_checked_arithmetic]
                 tracing::error!(
                     kind = ?error.kind(),
@@ -188,10 +192,9 @@ pub fn execute_transaction_to_effects_impl<
                     "INVARIANT VIOLATION! Source: {:?}",
                     error.source(),
                 );
-            },
+            }
 
-            K::SuiMoveVerificationError |
-            K::VMVerificationOrDeserializationError => {
+            K::SuiMoveVerificationError | K::VMVerificationOrDeserializationError => {
                 #[skip_checked_arithmetic]
                 tracing::debug!(
                     kind = ?error.kind(),
@@ -201,8 +204,7 @@ pub fn execute_transaction_to_effects_impl<
                 );
             }
 
-            K::PublishUpgradeMissingDependency |
-            K::PublishUpgradeDependencyDowngrade => {
+            K::PublishUpgradeMissingDependency | K::PublishUpgradeDependencyDowngrade => {
                 #[skip_checked_arithmetic]
                 tracing::debug!(
                     kind = ?error.kind(),
@@ -306,7 +308,10 @@ fn execute_transaction<
     let result = charge_gas_for_object_read(temporary_store, &mut gas_status);
     let mut result = result.and_then(|()| {
         let mut execution_result = if deny_cert {
-            Err(ExecutionError::new(ExecutionErrorKind::CertificateDenied, None))
+            Err(ExecutionError::new(
+                ExecutionErrorKind::CertificateDenied,
+                None,
+            ))
         } else {
             execution_loop::<Mode, _>(
                 temporary_store,
@@ -351,11 +356,11 @@ fn execute_transaction<
             }
         };
         if execution_result.is_ok() {
-
             // This limit is only present in Version 3 and up, so use this to gate it
-            if let (Some(normal_lim), Some(system_lim)) =
-                (protocol_config.max_size_written_objects_as_option(), protocol_config
-            .max_size_written_objects_system_tx_as_option()) {
+            if let (Some(normal_lim), Some(system_lim)) = (
+                protocol_config.max_size_written_objects_as_option(),
+                protocol_config.max_size_written_objects_system_tx_as_option(),
+            ) {
                 let written_objects_size = temporary_store.written_objects_size();
 
                 match check_limit_by_meter!(
@@ -383,9 +388,7 @@ fn execute_transaction<
                         ))
                     }
                 };
-
             }
-
         }
 
         execution_result
@@ -413,7 +416,8 @@ fn execute_transaction<
         temporary_store.conserve_unmetered_storage_rebate(gas_status.unmetered_storage_rebate());
         if !is_genesis_tx && !Mode::allow_arbitrary_values() {
             // ensure that this transaction did not create or destroy SUI, try to recover if the check fails
-            let conservation_result = temporary_store.check_sui_conserved(advance_epoch_gas_summary, enable_expensive_checks);
+            let conservation_result = temporary_store
+                .check_sui_conserved(advance_epoch_gas_summary, enable_expensive_checks);
             if let Err(conservation_err) = conservation_result {
                 // conservation violated. try to avoid panic by dumping all writes, charging for gas, re-checking
                 // conservation, and surfacing an aborted transaction with an invariant violation if all of that works
@@ -421,16 +425,23 @@ fn execute_transaction<
                 temporary_store.reset(gas, &mut gas_status);
                 temporary_store.charge_gas(gas_object_id, &mut gas_status, &mut result, gas);
                 // check conservation once more more
-                if let Err(recovery_err) = temporary_store.check_sui_conserved(advance_epoch_gas_summary, enable_expensive_checks) {
+                if let Err(recovery_err) = temporary_store
+                    .check_sui_conserved(advance_epoch_gas_summary, enable_expensive_checks)
+                {
                     // if we still fail, it's a problem with gas
                     // charging that happens even in the "aborted" case--no other option but panic.
                     // we will create or destroy SUI otherwise
-                    panic!("SUI conservation fail in tx block {}: {}\nGas status is {}\nTx was ", tx_ctx.digest(), recovery_err, gas_status.summary())
+                    panic!(
+                        "SUI conservation fail in tx block {}: {}\nGas status is {}\nTx was ",
+                        tx_ctx.digest(),
+                        recovery_err,
+                        gas_status.summary()
+                    )
                 }
-              }
+            }
         } // else, we're in the genesis transaction which mints the SUI supply, and hence does not satisfy SUI conservation, or
-        // we're in the non-production dev inspect mode which allows us to violate conservation
-        // === end SUI conservation checks ===
+          // we're in the non-production dev inspect mode which allows us to violate conservation
+          // === end SUI conservation checks ===
         (cost_summary, result)
     } else {
         // legacy code before gas v2, leave it alone
@@ -497,7 +508,8 @@ fn execution_loop<
                 gas_status,
                 protocol_config,
                 metrics,
-            ).expect("ConsensusCommitPrologue cannot fail");
+            )
+            .expect("ConsensusCommitPrologue cannot fail");
             Ok(Mode::empty_results())
         }
         TransactionKind::ProgrammableTransaction(pt) => {
@@ -584,10 +596,7 @@ pub fn construct_advance_epoch_pt(
 
     arguments.append(&mut call_arg_arguments.unwrap());
 
-    info!(
-        "Call arguments to advance_epoch transaction: {:?}",
-        params
-    );
+    info!("Call arguments to advance_epoch transaction: {:?}", params);
 
     let storage_rebates = builder.programmable_move_call(
         SUI_SYSTEM_OBJECT_ID,
@@ -650,10 +659,7 @@ pub fn construct_advance_epoch_safe_mode_pt(
 
     arguments.append(&mut call_arg_arguments.unwrap());
 
-    info!(
-        "Call arguments to advance_epoch transaction: {:?}",
-        params
-    );
+    info!("Call arguments to advance_epoch transaction: {:?}", params);
 
     builder.programmable_move_call(
         SUI_SYSTEM_OBJECT_ID,
@@ -735,7 +741,14 @@ fn advance_epoch<S: ObjectStore + BackingPackageStore + ParentSync + ChildObject
         let max_format_version = protocol_config.move_binary_format_version();
         let deserialized_modules: Vec<_> = modules
             .iter()
-            .map(|m| CompiledModule::deserialize_with_config(m, max_format_version, protocol_config.no_extraneous_module_bytes()).unwrap())
+            .map(|m| {
+                CompiledModule::deserialize_with_config(
+                    m,
+                    max_format_version,
+                    protocol_config.no_extraneous_module_bytes(),
+                )
+                .unwrap()
+            })
             .collect();
 
         if version == OBJECT_START_VERSION {
@@ -761,7 +774,10 @@ fn advance_epoch<S: ObjectStore + BackingPackageStore + ParentSync + ChildObject
             .expect("System Package Publish must succeed");
         } else {
             let mut new_package = Object::new_system_package(
-                &deserialized_modules, version, dependencies, tx_ctx.digest(),
+                &deserialized_modules,
+                version,
+                dependencies,
+                tx_ctx.digest(),
             );
 
             info!(
