@@ -5,7 +5,7 @@ export interface Feature {
     type: 'Feature';
     id: string;
     geometry: { coordinates: [number, number][][]; type: 'Polygon' };
-    properties: { name: string; alpha2: string };
+    properties: { name: string; countryCode: string };
 }
 
 interface ValidatorIpInfo {
