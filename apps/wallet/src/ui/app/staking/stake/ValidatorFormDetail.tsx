@@ -173,9 +173,9 @@ export function ValidatorFormDetail({
                                     weight="medium"
                                     color="steel-darker"
                                 >
-                                    Staking Share
+                                    Stake Share
                                 </Text>
-                                <IconTooltip tip="This is the Annualized Percentage Yield of the a specific validator’s past operations. Note there is no guarantee this APY will be true in the future." />
+                                <IconTooltip tip="The percentage of total stake managed by this validator" />
                             </div>
 
                             <Text
