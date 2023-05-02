@@ -89,8 +89,7 @@ Follow the instructions in the [Full node Docker Readme](https://github.com/Myst
 You must get the latest source files from the Sui GitHub repository.
 
 1. Set up your fork of the Sui repository:
-   1. Go to the [Sui repository](https://github.com/MystenLabs/sui) on GitHub
-      and click the _Fork_ button in the top right-hand corner of the screen.
+   1. Go to the [Sui repository](https://github.com/MystenLabs/sui) on GitHub and click the **Fork** button in the top right-hand corner of the screen.
    1. Clone your personal fork of the Sui repository to your local machine
       (ensure that you insert your GitHub username into the URL):
       ```shell
@@ -127,9 +126,13 @@ Open a Terminal or Console to the `sui` directory you downloaded in the previous
       ```shell
       curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob
       ```
-    - [Testnet genesis blob](https://github.com/MystenLabs/sui-genesis/raw/main/testnet/genesis.blob) - Supported only when there is an active public Testnet network.
+    - [Testnet genesis blob](https://github.com/MystenLabs/sui-genesis/raw/main/testnet/genesis.blob):
       ```shell
       curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/testnet/genesis.blob
+      ```
+    - [Mainnet genesis blob](https://github.com/MystenLabs/sui-genesis/raw/main/mainnet/genesis.blob)
+      ```shell
+      curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/mainnet/genesis.blob
       ```
 1.  Testnet Full nodes only: Edit the `fullnode.yaml` file to include peer nodes for state synchronization. Append the following to the end of the current configuration:
       ```shell
@@ -189,22 +192,22 @@ metrics-address: "0.0.0.0:9180"
 
 ## Sui Explorer with your Full node
 
-[Sui Explorer](https://explorer.sui.io/) supports connections to custom RPC URLS and local networks. You can point the Explorer to your local Full node and see the
-transactions it syncs from the network. To make this change:
+[Sui Explorer](https://suiexplorer.com/) supports connections to custom RPC URLS and local networks. You can point the Explorer to your local Full node and see the transactions it syncs from the network.
 
-1.  Open a browser and go to: https://explorer.sui.io/
-1.  Click the **Devnet** button in the top right-hand corner of Sui Explorer (or menu icon on smaller screens) and select **Local** or **Testnet** from the drop-down menu.
-1.  Close the **Choose a Network** menu to see the latest transactions. If you chose the **Local** network, Sui Explorer now uses your local Full node to explore the state of the chain.
+1.  Open a browser and go to: https://suiexplorer.com/
+1.  Click **Mainnet** in the network drop-down at the top right-hand corner (or three bars on smaller screens) and select **Local** to connect to a local network, or select **Custom RPC URL** and then enter the URL.
+
+Sui Explorer displays information about the selected network.
 
 ## Monitoring
 
 Monitor your Full node using the instructions at [Logging, Tracing, Metrics, and Observability](../contribute/observability.md).
 
-Note the default metrics port is `9184`. To change the port, edit your `fullnode.yaml` file.
+The default metrics port is `9184`. To change the port, edit your `fullnode.yaml` file.
 
 ## Update your Full node
 
-Whenever Sui releases a new version, the network resets and restarts as a new network with no data. You must update your Full node with each Sui release to ensure compatibility with the network.
+Whenever Sui releases a new version, you must update your Full node with the release to ensure compatibility with the network it connects to. For example, if you use Sui Testnet you should install the version of Sui running on Sui Testnet. 
 
 ### Update with Docker Compose
 
@@ -217,14 +220,14 @@ docker-compose down --volumes
 
 ### Update from source
 
-If you followed the instructions for [Building from Source](#building-from-source), update your Full node as follows:
+If you followed the instructions for [Building from Source](#building-from-source), use the following steps to update your Full node:
 
 1.  Shut down your running Full node.
 1.  `cd` into your local Sui repository:
     ```shell
     cd sui
     ```
-1.  Remove the old on-disk database and 'genesis.blob' file:
+1.  Remove the database and 'genesis.blob' file:
     ```shell
     rm -r suidb genesis.blob
     ```

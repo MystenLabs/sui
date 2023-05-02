@@ -2,16 +2,16 @@
 title: Connect to a Sui Network
 ---
 
-Sui has Testnet and Devnet networks available. Use one of the on-chain networks to experiment with the version of Sui running on that network. You can also spin up a [local Sui network](sui-local-network.md) for local development. 
+Sui has Mainnet, Devnet, and Testnet networks available. You can use one of the test networks, Devnet or Testnet, to experiment with the version of Sui running on that network. You can also spin up a [local Sui network](sui-local-network.md) for local development. 
 
 The Sui Testnet and Devnet networks consist of:
 
  * Four validator nodes operated by Mysten Labs. Clients send transactions and read requests via this endpoint: `https://fullnode.<SUI-NETWORK-VERSION>.sui.io:443` using [JSON-RPC](../build/json-rpc.md).
- * A public network [Sui Explorer](https://explorer.sui.io) for browsing transaction history.
+ * A public network [Sui Explorer](https://suiexplorer.com/) for browsing transaction history.
 
-You can [request test SUI tokens](#request-test-tokens) through the Sui [devnet-faucet](https://discordapp.com/channels/916379725201563759/971488439931392130) and [testnet-faucet](https://discord.com/channels/916379725201563759/1037811694564560966) Discord channels, depending on which version of the network you're working with. If connected to Localnet, use cURL to request tokens from your [local faucet](sui-local-network.md#use-the-local-faucet). The coins on these networks have no financial value. With each Sui release, the network resets and removes all assets (coins and NFTs).
+You can [request test SUI tokens](#request-test-tokens) through the Sui [devnet-faucet](https://discordapp.com/channels/916379725201563759/971488439931392130) and [testnet-faucet](https://discord.com/channels/916379725201563759/1037811694564560966) Discord channels, depending on which version of the network you use. If connected to Localnet, use cURL to request tokens from your [local faucet](sui-local-network.md#use-the-local-faucet). The coins on these networks have no financial value. For obvious reasons, there is no faucet service for Mainnet.
 
-See announcements about Sui Devnet in the [#devnet-updates](https://discord.com/channels/916379725201563759/1004638487078772736) Discord channel.
+See announcements about Sui in the [#announcements](https://discord.com/channels/916379725201563759/925109817834631189) Discord channel.
 
 See the [terms of service](https://sui.io/terms/) for using Sui networks.
 
@@ -63,7 +63,7 @@ Press **y** and then press **Enter**. The process then requests the RPC server U
 Sui Full node server URL (Defaults to Sui Devnet if not specified) :
 ```
 
-Press **Enter** to connect to Sui Devnet. To use a custom RPC server or Sui Testnet, enter the URL to the correct RPC endpoint and then press **Enter**.
+Press **Enter** to connect to Sui Devnet. To use a custom RPC server, Sui Testnet, or Sui Mainnet, enter the URL to the correct RPC endpoint and then press **Enter**.
 
 If you enter a URL, the process prompts for an alias for the environment:
 
@@ -342,7 +342,7 @@ Go to the Sui Explorer to observe a newly created object. You should see a sword
 ![Object view in Sui Explorer](../../static/build-explorer-object.png)
 *Explorer view of example sword object*
 
-To see your object in the current [Sui Explorer](https://explorer.sui.io), paste the object ID of the created object you observed in your own command output in the search field and press **Enter**. If your Sui Explorer doesn't find your object, make sure it's pointing to the right network. 
+To see your object in the current [Sui Explorer](https://suiexplorer.com/), paste the object ID of the created object you observed in your own command output in the search field and press **Enter**. If your Sui Explorer doesn't find your object, make sure it's pointing to the right network. 
 
 Related topics:
  * [Create Smart Contracts with Move](../build/move/index.md)

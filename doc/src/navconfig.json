@@ -214,6 +214,10 @@
 						"fileName": "build/custom-upgrade-policy"
 					},
 					{
+						"label": "Dependency Overrides",
+						"fileName": "build/dependency-overrides"
+					},
+					{
 						"label": "Sui Move Library",
 						"fileName": "build/move/sui-move-library"
 					}
@@ -308,14 +312,7 @@
 				"fileName": "reference/framework/index"
 			}
 		],
-		"explore": [{
-				"label": "Sui Explorer",
-				"fileName": "explore/sui-explorer"
-			},
-			{
-				"label": "Sui Wallet",
-				"fileName": "explore/wallet-browser"
-			},
+		"explore": [
 			{
 				"label": "Tutorials",
 				"fileName": "explore/tutorials"
@@ -325,7 +322,8 @@
 				"fileName": "explore/examples"
 			}
 		],
-		"contribute": [{
+		"contribute": [
+			{
 				"label": "Frequently Asked Questions",
 				"fileName": "contribute/faq"
 			},

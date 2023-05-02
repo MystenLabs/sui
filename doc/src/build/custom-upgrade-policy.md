@@ -611,8 +611,7 @@ const tuesdayUpgradeCap = tx.moveCall({
 tx.transferObjects([tuesdayUpgradeCap], tx.pure(sender));
 ```
 
-And finally, execute that transaction and display its effects to the console. The following snippet assumes that you're running your examples against a
-local network. Replace all `localnetConnection` references with `devnetConnection` or `testnetConnection` to run on Devnet or Testnet respectively:
+And finally, execute that transaction and display its effects to the console. The following snippet assumes that you're running your examples against a local network. Replace all `localnetConnection` references with `devnetConnection`, `testnetConnection`, or `mainnetConnection` to run on Devnet, Testnet, or Mainnet respectively:
 
 ```js
 import { JsonRpcProvider, RawSigner, localnetConnection }

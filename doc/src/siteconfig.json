@@ -32,7 +32,7 @@
         },
         {
           "title": "GitHub",
-          "link": "https://github.com/MystenLabs",
+          "link": "https://github.com/MystenLabs/sui",
           "external": true
         }
       ]
@@ -123,6 +123,11 @@
             "name": "Sui Announcements (Discord)",
             "url": "https://discord.com/channels/916379725201563759/925109817834631189",
             "external": true            
+          },
+          {
+            "name": "Sui Developer Portal",
+            "url": "https://sui.io/developers",
+            "external": true
           }
         ]
       },

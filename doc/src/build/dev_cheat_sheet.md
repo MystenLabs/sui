@@ -18,7 +18,7 @@ Quick reference on best practices for Sui Network developers.
     - Use dynamic field-backed collections (`Table`, `Bag`, `ObjectBag`, `ObjectTable`, `LinkedTable`) for any collection that allows third-party addition, larger collections, and collections of unknown size.
     - Sui Move objects have a maximum size of 250KB—any attempt to create a larger object will lead to an aborted transaction. Ensure that your objects do not have an ever-growing `vector`-backed collection.
 - If your function `f` needs a payment in (e.g.) SUI from the caller, use `fun f(payment: Coin<SUI>)` not `fun f(payment: &mut Coin<SUI>, amount: u64)`. This is safer for callers—they know exactly how much they are paying, and do not need to trust `f` to extract the right amount.
-- Don’t micro-optimize gas usage. Sui computation costs are rounded up to the closest *[bucket](https://docs.sui.io/devnet/learn/tokenomics/gas-in-sui#gas-units)*, so only very drastic changes will make a difference. In particular, if your transaction is already in the lowest cost bucket, it can’t get any cheaper.
+- Don’t micro-optimize gas usage. Sui computation costs are rounded up to the closest *[bucket](https://docs.sui.io/learn/tokenomics/gas-in-sui#gas-units)*, so only very drastic changes will make a difference. In particular, if your transaction is already in the lowest cost bucket, it can’t get any cheaper.
 - Follow the [Move coding conventions](https://move-language.github.io/move/coding-conventions.html) for consistent style.
 
 ### Composability
@@ -44,4 +44,4 @@ Quick reference on best practices for Sui Network developers.
 
 - **Never** sign two concurrent transactions that are touching the same owned object. Either use independent owned objects, or wait for one transaction to conclude before sending the next one. Violating this rule might lead to client [equivocation](https://docs.sui.io/learn/sui-glossary#equivocation), which locks up the owned objects involved in the two transactions until the end of the current epoch.
 - Any `sui client` command that crafts a transaction (e.g., `sui client publish`, `sui client call`) can accept the `--serialize-output` flag to output a base64 transaction to be signed.
-- Sui supports several [signature schemes](https://docs.sui.io/devnet/learn/cryptography/sui-offline-signing) for transaction signing, including native [multisig](https://docs.sui.io/devnet/learn/cryptography/sui-multisig).
+- Sui supports several [signature schemes](https://docs.sui.io/learn/cryptography/sui-offline-signing) for transaction signing, including native [multisig](https://docs.sui.io/learn/cryptography/sui-multisig).
