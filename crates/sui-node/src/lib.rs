@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashMap;
-use std::fmt;
 use std::path::PathBuf;
 #[cfg(msim)]
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
+use std::{fmt, fs};
 
 use anemo::Network;
 use anemo_tower::callback::CallbackLayer;
@@ -46,7 +46,7 @@ use sui_core::authority::epoch_start_configuration::EpochStartConfigTrait;
 use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_server::ValidatorService;
-use sui_core::checkpoints::checkpoint_executor;
+use sui_core::checkpoints::{checkpoint_executor, CheckpointWatermark};
 use sui_core::checkpoints::{
     CheckpointMetrics, CheckpointService, CheckpointStore, SendCheckpointToStateSync,
     SubmitCheckpointToConsensus,
@@ -85,6 +85,7 @@ use sui_network::discovery;
 use sui_network::discovery::TrustedPeerChangeEvent;
 use sui_network::state_sync;
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
+use sui_storage::object_store::util::hard_link_dir_all;
 use sui_storage::IndexStore;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
 use sui_types::committee::Committee;
@@ -96,7 +97,7 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemS
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use typed_store::rocks::default_db_options;
-use typed_store::DBMetrics;
+use typed_store::{DBMetrics, Map};
 
 use crate::metrics::GrpcMetrics;
 
@@ -193,6 +194,80 @@ impl SuiNode {
         info!(node =? config.protocol_public_key(),
             "Initializing sui-node listening on {}", config.network_address
         );
+
+        let db_checkpoint_config = if config.db_checkpoint_config.checkpoint_path.is_none() {
+            DBCheckpointConfig {
+                checkpoint_path: Some(config.db_checkpoint_path()),
+                ..config.db_checkpoint_config.clone()
+            }
+        } else {
+            config.db_checkpoint_config.clone()
+        };
+
+        let db_checkpoint_handle = match db_checkpoint_config
+            .checkpoint_path
+            .as_ref()
+            .zip(db_checkpoint_config.object_store_config.as_ref())
+        {
+            Some((path, object_store_config)) => {
+                let handler = DBCheckpointHandler::new(
+                    path,
+                    object_store_config,
+                    60,
+                    db_checkpoint_config
+                        .prune_and_compact_before_upload
+                        .unwrap_or(true),
+                    config.indirect_objects_threshold,
+                    config.authority_store_pruning_config,
+                )?;
+                let local_db_checkpoints = handler.local_checkpoints().await?;
+                let latest_db_checkpoint = local_db_checkpoints
+                    .iter()
+                    .max_by_key(|&(epoch, _db_path)| *epoch);
+                if let Some((epoch, checkpoint_db_path)) = latest_db_checkpoint {
+                    if is_full_node
+                        && db_checkpoint_config
+                            .pedantic_snapshot_restore
+                            .unwrap_or(false)
+                    {
+                        let checkpoint_store =
+                            CheckpointStore::open_readonly(&config.db_path().join("checkpoints"));
+                        let live_highest_executed_checkpoint = if let Some(highest_executed) =
+                            checkpoint_store
+                                .watermarks
+                                .get(&CheckpointWatermark::HighestExecuted)?
+                        {
+                            Some(highest_executed.0)
+                        } else {
+                            None
+                        };
+                        let checkpoint_db_path = handler.path_to_filesystem(checkpoint_db_path)?;
+                        let snapshot_checkpoint_store =
+                            CheckpointStore::open_readonly(&checkpoint_db_path.join("checkpoints"));
+                        let snapshot_highest_executed_checkpoint = if let Some(highest_executed) =
+                            snapshot_checkpoint_store
+                                .watermarks
+                                .get(&CheckpointWatermark::HighestExecuted)?
+                        {
+                            Some(highest_executed.0)
+                        } else {
+                            None
+                        };
+                        let same_checkpoint = live_highest_executed_checkpoint
+                            .zip(snapshot_highest_executed_checkpoint)
+                            .map(|(c1, c2)| c1 == c2)
+                            .unwrap_or(false);
+                        if same_checkpoint {
+                            fs::remove_dir_all(config.db_path())?;
+                            hard_link_dir_all(checkpoint_db_path, config.db_path())?;
+                            info!("Restored from local db checkpoint at epoch: {}", epoch);
+                        }
+                    }
+                }
+                Some(handler.start())
+            }
+            None => None,
+        };
 
         // Initialize metrics to track db usage before creating any stores
         DBMetrics::init(&prometheus_registry);
@@ -307,27 +382,6 @@ impl SuiNode {
             }
         } else {
             config.db_checkpoint_config.clone()
-        };
-
-        let db_checkpoint_handle = match db_checkpoint_config
-            .checkpoint_path
-            .as_ref()
-            .zip(db_checkpoint_config.object_store_config.as_ref())
-        {
-            Some((path, object_store_config)) => {
-                let handler = DBCheckpointHandler::new(
-                    path,
-                    object_store_config,
-                    60,
-                    db_checkpoint_config
-                        .prune_and_compact_before_upload
-                        .unwrap_or(true),
-                    config.indirect_objects_threshold,
-                    config.authority_store_pruning_config,
-                )?;
-                Some(handler.start())
-            }
-            None => None,
         };
 
         let state = AuthorityState::new(
