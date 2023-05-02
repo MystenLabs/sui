@@ -62,7 +62,6 @@ export function ConnectLedgerModal({
                             >
                                 Need more help?&nbsp;
                             </Text>
-                            {/* TODO: Replace this link with the final URL once the tutorial is ready */}
                             <span>
                                 <Link
                                     underline="hover"
