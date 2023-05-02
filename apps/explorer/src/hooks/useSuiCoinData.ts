@@ -10,6 +10,8 @@ type CoinData = {
     fullyDilutedMarketCap: number;
     currentPrice: number;
     priceChangePercentageOver24H: number;
+    circulatingSupply: number;
+    totalSupply: number;
 };
 
 export function useSuiCoinData() {
