@@ -11,9 +11,11 @@ import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
 import { IconButton } from '~/ui/IconButton';
 import { Text } from '~/ui/Text';
+import { useState } from 'react';
 
 export function SuiTokenCard() {
-    const { data, isLoading } = useSuiCoinData();
+    const { data, isLoading, refetch } = useSuiCoinData();
+    const [isRefreshButtonHovered, setRefreshButtonHovered] = useState(false);
     const formattedPrice = data
         ? data.currentPrice.toLocaleString('en', {
               style: 'currency',
@@ -23,12 +25,12 @@ export function SuiTokenCard() {
 
     return (
         <Card bg="lightBlue" spacing="lg">
-            <div className="flex gap-2 items-center">
+            <div className="flex items-center gap-2 md:max-lg:max-w-[336px]">
                 <div className="h-4.5 w-4.5 rounded-full bg-sui p-1">
                     <Sui className="h-full w-full text-white" />
                 </div>
-                <div className="flex flex-col gap-1">
-                    <div className="flex gap-2 items-center">
+                <div className="flex w-full flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-2">
                         <Heading
                             as="div"
                             variant="heading4/semibold"
@@ -54,7 +56,7 @@ export function SuiTokenCard() {
                     </Text>
                 </div>
             </div>
-            <div className="mt-8 flex gap-8">
+            <div className="mt-8 flex w-full gap-8 sm:justify-between md:max-lg:max-w-[336px]">
                 <StatsWrapper
                     label="Market Cap"
                     size="sm"
@@ -71,7 +73,13 @@ export function SuiTokenCard() {
                 >
                     {formatAmount(data?.totalSupply)}
                 </StatsWrapper>
-                <IconButton icon={Refresh16} aria-label="Refresh SUI coin data" />
+                <IconButton
+                    icon={Refresh16}
+                    aria-label="Refresh SUI coin data"
+                    onClick={() => refetch()}
+                    onMouseEnter={() => setRefreshButtonHovered(true)}
+                    onMouseLeave={() => setRefreshButtonHovered(false)}
+                />
             </div>
         </Card>
     );
