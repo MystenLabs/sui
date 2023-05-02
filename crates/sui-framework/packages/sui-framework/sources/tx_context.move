@@ -40,6 +40,7 @@ module sui::tx_context {
     }
 
     /// Return the transaction digest (hash of transaction inputs).
+    /// Please do not use as a source of randomness.
     public fun digest(self: &TxContext): &vector<u8> {
         &self.tx_hash
     }

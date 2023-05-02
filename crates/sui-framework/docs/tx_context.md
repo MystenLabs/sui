@@ -131,6 +131,7 @@ transaction
 ## Function `digest`
 
 Return the transaction digest (hash of transaction inputs).
+Please do not use as a source of randomness.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="tx_context.md#0x2_tx_context_digest">digest</a>(self: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): &<a href="">vector</a>&lt;u8&gt;
