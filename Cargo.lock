@@ -9769,6 +9769,7 @@ dependencies = [
  "sui-framework",
  "sui-json-rpc",
  "sui-json-rpc-types",
+ "sui-macros",
  "sui-move-natives",
  "sui-protocol-config",
  "sui-sdk",

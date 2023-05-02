@@ -743,6 +743,19 @@ impl AuthorityStore {
         Ok(())
     }
 
+    /// NOTE: this function is only to be used for fuzzing and testing. Never use in prod
+    #[cfg(not(release))]
+    pub(crate) async fn insert_raw_object_unchecked_for_testing(
+        &self,
+        objects: &[Object],
+    ) -> SuiResult {
+        // Sideload directly
+        for o in objects {
+            self.insert_object_direct(o.compute_object_reference(), o)?;
+        }
+        Ok(())
+    }
+
     /// Insert objects directly into the object table, but do not touch other tables.
     /// This is used in fullnode to insert objects from validators certificate handling response
     /// in fast path execution.

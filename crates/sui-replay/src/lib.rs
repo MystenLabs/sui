@@ -56,6 +56,7 @@ pub enum ReplayToolCommand {
 pub async fn execute_replay_command(
     rpc_url: String,
     safety_checks: bool,
+    use_authority: bool,
     cmd: ReplayToolCommand,
 ) -> anyhow::Result<(u64, u64)> {
     let safety = if safety_checks {
@@ -70,16 +71,19 @@ pub async fn execute_replay_command(
         } => {
             let tx_digest = TransactionDigest::from_str(&tx_digest)?;
             info!("Executing tx: {}", tx_digest);
-            let effects = LocalExec::new_from_fn_url(&rpc_url)
+            let sandbox_state = LocalExec::new_from_fn_url(&rpc_url)
                 .await?
                 .init_for_execution()
                 .await?
-                .execute(&tx_digest, safety)
+                .execute_transaction(&tx_digest, safety, use_authority)
                 .await?;
 
+            let effects = sandbox_state.local_exec_effects.clone();
             if show_effects {
                 println!("{:#?}", effects)
             }
+
+            sandbox_state.check_effects()?;
 
             info!("Execution finished successfully. Local and on-chain effects match.");
             (1u64, 1u64)
@@ -157,7 +161,7 @@ pub async fn execute_replay_command(
                         .init_for_execution()
                         .await
                         .unwrap()
-                        .execute_all_in_checkpoints(&checkpoints, &safety, terminate_early)
+                        .execute_all_in_checkpoints(&checkpoints, &safety, terminate_early, use_authority)
                         .await
                         .unwrap();
                     let time = time.elapsed();
@@ -211,6 +215,7 @@ pub async fn execute_replay_command(
             let status = execute_replay_command(
                 rpc_url,
                 safety_checks,
+                use_authority,
                 ReplayToolCommand::ReplayCheckpoints {
                     start,
                     end,
