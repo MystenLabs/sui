@@ -18,15 +18,12 @@ To address the security risk a single key poses while still providing the opport
 
 Sui comes with a set of built-in package compatibility policies, listed here from most to least strict:
 
-- immutable - no one can upgrade the package.
-- dependency-only - you can modify only the dependencies of the package.
-- additive - you can add new functionality to the package (e.g., new public functions or structs) but you can't change any of the existing functionality (e.g., the code in existing public functions cannot change).
-- compatible - the most relaxed policy where in addition to everything more restrictive policies allow, in an upgraded version of the package:
-  - you can change all function implementations.
-  - you can remove the ability constraints on generic type parameters in function signatures.
-  - you can change, remove, or make `public` any `private`, `public(friend)`, and `entry` function signatures.
-  - you cannot change `public` function signatures (except in the case of abilitiy constraints mentioned previously).
-  - you cannot change existing types.
+| Policy | Description |
+| --- | --- |
+| Immutable | No one can upgrade the package. |
+| Dependency-only | You can modify the dependencies of the package only.|
+| Additive | You can add new functionality to the package (e.g., new public functions or structs) but you can't change any of the existing functionality (e.g., the code in existing public functions cannot change). |
+| Compatible | The most relaxed policy. In addition to what the more restrictive policies allow, in an upgraded version of the package: <ul><li>You can change all function implementations.</li><li>You can remove the ability constraints on generic type parameters in function signatures.</li><li>You can change, remove, or make `public` any `private`, `public(friend)`, and `entry` function signatures.</li><li>You cannot change `public` function signatures (except in the case of abilitiy constraints mentioned previously).</li><li>You cannot change existing types.</li></ul> |
 
 Each of these policies, in the order listed, is a superset of the previous one in the type of changes allowed in the upgraded package.
 
