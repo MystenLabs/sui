@@ -44,6 +44,7 @@ import {
   PaginatedObjectsResponse,
   SuiObjectResponseQuery,
   ValidatorsApy,
+  MoveCallMetrics,
 } from '../types';
 import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 import {
@@ -788,6 +789,18 @@ export class JsonRpcProvider {
       EpochPage,
     );
   }
+
+  /**
+   * Returns list of top move calls by usage
+   */
+  async getMoveCallMetrics(): Promise<MoveCallMetrics> {
+    return await this.client.requestWithType(
+      'suix_getMoveCallMetrics',
+      [],
+      MoveCallMetrics,
+    );
+  }
+
   /**
    * Return the committee information for the asked epoch
    */

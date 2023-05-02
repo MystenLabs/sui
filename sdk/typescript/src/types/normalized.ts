@@ -13,6 +13,7 @@ import {
   literal,
   record,
   is,
+  tuple,
 } from 'superstruct';
 
 export type SuiMoveFunctionArgTypesResponse = Infer<
@@ -67,6 +68,25 @@ export type SuiMoveNormalizedType =
   | { MutableReference: SuiMoveNormalizedType }
   | { Vector: SuiMoveNormalizedType }
   | SuiMoveNormalizedStructType;
+
+export const MoveCallMetric = tuple([
+  object({
+    module: string(),
+    package: string(),
+    function: string(),
+  }),
+  string(),
+]);
+
+export type MoveCallMetric = Infer<typeof MoveCallMetric>;
+
+export const MoveCallMetrics = object({
+  rank3Days: array(MoveCallMetric),
+  rank7Days: array(MoveCallMetric),
+  rank30Days: array(MoveCallMetric),
+});
+
+export type MoveCallMetrics = Infer<typeof MoveCallMetrics>;
 
 function isSuiMoveNormalizedType(
   value: unknown,
