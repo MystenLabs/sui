@@ -1,18 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
 use std::cmp::max;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use anyhow::anyhow;
 use async_trait::async_trait;
+use cached::proc_macro::cached;
+use cached::SizedCache;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 use tracing::{info, instrument};
 
-use cached::proc_macro::cached;
-use cached::SizedCache;
 use mysten_metrics::spawn_monitored_task;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{DelegatedStake, Stake, StakeStatus};
@@ -277,23 +277,36 @@ impl GovernanceReadApiServer for GovernanceReadApi {
         let mut apys = vec![];
 
         for rates in exchange_rate_table.into_iter().filter(|r| r.active) {
-            let apy = if let Some((_, latest_rate)) = rates.rates.first() {
-                let (n, rates_n) = if rates.rates.len() < 29 {
-                    (rates.rates.len() as f64, rates.rates.last())
-                } else {
-                    (29.0, rates.rates.get(29))
-                };
-                if let Some((_, rate_n_days)) = rates_n {
-                    (rate_n_days.rate() / latest_rate.rate()).powf(365.0 / (n + 1.0)) - 1.0
-                } else {
-                    0.0
-                }
+            // we start the apy calculation from the epoch when the stake subsidy starts
+            let exchange_rates = rates
+                .rates
+                .into_iter()
+                .filter_map(|(epoch, rate)| {
+                    if epoch >= system_state_summary.stake_subsidy_start_epoch {
+                        Some(rate)
+                    } else {
+                        None
+                    }
+                })
+                // we only need the last 30 + 1 days of data
+                .take(31)
+                .collect::<Vec<_>>();
+
+            // we need at least 2 data points to calculate apy
+            let average_apy = if exchange_rates.len() >= 2 {
+                // rates are sorted by epoch in descending order.
+                let er_e = &exchange_rates[1..];
+                // rate e+1
+                let er_e_1 = &exchange_rates[..exchange_rates.len() - 1];
+                let dp_count = er_e.len();
+                er_e.iter().zip(er_e_1).map(calculate_apy).sum::<f64>() / dp_count as f64
             } else {
                 0.0
             };
+
             apys.push(ValidatorApy {
                 address: rates.address,
-                apy,
+                apy: average_apy,
             });
         }
         Ok(ValidatorApys {
@@ -303,7 +316,13 @@ impl GovernanceReadApiServer for GovernanceReadApi {
     }
 }
 
+// APY_e = (ER_e+1 / ER_e) ^ 365
+fn calculate_apy((rate_e, rate_e_1): (&PoolTokenExchangeRate, &PoolTokenExchangeRate)) -> f64 {
+    (rate_e.rate() / rate_e_1.rate()).powf(365.0) - 1.0
+}
+
 /// Cached exchange rates for validators for the given epoch, the cache size is 1, it will be cleared when the epoch changes.
+/// rates are in descending order by epoch.
 #[cached(
     type = "SizedCache<EpochId, Vec<ValidatorExchangeRates>>",
     create = "{ SizedCache::with_size(1) }",
