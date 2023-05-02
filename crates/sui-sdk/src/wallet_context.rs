@@ -264,7 +264,7 @@ impl WalletContext {
                     .with_events()
                     .with_object_changes()
                     .with_balance_changes(),
-                Some(sui_types::messages::ExecuteTransactionRequestType::WaitForLocalExecution),
+                Some(sui_types::quorum_driver_types::ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await?)
     }

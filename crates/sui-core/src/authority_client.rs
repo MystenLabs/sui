@@ -16,6 +16,11 @@ use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{error::SuiError, messages::*};
 
 use sui_network::tonic::transport::Channel;
+use sui_types::messages_grpc::{
+    HandleCertificateResponse, HandleCertificateResponseV2, HandleTransactionResponse,
+    ObjectInfoRequest, ObjectInfoResponse, SystemStateRequest, TransactionInfoRequest,
+    TransactionInfoResponse,
+};
 
 #[async_trait]
 pub trait AuthorityAPI {

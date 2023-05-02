@@ -7,7 +7,9 @@ use sui_json_rpc_types::{
     SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
 };
 use sui_sdk::SuiClient;
-use sui_types::{base_types::TransactionDigest, messages::ExecuteTransactionRequestType};
+use sui_types::{
+    base_types::TransactionDigest, quorum_driver_types::ExecuteTransactionRequestType,
+};
 use tracing::info;
 
 pub struct FullNodeExecuteTransactionTest;

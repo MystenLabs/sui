@@ -17,8 +17,8 @@ use sui_json_rpc_types::{
 };
 use sui_sdk::wallet_context::WalletContext;
 use sui_types::base_types::TransactionDigest;
-use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::object::Owner;
+use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use test_utils::messages::make_transactions_with_wallet_context;
 

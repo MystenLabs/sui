@@ -39,6 +39,9 @@ use sui_types::effects::{
     TransactionEffects, TransactionEffectsAPI, TransactionEffectsV1, TransactionEvents,
 };
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
+use sui_types::messages_grpc::{
+    HandleTransactionResponse, TransactionStatus, VerifiedObjectInfoResponse,
+};
 
 pub fn set_local_client_config(
     authorities: &mut AuthorityAggregator<LocalAuthorityClient>,

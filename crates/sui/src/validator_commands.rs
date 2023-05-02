@@ -588,7 +588,7 @@ async fn call_0x5(
             SuiTransactionBlockResponseOptions::new()
                 .with_input()
                 .with_effects(),
-            Some(sui_types::messages::ExecuteTransactionRequestType::WaitForLocalExecution),
+            Some(sui_types::quorum_driver_types::ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await
         .map_err(|err| anyhow::anyhow!(err.to_string()))

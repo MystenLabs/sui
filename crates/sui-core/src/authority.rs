@@ -70,6 +70,7 @@ use sui_types::effects::{
 };
 use sui_types::error::{ExecutionError, UserInputError};
 use sui_types::event::{Event, EventID};
+use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::gas::{GasCostSummary, SuiGasStatus};
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
@@ -77,6 +78,11 @@ use sui_types::messages_checkpoint::{
     CheckpointSequenceNumber, CheckpointSummary, CheckpointTimestamp, VerifiedCheckpoint,
 };
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
+use sui_types::messages_consensus::AuthorityCapabilities;
+use sui_types::messages_grpc::{
+    HandleTransactionResponse, ObjectInfoRequest, ObjectInfoRequestKind, ObjectInfoResponse,
+    TransactionInfoRequest, TransactionInfoResponse, TransactionStatus,
+};
 use sui_types::metrics::LimitsMetrics;
 use sui_types::object::{MoveObject, Owner, PastObjectRead, OBJECT_START_VERSION};
 use sui_types::storage::{ObjectKey, ObjectStore, WriteKind};
