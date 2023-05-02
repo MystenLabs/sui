@@ -9,7 +9,7 @@ The Sui Testnet and Devnet networks consist of:
  * Four validator nodes operated by Mysten Labs. Clients send transactions and read requests via this endpoint: `https://fullnode.<SUI-NETWORK-VERSION>.sui.io:443` using [JSON-RPC](../build/json-rpc.md).
  * A public network [Sui Explorer](https://suiexplorer.com/) for browsing transaction history.
 
-You can [request test SUI tokens](#request-test-tokens) through the Sui [devnet-faucet](https://discordapp.com/channels/916379725201563759/971488439931392130) and [testnet-faucet](https://discord.com/channels/916379725201563759/1037811694564560966) Discord channels, depending on which version of the network you use. If connected to Localnet, use cURL to request tokens from your [local faucet](sui-local-network.md#use-the-local-faucet). The coins on these networks have no financial value.
+You can [request test SUI tokens](#request-test-tokens) through the Sui [devnet-faucet](https://discordapp.com/channels/916379725201563759/971488439931392130) and [testnet-faucet](https://discord.com/channels/916379725201563759/1037811694564560966) Discord channels, depending on which version of the network you use. If connected to Localnet, use cURL to request tokens from your [local faucet](sui-local-network.md#use-the-local-faucet). The coins on these networks have no financial value. For obvious reasons, there is no faucet service for Mainnet.
 
 See announcements about Sui in the [#announcements](https://discord.com/channels/916379725201563759/925109817834631189) Discord channel.
 
@@ -63,7 +63,7 @@ Press **y** and then press **Enter**. The process then requests the RPC server U
 Sui Full node server URL (Defaults to Sui Devnet if not specified) :
 ```
 
-Press **Enter** to connect to Sui Devnet. To use a custom RPC server or Sui Testnet, enter the URL to the correct RPC endpoint and then press **Enter**.
+Press **Enter** to connect to Sui Devnet. To use a custom RPC server, Sui Testnet, or Sui Mainnet, enter the URL to the correct RPC endpoint and then press **Enter**.
 
 If you enter a URL, the process prompts for an alias for the environment:
 

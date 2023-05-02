@@ -126,9 +126,13 @@ Open a Terminal or Console to the `sui` directory you downloaded in the previous
       ```shell
       curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob
       ```
-    - [Testnet genesis blob](https://github.com/MystenLabs/sui-genesis/raw/main/testnet/genesis.blob) - Supported only when there is an active public Testnet network.
+    - [Testnet genesis blob](https://github.com/MystenLabs/sui-genesis/raw/main/testnet/genesis.blob):
       ```shell
       curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/testnet/genesis.blob
+      ```
+    - [Mainnet genesis blob](https://github.com/MystenLabs/sui-genesis/raw/main/mainnet/genesis.blob)
+      ```shell
+      curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/mainnet/genesis.blob
       ```
 1.  Testnet Full nodes only: Edit the `fullnode.yaml` file to include peer nodes for state synchronization. Append the following to the end of the current configuration:
       ```shell
@@ -199,7 +203,7 @@ Sui Explorer displays information about the selected network.
 
 Monitor your Full node using the instructions at [Logging, Tracing, Metrics, and Observability](../contribute/observability.md).
 
-Note the default metrics port is `9184`. To change the port, edit your `fullnode.yaml` file.
+The default metrics port is `9184`. To change the port, edit your `fullnode.yaml` file.
 
 ## Update your Full node
 

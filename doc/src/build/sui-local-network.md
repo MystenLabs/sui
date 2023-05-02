@@ -67,7 +67,7 @@ Use the following command to install Sui directly from the Sui GitHub repository
 cargo install --locked --git https://github.com/MystenLabs/sui.git --branch main sui-test-validator sui
 ```
 
-Note that the command uses the `main` branch of the Sui repository. To use a different branch, change the value for the `--branch` switch. For example, to use the `devnet` branch, specify `--branch devnet`.
+The command uses the `main` branch of the Sui repository. To use a different branch, change the value for the `--branch` switch. For example, to use the `devnet` branch, specify `--branch devnet`.
 
 ## Start the local network
 

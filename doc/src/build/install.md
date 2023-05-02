@@ -17,10 +17,11 @@ You can also download the [source code](#source-code) to have local access to fi
 
 ## Sui repository
 
-The Sui repository includes primary branches, `devnet`, `testnet`, and `main`.
+The Sui repository includes primary branches, `devnet`, `testnet`, `mainnet`, and `main`.
 
 - The `devnet` branch includes the latest stable build of Sui. Choose the `devnet` branch if you want to build or test on Sui Devnet. If you encounter an issue or find a bug, it may already be fixed in the `main` branch. To submit a pull request (PR), you should push commits to your fork of the `main` branch.
 - The `testnet` branch includes the code running on the Sui Testnet network.
+- The `mainnet` branch includes the code running on the Sui Mainnet network.
 - The `main` branch includes the most recent changes and updates. Use the `main` branch if you want to contribute to the Sui project. The `main` branch may include unreleased changes, or introduce changes that cause issues in apps created using an earlier version.
 
 ## Documentation in the Sui repository
