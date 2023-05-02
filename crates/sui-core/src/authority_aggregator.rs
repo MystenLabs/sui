@@ -401,21 +401,10 @@ impl<A: Clone> AuthorityAggregator<A> {
         let safe_client_metrics_base = SafeClientMetricsBase::new(registry);
         Self {
             committee: Arc::new(committee),
-            authority_clients: Arc::new(
-                authority_clients
-                    .into_iter()
-                    .map(|(name, api)| {
-                        (
-                            name,
-                            Arc::new(SafeClient::new(
-                                api,
-                                committee_store.clone(),
-                                name,
-                                SafeClientMetrics::new(&safe_client_metrics_base, name),
-                            )),
-                        )
-                    })
-                    .collect(),
+            authority_clients: create_authority_clients(
+                authority_clients,
+                &committee_store,
+                &safe_client_metrics_base,
             ),
             metrics: Arc::new(AuthAggMetrics::new(registry)),
             safe_client_metrics_base,
@@ -433,21 +422,10 @@ impl<A: Clone> AuthorityAggregator<A> {
     ) -> Self {
         Self {
             committee: Arc::new(committee),
-            authority_clients: Arc::new(
-                authority_clients
-                    .into_iter()
-                    .map(|(name, api)| {
-                        (
-                            name,
-                            Arc::new(SafeClient::new(
-                                api,
-                                committee_store.clone(),
-                                name,
-                                SafeClientMetrics::new(&safe_client_metrics_base, name),
-                            )),
-                        )
-                    })
-                    .collect(),
+            authority_clients: create_authority_clients(
+                authority_clients,
+                &committee_store,
+                &safe_client_metrics_base,
             ),
             metrics: auth_agg_metrics,
             safe_client_metrics_base,
@@ -548,6 +526,29 @@ impl<A: Clone> AuthorityAggregator<A> {
             .map(|(k, v)| (k, (*v).clone()))
             .collect()
     }
+}
+
+fn create_authority_clients<A: Clone>(
+    authority_clients: BTreeMap<AuthorityName, A>,
+    committee_store: &Arc<CommitteeStore>,
+    safe_client_metrics_base: &SafeClientMetricsBase,
+) -> Arc<BTreeMap<AuthorityName, Arc<SafeClient<A>>>> {
+    Arc::new(
+        authority_clients
+            .into_iter()
+            .map(|(name, api)| {
+                (
+                    name,
+                    Arc::new(SafeClient::new(
+                        api,
+                        committee_store.clone(),
+                        name,
+                        SafeClientMetrics::new(&safe_client_metrics_base, name),
+                    )),
+                )
+            })
+            .collect(),
+    )
 }
 
 impl AuthorityAggregator<NetworkAuthorityClient> {
@@ -970,10 +971,10 @@ where
                             }
                         };
                         if state.total_weight >= self.committee.quorum_threshold() {
-                            if let Some(object) = state.latest_object_version {
-                                return ReduceOutput::Success(object);
+                            return if let Some(object) = state.latest_object_version {
+                                ReduceOutput::Success(object)
                             } else {
-                                return ReduceOutput::Failed(state);
+                                ReduceOutput::Failed(state)
                             }
                         }
                         ReduceOutput::Continue(state)
@@ -1033,11 +1034,11 @@ where
                         }
                     };
                     if state.total_weight >= self.committee.quorum_threshold() {
-                        if let Some(system_state) = state.latest_system_state {
-                            return ReduceOutput::Success(system_state);
+                        return if let Some(system_state) = state.latest_system_state {
+                            ReduceOutput::Success(system_state)
                         } else {
-                            return ReduceOutput::Failed(state);
-                        }
+                            ReduceOutput::Failed(state)
+                        };
                     }
                     ReduceOutput::Continue(state)
                 })
