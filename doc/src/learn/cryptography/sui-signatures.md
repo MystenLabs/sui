@@ -78,4 +78,4 @@ The account that the authority uses to receive payments on staking rewards is se
 ## Network Keypair
 The private key is used to perform the TLS handshake required by QUIC for Narwhal primary and its worker network interface. The public key is used for validator peer ID. Pure Ed25519 is used as the signing scheme.
 
-See more authority key toolings in [Validator Tool](../../../../nre/validator_tool.md), 
+See more authority key toolings in [Validator Tool](https://github.com/MystenLabs/sui/blob/f8b5ad9aaecc3c4b30a060ec5e00bdad9ba75a93/nre/validator_tool.md).
