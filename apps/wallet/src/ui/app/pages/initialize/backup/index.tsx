@@ -80,17 +80,19 @@ const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
     return (
         <Loading loading={guardsLoading}>
             {showPasswordDialog ? (
-                <PasswordInputDialog
-                    title="Backup Recovery Phrase"
-                    onPasswordVerified={() => {
-                        setPasswordConfirmed(true);
-                        setShowPasswordDialog(false);
-                    }}
-                    continueLabel="Confirm"
-                />
+                <CardLayout>
+                    <PasswordInputDialog
+                        title="Backup Recovery Phrase"
+                        onPasswordVerified={() => {
+                            setPasswordConfirmed(true);
+                            setShowPasswordDialog(false);
+                        }}
+                        continueLabel="Confirm"
+                    />
+                </CardLayout>
             ) : (
                 <CardLayout
-                    icon="success"
+                    icon={isOnboardingFlow ? 'success' : undefined}
                     title={
                         mode === 'imported'
                             ? 'Wallet Imported Successfully!'

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ArrowRight16 } from '@mysten/icons';
+import classNames from 'classnames';
 import { Formik, Form, ErrorMessage } from 'formik';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
@@ -26,12 +27,16 @@ export type PasswordExportDialogProps = {
     showArrowIcon?: boolean;
     onPasswordVerified: (password: string) => Promise<void> | void;
     onBackClicked?: () => void;
+    spacing?: boolean;
+    background?: boolean;
 };
 
 export function PasswordInputDialog({
     title,
     continueLabel = 'Continue',
     showArrowIcon = false,
+    spacing = false,
+    background = false,
     onPasswordVerified,
     onBackClicked,
 }: PasswordExportDialogProps) {
@@ -59,7 +64,12 @@ export function PasswordInputDialog({
             validateOnMount
         >
             {({ isSubmitting, isValid }) => (
-                <Form className="bg-white px-5 pt-10 flex flex-col flex-nowrap items-center flex-1 gap-7.5">
+                <Form
+                    className={classNames(
+                        'flex flex-col flex-nowrap items-center flex-1 gap-7.5',
+                        { 'bg-white': background, 'px-5 pt-10': spacing }
+                    )}
+                >
                     <div className="text-center">
                         <Heading
                             variant="heading1"
@@ -88,7 +98,7 @@ export function PasswordInputDialog({
                             </Text>
                         </div>
                     </div>
-                    <div className="flex flex-col flex-nowrap gap-3.75 self-stretch pb-2">
+                    <div className="flex flex-col flex-nowrap gap-3.75 self-stretch">
                         <Button
                             type="submit"
                             variant="primary"

@@ -61,6 +61,8 @@ export function ExportAccount() {
             onPasswordVerified={async (password) => {
                 await exportMutation.mutateAsync(password);
             }}
+            background
+            spacing
         />
     );
 }
