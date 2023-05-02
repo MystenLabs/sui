@@ -52,9 +52,19 @@ export function Card({
     border,
     shadow,
     children,
+    height,
 }: CardProps) {
     return (
-        <div className={cardStyles({ spacing, rounded, bg, border, shadow })}>
+        <div
+            className={cardStyles({
+                spacing,
+                rounded,
+                bg,
+                border,
+                shadow,
+                height,
+            })}
+        >
             {children}
         </div>
     );
