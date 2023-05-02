@@ -35,6 +35,6 @@
         }
     ],
     "content_security_policy": {
-        "extension_pages": "default-src 'none'; object-src 'none'; connect-src *; font-src 'self'; img-src *; script-src 'self'; style-src 'self' 'unsafe-inline'; base-uri 'self'; form-action 'none'; frame-ancestors 'none';"
+        "extension_pages": "default-src 'none'; frame-src *; object-src 'none'; connect-src *; font-src 'self'; img-src *; script-src 'self'; style-src 'self' 'unsafe-inline'; base-uri 'self'; form-action 'none'; frame-ancestors 'none';"
     }
 }

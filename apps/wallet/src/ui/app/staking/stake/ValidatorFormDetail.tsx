@@ -3,7 +3,7 @@
 
 import {
     formatPercentageDisplay,
-    useGetRollingAverageApys,
+    useGetValidatorsApy,
     calculateStakeShare,
     useGetSystemState,
 } from '@mysten/core';
@@ -48,9 +48,7 @@ export function ValidatorFormDetail({
         error,
     } = useGetDelegatedStake(accountAddress || '');
 
-    const { data: rollingAverageApys } = useGetRollingAverageApys(
-        system?.activeValidators.length || null
-    );
+    const { data: rollingAverageApys } = useGetValidatorsApy();
 
     const validatorData = useMemo(() => {
         if (!system) return null;

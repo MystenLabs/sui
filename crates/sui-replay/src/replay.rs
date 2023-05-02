@@ -111,7 +111,7 @@ impl ExecutionSandboxState {
             res.push(format!("{}{}", sign, change));
         }
 
-        res.join("\n")
+        res.join("")
     }
 }
 
@@ -573,8 +573,16 @@ impl LocalExec {
                 "Genesis replay not supported: {}, skipping transaction",
                 tx_digest
             );
-            //return Ok(tx_info.effects);
-            return Err(LocalExecError::GenesisReplayNotSupported { digest: *tx_digest });
+            // Return the same data from onchain since we dont want to fail nor do we want to recompute
+            // Assume genesis transactions are always successful
+            let effects = tx_info.effects.clone();
+            return Ok(ExecutionSandboxState {
+                transaction_info: tx_info,
+                required_objects: vec![],
+                local_exec_temporary_store: None,
+                local_exec_effects: effects,
+                local_exec_status: Ok(()),
+            });
         }
 
         // Initialize the state necessary for execution

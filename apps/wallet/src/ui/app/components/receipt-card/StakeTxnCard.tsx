@@ -3,9 +3,8 @@
 
 import {
     formatPercentageDisplay,
-    useGetRollingAverageApys,
+    useGetValidatorsApy,
     useGetTimeBeforeEpochNumber,
-    useGetSystemState,
 } from '@mysten/core';
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
 
@@ -25,14 +24,11 @@ type StakeTxnCardProps = {
 
 // For Staked Transaction use moveEvent Field to get the validator address, delegation amount, epoch
 export function StakeTxnCard({ event }: StakeTxnCardProps) {
-    const { data: system } = useGetSystemState();
     const validatorAddress = event.parsedJson?.validator_address;
     const stakedAmount = event.parsedJson?.amount;
     const stakedEpoch = Number(event.parsedJson?.epoch || 0);
 
-    const { data: rollingAverageApys } = useGetRollingAverageApys(
-        system?.activeValidators?.length || null
-    );
+    const { data: rollingAverageApys } = useGetValidatorsApy();
 
     const apy = rollingAverageApys?.[validatorAddress] ?? null;
 

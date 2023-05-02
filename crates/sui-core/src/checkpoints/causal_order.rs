@@ -8,21 +8,21 @@ use sui_types::effects::TransactionEffectsAPI;
 use sui_types::storage::ObjectKey;
 use tracing::trace;
 
-pub struct CasualOrder {
+pub struct CausalOrder {
     not_seen: BTreeMap<TransactionDigest, TransactionDependencies>,
     output: Vec<TransactionEffects>,
 }
 
-impl CasualOrder {
-    /// Casually sort given vector of effects
+impl CausalOrder {
+    /// Causally sort given vector of effects
     ///
     /// Returned list has effects that
     ///
-    /// (a) Casually sorted
-    /// (b) Have deterministic order between transactions that are not casually dependent
+    /// (a) Causally sorted
+    /// (b) Have deterministic order between transactions that are not causally dependent
     ///
     /// The order of result list does not depend on order of effects in the supplied vector
-    pub fn casual_sort(effects: Vec<TransactionEffects>) -> Vec<TransactionEffects> {
+    pub fn causal_sort(effects: Vec<TransactionEffects>) -> Vec<TransactionEffects> {
         let mut this = Self::from_vec(effects);
         while let Some(item) = this.pop_first() {
             this.insert(item);
@@ -100,13 +100,13 @@ impl TransactionDependencies {
 /// (and because you do not need read transactions to replay write transaction for next version).
 ///
 /// However, when building checkpoints we supply transaction dependency tree with additional dependency edges to
-/// make it look like write transaction for next version casually depends on transactions that read
+/// make it look like write transaction for next version causally depends on transactions that read
 /// previous versions, for two reasons:
 ///
 /// (1) Without this addition we could have peculiar checkpoints where transaction reading
 /// version N appears after transaction that overwritten this object with version N+1.
 /// This does not affect how transaction is executed, but it is not something one would expect in
-/// casually ordered list.
+/// causally ordered list.
 ///
 /// (2) On the practical side it will allow to simplify pruner as it can now just tail checkpoints
 /// and delete objects in order they appear in TransactionEffects::modified_at_versions in checkpoint.
@@ -177,9 +177,9 @@ impl InsertState {
         }
     }
 
-    pub fn process(&mut self, casual_order: &mut CasualOrder) -> Option<InsertState> {
+    pub fn process(&mut self, causal_order: &mut CausalOrder) -> Option<InsertState> {
         while let Some(dep) = self.dependencies.pop() {
-            if let Some(dep_transaction) = casual_order.not_seen.remove(&dep) {
+            if let Some(dep_transaction) = causal_order.not_seen.remove(&dep) {
                 return Some(InsertState::new(dep_transaction));
             }
         }
@@ -187,7 +187,7 @@ impl InsertState {
             .transaction
             .take()
             .expect("Can't use InsertState after it is finished");
-        casual_order.output.push(transaction.effects);
+        causal_order.output.push(transaction.effects);
         None
     }
 }
@@ -200,13 +200,13 @@ mod tests {
     use sui_types::effects::TransactionEffects;
 
     #[test]
-    pub fn test_casual_order() {
+    pub fn test_causal_order() {
         let e1 = e(d(1), vec![d(2), d(3)]);
         let e2 = e(d(2), vec![d(3), d(4)]);
         let e3 = e(d(3), vec![]);
         let e4 = e(d(4), vec![]);
 
-        let r = extract(CasualOrder::casual_sort(vec![
+        let r = extract(CausalOrder::causal_sort(vec![
             e1.clone(),
             e2,
             e3,
@@ -214,15 +214,15 @@ mod tests {
         ]));
         assert_eq!(r, vec![3, 4, 2, 1]);
 
-        // e1 and e4 are not (directly) casually dependent - ordered lexicographically
-        let r = extract(CasualOrder::casual_sort(vec![e1.clone(), e4.clone()]));
+        // e1 and e4 are not (directly) causally dependent - ordered lexicographically
+        let r = extract(CausalOrder::causal_sort(vec![e1.clone(), e4.clone()]));
         assert_eq!(r, vec![1, 4]);
-        let r = extract(CasualOrder::casual_sort(vec![e4, e1]));
+        let r = extract(CausalOrder::causal_sort(vec![e4, e1]));
         assert_eq!(r, vec![1, 4]);
     }
 
     #[test]
-    pub fn test_casual_order_rw_locks() {
+    pub fn test_causal_order_rw_locks() {
         let mut e5 = e(d(5), vec![]);
         let mut e2 = e(d(2), vec![]);
         let mut e3 = e(d(3), vec![]);
@@ -236,7 +236,7 @@ mod tests {
 
         e3.modified_at_versions_mut_for_testing()
             .push((o(1), SequenceNumber::from_u64(1)));
-        let r = extract(CasualOrder::casual_sort(vec![e5, e2, e3]));
+        let r = extract(CausalOrder::causal_sort(vec![e5, e2, e3]));
         assert_eq!(r.len(), 3);
         assert_eq!(*r.get(2).unwrap(), 3); // [3] is the last
                                            // both [5] and [2] are present (but order is not fixed)

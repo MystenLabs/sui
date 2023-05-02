@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-    useGetRollingAverageApys,
+    useGetValidatorsApy,
     formatPercentageDisplay,
     calculateStakeShare,
     useGetSystemState,
@@ -33,9 +33,7 @@ export function SelectValidatorCard() {
     const [sortAscending, setSortAscending] = useState(true);
     const { data, isLoading, isError } = useGetSystemState();
 
-    const { data: rollingAverageApys } = useGetRollingAverageApys(
-        data?.activeValidators.length || null
-    );
+    const { data: rollingAverageApys } = useGetValidatorsApy();
 
     const selectValidator = (address: string) => {
         setSelectedValidator((state) => (state !== address ? address : null));

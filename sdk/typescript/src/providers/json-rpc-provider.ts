@@ -43,6 +43,7 @@ import {
   SuiEvent,
   PaginatedObjectsResponse,
   SuiObjectResponseQuery,
+  ValidatorsApy,
 } from '../types';
 import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 import {
@@ -795,6 +796,17 @@ export class JsonRpcProvider {
       'suix_getCurrentEpoch',
       [],
       EpochInfo,
+    );
+  }
+
+  /**
+   * Return the Validators APYs
+   */
+  async getValidatorsApy(): Promise<ValidatorsApy> {
+    return await this.client.requestWithType(
+      'suix_getValidatorsApy',
+      [],
+      ValidatorsApy,
     );
   }
 
