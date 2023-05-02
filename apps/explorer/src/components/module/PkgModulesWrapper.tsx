@@ -250,7 +250,6 @@ function PkgModuleViewWrapper({ id, modules, splitPanelOrientation }: Props) {
                     />
                 </div>
             ) : (
-                bytecodeContent &&
                 bytecodeContent.map((panel, index) => (
                     <div key={index}>{panel.panel}</div>
                 ))
