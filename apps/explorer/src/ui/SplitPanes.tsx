@@ -19,6 +19,7 @@ interface ResizeHandleProps {
     isCollapsed: boolean;
     togglePanelCollapse: () => void;
     collapsibleButton?: boolean;
+    noHoverHidden?: boolean;
 }
 
 function ResizeHandle({
@@ -26,6 +27,7 @@ function ResizeHandle({
     isCollapsed,
     collapsibleButton,
     togglePanelCollapse,
+    noHoverHidden,
 }: ResizeHandleProps) {
     const [isDragging, setIsDragging] = useState(false);
 
@@ -33,13 +35,25 @@ function ResizeHandle({
 
     return (
         <PanelResizeHandle
-            className={clsx('group/container', isHorizontal ? 'px-3' : 'py-3')}
+            className={clsx(
+                'group/container',
+                isHorizontal
+                    ? {
+                          'px-3': !isCollapsed,
+                          'px-6': isCollapsed,
+                      }
+                    : {
+                          'py-3': !isCollapsed,
+                          'py-6': isCollapsed,
+                      }
+            )}
             onDragging={setIsDragging}
         >
             <div
                 className={clsx(
                     'relative border border-gray-45 group-hover/container:border-hero',
-                    isHorizontal ? 'h-full w-px' : 'h-px'
+                    isHorizontal ? 'h-full w-px' : 'h-px',
+                    noHoverHidden && !isCollapsed && 'border-transparent'
                 )}
             >
                 {collapsibleButton && (
@@ -53,15 +67,16 @@ function ResizeHandle({
                             'border-2 border-gray-45 bg-white text-gray-70 group-hover/container:border-hero-dark',
                             'hover:bg-hero-dark hover:text-white',
                             isHorizontal
-                                ? 'absolute left-1/2 top-[5%] -translate-x-2/4'
-                                : 'absolute left-[5%] top-1/2 -translate-y-2/4',
+                                ? 'absolute left-1/2 top-10 -translate-x-2/4'
+                                : 'absolute left-10 top-1/2 -translate-y-2/4',
+                            noHoverHidden &&
+                                !isCollapsed &&
+                                'hidden group-hover/container:flex',
                         ])}
                     >
                         <ChevronButton
-                            height={12}
-                            width={12}
                             className={clsx(
-                                'text-gray-45 group-hover/button:text-white group-hover/container:text-hero',
+                                'h-4 w-4 text-gray-45 group-hover/button:!text-white group-hover/container:text-hero',
                                 isCollapsed && 'rotate-180'
                             )}
                         />
@@ -77,6 +92,7 @@ interface SplitPanelProps extends PanelProps {
     direction: Direction;
     renderResizeHandle: boolean;
     collapsibleButton?: boolean;
+    noHoverHidden?: boolean;
 }
 
 function SplitPanel({
@@ -84,6 +100,7 @@ function SplitPanel({
     direction,
     renderResizeHandle,
     collapsibleButton,
+    noHoverHidden,
     ...props
 }: SplitPanelProps) {
     const ref = useRef<ImperativePanelHandle>(null);
@@ -108,6 +125,7 @@ function SplitPanel({
             </Panel>
             {renderResizeHandle && (
                 <ResizeHandle
+                    noHoverHidden={noHoverHidden}
                     isCollapsed={isCollapsed}
                     isHorizontal={direction === 'horizontal'}
                     togglePanelCollapse={togglePanelCollapse}

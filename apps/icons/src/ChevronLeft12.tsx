@@ -15,7 +15,7 @@ const SvgChevronLeft12 = (props: SVGProps<SVGSVGElement>) => (
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth={1.5}
-      d="M8 3 5 6l3 3"
+      d="M7 3 4 6l3 3"
     />
   </svg>
 );

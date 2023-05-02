@@ -26,3 +26,4 @@ export * from './hooks/useTransactionSummary';
 export * from './utils/transaction';
 export * from './hooks/useOnScreen';
 export * from './hooks/useGetOwnedObjects';
+export * from './hooks/useCopyToClipboard';
