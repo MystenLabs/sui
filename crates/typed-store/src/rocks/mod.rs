@@ -1982,8 +1982,7 @@ impl DBOptions {
 
     // Optimize write and lookup perf for tables which are rarely scanned, and have large values.
     // https://rocksdb.org/blog/2021/05/26/integrated-blob-db.html
-    // REQUIRED: table must set optimize_for_write_throughput() earlier.
-    pub fn optimize_for_large_values_no_scan(mut self) -> DBOptions {
+    pub fn optimize_for_large_values_no_scan(mut self, min_blob_size: u64) -> DBOptions {
         if env::var(ENV_VAR_DISABLE_BLOB_STORAGE).is_ok() {
             info!("Large value blob storage optimization is disabled via env var.");
             return self;
@@ -1995,12 +1994,17 @@ impl DBOptions {
             .set_blob_compression_type(rocksdb::DBCompressionType::Lz4);
         self.options.set_enable_blob_gc(true);
         // Since each blob can have non-trivial size overhead, and compression does not work across blobs,
-        // set a min blob size to so small transactions and effects are kept in sst files.
-        self.options.set_min_blob_size(4 * 1024); // 4KiB
+        // set a min blob size in bytes to so small transactions and effects are kept in sst files.
+        self.options.set_min_blob_size(min_blob_size);
 
+        // Increase write buffer size to 256MiB.
+        let write_buffer_size = read_size_from_env(ENV_VAR_MAX_WRITE_BUFFER_SIZE_MB)
+            .unwrap_or(DEFAULT_MAX_WRITE_BUFFER_SIZE_MB)
+            * 1024
+            * 1024;
+        self.options.set_write_buffer_size(write_buffer_size);
         // Since large blobs are not in sst files, reduce the target file size and base level
         // target size.
-        // Keep sst file size at 64MiB.
         let target_file_size_base = 64 << 20;
         self.options
             .set_target_file_size_base(target_file_size_base);
