@@ -6,10 +6,9 @@ import React, { memo } from 'react';
 import * as topojson from 'topojson-client';
 
 import world from '../node-map/topology.json';
-import { type Feature } from './types';
 import { MapFeature } from './MapFeature';
 import { ValidatorLocation } from './ValidatorLocation';
-import { type ValidatorMapData } from './types';
+import { type Feature, type ValidatorMapData } from './types';
 
 // @ts-expect-error: The types of `world` here aren't aligned but they are correct
 const land = topojson.feature(world, world.objects.countries) as unknown as {

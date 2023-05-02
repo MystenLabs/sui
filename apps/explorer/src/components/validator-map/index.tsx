@@ -48,7 +48,7 @@ export default function ValidatorMap({ minHeight }: Props) {
                 `http://localhost:3003/validator-map?network=testnet`,
                 {
                     method: 'GET',
-                    cache: 'no-cache'
+                    cache: 'no-cache',
                 }
             );
 
