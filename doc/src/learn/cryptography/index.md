@@ -9,4 +9,4 @@ Learn about cryptography in Sui:
 * [Groth16 verifier](../cryptography/groth16.md)
 * [Sui Signatures and Crypto Agility](../cryptography/sui-signatures.md)
 * [Verifiable Random Function](../cryptography/ecvrf.md)
-
+* [Hashing in Sui](../cryptography/hashing.md)
