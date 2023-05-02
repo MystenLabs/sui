@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-export const ToS_LINK = 'https://mystenlabs.com/legal?content=terms';
+export const ToS_LINK = 'https://mystenlabs.com/legal?content=wallet-terms';
 export const PRIVACY_POLICY_LINK =
     'https://mystenlabs.com/legal?content=privacy';
 
