@@ -66,7 +66,7 @@ export function ConnectLedgerModal({
                             <span>
                                 <Link
                                     underline="hover"
-                                    href="https://github.com/MystenLabs/mysten-app-docs/blob/main/sui-wallet-with-ledger.md"
+                                    href="https://support.ledger.com/hc/articles/10136570195101"
                                     text="View tutorial."
                                     color="heroDark"
                                 />
