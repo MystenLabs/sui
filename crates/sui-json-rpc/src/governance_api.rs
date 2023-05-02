@@ -318,7 +318,7 @@ impl GovernanceReadApiServer for GovernanceReadApi {
 
 // APY_e = (ER_e+1 / ER_e) ^ 365
 fn calculate_apy((rate_e, rate_e_1): (&PoolTokenExchangeRate, &PoolTokenExchangeRate)) -> f64 {
-    (rate_e.rate() / rate_e_1.rate()).powf(365.0)
+    (rate_e.rate() / rate_e_1.rate()).powf(365.0) - 1.0
 }
 
 /// Cached exchange rates for validators for the given epoch, the cache size is 1, it will be cleared when the epoch changes.
