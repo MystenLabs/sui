@@ -43,15 +43,15 @@ use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::SuiClient;
 use sui_types::crypto::SignatureScheme;
 use sui_types::dynamic_field::DynamicFieldType;
-use sui_types::messages::{SenderSignedData, TransactionData};
 use sui_types::move_package::UpgradeCap;
 use sui_types::signature::GenericSignature;
+use sui_types::transaction::{SenderSignedData, TransactionData, TransactionDataAPI};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     gas_coin::GasCoin,
-    messages::{Transaction, TransactionDataAPI},
     object::Owner,
     parse_sui_type_tag,
+    transaction::Transaction,
 };
 use tracing::info;
 

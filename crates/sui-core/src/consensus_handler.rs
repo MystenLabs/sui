@@ -28,8 +28,8 @@ use std::hash::{Hash, Hasher};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
-use sui_types::messages::VerifiedTransaction;
 use sui_types::storage::ParentSync;
+use sui_types::transaction::VerifiedTransaction;
 
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::messages_consensus::{

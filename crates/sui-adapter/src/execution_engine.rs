@@ -32,9 +32,6 @@ use sui_types::epoch_data::EpochData;
 use sui_types::error::{ExecutionError, ExecutionErrorKind};
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::gas::{GasCostSummary, SuiGasStatusAPI};
-use sui_types::messages::{
-    Argument, Command, GenesisTransaction, ObjectArg, ProgrammableTransaction, TransactionKind,
-};
 use sui_types::messages_consensus::ConsensusCommitPrologue;
 use sui_types::storage::{ChildObjectResolver, ObjectStore, ParentSync, WriteKind};
 #[cfg(msim)]
@@ -42,13 +39,16 @@ use sui_types::sui_system_state::advance_epoch_result_injection::maybe_modify_re
 use sui_types::sui_system_state::{AdvanceEpochParams, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME};
 use sui_types::temporary_store::InnerTemporaryStore;
 use sui_types::temporary_store::TemporaryStore;
+use sui_types::transaction::{
+    Argument, Command, GenesisTransaction, ObjectArg, ProgrammableTransaction, TransactionKind,
+};
 use sui_types::{
     base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
     gas::SuiGasStatus,
-    messages::{CallArg, ChangeEpoch},
     object::Object,
     storage::BackingPackageStore,
     sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
+    transaction::{CallArg, ChangeEpoch},
     SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use sui_types::{
@@ -486,7 +486,7 @@ fn execution_loop<
 
             for genesis_object in objects {
                 match genesis_object {
-                    sui_types::messages::GenesisObject::RawObject { data, owner } => {
+                    sui_types::transaction::GenesisObject::RawObject { data, owner } => {
                         let object = Object {
                             data,
                             owner,

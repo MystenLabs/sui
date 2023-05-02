@@ -18,10 +18,10 @@ use clap::*;
 use fastcrypto::encoding::Encoding;
 use sui_config::Config;
 use sui_core::authority_aggregator::AuthorityAggregatorBuilder;
-use sui_types::messages::{SenderSignedData, Transaction};
 use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
+use sui_types::transaction::{SenderSignedData, Transaction};
 
 #[derive(Parser, Clone, ValueEnum)]
 pub enum Verbosity {

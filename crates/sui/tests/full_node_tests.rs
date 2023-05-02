@@ -29,17 +29,17 @@ use sui_types::base_types::{ObjectRef, SequenceNumber};
 use sui_types::crypto::{get_key_pair, SuiKeyPair};
 use sui_types::event::{Event, EventID};
 use sui_types::message_envelope::Message;
-use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN;
-use sui_types::messages::{
-    CallArg, GasData, ObjectArg, TransactionData, TransactionKind,
-    TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
-};
 use sui_types::messages_grpc::TransactionInfoRequest;
 use sui_types::object::{Object, ObjectRead, Owner, PastObjectRead};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::quorum_driver_types::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
     QuorumDriverResponse,
+};
+use sui_types::transaction::{
+    CallArg, GasData, ObjectArg, TransactionData, TransactionKind,
+    TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS, TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN,
+    TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
 use sui_types::utils::{
     to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,

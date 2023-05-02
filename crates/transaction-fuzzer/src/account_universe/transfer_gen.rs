@@ -19,9 +19,9 @@ use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::{
     base_types::SuiAddress,
     error::{SuiError, UserInputError},
-    messages::{GasData, TransactionData, TransactionKind, VerifiedTransaction},
     object::Object,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
+    transaction::{GasData, TransactionData, TransactionKind, VerifiedTransaction},
     utils::{to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers},
 };
 

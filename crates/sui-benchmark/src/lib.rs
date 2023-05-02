@@ -31,11 +31,11 @@ use sui_json_rpc_types::{
 use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::effects::{CertifiedTransactionEffects, TransactionEffectsAPI, TransactionEvents};
-use sui_types::messages::Argument;
-use sui_types::messages::CallArg;
-use sui_types::messages::ObjectArg;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
+use sui_types::transaction::Argument;
+use sui_types::transaction::CallArg;
+use sui_types::transaction::ObjectArg;
 use sui_types::{
     base_types::ObjectID,
     committee::{Committee, EpochId},
@@ -44,8 +44,8 @@ use sui_types::{
         AuthoritySignature,
     },
     message_envelope::Envelope,
-    messages::{CertifiedTransaction, Transaction},
     object::Object,
+    transaction::{CertifiedTransaction, Transaction},
 };
 use sui_types::{base_types::ObjectRef, crypto::AuthorityStrongQuorumSignInfo, object::Owner};
 use sui_types::{base_types::SequenceNumber, gas_coin::GasCoin};

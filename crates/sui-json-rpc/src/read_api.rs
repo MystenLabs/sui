@@ -39,12 +39,12 @@ use sui_types::digests::TransactionEventsDigest;
 use sui_types::display::DisplayVersionUpdatedEvent;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::error::{SuiObjectResponseError, UserInputError};
-use sui_types::messages::TransactionDataAPI;
-use sui_types::messages::{TransactionData, VerifiedTransaction};
 use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointTimestamp};
 use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, Object, ObjectRead, PastObjectRead};
 use sui_types::sui_serde::BigInt;
+use sui_types::transaction::TransactionDataAPI;
+use sui_types::transaction::{TransactionData, VerifiedTransaction};
 
 use crate::api::JsonRpcMetrics;
 use crate::api::{validate_limit, ReadApiServer};

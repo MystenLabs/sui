@@ -50,8 +50,8 @@ use sui_sdk::SuiClient;
 use sui_types::crypto::{
     generate_proof_of_possession, get_authority_key_pair, AuthorityPublicKeyBytes,
 };
-use sui_types::messages::Transaction;
-use sui_types::messages::{CallArg, ObjectArg, TransactionData};
+use sui_types::transaction::Transaction;
+use sui_types::transaction::{CallArg, ObjectArg, TransactionData};
 use sui_types::{
     crypto::{AuthorityKeyPair, NetworkKeyPair, SignatureScheme, SuiKeyPair},
     SUI_SYSTEM_OBJ_CALL_ARG,

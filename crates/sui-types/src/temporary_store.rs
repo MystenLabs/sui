@@ -29,13 +29,13 @@ use crate::{
     event::Event,
     fp_bail, gas,
     gas::{GasCostSummary, SuiGasStatus, SuiGasStatusAPI},
-    messages::InputObjects,
     object::Owner,
     object::{Data, Object},
     storage::{
         BackingPackageStore, ChildObjectResolver, DeleteKind, ObjectChange, ParentSync, Storage,
         WriteKind,
     },
+    transaction::InputObjects,
 };
 use crate::{is_system_package, SUI_SYSTEM_STATE_OBJECT_ID};
 

@@ -19,11 +19,11 @@ use sui_types::{
     digests::TransactionDigest,
     error::{ExecutionErrorKind, SuiError},
     execution_status::PackageUpgradeError,
-    messages::{Command, TransactionData, TransactionDataAPI, TransactionKind},
     metrics::BytecodeVerifierMetrics,
     move_package::{MovePackage, TypeOrigin, UpgradeInfo},
     object::{Data, Object, OBJECT_START_VERSION},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
+    transaction::{Command, TransactionData, TransactionDataAPI, TransactionKind},
 };
 
 macro_rules! type_origin_table {

@@ -35,10 +35,10 @@ use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::message_envelope::Message;
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest, TransactionEffectsDigest},
-    messages::VerifiedTransaction,
     messages_checkpoint::{CheckpointSequenceNumber, VerifiedCheckpoint},
+    transaction::VerifiedTransaction,
 };
-use sui_types::{error::SuiResult, messages::TransactionDataAPI};
+use sui_types::{error::SuiResult, transaction::TransactionDataAPI};
 use tap::{TapFallible, TapOptional};
 use tokio::{
     sync::broadcast::{self, error::RecvError},

@@ -35,7 +35,6 @@ use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::gas::GasCostSummary;
 use sui_types::message_envelope::Message;
-use sui_types::messages::{TransactionDataAPI, TransactionKind};
 use sui_types::messages_checkpoint::SignedCheckpointSummary;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
@@ -45,6 +44,7 @@ use sui_types::messages_checkpoint::{
 use sui_types::messages_consensus::ConsensusTransactionKey;
 use sui_types::signature::GenericSignature;
 use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
+use sui_types::transaction::{TransactionDataAPI, TransactionKind};
 use tokio::{
     sync::{watch, Notify},
     time::timeout,
@@ -1392,10 +1392,10 @@ mod tests {
     use sui_types::base_types::{ObjectID, SequenceNumber, TransactionEffectsDigest};
     use sui_types::crypto::Signature;
     use sui_types::effects::TransactionEffects;
-    use sui_types::messages::{GenesisObject, VerifiedTransaction};
     use sui_types::messages_checkpoint::SignedCheckpointSummary;
     use sui_types::move_package::MovePackage;
     use sui_types::object;
+    use sui_types::transaction::{GenesisObject, VerifiedTransaction};
     use tokio::sync::mpsc;
 
     #[tokio::test]

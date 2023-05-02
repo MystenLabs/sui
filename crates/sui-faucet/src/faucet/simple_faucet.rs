@@ -24,7 +24,7 @@ use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     gas_coin::GasCoin,
-    messages::{Transaction, TransactionData, VerifiedTransaction},
+    transaction::{Transaction, TransactionData, VerifiedTransaction},
 };
 use tokio::sync::{
     mpsc::{self, Receiver, Sender},

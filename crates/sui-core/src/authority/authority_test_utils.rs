@@ -15,7 +15,7 @@ use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
     crypto::{AccountKeyPair, AuthorityKeyPair, KeypairTraits},
-    messages::VerifiedTransaction,
+    transaction::VerifiedTransaction,
 };
 
 use super::test_authority_builder::TestAuthorityBuilder;

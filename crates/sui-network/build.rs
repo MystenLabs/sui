@@ -26,7 +26,7 @@ fn main() -> Result<()> {
             Method::builder()
                 .name("transaction")
                 .route_name("Transaction")
-                .input_type("sui_types::messages::Transaction")
+                .input_type("sui_types::transaction::Transaction")
                 .output_type("sui_types::messages_grpc::HandleTransactionResponse")
                 .codec_path(codec_path)
                 .build(),
@@ -35,7 +35,7 @@ fn main() -> Result<()> {
             Method::builder()
                 .name("handle_certificate")
                 .route_name("CertifiedTransaction")
-                .input_type("sui_types::messages::CertifiedTransaction")
+                .input_type("sui_types::transaction::CertifiedTransaction")
                 .output_type("sui_types::messages_grpc::HandleCertificateResponse")
                 .codec_path(codec_path)
                 .build(),
@@ -44,7 +44,7 @@ fn main() -> Result<()> {
             Method::builder()
                 .name("handle_certificate_v2")
                 .route_name("CertifiedTransactionV2")
-                .input_type("sui_types::messages::CertifiedTransaction")
+                .input_type("sui_types::transaction::CertifiedTransaction")
                 .output_type("sui_types::messages_grpc::HandleCertificateResponseV2")
                 .codec_path(codec_path)
                 .build(),
@@ -53,7 +53,7 @@ fn main() -> Result<()> {
             Method::builder()
                 .name("submit_certificate")
                 .route_name("SubmitCertificate")
-                .input_type("sui_types::messages::CertifiedTransaction")
+                .input_type("sui_types::transaction::CertifiedTransaction")
                 .output_type("sui_types::messages_grpc::SubmitCertificateResponse")
                 .codec_path(codec_path)
                 .build(),

@@ -27,9 +27,9 @@ use sui_types::base_types::{AuthorityName, ObjectID};
 use sui_types::crypto::AuthorityKeyPair;
 use sui_types::error::SuiResult;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::messages::VerifiedTransaction;
 use sui_types::object::Object;
 use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::transaction::VerifiedTransaction;
 
 #[derive(Default)]
 pub struct TestAuthorityBuilder<'a> {

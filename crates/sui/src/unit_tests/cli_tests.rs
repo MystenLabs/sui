@@ -7,12 +7,12 @@ use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
 
 use expect_test::expect;
 use serde_json::json;
-use sui_types::messages::{
+use sui_types::object::Owner;
+use sui_types::transaction::{
     TEST_ONLY_GAS_UNIT_FOR_GENERIC, TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
     TEST_ONLY_GAS_UNIT_FOR_PUBLISH, TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN,
     TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
-use sui_types::object::Owner;
 use tokio::time::sleep;
 
 use sui::client_commands::SwitchResponse;

@@ -15,14 +15,16 @@ use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::ObjectRef;
 use sui_types::error::{UserInputError, UserInputResult};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::messages::{TransactionKind, VersionedProtocolMessage};
 use sui_types::metrics::BytecodeVerifierMetrics;
+use sui_types::transaction::{
+    InputObjectKind, InputObjects, TransactionData, TransactionDataAPI, TransactionKind,
+    VersionedProtocolMessage,
+};
 use sui_types::{
     base_types::{SequenceNumber, SuiAddress},
     error::SuiResult,
     fp_ensure,
     gas::{SuiCostTable, SuiGasStatus},
-    messages::{InputObjectKind, InputObjects, TransactionData, TransactionDataAPI},
     object::{Object, Owner},
 };
 use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION};

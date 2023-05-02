@@ -5,8 +5,8 @@ use once_cell::sync::Lazy;
 use proptest::collection::vec;
 use proptest::prelude::*;
 use sui_protocol_config::ProtocolConfig;
-use sui_types::messages::{Argument, Command, ProgrammableTransaction};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::transaction::{Argument, Command, ProgrammableTransaction};
 
 static PROTOCOL_CONFIG: Lazy<ProtocolConfig> = Lazy::new(ProtocolConfig::get_for_max_version);
 
