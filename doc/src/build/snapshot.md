@@ -16,6 +16,7 @@ Full nodes do not take snapshots by default. To enable this feature:
    ```yaml
    db-checkpoint-config:
      perform-db-checkpoints-at-epoch-end: true
+     perform-index-db-checkpoints-at-epoch-end: true
      object-store-config:
        object-store: "S3"
        bucket: "<BUCKET-NAME>"
