@@ -1384,7 +1384,7 @@ fn extract_epoch_and_version(ev: SuiEvent) -> Result<(u64, u64), LocalExecError>
     Err(LocalExecError::UnexpectedEventFormat { event: ev })
 }
 
-/// Utility ti diff effects in a human readable format
+/// Utility to diff effects in a human readable format
 fn diff_effects(
     eff1: &SuiTransactionBlockEffectsV1,
     eff2: &SuiTransactionBlockEffectsV1,
@@ -1404,5 +1404,5 @@ fn diff_effects(
         res.push(format!("{}{}", sign, change));
     }
 
-    res.join("\n")
+    res.join("")
 }
