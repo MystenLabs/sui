@@ -50,6 +50,10 @@ use sui_types::effects::{
     CertifiedTransactionEffects, SignedTransactionEffects, TransactionEffects, TransactionEvents,
     VerifiedCertifiedTransactionEffects,
 };
+use sui_types::messages_grpc::{
+    HandleCertificateResponseV2, ObjectInfoRequest, PlainTransactionInfoResponse,
+    TransactionInfoRequest,
+};
 use tap::TapFallible;
 use tokio::time::{sleep, timeout};
 
@@ -397,21 +401,10 @@ impl<A: Clone> AuthorityAggregator<A> {
         let safe_client_metrics_base = SafeClientMetricsBase::new(registry);
         Self {
             committee: Arc::new(committee),
-            authority_clients: Arc::new(
-                authority_clients
-                    .into_iter()
-                    .map(|(name, api)| {
-                        (
-                            name,
-                            Arc::new(SafeClient::new(
-                                api,
-                                committee_store.clone(),
-                                name,
-                                SafeClientMetrics::new(&safe_client_metrics_base, name),
-                            )),
-                        )
-                    })
-                    .collect(),
+            authority_clients: create_safe_clients(
+                authority_clients,
+                &committee_store,
+                &safe_client_metrics_base,
             ),
             metrics: Arc::new(AuthAggMetrics::new(registry)),
             safe_client_metrics_base,
@@ -429,21 +422,10 @@ impl<A: Clone> AuthorityAggregator<A> {
     ) -> Self {
         Self {
             committee: Arc::new(committee),
-            authority_clients: Arc::new(
-                authority_clients
-                    .into_iter()
-                    .map(|(name, api)| {
-                        (
-                            name,
-                            Arc::new(SafeClient::new(
-                                api,
-                                committee_store.clone(),
-                                name,
-                                SafeClientMetrics::new(&safe_client_metrics_base, name),
-                            )),
-                        )
-                    })
-                    .collect(),
+            authority_clients: create_safe_clients(
+                authority_clients,
+                &committee_store,
+                &safe_client_metrics_base,
             ),
             metrics: auth_agg_metrics,
             safe_client_metrics_base,
@@ -544,6 +526,29 @@ impl<A: Clone> AuthorityAggregator<A> {
             .map(|(k, v)| (k, (*v).clone()))
             .collect()
     }
+}
+
+fn create_safe_clients<A: Clone>(
+    authority_clients: BTreeMap<AuthorityName, A>,
+    committee_store: &Arc<CommitteeStore>,
+    safe_client_metrics_base: &SafeClientMetricsBase,
+) -> Arc<BTreeMap<AuthorityName, Arc<SafeClient<A>>>> {
+    Arc::new(
+        authority_clients
+            .into_iter()
+            .map(|(name, api)| {
+                (
+                    name,
+                    Arc::new(SafeClient::new(
+                        api,
+                        committee_store.clone(),
+                        name,
+                        SafeClientMetrics::new(safe_client_metrics_base, name),
+                    )),
+                )
+            })
+            .collect(),
+    )
 }
 
 impl AuthorityAggregator<NetworkAuthorityClient> {

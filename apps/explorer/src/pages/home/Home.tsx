@@ -5,7 +5,6 @@ import clsx from 'clsx';
 import { lazy, Suspense } from 'react';
 
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
-// import { RecentModulesCard } from '../../components/recent-packages-card/RecentPackagesCard';
 import { TopValidatorsCard } from '../../components/top-validators-card/TopValidatorsCard';
 
 import { Activity } from '~/components/Activity';
@@ -16,6 +15,7 @@ import { CurrentEpoch } from '~/components/HomeMetrics/CurrentEpoch';
 import { NetworkTPS } from '~/components/HomeMetrics/NetworkTPS';
 import { OnTheNetwork } from '~/components/HomeMetrics/OnTheNetwork';
 import { SuiTokenCard } from '~/components/SuiTokenCard';
+import { TopPackagesCard } from '~/components/top-packages/TopPackagesCard';
 import { Card } from '~/ui/Card';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
@@ -93,10 +93,10 @@ function Home() {
                     </TabPanels>
                 </TabGroup>
             </div>
-            {/* TODO: Add the popular packages component here :) */}
-            {/* <div style={{ gridArea: 'packages' }} className="mt-5 bg-gray-60">
-                Popular packages
-            </div> */}
+
+            <div style={{ gridArea: 'packages' }}>
+                <TopPackagesCard />
+            </div>
         </div>
     ) : (
         <div
@@ -117,8 +117,11 @@ function Home() {
                 <Activity initialLimit={TRANSACTIONS_LIMIT} disablePagination />
             </ErrorBoundary>
 
-            <div data-testid="validators-table">
-                <TabGroup>
+            <div
+                className="flex flex-col gap-y-3"
+                data-testid="validators-table"
+            >
+                <TabGroup size="lg">
                     <TabList>
                         <Tab>Validators</Tab>
                     </TabList>
@@ -130,21 +133,10 @@ function Home() {
                         </TabPanel>
                     </TabPanels>
                 </TabGroup>
+                <ErrorBoundary>
+                    <TopPackagesCard />
+                </ErrorBoundary>
             </div>
-            {/* <div>
-                    <TabGroup>
-                        <TabList>
-                            <Tab>Recent Packages</Tab>
-                        </TabList>
-                        <TabPanels>
-                            <TabPanel>
-                                <ErrorBoundary>
-                                    <RecentModulesCard />
-                                </ErrorBoundary>
-                            </TabPanel>
-                        </TabPanels>
-                    </TabGroup>
-            </div> */}
         </div>
     );
 }

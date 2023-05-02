@@ -8,6 +8,7 @@
 -  [Struct `TxContext`](#0x2_tx_context_TxContext)
 -  [Constants](#@Constants_0)
 -  [Function `sender`](#0x2_tx_context_sender)
+-  [Function `digest`](#0x2_tx_context_digest)
 -  [Function `epoch`](#0x2_tx_context_epoch)
 -  [Function `epoch_timestamp_ms`](#0x2_tx_context_epoch_timestamp_ms)
 -  [Function `fresh_object_address`](#0x2_tx_context_fresh_object_address)
@@ -118,6 +119,32 @@ transaction
 
 <pre><code><b>public</b> <b>fun</b> <a href="tx_context.md#0x2_tx_context_sender">sender</a>(self: &<a href="tx_context.md#0x2_tx_context_TxContext">TxContext</a>): <b>address</b> {
     self.sender
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_tx_context_digest"></a>
+
+## Function `digest`
+
+Return the transaction digest (hash of transaction inputs).
+Please do not use as a source of randomness.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="tx_context.md#0x2_tx_context_digest">digest</a>(self: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): &<a href="">vector</a>&lt;u8&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="tx_context.md#0x2_tx_context_digest">digest</a>(self: &<a href="tx_context.md#0x2_tx_context_TxContext">TxContext</a>): &<a href="">vector</a>&lt;u8&gt; {
+    &self.tx_hash
 }
 </code></pre>
 

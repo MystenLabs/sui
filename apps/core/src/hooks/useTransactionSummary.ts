@@ -35,7 +35,7 @@ const getSummary = (
             gas,
             balanceChanges: balanceChangeSummary,
             digest: getTransactionDigest(transaction),
-            label: getLabel(transaction),
+            label: getLabel(transaction, currentAddress),
             objectSummary,
             status: getExecutionStatusType(transaction),
             timestamp: transaction.timestampMs,

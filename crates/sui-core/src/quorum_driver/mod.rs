@@ -33,7 +33,8 @@ use mysten_common::sync::notify_read::{NotifyRead, Registration};
 use mysten_metrics::{spawn_monitored_task, GaugeGuard};
 use std::fmt::Write;
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::messages::{PlainTransactionInfoResponse, VerifiedCertificate, VerifiedTransaction};
+use sui_types::messages::{VerifiedCertificate, VerifiedTransaction};
+use sui_types::messages_grpc::PlainTransactionInfoResponse;
 
 use self::reconfig_observer::ReconfigObserver;
 
@@ -289,7 +290,7 @@ where
                     // the original transaction + retryable stake. Will continue to retry the original transaction.
                     debug!(
                         ?errors,
-                        "Observed Tx {tx_digest:} is still in retryable state. Conflicting Txes: {conflicting_tx_digests:?}", 
+                        "Observed Tx {tx_digest:} is still in retryable state. Conflicting Txes: {conflicting_tx_digests:?}",
                     );
                     Err(None)
                 }
@@ -362,7 +363,7 @@ where
             Err(err) => {
                 debug!(
                     ?tx_digest,
-                    "Encountered error while attemptting conflicting transaction: {:?}", err
+                    "Encountered error while attempting conflicting transaction: {:?}", err
                 );
                 let err = Err(Some(QuorumDriverError::ObjectsDoubleUsed {
                     conflicting_txes: conflicting_tx_digests,

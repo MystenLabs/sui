@@ -33,9 +33,9 @@ use sui_types::error::{ExecutionError, ExecutionErrorKind};
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::gas::{GasCostSummary, SuiGasStatusAPI};
 use sui_types::messages::{
-    Argument, Command, ConsensusCommitPrologue, GenesisTransaction, ObjectArg,
-    ProgrammableTransaction, TransactionKind,
+    Argument, Command, GenesisTransaction, ObjectArg, ProgrammableTransaction, TransactionKind,
 };
+use sui_types::messages_consensus::ConsensusCommitPrologue;
 use sui_types::storage::{ChildObjectResolver, ObjectStore, ParentSync, WriteKind};
 #[cfg(msim)]
 use sui_types::sui_system_state::advance_epoch_result_injection::maybe_modify_result;

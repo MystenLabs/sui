@@ -4,6 +4,8 @@
 use crate::messages_checkpoint::CheckpointSequenceNumber;
 use crate::{committee::EpochId, crypto::AuthorityStrongQuorumSignInfo};
 
+use crate::message_envelope::{Envelope, TrustedEnvelope, VerifiedEnvelope};
+use crate::messages::SenderSignedData;
 use serde::{Deserialize, Serialize};
 
 /// CertificateProof is a proof that a transaction certs existed at a given epoch and hence can be executed.
@@ -41,6 +43,23 @@ impl CertificateProof {
             | Self::QuorumExecuted(epoch)
             | Self::SystemTransaction(epoch) => *epoch,
             Self::Certified(sig) => sig.epoch,
+        }
+    }
+}
+
+/// An ExecutableTransaction is a wrapper of a transaction with a CertificateProof that indicates
+/// there existed a valid certificate for this transaction, and hence it can be executed locally.
+/// This is an abstraction data structure to cover both the case where the transaction is
+/// certified or checkpointed when we schedule it for execution.
+pub type ExecutableTransaction = Envelope<SenderSignedData, CertificateProof>;
+pub type VerifiedExecutableTransaction = VerifiedEnvelope<SenderSignedData, CertificateProof>;
+pub type TrustedExecutableTransaction = TrustedEnvelope<SenderSignedData, CertificateProof>;
+
+impl VerifiedExecutableTransaction {
+    pub fn certificate_sig(&self) -> Option<&AuthorityStrongQuorumSignInfo> {
+        match self.auth_sig() {
+            CertificateProof::Certified(sig) => Some(sig),
+            _ => None,
         }
     }
 }

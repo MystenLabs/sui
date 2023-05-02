@@ -37,11 +37,17 @@ export type ObjectCallArg = Infer<typeof ObjectCallArg>;
 export const BuilderCallArg = union([PureCallArg, ObjectCallArg]);
 export type BuilderCallArg = Infer<typeof BuilderCallArg>;
 
+const MAX_PURE_ARGUMENT_SIZE = 16 * 1024;
+
 export const Inputs = {
   Pure(data: unknown, type?: string): PureCallArg {
     return {
       Pure: Array.from(
-        data instanceof Uint8Array ? data : builder.ser(type!, data).toBytes(),
+        data instanceof Uint8Array
+          ? data
+          : builder
+              .ser(type!, data, { maxSize: MAX_PURE_ARGUMENT_SIZE })
+              .toBytes(),
       ),
     };
   },

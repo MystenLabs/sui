@@ -7,7 +7,8 @@ use std::{
 };
 
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
-use sui_types::{digests::TransactionEffectsDigest, messages::VerifiedExecutableTransaction};
+use sui_types::digests::TransactionEffectsDigest;
+use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use tokio::{
     sync::{mpsc::UnboundedReceiver, oneshot, Semaphore},
     time::sleep,

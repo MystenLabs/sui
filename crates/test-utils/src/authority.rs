@@ -11,7 +11,7 @@ use sui_core::authority_client::AuthorityAPI;
 use sui_core::authority_client::NetworkAuthorityClient;
 pub use sui_node::{SuiNode, SuiNodeHandle};
 use sui_types::base_types::ObjectID;
-use sui_types::messages::ObjectInfoRequest;
+use sui_types::messages_grpc::ObjectInfoRequest;
 use sui_types::multiaddr::Multiaddr;
 use sui_types::object::Object;
 

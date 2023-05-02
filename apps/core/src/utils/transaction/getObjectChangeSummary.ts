@@ -28,7 +28,9 @@ export const getObjectChangeSummary = (
 
     const created = objectChanges.filter(
         (change) =>
-            change.type === 'created' && change.sender === currentAddress
+            change.type === 'created' &&
+            (typeof currentAddress === 'undefined' ||
+                change.sender === currentAddress)
     ) as SuiObjectChangeCreated[];
 
     const transferred = objectChanges.filter(

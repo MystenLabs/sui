@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { CopyNew24, Flag16, Nft16 } from '@mysten/icons';
-import toast from 'react-hot-toast';
+import { Flag16, Nft16 } from '@mysten/icons';
 
 import { Badge } from './Badge';
 import { Heading } from './Heading';
 import { ReactComponent as SenderIcon } from './icons/sender.svg';
 import { ReactComponent as CallIcon } from './icons/transactions/call.svg';
+
+import { CopyToClipboard } from '~/ui/CopyToClipboard';
 
 export type PageHeaderType =
     | 'Transaction'
@@ -70,17 +71,7 @@ export function PageHeader({ title, subtitle, type, status }: PageHeaderProps) {
                             {title}
                         </Heading>
                     </div>
-                    <button
-                        type="button"
-                        onClick={() => {
-                            navigator.clipboard.writeText(title);
-                            toast.success('Copied!');
-                        }}
-                        className="m-0 -mt-0.5 flex cursor-pointer items-center justify-center border-none bg-transparent p-0 text-xl text-steel transition-colors hover:text-steel-dark"
-                    >
-                        <span className="sr-only">Copy</span>
-                        <CopyNew24 aria-hidden="true" />
-                    </button>
+                    <CopyToClipboard size="lg" color="steel" copyText={title} />
                 </div>
 
                 {status && (
