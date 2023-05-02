@@ -1,5 +1,20 @@
 # @mysten/sui.js
 
+## 0.33.0
+
+### Minor Changes
+
+- 7915de531: Strip disassembled modules from publish/upgrade transaction inputs.
+- e61ed2bac: Added new TransactionFilter fields
+
+### Patch Changes
+
+- 6f9fc94ca: Increase max size of pure inputs
+- 605eac8c6: Bugfix for makeMoveVec when not providing type arguments.
+- 262e3dfdd: Add support for account switching in Wallet Kit.
+- 91c63e4f8: Fix transaction building with >50 input objects.
+- 5053a8dc8: Add getValidatorsApy to rpc
+
 ## 0.32.2
 
 ### Patch Changes

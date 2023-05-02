@@ -15,6 +15,7 @@
 -  [Function `size`](#0x2_vec_set_size)
 -  [Function `is_empty`](#0x2_vec_set_is_empty)
 -  [Function `into_keys`](#0x2_vec_set_into_keys)
+-  [Function `keys`](#0x2_vec_set_keys)
 -  [Function `get_idx_opt`](#0x2_vec_set_get_idx_opt)
 -  [Function `get_idx`](#0x2_vec_set_get_idx)
 
@@ -29,10 +30,11 @@
 
 ## Struct `VecSet`
 
-A set data structure backed by a vector. The set is guaranteed not to contain duplicate keys.
-All operations are O(N) in the size of the set--the intention of this data structure is only to provide
-the convenience of programming against a set API.
-Sets that need sorted iteration rather than insertion order iteration should be handwritten.
+A set data structure backed by a vector. The set is guaranteed not to
+contain duplicate keys. All operations are O(N) in the size of the set
+- the intention of this data structure is only to provide the convenience
+of programming against a set API. Sets that need sorted iteration rather
+than insertion order iteration should be handwritten.
 
 
 <pre><code><b>struct</b> <a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K: <b>copy</b>, drop&gt; <b>has</b> <b>copy</b>, drop, store
@@ -279,6 +281,33 @@ The output keys are stored in insertion order, *not* sorted.
 <pre><code><b>public</b> <b>fun</b> <a href="vec_set.md#0x2_vec_set_into_keys">into_keys</a>&lt;K: <b>copy</b> + drop&gt;(self: <a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt;): <a href="">vector</a>&lt;K&gt; {
     <b>let</b> <a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a> { contents } = self;
     contents
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_vec_set_keys"></a>
+
+## Function `keys`
+
+Borrow the <code>contents</code> of the <code><a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a></code> to access content by index
+without unpacking. The contents are stored in insertion order,
+*not* sorted.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="vec_set.md#0x2_vec_set_keys">keys</a>&lt;K: <b>copy</b>, drop&gt;(self: &<a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;): &<a href="">vector</a>&lt;K&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="vec_set.md#0x2_vec_set_keys">keys</a>&lt;K: <b>copy</b> + drop&gt;(self: &<a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt;): &<a href="">vector</a>&lt;K&gt; {
+    &self.contents
 }
 </code></pre>
 

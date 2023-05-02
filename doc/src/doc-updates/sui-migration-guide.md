@@ -46,7 +46,7 @@ version = "0.0.1"
 published-at = "0x42"
 
 [dependencies]
-Sui = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/sui-framework/", rev = "devnet" }
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/sui-framework/", rev = "framework/devnet" }
 
 [addresses]
 example = "0x42"

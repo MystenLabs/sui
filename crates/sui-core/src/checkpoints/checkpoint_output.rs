@@ -67,6 +67,13 @@ impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
     ) -> SuiResult {
         let checkpoint_seq = summary.sequence_number;
         let checkpoint_timestamp = summary.timestamp_ms;
+        self.metrics.checkpoint_creation_latency_ms.observe(
+            summary
+                .timestamp()
+                .elapsed()
+                .unwrap_or_default()
+                .as_millis() as u64,
+        );
         debug!(
             "Sending checkpoint signature at sequence {checkpoint_seq} to consensus, timestamp {checkpoint_timestamp}.
             {}ms left till end of epoch at timestamp {}",
