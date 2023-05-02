@@ -117,6 +117,9 @@ impl DBCheckpointHandler {
         });
         sender
     }
+    pub async fn local_checkpoints(&self) -> Result<BTreeMap<u32, Path>> {
+        self.read_checkpoint_dir(self.input_object_store.clone())
+    }
     async fn prune_and_compact(&self, db_path: PathBuf, epoch: u32) -> Result<()> {
         let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path.join("store"), None));
         let checkpoint_store = Arc::new(CheckpointStore::open_tables_read_write(
@@ -273,7 +276,7 @@ impl DBCheckpointHandler {
         }
         Ok(checkpoints_by_epoch)
     }
-    fn path_to_filesystem(&self, location: &Path) -> Result<PathBuf> {
+    pub fn path_to_filesystem(&self, location: &Path) -> Result<PathBuf> {
         // Convert an `object_store::path::Path` to `std::path::PathBuf`
         let path = std::fs::canonicalize(&self.input_root_path)?;
         let mut url = Url::from_file_path(&path)
