@@ -543,7 +543,7 @@ fn create_authority_clients<A: Clone>(
                         api,
                         committee_store.clone(),
                         name,
-                        SafeClientMetrics::new(&safe_client_metrics_base, name),
+                        SafeClientMetrics::new(safe_client_metrics_base, name),
                     )),
                 )
             })
