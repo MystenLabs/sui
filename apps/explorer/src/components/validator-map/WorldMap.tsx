@@ -5,9 +5,9 @@ import { Mercator } from '@visx/geo';
 import React, { memo } from 'react';
 import * as topojson from 'topojson-client';
 
-import world from './topology.json';
 import { MapFeature } from './MapFeature';
 import { ValidatorLocation } from './ValidatorLocation';
+import world from './topology.json';
 import { type Feature, type ValidatorMapData } from './types';
 
 // @ts-expect-error: The types of `world` here aren't aligned but they are correct
