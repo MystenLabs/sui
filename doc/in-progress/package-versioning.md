@@ -13,19 +13,21 @@ version = "1.0.0"
 [dependencies]
 another_pkg = { git = "https://github.com/another_pkg/another_pkg.git" , version = "2.0.0"}
 ```
-These fields in the manifest file, however, at this point are only used for user-level documentation purposes and are ignored by the publish and upgrade commands. Another way of looking at it is that if a developer publishes a package with a certain package version in the manifest file and then modifies and re-publishes the same package with a different version (using publish command rather than upgrade command), these two packages will be considered different packages, rather than on-chain versions of the same package. For example, none of these packages should be used as a [dependency override](./dependency-overrides.md) to stand in for the other one - while this kind of override is possibly to specify when building a package, it will result in an error when publishing/upgrading on-chain.
+These fields in the manifest file, however, at this point are only used for user-level documentation purposes and are ignored by the publish and upgrade commands. Another way of looking at it is that if a developer publishes a package with a certain package version in the manifest file and then modifies and re-publishes the same package with a different version (using publish command rather than upgrade command), these two packages will be considered different packages, rather than on-chain versions of the same package. For example, none of these packages should be used as a [dependency override](./dependency-overrides.md) to stand in for the other one - while this kind of override is possible to specify when building a package, it will result in an error when publishing/upgrading on-chain.
 
 ## Compatibility
 
-Sui comes with a set of built-in package upgrade policies, listed here in the order of strictness:
+Sui comes with a set of built-in package compatibility policies, listed here from most to least strict:
 
 - immutable - this policy is a bit of a misnomer as having it applied means that the package cannot be upgraded at all
 - dependency-only - the only thing that can be modified in an upgraded version of this package are its dependencies
 - additive - new functionality can be added to the package (e.g., new public functions or structs) but none of the existing functionality can be changed (e.g., the code in existing public functions cannot change)
 - compatible - the most relaxed policy where in addition to everything allowed by more restrictive policies, in an upgraded version of the package:
-  - the code of existing public functions can change (on the other hand, signatures of existing functions and definitions of existing types cannot change)
+  - all function implementations can change.
   - ability constraints on generic type parameters in function signatures can be removed
-  - `private`, `public(friend)`, and `entry` functions can be changed, removed, or made `public`
+  - `private`, `public(friend)`, and `entry` function signatured can be changed, they can also be removed, or made `public`.
+  - `public` function signatures cannot be changed (except in the case of ability constraints as mentioned previously).
+  - existing types cannot change
 
 Note that each of these policies, in the order listed, is a superset of the previous one in what kind of changes is allowed in the upgraded package.
 
