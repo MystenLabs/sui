@@ -401,7 +401,7 @@ impl<A: Clone> AuthorityAggregator<A> {
         let safe_client_metrics_base = SafeClientMetricsBase::new(registry);
         Self {
             committee: Arc::new(committee),
-            authority_clients: create_authority_clients(
+            authority_clients: create_safe_clients(
                 authority_clients,
                 &committee_store,
                 &safe_client_metrics_base,
@@ -422,7 +422,7 @@ impl<A: Clone> AuthorityAggregator<A> {
     ) -> Self {
         Self {
             committee: Arc::new(committee),
-            authority_clients: create_authority_clients(
+            authority_clients: create_safe_clients(
                 authority_clients,
                 &committee_store,
                 &safe_client_metrics_base,
@@ -528,7 +528,7 @@ impl<A: Clone> AuthorityAggregator<A> {
     }
 }
 
-fn create_authority_clients<A: Clone>(
+fn create_safe_clients<A: Clone>(
     authority_clients: BTreeMap<AuthorityName, A>,
     committee_store: &Arc<CommitteeStore>,
     safe_client_metrics_base: &SafeClientMetricsBase,
@@ -971,10 +971,10 @@ where
                             }
                         };
                         if state.total_weight >= self.committee.quorum_threshold() {
-                            return if let Some(object) = state.latest_object_version {
-                                ReduceOutput::Success(object)
+                            if let Some(object) = state.latest_object_version {
+                                return ReduceOutput::Success(object);
                             } else {
-                                ReduceOutput::Failed(state)
+                                return ReduceOutput::Failed(state);
                             }
                         }
                         ReduceOutput::Continue(state)
@@ -1034,11 +1034,11 @@ where
                         }
                     };
                     if state.total_weight >= self.committee.quorum_threshold() {
-                        return if let Some(system_state) = state.latest_system_state {
-                            ReduceOutput::Success(system_state)
+                        if let Some(system_state) = state.latest_system_state {
+                            return ReduceOutput::Success(system_state);
                         } else {
-                            ReduceOutput::Failed(state)
-                        };
+                            return ReduceOutput::Failed(state);
+                        }
                     }
                     ReduceOutput::Continue(state)
                 })
