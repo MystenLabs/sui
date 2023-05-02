@@ -1,5 +1,19 @@
 # @mysten/wallet-standard
 
+## 0.5.5
+
+### Patch Changes
+
+- 44e76bbd2: Expose mainnet chain.
+- Updated dependencies [7915de531]
+- Updated dependencies [6f9fc94ca]
+- Updated dependencies [605eac8c6]
+- Updated dependencies [262e3dfdd]
+- Updated dependencies [91c63e4f8]
+- Updated dependencies [e61ed2bac]
+- Updated dependencies [5053a8dc8]
+  - @mysten/sui.js@0.33.0
+
 ## 0.5.4
 
 ### Patch Changes
