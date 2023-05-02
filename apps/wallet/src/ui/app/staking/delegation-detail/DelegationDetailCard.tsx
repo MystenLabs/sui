@@ -64,8 +64,7 @@ export function DelegationDetailCard({
     const suiEarned = BigInt(delegationData?.estimatedReward || 0n);
     const { apy, isApyApproxZero } = rollingAverageApys?.[validatorAddress] ?? {
         apy: 0,
-    };
-    // const apy = rollingAverageApys?.[validatorAddress] || 0;
+    };  
 
     const delegationId =
         delegationData?.status === 'Active' && delegationData?.stakedSuiId;
