@@ -178,9 +178,11 @@ function ObjectChangeEntries({
                     <ExpandableListItems />
                 </div>
 
-                <div className="mt-4">
-                    <ExpandableListControl />
-                </div>
+                {changeEntries.length > DEFAULT_ITEMS_TO_SHOW && (
+                    <div className="mt-4">
+                        <ExpandableListControl />
+                    </div>
+                )}
             </ExpandableList>
         </TransactionBlockCardSection>
     );
@@ -199,8 +201,6 @@ export function ObjectChangeEntryUpdated({
     if (!data) {
         return null;
     }
-
-    console.log('data here', data);
 
     return (
         <>
@@ -280,15 +280,19 @@ export function ObjectChanges({ objectSummary }: ObjectChangesProps) {
         <>
             {objectSummary?.created?.length ? (
                 <TransactionBlockCard shadow title="Changes" size="sm">
-                    {Object.values(createdChangesByOwner).map((data, index) => (
-                        <ObjectChangeEntries
-                            key={index}
-                            type="created"
-                            changeEntries={
-                                data as unknown as SuiObjectChangeCreated[]
-                            }
-                        />
-                    ))}
+                    <div className="flex flex-col gap-3">
+                        {Object.values(createdChangesByOwner).map(
+                            (data, index) => (
+                                <ObjectChangeEntries
+                                    key={index}
+                                    type="created"
+                                    changeEntries={
+                                        data as unknown as SuiObjectChangeCreated[]
+                                    }
+                                />
+                            )
+                        )}
+                    </div>
                 </TransactionBlockCard>
             ) : null}
 
