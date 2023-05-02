@@ -147,7 +147,7 @@ export function GasPriceCard() {
         : '-';
     return (
         <Card spacing="lg" height="full">
-            <div className="flex h-full flex-col gap-5">
+            <div className="flex h-full flex-col gap-8">
                 <div className="flex gap-2.5">
                     <div className="flex flex-grow flex-nowrap items-center gap-1 text-steel">
                         <Heading
