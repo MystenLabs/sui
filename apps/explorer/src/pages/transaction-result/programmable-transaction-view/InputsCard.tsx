@@ -3,17 +3,10 @@
 
 import { type SuiCallArg } from '@mysten/sui.js';
 
-import {
-    ExpandableList,
-    ExpandableListControl,
-    ExpandableListItems,
-} from '~/ui/ExpandableList';
+import { ProgrammableTxnBlockCard } from '~/components/transactions/ProgTxnBlockCard';
 import { AddressLink, ObjectLink } from '~/ui/InternalLink';
 import { Text } from '~/ui/Text';
-import {
-    TransactionBlockCard,
-    TransactionBlockCardSection,
-} from '~/ui/TransactionBlockCard';
+import { TransactionBlockCardSection } from '~/ui/TransactionBlockCard';
 
 const REGEX_NUMBER = /^\d+$/;
 const DEFAULT_ITEMS_TO_SHOW = 5;
@@ -83,22 +76,10 @@ export function InputsCard({ inputs }: InputsCardProps) {
     ));
 
     return (
-        <TransactionBlockCard collapsible title="Inputs">
-            <ExpandableList
-                items={expandableItems}
-                defaultItemsToShow={DEFAULT_ITEMS_TO_SHOW}
-                itemsLabel="Inputs"
-            >
-                <div className="flex max-h-[300px] flex-col gap-6 overflow-y-auto">
-                    <ExpandableListItems />
-                </div>
-
-                {expandableItems.length > DEFAULT_ITEMS_TO_SHOW && (
-                    <div className="mt-6">
-                        <ExpandableListControl />
-                    </div>
-                )}
-            </ExpandableList>
-        </TransactionBlockCard>
+        <ProgrammableTxnBlockCard
+            items={expandableItems}
+            itemsLabel="Inputs"
+            defaultItemsToShow={DEFAULT_ITEMS_TO_SHOW}
+        />
     );
 }
