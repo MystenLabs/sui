@@ -1,21 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useQuery } from '@tanstack/react-query';
 import { ParentSize } from '@visx/responsive';
 import { TooltipWithBounds, useTooltip } from '@visx/tooltip';
-import React, { type ReactNode, useCallback, useMemo } from 'react';
+import React, {
+    type ReactNode,
+    useCallback,
+    useMemo,
+    useState,
+    useEffect,
+} from 'react';
 
 import { WorldMap } from './WorldMap';
 import { type ValidatorMapData } from './types';
 
-// import { useNetwork } from '~/context';
+import { useNetwork } from '~/context';
+import { useAppsBackend } from '~/hooks/useAppsBackend';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
 import { Placeholder } from '~/ui/Placeholder';
 import { Text } from '~/ui/Text';
-
-// const HOST = 'https://apps-backend.sui.io';
 
 type ValidatorsMap = Record<string, ValidatorMapData>;
 
@@ -40,38 +44,41 @@ interface Props {
 
 // NOTE: This component is lazy imported, so it needs to be default exported:
 export default function ValidatorMap({ minHeight }: Props) {
-    // TODO BEFORE MERGING: update query URI
-    const { data, isLoading, isSuccess } = useQuery(
-        ['validator-map'],
-        async () => {
-            const res = await fetch(
-                `http://localhost:3003/validator-map?network=testnet`,
-                {
-                    method: 'GET',
-                    cache: 'no-cache',
-                }
-            );
+    const [network] = useNetwork();
+    const [validatorData, setValidatorData] = useState<
+        (ValidatorMapData | null)[]
+    >([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [isError, setIsError] = useState(false);
+    const appsBe = useAppsBackend();
 
-            if (!res.ok) {
-                throw new Error('Failed to fetch validator map data');
-            }
-            return res.json() as Promise<(ValidatorMapData | null)[]>;
-        }
-    );
+    useEffect(() => {
+        setIsLoading(true);
+        appsBe(`validator-map`, {
+            network: network.toLowerCase(),
+        })
+            .then((res) => {
+                setValidatorData(res as (ValidatorMapData | null)[]);
+                setIsLoading(false);
+            })
+            .catch((err) => {
+                setIsError(true);
+            });
+    }, [appsBe, network]);
 
     const { totalCount, countryCount, validatorMap } = useMemo<{
         totalCount: number | null;
         countryCount: number | null;
         validatorMap: ValidatorsMap;
     }>(() => {
-        if (!data) {
+        if (!validatorData) {
             return { totalCount: null, countryCount: null, validatorMap: {} };
         }
 
         let totalCount = 0;
         const validatorMap: ValidatorsMap = {};
         const countryMap: Record<string, number> = {};
-        data.forEach((validator) => {
+        validatorData.forEach((validator) => {
             if (validator) {
                 totalCount++;
                 validatorMap[validator.suiAddress] ??= {
@@ -91,7 +98,7 @@ export default function ValidatorMap({ minHeight }: Props) {
             countryCount: Object.keys(countryMap).length,
             validatorMap,
         };
-    }, [data]);
+    }, [validatorData]);
 
     const {
         tooltipData,
@@ -139,10 +146,10 @@ export default function ValidatorMap({ minHeight }: Props) {
                             )}
                         </Text>
                         <Text variant="body/bold" color="steel-darker">
-                            {' '}
-                            {isSuccess &&
+                            {(!isError &&
                                 countryCount &&
-                                numberFormatter.format(countryCount)}
+                                numberFormatter.format(countryCount)) ||
+                                '--'}
                         </Text>
                     </div>
 
@@ -153,9 +160,10 @@ export default function ValidatorMap({ minHeight }: Props) {
                             )}
                             {
                                 // Fetch received response with no errors and the value was not null
-                                isSuccess &&
+                                (!isError &&
                                     totalCount &&
-                                    numberFormatter.format(totalCount)
+                                    numberFormatter.format(totalCount)) ||
+                                    '--'
                             }
                         </NodeStat>
                     </div>
@@ -166,7 +174,7 @@ export default function ValidatorMap({ minHeight }: Props) {
                         <ParentSize>
                             {(parent) => (
                                 <WorldMap
-                                    validators={data}
+                                    validators={validatorData}
                                     width={parent.width}
                                     height={parent.height}
                                     onMouseOver={handleMouseOver}
