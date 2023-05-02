@@ -92,13 +92,13 @@ impl<'state, S: StorageView> LinkageView<'state, S> {
     /// Reset the linkage, but save the context that existed before, if there was one.
     pub fn steal_linkage(&mut self) -> Option<SavedLinkage> {
         if let LinkageInfo::Universal = &self.linkage_info {
-            return None;
-        }
-
-        match std::mem::replace(&mut self.linkage_info, LinkageInfo::Unset) {
-            LinkageInfo::Set(linkage) => Some(SavedLinkage(linkage)),
-            LinkageInfo::Unset => None,
-            LinkageInfo::Universal => unreachable!(),
+            None
+        } else {
+            match std::mem::replace(&mut self.linkage_info, LinkageInfo::Unset) {
+                LinkageInfo::Set(linkage) => Some(SavedLinkage(linkage)),
+                LinkageInfo::Unset => None,
+                LinkageInfo::Universal => unreachable!(),
+            }
         }
     }
 
