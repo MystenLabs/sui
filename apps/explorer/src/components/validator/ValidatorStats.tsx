@@ -13,7 +13,7 @@ type StatsCardProps = {
     validatorData: SuiValidatorSummary;
     epoch: number | string;
     epochRewards: number | null;
-    apy: number;
+    apy: number | string | null;
     tallyingScore: string | null;
 };
 
@@ -49,7 +49,7 @@ export function ValidatorStats({
                             <Stats
                                 label="Staking APY"
                                 tooltip="This is the Annualized Percentage Yield of the a specific validator’s past operations. Note there is no guarantee this APY will be true in the future."
-                                unavailable={apy <= 0}
+                                unavailable={apy === null}
                             >
                                 {apy}%
                             </Stats>

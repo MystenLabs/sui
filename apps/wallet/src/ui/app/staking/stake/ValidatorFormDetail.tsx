@@ -84,7 +84,9 @@ export function ValidatorFormDetail({
         );
     }, [system, totalValidatorsStake, validatorData]);
 
-    const apy = rollingAverageApys?.[validatorAddress] ?? null;
+    const { apy, isApyApproxZero } = rollingAverageApys?.[validatorAddress] ?? {
+        apy: null,
+    };
 
     if (isLoading || loadingValidators) {
         return (
@@ -157,7 +159,11 @@ export function ValidatorFormDetail({
                                 weight="semibold"
                                 color="gray-90"
                             >
-                                {apy === null ? '--' : `${apy}%`}
+                                {formatPercentageDisplay(
+                                    apy,
+                                    '--',
+                                    isApyApproxZero
+                                )}
                             </Text>
                         </div>
                         <div className="flex gap-2 items-center justify-between">
