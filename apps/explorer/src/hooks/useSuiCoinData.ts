@@ -5,9 +5,10 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useAppsBackend } from './useAppsBackend';
 
+// TODO: We should consider using tRPC or something for apps-backend
 type CoinData = {
-    marketCap: number;
-    fullyDilutedMarketCap: number;
+    marketCap: string;
+    fullyDilutedMarketCap: string;
     currentPrice: number;
     priceChangePercentageOver24H: number;
     circulatingSupply: number;
