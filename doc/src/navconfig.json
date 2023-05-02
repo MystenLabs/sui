@@ -128,14 +128,18 @@
 					{
 						"label": "Verifying Groth16 zk-SNARKs",
 						"fileName": "learn/cryptography/groth16"
-          },
-          {
+					},
+					{
 						"label": "Sui Crypto Agility and Signatures",
 						"fileName": "learn/cryptography/sui-signatures"
 					},
 					{
 						"label": "Verifiable Random Function (VRF)",
 						"fileName": "learn/cryptography/ecvrf"
+					},
+					{
+						"label": "Hashing in Sui",
+						"fileName": "learn/cryptography/hashing"
 					}
 				]
 			},
