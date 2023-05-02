@@ -524,7 +524,7 @@ Emitted only when a maker order is filled.
 
 ## Struct `OrderPlaced`
 
-Emitted when a maker order is injected into the order book.
+Deprecated since v1.0.0, use <code><a href="clob.md#0xdee9_clob_OrderPlacedV2">OrderPlacedV2</a></code> instead.
 
 
 <pre><code><b>struct</b> <a href="clob.md#0xdee9_clob_OrderPlaced">OrderPlaced</a>&lt;BaseAsset, QuoteAsset&gt; <b>has</b> <b>copy</b>, drop, store
@@ -968,7 +968,7 @@ Emitted when a maker order is injected into the order book.
     <b>let</b> base_type_name = <a href="_get">type_name::get</a>&lt;BaseAsset&gt;();
     <b>let</b> quote_type_name = <a href="_get">type_name::get</a>&lt;QuoteAsset&gt;();
 
-    <b>assert</b>!(clob_math::mul(lot_size, tick_size) &gt; 0, <a href="clob.md#0xdee9_clob_EInvalidTickSizeLotSize">EInvalidTickSizeLotSize</a>);
+    <b>assert</b>!(clob_math::unsafe_mul(lot_size, tick_size) &gt; 0, <a href="clob.md#0xdee9_clob_EInvalidTickSizeLotSize">EInvalidTickSizeLotSize</a>);
     <b>assert</b>!(base_type_name != quote_type_name, <a href="clob.md#0xdee9_clob_EInvalidPair">EInvalidPair</a>);
     <b>assert</b>!(taker_fee_rate &gt;= maker_rebate_rate, <a href="clob.md#0xdee9_clob_EInvalidFeeRateRebateRate">EInvalidFeeRateRebateRate</a>);
 
@@ -1306,7 +1306,10 @@ Emitted when a maker order is injected into the order book.
                 <a href="clob.md#0xdee9_clob_emit_order_canceled">emit_order_canceled</a>&lt;BaseAsset, QuoteAsset&gt;(pool_id, maker_order);
             } <b>else</b> {
                 // Calculate how much quote asset (maker_quote_quantity) is required, including the commission, <b>to</b> fill the maker order.
-                <b>let</b> (flag, maker_quote_quantity) = clob_math::mul_round(maker_base_quantity, maker_order.price);
+                <b>let</b> (flag, maker_quote_quantity) = clob_math::mul_round(
+                    maker_base_quantity,
+                    maker_order.price
+                );
                 <b>if</b> (flag) maker_quote_quantity = maker_quote_quantity + 1;
                 (flag, maker_quote_quantity) = clob_math::mul_round(
                     maker_quote_quantity,
@@ -1330,21 +1333,25 @@ Emitted when a maker order is injected into the order book.
                     filled_base_quantity = maker_base_quantity;
                 } <b>else</b> {
                     terminate_loop = <b>true</b>;
-                    (_, filled_quote_quantity_without_commission) = clob_math::div_round(
+                    // <b>if</b> not enough quote quantity <b>to</b> pay for taker commission, then no quantity will be filled
+                    (_, filled_quote_quantity_without_commission) = clob_math::unsafe_div_round(
                         taker_quote_quantity_remaining,
                         <a href="clob.md#0xdee9_clob_FLOAT_SCALING">FLOAT_SCALING</a> + pool.taker_fee_rate
                     );
-                    (_, filled_base_quantity) = clob_math::div_round(
+                    // filled_base_quantity = 0 is permitted since filled_quote_quantity_without_commission can be 0
+                    (_, filled_base_quantity) = clob_math::unsafe_div_round(
                         filled_quote_quantity_without_commission,
                         maker_order.price
                     );
                     <b>let</b> filled_base_lot = filled_base_quantity / pool.lot_size;
                     filled_base_quantity = filled_base_lot * pool.lot_size;
-                    filled_quote_quantity_without_commission = clob_math::mul(
+                    // filled_quote_quantity_without_commission = 0 is permitted here since filled_base_quantity could be 0
+                    filled_quote_quantity_without_commission = clob_math::unsafe_mul(
                         filled_base_quantity,
                         maker_order.price
                     );
-                    <b>let</b> (round_down, taker_commission) = clob_math::mul_round(
+                    // <b>if</b> taker_commission = 0 due <b>to</b> underflow, round it up <b>to</b> 1
+                    <b>let</b> (round_down, taker_commission) = clob_math::unsafe_mul_round(
                         filled_quote_quantity_without_commission,
                         pool.taker_fee_rate
                     );
@@ -1353,7 +1360,11 @@ Emitted when a maker order is injected into the order book.
                     };
                     filled_quote_quantity = filled_quote_quantity_without_commission + taker_commission;
                 };
-                <b>let</b> maker_rebate = clob_math::mul(filled_quote_quantity_without_commission, pool.maker_rebate_rate);
+                // <b>if</b> maker_rebate = 0 due <b>to</b> underflow, maker will not receive a rebate
+                <b>let</b> maker_rebate = clob_math::unsafe_mul(
+                    filled_quote_quantity_without_commission,
+                    pool.maker_rebate_rate
+                );
                 maker_base_quantity = maker_base_quantity - filled_base_quantity;
 
                 // maker in ask side, decrease maker's locked base asset, increase maker's available quote asset
@@ -1484,14 +1495,16 @@ Emitted when a maker order is injected into the order book.
                 <a href="clob.md#0xdee9_clob_emit_order_canceled">emit_order_canceled</a>&lt;BaseAsset, QuoteAsset&gt;(pool_id, maker_order);
             } <b>else</b> {
                 <b>let</b> filled_base_quantity =
-                    <b>if</b> (taker_base_quantity_remaining &gt;= maker_base_quantity) { maker_base_quantity }
+                    <b>if</b> (taker_base_quantity_remaining &gt; maker_base_quantity) { maker_base_quantity }
                     <b>else</b> { taker_base_quantity_remaining };
                 // filled_quote_quantity <b>to</b> maker,  no need <b>to</b> round up
                 <b>let</b> filled_quote_quantity = clob_math::mul(filled_base_quantity, maker_order.price);
 
                 // rebate_fee <b>to</b> maker, no need <b>to</b> round up
-                <b>let</b> maker_rebate = clob_math::mul(filled_quote_quantity, pool.maker_rebate_rate);
-                <b>let</b> (is_round_down, taker_commission) = clob_math::mul_round(
+                // <b>if</b> maker_rebate = 0 due <b>to</b> underflow, maker will not receive a rebate
+                <b>let</b> maker_rebate = clob_math::unsafe_mul(filled_quote_quantity, pool.maker_rebate_rate);
+                // <b>if</b> taker_commission = 0 due <b>to</b> underflow, round it up <b>to</b> 1
+                <b>let</b> (is_round_down, taker_commission) = clob_math::unsafe_mul_round(
                     filled_quote_quantity,
                     pool.taker_fee_rate
                 );
@@ -1632,8 +1645,10 @@ Emitted when a maker order is injected into the order book.
                 <b>let</b> filled_quote_quantity = clob_math::mul(filled_base_quantity, maker_order.price);
 
                 // rebate_fee <b>to</b> maker, no need <b>to</b> round up
-                <b>let</b> maker_rebate = clob_math::mul(filled_quote_quantity, pool.maker_rebate_rate);
-                <b>let</b> (is_round_down, taker_commission) = clob_math::mul_round(
+                // <b>if</b> maker_rebate = 0 due <b>to</b> underflow, maker will not receive a rebate
+                <b>let</b> maker_rebate = clob_math::unsafe_mul(filled_quote_quantity, pool.maker_rebate_rate);
+                // <b>if</b> taker_commission = 0 due <b>to</b> underflow, round it up <b>to</b> 1
+                <b>let</b> (is_round_down, taker_commission) = clob_math::unsafe_mul_round(
                     filled_quote_quantity,
                     pool.taker_fee_rate
                 );
