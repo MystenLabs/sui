@@ -12,7 +12,7 @@ Finally, Sui’s [Storage mechanics](https://docs.sui.io/learn/tokenomics/storag
 
 `net_gas_fees = computation_gas_fee + storage_gas_fee - storage_rebate`
 
-The information on net gas fees displays in [Sui Explorer](https://explorer.sui.io/) for each transaction block:
+The information on net gas fees displays in [Sui Explorer](https://suiexplorer.com/) for each transaction block:
 
 ![Gas Fees displayed on Sui Explorer](../../static/gas-fees-explorer.png "The Gas Fees section displayed on Sui Explorer")
 *The Gas Fees section for a transaction block displayed on Sui Explorer*

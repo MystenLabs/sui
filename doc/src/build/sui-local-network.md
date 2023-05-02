@@ -258,7 +258,7 @@ If you encounter an error from turbo build, confirm that there is no `package-lo
 
 ### Set up Sui Explorer on your local network
 
-To connect the live Sui Explorer to your local network, open the URL:[https://explorer.sui.io/?network=local](https://explorer.sui.io/?network=local). The live version of Sui Explorer may not include recent updates added to the `main` branch of the Sui repo. To use Sui Explorer that includes the most recent updates, install and run Sui Explorer from your local clone of the Sui repo.
+To connect the live Sui Explorer to your local network, open the URL:[https://suiexplorer.com/?network=local](https://suiexplorer.com/?network=local). The live version of Sui Explorer may not include recent updates added to the `main` branch of the Sui repo. To use Sui Explorer that includes the most recent updates, install and run Sui Explorer from your local clone of the Sui repo.
 
 Run the following command from the `sui` root folder:
 
