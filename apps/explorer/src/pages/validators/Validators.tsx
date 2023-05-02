@@ -260,7 +260,10 @@ function ValidatorPageResult() {
             return null;
 
         // if all validators have isApyApproxZero, return ~0
-        if (Object.values(validatorsApy)?.filter((a) => a.isApyApproxZero)) {
+        if (
+            Object.values(validatorsApy)?.filter((a) => a.isApyApproxZero)
+                .length === numberOfValidators
+        ) {
             return '~0';
         }
 
@@ -271,7 +274,7 @@ function ValidatorPageResult() {
         const averageAPY = apys?.reduce((acc, cur) => acc + cur.apy, 0);
         // in case of no apy, return 0
         return apys.length > 0 ? roundFloat(averageAPY / apys.length) : 0;
-    }, [validatorsApy]);
+    }, [numberOfValidators, validatorsApy]);
 
     const lastEpochRewardOnAllValidators = useMemo(() => {
         if (!validatorEvents) return null;

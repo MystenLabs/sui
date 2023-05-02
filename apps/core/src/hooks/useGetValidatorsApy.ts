@@ -5,6 +5,7 @@ import { useRpcClient } from '../api/RpcClientContext';
 import { useQuery } from '@tanstack/react-query';
 
 import { roundFloat } from '../utils/roundFloat';
+import { useGetSystemState } from './useGetSystemState';
 
 // recentEpochRewards is list of the last 30 epoch rewards for a specific validator
 // APY_e = (1 + epoch_rewards / stake)^365-1
@@ -24,15 +25,11 @@ const MINIMUM_THRESHOLD = 0.001;
 
 export function useGetValidatorsApy() {
     const rpc = useRpcClient();
+    const { data: systemStateResponse, isFetched } = useGetSystemState();
     return useQuery(
         ['get-rolling-average-apys'],
         async () => {
-            const [apy, systemStateResponse] = await Promise.all([
-                rpc.getValidatorsApy(),
-                //TODO: remove the stakeSubsidyStartEpoch check once its past that epoch
-                rpc.getLatestSuiSystemState(),
-            ]);
-
+            const apy = await rpc.getValidatorsApy();
             // check if stakeSubsidyStartEpoch is greater than current epoch, flag for UI to show ~0% instead of 0%
             const currentEpoch = Number(systemStateResponse?.epoch);
             const stakeSubsidyStartEpoch = Number(
@@ -44,6 +41,7 @@ export function useGetValidatorsApy() {
             };
         },
         {
+            enabled: isFetched,
             select: ({ validatorApys, isStakeSubsidyStarted }) => {
                 return validatorApys?.apys.reduce((acc, { apy, address }) => {
                     acc[address] = {
