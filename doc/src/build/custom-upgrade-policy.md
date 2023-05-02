@@ -14,6 +14,26 @@ You can make a package *immutable* when it goes live to mitigate this risk using
 
 To address the security risk a single key poses while still providing the opportunity to upgrade live packages, Sui offers *custom upgrade policies*. These policies protect `UpgradeCap` access behind arbitrary Sui Move code and issue `UpgradeTicket` objects that authorize upgrades on a case-by-case basis.
 
+## Compatibility
+
+Sui comes with a set of built-in package compatibility policies, listed here from most to least strict:
+
+- immutable - no one can upgrade the package.
+- dependency-only - you can modify only the dependencies of the package.
+- additive - you can add new functionality to the package (e.g., new public functions or structs) but you can't change any of the existing functionality (e.g., the code in existing public functions cannot change).
+- compatible - the most relaxed policy where in addition to everything more restrictive policies allow, in an upgraded version of the package:
+  - you can change all function implementations.
+  - you can remove the ability constraints on generic type parameters in function signatures.
+  - you can change, remove, or make `public` any `private`, `public(friend)`, and `entry` function signatures.
+  - you cannot change `public` function signatures (except in the case of abilitiy constraints mentioned previously).
+  - you cannot change existing types.
+
+Each of these policies, in the order listed, is a superset of the previous one in the type of changes allowed in the upgraded package.
+
+When you publish a package, by default it adopts the most relaxed, combatible policy. You can publish a package as part of a transaction block that can change the policy before the transaction block successfully completes, making the package available on chain for the first time at the desired policy level, rather than at the default one.
+
+You can change the current policy by calling one of the functions in `sui::package` (`only_additive_upgrades`, `only_dep_upgrades`, `make_immutable`) on the package's [`UpgradeCap`](./custom-upgrade-policy.md#upgradecap) and a policy can become only more restrictive. For example, after you call `sui::package::only_dep_upgrades` to restrict the policy to become additive, calling `sui::package::only_additive_upgrades` on the `UpgradeCap` of the same package results in an error.
+
 ## Upgrade overview
 
 Package upgrades must occur end-to-end in a single transaction block and are composed of three commands:
