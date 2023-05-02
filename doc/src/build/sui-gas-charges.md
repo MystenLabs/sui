@@ -63,7 +63,7 @@ The remaining values provide an insight into the storage charges. Each time Sui 
 
 At the end of execution, all created object contribute to `storage_cost` with the following formula: `storage_cost = object_byte * storage_normalizer * storage_price` where, currently, `storage_normalizer = 100` and `storage_price = 76`. The `storage_cost` is saved and tracked by each object, and represents the value of the object in terms of its storage cost.
 
-All deleted objects storage values are added together and refunded to the user (`storage_rebate`), except for a small percentage of the rebate that is charged by the system and goes into the `non_refundable_storage_fee`. That percentage is currently defined to be 0.01%.
+All deleted objects storage values are added together and refunded to the user (`storage_rebate`), except for a small percentage of the rebate that is charged by the system and goes into the `non_refundable_storage_fee`. That percentage is currently 1.0%.
 
 ## Out Of Gas Model
 
