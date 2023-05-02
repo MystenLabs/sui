@@ -692,7 +692,7 @@ pub fn mock_certificate_with_epoch(
         .round(round)
         .epoch(epoch)
         .parents(parents)
-        .payload(fixture_payload(1))
+        .payload(fixture_payload(3))
         .build()
         .unwrap();
     let certificate = Certificate::new_unsigned(committee, Header::V1(header), Vec::new()).unwrap();
@@ -968,7 +968,7 @@ pub struct AuthorityFixture {
     network_keypair: NetworkKeyPair,
     stake: Stake,
     address: Multiaddr,
-    workers: BTreeMap<WorkerId, WorkerFixture>,
+    pub workers: BTreeMap<WorkerId, WorkerFixture>,
 }
 
 impl AuthorityFixture {

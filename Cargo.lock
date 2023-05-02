@@ -5782,6 +5782,7 @@ dependencies = [
  "itertools",
  "mockall",
  "mysten-metrics",
+ "mysten-network",
  "narwhal-config",
  "narwhal-consensus",
  "narwhal-crypto",

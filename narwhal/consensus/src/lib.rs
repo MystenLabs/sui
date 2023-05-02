@@ -9,7 +9,7 @@
 
 pub mod bullshark;
 pub mod consensus;
-#[cfg(test)]
+
 #[path = "tests/consensus_utils.rs"]
 pub mod consensus_utils;
 pub mod dag;

@@ -1,7 +1,7 @@
-use std::num::NonZeroUsize;
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use config::AuthorityIdentifier;
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 use storage::{CertificateStore, CertificateStoreCache, ConsensusStore};
 use store::rocks::MetricConf;
@@ -10,7 +10,7 @@ use types::{
     Certificate, CertificateDigest, CommittedSubDagShell, ConsensusCommit, Round, SequenceNumber,
 };
 
-pub(crate) const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
+pub const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
 
 pub fn make_consensus_store(store_path: &std::path::Path) -> Arc<ConsensusStore> {
     const LAST_COMMITTED_CF: &str = "last_committed";

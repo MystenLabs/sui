@@ -19,6 +19,8 @@ use tokio::sync::watch;
 
 use types::{Certificate, PreSubscribedBroadcastSender, Round, TransactionProto};
 
+mod subscriber_tests;
+
 #[tokio::test]
 async fn test_recovery() {
     // Create storage

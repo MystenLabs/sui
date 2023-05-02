@@ -37,6 +37,7 @@ store = { path = "../../crates/typed-store", package = "typed-store" }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 anemo.workspace = true
+mysten-network.workspace = true
 
 [dev-dependencies]
 indexmap = { version = "1.9.2", features = ["serde"] }
