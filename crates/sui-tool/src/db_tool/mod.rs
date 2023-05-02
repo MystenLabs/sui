@@ -4,6 +4,7 @@
 use self::db_dump::{dump_table, duplicate_objects_summary, list_tables, table_summary, StoreName};
 use self::index_search::{search_index, SearchRange};
 use crate::db_tool::db_dump::{compact, print_table_metadata};
+use anyhow::bail;
 use clap::Parser;
 use std::path::{Path, PathBuf};
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
@@ -22,8 +23,9 @@ pub enum DbToolCommand {
     IndexSearchCount(IndexSearchCountOptions),
     TableSummary(Options),
     DuplicatesSummary,
-    ResetDB,
     ListDBMetadata(Options),
+    ResetDB,
+    RewindCheckpointExecution(RewindCheckpointExecutionOptions),
     Compact,
 }
 
@@ -73,6 +75,16 @@ pub struct Options {
     epoch: Option<EpochId>,
 }
 
+#[derive(Parser)]
+#[clap(rename_all = "kebab-case")]
+pub struct RewindCheckpointExecutionOptions {
+    #[clap(long = "epoch")]
+    epoch: EpochId,
+
+    #[clap(long = "checkpoint-sequence-number")]
+    checkpoint_sequence_number: u64,
+}
+
 pub fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> anyhow::Result<()> {
     match cmd {
         DbToolCommand::ListTables => print_db_all_tables(db_path),
@@ -88,9 +100,12 @@ pub fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> anyhow::
             print_db_table_summary(d.store_name, d.epoch, db_path, &d.table_name)
         }
         DbToolCommand::DuplicatesSummary => print_db_duplicates_summary(db_path),
-        DbToolCommand::ResetDB => reset_db_to_genesis(&db_path),
         DbToolCommand::ListDBMetadata(d) => {
             print_table_metadata(d.store_name, d.epoch, db_path, &d.table_name)
+        }
+        DbToolCommand::ResetDB => reset_db_to_genesis(&db_path),
+        DbToolCommand::RewindCheckpointExecution(d) => {
+            rewind_checkpoint_execution(&db_path, d.epoch, d.checkpoint_sequence_number)
         }
         DbToolCommand::Compact => compact(db_path),
         DbToolCommand::IndexSearchKeyRange(rg) => {
@@ -181,6 +196,33 @@ pub fn reset_db_to_genesis(path: &Path) -> anyhow::Result<()> {
         None,
     );
     checkpoint_db.reset_db_for_execution_since_genesis()?;
+    Ok(())
+}
+
+// Force sets the highest executed checkpoint.
+// NOTE: Does not force re-execution of transactions yet.
+// Run with: cargo run --package sui-tool -- db-tool --db-path /opt/sui/db/authorities_db/live rewind-checkpoint-execution --epoch 3 --checkpoint-sequence-number 300000
+pub fn rewind_checkpoint_execution(
+    path: &Path,
+    epoch: EpochId,
+    checkpoint_sequence_number: u64,
+) -> anyhow::Result<()> {
+    let checkpoint_db = CheckpointStore::open_tables_read_write(
+        path.join("checkpoints"),
+        MetricConf::default(),
+        None,
+        None,
+    );
+    let Some(checkpoint) = checkpoint_db.get_checkpoint_by_sequence_number(checkpoint_sequence_number)? else {
+        bail!("Checkpoint {checkpoint_sequence_number} not found!");
+    };
+    if epoch != checkpoint.epoch() {
+        bail!(
+            "Checkpoint {checkpoint_sequence_number} is in epoch {} not {epoch}!",
+            checkpoint.epoch()
+        );
+    }
+    checkpoint_db.set_highest_executed_checkpoint(&checkpoint)?;
     Ok(())
 }
 

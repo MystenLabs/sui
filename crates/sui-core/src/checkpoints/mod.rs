@@ -368,6 +368,17 @@ impl CheckpointStore {
         }
     }
 
+    pub fn set_highest_executed_checkpoint(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+    ) -> Result<(), TypedStoreError> {
+        self.watermarks.insert(
+            &CheckpointWatermark::HighestExecuted,
+            &(*checkpoint.sequence_number(), *checkpoint.digest()),
+        )?;
+        Ok(())
+    }
+
     pub fn insert_checkpoint_contents(
         &self,
         contents: CheckpointContents,
