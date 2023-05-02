@@ -8,7 +8,7 @@ version = "0.0.0"
 MoveStdlib = { git = "https://github.com/move-language/move.git", subdir = "language/move-stdlib", rev = "main" }
 
 [addresses]
-std =  "0x1"
+std = "0x1"
 Command `new P2 -p other_dir`:
 External Command `cat other_dir/Move.toml`:
 [package]
@@ -19,4 +19,4 @@ version = "0.0.0"
 MoveStdlib = { git = "https://github.com/move-language/move.git", subdir = "language/move-stdlib", rev = "main" }
 
 [addresses]
-std =  "0x1"
+std = "0x1"
