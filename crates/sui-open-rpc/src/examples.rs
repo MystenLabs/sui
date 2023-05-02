@@ -17,7 +17,6 @@ use serde_json::json;
 
 use sui_json::SuiJsonValue;
 use sui_json_rpc::error::Error;
-use sui_json_rpc_types::SuiTypeTag;
 use sui_json_rpc_types::TransactionFilter;
 use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, CheckpointPage, Coin, CoinPage, EventPage, MoveCallParams,
@@ -29,6 +28,7 @@ use sui_json_rpc_types::{
     SuiTransactionBlockResponseQuery, TransactionBlockBytes, TransactionBlocksPage,
     TransferObjectParams,
 };
+use sui_json_rpc_types::{SuiTypeTag, ValidatorApy, ValidatorApys};
 use sui_open_rpc::ExamplePairing;
 use sui_types::balance::Supply;
 use sui_types::base_types::random_object_ref;
@@ -53,6 +53,7 @@ use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::signature::GenericSignature;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{parse_sui_struct_tag, SUI_FRAMEWORK_OBJECT_ID};
+
 struct Examples {
     function_name: String,
     examples: Vec<ExamplePairing>,
@@ -105,6 +106,9 @@ impl RpcExampleProvider {
             self.sui_get_latest_checkpoint_sequence_number(),
             self.suix_get_coins(),
             self.suix_get_total_supply(),
+            self.multi_get_objects_example(),
+            self.multi_get_transaction_blocks(),
+            self.suix_get_validators_apy(),
         ]
         .into_iter()
         .map(|example| (example.function_name, example.examples))
@@ -224,38 +228,63 @@ impl RpcExampleProvider {
         )
     }
 
+    fn multi_get_objects_example(&mut self) -> Examples {
+        let objects = self.get_object_responses(5);
+        let object_ids = objects
+            .iter()
+            .map(|o| o.object_id().unwrap())
+            .collect::<Vec<_>>();
+        Examples::new(
+            "sui_multiGetObjects",
+            vec![ExamplePairing::new(
+                "Get objects by IDs.",
+                vec![
+                    ("object_ids", json!(object_ids)),
+                    ("options", json!(SuiObjectDataOptions::full_content())),
+                ],
+                json!(objects),
+            )],
+        )
+    }
+
+    fn get_object_responses(&mut self, object_count: usize) -> Vec<SuiObjectResponse> {
+        (0..object_count)
+            .map(|_| {
+                let object_id = ObjectID::new(self.rng.gen());
+                let coin = GasCoin::new(object_id, 100000000);
+
+                SuiObjectResponse::new_with_data(SuiObjectData {
+                    content: Some(
+                        SuiParsedData::try_from_object(
+                            coin.to_object(SequenceNumber::from_u64(1)),
+                            GasCoin::layout(),
+                        )
+                        .unwrap(),
+                    ),
+                    owner: Some(Owner::AddressOwner(SuiAddress::from(ObjectID::new(
+                        self.rng.gen(),
+                    )))),
+                    previous_transaction: Some(TransactionDigest::new(self.rng.gen())),
+                    storage_rebate: Some(100),
+                    object_id,
+                    version: SequenceNumber::from_u64(1),
+                    digest: ObjectDigest::new(self.rng.gen()),
+                    type_: Some(ObjectType::Struct(MoveObjectType::gas_coin())),
+                    bcs: None,
+                    display: None,
+                })
+            })
+            .collect()
+    }
+
     fn get_object_example(&mut self) -> Examples {
-        let object_id = ObjectID::new(self.rng.gen());
-
-        let coin = GasCoin::new(object_id, 10000);
-
-        let result = SuiObjectResponse::new_with_data(SuiObjectData {
-            content: Some(
-                SuiParsedData::try_from_object(
-                    coin.to_object(SequenceNumber::from_u64(1)),
-                    GasCoin::layout(),
-                )
-                .unwrap(),
-            ),
-            owner: Some(Owner::AddressOwner(SuiAddress::from(ObjectID::new(
-                self.rng.gen(),
-            )))),
-            previous_transaction: Some(TransactionDigest::new(self.rng.gen())),
-            storage_rebate: Some(100),
-            object_id,
-            version: SequenceNumber::from_u64(1),
-            digest: ObjectDigest::new(self.rng.gen()),
-            type_: Some(ObjectType::Struct(MoveObjectType::gas_coin())),
-            bcs: None,
-            display: None,
-        });
-
+        let result = self.get_object_responses(1).pop().unwrap();
         Examples::new(
             "sui_getObject",
             vec![ExamplePairing::new(
                 "Get Object data for the ID in the request.",
                 vec![
-                    ("object_id", json!(object_id)),
+                    ("object_id", json!(result.object_id().unwrap())),
                     ("options", json!(SuiObjectDataOptions::full_content())),
                 ],
                 json!(result),
@@ -359,16 +388,16 @@ impl RpcExampleProvider {
             vec![ExamplePairing::new(
                 "Get a paginated list in descending order of all checkpoints starting at the provided cursor. Each page of results has a maximum number of checkpoints set by the provided limit.",
                 vec![(
-                        "cursor", json!(seq.to_string()),
-                    ),
-                    (
-                        "limit", json!(limit),
-                    ),
-                    (
-                        "descending_order",
-                        json!(descending_order),
-                    ),
-                    ],
+                         "cursor", json!(seq.to_string()),
+                     ),
+                     (
+                         "limit", json!(limit),
+                     ),
+                     (
+                         "descending_order",
+                         json!(descending_order),
+                     ),
+                ],
                 json!(result),
             )],
         )
@@ -486,6 +515,30 @@ impl RpcExampleProvider {
                     ("descending_order", json!(false)),
                 ],
                 json!(result),
+            )],
+        )
+    }
+
+    fn multi_get_transaction_blocks(&mut self) -> Examples {
+        let data = (0..3)
+            .map(|_| self.get_transfer_data_response().4)
+            .collect::<Vec<_>>();
+        let digests = data.iter().map(|x| x.digest).collect::<Vec<_>>();
+        Examples::new(
+            "sui_multiGetTransactionBlocks",
+            vec![ExamplePairing::new(
+                "Return the transaction data for specified digest.",
+                vec![
+                    ("digests", json!(digests)),
+                    (
+                        "options",
+                        json!(SuiTransactionBlockResponseOptions::new()
+                            .with_input()
+                            .with_effects()
+                            .with_events()),
+                    ),
+                ],
+                json!(data),
             )],
         )
     }
@@ -608,7 +661,6 @@ impl RpcExampleProvider {
     }
 
     fn get_events(&mut self) -> Examples {
-        let (_, _, _, _, result) = self.get_transfer_data_response();
         let tx_dig =
             TransactionDigest::from_str("11a72GCQ5hGNpWGh2QhQkkusTEGS6EDqifJqxr7nSYX").unwrap();
         let event = SuiEvent {
@@ -620,7 +672,7 @@ impl RpcExampleProvider {
             transaction_module: Identifier::from_str("test_module").unwrap(),
             sender: SuiAddress::from(ObjectID::new(self.rng.gen())),
             type_: parse_sui_struct_tag("0x9::test::TestEvent").unwrap(),
-            parsed_json: json! ({"test": "example value"}),
+            parsed_json: json!({"test": "example value"}),
             bcs: vec![],
             timestamp_ms: None,
         };
@@ -634,7 +686,7 @@ impl RpcExampleProvider {
             "sui_getEvents",
             vec![ExamplePairing::new(
                 "Return the events the transaction in the request emits.",
-                vec![("transaction_digest", json!(result.digest))],
+                vec![("transaction_digest", json!(tx_dig))],
                 json!(page),
             )],
         )
@@ -719,12 +771,12 @@ impl RpcExampleProvider {
             vec![ExamplePairing::new(
                 "Get all coins for the address in the request body. Begin listing the coins that are after the provided `cursor` value and return only the `limit` amount of results per page.",
                 vec![
-                        ("owner", json!(owner)), 
-                        ("cursor", json!(cursor)), 
-                        ("limit", json!(limit))
-                    ],
+                    ("owner", json!(owner)),
+                    ("cursor", json!(cursor)),
+                    ("limit", json!(limit)),
+                ],
                 json!(page),
-            )]
+            )],
         )
     }
 
@@ -816,10 +868,10 @@ impl RpcExampleProvider {
                     ("owner", json!(owner)),
                     ("coin_type", json!(coin_type)),
                     ("cursor", json!(ObjectID::new(self.rng.gen()))),
-                    ("limit", json!(3))
+                    ("limit", json!(3)),
                 ],
-                json!(page)
-            )]
+                json!(page),
+            )],
         )
     }
 
@@ -835,6 +887,34 @@ impl RpcExampleProvider {
                 "Get total supply for the type of coin provided.",
                 vec![("coin_type", json!(coin))],
                 json!(result),
+            )],
+        )
+    }
+    fn suix_get_validators_apy(&mut self) -> Examples {
+        let result = vec![
+            ValidatorApy {
+                address: SuiAddress::from(ObjectID::new(self.rng.gen())),
+                apy: 0.06,
+            },
+            ValidatorApy {
+                address: SuiAddress::from(ObjectID::new(self.rng.gen())),
+                apy: 0.02,
+            },
+            ValidatorApy {
+                address: SuiAddress::from(ObjectID::new(self.rng.gen())),
+                apy: 0.05,
+            },
+        ];
+
+        Examples::new(
+            "suix_getValidatorsApy",
+            vec![ExamplePairing::new(
+                "Get the APY for all validators.",
+                vec![],
+                json!(ValidatorApys {
+                    apys: result,
+                    epoch: 420
+                }),
             )],
         )
     }
