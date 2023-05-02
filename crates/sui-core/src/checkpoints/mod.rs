@@ -949,6 +949,7 @@ impl CheckpointBuilder {
             let mut pending = HashSet::new();
             for effect in roots {
                 let digest = effect.transaction_digest();
+                // Unnecessary to read effects of a depndency if the effect is already processed.
                 seen.insert(*digest);
                 if self
                     .epoch_store
