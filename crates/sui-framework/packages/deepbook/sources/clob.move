@@ -769,7 +769,7 @@ module deepbook::clob {
         clock: &Clock,
         ctx: &mut TxContext,
     ): (Coin<BaseAsset>, Coin<QuoteAsset>) {
-        // If market bid order, match against the open ask orders. Otherwise, match against the open bid orders.
+        // If market bid order(`is_bid` equals true), match against the open ask orders(match_bid). Otherwise, match against the open ask orders.
         // Take market bid order for example.
         // We first retrieve the PriceLevel with the lowest price by calling min_leaf on the asks Critbit Tree.
         // We then match the market order by iterating through open orders on that price level in ascending order of the order id.
