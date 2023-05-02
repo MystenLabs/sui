@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { formatAmount } from '@mysten/core';
-import { Sui, Refresh16 } from '@mysten/icons';
-import clsx from 'clsx';
-import { useState } from 'react';
+import { Sui } from '@mysten/icons';
 
 import { StatsWrapper } from './HomeMetrics/FormattedStatsAmount';
 
@@ -12,17 +10,15 @@ import { useSuiCoinData } from '~/hooks/useSuiCoinData';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
 import { Text } from '~/ui/Text';
-import { ButtonOrLink } from '~/ui/utils/ButtonOrLink';
 
 export function SuiTokenCard() {
-    const { data, isLoading, isFetching, refetch } = useSuiCoinData();
+    const { data, isLoading } = useSuiCoinData();
     const {
         priceChangePercentageOver24H,
         currentPrice,
         totalSupply,
         fullyDilutedMarketCap,
     } = data || {};
-    const [isRefreshButtonHovered, setRefreshButtonHovered] = useState(false);
 
     const isPriceChangePositive = Number(priceChangePercentageOver24H) > 0;
     const formattedPrice = currentPrice
@@ -68,48 +64,23 @@ export function SuiTokenCard() {
                         </Text>
                     </div>
                 </div>
-                <div className="mt-8 w-full">
-                    <div className="flex items-end justify-between gap-8">
-                        <StatsWrapper
-                            label="Market Cap"
-                            size="sm"
-                            postfix="USD"
-                            unavailable={isLoading}
-                        >
-                            {formatAmount(fullyDilutedMarketCap)}
-                        </StatsWrapper>
-                        <StatsWrapper
-                            label="Total Supply"
-                            size="sm"
-                            postfix="SUI"
-                            unavailable={isLoading}
-                        >
-                            {formatAmount(totalSupply)}
-                        </StatsWrapper>
-                        <div className="-mb-2 -mr-2">
-                            <ButtonOrLink
-                                onClick={() => refetch()}
-                                onMouseEnter={() =>
-                                    setRefreshButtonHovered(true)
-                                }
-                                onMouseLeave={() =>
-                                    setRefreshButtonHovered(false)
-                                }
-                                className={clsx(
-                                    'p-2 text-steel hover:text-hero'
-                                )}
-                            >
-                                <div className="group flex items-center gap-1">
-                                    <div className="opacity-0 transition-opacity duration-100 group-hover:opacity-100">
-                                        <Text variant="subtitleSmallExtra/medium">
-                                            {isFetching ? 'refreshing' : 'refresh'}
-                                        </Text>
-                                    </div>
-                                    <Refresh16 />
-                                </div>
-                            </ButtonOrLink>
-                        </div>
-                    </div>
+                <div className="mt-8 flex w-full gap-8">
+                    <StatsWrapper
+                        label="Market Cap"
+                        size="sm"
+                        postfix="USD"
+                        unavailable={isLoading}
+                    >
+                        {formatAmount(fullyDilutedMarketCap)}
+                    </StatsWrapper>
+                    <StatsWrapper
+                        label="Total Supply"
+                        size="sm"
+                        postfix="SUI"
+                        unavailable={isLoading}
+                    >
+                        {formatAmount(totalSupply)}
+                    </StatsWrapper>
                 </div>
             </div>
         </Card>

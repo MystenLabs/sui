@@ -18,7 +18,7 @@ export function useSuiCoinData() {
     const makeAppsBackendRequest = useAppsBackend();
     return useQuery(
         ['sui-coin-data'],
-        () => makeAppsBackendRequest<CoinData>('coins/aptos', {}),
+        () => makeAppsBackendRequest<CoinData>('coins/sui', {}),
         {
             // Cache this forever because we have limited API bandwidth at the moment
             cacheTime: Infinity,

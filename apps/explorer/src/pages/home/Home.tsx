@@ -24,11 +24,10 @@ const NodeMap = lazy(() => import('../../components/node-map'));
 const TRANSACTIONS_LIMIT = 25;
 
 function Home() {
-    // const isHomePageRedesignEnabled = useFeatureIsOn(
-    //     'explorer-home-page-redesign'
-    // );
-    const isHomePageRedesignEnabled = true;
-    const isSuiTokenCardEnabled = true //useFeatureIsOn('explorer-sui-token-card');
+    const isHomePageRedesignEnabled = useFeatureIsOn(
+        'explorer-home-page-redesign'
+    );
+    const isSuiTokenCardEnabled = useFeatureIsOn('explorer-sui-token-card');
 
     return isHomePageRedesignEnabled ? (
         <div
