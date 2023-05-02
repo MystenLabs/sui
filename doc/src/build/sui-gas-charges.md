@@ -39,7 +39,7 @@ Gas usage is proportional to the resources used. Specifically, it is proportiona
 There are 2 main values defined in the system that contribute to gas consumption:
 
 - **RGP** (Reference Gas Price): set up at the beginning of each epoch by the validator committee. RGP is a multiplier applied to each unit of computation. Initial **RGP** at genesis is 1,000 MIST.
-- **Storage Price**: set up in the system and intended to be more stable than RGP, it is a multiplier for the number of bytes written to storage. Initial **Storage Price** at genesis is **76** MIST.
+- **Storage Price**: set up in the system and intended to be more stable than RGP, it is a multiplier for the number of bytes written to storage. This is a one-time charge for the life of the object on the network. Initial **Storage Price** at genesis is **76** MIST.
 
 ## Transaction Output: GasCostSummary
 
