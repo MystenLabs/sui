@@ -57,7 +57,7 @@ fn main() {
                         m
                     }
                     "raw-bytes" | _ => {
-                        let Ok(m) = move_binary_format::file_format::CompiledModule::deserialize(&input) else { process::exit(1); };
+                        let Ok(m) = move_binary_format::file_format::CompiledModule::deserialize_with_defaults(&input) else { process::exit(1); };
                         m
                     }
                 };
@@ -65,9 +65,9 @@ fn main() {
                     // Print human-readable representation of input.
                     dbg!(m.to_owned());
                 };
-                let move_result = move_bytecode_verifier::verify_module(&m);
+                let move_result = move_bytecode_verifier::verify_module_unmetered(&m);
                 if let Ok(()) = move_result {
-                    let sui_result = sui_bytecode_verifier::verify_module(
+                    let sui_result = sui_bytecode_verifier::sui_verify_module_unmetered(
                         &ProtocolConfig::get_for_version(ProtocolVersion::MAX),
                         &m,
                         &BTreeMap::new(),
