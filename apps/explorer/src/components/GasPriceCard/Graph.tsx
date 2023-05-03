@@ -4,7 +4,7 @@
 import { AxisBottom } from '@visx/axis';
 import { curveNatural } from '@visx/curve';
 import { localPoint } from '@visx/event';
-import { scaleTime, scaleLinear } from '@visx/scale';
+import { scaleLinear } from '@visx/scale';
 import { LinePath } from '@visx/shape';
 import clsx from 'clsx';
 import { bisector, extent } from 'd3-array';
@@ -13,18 +13,17 @@ import { throttle } from 'throttle-debounce';
 
 import { type EpochGasInfo } from './types';
 
-function formatDate(date: Date) {
-    return String(date.getDate());
+function formatXLabel(epoch: number) {
+    return String(epoch);
 }
 
 export function isDefined(d: EpochGasInfo) {
     return d.date !== null && d.referenceGasPrice !== null;
 }
 
-const ONE_DAY_MILLIS = 1000 * 60 * 60 * 24;
 const SIDE_MARGIN = 30;
 
-const bisectDate = bisector(({ date }: EpochGasInfo) => date).center;
+const bisectEpoch = bisector(({ epoch }: EpochGasInfo) => epoch).center;
 
 export type GraphProps = {
     data: EpochGasInfo[];
@@ -39,10 +38,12 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
     const graphButton = Math.max(height - 45, 0);
     const xScale = useMemo(
         () =>
-            scaleTime<number>({
-                domain: extent(adjData, ({ date }) => date) as [Date, Date],
+            scaleLinear<number>({
+                domain: extent(adjData, ({ epoch }) => epoch) as [
+                    number,
+                    number
+                ],
                 range: [SIDE_MARGIN, width - SIDE_MARGIN],
-                nice: 'hour',
             }),
         [width, adjData]
     );
@@ -68,10 +69,10 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
     }, [onHoverElement, hoveredElement]);
     const handleTooltip = useCallback(
         (x: number) => {
-            const xDate = xScale.invert(x);
-            const epochIndex = bisectDate(adjData, xDate, 0);
+            const xEpoch = xScale.invert(x);
+            const epochIndex = bisectEpoch(adjData, xEpoch, 0);
             const selectedEpoch = adjData[epochIndex];
-            setTooltipX(selectedEpoch.date ? xScale(selectedEpoch.date) : x);
+            setTooltipX(xScale(selectedEpoch.epoch));
             setHoveredElement(selectedEpoch);
             setIsTooltipVisible(true);
         },
@@ -87,12 +88,12 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
             handleTooltipThrottledRef?.current?.cancel?.();
         };
     }, [handleTooltip]);
-    const totalDays = useMemo(() => {
-        const domain = xScale.domain();
-        return Math.floor(
-            (domain[1].getTime() - domain[0].getTime()) / ONE_DAY_MILLIS
-        );
-    }, [xScale]);
+    // calculates the total ticks of 4 (~30px + some margin) digit epochs that could fit
+    const totalMaxTicksForWidth = Math.floor((width - 2 * SIDE_MARGIN) / 34);
+    const totalTicks = Math.min(
+        adjData.length,
+        totalMaxTicksForWidth < 1 ? 1 : totalMaxTicksForWidth
+    );
     return (
         <svg
             width={width}
@@ -114,7 +115,7 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
             <LinePath<EpochGasInfo>
                 curve={curveNatural}
                 data={adjData}
-                x={(d) => xScale(d.date!.getTime())}
+                x={(d) => xScale(d.epoch)}
                 y={(d) => yScale(Number(d.referenceGasPrice!))}
                 width="1"
             />
@@ -129,10 +130,10 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
                     className: 'text-subtitle font-medium fill-steel font-sans',
                 }}
                 scale={xScale}
-                tickFormat={(date) => formatDate(date as Date)}
+                tickFormat={(epoch) => formatXLabel(epoch as number)}
                 hideTicks
                 hideAxisLine
-                numTicks={Math.min(totalDays || 0, 15)}
+                numTicks={totalTicks}
             />
             <rect
                 x={SIDE_MARGIN}
