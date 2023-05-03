@@ -4,7 +4,7 @@ title: Sui Bridging
 
 Bridging is the process of moving tokens from one blockchain to another. When you use a bridge to move tokens between blockchains that are incompatible, the tokens are "wrapped" by the bridge, which means that they get converted to a derivative token for the target blockchain. You can transfer tokens in from other blockchains to SUI, or transfer SUI tokens out to other blockchains.
 
-Sui supports bridging through [Wormhole Connect](https://www.portalbridge.com/connect) and [Wormhole Token Bridge](https://www.portalbridge.com/sui).
+Sui supports bridging through [Wormhole Connect](#wormhole-connect) and [Wormhole Portal Bridge](#wormhole-portal-bridge).
 
 ## Wormhole Connect
 
@@ -13,8 +13,6 @@ Use to bridge tokens from any Wormhole supported chain into Sui and get dropped 
 ### Wormhole Connect asset support
 
 Initially, Wormhole Connect supports only lock-and-mint bridging for ETH, WETH, USDC, MATIC, WMATIC, BNB, WBNB, AVAX, WAVAX, FTM, WFTM, CELO, GLMR, WGLRM, AND SOL across Ethereum, Polygon, BSC, Avalanche, Celo, Moonbeam, Solana and Sui. This means that any native token bridged through Wormhole Connect and the underlying Wormhole Token Bridge are received as a Wormhole-minted token on the destination chain. In some cases, Wormhole-minted tokens are the canonical representation on the chain. See the [Wormhole token list](https://github.com/wormhole-foundation/wormhole-token-list) on GitHub. Some Wormhole-minted tokens support swapping on the destination chain's DEX(s) for whichever assets you need.
-
-The Wormhole powered Portal Bridge (https://www.portalbridge.com/sui) supports bridging any asset from any of the 22 supported Wormhole chains (listed here https://www.portalbridge.com/sui).
 
 ### Wormhole Connect automatic relay
 
@@ -26,9 +24,9 @@ The gas drop-off feature enables users to pay an additional fee on the source ch
 
 To learn more about Wormhole Connect, see their [FAQ](https://docs.wormhole.com/wormhole/faqs) page.
 
-## Wormhole Token Bridge
+## Wormhole Portal Bridge
 
-With [Wormhole Token Bridge](https://www.portalbridge.com/sui) for the Sui network, you can bridge tokens from any of the 22 Wormhole supported chains into Sui.
+The Wormhole powered [Portal Bridge](https://www.portalbridge.com/sui) supports bridging any asset from any of the [22 supported Wormhole chains](https://www.wormhole.com/network).
 
 ## Token address list
 
