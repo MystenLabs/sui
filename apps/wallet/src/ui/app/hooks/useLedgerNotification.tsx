@@ -5,23 +5,32 @@ import { useFeatureIsOn } from '@growthbook/growthbook-react';
 import { X12 } from '@mysten/icons';
 import { useEffect } from 'react';
 import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
+import Browser from 'webextension-polyfill';
 
 import { trackEvent } from '../../../shared/plausible';
 import { useMenuIsOpen, useNextMenuUrl } from '../components/menu/hooks';
+import { AppType } from '../redux/slices/app/AppType';
 import { ButtonOrLink } from '../shared/utils/ButtonOrLink';
+import useAppSelector from './useAppSelector';
 
 const HAS_SEEN_LEDGER_NOTIFICATION_KEY = 'has-seen-ledger-notification';
 const HAS_SEEN_LEDGER_NOTIFICATION_VALUE = 'true';
 
 const LEDGER_NOTIFICATION_TOAST_ID = 'ledger-notification-toast';
 
-// TODO: Delete this soon because imperative toasts shouldn't be used for notifications :)
+// TODO: Delete this *soon* because custom, imperative toasts shouldn't be used for notifications :)
 export function useLedgerNotification() {
-    const accountUrl = useNextMenuUrl(true, `/accounts`);
     const isLedgerNotificationEnabled = useFeatureIsOn(
         'wallet-ledger-notification-enabled'
     );
     const isMenuOpen = useMenuIsOpen();
+    const appType = useAppSelector((state) => state.app.appType);
+    const navigate = useNavigate();
+    const connectLedgerModalUrl = useNextMenuUrl(
+        true,
+        '/accounts/connect-ledger-modal'
+    );
 
     useEffect(() => {
         if (isMenuOpen) {
@@ -48,16 +57,26 @@ export function useLedgerNotification() {
                     <div className="flex gap-2 items-center">
                         <div className="shrink-0">
                             <ButtonOrLink
-                                className="text-inherit hover:text-success no-underline"
-                                onClick={() => {
+                                className="font-medium appearance-none border-0 cursor-pointer p-0 bg-transparent text-inherit"
+                                onClick={async () => {
                                     trackEvent('LedgerNotification');
                                     localStorage.setItem(
                                         HAS_SEEN_LEDGER_NOTIFICATION_KEY,
                                         HAS_SEEN_LEDGER_NOTIFICATION_VALUE
                                     );
                                     toast.remove(LEDGER_NOTIFICATION_TOAST_ID);
+
+                                    if (appType === AppType.popup) {
+                                        const { origin, pathname } =
+                                            window.location;
+                                        await Browser.tabs.create({
+                                            url: `${origin}/${pathname}#${connectLedgerModalUrl}`,
+                                        });
+                                        window.close();
+                                    } else {
+                                        navigate(connectLedgerModalUrl);
+                                    }
                                 }}
-                                to={accountUrl}
                             >
                                 New! Tap to Connect your Ledger
                             </ButtonOrLink>
@@ -78,6 +97,8 @@ export function useLedgerNotification() {
                     </div>,
                     {
                         id: LEDGER_NOTIFICATION_TOAST_ID,
+                        className:
+                            '!rounded-full !shadow-notification !border !border-solid !border-success-dark/20 !bg-success-light !text-success-dark',
                         duration: Infinity,
                     }
                 );
@@ -87,5 +108,11 @@ export function useLedgerNotification() {
         return () => {
             toast.remove(LEDGER_NOTIFICATION_TOAST_ID);
         };
-    }, [accountUrl, isLedgerNotificationEnabled, isMenuOpen]);
+    }, [
+        appType,
+        connectLedgerModalUrl,
+        isLedgerNotificationEnabled,
+        isMenuOpen,
+        navigate,
+    ]);
 }
