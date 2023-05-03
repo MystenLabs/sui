@@ -27,6 +27,18 @@ struct Args {
 
 fn main() {
     let args = Args::parse();
+    let compiled_state =
+        move_transactional_test_runner::framework::CompiledState::new(
+            sui_transactional_test_runner::test_adapter::NAMED_ADDRESSES
+                .clone(),
+            Some(&*sui_transactional_test_runner::test_adapter::PRE_COMPILED),
+            Some(move_compiler::shared::NumericalAddress::new(
+                move_core_types::account_address::AccountAddress::ZERO
+                    .into_bytes(),
+                move_compiler::shared::NumberFormat::Hex,
+            )),
+        );
+
 
     // Use the fuzz! macro because it promotes panics to `abort` signals which
     // AFL needs to detect a crash. Alternatively set `abort = "panic"` for
@@ -41,17 +53,6 @@ fn main() {
                         m
                     }
                     "ir" => {
-                        let compiled_state =
-                            move_transactional_test_runner::framework::CompiledState::new(
-                                sui_transactional_test_runner::test_adapter::NAMED_ADDRESSES
-                                    .clone(),
-                                Some(&*sui_transactional_test_runner::test_adapter::PRE_COMPILED),
-                                Some(move_compiler::shared::NumericalAddress::new(
-                                    move_core_types::account_address::AccountAddress::ZERO
-                                        .into_bytes(),
-                                    move_compiler::shared::NumberFormat::Hex,
-                                )),
-                            );
                         let Ok(code) = std::str::from_utf8(input) else { process::exit(1); };
                         let Ok(m) = move_ir_compiler::Compiler::new(compiled_state.dep_modules().collect()).into_compiled_module(code) else { process::exit(1); };
                         m
