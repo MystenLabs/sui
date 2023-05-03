@@ -568,3 +568,75 @@ async fn test_metered_move_bytecode_verifier() {
             .expect("Metering should not fail. Meter limits might have changed");
     }
 }
+
+#[tokio::test]
+async fn test_meter_system_packages() {
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+
+    let metered_verifier_config = default_verifier_config(
+        &ProtocolConfig::get_for_max_version(),
+        true, /* enable metering */
+    );
+
+    let mut meter = BoundMeter::new(&metered_verifier_config);
+    for system_package in BuiltInFramework::iter_system_packages() {
+        run_metered_move_bytecode_verifier_impl(
+            &system_package.modules(),
+            &ProtocolConfig::get_for_max_version(),
+            &metered_verifier_config,
+            &mut meter,
+        )
+        .unwrap_or_else(|_| {
+            panic!(
+                "Verification of all system packages should succeed, but failed on {}",
+                system_package.id(),
+            )
+        });
+    }
+}
+
+#[tokio::test]
+async fn test_build_and_verify_programmability_examples() {
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+
+    let metered_verifier_config = default_verifier_config(
+        &ProtocolConfig::get_for_max_version(),
+        true, /* enable metering */
+    );
+
+    let mut examples = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    examples.extend(["..", "..", "sui_programmability", "examples"]);
+
+    for example in std::fs::read_dir(&examples).unwrap() {
+        let Ok(example) = example else { continue };
+        let path = example.path();
+
+        if !path.is_dir() {
+            continue;
+        }
+
+        let manifest = path.join("Move.toml");
+        if !manifest.exists() {
+            continue;
+        };
+
+        let modules = BuildConfig::new_for_testing()
+            .build(path)
+            .unwrap()
+            .into_modules();
+
+        let mut meter = BoundMeter::new(&metered_verifier_config);
+        run_metered_move_bytecode_verifier_impl(
+            &modules,
+            &ProtocolConfig::get_for_max_version(),
+            &metered_verifier_config,
+            &mut meter,
+        )
+        .unwrap_or_else(|_| {
+            panic!(
+                "Verification of example: '{:?}' failed",
+                example.file_name(),
+            )
+        });
+    }
+}
