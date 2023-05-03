@@ -1,0 +1,59 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+// Modules with infinite loops to stress the ID leak verifier
+
+//# publish
+module 0x0.m {
+    import 0x2.object;
+    import 0x2.tx_context;
+
+    struct Obj has key {
+        id: object.UID,
+    }
+
+    public entry loop_forever(ctx: &mut tx_context.TxContext) {
+        let tmp: object.UID;
+        let uid: object.UID;
+        let obj: Self.Obj;
+    label B0:
+        tmp = object.new(copy(ctx));
+        obj = Obj { id: move(tmp) };
+        Obj { id: uid } = move(obj);
+    label B1:
+        object.delete(move(uid));
+        uid = object.new(copy(ctx));
+        jump B1;
+    }
+}
+
+//# publish
+module 0x0.m {
+    import 0x2.object;
+    import 0x2.tx_context;
+
+    struct Obj has key {
+        id: object.UID,
+    }
+
+    public entry loop_forever(ctx: &mut tx_context.TxContext) {
+        let tmp: object.UID;
+        let uid: object.UID;
+        let obj: Self.Obj;
+    label B0:
+        tmp = object.new(copy(ctx));
+        obj = Obj { id: move(tmp) };
+        Obj { id: uid } = move(obj);
+        jump B1;
+    label B1:
+        object.delete(move(uid));
+        tmp = object.new(copy(ctx));
+        obj = Obj { id: move(tmp) };
+        jump B2;
+    label B2:
+        Obj { id: uid } = move(obj);
+        object.delete(move(uid));
+        uid = object.new(copy(ctx));
+        jump B1;
+    }
+}
