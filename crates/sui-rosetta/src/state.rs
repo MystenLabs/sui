@@ -89,7 +89,8 @@ impl BlockProvider for CheckpointBlockProvider {
     }
 
     async fn current_block(&self) -> Result<BlockResponse, Error> {
-        self.get_block_by_index(self.last_indexed_checkpoint()?)
+        let checkpoint = self.client.read_api().get_latest_checkpoint_sequence_number().await?;
+        self.get_block_by_index(checkpoint)
             .await
     }
 

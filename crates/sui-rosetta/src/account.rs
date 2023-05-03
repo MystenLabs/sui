@@ -69,21 +69,36 @@ pub async fn balance_new(
     if let Some(SubAccount { account_type }) = request.account_identifier.sub_account {
         let balances_first =
             get_sub_account_balances(account_type.clone(), &ctx.client, address).await?;
-        let checkpoint = ctx
+        let checkpoint1 = ctx
             .client
             .read_api()
             .get_latest_checkpoint_sequence_number()
             .await?;
+        // Get another checkpoint which is greater than current
+        let mut checkpoint2 = ctx
+            .client
+            .read_api()
+            .get_latest_checkpoint_sequence_number()
+            .await?;
+
+        while checkpoint2 <= checkpoint1 {
+            checkpoint2 = ctx
+                .client
+                .read_api()
+                .get_latest_checkpoint_sequence_number()
+                .await?;
+            thread::sleep(Duration::from_secs(1))
+        }
         let balances_second = get_sub_account_balances(account_type, &ctx.client, address).await?;
         if balances_first.eq(&balances_second) {
             Ok(AccountBalanceResponse {
-                block_identifier: ctx.blocks().create_block_identifier(checkpoint).await?,
+                block_identifier: ctx.blocks().create_block_identifier(checkpoint2).await?,
                 balances: balances_first,
             })
         } else {
             // retry logic needs to be aaded
             Ok(AccountBalanceResponse {
-                block_identifier: ctx.blocks().create_block_identifier(checkpoint).await?,
+                block_identifier: ctx.blocks().create_block_identifier(checkpoint2).await?,
                 balances: balances_first,
             })
         }
