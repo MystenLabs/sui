@@ -218,19 +218,19 @@ pub fn run_metered_move_bytecode_verifier_impl(
             ]
             .contains(&e.major_status())
             {
-                metrics.verifier_timeout_metrics.with_label_values(&["move_verifier", "failed"]).inc();
+                metrics.verifier_timeout_metrics.with_label_values(&[BytecodeVerifierMetrics::MOVE_VERIFIER_TAG, BytecodeVerifierMetrics::TIMEOUT_TAG]).inc();
                 return Err(SuiError::ModuleVerificationFailure {
                     error: "Verification timedout".to_string(),
                 });
             };
         } else {
             sui_verify_module_metered(protocol_config, module, &BTreeMap::new(), meter).map_err(|err|{
-                metrics.verifier_timeout_metrics.with_label_values(&["sui_verifier", "failed"]).inc();
+                metrics.verifier_timeout_metrics.with_label_values(&[ BytecodeVerifierMetrics::SUI_VERIFIER_TAG, BytecodeVerifierMetrics::TIMEOUT_TAG]).inc();
                 err
             })?
         }
+        metrics.verifier_timeout_metrics.with_label_values(&[BytecodeVerifierMetrics::OVERALL_TAG, BytecodeVerifierMetrics::SUCCESS_TAG]).inc();
     }
-    metrics.verifier_timeout_metrics.with_label_values(&["overall", "succeeded"]).inc();
     Ok(())
 }
 

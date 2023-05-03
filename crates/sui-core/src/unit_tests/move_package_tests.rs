@@ -4,7 +4,8 @@
 use move_binary_format::file_format::CompiledModule;
 
 use move_bytecode_verifier::meter::{BoundMeter, Scope};
-use std::{collections::BTreeMap, path::PathBuf};
+use prometheus::Registry;
+use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 use sui_adapter::adapter::{
     default_verifier_config, run_metered_move_bytecode_verifier,
     run_metered_move_bytecode_verifier_impl,
@@ -19,6 +20,7 @@ use sui_types::{
     error::{ExecutionErrorKind, SuiError},
     execution_status::PackageUpgradeError,
     messages::{Command, TransactionData, TransactionDataAPI, TransactionKind},
+    metrics::BytecodeVerifierMetrics,
     move_package::{MovePackage, TypeOrigin, UpgradeInfo},
     object::{Data, Object, OBJECT_START_VERSION},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
@@ -467,7 +469,8 @@ async fn test_metered_move_bytecode_verifier() {
         &ProtocolConfig::get_for_max_version(),
         true, /* enable metering */
     );
-
+    let registry = &Registry::new();
+    let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
     let mut meter = BoundMeter::new(&metered_verifier_config);
     // Default case should pass
     let r = run_metered_move_bytecode_verifier_impl(
@@ -475,8 +478,43 @@ async fn test_metered_move_bytecode_verifier() {
         &ProtocolConfig::get_for_max_version(),
         &metered_verifier_config,
         &mut meter,
+        &bytecode_verifier_metrics,
     );
     assert!(r.is_ok());
+    // Ensure metrics worked as expected
+    // No failures expected in counter
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_timeout_metrics
+            .with_label_values(&[
+                BytecodeVerifierMetrics::MOVE_VERIFIER_TAG,
+                BytecodeVerifierMetrics::TIMEOUT_TAG,
+            ])
+            .get()
+            == 0
+    );
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_timeout_metrics
+            .with_label_values(&[
+                BytecodeVerifierMetrics::SUI_VERIFIER_TAG,
+                BytecodeVerifierMetrics::TIMEOUT_TAG,
+            ])
+            .get()
+            == 0
+    );
+
+    // Counter must equal number of modules
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_timeout_metrics
+            .with_label_values(&[
+                BytecodeVerifierMetrics::OVERALL_TAG,
+                BytecodeVerifierMetrics::SUCCESS_TAG,
+            ])
+            .get()
+            == compiled_modules_bytes.len() as u64
+    );
 
     // Use low limits. Should fail
     metered_verifier_config.max_back_edges_per_function = Some(100);
@@ -485,7 +523,6 @@ async fn test_metered_move_bytecode_verifier() {
     metered_verifier_config.max_per_fun_meter_units = Some(10_000);
 
     let mut meter = BoundMeter::new(&metered_verifier_config);
-    let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
     let r = run_metered_move_bytecode_verifier_impl(
         &compiled_modules_bytes,
         &ProtocolConfig::get_for_max_version(),
@@ -499,6 +536,41 @@ async fn test_metered_move_bytecode_verifier() {
             == SuiError::ModuleVerificationFailure {
                 error: "Verification timedout".to_string()
             }
+    );
+
+    // One failure
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_timeout_metrics
+            .with_label_values(&[
+                BytecodeVerifierMetrics::MOVE_VERIFIER_TAG,
+                BytecodeVerifierMetrics::TIMEOUT_TAG,
+            ])
+            .get()
+            == 1
+    );
+    // Sui verifier did not fail
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_timeout_metrics
+            .with_label_values(&[
+                BytecodeVerifierMetrics::SUI_VERIFIER_TAG,
+                BytecodeVerifierMetrics::TIMEOUT_TAG,
+            ])
+            .get()
+            == 0
+    );
+
+    // This should be slighltly higher as some modules passed
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_timeout_metrics
+            .with_label_values(&[
+                BytecodeVerifierMetrics::OVERALL_TAG,
+                BytecodeVerifierMetrics::SUCCESS_TAG,
+            ])
+            .get()
+            > compiled_modules_bytes.len() as u64
     );
 
     // Check shared meter logic works across all publish in PT
@@ -541,7 +613,6 @@ async fn test_metered_move_bytecode_verifier() {
         default_verifier_config(&protocol_config, true /* enable metering */);
     // Check if the same meter is indeed used for all modules
     let mut meter = BoundMeter::new(&metered_verifier_config);
-    let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
     if let TransactionKind::ProgrammableTransaction(pt) = tx_data.kind() {
         pt.non_system_packages_to_be_published()
             .try_for_each(|q| {
@@ -577,7 +648,8 @@ async fn test_meter_system_packages() {
         &ProtocolConfig::get_for_max_version(),
         true, /* enable metering */
     );
-
+    let registry = &Registry::new();
+    let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
     let mut meter = BoundMeter::new(&metered_verifier_config);
     for system_package in BuiltInFramework::iter_system_packages() {
         run_metered_move_bytecode_verifier_impl(
@@ -585,6 +657,7 @@ async fn test_meter_system_packages() {
             &ProtocolConfig::get_for_max_version(),
             &metered_verifier_config,
             &mut meter,
+            &bytecode_verifier_metrics,
         )
         .unwrap_or_else(|_| {
             panic!(
@@ -593,6 +666,42 @@ async fn test_meter_system_packages() {
             )
         });
     }
+
+    // Ensure metrics worked as expected
+    // No failures expected in counter
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_timeout_metrics
+            .with_label_values(&[
+                BytecodeVerifierMetrics::MOVE_VERIFIER_TAG,
+                BytecodeVerifierMetrics::TIMEOUT_TAG,
+            ])
+            .get()
+            == 0
+    );
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_timeout_metrics
+            .with_label_values(&[
+                BytecodeVerifierMetrics::SUI_VERIFIER_TAG,
+                BytecodeVerifierMetrics::TIMEOUT_TAG,
+            ])
+            .get()
+            == 0
+    );
+
+    // Counter must equal number of modules
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_timeout_metrics
+            .with_label_values(&[
+                BytecodeVerifierMetrics::OVERALL_TAG,
+                BytecodeVerifierMetrics::SUCCESS_TAG,
+            ])
+            .get()
+            == BuiltInFramework::iter_system_packages().fold(0, |sm, x| sm + x.modules().len())
+                as u64
+    );
 }
 
 #[tokio::test]
@@ -603,7 +712,8 @@ async fn test_build_and_verify_programmability_examples() {
         &ProtocolConfig::get_for_max_version(),
         true, /* enable metering */
     );
-
+    let registry = &Registry::new();
+    let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
     let mut examples = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     examples.extend(["..", "..", "sui_programmability", "examples"]);
 
@@ -631,6 +741,7 @@ async fn test_build_and_verify_programmability_examples() {
             &ProtocolConfig::get_for_max_version(),
             &metered_verifier_config,
             &mut meter,
+            &bytecode_verifier_metrics,
         )
         .unwrap_or_else(|_| {
             panic!(
