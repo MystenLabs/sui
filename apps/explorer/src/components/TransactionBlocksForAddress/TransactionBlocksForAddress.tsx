@@ -23,7 +23,7 @@ export enum FILTER_VALUES {
 
 type TransactionBlocksForAddressProps = {
     address: string;
-    filter?: FILTER_VALUES
+    filter?: FILTER_VALUES;
     isObject?: boolean;
 };
 
