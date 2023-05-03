@@ -485,11 +485,13 @@ async fn test_metered_move_bytecode_verifier() {
     metered_verifier_config.max_per_fun_meter_units = Some(10_000);
 
     let mut meter = BoundMeter::new(&metered_verifier_config);
+    let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
     let r = run_metered_move_bytecode_verifier_impl(
         &compiled_modules_bytes,
         &ProtocolConfig::get_for_max_version(),
         &metered_verifier_config,
         &mut meter,
+        &bytecode_verifier_metrics,
     );
 
     assert!(
@@ -539,6 +541,7 @@ async fn test_metered_move_bytecode_verifier() {
         default_verifier_config(&protocol_config, true /* enable metering */);
     // Check if the same meter is indeed used for all modules
     let mut meter = BoundMeter::new(&metered_verifier_config);
+    let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
     if let TransactionKind::ProgrammableTransaction(pt) = tx_data.kind() {
         pt.non_system_packages_to_be_published()
             .try_for_each(|q| {
@@ -552,6 +555,7 @@ async fn test_metered_move_bytecode_verifier() {
                     &protocol_config,
                     &metered_verifier_config,
                     &mut meter,
+                    &bytecode_verifier_metrics,
                 );
                 // Check that at least one of the meter values has increased
                 assert!(

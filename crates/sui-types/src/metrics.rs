@@ -69,3 +69,21 @@ impl LimitsMetrics {
         }
     }
 }
+
+pub struct BytecodeVerifierMetrics {
+    /// Bytecode verifier metrics
+    pub verifier_timeout_metrics: IntCounterVec,
+}
+
+impl BytecodeVerifierMetrics {
+    pub fn new(registry: &prometheus::Registry) -> Self {
+        Self {
+            verifier_timeout_metrics: register_int_counter_vec_with_registry!(
+                "verifier_timeout_metrics",
+                "Number of timeouts in bytecode verifier",
+                &["verifier_meter", "status"],
+                registry,
+            ).unwrap(),
+        }
+    }
+}
