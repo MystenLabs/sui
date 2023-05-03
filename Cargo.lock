@@ -4823,8 +4823,11 @@ name = "move-binary-format"
 version = "0.0.3"
 dependencies = [
  "anyhow",
+ "arbitrary",
  "move-core-types",
  "once_cell",
+ "proptest",
+ "proptest-derive",
  "ref-cast",
  "serde 1.0.152",
  "variant_count",
@@ -10274,6 +10277,7 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-verifier",
  "quinn-proto",
+ "sui-protocol-config",
  "sui-verifier",
 ]
 
