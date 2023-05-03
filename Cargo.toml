@@ -182,7 +182,7 @@ tokio = "1.27.0"
 axum = { version = "0.6.6", default-features = false, features = ["headers", "tokio", "http1", "http2", "json", "matched-path", "original-uri", "form", "query"] }
 
 # Move dependencies
-move-binary-format = { path = "external-crates/move/move-binary-format" }
+move-binary-format = { path = "external-crates/move/move-binary-format", features = ["fuzzing"] }
 move-bytecode-utils = { path = "external-crates/move/tools/move-bytecode-utils" }
 move-bytecode-verifier = { path = "external-crates/move/move-bytecode-verifier" }
 move-cli = { path = "external-crates/move/tools/move-cli" }
