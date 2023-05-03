@@ -66,11 +66,13 @@ function BalanceChangeEntry({ change }: { change: BalanceChangeSummary }) {
     );
 }
 
-export function BalanceChanges({ changes }: BalanceChangesProps) {
-    if (!changes?.length) return null;
-
-    const owner = changes[0]?.owner ?? '';
-
+function BalanceChangeCard({
+    changes,
+    owner,
+}: {
+    changes: BalanceChangeSummary[];
+    owner: string;
+}) {
     const coinTypesSet = new Set(changes.map((change) => change.coinType));
 
     return (
@@ -107,5 +109,30 @@ export function BalanceChanges({ changes }: BalanceChangesProps) {
                 ))}
             </div>
         </TransactionBlockCard>
+    );
+}
+
+export function BalanceChanges({ changes }: BalanceChangesProps) {
+    if (!changes?.length) return null;
+
+    const changesByOwner = changes.reduce((acc, change) => {
+        const owner = change.owner ?? '';
+
+        acc[owner] = acc[owner] ?? [];
+        acc[owner].push(change);
+
+        return acc;
+    }, {} as Record<string, BalanceChangeSummary[]>);
+
+    return (
+        <>
+            {Object.entries(changesByOwner).map(([owner, changes], index) => (
+                <BalanceChangeCard
+                    key={owner}
+                    changes={changes}
+                    owner={owner}
+                />
+            ))}
+        </>
     );
 }

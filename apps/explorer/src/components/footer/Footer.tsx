@@ -25,7 +25,7 @@ function FooterLinks() {
 
             <ul className="flex justify-center gap-6">
                 {socialLinks.map(({ children, href }) => (
-                    <li key="href">
+                    <li key={href}>
                         <Link variant="text" color="steel-darker" href={href}>
                             <div className="mt-2">{children}</div>
                         </Link>
