@@ -13,7 +13,7 @@ import { ValidatorLogo } from '_app/staking/validators/ValidatorLogo';
 import { TxnAmount } from '_components/receipt-card/TxnAmount';
 import {
     NUM_OF_EPOCH_BEFORE_STAKING_REWARDS_REDEEMABLE,
-    NUM_OF_EPOCH_BEFORE_STAKING__REWARDS_STARTS,
+    NUM_OF_EPOCH_BEFORE_STAKING_REWARDS_STARTS,
 } from '_src/shared/constants';
 import { CountDownTimer } from '_src/ui/app/shared/countdown-timer';
 import { Text } from '_src/ui/app/shared/text';
@@ -40,7 +40,7 @@ export function StakeTxnCard({ event }: StakeTxnCardProps) {
     // TODO: Get epochStartTimestampMs/StartDate
     // for staking epoch + NUM_OF_EPOCH_BEFORE_STAKING_REWARDS_REDEEMABLE
     const startEarningRewardsEpoch =
-        Number(stakedEpoch) + NUM_OF_EPOCH_BEFORE_STAKING__REWARDS_STARTS;
+        Number(stakedEpoch) + NUM_OF_EPOCH_BEFORE_STAKING_REWARDS_STARTS;
 
     const redeemableRewardsEpoch =
         Number(stakedEpoch) + NUM_OF_EPOCH_BEFORE_STAKING_REWARDS_REDEEMABLE;

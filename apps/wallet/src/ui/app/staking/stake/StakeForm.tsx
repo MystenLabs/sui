@@ -18,7 +18,7 @@ import { Text } from '_app/shared/text';
 import NumberInput from '_components/number-input';
 import {
     NUM_OF_EPOCH_BEFORE_STAKING_REWARDS_REDEEMABLE,
-    NUM_OF_EPOCH_BEFORE_STAKING__REWARDS_STARTS,
+    NUM_OF_EPOCH_BEFORE_STAKING_REWARDS_STARTS,
 } from '_src/shared/constants';
 import { CountDownTimer } from '_src/ui/app/shared/countdown-timer';
 
@@ -65,7 +65,7 @@ function StakeForm({
 
     // Reward will be available after 2 epochs
     const startEarningRewardsEpoch =
-        Number(epoch || 0) + NUM_OF_EPOCH_BEFORE_STAKING__REWARDS_STARTS;
+        Number(epoch || 0) + NUM_OF_EPOCH_BEFORE_STAKING_REWARDS_STARTS;
 
     const redeemableRewardsEpoch =
         Number(epoch || 0) + NUM_OF_EPOCH_BEFORE_STAKING_REWARDS_REDEEMABLE;

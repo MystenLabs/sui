@@ -15,4 +15,4 @@ export const DEFAULT_NFT_IMAGE =
 // number of epochs before earning
 // Staking Rewards Redeemable
 export const NUM_OF_EPOCH_BEFORE_STAKING_REWARDS_REDEEMABLE = 2;
-export const NUM_OF_EPOCH_BEFORE_STAKING__REWARDS_STARTS = 1;
+export const NUM_OF_EPOCH_BEFORE_STAKING_REWARDS_STARTS = 1;

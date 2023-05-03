@@ -19,7 +19,7 @@ export interface ApyByValidator {
         isApyApproxZero: boolean;
     };
 }
-// For small APYs or AYPs before stakeSubsidyStartEpoch, show ~0% instead of 0%
+// For small APY or epoch before stakeSubsidyStartEpoch, show ~0% instead of 0%
 // If APY falls below 0.001, show ~0% instead of 0% since we round to 2 decimal places
 const MINIMUM_THRESHOLD = 0.001;
 
