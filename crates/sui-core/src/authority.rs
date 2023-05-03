@@ -1918,6 +1918,9 @@ impl AuthorityState {
             accumulator,
             expensive_safety_check_config.enable_state_consistency_check(),
         );
+        self.db()
+            .set_epoch_start_configuration(&epoch_start_configuration)
+            .await?;
         if let Some(checkpoint_path) = &self.db_checkpoint_config.checkpoint_path {
             if self
                 .db_checkpoint_config
@@ -3642,9 +3645,6 @@ impl AuthorityState {
             epoch_start_configuration.epoch_start_state().epoch(),
             new_committee.epoch
         );
-        self.db()
-            .set_epoch_start_configuration(&epoch_start_configuration)
-            .await?;
         fail_point!("before-open-new-epoch-store");
         let new_epoch_store = cur_epoch_store.new_at_next_epoch(
             self.name,
