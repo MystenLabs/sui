@@ -103,7 +103,7 @@ pub async fn balance_new(
                 retry_attempts -= 1;
             }
         }
-        Err(Error::RetryExhausted(String::from("ads")))
+        Err(Error::RetryExhausted(String::from("retry")))
     } else {
         // Get current live balance
         while retry_attempts > 0 {
@@ -164,7 +164,7 @@ pub async fn balance_new(
                 retry_attempts -= 1;
             }
         }
-        Err(Error::RetryExhausted(String::from("ads")))
+        Err(Error::RetryExhausted(String::from("retry")))
     }
 }
 
