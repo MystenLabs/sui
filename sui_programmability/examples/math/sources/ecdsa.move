@@ -27,7 +27,7 @@ module math::ecdsa_k1 {
     public entry fun keccak256(data: vector<u8>, recipient: address, ctx: &mut TxContext) {
         let hashed = Output {
             id: object::new(ctx),
-            value: ecdsa_k1::keccak256(&data),
+            value: sui::hash::keccak256(&data),
         };
         // Transfer an output data object holding the hashed data to the recipient.
         transfer::public_transfer(hashed, recipient)
@@ -72,7 +72,7 @@ module math::ecdsa_k1 {
         };
 
         // Take the last 20 bytes of the hash of the 64-bytes uncompressed pubkey.
-        let hashed = ecdsa_k1::keccak256(&uncompressed_64);
+        let hashed = sui::hash::keccak256(&uncompressed_64);
         let addr = vector::empty<u8>();
         let i = 12;
         while (i < 32) {

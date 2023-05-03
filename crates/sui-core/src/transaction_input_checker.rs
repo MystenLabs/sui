@@ -6,6 +6,7 @@ use crate::authority::AuthorityStore;
 use crate::transaction_signing_filter;
 use move_bytecode_verifier::meter::BoundMeter;
 use std::collections::{BTreeMap, HashSet};
+use std::sync::Arc;
 use sui_adapter::adapter::default_verifier_config;
 use sui_adapter::adapter::run_metered_move_bytecode_verifier;
 use sui_config::transaction_deny_config::TransactionDenyConfig;
@@ -15,6 +16,7 @@ use sui_types::base_types::ObjectRef;
 use sui_types::error::{UserInputError, UserInputResult};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::messages::{TransactionKind, VersionedProtocolMessage};
+use sui_types::metrics::BytecodeVerifierMetrics;
 use sui_types::{
     base_types::{SequenceNumber, SuiAddress},
     error::SuiResult,
@@ -62,10 +64,11 @@ pub async fn check_transaction_input(
     epoch_store: &AuthorityPerEpochStore,
     transaction: &TransactionData,
     transaction_deny_config: &TransactionDenyConfig,
+    metrics: &Arc<BytecodeVerifierMetrics>
 ) -> SuiResult<(SuiGasStatus, InputObjects)> {
     transaction.check_version_supported(epoch_store.protocol_config())?;
     transaction.validity_check(epoch_store.protocol_config())?;
-    check_non_system_packages_to_be_published(transaction, epoch_store.protocol_config())?;
+    check_non_system_packages_to_be_published(transaction, epoch_store.protocol_config(), metrics)?;
     let input_objects = transaction.input_objects()?;
     transaction_signing_filter::check_transaction_for_signing(
         transaction,
@@ -84,10 +87,11 @@ pub async fn check_transaction_input_with_given_gas(
     epoch_store: &AuthorityPerEpochStore,
     transaction: &TransactionData,
     gas_object: Object,
+    metrics: &Arc<BytecodeVerifierMetrics>
 ) -> SuiResult<(SuiGasStatus, InputObjects)> {
     transaction.check_version_supported(epoch_store.protocol_config())?;
     transaction.validity_check_no_gas_check(epoch_store.protocol_config())?;
-    check_non_system_packages_to_be_published(transaction, epoch_store.protocol_config())?;
+    check_non_system_packages_to_be_published(transaction, epoch_store.protocol_config(), metrics)?;
     let mut input_objects = transaction.input_objects()?;
     let mut objects = store.check_input_objects(&input_objects, epoch_store.protocol_config())?;
 
@@ -401,6 +405,7 @@ fn check_one_object(
 pub fn check_non_system_packages_to_be_published(
     transaction: &TransactionData,
     protocol_config: &ProtocolConfig,
+    metrics: &Arc<BytecodeVerifierMetrics>
 ) -> UserInputResult<()> {
     // Only meter non-system TXes
     if !transaction.is_system_tx() {
@@ -411,7 +416,7 @@ pub fn check_non_system_packages_to_be_published(
         let mut meter = BoundMeter::new(&metered_verifier_config);
         if let TransactionKind::ProgrammableTransaction(pt) = transaction.kind() {
             pt.non_system_packages_to_be_published()
-            .try_for_each(|q| run_metered_move_bytecode_verifier(q, protocol_config, &metered_verifier_config, &mut meter))
+            .try_for_each(|q| run_metered_move_bytecode_verifier(q, protocol_config, &metered_verifier_config, &mut meter, metrics))
             .map_err(|e| UserInputError::PackageVerificationTimedout { err: e.to_string() })?;
         }
     }

@@ -83,7 +83,7 @@ use sui_types::messages_grpc::{
     HandleTransactionResponse, ObjectInfoRequest, ObjectInfoRequestKind, ObjectInfoResponse,
     TransactionInfoRequest, TransactionInfoResponse, TransactionStatus,
 };
-use sui_types::metrics::LimitsMetrics;
+use sui_types::metrics::{BytecodeVerifierMetrics, LimitsMetrics};
 use sui_types::object::{MoveObject, Owner, PastObjectRead, OBJECT_START_VERSION};
 use sui_types::storage::{ObjectKey, ObjectStore, WriteKind};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
@@ -225,6 +225,9 @@ pub struct AuthorityMetrics {
     pub consensus_committed_certificates: IntCounterVec,
 
     pub limits_metrics: Arc<LimitsMetrics>,
+
+    /// bytecode verifier metrics for tracking timeouts
+    pub bytecode_verifier_metrics: Arc<BytecodeVerifierMetrics>,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -472,6 +475,7 @@ impl AuthorityMetrics {
             )
                 .unwrap(),
             limits_metrics: Arc::new(LimitsMetrics::new(registry)),
+            bytecode_verifier_metrics: Arc::new(BytecodeVerifierMetrics::new(registry)),
         }
     }
 }
@@ -578,6 +582,7 @@ impl AuthorityState {
             epoch_store.as_ref(),
             &transaction.data().intent_message().value,
             &self.transaction_deny_config,
+            &self.metrics.bytecode_verifier_metrics,
         )
         .await?;
 
@@ -1131,6 +1136,7 @@ impl AuthorityState {
                     epoch_store.as_ref(),
                     &transaction,
                     gas_object,
+                    &self.metrics.bytecode_verifier_metrics,
                 )
                 .await?,
                 Some(gas_object_id),
@@ -1142,6 +1148,7 @@ impl AuthorityState {
                     epoch_store.as_ref(),
                     &transaction,
                     &self.transaction_deny_config,
+                    &self.metrics.bytecode_verifier_metrics,
                 )
                 .await?,
                 None,

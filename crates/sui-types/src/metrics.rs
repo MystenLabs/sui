@@ -69,3 +69,27 @@ impl LimitsMetrics {
         }
     }
 }
+
+pub struct BytecodeVerifierMetrics {
+    /// Bytecode verifier metrics
+    pub verifier_timeout_metrics: IntCounterVec,
+}
+
+impl BytecodeVerifierMetrics {
+    pub const MOVE_VERIFIER_TAG: &'static str = "move_verifier";
+    pub const SUI_VERIFIER_TAG: &'static str = "sui_verifier";
+    pub const OVERALL_TAG: &'static str = "overall";
+    pub const SUCCESS_TAG: &'static str = "success";
+    pub const TIMEOUT_TAG: &'static str = "failed";
+    pub fn new(registry: &prometheus::Registry) -> Self {
+        Self {
+            verifier_timeout_metrics: register_int_counter_vec_with_registry!(
+                "verifier_timeout_metrics",
+                "Number of timeouts in bytecode verifier",
+                &["verifier_meter", "status"],
+                registry,
+            )
+            .unwrap(),
+        }
+    }
+}
