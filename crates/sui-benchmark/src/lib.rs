@@ -31,6 +31,7 @@ use sui_json_rpc_types::{
 use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::effects::{CertifiedTransactionEffects, TransactionEffectsAPI, TransactionEvents};
+use sui_types::messages::Argument;
 use sui_types::messages::CallArg;
 use sui_types::messages::ObjectArg;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
@@ -43,7 +44,7 @@ use sui_types::{
         AuthoritySignature,
     },
     message_envelope::Envelope,
-    messages::{CertifiedTransaction, HandleCertificateResponse, Transaction, TransactionStatus},
+    messages::{CertifiedTransaction, Transaction},
     object::Object,
 };
 use sui_types::{base_types::ObjectRef, crypto::AuthorityStrongQuorumSignInfo, object::Owner};
@@ -53,7 +54,6 @@ use sui_types::{
     sui_system_state::SuiSystemStateTrait,
 };
 use sui_types::{error::SuiError, gas::GasCostSummary};
-use sui_types::{messages::Argument, messages::QuorumDriverResponse};
 use tokio::{
     task::JoinSet,
     time::{sleep, timeout},
@@ -71,6 +71,8 @@ pub mod system_state_observer;
 pub mod util;
 pub mod workloads;
 use futures::FutureExt;
+use sui_types::messages_grpc::{HandleCertificateResponse, TransactionStatus};
+use sui_types::quorum_driver_types::QuorumDriverResponse;
 
 #[derive(Debug)]
 /// A wrapper on execution results to accommodate different types of

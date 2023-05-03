@@ -67,7 +67,7 @@ Use the following command to install Sui directly from the Sui GitHub repository
 cargo install --locked --git https://github.com/MystenLabs/sui.git --branch main sui-test-validator sui
 ```
 
-Note that the command uses the `main` branch of the Sui repository. To use a different branch, change the value for the `--branch` switch. For example, to use the `devnet` branch, specify `--branch devnet`.
+The command uses the `main` branch of the Sui repository. To use a different branch, change the value for the `--branch` switch. For example, to use the `devnet` branch, specify `--branch devnet`.
 
 ## Start the local network
 
@@ -258,7 +258,7 @@ If you encounter an error from turbo build, confirm that there is no `package-lo
 
 ### Set up Sui Explorer on your local network
 
-To connect the live Sui Explorer to your local network, open the URL:[https://explorer.sui.io/?network=local](https://explorer.sui.io/?network=local). The live version of Sui Explorer may not include recent updates added to the `main` branch of the Sui repo. To use Sui Explorer that includes the most recent updates, install and run Sui Explorer from your local clone of the Sui repo.
+To connect the live Sui Explorer to your local network, open the URL:[https://suiexplorer.com/?network=local](https://suiexplorer.com/?network=local). The live version of Sui Explorer may not include recent updates added to the `main` branch of the Sui repo. To use Sui Explorer that includes the most recent updates, install and run Sui Explorer from your local clone of the Sui repo.
 
 Run the following command from the `sui` root folder:
 

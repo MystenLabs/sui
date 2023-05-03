@@ -20,10 +20,11 @@ use sui_json_rpc_types::{
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::wallet_context::WalletContext;
 use sui_types::object::Owner;
+use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     gas_coin::GasCoin,
-    messages::{ExecuteTransactionRequestType, Transaction, TransactionData, VerifiedTransaction},
+    messages::{Transaction, TransactionData, VerifiedTransaction},
 };
 use tokio::sync::{
     mpsc::{self, Receiver, Sender},

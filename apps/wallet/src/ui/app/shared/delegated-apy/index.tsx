@@ -3,7 +3,7 @@
 
 import {
     roundFloat,
-    useGetRollingAverageApys,
+    useGetValidatorsApy,
     useGetSystemState,
 } from '@mysten/core';
 import { type SuiAddress } from '@mysten/sui.js';
@@ -21,9 +21,7 @@ type DelegatedAPYProps = {
 
 export function DelegatedAPY({ stakedValidators }: DelegatedAPYProps) {
     const { data, isLoading } = useGetSystemState();
-    const { data: rollingAverageApys } = useGetRollingAverageApys(
-        data?.activeValidators.length || null
-    );
+    const { data: rollingAverageApys } = useGetValidatorsApy();
 
     const averageNetworkAPY = useMemo(() => {
         if (!data || !rollingAverageApys) return null;
@@ -31,7 +29,7 @@ export function DelegatedAPY({ stakedValidators }: DelegatedAPYProps) {
         let stakedAPYs = 0;
 
         stakedValidators.forEach((validatorAddress) => {
-            stakedAPYs += rollingAverageApys?.[validatorAddress] || 0;
+            stakedAPYs += rollingAverageApys?.[validatorAddress].apy || 0;
         });
 
         const averageAPY = stakedAPYs / stakedValidators.length;

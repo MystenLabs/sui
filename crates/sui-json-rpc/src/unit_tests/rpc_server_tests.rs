@@ -30,7 +30,7 @@ use sui_types::base_types::SequenceNumber;
 use sui_types::coin::{TreasuryCap, COIN_MODULE_NAME};
 use sui_types::digests::ObjectDigest;
 use sui_types::gas_coin::GAS;
-use sui_types::messages::ExecuteTransactionRequestType;
+use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{parse_sui_struct_tag, SUI_FRAMEWORK_ADDRESS};
 use test_utils::network::TestClusterBuilder;

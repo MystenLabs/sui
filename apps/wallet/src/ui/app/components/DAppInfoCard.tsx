@@ -34,6 +34,8 @@ export function DAppInfoCard({
     }, [url]);
     return (
         <SummaryCard
+            minimalPadding
+            noBorder
             showDivider
             body={
                 <>

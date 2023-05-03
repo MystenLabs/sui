@@ -13,9 +13,8 @@ use sui_macros::checked_arithmetic;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::ObjectRef;
 use sui_types::error::{UserInputError, UserInputResult};
-use sui_types::messages::{
-    TransactionKind, VerifiedExecutableTransaction, VersionedProtocolMessage,
-};
+use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::messages::{TransactionKind, VersionedProtocolMessage};
 use sui_types::{
     base_types::{SequenceNumber, SuiAddress},
     error::SuiResult,

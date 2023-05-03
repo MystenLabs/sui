@@ -8,65 +8,66 @@ Before you install Sui, you need to install some prerequisite tools and configur
 
 The steps to install Sui include:
 
- 1. Install [prerequisites](#prerequisites) for your operating system.
- 1. Install [Sui binaries](#install-sui-binaries).
- 1. Configure an [Integrated Development Environment (IDE)](#integrated-development-environment).
- 1. Request [SUI test tokens](#sui-tokens) to use on a Sui network.
+1.  Install [prerequisites](#prerequisites) for your operating system.
+1.  Install [Sui binaries](#install-sui-binaries).
+1.  Configure an [Integrated Development Environment (IDE)](#integrated-development-environment).
+1.  Request [SUI test tokens](#sui-tokens) to use on Sui Devnet or Sui Testnet networks.
 
 You can also download the [source code](#source-code) to have local access to files.
 
 ## Sui repository
 
-The Sui repository includes two primary branches, `devnet` and `main`.
+The Sui repository includes primary branches, `devnet`, `testnet`, `mainnet`, and `main`.
 
- * The `devnet` branch includes the latest stable build of Sui. Choose the `devnet` branch if you want to build or test on Sui. If you encounter an issue or find a bug, it may already be fixed in the `main` branch. To submit a pull request (PR), you should push commits to your fork of the `main` branch.
- * The `main` branch includes the most recent changes and updates. Use the `main` branch if you want to contribute to the Sui project. The `main` branch may include unreleased changes, or introduce changes that cause issues in apps created using an earlier version.
+- The `devnet` branch includes the latest stable build of Sui. Choose the `devnet` branch if you want to build or test on Sui Devnet. If you encounter an issue or find a bug, it may already be fixed in the `main` branch. To submit a pull request (PR), you should push commits to your fork of the `main` branch.
+- The `testnet` branch includes the code running on the Sui Testnet network.
+- The `mainnet` branch includes the code running on the Sui Mainnet network.
+- The `main` branch includes the most recent changes and updates. Use the `main` branch if you want to contribute to the Sui project. The `main` branch may include unreleased changes, or introduce changes that cause issues in apps created using an earlier version.
 
 ## Documentation in the Sui repository
 
-The source for the documentation published on this site also resides in the Sui repository. The content differs between the branches of the repository just like the Sui source code. Use the version of the documentation that corresponds to the Sui network you plan to use. For example, to use the Sui Devnet network, use the **Devnet** version of the documentation. To use the Sui Testnet network, use the **Testnet** version of the documentation.
-
+The source for the documentation published on this site also resides in the Sui repository. The site displays the **Mainnet** version of the documentation by default. The content on the site differs between the branches of the repository just like the Sui source code. Use the version of the documentation that corresponds to the Sui network you plan to use. For example, to use the Sui Devnet network, use the **Devnet** version of the documentation. To use the Sui Testnet network, use the **Testnet** version of the documentation.
 
 ## Supported operating systems
 
 Sui supports the following operating systems:
 
- * Linux - Ubuntu version 20.04 (Bionic Beaver)
- * macOS - macOS Monterey
- * Microsoft Windows - Windows 11
+- Linux - Ubuntu version 20.04 (Bionic Beaver)
+- macOS - macOS Monterey
+- Microsoft Windows - Windows 11
 
 ## Prerequisites
 
-Install the following prerequisites and tools you need to work with Sui. 
+Install the following prerequisites and tools you need to work with Sui.
 
-| Prerequisite        |         Linux         |         macOS        |           Windows 11               |
-| ------------------- | :-------------------: | :------------------: | :--------------------------------: |
-| cURL                | [X](#curl)            | [X](#curl-1)         | [X](#curl-2)                       |
-| Rust and Cargo      | [X](#rust-and-cargo)  | [X](#rust-and-cargo) | [X](#rust-and-cargo)               |
-| Git CLI             | [X](#git-cli)         | [X](#git-cli-1)      | [X](#git-cli-2)                    |
-| CMake               | [X](#cmake)           | [X](#cmake-1)        | [X](#cmake-2)                      |
-| GCC                 | [X](#gcc)             |                      |                                    | 
-| libssl-dev          | [X](#libssl-dev)      |                      |                                    |
-| libclang-dev        | [X](#libclang-dev)    |                      |                                    |
-| libpq-dev           | [X](#libpq-dev)       |                      |                                    |
-| build-essential     | [X](#build-essential) |                      |                                    |
-| Brew                |                       | [X](#brew)           |                                    |
-| C++ build tools     |                       |                      | [X](#additional-tools-for-windows) |
-| LLVM Compiler       |                       |                      | [X](#additional-tools-for-windows) |
-
+| Prerequisite    |         Linux         |        macOS         |             Windows 11             |
+| --------------- | :-------------------: | :------------------: | :--------------------------------: |
+| cURL            |      [X](#curl)       |     [X](#curl-1)     |            [X](#curl-2)            |
+| Rust and Cargo  | [X](#rust-and-cargo)  | [X](#rust-and-cargo) |        [X](#rust-and-cargo)        |
+| Git CLI         |     [X](#git-cli)     |   [X](#git-cli-1)    |          [X](#git-cli-2)           |
+| CMake           |      [X](#cmake)      |    [X](#cmake-1)     |           [X](#cmake-2)            |
+| GCC             |       [X](#gcc)       |                      |                                    |
+| libssl-dev      |   [X](#libssl-dev)    |                      |                                    |
+| libclang-dev    |  [X](#libclang-dev)   |                      |                                    |
+| libpq-dev       |    [X](#libpq-dev)    |                      |                                    |
+| build-essential | [X](#build-essential) |                      |                                    |
+| Brew            |                       |      [X](#brew)      |                                    |
+| C++ build tools |                       |                      | [X](#additional-tools-for-windows) |
+| LLVM Compiler   |                       |                      | [X](#additional-tools-for-windows) |
 
 ### Rust and Cargo
 
-Sui requires Rust and Cargo (Rust's package manager) on all supported operating systems. The suggested method to install Rust is with `rustup` using cURL. 
+Sui requires Rust and Cargo (Rust's package manager) on all supported operating systems. The suggested method to install Rust is with `rustup` using cURL.
 
 Some other commands in the installation instructions also require cURL to run. If you can't run the cURL command to install Rust, see the instructions to install cURL for your operating system before you install Rust.
 
 Use the following command to install Rust and Cargo on macOS or Linux:
+
 ```shell
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
-If you use Windows 11, see information about using the [Rust installer](https://www.rust-lang.org/tools/install) on the Rust website. The installer checks for C++ build tools and prompts you to install them if necessary. Select the option that best defines your environment and follow the instructions in the install wizard. 
+If you use Windows 11, see information about using the [Rust installer](https://www.rust-lang.org/tools/install) on the Rust website. The installer checks for C++ build tools and prompts you to install them if necessary. Select the option that best defines your environment and follow the instructions in the install wizard.
 
 For additional installation options, see [Install Rust](https://www.rust-lang.org/tools/install).
 
@@ -79,11 +80,12 @@ rustup update stable
 ```
 
 After you install Rust, proceed to the prerequisites for your operating system.
- * [Linux prerequisites](#linux-prerequisites)
- * [macOS prerequisites](#macos-prerequisites)
- * [Windows prerequisites](#windows-prerequisites)
 
-## Linux prerequisites 
+- [Linux prerequisites](#linux-prerequisites)
+- [macOS prerequisites](#macos-prerequisites)
+- [Windows prerequisites](#windows-prerequisites)
+
+## Linux prerequisites
 
 **Note:** The Linux instructions assume a distribution that uses the APT package manager. You might need to adjust the instructions to use other package managers.
 
@@ -96,11 +98,13 @@ sudo apt-get update
 ### cURL
 
 Install cURL with the following command:
+
 ```shell
 sudo apt install curl
 ```
 
 Verify that cURL installed correctly with the following command:
+
 ```shell
 curl --version
 ```
@@ -166,9 +170,11 @@ Use the following command to install `libpq-dev`:
 ```shell
 sudo apt-get install libpq-dev
 ```
+
 If the version of Linux you use doesn't support `libpq-dev`, find an equivalent package for it on the [ROS Index](https://index.ros.org/d/libpq-dev/).
 
 ### build-essential
+
 Use the following command to install `build-essential`"
 
 ```shell
@@ -184,6 +190,7 @@ macOS includes a version of cURL you can use to install Brew. Use Brew to instal
 ### Brew
 
 Use the following command to install [Brew](https://brew.sh/):
+
 ```shell
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
@@ -191,6 +198,7 @@ Use the following command to install [Brew](https://brew.sh/):
 ### cURL
 
 Use the following command to update the default [cURL](https://curl.se) on macOS:
+
 ```shell
 brew install curl
 ```
@@ -198,6 +206,7 @@ brew install curl
 ### CMake
 
 Use the following command to install CMake:
+
 ```shell
 brew install cmake
 ```
@@ -207,6 +216,7 @@ To customize the installation, see [Installing CMake](https://cmake.org/install/
 ### Git CLI
 
 Use the following command to install Git:
+
 ```shell
 brew install git
 ```
@@ -239,9 +249,9 @@ Download [Protocol Buffers](https://github.com/protocolbuffers/protobuf/releases
 
 Sui requires the following additional tools on computers running Windows.
 
- * For Windows on ARM64 only - [Visual Studio 2022 Preview](https://visualstudio.microsoft.com/vs/preview/).
- * [C++ build tools](https://visualstudio.microsoft.com/downloads/) is required to [install Rust](#rust-and-cargo).
- * The [LLVM Compiler Infrastructure](https://releases.llvm.org/). Look for a file with a name similar to LLVM-15.0.7-win64.exe for 64-bit Windows, or LLVM-15.0.7-win32.exe for 32-bit Windows.
+- For Windows on ARM64 only - [Visual Studio 2022 Preview](https://visualstudio.microsoft.com/vs/preview/).
+- [C++ build tools](https://visualstudio.microsoft.com/downloads/) is required to [install Rust](#rust-and-cargo).
+- The [LLVM Compiler Infrastructure](https://releases.llvm.org/). Look for a file with a name similar to LLVM-15.0.7-win64.exe for 64-bit Windows, or LLVM-15.0.7-win32.exe for 32-bit Windows.
 
 **Known issue** - The `sui console` command does not work in PowerShell.
 
@@ -256,6 +266,7 @@ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch devn
 The install process can take a while to complete. You can monitor installation progress in the terminal. If you encounter an error, make sure to install the latest version of all prerequisites and then try the command again.
 
 To update to the latest stable version of Rust:
+
 ```shell
 rustup update stable
 ```
@@ -278,20 +289,22 @@ See more [IDE options](https://github.com/MystenLabs/awesome-move#ides) in the [
 
 ## SUI tokens
 
-You need SUI tokens to perform transactions on a Sui network. You can get test tokens from the Sui faucet in Discord, or directly in the [Sui Wallet](../explore/wallet-browser.md).
+You need SUI tokens to perform transactions on a Sui network. You can get test tokens from the Sui faucet in Discord, or directly in the [Sui Wallet](https://github.com/MystenLabs/mysten-app-docs/blob/main/mysten-sui-wallet.md).
 
 To request SUI test tokens in Discord:
 
- 1. Join the [Sui Discord](https://discord.com/invite/sui) If you haven’t already.
- 1. Identify your address through either the Sui Wallet browser extension or by running the following command and electing to connect to a Sui RPC server if prompted:
-   ```shell
-   sui client active-address
-   ```
- 1. Request tokens in the [#devnet-faucet](https://discord.com/channels/916379725201563759/971488439931392130) channel using the syntax: `!faucet <YOUR_ADDRESS>`, for example:
-      ```shell
+1.  Join the [Sui Discord](https://discord.com/invite/sui) If you haven’t already.
+1.  Identify your address through either the Sui Wallet browser extension or by running the following command and electing to connect to a Sui RPC server if prompted:
+
+```shell
+sui client active-address
+```
+
+1.  Request tokens in the [#devnet-faucet](https://discord.com/channels/916379725201563759/971488439931392130) channel using the syntax: `!faucet <YOUR_ADDRESS>`, for example:
+    `shell
       !faucet 0xa56612ad4f5dbc04c651e8d20f56af3316ee6793335707f29857bacabf9127d0
-      ```
-A bot on the channel distributes tokens to your address.
+      `
+    A bot on the channel distributes tokens to your address.
 
 ## Source code
 
@@ -305,9 +318,10 @@ git clone https://github.com/MystenLabs/sui.git --branch devnet
 ```
 
 The following primary directories offer a good starting point for exploring Sui's source code:
- * [sui](https://github.com/MystenLabs/sui/tree/main/crates/sui) - Sui, including the Sui CLI Client
- * [sui_programmability](https://github.com/MystenLabs/sui/tree/main/sui_programmability) - Sui Move code examples (games, defi, nfts, ...)
- * [sui_core](https://github.com/MystenLabs/sui/tree/main/crates/sui-core) - Core Sui components
- * [sui-types](https://github.com/MystenLabs/sui/tree/main/crates/sui-types) - Sui object types, such as coins and gas
- * [explorer](https://github.com/MystenLabs/sui/tree/main/apps/explorer) - browser-based object explorer for the Sui network
- * [sui-network](https://github.com/MystenLabs/sui/tree/main/crates/sui-network) - networking interfaces
+
+- [sui](https://github.com/MystenLabs/sui/tree/main/crates/sui) - Sui, including the Sui CLI Client
+- [sui_programmability](https://github.com/MystenLabs/sui/tree/main/sui_programmability) - Sui Move code examples (games, defi, nfts, ...)
+- [sui_core](https://github.com/MystenLabs/sui/tree/main/crates/sui-core) - Core Sui components
+- [sui-types](https://github.com/MystenLabs/sui/tree/main/crates/sui-types) - Sui object types, such as coins and gas
+- [explorer](https://github.com/MystenLabs/sui/tree/main/apps/explorer) - browser-based object explorer for the Sui network
+- [sui-network](https://github.com/MystenLabs/sui/tree/main/crates/sui-network) - networking interfaces

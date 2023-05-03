@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-mod casual_order;
+mod causal_order;
 pub mod checkpoint_executor;
 mod checkpoint_output;
 mod metrics;
 
 use crate::authority::{AuthorityState, EffectsNotifyRead};
-use crate::checkpoints::casual_order::CasualOrder;
+use crate::checkpoints::causal_order::CausalOrder;
 use crate::checkpoints::checkpoint_output::{CertifiedCheckpointOutput, CheckpointOutput};
 pub use crate::checkpoints::checkpoint_output::{
     LogCheckpointOutput, SendCheckpointToStateSync, SubmitCheckpointToConsensus,
@@ -35,13 +35,14 @@ use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::gas::GasCostSummary;
 use sui_types::message_envelope::Message;
-use sui_types::messages::{ConsensusTransactionKey, TransactionDataAPI, TransactionKind};
+use sui_types::messages::{TransactionDataAPI, TransactionKind};
 use sui_types::messages_checkpoint::SignedCheckpointSummary;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
     CheckpointSignatureMessage, CheckpointSummary, CheckpointTimestamp, EndOfEpochData,
     FullCheckpointContents, TrustedCheckpoint, VerifiedCheckpoint, VerifiedCheckpointContents,
 };
+use sui_types::messages_consensus::ConsensusTransactionKey;
 use sui_types::signature::GenericSignature;
 use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
 use tokio::{
@@ -590,8 +591,8 @@ impl CheckpointBuilder {
         let _scope = monitored_scope("CheckpointBuilder");
         let unsorted = self.complete_checkpoint_effects(roots)?;
         let sorted = {
-            let _scope = monitored_scope("CheckpointBuilder::casual_sort");
-            CasualOrder::casual_sort(unsorted)
+            let _scope = monitored_scope("CheckpointBuilder::causal_sort");
+            CausalOrder::causal_sort(unsorted)
         };
         let new_checkpoint = self.create_checkpoints(sorted, pending.details).await?;
         self.write_checkpoints(height, new_checkpoint).await?;
@@ -949,6 +950,8 @@ impl CheckpointBuilder {
             let mut pending = HashSet::new();
             for effect in roots {
                 let digest = effect.transaction_digest();
+                // Unnecessary to read effects of a depndency if the effect is already processed.
+                seen.insert(*digest);
                 if self
                     .epoch_store
                     .builder_included_transaction_in_checkpoint(digest)?

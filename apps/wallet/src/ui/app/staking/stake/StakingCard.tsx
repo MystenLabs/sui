@@ -237,7 +237,7 @@ function StakingCard() {
                 navigate(
                     `/receipt?${new URLSearchParams({
                         txdigest: txDigest,
-                        from: 'stake',
+                        from: 'tokens',
                     }).toString()}`,
                     { state: { response } }
                 );

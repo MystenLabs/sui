@@ -39,7 +39,7 @@ Gas usage is proportional to the resources used. Specifically, it is proportiona
 There are 2 main values defined in the system that contribute to gas consumption:
 
 - **RGP** (Reference Gas Price): set up at the beginning of each epoch by the validator committee. RGP is a multiplier applied to each unit of computation. Initial **RGP** at genesis is 1,000 MIST.
-- **Storage Price**: set up in the system and intended to be more stable than RGP, it is a multiplier for the number of bytes written to storage. Initial **Storage Price** at genesis is **76** MIST.
+- **Storage Price**: set up in the system and intended to be more stable than RGP, it is a multiplier for the number of bytes written to storage. This is a one-time charge for the life of the object on the network. Initial **Storage Price** at genesis is **76** MIST.
 
 ## Transaction Output: GasCostSummary
 
@@ -63,7 +63,7 @@ The remaining values provide an insight into the storage charges. Each time Sui 
 
 At the end of execution, all created object contribute to `storage_cost` with the following formula: `storage_cost = object_byte * storage_normalizer * storage_price` where, currently, `storage_normalizer = 100` and `storage_price = 76`. The `storage_cost` is saved and tracked by each object, and represents the value of the object in terms of its storage cost.
 
-All deleted objects storage values are added together and refunded to the user (`storage_rebate`), except for a small percentage of the rebate that is charged by the system and goes into the `non_refundable_storage_fee`. That percentage is currently defined to be 0.01%.
+All deleted objects storage values are added together and refunded to the user (`storage_rebate`), except for a small percentage of the rebate that is charged by the system and goes into the `non_refundable_storage_fee`. That percentage is currently 1.0%.
 
 ## Out Of Gas Model
 

@@ -13,6 +13,7 @@ For a deep dive into Sui technology, see the [Sui Smart Contracts Platform](http
 This site is available in two versions. You can choose which version to view using the drop-down menu at top left.
  * **Devnet** reflects the version of Sui running on the Sui Devnet network.  
  * **Testnet** reflects the version of Sui running on the Sui Testnet network. 
+ * **Mainnet** reflects the version of Sui running on the Sui Mainnet network.
 
 Use the version of the documentation that corresponds to the Sui network you use.
 

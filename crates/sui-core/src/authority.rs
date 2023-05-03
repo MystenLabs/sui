@@ -32,7 +32,7 @@ use tracing::{debug, error, info, instrument, trace, warn, Instrument};
 
 pub use authority_notify_read::EffectsNotifyRead;
 pub use authority_store::{AuthorityStore, ResolverWrapper, UpdateType};
-use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use narwhal_config::{
     Committee as ConsensusCommittee, WorkerCache as ConsensusWorkerCache,
     WorkerId as ConsensusWorkerId,
@@ -70,6 +70,7 @@ use sui_types::effects::{
 };
 use sui_types::error::{ExecutionError, UserInputError};
 use sui_types::event::{Event, EventID};
+use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::gas::{GasCostSummary, SuiGasStatus};
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
@@ -77,6 +78,11 @@ use sui_types::messages_checkpoint::{
     CheckpointSequenceNumber, CheckpointSummary, CheckpointTimestamp, VerifiedCheckpoint,
 };
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
+use sui_types::messages_consensus::AuthorityCapabilities;
+use sui_types::messages_grpc::{
+    HandleTransactionResponse, ObjectInfoRequest, ObjectInfoRequestKind, ObjectInfoResponse,
+    TransactionInfoRequest, TransactionInfoResponse, TransactionStatus,
+};
 use sui_types::metrics::LimitsMetrics;
 use sui_types::object::{MoveObject, Owner, PastObjectRead, OBJECT_START_VERSION};
 use sui_types::storage::{ObjectKey, ObjectStore, WriteKind};
@@ -776,6 +782,7 @@ impl AuthorityState {
         expected_effects_digest: Option<TransactionEffectsDigest>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
+        let _scope = monitored_scope("Execution::try_execute_immediately");
         let _metrics_guard = self.metrics.internal_execution_latency.start_timer();
         let tx_digest = *certificate.digest();
         debug!("execute_certificate_internal");
@@ -924,6 +931,9 @@ impl AuthorityState {
         _execution_guard: ExecutionLockReadGuard<'_>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
+        let _scope: Option<mysten_metrics::MonitoredScopeGuard> =
+            monitored_scope("Execution::commit_cert_and_notify");
+
         let input_object_count = inner_temporary_store.objects.len();
         let shared_object_count = effects.shared_objects().len();
         let digest = *certificate.digest();
@@ -1025,6 +1035,7 @@ impl AuthorityState {
         TransactionEffects,
         Option<ExecutionError>,
     )> {
+        let _scope = monitored_scope("Execution::prepare_certificate");
         let _metrics_guard = self.metrics.prepare_certificate_latency.start_timer();
 
         // check_certificate_input also checks shared object locks when loading the shared objects.

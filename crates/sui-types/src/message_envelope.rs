@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::base_types::AuthorityName;
-use crate::certificate_proof::CertificateProof;
 use crate::committee::{Committee, EpochId};
 use crate::crypto::{
     AuthorityQuorumSignInfo, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature,
     AuthorityStrongQuorumSignInfo, EmptySignInfo, Signer,
 };
 use crate::error::SuiResult;
+use crate::executable_transaction::CertificateProof;
 use crate::messages::VersionedProtocolMessage;
 use crate::messages_checkpoint::CheckpointSequenceNumber;
 use once_cell::sync::OnceCell;

@@ -101,9 +101,10 @@ impl ProtobufDecoder {
 
 // populate labels in place for our given metric family data
 pub fn populate_labels(
-    name: String,               // host field for grafana agent (from chain data)
-    network: String,            // network name from ansible (via config)
-    inventory_hostname: String, // inventory_name from ansible (via config)
+    name: String,    // host field for grafana agent (from chain data)
+    network: String, // network name from ansible (via config)
+    // TODO use in stderr logging, see below
+    _inventory_hostname: String, // inventory_name from ansible (via config)
     data: Vec<proto::MetricFamily>,
 ) -> Vec<proto::MetricFamily> {
     let timer = CONSUMER_OPERATION_DURATION
@@ -119,11 +120,12 @@ pub fn populate_labels(
     host_label.set_name("host".into());
     host_label.set_value(name);
 
-    let mut relay_host_label = proto::LabelPair::default();
-    relay_host_label.set_name("relay_host".into());
-    relay_host_label.set_value(inventory_hostname);
+    // TODO add this back in via stderr logging only and not in relayed samples
+    // let mut relay_host_label = proto::LabelPair::default();
+    // relay_host_label.set_name("relay_host".into());
+    // relay_host_label.set_value(inventory_hostname);
 
-    let labels = vec![network_label, host_label, relay_host_label];
+    let labels = vec![network_label, host_label];
 
     let mut data = data;
     // add our extra labels to our incoming metric data
@@ -330,7 +332,6 @@ mod tests {
             &create_labels(vec![
                 ("network", "unittest-network"),
                 ("host", "validator-0"),
-                ("relay_host", "inventory-hostname"),
             ])
         );
     }

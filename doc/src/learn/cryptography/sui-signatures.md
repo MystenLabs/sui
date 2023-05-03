@@ -14,28 +14,28 @@ The `flag` is a 1-byte representation corresponding to the signature scheme that
 
 | Scheme | Flag |
 |---|---|
-|  Pure Ed25519 |  0x00 |
-| ECDSA Secp256k1  | 0x01  |
-| ECDSA Secp256r1  | 0x02  |
-| MultiSig  | 0x03  |
+| Pure Ed25519 | 0x00 |
+| ECDSA Secp256k1 | 0x01 |
+| ECDSA Secp256r1 | 0x02 |
+| MultiSig | 0x03 |
 
 The `sig` bytes is the compressed bytes representation of the signature instead of DER encoding. See the expected size and format below:
 
 | Scheme | Signature |
 |---|---|
-|  Pure Ed25519 | Compressed, 64 bytes |
-| ECDSA Secp256k1  | Compressed, 64 bytes  |
-| ECDSA Secp256r1  | Compressed, 64 bytes  |
-| MultiSig  | BCS serialized all signatures, size varies  |
+| Pure Ed25519 | Compressed, 64 bytes |
+| ECDSA Secp256k1 | Non-recoverable, compressed, 64 bytes  |
+| ECDSA Secp256r1 | Non-recoverable, compressed, 64 bytes |
+| MultiSig | BCS serialized all signatures, size varies |
 
 The `pk` bytes is the bytes representation of the public key corresponding to the signature.
 
 | Scheme | Public key |
 |---|---|
-|  Pure Ed25519 | Compressed, 32 bytes |
-| ECDSA Secp256k1  | Compressed, 33 bytes  |
-| ECDSA Secp256r1  | Compressed, 33 bytes  |
-| MultiSig  | BCS serialized all participating public keys, size varies  |
+| Pure Ed25519 | Compressed, 32 bytes |
+| ECDSA Secp256k1 | Compressed, 33 bytes |
+| ECDSA Secp256r1 | Compressed, 33 bytes |
+| MultiSig | BCS serialized all participating public keys, size varies |
 
 ## Signature Requirements
 
@@ -78,4 +78,4 @@ The account that the authority uses to receive payments on staking rewards is se
 ## Network Keypair
 The private key is used to perform the TLS handshake required by QUIC for Narwhal primary and its worker network interface. The public key is used for validator peer ID. Pure Ed25519 is used as the signing scheme.
 
-See more authority key toolings in [Validator Tool](../../../../nre/validator_tool.md), 
+See more authority key toolings in [Validator Tool](https://github.com/MystenLabs/sui/blob/f8b5ad9aaecc3c4b30a060ec5e00bdad9ba75a93/nre/validator_tool.md).

@@ -261,7 +261,7 @@ When you use the Sui Client CLI, the `upgrade` command handles generating the up
 
 You develop a package named `sui_package`. Its manifest looks like the following:
 
-```move
+```toml
 [package]
 name = "sui_package"
 version = "0.0.0"

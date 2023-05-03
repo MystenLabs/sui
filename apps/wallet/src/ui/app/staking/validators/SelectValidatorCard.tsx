@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-    useGetRollingAverageApys,
+    useGetValidatorsApy,
     formatPercentageDisplay,
     calculateStakeShare,
     useGetSystemState,
@@ -33,9 +33,7 @@ export function SelectValidatorCard() {
     const [sortAscending, setSortAscending] = useState(true);
     const { data, isLoading, isError } = useGetSystemState();
 
-    const { data: rollingAverageApys } = useGetRollingAverageApys(
-        data?.activeValidators.length || null
-    );
+    const { data: rollingAverageApys } = useGetValidatorsApy();
 
     const selectValidator = (address: string) => {
         setSelectedValidator((state) => (state !== address ? address : null));
@@ -62,15 +60,21 @@ export function SelectValidatorCard() {
         [data?.activeValidators]
     );
     const validatorList = useMemo(() => {
-        const sortedAsc = validatorsRandomOrder.map((validator) => ({
-            name: validator.name,
-            address: validator.suiAddress,
-            apy: rollingAverageApys?.[validator.suiAddress] ?? null,
-            stakeShare: calculateStakeShare(
-                BigInt(validator.stakingPoolSuiBalance),
-                BigInt(totalStake)
-            ),
-        }));
+        const sortedAsc = validatorsRandomOrder.map((validator) => {
+            const { apy, isApyApproxZero } = rollingAverageApys?.[
+                validator.suiAddress
+            ] ?? { apy: null };
+            return {
+                name: validator.name,
+                address: validator.suiAddress,
+                apy,
+                isApyApproxZero,
+                stakeShare: calculateStakeShare(
+                    BigInt(validator.stakingPoolSuiBalance),
+                    BigInt(totalStake)
+                ),
+            };
+        });
         if (sortKey) {
             sortedAsc.sort((a, b) => {
                 if (sortKey === 'name') {
@@ -191,7 +195,8 @@ export function SelectValidatorCard() {
                                         !sortKey || sortKey === 'name'
                                             ? null
                                             : validator[sortKey],
-                                        '-'
+                                        '-',
+                                        validator?.isApyApproxZero
                                     )}
                                 />
                             </div>

@@ -23,22 +23,25 @@ use sui_macros::*;
 use sui_node::SuiNode;
 use sui_sdk::wallet_context::WalletContext;
 use sui_tool::restore_from_db_checkpoint;
+use sui_types::base_types::ObjectID;
 use sui_types::base_types::{ObjectRef, SequenceNumber};
 use sui_types::crypto::{get_key_pair, SuiKeyPair};
 use sui_types::event::{Event, EventID};
 use sui_types::message_envelope::Message;
-use sui_types::messages::QuorumDriverResponse;
 use sui_types::messages::{
-    CallArg, ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
-    GasData, ObjectArg, TransactionData, TransactionKind, TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
-    TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+    CallArg, GasData, ObjectArg, TransactionData, TransactionKind,
+    TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
+use sui_types::messages_grpc::TransactionInfoRequest;
 use sui_types::object::{Object, ObjectRead, Owner, PastObjectRead};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::quorum_driver_types::{
+    ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
+    QuorumDriverResponse,
+};
 use sui_types::utils::{
     to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
 };
-use sui_types::{base_types::ObjectID, messages::TransactionInfoRequest};
 use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION};
 use test_utils::authority::test_and_configure_authority_configs;
 use test_utils::messages::make_transactions_with_wallet_context;

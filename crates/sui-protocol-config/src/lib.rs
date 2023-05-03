@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 9;
+const MAX_PROTOCOL_VERSION: u64 = 10;
 
 // Record history of protocol version allocations here:
 //
@@ -33,6 +33,7 @@ const MAX_PROTOCOL_VERSION: u64 = 9;
 // Version 9: Limit the length of Move idenfitiers to 128.
 //            Disallow extraneous module bytes,
 //            advance_to_highest_supported_protocol_version,
+// Version 10:
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1129,6 +1130,7 @@ impl ProtocolConfig {
                     .advance_to_highest_supported_protocol_version = true;
                 cfg
             }
+            10 => Self::get_for_version_impl(version - 1),
             // Use this template when making changes:
             //
             //     // modify an existing constant.
