@@ -1,9 +1,14 @@
-name: Build docker images and binaries
+name: Trigger builds for images and binaries
 
 on:
   workflow_dispatch:
   push:
-     branches: [ devnet, testnet ]
+    branches: 
+      - 'devnet'
+      - 'testnet'
+      - 'releases/sui-*-release'
+    tags:
+      - sui-v**
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
